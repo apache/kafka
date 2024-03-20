@@ -60,6 +60,10 @@ public class LeaderState<T> implements EpochState {
     private final BatchAccumulator<T> accumulator;
     // The set includes all of the followers voters that FETCH or FETCH_SNAPSHOT during the current checkQuorumTimer interval.
     private final Set<Integer> fetchedVoters = new HashSet<>();
+    // The map includes all of the followers voters -> previous FETCH offset.
+    private final Map<Integer, Long> fetchedOffset = new HashMap<>();
+    // The map includes all of the followers voters -> previous FETCH_SNAPSHOT position.
+    private final Map<Integer, Long> fetchedPosition = new HashMap<>();
     private final Timer checkQuorumTimer;
     private final int checkQuorumTimeoutMs;
 
@@ -84,6 +88,8 @@ public class LeaderState<T> implements EpochState {
         for (int voterId : voters) {
             boolean hasAcknowledgedLeader = voterId == localId;
             this.voterStates.put(voterId, new ReplicaState(voterId, hasAcknowledgedLeader));
+            this.fetchedOffset.put(voterId, -1L);
+            this.fetchedPosition.put(voterId, -1L);
         }
         this.grantingVoters = Collections.unmodifiableSet(new HashSet<>(grantingVoters));
         this.log = logContext.logger(LeaderState.class);
@@ -122,8 +128,8 @@ public class LeaderState<T> implements EpochState {
      * @param id the node id
      * @param currentTimeMs the current timestamp in millisecond
      */
-    public void updateCheckQuorumForFollowingVoter(int id, long currentTimeMs) {
-        updateFetchedVoters(id);
+    public void updateCheckQuorumForFollowingVoter(int id, long currentTimeMs, long offset, long position) {
+        updateFetchedVoters(id, offset, position);
         // The majority number of the voters excluding the leader. Ex: 3 voters, the value will be 1
         int majority = voterStates.size() / 2;
         if (fetchedVoters.size() >= majority) {
@@ -133,14 +139,44 @@ public class LeaderState<T> implements EpochState {
         }
     }
 
-    private void updateFetchedVoters(int id) {
+    private void updateFetchedVoters(int id, long offset, long position) {
         if (id == localId) {
             throw new IllegalArgumentException("Received a FETCH/FETCH_SNAPSHOT request from the leader itself.");
         }
 
-        if (isVoter(id)) {
+        if (isVoter(id) && (isFetchOffsetAdvanced(id, offset) || isFetchSnapshotPositionAdvanced(id, position))) {
             fetchedVoters.add(id);
         }
+    }
+
+    /**
+     * We treat fetch offset is advanced when:
+     * 1. fetch offset is greater than or equal to leader end offset
+     * 2. if leader end offset is not set yet, we treat the follower is progressing
+     * 3. fetch offset is greater than previous fetch offset
+     *
+     * @param id the node id
+     * @param offset the fetch offset
+     */
+    private boolean isFetchOffsetAdvanced(int id, long offset) {
+        if (offset >= voterStates.get(localId).endOffset.orElse(new LogOffsetMetadata(-1)).offset ||
+                offset > fetchedOffset.get(id)) {
+            fetchedOffset.put(id, offset);
+        }
+        return false;
+    }
+
+    /**
+     * We treat fetch snapshot position is advanced when fetch snapshot position is greater than previous fetch snapshot position
+     *
+     * @param id the node id
+     * @param position the fetch snapshot position
+     */
+    private boolean isFetchSnapshotPositionAdvanced(int id, long position) {
+        if (position > fetchedPosition.get(id)) {
+            fetchedPosition.put(id, position);
+        }
+        return false;
     }
 
     public BatchAccumulator<T> accumulator() {
@@ -349,7 +385,7 @@ public class LeaderState<T> implements EpochState {
             fetchOffsetMetadata,
             leaderEndOffsetOpt
         );
-        updateCheckQuorumForFollowingVoter(replicaId, currentTimeMs);
+        updateCheckQuorumForFollowingVoter(replicaId, currentTimeMs, fetchOffsetMetadata.offset, -1, leaderEndOffsetOpt);
 
         return isVoter(state.nodeId) && maybeUpdateHighWatermark();
     }
