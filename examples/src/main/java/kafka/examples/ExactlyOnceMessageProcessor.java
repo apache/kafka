@@ -248,6 +248,11 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
      * @return Updated number of retries
      */
     private int maybeRetry(int retries, KafkaConsumer<Integer, String> consumer) {
+        if (retries < 0) {
+            Utils.printErr("The number of retries must be greater than zero");
+            shutdown();
+        }
+        
         if (retries < MAX_RETRIES) {
             // retry: reset fetch offset
             // the consumer fetch position needs to be restored to the committed offset before the transaction started
