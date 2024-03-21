@@ -119,7 +119,8 @@ public class RepartitionTopics {
             return new StreamsException(
                 new MissingSourceTopicException(String.format(
                     "Missing source topics %s for subtopology %d of topology %s",
-                    missingSourceTopics, subtopologyId, topologyName)),
+                    missingSourceTopics, subtopologyId, topologyName),
+                    missingSourceTopics),
                 new TaskId(subtopologyId, 0, topologyName));
         }).collect(Collectors.toCollection(LinkedList::new));
     }

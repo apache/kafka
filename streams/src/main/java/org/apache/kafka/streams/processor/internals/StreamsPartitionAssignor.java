@@ -523,7 +523,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean isMissingInputTopics = !repartitionTopics.missingSourceTopicExceptions().isEmpty();
         if (isMissingInputTopics) {
             if (!taskManager.topologyMetadata().hasNamedTopologies()) {
-                throw new MissingSourceTopicException("Missing source topics.");
+                final Set<String> aggregatedMissingTopics = repartitionTopics.missingSourceTopicExceptions()
+                        .stream()
+                        .filter(e -> e.getCause() instanceof MissingSourceTopicException)
+                        .map(e -> (MissingSourceTopicException) e.getCause())
+                        .map(e -> e.getMissingTopics())
+                        .flatMap(Collection::stream)
+                        .collect(Collectors.toSet());
+
+                throw new MissingSourceTopicException(
+                        String.format("Missing source topics. %s", aggregatedMissingTopics),
+                        aggregatedMissingTopics);
             } else {
                 nonFatalExceptionsToHandle.addAll(repartitionTopics.missingSourceTopicExceptions());
             }

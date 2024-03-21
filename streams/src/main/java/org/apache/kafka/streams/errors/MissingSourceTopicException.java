@@ -16,11 +16,25 @@
  */
 package org.apache.kafka.streams.errors;
 
+import java.util.HashSet;
+import java.util.Set;
+
 public class MissingSourceTopicException extends StreamsException {
 
     private final static long serialVersionUID = 1L;
+    private final Set<String> missingTopics;
 
     public MissingSourceTopicException(final String message) {
         super(message);
+        this.missingTopics = new HashSet<>();
+    }
+
+    public MissingSourceTopicException(final String message, final Set<String> missingTopics) {
+        super(message);
+        this.missingTopics = missingTopics;
+    }
+
+    public Set<String> getMissingTopics() {
+        return this.missingTopics;
     }
 }
