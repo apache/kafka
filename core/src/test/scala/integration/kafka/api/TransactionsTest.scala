@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerGrou
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.config.KafkaConfig._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -58,7 +59,7 @@ class TransactionsTest extends IntegrationTestHarness {
 
   def overridingProps(): Properties = {
     val props = new Properties()
-    props.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+    props.put(AUTO_CREATE_TOPICS_ENABLE_PROP, false.toString)
      // Set a smaller value for the number of partitions for the __consumer_offsets topic + // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
     props.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
     props.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
@@ -89,7 +90,7 @@ class TransactionsTest extends IntegrationTestHarness {
 
   def topicConfig(): Properties = {
     val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
+    topicConfig.put(MIN_IN_SYNC_REPLICAS_PROP, 2.toString)
     topicConfig
   }
 

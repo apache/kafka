@@ -21,6 +21,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.NewPartitionReassignment
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.config.KafkaConfig._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -35,7 +36,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
   val producerCount: Int = 1
   val brokerCount: Int = 2
 
-  serverConfig.put(KafkaConfig.NumPartitionsProp, 2.toString)
+  serverConfig.put(NUM_PARTITIONS_PROP, 2.toString)
   serverConfig.put(KafkaConfig.DefaultReplicationFactorProp, 2.toString)
   serverConfig.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
 

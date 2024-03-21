@@ -74,6 +74,7 @@ import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.server.config.{Defaults, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
@@ -348,9 +349,9 @@ object TestUtils extends Logging {
         // We can verify this by using a mixture of relative path and absolute path as log directories in the test
         if (i % 2 == 0) tempDir().getAbsolutePath else tempRelativeDir("data")
       ).mkString(",")
-      props.put(KafkaConfig.LogDirsProp, logDirs)
+      props.put(LOG_DIRS_PROP, logDirs)
     } else {
-      props.put(KafkaConfig.LogDirProp, tempDir().getAbsolutePath)
+      props.put(LOG_DIR_PROP, tempDir().getAbsolutePath)
     }
     if (zkConnect == null) {
       props.put(KafkaConfig.ProcessRolesProp, "broker")
@@ -367,7 +368,7 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.ControllerSocketTimeoutMsProp, "1500")
     props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
     props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
-    props.put(KafkaConfig.LogDeleteDelayMsProp, "1000")
+    props.put(LOG_DELETE_DELAY_MS_PROP, "1000")
     props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
     props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152")
     props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
@@ -393,7 +394,7 @@ object TestUtils extends Logging {
     if (enableToken)
       props.put(KafkaConfig.DelegationTokenSecretKeyProp, "secretkey")
 
-    props.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
+    props.put(NUM_PARTITIONS_PROP, numPartitions.toString)
     props.put(KafkaConfig.DefaultReplicationFactorProp, defaultReplicationFactor.toString)
 
     if (enableFetchFromFollower) {
@@ -408,7 +409,7 @@ object TestUtils extends Logging {
     config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, version.version)
     // for clarity, only set the log message format version if it's not ignored
     if (!LogConfig.shouldIgnoreMessageFormatVersion(version))
-      config.setProperty(KafkaConfig.LogMessageFormatVersionProp, version.version)
+      config.setProperty(LOG_MESSAGE_FORMAT_VERSION_PROP, version.version)
   }
 
   def createAdminClient[B <: KafkaBroker](

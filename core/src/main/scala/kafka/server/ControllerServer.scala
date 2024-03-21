@@ -46,6 +46,7 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.security.{CredentialProvider, PasswordEncoder}
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.config.KafkaConfig.{ALTER_CONFIG_POLICY_CLASS_NAME_PROP, CREATE_TOPIC_POLICY_CLASS_NAME_PROP}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
@@ -207,9 +208,9 @@ class ControllerServer(
       sharedServer.startForController()
 
       createTopicPolicy = Option(config.
-        getConfiguredInstance(CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
+        getConfiguredInstance(CREATE_TOPIC_POLICY_CLASS_NAME_PROP, classOf[CreateTopicPolicy]))
       alterConfigPolicy = Option(config.
-        getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
+        getConfiguredInstance(ALTER_CONFIG_POLICY_CLASS_NAME_PROP, classOf[AlterConfigPolicy]))
 
       val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "controller quorum voters future",

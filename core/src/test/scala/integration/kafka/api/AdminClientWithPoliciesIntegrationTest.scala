@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.server.config.KafkaConfig._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -76,7 +77,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   }
 
   private def overrideNodeConfigs(props: Properties): Unit = {
-    props.put(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[Policy])
+    props.put(ALTER_CONFIG_POLICY_CLASS_NAME_PROP, classOf[Policy])
   }
 
   @ParameterizedTest

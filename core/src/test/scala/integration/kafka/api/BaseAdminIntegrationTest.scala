@@ -30,6 +30,7 @@ import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.KafkaSecurityConfigs
+import org.apache.kafka.server.config.KafkaConfig._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
@@ -196,9 +197,9 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     // verify that they show up in the "configs" output of CreateTopics.
     if (testInfo.getTestMethod.toString.contains("testCreateTopicsReturnsConfigs")) {
       configs.foreach(config => {
-        config.setProperty(KafkaConfig.LogRollTimeHoursProp, "2")
-        config.setProperty(KafkaConfig.LogRetentionTimeMinutesProp, "240")
-        config.setProperty(KafkaConfig.LogRollTimeJitterMillisProp, "123")
+        config.setProperty(LOG_ROLL_TIME_HOURS_PROP, "2")
+        config.setProperty(LOG_RETENTION_TIME_MINUTES_PROP, "240")
+        config.setProperty(LOG_ROLL_TIME_JITTER_MILLIS_PROP, "123")
       })
     }
     configs.foreach { config =>

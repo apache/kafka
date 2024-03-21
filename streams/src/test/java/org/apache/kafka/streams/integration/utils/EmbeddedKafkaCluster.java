@@ -42,6 +42,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
+import static org.apache.kafka.server.config.KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_PROP;
+
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and supplied number of Kafka brokers.
  */
@@ -119,7 +121,7 @@ public class EmbeddedKafkaCluster {
         putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), (short) 1);
         putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicPartitionsProp(), 5);
         putIfAbsent(brokerConfig, KafkaConfig.TransactionsTopicPartitionsProp(), 5);
-        putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), true);
+        putIfAbsent(brokerConfig, AUTO_CREATE_TOPICS_ENABLE_PROP, true);
 
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
