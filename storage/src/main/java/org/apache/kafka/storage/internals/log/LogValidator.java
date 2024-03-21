@@ -74,7 +74,7 @@ public class LogValidator {
 
         public ValidationResult(long logAppendTimeMs, MemoryRecords validatedRecords, long maxTimestampMs,
                                 long offsetOfMaxTimestampMs, boolean messageSizeMaybeChanged,
-                                RecordValidationStats recordValidationStats) {
+                                RecordConversionStats recordConversionStats) {
             this.logAppendTimeMs = logAppendTimeMs;
             this.validatedRecords = validatedRecords;
             this.maxTimestampMs = maxTimestampMs;
