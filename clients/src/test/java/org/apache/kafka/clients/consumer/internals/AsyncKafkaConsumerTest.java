@@ -717,7 +717,7 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.completeQuietly(() -> {
             throw new KafkaException("Test exception");
         }, "test", exception));
-        assertTrue(exception.get() instanceof KafkaException);
+        assertInstanceOf(KafkaException.class, exception.get());
     }
 
     @Test

@@ -81,6 +81,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -996,7 +997,7 @@ public class ProcessorStateManagerTest {
             stateMgr.markChangelogAsCorrupted(mkSet(persistentStorePartition));
 
             final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, () -> stateMgr.initializeStoreOffsetsFromCheckpoint(true));
-            assertTrue(thrown.getCause() instanceof IllegalStateException);
+            assertInstanceOf(IllegalStateException.class, thrown.getCause());
         } finally {
             stateMgr.close();
         }

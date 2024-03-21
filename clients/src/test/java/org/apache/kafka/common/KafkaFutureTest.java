@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -316,7 +317,7 @@ public class KafkaFutureTest {
         assertIsFailed(dependantFuture);
         awaitAndAssertResult(future, 21, null);
         Throwable cause = awaitAndAssertFailure(dependantFuture, CompletionException.class, "java.lang.RuntimeException: We require more vespene gas");
-        assertTrue(cause.getCause() instanceof RuntimeException);
+        assertInstanceOf(RuntimeException.class, cause.getCause());
         assertEquals(cause.getCause().getMessage(), "We require more vespene gas");
     }
 
@@ -438,7 +439,7 @@ public class KafkaFutureTest {
         assertFalse(dependantFuture.isDone());
         assertTrue(future.cancel(true));
         assertTrue(ran[0]);
-        assertTrue(err[0] instanceof CancellationException);
+        assertInstanceOf(CancellationException.class, err[0]);
     }
 
     private static class CompleterThread<T> extends Thread {

@@ -32,7 +32,7 @@ import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletion
 
 import java.util
 import java.util.concurrent.TimeUnit
-import scala.collection.{Set, Seq, mutable}
+import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
 object AddPartitionsToTxnManager {
@@ -66,6 +66,7 @@ class AddPartitionsToTxnManager(
 
   this.logIdent = logPrefix
 
+  private val interBrokerListenerName = config.interBrokerListenerName
   private val inflightNodes = mutable.HashSet[Node]()
   private val nodesToTransactions = mutable.Map[Node, TransactionDataAndCallbacks]()
 
@@ -80,10 +81,9 @@ class AddPartitionsToTxnManager(
     topicPartitions: Seq[TopicPartition],
     callback: AddPartitionsToTxnManager.AppendCallback
   ): Unit = {
-    val (error, node) = getTransactionCoordinator(partitionFor(transactionalId))
-
-    if (error != Errors.NONE) {
-      callback(topicPartitions.map(tp => tp -> error).toMap)
+    val coordinatorNode = getTransactionCoordinator(partitionFor(transactionalId))
+    if (coordinatorNode.isEmpty) {
+      callback(topicPartitions.map(tp => tp -> Errors.COORDINATOR_NOT_AVAILABLE).toMap)
     } else {
       val topicCollection = new AddPartitionsToTxnTopicCollection()
       topicPartitions.groupBy(_.topic).forKeyValue { (topic, tps) =>
@@ -99,7 +99,7 @@ class AddPartitionsToTxnManager(
         .setVerifyOnly(true)
         .setTopics(topicCollection)
 
-      addTxnData(node, transactionData, callback)
+      addTxnData(coordinatorNode.get, transactionData, callback)
     }
   }
 
@@ -146,31 +146,10 @@ class AddPartitionsToTxnManager(
     }
   }
 
-  private def getTransactionCoordinator(partition: Int): (Errors, Node) = {
-    val listenerName = config.interBrokerListenerName
-
-    val topicMetadata = metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), listenerName)
-
-    if (topicMetadata.headOption.isEmpty) {
-      // If topic is not created, then the transaction is definitely not started.
-      (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
-    } else {
-      if (topicMetadata.head.errorCode != Errors.NONE.code) {
-        (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
-      } else {
-        val coordinatorEndpoint = topicMetadata.head.partitions.asScala
-          .find(_.partitionIndex == partition)
-          .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
-          .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leaderId, listenerName))
-
-        coordinatorEndpoint match {
-          case Some(endpoint) =>
-            (Errors.NONE, endpoint)
-          case _ =>
-            (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
-        }
-      }
-    }
+  private def getTransactionCoordinator(partition: Int): Option[Node] = {
+   metadataCache.getPartitionInfo(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
+      .filter(_.leader != MetadataResponse.NO_LEADER_ID)
+      .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leader, interBrokerListenerName))
   }
 
   private def topicPartitionsToError(transactionData: AddPartitionsToTxnTransaction, error: Errors): Map[TopicPartition, Errors] = {
