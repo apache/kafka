@@ -19,7 +19,6 @@ package org.apache.kafka.jmh.acl;
 
 import kafka.security.authorizer.AclAuthorizer;
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls;
-import kafka.security.authorizer.AclEntry;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
@@ -36,6 +35,7 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.security.authorizer.AclEntry;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.server.authorizer.Action;
