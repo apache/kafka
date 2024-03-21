@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumer.group;
 
 import kafka.api.BaseConsumerTest;
-import kafka.admin.ConsumerGroupCommand;
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -41,7 +40,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -58,6 +56,7 @@ import java.util.stream.Stream;
 public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestHarness {
     public static final String TOPIC = "foo";
     public static final String GROUP = "test.group";
+    public static final String PROTOCOL_GROUP = "protocol-group";
 
     List<ConsumerGroupCommand.ConsumerGroupService> consumerGroupService = new ArrayList<>();
     List<AbstractConsumerGroupExecutor> consumerGroupExecutors = new ArrayList<>();
@@ -86,10 +85,7 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
             0,
             false
         ).foreach(props -> {
-            if (isNewGroupCoordinatorEnabled()) {
-                props.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp(), "true");
-            }
-
+            props.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp(), isNewGroupCoordinatorEnabled() + "");
             cfgs.add(KafkaConfig.fromProps(props));
             return null;
         });
@@ -132,10 +128,10 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
     }
 
     ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
-        ConsumerGroupCommand.ConsumerGroupCommandOptions opts = new ConsumerGroupCommand.ConsumerGroupCommandOptions(args);
+        ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         ConsumerGroupCommand.ConsumerGroupService service = new ConsumerGroupCommand.ConsumerGroupService(
             opts,
-            asScala(Collections.singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE)))
+            Collections.singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
 
         consumerGroupService.add(0, service);
@@ -154,8 +150,8 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
         return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), remoteAssignor, Optional.empty(), false, groupProtocol);
     }
 
-    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String topic, String group) {
-        return addConsumerGroupExecutor(numConsumers, topic, group, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, GroupProtocol.CLASSIC.name);
+    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String group, String groupProtocol) {
+        return addConsumerGroupExecutor(numConsumers, TOPIC, group, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, groupProtocol);
     }
 
     ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String topic, String group, String groupProtocol) {
@@ -342,18 +338,16 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
         return BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll();
     }
 
+    public static Stream<Arguments> getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() {
+        return BaseConsumerTest.getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly();
+    }
+
+    public static Stream<Arguments> getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly() {
+        return BaseConsumerTest.getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly();
+    }
+
     @SuppressWarnings({"deprecation"})
     static <T> Seq<T> seq(Collection<T> seq) {
         return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
-    }
-
-    @SuppressWarnings("deprecation")
-    static <K, V> scala.collection.Map<K, V> asScala(Map<K, V> jmap) {
-        return JavaConverters.mapAsScalaMap(jmap);
-    }
-
-    @SuppressWarnings({"deprecation"})
-    static <T> scala.collection.immutable.Set<T> set(final Collection<T> set) {
-        return JavaConverters.asScalaSet(new HashSet<>(set)).toSet();
     }
 }

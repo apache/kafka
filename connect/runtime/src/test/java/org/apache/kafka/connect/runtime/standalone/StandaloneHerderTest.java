@@ -90,6 +90,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -286,7 +287,7 @@ public class StandaloneHerderTest {
                 ExecutionException.class,
                 () -> failedDeleteCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS)
         );
-        assertTrue(e.getCause() instanceof NotFoundException);
+        assertInstanceOf(NotFoundException.class, e.getCause());
     }
 
     @Test
@@ -455,7 +456,7 @@ public class StandaloneHerderTest {
         RestartRequest restartRequest = new RestartRequest("UnknownConnector", false, true);
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
         ExecutionException ee = assertThrows(ExecutionException.class, () -> restartCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
-        assertTrue(ee.getCause() instanceof NotFoundException);
+        assertInstanceOf(NotFoundException.class, ee.getCause());
     }
 
     @Test
@@ -476,7 +477,7 @@ public class StandaloneHerderTest {
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
         ExecutionException ee = assertThrows(ExecutionException.class, () -> restartCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
-        assertTrue(ee.getCause() instanceof NotFoundException);
+        assertInstanceOf(NotFoundException.class, ee.getCause());
         assertTrue(ee.getMessage().contains("Status for connector"));
     }
 
@@ -807,7 +808,7 @@ public class StandaloneHerderTest {
         );
         assertNotNull(e.getCause());
         Throwable cause = e.getCause();
-        assertTrue(cause instanceof BadRequestException);
+        assertInstanceOf(BadRequestException.class, cause);
         assertEquals(
                 cause.getMessage(),
                 "Connector configuration is invalid and contains the following 1 error(s):\n" +
@@ -860,12 +861,12 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
                 alterOffsetsCallback);
         ExecutionException e = assertThrows(ExecutionException.class, () -> alterOffsetsCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
-        assertTrue(e.getCause() instanceof NotFoundException);
+        assertInstanceOf(NotFoundException.class, e.getCause());
 
         FutureCallback<Message> resetOffsetsCallback = new FutureCallback<>();
         herder.resetConnectorOffsets("unknown-connector", resetOffsetsCallback);
         e = assertThrows(ExecutionException.class, () -> resetOffsetsCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
-        assertTrue(e.getCause() instanceof NotFoundException);
+        assertInstanceOf(NotFoundException.class, e.getCause());
     }
 
     @Test
@@ -888,12 +889,12 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
                 alterOffsetsCallback);
         ExecutionException e = assertThrows(ExecutionException.class, () -> alterOffsetsCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
-        assertTrue(e.getCause() instanceof BadRequestException);
+        assertInstanceOf(BadRequestException.class, e.getCause());
 
         FutureCallback<Message> resetOffsetsCallback = new FutureCallback<>();
         herder.resetConnectorOffsets(CONNECTOR_NAME, resetOffsetsCallback);
         e = assertThrows(ExecutionException.class, () -> resetOffsetsCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
-        assertTrue(e.getCause() instanceof BadRequestException);
+        assertInstanceOf(BadRequestException.class, e.getCause());
     }
 
     @Test

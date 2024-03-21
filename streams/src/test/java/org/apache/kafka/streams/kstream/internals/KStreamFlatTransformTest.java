@@ -34,7 +34,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import java.util.Arrays;
 import java.util.Collections;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -129,6 +129,6 @@ public class KStreamFlatTransformTest {
 
         final Processor<Number, Number, Integer, Integer> processor = processorSupplier.get();
 
-        assertTrue(processor instanceof KStreamFlatTransformProcessor);
+        assertInstanceOf(KStreamFlatTransformProcessor.class, processor);
     }
 }

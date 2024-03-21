@@ -52,6 +52,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -1938,7 +1939,7 @@ final public class KafkaRaftClientSnapshotTest {
         int replicaId,
         int maxBytes
     ) {
-        assertTrue(request.data() instanceof FetchSnapshotRequestData);
+        assertInstanceOf(FetchSnapshotRequestData.class, request.data());
 
         FetchSnapshotRequestData data = (FetchSnapshotRequestData) request.data();
 

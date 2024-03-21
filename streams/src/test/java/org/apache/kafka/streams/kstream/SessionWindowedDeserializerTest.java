@@ -28,9 +28,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
-
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class SessionWindowedDeserializerTest {
     private final SessionWindowedDeserializer<?> sessionWindowedDeserializer = new SessionWindowedDeserializer<>(new StringDeserializer());
@@ -41,7 +40,7 @@ public class SessionWindowedDeserializerTest {
         sessionWindowedDeserializer.configure(props, true);
         final Deserializer<?> inner = sessionWindowedDeserializer.innerDeserializer();
         assertNotNull("Inner deserializer should be not null", inner);
-        assertTrue("Inner deserializer type should be StringDeserializer", inner instanceof StringDeserializer);
+        assertInstanceOf(StringDeserializer.class, inner, "Inner deserializer type should be StringDeserializer");
     }
 
     @Test
@@ -49,7 +48,7 @@ public class SessionWindowedDeserializerTest {
         props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, Serdes.ByteArraySerde.class.getName());
         final SessionWindowedDeserializer<?> deserializer = new SessionWindowedDeserializer<>();
         deserializer.configure(props, false);
-        assertTrue(deserializer.innerDeserializer() instanceof ByteArrayDeserializer);
+        assertInstanceOf(ByteArrayDeserializer.class, deserializer.innerDeserializer());
     }
 
     @Test

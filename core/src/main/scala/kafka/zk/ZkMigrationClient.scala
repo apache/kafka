@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.scram.ScramCredential
+import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.metadata.DelegationTokenData
 import org.apache.kafka.metadata.PartitionRegistration
@@ -46,7 +47,7 @@ import scala.jdk.CollectionConverters._
 
 object ZkMigrationClient {
 
-  val MaxBatchSize = 100
+  private val MaxBatchSize = 100
 
   def apply(
     zkClient: KafkaZkClient,
@@ -226,6 +227,9 @@ class ZkMigrationClient(
         entityDataList: util.List[ClientQuotaRecord.EntityData],
         quotas: util.Map[String, lang.Double]
       ): Unit = {
+        entityDataList.forEach(entityData => {
+          entityData.setEntityName(Sanitizer.desanitize(entityData.entityName()))
+        })
         val batch = new util.ArrayList[ApiMessageAndVersion]()
         quotas.forEach((key, value) => {
           batch.add(new ApiMessageAndVersion(new ClientQuotaRecord()
@@ -295,17 +299,16 @@ class ZkMigrationClient(
     })
   }
 
-  def migrateDelegationTokens(
+  private def migrateDelegationTokens(
     recordConsumer: Consumer[util.List[ApiMessageAndVersion]]
   ): Unit = wrapZkException {
     val batch = new util.ArrayList[ApiMessageAndVersion]()
     val tokens = zkClient.getChildren(DelegationTokensZNode.path)
     for (tokenId <- tokens) {
       zkClient.getDelegationTokenInfo(tokenId) match {
-        case Some(tokenInformation) => {
+        case Some(tokenInformation) =>
           val newDelegationTokenData = new DelegationTokenData(tokenInformation)
           batch.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord(), 0.toShort))
-        }
         case None =>
       }
     }

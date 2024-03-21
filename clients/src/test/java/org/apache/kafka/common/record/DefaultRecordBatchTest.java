@@ -44,6 +44,7 @@ import static org.apache.kafka.common.record.DefaultRecordBatch.RECORDS_COUNT_OF
 import static org.apache.kafka.common.record.DefaultRecordBatch.RECORDS_OFFSET;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -425,12 +426,12 @@ public class DefaultRecordBatchTest {
 
             if (CompressionType.NONE == compressionType) {
                 // assert that for uncompressed data stream record iterator is not used
-                assertTrue(skipKeyValueIterator instanceof DefaultRecordBatch.RecordIterator);
+                assertInstanceOf(DefaultRecordBatch.RecordIterator.class, skipKeyValueIterator);
                 // superficial validation for correctness. Deep validation is already performed in other tests
                 assertEquals(Utils.toList(records.records()).size(), Utils.toList(skipKeyValueIterator).size());
             } else {
                 // assert that a streaming iterator is used for compressed records
-                assertTrue(skipKeyValueIterator instanceof DefaultRecordBatch.StreamRecordIterator);
+                assertInstanceOf(DefaultRecordBatch.StreamRecordIterator.class, skipKeyValueIterator);
                 // assert correctness for compressed records
                 assertIterableEquals(Arrays.asList(
                         new PartialDefaultRecord(9, (byte) 0, 0L, 1L, -1, 1, 1),

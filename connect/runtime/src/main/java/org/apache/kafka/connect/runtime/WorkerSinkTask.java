@@ -354,6 +354,11 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         return Collections.unmodifiableMap(lastCommittedOffsets);
     }
 
+    //VisibleForTesting
+    Map<TopicPartition, OffsetAndMetadata> currentOffsets() {
+        return Collections.unmodifiableMap(currentOffsets);
+    }
+
     private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {
         log.debug("{} Committing offsets synchronously using sequence number {}: {}", this, seqno, offsets);
         try {

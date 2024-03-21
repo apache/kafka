@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -48,7 +48,7 @@ public class TopicPartitionTest {
 
         //deserialize the byteArray and check if the values are same as original
         Object deserializedObject = Serializer.deserialize(byteArray);
-        assertTrue(deserializedObject instanceof TopicPartition);
+        assertInstanceOf(TopicPartition.class, deserializedObject);
         checkValues((TopicPartition) deserializedObject);
     }
 
@@ -57,7 +57,7 @@ public class TopicPartitionTest {
         // assert serialized TopicPartition object in file (serializedData/topicPartitionSerializedfile) is
         // deserializable into TopicPartition and is compatible
         Object deserializedObject = Serializer.deserialize(fileName);
-        assertTrue(deserializedObject instanceof TopicPartition);
+        assertInstanceOf(TopicPartition.class, deserializedObject);
         checkValues((TopicPartition) deserializedObject);
     }
 }
