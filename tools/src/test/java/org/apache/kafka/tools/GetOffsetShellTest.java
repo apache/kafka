@@ -105,11 +105,6 @@ public class GetOffsetShellTest {
         }
 
         @Override
-        public String toString() {
-            return "Row[name:" + name + ",partition:" + partition + ",timestamp:" + timestamp;
-        }
-
-        @Override
         public boolean equals(Object o) {
             if (o == this) return true;
 
@@ -132,7 +127,12 @@ public class GetOffsetShellTest {
 
         List<Row> output = executeAndParse();
 
-        assertEquals(expectedOffsetsWithInternal(), output);
+        if (!cluster.isKRaftTest()) {
+            assertEquals(expectedOffsetsWithInternal(), output);
+        } else {
+            assertEquals(expectedTestTopicOffsets(), output);
+        }
+
     }
 
     @ClusterTest
@@ -170,7 +170,11 @@ public class GetOffsetShellTest {
 
         List<Row> offsets = executeAndParse("--partitions", "0,1");
 
-        assertEquals(expectedOffsetsWithInternal().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+        if (!cluster.isKRaftTest()) {
+            assertEquals(expectedOffsetsWithInternal().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+        } else {
+            assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+        }
     }
 
     @ClusterTest
@@ -187,7 +191,7 @@ public class GetOffsetShellTest {
         setUp();
 
         List<Row> offsets = executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3");
-        ArrayList<Row> expected = new ArrayList<>(
+        List<Row> expected = new ArrayList<>(
             Arrays.asList(
                 new Row("topic1", 0, 1L),
                 new Row("topic2", 1, 2L),
@@ -348,9 +352,6 @@ public class GetOffsetShellTest {
     }
 
     private List<Row> expectedOffsetsWithInternal() {
-        if (cluster.isKRaftTest()) {
-            return expectedTestTopicOffsets();
-        }
 
         List<Row> consOffsets = IntStream.range(0, offsetTopicPartitionCount)
                 .mapToObj(i -> new Row("__consumer_offsets", i, 0L))
