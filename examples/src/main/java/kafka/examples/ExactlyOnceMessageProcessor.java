@@ -51,7 +51,7 @@ import static java.util.Collections.singleton;
  */
 public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebalanceListener, AutoCloseable {
     private static final int MAX_RETRIES = 5;
-
+    
     private final String bootstrapServers;
     private final String inputTopic;
     private final String outputTopic;
@@ -129,6 +129,18 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
             while (!closed && remainingRecords > 0) {
                 try {
                     records = consumer.poll(ofMillis(200));
+
+                    // TODO remove after test
+                    final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(consumer.assignment());
+                    consumer.assignment().forEach(tp -> {
+                        OffsetAndMetadata offsetAndMetadata = committed.get(tp);
+                        if (offsetAndMetadata != null) {
+                            System.out.printf(">>> partition %d @ offset %d%n", tp.partition(), offsetAndMetadata.offset());
+                        } else {
+                            System.out.printf(">>> partition %d @ offset 0%n", tp.partition());
+                        }
+                    });
+                    
                     if (!records.isEmpty()) {
                         // begin a new transaction session
                         producer.beginTransaction();
@@ -159,11 +171,12 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
                     Utils.printOut("Invalid or no offset found, using latest");
                     consumer.seekToEnd(emptyList());
                     consumer.commitSync();
+                    retries = 0;
                 } catch (KafkaException e) {
                     // abort the transaction
                     Utils.printOut("Aborting transaction: %s", e.getMessage());
                     producer.abortTransaction();
-                    retries = retry(retries, consumer, records);
+                    retries = maybeRetry(retries, consumer);
                 }
 
                 remainingRecords = getRemainingRecords(consumer);
@@ -225,9 +238,17 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
         }).sum();
     }
 
-    private int retry(int retries, KafkaConsumer<Integer, String> consumer, ConsumerRecords<Integer, String> records) {
-        retries++;
-        if (retries > 0 && retries <= MAX_RETRIES) {
+    /**
+     * When we get a generic {@code KafkaException} while processing records, we retry up to {@code MAX_RETRIES} times.
+     * If we exceed this threshold, we log and error and move on to the next batch of records.
+     * In a real world application you may want to to send these records to a DLQ for further processing.
+     * 
+     * @param retries Current number of retries
+     * @param consumer Consumer instance
+     * @return Updated number of retries
+     */
+    private int maybeRetry(int retries, KafkaConsumer<Integer, String> consumer) {
+        if (retries < MAX_RETRIES) {
             // retry: reset fetch offset
             // the consumer fetch position needs to be restored to the committed offset before the transaction started
             Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(consumer.assignment());
@@ -239,14 +260,12 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
                     consumer.seekToBeginning(Collections.singleton(tp));
                 }
             });
-        } else if (retries > MAX_RETRIES) {
-            // continue: skip bad records
-            // in addition to logging, you may want to send these records to a DLQ for further processing
-            records.forEach(record -> {
-                Utils.printErr("Skipping record after %d retries: %s", MAX_RETRIES, record.value());
-                consumer.seek(new TopicPartition(record.topic(), record.partition()), record.offset() + 1);
-                consumer.commitSync();
-            });
+            retries++;
+        } else if (retries >= MAX_RETRIES) {
+            // continue: skip records
+            // the consumer fetch position needs to be committed as if records were processed successfully
+            Utils.printErr("Skipping records after %d retries", MAX_RETRIES);
+            consumer.commitSync();
             retries = 0;
         }
         return retries;

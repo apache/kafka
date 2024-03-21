@@ -145,7 +145,6 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
         }
         // sets the reset offset policy in case of invalid or no offset
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
         return new KafkaConsumer<>(props);
     }
 
