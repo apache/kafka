@@ -30,7 +30,6 @@ import com.yammer.metrics.core.{Gauge, Meter}
 
 import javax.net.ssl._
 import kafka.cluster.EndPoint
-import kafka.security.CredentialProvider
 import kafka.server.{ApiVersionManager, KafkaConfig, SimpleApiVersionManager, ThrottleCallback, ThrottledChannel}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
@@ -46,6 +45,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time, Utils}
+import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level

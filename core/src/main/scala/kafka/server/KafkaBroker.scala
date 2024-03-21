@@ -22,7 +22,6 @@ import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
 import kafka.metrics.LinuxIoMetricsCollector
 import kafka.network.SocketServer
-import kafka.security.CredentialProvider
 import kafka.utils.Logging
 import org.apache.kafka.common.ClusterResource
 import org.apache.kafka.common.internals.ClusterResourceListeners
@@ -32,6 +31,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
