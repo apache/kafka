@@ -26,7 +26,7 @@ public final class KafkaMetric implements Metric {
     private final Object lock;
     private final Time time;
     private final MetricValueProvider<?> metricValueProvider;
-    private MetricConfig config;
+    private volatile MetricConfig config;
 
     // public for testing
     public KafkaMetric(Object lock, MetricName metricName, MetricValueProvider<?> valueProvider,
@@ -41,9 +41,7 @@ public final class KafkaMetric implements Metric {
     }
 
     public MetricConfig config() {
-        synchronized (lock) {
-            return this.config;
-        }
+        return this.config;
     }
 
     @Override
