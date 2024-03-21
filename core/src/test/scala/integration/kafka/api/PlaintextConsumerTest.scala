@@ -374,7 +374,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    */
   // TODO: enable this test for the consumer group protocol when support for pattern subscriptions is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testPatternSubscription(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
