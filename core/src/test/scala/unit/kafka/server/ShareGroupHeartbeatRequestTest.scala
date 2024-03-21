@@ -25,7 +25,7 @@ import org.apache.kafka.common.message.{ShareGroupHeartbeatRequestData, ShareGro
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull}
-import org.junit.jupiter.api.{Disabled, Tag, Timeout}
+import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util.stream.Collectors
@@ -366,7 +366,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
 
     // Verify the response for member 1.
-    assertEquals(3, shareGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(4, shareGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(memberId, shareGroupHeartbeatResponse.data.memberId)
     // Partition assignment remains intact on rejoining.
     assertEquals(expectedAssignment, shareGroupHeartbeatResponse.data.assignment)
@@ -548,7 +548,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     assertEquals(6, shareGroupHeartbeatResponse.data.memberEpoch)
   }
 
-  @Disabled
   //TODO: The heartbeat interval and session timeout should be for share group and not consumer group.
   // Working with these configs until we have the share group configs available
   @ClusterTest(serverProperties = Array(
@@ -606,8 +605,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
     val barId = TestUtils.createTopicWithAdminRaw(
       admin = admin,
-      topic = "bar",
-      numPartitions = 1
+      topic = "bar"
     )
 
     // This is the expected assignment.
@@ -711,6 +709,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions.containsAll(expectedAssignment.assignedTopicPartitions)
     }, msg = s"Could not get bar partitions assigned upon rejoining. Last response $shareGroupHeartbeatResponse.")
 
+    // Epoch should have been bumped when a member is removed and agin when it joins back.
     assertEquals(6, shareGroupHeartbeatResponse.data.memberEpoch)
   }
 

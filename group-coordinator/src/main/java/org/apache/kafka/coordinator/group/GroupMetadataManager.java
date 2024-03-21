@@ -1716,6 +1716,10 @@ public class GroupMetadataManager {
         ShareGroup group,
         ShareGroupMember member
     ) {
+        List<Record> records = new ArrayList<>();
+
+        removeMember(records, group.groupId(), member.memberId());
+
         // We update the subscription metadata without the leaving member.
         Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
             member,
@@ -1727,16 +1731,20 @@ public class GroupMetadataManager {
         if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
             log.info("[GroupId {}] Computed new subscription metadata: {}.",
                 group.groupId(), subscriptionMetadata);
+            records.add(newGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
         }
-
-        // We bump the group epoch.
-        int groupEpoch = group.groupEpoch() + 1;
-        List<Record> records = new ArrayList<>();
-        records.add(newGroupEpochRecord(group.groupId(), groupEpoch, SHARE));
 
         cancelTimers(group.groupId(), member.memberId());
 
-        return records;
+        /*
+         Replay generated records for share consumer as only group epoch records are persisted for
+         share consumer.
+        */
+        records.forEach(record -> replay(record, SHARE));
+
+        // We bump the group epoch.
+        int groupEpoch = group.groupEpoch() + 1;
+        return Collections.singletonList(newGroupEpochRecord(group.groupId(), groupEpoch, SHARE));
     }
 
     /**
@@ -1808,14 +1816,14 @@ public class GroupMetadataManager {
             try {
                 ShareGroup group = getOrMaybeCreateShareGroup(groupId, false);
                 ShareGroupMember member = group.getOrMaybeCreateMember(memberId, false);
-                log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
+                log.info("[GroupId {}] Member {} fenced from the share group because its session expired.",
                     groupId, memberId);
                 return new CoordinatorResult<>(shareGroupFenceMember(group, member));
             } catch (GroupIdNotFoundException ex) {
-                log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
+                log.debug("[GroupId {}] Could not fence {} because the share group does not exist.",
                     groupId, memberId);
             } catch (UnknownMemberIdException ex) {
-                log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
+                log.debug("[GroupId {}] Could not fence {} because the member does not exist in share group.",
                     groupId, memberId);
             }
 
