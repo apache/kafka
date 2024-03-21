@@ -84,7 +84,6 @@ public class KafkaMetricsGroup {
 
     public final Meter newMeter(String name, String eventType,
                                 TimeUnit timeUnit) {
-        System.err.println("[Johnny] in newMeter");
         return newMeter(name, eventType, timeUnit, Collections.emptyMap());
     }
 

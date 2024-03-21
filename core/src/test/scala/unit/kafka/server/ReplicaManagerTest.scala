@@ -89,7 +89,6 @@ import scala.jdk.CollectionConverters._
 
 object ReplicaManagerTest {
   @AfterAll
-  @BeforeAll
   def tearDownClass(): Unit = {
     TestUtils.clearYammerMetrics()
   }
@@ -4169,7 +4168,7 @@ class ReplicaManagerTest {
 
       replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, fetchCallback)
       // advancing the clock to expire the delayed remote fetch
-      timer.advanceClock(5000L)
+      timer.advanceClock(2000L)
 
       // verify the DelayedRemoteFetchMetrics.expiredRequestMeter.mark is called since the delayed remote fetch is expired
       verify(mockDelayedRemoteFetchMetricsMeter, times(1)).mark()
