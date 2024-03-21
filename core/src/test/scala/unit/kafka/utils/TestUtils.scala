@@ -1135,7 +1135,7 @@ object TestUtils extends Logging {
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
   }
 
-  def pollRecordsUntilTrue[K, V](shareConsumer: ShareConsumer[K, V],
+  def pollShareRecordsUntilTrue[K, V](shareConsumer: ShareConsumer[K, V],
                                  action: ConsumerRecords[K, V] => Boolean,
                                  msg: => String,
                                  waitTimeMs: Long): Unit = {
