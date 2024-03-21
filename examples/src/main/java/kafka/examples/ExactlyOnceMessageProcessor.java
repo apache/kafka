@@ -241,7 +241,7 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
     /**
      * When we get a generic {@code KafkaException} while processing records, we retry up to {@code MAX_RETRIES} times.
      * If we exceed this threshold, we log and error and move on to the next batch of records.
-     * In a real world application you may want to to send these records to a DLQ for further processing.
+     * In a real world application you may want to to send these records to a dead letter topic (DLT) for further processing.
      * 
      * @param retries Current number of retries
      * @param consumer Consumer instance
@@ -266,7 +266,7 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
                 }
             });
             retries++;
-        } else if (retries >= MAX_RETRIES) {
+        } else {
             // continue: skip records
             // the consumer fetch position needs to be committed as if records were processed successfully
             Utils.printErr("Skipping records after %d retries", MAX_RETRIES);
