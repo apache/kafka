@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.utils.TestInfoUtils;
 import kafka.server.DynamicConfig;
+import kafka.utils.TestInfoUtils;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
@@ -208,6 +208,66 @@ public class ToolsTestUtils {
             sb.append(entry.getKey() + "=" + entry.getValue() + System.lineSeparator());
         }
         return org.apache.kafka.test.TestUtils.tempFile(sb.toString());
+    }
+
+    /**
+     * Capture the console output during the execution of the provided function.
+     */
+    public static String grabConsoleOutput(Runnable f) {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(buf);
+        PrintStream out0 = System.out;
+
+        System.setOut(out);
+        try {
+            f.run();
+        } finally {
+            System.setOut(out0);
+        }
+        out.flush();
+        return buf.toString();
+    }
+
+    /**
+     * Capture the console error during the execution of the provided function.
+     */
+    public static String grabConsoleError(Runnable f) {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        PrintStream err = new PrintStream(buf);
+        PrintStream err0 = System.err;
+
+        System.setErr(err);
+        try {
+            f.run();
+        } finally {
+            System.setErr(err0);
+        }
+        err.flush();
+        return buf.toString();
+    }
+
+    /**
+     * Capture both the console output and console error during the execution of the provided function.
+     */
+    public static Tuple2<String, String> grabConsoleOutputAndError(Runnable f) {
+        ByteArrayOutputStream outBuf = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuf);
+        PrintStream err = new PrintStream(errBuf);
+        PrintStream out0 = System.out;
+        PrintStream err0 = System.err;
+
+        System.setOut(out);
+        System.setErr(err);
+        try {
+            f.run();
+        } finally {
+            System.setOut(out0);
+            System.setErr(err0);
+        }
+        out.flush();
+        err.flush();
+        return new Tuple2<>(outBuf.toString(), errBuf.toString());
     }
 
     public static class MockExitProcedure implements Exit.Procedure {

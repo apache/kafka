@@ -16,27 +16,20 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Node;
 
-import java.util.List;
-
-class MemberAssignmentState {
+class GroupState {
     final String group;
-    final String consumerId;
-    final String host;
-    final String clientId;
-    final String groupInstanceId;
-    final int numPartitions;
-    final List<TopicPartition> assignment;
+    final Node coordinator;
+    final String assignmentStrategy;
+    final String state;
+    final int numMembers;
 
-    MemberAssignmentState(String group, String consumerId, String host, String clientId, String groupInstanceId,
-                                 int numPartitions, List<TopicPartition> assignment) {
+    GroupState(String group, Node coordinator, String assignmentStrategy, String state, int numMembers) {
         this.group = group;
-        this.consumerId = consumerId;
-        this.host = host;
-        this.clientId = clientId;
-        this.groupInstanceId = groupInstanceId;
-        this.numPartitions = numPartitions;
-        this.assignment = assignment;
+        this.coordinator = coordinator;
+        this.assignmentStrategy = assignmentStrategy;
+        this.state = state;
+        this.numMembers = numMembers;
     }
 }

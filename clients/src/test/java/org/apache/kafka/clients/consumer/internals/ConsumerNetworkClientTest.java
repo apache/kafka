@@ -49,6 +49,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -94,7 +95,7 @@ public class ConsumerNetworkClientTest {
         final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         consumerClient.poll(future);
         assertTrue(future.failed());
-        assertTrue(future.exception() instanceof AuthenticationException, "Expected only an authentication error.");
+        assertInstanceOf(AuthenticationException.class, future.exception(), "Expected only an authentication error.");
 
         time.sleep(30); // wait less than the backoff period
         assertTrue(client.connectionFailed(node));
@@ -102,7 +103,7 @@ public class ConsumerNetworkClientTest {
         final RequestFuture<ClientResponse> future2 = consumerClient.send(node, heartbeat());
         consumerClient.poll(future2);
         assertTrue(future2.failed());
-        assertTrue(future2.exception() instanceof AuthenticationException, "Expected only an authentication error.");
+        assertInstanceOf(AuthenticationException.class, future2.exception(), "Expected only an authentication error.");
     }
 
     @Test
@@ -127,7 +128,7 @@ public class ConsumerNetworkClientTest {
         consumerClient.disconnectAsync(node);
         consumerClient.pollNoWakeup();
         assertTrue(future.failed());
-        assertTrue(future.exception() instanceof DisconnectException);
+        assertInstanceOf(DisconnectException.class, future.exception());
     }
 
     @Test
@@ -139,7 +140,7 @@ public class ConsumerNetworkClientTest {
         consumerClient.disconnectAsync(node);
         consumerClient.pollNoWakeup();
         assertTrue(future.failed());
-        assertTrue(future.exception() instanceof DisconnectException);
+        assertInstanceOf(DisconnectException.class, future.exception());
     }
 
     @Test
@@ -159,7 +160,7 @@ public class ConsumerNetworkClientTest {
 
         assertFalse(consumerClient.hasPendingRequests());
         assertTrue(future.failed());
-        assertTrue(future.exception() instanceof TimeoutException);
+        assertInstanceOf(TimeoutException.class, future.exception());
     }
 
     @Test
@@ -227,7 +228,7 @@ public class ConsumerNetworkClientTest {
         consumerClient.disconnectAsync(node);
         t.join();
         assertTrue(future.failed());
-        assertTrue(future.exception() instanceof DisconnectException);
+        assertInstanceOf(DisconnectException.class, future.exception());
     }
 
     @Test

@@ -434,7 +434,7 @@ public class GroupMetadataManagerTest {
         ));
 
         assertThrows(GroupIdNotFoundException.class, () ->
-            context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false));
+            context.groupMetadataManager.consumerGroup(groupId));
 
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
@@ -1651,6 +1651,102 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testConsumerGroupHeartbeatFullResponse() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        // Create a context with an empty consumer group.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 2)
+                .addRacks()
+                .build())
+            .build();
+
+        // Prepare new assignment for the group.
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            new HashMap<String, MemberAssignment>() {
+                {
+                    put(memberId, new MemberAssignment(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1)
+                    )));
+                }
+            }
+        ));
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result;
+
+        // A full response should be sent back on joining.
+        result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setServerAssignor("range")
+                .setTopicPartitions(Collections.emptyList()));
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(Collections.singletonList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(Arrays.asList(0, 1))))),
+            result.response()
+        );
+
+        // Otherwise, a partial response should be sent back.
+        result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().memberEpoch()));
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setHeartbeatIntervalMs(5000),
+            result.response()
+        );
+
+        // A full response should be sent back when the member sends
+        // a full request again.
+        result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().memberEpoch())
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setServerAssignor("range")
+                .setTopicPartitions(Collections.emptyList()));
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(Collections.singletonList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(Arrays.asList(0, 1))))),
+            result.response()
+        );
+    }
+
+    @Test
     public void testReconciliationProcess() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
@@ -1904,16 +2000,7 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(11)
-                .setHeartbeatIntervalMs(5000)
-                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
-                    .setTopicPartitions(Arrays.asList(
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                            .setTopicId(fooTopicId)
-                            .setPartitions(Arrays.asList(0, 1)),
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                            .setTopicId(barTopicId)
-                            .setPartitions(Collections.singletonList(0))
-                    ))),
+                .setHeartbeatIntervalMs(5000),
             result.response()
         );
 
@@ -2295,7 +2382,7 @@ public class GroupMetadataManagerTest {
 
         // The metadata refresh flag should be true.
         ConsumerGroup consumerGroup = context.groupMetadataManager
-            .getOrMaybeCreateConsumerGroup(groupId, false);
+            .consumerGroup(groupId);
         assertTrue(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
 
         // Prepare the assignment result.
@@ -2406,7 +2493,7 @@ public class GroupMetadataManagerTest {
 
         // The metadata refresh flag should be true.
         ConsumerGroup consumerGroup = context.groupMetadataManager
-            .getOrMaybeCreateConsumerGroup(groupId, false);
+            .consumerGroup(groupId);
         assertTrue(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
 
         // Prepare the assignment result.
@@ -2644,7 +2731,7 @@ public class GroupMetadataManagerTest {
 
         // Ensures that all refresh flags are set to the future.
         Arrays.asList("group1", "group2", "group3", "group4", "group5").forEach(groupId -> {
-            ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false);
+            ConsumerGroup group = context.groupMetadataManager.consumerGroup(groupId);
             group.setMetadataRefreshDeadline(context.time.milliseconds() + 5000L, 0);
             assertFalse(group.hasMetadataExpired(context.time.milliseconds()));
         });
@@ -2681,12 +2768,12 @@ public class GroupMetadataManagerTest {
 
         // Verify the groups.
         Arrays.asList("group1", "group2", "group3", "group4").forEach(groupId -> {
-            ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false);
+            ConsumerGroup group = context.groupMetadataManager.consumerGroup(groupId);
             assertTrue(group.hasMetadataExpired(context.time.milliseconds()));
         });
 
         Collections.singletonList("group5").forEach(groupId -> {
-            ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false);
+            ConsumerGroup group = context.groupMetadataManager.consumerGroup(groupId);
             assertFalse(group.hasMetadataExpired(context.time.milliseconds()));
         });
 
@@ -3057,12 +3144,7 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(2)
-                .setHeartbeatIntervalMs(5000)
-                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
-                    .setTopicPartitions(Collections.singletonList(
-                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                            .setTopicId(fooTopicId)
-                            .setPartitions(Arrays.asList(0, 1))))),
+                .setHeartbeatIntervalMs(5000),
             result.response()
         );
 
@@ -9085,7 +9167,7 @@ public class GroupMetadataManagerTest {
 
         List<Record> expectedRecords = Collections.singletonList(RecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
         List<Record> records = new ArrayList<>();
-        context.groupMetadataManager.deleteGroup("group-id", records);
+        context.groupMetadataManager.createGroupTombstoneRecords("group-id", records);
         assertEquals(expectedRecords, records);
     }
 
@@ -9123,7 +9205,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newGroupEpochTombstoneRecord(groupId)
         );
         List<Record> records = new ArrayList<>();
-        context.groupMetadataManager.deleteGroup(groupId, records);
+        context.groupMetadataManager.createGroupTombstoneRecords("group-id", records);
         assertEquals(expectedRecords, records);
     }
 
@@ -9296,6 +9378,146 @@ public class GroupMetadataManagerTest {
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(null, ConsumerGroup.ConsumerGroupState.EMPTY);
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, null);
+    }
+
+    @Test
+    public void testConsumerGroupHeartbeatWithNonEmptyClassicGroup() {
+        String classicGroupId = "classic-group-id";
+        String memberId = Uuid.randomUuid().toString();
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .build();
+        ClassicGroup classicGroup = new ClassicGroup(
+            new LogContext(),
+            classicGroupId,
+            EMPTY,
+            context.time,
+            context.metrics
+        );
+        context.replay(RecordHelpers.newGroupMetadataRecord(classicGroup, classicGroup.groupAssignment(), MetadataVersion.latestTesting()));
+
+        context.groupMetadataManager.getOrMaybeCreateClassicGroup(classicGroupId, false).transitionTo(PREPARING_REBALANCE);
+        assertThrows(GroupIdNotFoundException.class, () ->
+            context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                    .setGroupId(classicGroupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(0)
+                    .setServerAssignor("range")
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                    .setTopicPartitions(Collections.emptyList())));
+    }
+
+    @Test
+    public void testConsumerGroupHeartbeatWithEmptyClassicGroup() {
+        String classicGroupId = "classic-group-id";
+        String memberId = Uuid.randomUuid().toString();
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .build();
+        ClassicGroup classicGroup = new ClassicGroup(
+            new LogContext(),
+            classicGroupId,
+            EMPTY,
+            context.time,
+            context.metrics
+        );
+        context.replay(RecordHelpers.newGroupMetadataRecord(classicGroup, classicGroup.groupAssignment(), MetadataVersion.latestTesting()));
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(classicGroupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setServerAssignor("range")
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setTopicPartitions(Collections.emptyList()));
+
+        ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(0)
+            .setRebalanceTimeoutMs(5000)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(Collections.emptyMap())
+            .build();
+
+        assertEquals(Errors.NONE.code(), result.response().errorCode());
+        assertEquals(
+            Arrays.asList(
+                RecordHelpers.newGroupMetadataTombstoneRecord(classicGroupId),
+                RecordHelpers.newMemberSubscriptionRecord(classicGroupId, expectedMember),
+                RecordHelpers.newGroupEpochRecord(classicGroupId, 1),
+                RecordHelpers.newTargetAssignmentRecord(classicGroupId, memberId, Collections.emptyMap()),
+                RecordHelpers.newTargetAssignmentEpochRecord(classicGroupId, 1),
+                RecordHelpers.newCurrentAssignmentRecord(classicGroupId, expectedMember)
+            ),
+            result.records()
+        );
+        assertEquals(
+            Group.GroupType.CONSUMER,
+            context.groupMetadataManager.consumerGroup(classicGroupId).type()
+        );
+    }
+
+    @Test
+    public void testClassicGroupJoinWithNonEmptyConsumerGroup() throws Exception {
+        String consumerGroupId = "consumer-group-id";
+        String memberId = Uuid.randomUuid().toString();
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10)
+            .withMember(new ConsumerGroupMember.Builder(memberId)
+                .setState(MemberState.STABLE)
+                .setMemberEpoch(10)
+                .setPreviousMemberEpoch(10)
+                .build()))
+            .build();
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(consumerGroupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request);
+        assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), joinResult.joinFuture.get().errorCode());
+    }
+
+    @Test
+    public void testClassicGroupJoinWithEmptyConsumerGroup() throws Exception {
+        String consumerGroupId = "consumer-group-id";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10))
+            .build();
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(consumerGroupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request, true);
+
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newTargetAssignmentEpochTombstoneRecord(consumerGroupId),
+            RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(consumerGroupId),
+            RecordHelpers.newGroupEpochTombstoneRecord(consumerGroupId)
+        );
+
+        assertEquals(Errors.MEMBER_ID_REQUIRED.code(), joinResult.joinFuture.get().errorCode());
+        assertEquals(expectedRecords, joinResult.records.subList(0, expectedRecords.size()));
+        assertEquals(
+            Group.GroupType.CLASSIC,
+            context.groupMetadataManager.getOrMaybeCreateClassicGroup(consumerGroupId, false).type()
+        );
     }
 
     private static void checkJoinGroupResponse(

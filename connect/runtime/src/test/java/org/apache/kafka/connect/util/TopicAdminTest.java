@@ -76,6 +76,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class TopicAdminTest {
 
@@ -110,7 +111,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(describeTopicResponseWithUnsupportedVersion(newTopic));
             TopicAdmin admin = new TopicAdmin(env.adminClient());
             Exception e = assertThrows(ConnectException.class, () -> admin.describeTopics(newTopic.name()));
-            assertTrue(e.getCause() instanceof UnsupportedVersionException);
+            assertInstanceOf(UnsupportedVersionException.class, e.getCause());
         }
     }
 
@@ -136,7 +137,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(describeTopicResponseWithClusterAuthorizationException(newTopic));
             TopicAdmin admin = new TopicAdmin(env.adminClient());
             Exception e = assertThrows(ConnectException.class, () -> admin.describeTopics(newTopic.name()));
-            assertTrue(e.getCause() instanceof ClusterAuthorizationException);
+            assertInstanceOf(ClusterAuthorizationException.class, e.getCause());
         }
     }
 
@@ -162,7 +163,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(describeTopicResponseWithTopicAuthorizationException(newTopic));
             TopicAdmin admin = new TopicAdmin(env.adminClient());
             Exception e = assertThrows(ConnectException.class, () -> admin.describeTopics(newTopic.name()));
-            assertTrue(e.getCause() instanceof TopicAuthorizationException);
+            assertInstanceOf(TopicAuthorizationException.class, e.getCause());
         }
     }
 
