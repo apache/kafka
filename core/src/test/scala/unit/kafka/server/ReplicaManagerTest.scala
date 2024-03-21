@@ -4111,6 +4111,8 @@ class ReplicaManagerTest {
       brokerTopicStats)
     val spyRLM = spy(remoteLogManager)
     val timer = new MockTimer(time)
+    val mockDelayedRemoteFetchMetricsMeter = spy(DelayedRemoteFetchMetrics.expiredRequestMeter)
+    DelayedRemoteFetchMetrics.expiredRequestMeter = mockDelayedRemoteFetchMetricsMeter
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(timer, aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
 
@@ -4172,10 +4174,8 @@ class ReplicaManagerTest {
       // advancing the clock to expire the delayed remote fetch
       timer.advanceClock(5000L)
 
-      // verify the metric value is incremented since the delayed remote fetch is expired
-      TestUtils.waitUntilTrue(() => curExpiresPerSec + 1 == safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long],
-        "The ExpiresPerSec value is not incremented. Current value is: " +
-          safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long])
+      // verify the DelayedRemoteFetchMetrics.expiredRequestMeter.mark is called since the delayed remote fetch is expired
+      verify(mockDelayedRemoteFetchMetricsMeter, times(1)).mark()
       latch.countDown()
     } finally {
       Utils.tryAll(util.Arrays.asList[Callable[Void]](
