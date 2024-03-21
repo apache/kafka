@@ -29,6 +29,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.coordinator.group.OffsetConfig
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -78,7 +79,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
         s"$SecureExternal://localhost:0, $External://localhost:0")
       props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$Internal:PLAINTEXT, $SecureInternal:SASL_SSL," +
         s"$External:PLAINTEXT, $SecureExternal:SASL_SSL")
-      props.put(KafkaConfig.InterBrokerListenerNameProp, Internal)
+      props.put(INTER_BROKER_LISTENER_NAME_PROP, Internal)
       props.put(KafkaConfig.ZkEnableSecureAclsProp, "true")
       props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, kafkaClientSaslMechanism)
       props.put(s"${new ListenerName(SecureInternal).configPrefix}${KafkaConfig.SaslEnabledMechanismsProp}",
@@ -104,7 +105,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       assertEquals(4, config.listeners.size, s"Unexpected listener count for broker ${config.brokerId}")
       // KAFKA-5184 seems to show that this value can sometimes be PLAINTEXT, so verify it here
       assertEquals(Internal, config.interBrokerListenerName.value,
-        s"Unexpected ${KafkaConfig.InterBrokerListenerNameProp} for broker ${config.brokerId}")
+        s"Unexpected $INTER_BROKER_LISTENER_NAME_PROP for broker ${config.brokerId}")
     }
 
     TestUtils.createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, OffsetConfig.DEFAULT_OFFSETS_TOPIC_NUM_PARTITIONS,

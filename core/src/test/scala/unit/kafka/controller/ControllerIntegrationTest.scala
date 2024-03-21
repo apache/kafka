@@ -34,6 +34,7 @@ import org.apache.kafka.common.requests.AlterPartitionRequest
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_6_IV0, IBP_2_7_IV0, IBP_3_2_IV0}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -1941,13 +1942,13 @@ class ControllerIntegrationTest extends QuorumTestHarness {
                           startingIdNumber: Int = 0): Seq[KafkaServer] = {
     val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown, logDirCount = logDirCount, startingIdNumber = startingIdNumber)
     configs.foreach { config =>
-      config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, autoLeaderRebalanceEnable.toString)
-      config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)
-      config.setProperty(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp, "1")
+      config.setProperty(AUTO_LEADER_REBALANCE_ENABLE_PROP, autoLeaderRebalanceEnable.toString)
+      config.setProperty(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, uncleanLeaderElectionEnable.toString)
+      config.setProperty(LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_PROP, "1")
       listeners.foreach(listener => config.setProperty(KafkaConfig.ListenersProp, listener))
       listenerSecurityProtocolMap.foreach(listenerMap => config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerMap))
       controlPlaneListenerName.foreach(controlPlaneListener => config.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListener))
-      interBrokerProtocolVersion.foreach(ibp => config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, ibp.toString))
+      interBrokerProtocolVersion.foreach(ibp => config.setProperty(INTER_BROKER_PROTOCOL_VERSION_PROP, ibp.toString))
     }
     configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))
   }

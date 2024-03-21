@@ -31,6 +31,7 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.server.ProcessRole
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -57,7 +58,7 @@ class RaftManagerTest {
     props.setProperty(KafkaConfig.NodeIdProp, nodeId.toString)
     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
     if (processRoles.contains(ProcessRole.BrokerRole)) {
-      props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "PLAINTEXT")
+      props.setProperty(INTER_BROKER_LISTENER_NAME_PROP, "PLAINTEXT")
       if (processRoles.contains(ProcessRole.ControllerRole)) { // co-located
         props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
         props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
