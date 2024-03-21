@@ -293,10 +293,7 @@ public class LogValidator {
 
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
             maxTimestamp = now;
-            if (toMagic >= RecordBatch.MAGIC_VALUE_V2)
-                offsetOfMaxTimestamp = offsetCounter.value - 1;
-            else
-                offsetOfMaxTimestamp = initialOffset;
+            offsetOfMaxTimestamp = initialOffset;
         }
 
         return new ValidationResult(
