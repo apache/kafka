@@ -832,10 +832,6 @@ project(':server') {
 
     implementation libs.slf4jApi
 
-    implementation libs.jacksonDatabind
-    implementation libs.jacksonDataformatCsv
-    implementation libs.jacksonJDK8Datatypes
-
     compileOnly libs.log4j
 
     testImplementation project(':clients').sourceSets.test.output
