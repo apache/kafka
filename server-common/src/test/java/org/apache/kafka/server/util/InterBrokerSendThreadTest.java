@@ -17,6 +17,7 @@
 package org.apache.kafka.server.util;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -137,7 +138,7 @@ public class InterBrokerSendThreadTest {
 
         Throwable thrown = throwable.get();
         assertNotNull(thrown);
-        assertTrue(thrown instanceof FatalExitError);
+        assertInstanceOf(FatalExitError.class, thrown);
     }
 
     @Test
@@ -317,9 +318,9 @@ public class InterBrokerSendThreadTest {
         final InterBrokerSendThread thread =
             new TestInterBrokerSendThread(networkClient, t -> {
                 if (isShuttingDown)
-                    assertTrue(t instanceof InterruptedException);
+                    assertInstanceOf(InterruptedException.class, t);
                 else
-                    assertTrue(t instanceof FatalExitError);
+                    assertInstanceOf(FatalExitError.class, t);
                 exception.getAndSet(t);
             });
 

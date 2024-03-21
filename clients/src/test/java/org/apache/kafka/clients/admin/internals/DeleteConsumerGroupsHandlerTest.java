@@ -21,7 +21,7 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -125,6 +125,6 @@ public class DeleteConsumerGroupsHandlerTest {
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(singleton(key), result.failedKeys.keySet());
-        assertTrue(expectedExceptionType.isInstance(result.failedKeys.get(key)));
+        assertInstanceOf(expectedExceptionType, result.failedKeys.get(key));
     }
 }

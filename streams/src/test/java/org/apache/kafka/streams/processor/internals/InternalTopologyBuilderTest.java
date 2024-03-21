@@ -78,6 +78,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class InternalTopologyBuilderTest {
 
@@ -891,14 +892,14 @@ public class InternalTopologyBuilderTest {
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties1.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("40000", properties1.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals("appId-store1-changelog", topicConfig1.name());
-        assertTrue(topicConfig1 instanceof WindowedChangelogTopicConfig);
+        assertInstanceOf(WindowedChangelogTopicConfig.class, topicConfig1);
         final InternalTopicConfig topicConfig2 = topicsInfo.stateChangelogTopics.get("appId-store2-changelog");
         final Map<String, String> properties2 = topicConfig2.getProperties(Collections.emptyMap(), 10000);
         assertEquals(3, properties2.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties2.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("40000", properties2.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals("appId-store2-changelog", topicConfig2.name());
-        assertTrue(topicConfig2 instanceof WindowedChangelogTopicConfig);
+        assertInstanceOf(WindowedChangelogTopicConfig.class, topicConfig2);
     }
 
     @Test
@@ -923,7 +924,7 @@ public class InternalTopologyBuilderTest {
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals(Long.toString(60_000L + 24 * 60 * 60 * 1000L), properties.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG));
         assertEquals("appId-vstore-changelog", topicConfig.name());
-        assertTrue(topicConfig instanceof VersionedChangelogTopicConfig);
+        assertInstanceOf(VersionedChangelogTopicConfig.class, topicConfig);
     }
 
     @Test
@@ -940,7 +941,7 @@ public class InternalTopologyBuilderTest {
         assertEquals(2, properties.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("appId-testStore-changelog", topicConfig.name());
-        assertTrue(topicConfig instanceof UnwindowedUnversionedChangelogTopicConfig);
+        assertInstanceOf(UnwindowedUnversionedChangelogTopicConfig.class, topicConfig);
     }
 
     @Test
@@ -956,7 +957,7 @@ public class InternalTopologyBuilderTest {
         assertEquals(String.valueOf(-1), properties.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals(TopicConfig.CLEANUP_POLICY_DELETE, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("appId-foo", topicConfig.name());
-        assertTrue(topicConfig instanceof RepartitionTopicConfig);
+        assertInstanceOf(RepartitionTopicConfig.class, topicConfig);
     }
 
     @Test

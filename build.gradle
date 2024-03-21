@@ -1980,6 +1980,9 @@ project(':tools') {
     implementation project(':log4j-appender')
     implementation project(':tools:tools-api')
     implementation libs.argparse4j
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonDataformatCsv
+    implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
     implementation libs.log4j
     implementation libs.joptSimple
