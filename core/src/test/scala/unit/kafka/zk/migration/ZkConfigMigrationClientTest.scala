@@ -39,6 +39,7 @@ import org.apache.kafka.metadata.migration.KRaftMigrationZkWriter
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs}
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.server.util.MockRandom
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.Test
@@ -63,12 +64,12 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
     // Create some configs and persist in Zk.
     val props = new Properties()
-    props.put(KafkaConfig.DefaultReplicationFactorProp, "1") // normal config
+    props.put(DEFAULT_REPLICATION_FACTOR_PROP, "1") // normal config
     props.put(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, encoder.encode(new Password(SECRET))) // sensitive config
     zkClient.setOrCreateEntityConfigs(ConfigType.BROKER, "1", props)
 
     val defaultProps = new Properties()
-    defaultProps.put(KafkaConfig.DefaultReplicationFactorProp, "3") // normal config
+    defaultProps.put(DEFAULT_REPLICATION_FACTOR_PROP, "3") // normal config
     zkClient.setOrCreateEntityConfigs(ConfigType.BROKER, "<default>", defaultProps)
 
     migrationClient.migrateBrokerConfigs(batch => batches.add(batch), brokerId => brokers.add(brokerId))
@@ -94,13 +95,13 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     val record = batches.get(1).get(0).message().asInstanceOf[ConfigRecord]
     assertEquals(ConfigResource.Type.BROKER.id(), record.resourceType())
     assertEquals("", record.resourceName())
-    assertEquals(KafkaConfig.DefaultReplicationFactorProp, record.name())
+    assertEquals(DEFAULT_REPLICATION_FACTOR_PROP, record.name())
     assertEquals("3", record.value())
 
     // Update the sensitive config value from the config client and check that the value
     // persisted in Zookeeper is encrypted.
     val newProps = new util.HashMap[String, String]()
-    newProps.put(KafkaConfig.DefaultReplicationFactorProp, "2") // normal config
+    newProps.put(DEFAULT_REPLICATION_FACTOR_PROP, "2") // normal config
     newProps.put(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, NEW_SECRET) // sensitive config
     migrationState = migrationClient.configClient().writeConfigs(
       new ConfigResource(ConfigResource.Type.BROKER, "1"), newProps, migrationState)

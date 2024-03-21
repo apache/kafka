@@ -27,6 +27,7 @@ import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.migration.{KRaftMigrationZkWriter, ZkMigrationLeadershipState}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
@@ -330,7 +331,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     val replicas = List(1, 2, 3).map(int2Integer).asJava
     val topicId = Uuid.randomUuid()
     val props = new Properties()
-    props.put(KafkaConfig.DefaultReplicationFactorProp, "1") // normal config
+    props.put(DEFAULT_REPLICATION_FACTOR_PROP, "1") // normal config
     props.put(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, SECRET) // sensitive config
 
     //    // Leave Zk in an incomplete state.

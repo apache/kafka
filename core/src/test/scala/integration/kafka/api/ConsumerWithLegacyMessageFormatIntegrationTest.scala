@@ -16,10 +16,10 @@
  */
 package kafka.api
 
-import kafka.server.KafkaConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.server.config.KafkaConfig._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -35,7 +35,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     // legacy message formats are only supported with IBP < 3.0
     // KRaft mode is not supported for inter.broker.protocol.version = 2.8, The minimum version required is 3.0-IV1"
     if (!isKRaftTest())
-      properties.put(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
+      properties.put(INTER_BROKER_PROTOCOL_VERSION_PROP, "2.8")
   }
 
   @nowarn("cat=deprecation")

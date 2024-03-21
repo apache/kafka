@@ -73,6 +73,10 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.server.config.KafkaConfig.AUTO_LEADER_REBALANCE_ENABLE_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.REPLICA_FETCH_BACKOFF_MS_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.REPLICA_LAG_TIME_MAX_MS_PROP;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_FOLLOWER_THROTTLE;
@@ -123,7 +127,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         // the `AlterPartition` API. In this case, the controller will register individual
         // watches for each reassigning partition so that the reassignment can be
         // completed as soon as the ISR is expanded.
-        Map<String, String> configOverrides = Collections.singletonMap(KafkaConfig.InterBrokerProtocolVersionProp(), IBP_2_7_IV1.version());
+        Map<String, String> configOverrides = Collections.singletonMap(INTER_BROKER_PROTOCOL_VERSION_PROP, IBP_2_7_IV1.version());
         cluster = new ReassignPartitionsTestCluster(configOverrides, Collections.emptyMap());
         cluster.setup();
         executeAndVerifyReassignment();
@@ -143,7 +147,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         // change notification delay
         ZkAlterPartitionManager.DefaultIsrPropagationConfig_$eq(new IsrChangePropagationConfig(500, 100, 500));
 
-        Map<String, String> oldIbpConfig = Collections.singletonMap(KafkaConfig.InterBrokerProtocolVersionProp(), IBP_2_7_IV1.version());
+        Map<String, String> oldIbpConfig = Collections.singletonMap(INTER_BROKER_PROTOCOL_VERSION_PROP, IBP_2_7_IV1.version());
         Map<Integer, Map<String, String>> brokerConfigOverrides = new HashMap<>();
         brokerConfigOverrides.put(1, oldIbpConfig);
         brokerConfigOverrides.put(2, oldIbpConfig);
@@ -794,10 +798,10 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                     (short) 1,
                     false);
                 // shorter backoff to reduce test durations when no active partitions are eligible for fetching due to throttling
-                config.setProperty(KafkaConfig.ReplicaFetchBackoffMsProp(), "100");
+                config.setProperty(REPLICA_FETCH_BACKOFF_MS_PROP, "100");
                 // Don't move partition leaders automatically.
-                config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp(), "false");
-                config.setProperty(KafkaConfig.ReplicaLagTimeMaxMsProp(), "1000");
+                config.setProperty(AUTO_LEADER_REBALANCE_ENABLE_PROP, "false");
+                config.setProperty(REPLICA_LAG_TIME_MAX_MS_PROP, "1000");
                 configOverrides.forEach(config::setProperty);
                 brokerConfigOverrides.getOrDefault(brokerId, Collections.emptyMap()).forEach(config::setProperty);
 

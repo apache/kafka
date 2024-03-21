@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidPidMappingException, TransactionalIdNotFoundException}
+import org.apache.kafka.server.config.KafkaConfig._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -207,8 +208,8 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
     serverProps.put(KafkaConfig.TransactionsTopicMinISRProp, 2.toString)
     serverProps.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-    serverProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
-    serverProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
+    serverProps.put(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, false.toString)
+    serverProps.put(AUTO_LEADER_REBALANCE_ENABLE_PROP, false.toString)
     serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
     serverProps.put(KafkaConfig.TransactionalIdExpirationMsProp, "10000")

@@ -61,6 +61,7 @@ import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ZkConfigs}
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
@@ -129,12 +130,12 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       // Ensure that we can support multiple listeners per security protocol and multiple security protocols
       props.put(KafkaConfig.ListenersProp, s"$SecureInternal://localhost:0, $SecureExternal://localhost:0")
       props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"PLAINTEXT:PLAINTEXT, $SecureInternal:SSL, $SecureExternal:SASL_SSL, CONTROLLER:$controllerListenerSecurityProtocol")
-      props.put(KafkaConfig.InterBrokerListenerNameProp, SecureInternal)
+      props.put(INTER_BROKER_LISTENER_NAME_PROP, SecureInternal)
       props.put(KafkaSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "requested")
       props.put(KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN")
       props.put(KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, kafkaServerSaslMechanisms.mkString(","))
       props.put(KafkaConfig.LogSegmentBytesProp, "2000") // low value to test log rolling on config update
-      props.put(KafkaConfig.NumReplicaFetchersProp, "2") // greater than one to test reducing threads
+      props.put(NUM_REPLICA_FETCHERS_PROP, "2") // greater than one to test reducing threads
       props.put(KafkaConfig.PasswordEncoderSecretProp, "dynamic-config-secret")
       props.put(KafkaConfig.LogRetentionTimeMillisProp, 1680000000.toString)
       props.put(KafkaConfig.LogRetentionTimeHoursProp, 168.toString)
@@ -640,7 +641,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     props.put(KafkaConfig.LogDeleteDelayMsProp, "60000")
     props.put(CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP, "0.3")
     props.put(KafkaConfig.LogCleanupPolicyProp, "delete")
-    props.put(KafkaConfig.UncleanLeaderElectionEnableProp, "false")
+    props.put(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, "false")
     props.put(KafkaConfig.MinInSyncReplicasProp, "2")
     props.put(KafkaConfig.CompressionTypeProp, "gzip")
     props.put(KafkaConfig.LogPreAllocateProp, true.toString)
@@ -780,9 +781,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Enable unclean leader election
     val newProps = new Properties
-    newProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
+    newProps.put(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, "true")
     TestUtils.incrementalAlterConfigs(servers, adminClients.head, newProps, perBrokerConfig = false).all.get
-    waitForConfigOnServer(controller, KafkaConfig.UncleanLeaderElectionEnableProp, "true")
+    waitForConfigOnServer(controller, UNCLEAN_LEADER_ELECTION_ENABLE_PROP, "true")
 
     // Verify that the old follower with missing records is elected as the new leader
     val (newLeader, elected) = TestUtils.computeUntilTrue(partitionInfo.leader)(leader => leader != null)
@@ -870,7 +871,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val config = servers.head.config
     verifyThreadPoolResize(KafkaConfig.NumIoThreadsProp, config.numIoThreads,
       requestHandlerPrefix, mayReceiveDuplicates = false)
-    verifyThreadPoolResize(KafkaConfig.NumReplicaFetchersProp, config.numReplicaFetchers,
+    verifyThreadPoolResize(NUM_REPLICA_FETCHERS_PROP, config.numReplicaFetchers,
       fetcherThreadPrefix, mayReceiveDuplicates = false)
     verifyThreadPoolResize(KafkaConfig.BackgroundThreadsProp, config.backgroundThreads,
       "kafka-scheduler-", mayReceiveDuplicates = false)
@@ -1090,8 +1091,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Verify updating inter-broker listener
     val props = new Properties
-    props.put(KafkaConfig.InterBrokerListenerNameProp, SecureExternal)
-    val e = assertThrows(classOf[ExecutionException], () => reconfigureServers(props, perBrokerConfig = true, (KafkaConfig.InterBrokerListenerNameProp, SecureExternal)))
+    props.put(INTER_BROKER_LISTENER_NAME_PROP, SecureExternal)
+    val e = assertThrows(classOf[ExecutionException], () => reconfigureServers(props, perBrokerConfig = true, (INTER_BROKER_LISTENER_NAME_PROP, SecureExternal)))
     assertTrue(e.getCause.isInstanceOf[InvalidRequestException], s"Unexpected exception ${e.getCause}")
     servers.foreach(server => assertEquals(SecureInternal, server.config.interBrokerListenerName.value))
   }

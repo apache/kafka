@@ -38,6 +38,7 @@ import org.apache.kafka.server.config.{Defaults, KafkaSecurityConfigs, ZkConfigs
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, ProducerStateManagerConfig}
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
@@ -100,7 +101,7 @@ class DynamicBrokerConfigTest {
   @Test
   def testEnableDefaultUncleanLeaderElection(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    origProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, "false")
+    origProps.put(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, "false")
 
     val config = KafkaConfig(origProps)
     val serverMock = Mockito.mock(classOf[KafkaServer])
@@ -122,7 +123,7 @@ class DynamicBrokerConfigTest {
 
     val props = new Properties()
 
-    props.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
+    props.put(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, "true")
     config.dynamicConfig.updateDefaultConfig(props)
     assertTrue(config.uncleanLeaderElectionEnable)
     Mockito.verify(controllerMock).enableDefaultUncleanLeaderElection()
@@ -133,7 +134,7 @@ class DynamicBrokerConfigTest {
     val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     origProps.put(KafkaConfig.NumIoThreadsProp, "4")
     origProps.put(KafkaConfig.NumNetworkThreadsProp, "2")
-    origProps.put(KafkaConfig.NumReplicaFetchersProp, "1")
+    origProps.put(NUM_REPLICA_FETCHERS_PROP, "1")
     origProps.put(KafkaConfig.NumRecoveryThreadsPerDataDirProp, "1")
     origProps.put(KafkaConfig.BackgroundThreadsProp, "3")
 
@@ -175,7 +176,7 @@ class DynamicBrokerConfigTest {
     assertTrue(captor.getValue.containsKey(KafkaConfig.NumNetworkThreadsProp))
     assertEquals(4, captor.getValue.get(KafkaConfig.NumNetworkThreadsProp))
 
-    props.put(KafkaConfig.NumReplicaFetchersProp, "2")
+    props.put(NUM_REPLICA_FETCHERS_PROP, "2")
     config.dynamicConfig.updateDefaultConfig(props)
     assertEquals(2, config.numReplicaFetchers)
     Mockito.verify(replicaManagerMock).resizeFetcherThreadPool(newSize = 2)

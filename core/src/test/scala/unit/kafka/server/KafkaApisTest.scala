@@ -74,6 +74,7 @@ import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
 import org.apache.kafka.common._
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.ClientMetricsManager
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
@@ -1306,7 +1307,7 @@ class KafkaApisTest extends Logging {
           true
         case _ =>
           topicConfigOverride.put(KafkaConfig.NumPartitionsProp, numBrokersNeeded.toString)
-          topicConfigOverride.put(KafkaConfig.DefaultReplicationFactorProp, numBrokersNeeded.toString)
+          topicConfigOverride.put(DEFAULT_REPLICATION_FACTOR_PROP, numBrokersNeeded.toString)
           false
       }
 

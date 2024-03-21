@@ -19,6 +19,7 @@ package kafka.server
 
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.server.config.KafkaConfig._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
 
@@ -136,7 +137,7 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testZkIsrManager(): Unit = {
     val props = TestUtils.createBrokerConfigs(1, zkConnect).head
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, "2.7-IV1")
+    props.put(INTER_BROKER_PROTOCOL_VERSION_PROP, "2.7-IV1")
 
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
     server.replicaManager.alterPartitionManager match {
@@ -149,7 +150,7 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testAlterIsrManager(): Unit = {
     val props = TestUtils.createBrokerConfigs(1, zkConnect).head
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, MetadataVersion.latestTesting.toString)
+    props.put(INTER_BROKER_PROTOCOL_VERSION_PROP, MetadataVersion.latestTesting.toString)
 
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
     server.replicaManager.alterPartitionManager match {
