@@ -1201,6 +1201,13 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private final AtomicLong lastHighWatermark = new AtomicLong(NO_OFFSET);
 
         /**
+         * @return The last high watermark received or NO_OFFSET is none is pending.
+         */
+        public long lastHighWatermark() {
+            return lastHighWatermark.get();
+        }
+
+        /**
          * Updates the high watermark of the corresponding coordinator.
          *
          * @param tp        The topic partition.
