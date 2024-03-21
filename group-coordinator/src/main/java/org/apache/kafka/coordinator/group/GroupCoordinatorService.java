@@ -863,7 +863,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "txn-commit-offset",
             request,
             exception,
-            (error, __) -> TxnOffsetCommitRequest.getErrorResponse(request, error)
+            (error, __) -> TxnOffsetCommitRequest.getErrorResponse(
+                request,
+                // Transaction verification can throw `NETWORK_EXCEPTION`s, which older clients may
+                // not expect. Translate them to `COORDINATOR_LOAD_IN_PROGRESS` which triggers a
+                // retry without coordinator lookup.
+                error == Errors.NETWORK_EXCEPTION ?
+                    Errors.COORDINATOR_LOAD_IN_PROGRESS :
+                    error
+            )
         ));
     }
 
