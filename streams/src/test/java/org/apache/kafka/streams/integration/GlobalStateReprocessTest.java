@@ -129,7 +129,8 @@ public class GlobalStateReprocessTest {
             storeBuilder,
             globalStoreTopic,
             Consumed.with(Serdes.String(), Serdes.Long()),
-            processorSupplier
+            processorSupplier,
+            true
         );
     }
 

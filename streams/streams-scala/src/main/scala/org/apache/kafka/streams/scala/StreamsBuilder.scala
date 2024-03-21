@@ -200,7 +200,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
     consumed: Consumed[K, V],
     stateUpdateSupplier: org.apache.kafka.streams.processor.api.ProcessorSupplier[K, V, Void, Void]
   ): StreamsBuilderJ =
-    inner.addGlobalStore(storeBuilder, topic, consumed, stateUpdateSupplier)
+    inner.addGlobalStore(storeBuilder, topic, consumed, stateUpdateSupplier, true)
 
   def build(): Topology = inner.build()
 

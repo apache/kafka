@@ -629,7 +629,8 @@ public class IQv2StoreIntegrationTest {
                 keyValueStoreStoreBuilder,
                 INPUT_TOPIC_NAME,
                 Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                processorSupplier
+                processorSupplier,
+                false
             );
         } else {
             builder.addStateStore(keyValueStoreStoreBuilder);
@@ -697,7 +698,8 @@ public class IQv2StoreIntegrationTest {
                 windowStoreStoreBuilder,
                 INPUT_TOPIC_NAME,
                 Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                processorSupplier
+                processorSupplier,
+                false
             );
         } else {
             builder.addStateStore(windowStoreStoreBuilder);
@@ -745,7 +747,8 @@ public class IQv2StoreIntegrationTest {
                 sessionStoreStoreBuilder,
                 INPUT_TOPIC_NAME,
                 Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                processorSupplier
+                processorSupplier,
+                false
             );
         } else {
             builder.addStateStore(sessionStoreStoreBuilder);

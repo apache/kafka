@@ -134,7 +134,8 @@ public class StreamsBuilderTest {
                 public void process(final Record<String, String> record) {
                     store.put(record.key(), record.value());
                 }
-            }
+            },
+            false
         );
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic =
@@ -1443,10 +1444,11 @@ public class StreamsBuilderTest {
                         Stores.inMemoryKeyValueStore("store"),
                         Serdes.String(),
                         Serdes.String()
-                ),
-                "topic",
-                Consumed.with(Serdes.String(), Serdes.String()).withName("test"),
-                new MockApiProcessorSupplier<>()
+            ),
+            "topic",
+            Consumed.with(Serdes.String(), Serdes.String()).withName("test"),
+            new MockApiProcessorSupplier<>(),
+            false
         );
         builder.build();
 
@@ -1460,10 +1462,11 @@ public class StreamsBuilderTest {
                         Stores.inMemoryKeyValueStore("store"),
                         Serdes.String(),
                         Serdes.String()
-                ),
-                "topic",
-                Consumed.with(Serdes.String(), Serdes.String()),
-                new MockApiProcessorSupplier<>()
+            ),
+            "topic",
+            Consumed.with(Serdes.String(), Serdes.String()),
+            new MockApiProcessorSupplier<>(),
+            false
         );
         builder.build();
 

@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.api.Record;
 @SuppressWarnings("deprecation") // Old PAPI compatibility
 public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
     private final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate;
+    private final Processor<KIn, VIn, KOut, VOut> delegate2;
     private InternalProcessorContext context;
 
     public static <KIn, VIn, KOut, VOut> Processor<KIn, VIn, KOut, VOut> adapt(final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate) {
@@ -43,8 +44,24 @@ public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<K
         }
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static <KIn, VIn, KOut, VOut> Processor<KIn, VIn, KOut, VOut> adaptRaw(final Processor delegate) {
+        if (delegate == null) {
+            return null;
+        } else {
+            return new ProcessorAdapter<>(delegate);
+        }
+    }
+
     private ProcessorAdapter(final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate) {
         this.delegate = delegate;
+        delegate2 = null;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private ProcessorAdapter(final Processor<KIn, VIn, KOut, VOut> delegate) {
+        this.delegate = null;
+        delegate2 = delegate;
     }
 
     @Override
@@ -54,7 +71,11 @@ public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<K
         // This would fail if someone were to use this adapter in a unit test where
         // the context only implements api.ProcessorContext.
         this.context = (InternalProcessorContext) context;
-        delegate.init((org.apache.kafka.streams.processor.ProcessorContext) context);
+        if (delegate != null) {
+            delegate.init((org.apache.kafka.streams.processor.ProcessorContext) context);
+        } else {
+            delegate2.init(context);
+        }
     }
 
     @Override
@@ -68,7 +89,11 @@ public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<K
                 context.topic(),
                 record.headers()
             ));
-            delegate.process(record.key(), record.value());
+            if (delegate != null) {
+                delegate.process(record.key(), record.value());
+            } else {
+                delegate2.process(record);
+            }
         } finally {
             context.setRecordContext(processorRecordContext);
         }
