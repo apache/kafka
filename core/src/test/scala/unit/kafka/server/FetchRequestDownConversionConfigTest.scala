@@ -27,6 +27,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
+import org.apache.kafka.server.config.KafkaConfig.LOG_MESSAGE_DOWN_CONVERSION_ENABLE_PROP
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -53,7 +54,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
 
   override protected def brokerPropertyOverrides(properties: Properties): Unit = {
     super.brokerPropertyOverrides(properties)
-    properties.put(KafkaConfig.LogMessageDownConversionEnableProp, "false")
+    properties.put(LOG_MESSAGE_DOWN_CONVERSION_ENABLE_PROP, "false")
   }
 
   private def initProducer(): Unit = {

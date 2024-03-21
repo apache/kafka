@@ -123,7 +123,7 @@ object KafkaRaftServer {
 
   /**
    * Initialize the configured log directories, including both [[KafkaConfig.MetadataLogDirProp]]
-   * and [[KafkaConfig.LogDirProp]]. This method performs basic validation to ensure that all
+   * and [[KafkaConfig.LOG_DIR_PROP]]. This method performs basic validation to ensure that all
    * directories are accessible and have been initialized with consistent `meta.properties`.
    *
    * @param config The process configuration

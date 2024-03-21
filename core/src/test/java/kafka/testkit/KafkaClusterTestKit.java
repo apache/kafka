@@ -73,6 +73,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.apache.kafka.server.config.KafkaConfig.LOG_DIRS_PROP;
 
 
 @SuppressWarnings("deprecation") // Needed for Scala 2.12 compatibility
@@ -170,11 +171,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             if (brokerNode != null) {
                 // Set the log.dirs according to the broker node setting (if there is a broker node)
-                props.put(KafkaConfig$.MODULE$.LogDirsProp(),
+                props.put(LOG_DIRS_PROP,
                         String.join(",", brokerNode.logDataDirectories()));
             } else {
                 // Set log.dirs equal to the metadata directory if there is just a controller.
-                props.put(KafkaConfig$.MODULE$.LogDirsProp(),
+                props.put(LOG_DIRS_PROP,
                     controllerNode.metadataDirectory());
             }
             props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),

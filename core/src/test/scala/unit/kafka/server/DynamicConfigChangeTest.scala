@@ -45,6 +45,7 @@ import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
 import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals}
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
@@ -87,7 +88,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
         val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, newVal.toString()),
           SET)
         val resource2 = new ConfigResource(ConfigResource.Type.BROKER, "")
-        val op2 = new AlterConfigOp(new ConfigEntry(KafkaConfig.LogFlushIntervalMsProp, newVal.toString()),
+        val op2 = new AlterConfigOp(new ConfigEntry(LOG_FLUSH_INTERVAL_MS_PROP, newVal.toString()),
           SET)
         admin.incrementalAlterConfigs(Map(
           resource -> List(op).asJavaCollection,
