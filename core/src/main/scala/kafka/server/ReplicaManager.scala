@@ -1446,7 +1446,6 @@ class ReplicaManager(val config: KafkaConfig,
                                  responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
                                  logReadResults: Seq[(TopicIdPartition, LogReadResult)],
                                  fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]): Option[LogReadResult] = {
-    System.err.println("[Johnny] enter ReplicaManager.processRemoteFetch")
     val key = new TopicPartitionOperationKey(remoteFetchInfo.topicPartition.topic(), remoteFetchInfo.topicPartition.partition())
     val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
     var remoteFetchTask: Future[Void] = null
@@ -1461,10 +1460,8 @@ class ReplicaManager(val config: KafkaConfig,
         warn("Unable to fetch data from remote storage", e)
         return Some(createLogReadResult(e))
     }
-    System.err.println("[Johnny] enter ReplicaManager.processRemoteFetch, before init DelayedRemoteFetch")
     val remoteFetch = new DelayedRemoteFetch(remoteFetchTask, remoteFetchResult, remoteFetchInfo,
       fetchPartitionStatus, params, logReadResults, this, responseCallback)
-    System.err.println("[Johnny] enter ReplicaManager.processRemoteFetch, after init DelayedRemoteFetch, before tryCompleteElseWatch")
     delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, Seq(key))
     None
   }
@@ -1493,7 +1490,6 @@ class ReplicaManager(val config: KafkaConfig,
                     fetchInfos: Seq[(TopicIdPartition, PartitionData)],
                     quota: ReplicaQuota,
                     responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit): Unit = {
-    System.err.println("[Johnny] enter ReplicaManager fetchMessages")
     // check if this fetch request can be satisfied right away
     val logReadResults = readFromLog(params, fetchInfos, quota, readFromPurgatory = false)
     var bytesReadable: Long = 0
@@ -1531,7 +1527,6 @@ class ReplicaManager(val config: KafkaConfig,
     //                        6) has a preferred read replica
     if (!remoteFetchInfo.isPresent && (params.maxWaitMs <= 0 || fetchInfos.isEmpty || bytesReadable >= params.minBytes || errorReadingData ||
       hasDivergingEpoch || hasPreferredReadReplica)) {
-      System.err.println("[Johnny] enter ReplicaManager, return before use the remote fetch")
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
         val isReassignmentFetch = params.isFromFollower && isAddingReplica(tp.topicPartition, params.replicaId)
         tp -> result.toFetchPartitionData(isReassignmentFetch)
@@ -1548,7 +1543,6 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
       if (remoteFetchInfo.isPresent) {
-        System.err.println("[Johnny] enter ReplicaManager, remoteFetchInfo.isPresent is true")
         val maybeLogReadResultWithError = processRemoteFetch(remoteFetchInfo.get(), params, responseCallback, logReadResults, fetchPartitionStatus)
         if (maybeLogReadResultWithError.isDefined) {
           // If there is an error in scheduling the remote fetch task, return what we currently have
@@ -1560,7 +1554,6 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         // If there is not enough data to respond and there is no remote data, we will let the fetch request
         // wait for new data.
-        System.err.println("[Johnny] enter ReplicaManager,  remoteFetchInfo.isPresent is false, use DelayedFetch")
         val delayedFetch = new DelayedFetch(
           params = params,
           fetchPartitionStatus = fetchPartitionStatus,
