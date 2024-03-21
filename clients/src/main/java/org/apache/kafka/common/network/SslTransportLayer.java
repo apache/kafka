@@ -682,7 +682,7 @@ public class SslTransportLayer implements TransportLayer {
 
         int totalRead = 0;
         int i = offset;
-        while (i < length) {
+        while (i < offset + length) {
             if (dsts[i].hasRemaining()) {
                 int read = read(dsts[i]);
                 if (read > 0)
@@ -755,7 +755,7 @@ public class SslTransportLayer implements TransportLayer {
             throw new IndexOutOfBoundsException();
         int totalWritten = 0;
         int i = offset;
-        while (i < length) {
+        while (i < offset + length) {
             if (srcs[i].hasRemaining() || hasPendingWrites()) {
                 int written = write(srcs[i]);
                 if (written > 0) {
