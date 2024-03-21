@@ -210,9 +210,9 @@ public class MemoryRecords extends AbstractRecords {
                                         "increase their fetch sizes.",
                                 partition, batch.lastOffset(), maxRecordBatchSize, filteredBatchSize);
 
-                        MemoryRecordsBuilder.RecordsInfo info = builder.info();
-                        filterResult.updateRetainedBatchMetadata(info.maxTimestamp, info.offsetOfMaxTimestamp,
-                            maxOffset, retainedRecords.size(), filteredBatchSize);
+                    MemoryRecordsBuilder.RecordsInfo info = builder.info();
+                    filterResult.updateRetainedBatchMetadata(info.maxTimestamp, info.offsetOfMaxTimestamp,
+                        maxOffset, retainedRecords.size(), filteredBatchSize);
                 }
             } else if (batchRetention == BatchRetention.RETAIN_EMPTY) {
                 if (batchMagic < RecordBatch.MAGIC_VALUE_V2)

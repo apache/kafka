@@ -28,13 +28,11 @@ import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogCon
 
 import java.io.{File, IOException}
 import java.nio.file.Files
-import java.util
 import java.util.concurrent.atomic.AtomicLong
 import java.util.regex.Pattern
 import java.util.{Collections, Optional}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Seq, immutable}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 /**
