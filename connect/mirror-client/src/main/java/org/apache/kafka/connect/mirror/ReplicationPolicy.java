@@ -23,6 +23,8 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 @InterfaceStability.Evolving
 public interface ReplicationPolicy {
 
+    String DEFAULT_HEARTBEATS_TOPIC_NAME = "heartbeats";
+
     /** How to rename remote topics; generally should be like us-west.topic1. */
     String formatRemoteTopic(String sourceClusterAlias, String topic);
 
@@ -54,7 +56,7 @@ public interface ReplicationPolicy {
 
     /** Returns heartbeats topic name.*/
     default String heartbeatsTopic() {
-        return "heartbeats";
+        return DEFAULT_HEARTBEATS_TOPIC_NAME;
     }
 
     /** Returns the offset-syncs topic for given cluster alias. */

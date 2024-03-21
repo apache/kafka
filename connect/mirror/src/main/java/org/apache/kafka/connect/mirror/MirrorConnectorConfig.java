@@ -114,6 +114,10 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     public static final String OFFSET_SYNCS_TOPIC_LOCATION_DOC = "The location (source/target) of the offset-syncs topic.";
     public static final String TASK_INDEX = "task.index";
 
+    public static final String HEARTBEATS_TOPIC_NAME = MirrorClientConfig.HEARTBEATS_TOPIC_NAME;
+    public static final String HEARTBEATS_TOPIC_NAME_DOC = MirrorClientConfig.HEARTBEATS_TOPIC_NAME_DOC;
+    public static final String HEARTBEATS_TOPIC_NAME_DEFAULT = MirrorClientConfig.HEARTBEATS_TOPIC_NAME_DEFAULT;
+
     private final ReplicationPolicy replicationPolicy;
 
     @SuppressWarnings("this-escape")
@@ -316,6 +320,12 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC
             )
+            .define(
+                    HEARTBEATS_TOPIC_NAME,
+                    ConfigDef.Type.STRING,
+                    HEARTBEATS_TOPIC_NAME_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    HEARTBEATS_TOPIC_NAME_DOC)
             .withClientSslSupport()
             .withClientSaslSupport();
 

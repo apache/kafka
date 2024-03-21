@@ -211,4 +211,15 @@ public class MirrorConnectorConfigTest {
         assertSame(config.replicationPolicy(), config.replicationPolicy());
     }
 
+    @Test
+    public void testHeartbeatTopicNameInDefaultReplicationPolicyIfWeNotOverrideTheDefaultValue() {
+        MirrorConnectorConfig config = new TestMirrorConnectorConfig(makeProps());
+        assertEquals(ReplicationPolicy.DEFAULT_HEARTBEATS_TOPIC_NAME, config.replicationPolicy().heartbeatsTopic());
+    }
+
+    @Test
+    public void testHeartbeatTopicNameInDefaultReplicationPolicyIfWeOverrideTheDefaultValue() {
+        MirrorConnectorConfig config = new TestMirrorConnectorConfig(makeProps("default.replication.policy.heartbeats.topic.name", "berci-heartbeats"));
+        assertEquals("berci-heartbeats", config.replicationPolicy().heartbeatsTopic());
+    }
 }

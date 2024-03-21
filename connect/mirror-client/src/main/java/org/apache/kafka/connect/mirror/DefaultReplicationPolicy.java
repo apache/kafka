@@ -40,6 +40,8 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
     private Pattern separatorPattern = Pattern.compile(Pattern.quote(SEPARATOR_DEFAULT));
     private boolean isInternalTopicSeparatorEnabled = true;
 
+    private String heartbeatTopicName = DEFAULT_HEARTBEATS_TOPIC_NAME;
+
     @Override
     public void configure(Map<String, ?> props) {
         if (props.containsKey(SEPARATOR_CONFIG)) {
@@ -53,6 +55,9 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
                     log.warn("Disabling custom topic separator for internal topics; will use '.' instead of '{}'", separator);
                 }
             }
+        }
+        if (props.containsKey(MirrorClientConfig.HEARTBEATS_TOPIC_NAME)) {
+            heartbeatTopicName = (String) props.get(MirrorClientConfig.HEARTBEATS_TOPIC_NAME);
         }
     }
 
@@ -111,5 +116,9 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
     @Override
     public boolean isMM2InternalTopic(String topic) {
         return  topic.endsWith(internalSuffix());
+    }
+    @Override
+    public String heartbeatsTopic() {
+        return heartbeatTopicName;
     }
 }
