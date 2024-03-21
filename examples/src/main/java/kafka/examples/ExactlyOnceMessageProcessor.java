@@ -118,29 +118,15 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
         try (KafkaProducer<Integer, String> producer = new Producer("processor-producer", bootstrapServers, outputTopic,
                 true, transactionalId, true, -1, transactionTimeoutMs, null).createKafkaProducer();
              KafkaConsumer<Integer, String> consumer = new Consumer("processor-consumer", bootstrapServers, inputTopic,
-                "processor-group", Optional.of(groupInstanceId), readCommitted, -1, null).createKafkaConsumer()) {
+                 "processor-group", Optional.of(groupInstanceId), readCommitted, -1, null).createKafkaConsumer()) {
             // called first and once to fence zombies and abort any pending transaction
             producer.initTransactions();
-
             consumer.subscribe(singleton(inputTopic), this);
-            ConsumerRecords<Integer, String> records = null;
 
             Utils.printOut("Processing new records");
             while (!closed && remainingRecords > 0) {
                 try {
-                    records = consumer.poll(ofMillis(200));
-
-                    // TODO remove after test
-                    final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(consumer.assignment());
-                    consumer.assignment().forEach(tp -> {
-                        OffsetAndMetadata offsetAndMetadata = committed.get(tp);
-                        if (offsetAndMetadata != null) {
-                            System.out.printf(">>> partition %d @ offset %d%n", tp.partition(), offsetAndMetadata.offset());
-                        } else {
-                            System.out.printf(">>> partition %d @ offset 0%n", tp.partition());
-                        }
-                    });
-                    
+                    ConsumerRecords<Integer, String> records = consumer.poll(ofMillis(200));
                     if (!records.isEmpty()) {
                         // begin a new transaction session
                         producer.beginTransaction();
