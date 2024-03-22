@@ -1098,12 +1098,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
             case NETWORK_EXCEPTION:
                 // When committing offsets transactionally, we now verify the transaction with the
                 // transaction coordinator. Verification can fail with `NETWORK_EXCEPTION`, a
-                // retriable error which older clients may not expect and retry correctly. We have
-                // the option of translating `NETWORK_EXCEPTION` to either
-                // `COORDINATOR_LOAD_IN_PROGRESS` or `COORDINATOR_NOT_AVAILABLE`, which trigger the
-                // desired retry behavior in older clients. We use `COORDINATOR_LOAD_IN_PROGRESS`
-                // because `COORDINATOR_NOT_AVAILABLE` also triggers an unnecessary coordinator
-                // lookup.
+                // retriable error which older clients may not expect and retry correctly. We
+                // translate the error to `COORDINATOR_LOAD_IN_PROGRESS` because it causes clients
+                // to retry the request without an unnecessary coordinator lookup.
                 return handler.apply(Errors.COORDINATOR_LOAD_IN_PROGRESS, null);
 
             case UNKNOWN_TOPIC_OR_PARTITION:
