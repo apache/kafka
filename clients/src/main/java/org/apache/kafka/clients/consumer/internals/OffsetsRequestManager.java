@@ -159,14 +159,19 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             result -> OffsetFetcherUtils.buildOffsetsForTimesResult(timestampsToSearch, result.fetchedOffsets));
     }
 
-    public CompletableFuture<Map<TopicPartition, Long>> beginningOrEndOffset(
-        Map<TopicPartition, Long> timestampsToSearch) {
+    /**
+     * Handles the API request for getting the first or the last offsets for the given partitions.
+     */
+    public CompletableFuture<Map<TopicPartition, Long>> beginningOrEndOffset(Map<TopicPartition, Long> timestampsToSearch) {
         if (timestampsToSearch.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyMap());
         }
         ListOffsetsRequestState listOffsetsRequestState = fetchOffsets(timestampsToSearch, false);
         return listOffsetsRequestState.globalResult.thenApply(
-            result -> OffsetFetcherUtils.buildEndOffsetsResult(timestampsToSearch, result.fetchedOffsets));
+                result -> OffsetFetcherUtils.buildListOffsetsResult(
+                        timestampsToSearch,
+                        result.fetchedOffsets,
+                        (topicPartition, offsetData) -> offsetData.offset));
     }
 
     private ListOffsetsRequestState fetchOffsets(

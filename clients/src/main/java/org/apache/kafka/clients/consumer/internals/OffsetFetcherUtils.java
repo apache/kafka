@@ -94,14 +94,6 @@ class OffsetFetcherUtils {
         this.apiVersions = apiVersions;
     }
 
-    public static Map<TopicPartition, Long> beginningOrEndOffset(Map<TopicPartition, Long> timestampsToSearch,
-                                                              Map<TopicPartition, ListOffsetData> fetchedOffsets) {
-        return fetchedOffsets.entrySet().stream()
-            .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> entry.getValue().timestamp));
-    }
-
     /**
      * Callback for the response of the list offset call.
      *
@@ -264,14 +256,6 @@ class OffsetFetcherUtils {
         }
 
         return offsetsResults;
-    }
-
-    static Map<TopicPartition, Long> buildEndOffsetsResult(
-        final Map<TopicPartition, Long> timestampsToSearch,
-        final Map<TopicPartition, ListOffsetData> fetchedOffsets) {
-
-        return buildListOffsetsResult(timestampsToSearch, fetchedOffsets,
-            (topicPartition, offsetData) -> offsetData.offset);
     }
 
     static Map<TopicPartition, OffsetAndTimestamp> buildOffsetsForTimesResult(

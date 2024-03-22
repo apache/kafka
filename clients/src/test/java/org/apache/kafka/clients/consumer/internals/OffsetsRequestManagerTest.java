@@ -221,14 +221,6 @@ public class OffsetsRequestManagerTest {
                 Collections.singletonMap(TEST_PARTITION_1, null);
         verifyRequestSuccessfullyCompleted(result, expectedOffsets);
     }
-    /*
-    client response:ClientResponse(receivedTimeMs=1709673107864, latencyMs=0, disconnected=false, timedOut=false,
-    requestHeader=RequestHeader(apiKey=OFFSET_FETCH, apiVersion=8, clientId=, correlationId=1, headerVersion=2),
-    responseBody=ListOffsetsResponseData(throttleTimeMs=0,
-    topics=[ListOffsetsTopicResponse(name='t1', partitions=[ListOffsetsPartitionResponse(partitionIndex=1, errorCode=0, oldStyleOffsets=[],
-    timestamp=-1, offset=-1, leaderEpoch=-1)])]))
-
-     */
 
     @Test
     public void testListOffsetsWaitingForMetadataUpdate_RetrySucceeds() throws ExecutionException,
@@ -420,7 +412,7 @@ public class OffsetsRequestManagerTest {
             unsentRequest, Collections.singletonMap(TEST_PARTITION_2, Errors.TOPIC_AUTHORIZATION_FAILED));
         clientResponse.onComplete();
 
-        verifyRequestCompletedWithErrors(fetchOffsetsFuture, TopicAuthorizationException.class);
+        verifyRequestCompletedWithErrorResponse(fetchOffsetsFuture, TopicAuthorizationException.class);
         assertEquals(0, requestManager.requestsToRetry());
         assertEquals(0, requestManager.requestsToSend());
     }
@@ -721,23 +713,16 @@ public class OffsetsRequestManagerTest {
         NetworkClientDelegate.PollResult retriedPoll = requestManager.poll(time.milliseconds());
         verifySuccessfulPollAwaitingResponse(retriedPoll);
         NetworkClientDelegate.UnsentRequest unsentRequest = retriedPoll.unsentRequests.get(0);
-        System.out.println(expectedResult + " => " + toOffsetAndTimestamp(expectedResult));
-        ClientResponse clientResponse = buildClientResponse(unsentRequest, toOffsetAndTimestamp(expectedResult));
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampRes = expectedResult.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndTimestamp(e.getValue(), 1L)));
+        ClientResponse clientResponse = buildClientResponse(unsentRequest, offsetAndTimestampRes);
         clientResponse.onComplete();
         verifyRequestSuccessfullyCompleted(actualResult, expectedResult);
     }
 
 
-    private void verifyRequestCompletedWithErrors(CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> actualResult,
+    private void verifyRequestCompletedWithErrorResponse(CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> actualResult,
                                                          Class<? extends Throwable> expectedFailure) {
-        assertTrue(actualResult.isDone());
-        assertTrue(actualResult.isCompletedExceptionally());
-        Throwable failure = assertThrows(ExecutionException.class, actualResult::get);
-        assertEquals(expectedFailure, failure.getCause().getClass());
-    }
-
-    private void verifyEndOffsetsRequestCompletedWithErrors(CompletableFuture<Map<TopicPartition, Long>> actualResult,
-                                                  Class<? extends Throwable> expectedFailure) {
         assertTrue(actualResult.isDone());
         assertTrue(actualResult.isCompletedExceptionally());
         Throwable failure = assertThrows(ExecutionException.class, actualResult::get);
@@ -821,11 +806,6 @@ public class OffsetsRequestManagerTest {
         return new Cluster("clusterId", partitionLeaders.values(), partitions,
                 Collections.emptySet(),
                 Collections.emptySet());
-    }
-
-    private Map<TopicPartition, OffsetAndTimestamp> toOffsetAndTimestamp(Map<TopicPartition, Long> partitionsOffsets) {
-        return partitionsOffsets.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndTimestamp(e.getValue(), 1L)));
     }
 
     private ClientResponse buildClientResponse(
@@ -933,13 +913,6 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsResponse.UNKNOWN_EPOCH)));
 
         return buildClientResponse(request, topicResponses, false, null);
-    }
-
-    private ClientResponse buildClientResponseWithAuthenticationException(
-            final NetworkClientDelegate.UnsentRequest request) {
-        System.out.println("handler:" + request.future());
-        return buildClientResponse(request, Collections.emptyList(), true,
-                new AuthenticationException("Authentication failed"));
     }
 
     private ClientResponse buildClientResponse(
