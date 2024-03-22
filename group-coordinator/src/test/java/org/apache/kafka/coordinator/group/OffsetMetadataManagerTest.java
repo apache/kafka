@@ -102,6 +102,7 @@ public class OffsetMetadataManagerTest {
             private MetadataImage metadataImage = null;
             private GroupCoordinatorConfig config = null;
             private GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
+            private GroupConfigManager configManager = mock(GroupConfigManager.class);
 
             Builder withOffsetMetadataMaxSize(int offsetMetadataMaxSize) {
                 config = GroupCoordinatorConfigTest.createGroupCoordinatorConfig(offsetMetadataMaxSize, 60000L, 24 * 60 * 1000);
@@ -133,6 +134,7 @@ public class OffsetMetadataManagerTest {
                         .withMetadataImage(metadataImage)
                         .withConsumerGroupAssignors(Collections.singletonList(new RangeAssignor()))
                         .withGroupCoordinatorMetricsShard(metrics)
+                        .withGroupConfigManager(configManager)
                         .build();
                 }
 

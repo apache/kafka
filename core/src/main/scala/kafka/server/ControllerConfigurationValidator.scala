@@ -20,10 +20,11 @@ package kafka.server
 import java.util
 import java.util.Properties
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, GROUP, TOPIC}
 import org.apache.kafka.controller.ConfigurationValidator
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
@@ -66,6 +67,13 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
       if (brokerId < 0) {
         throw new InvalidRequestException("Invalid negative broker ID.")
       }
+    }
+  }
+
+  private def validateGroupName(
+    name: String): Unit = {
+    if (name.isEmpty) {
+      throw new InvalidRequestException("Default group resources are not allowed.")
     }
   }
 
@@ -113,6 +121,22 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
         val properties = new Properties()
         config.entrySet().forEach(e => properties.setProperty(e.getKey, e.getValue))
         ClientMetricsConfigs.validate(resource.name(), properties)
+      case GROUP =>
+        validateGroupName(resource.name())
+        val properties = new Properties()
+        val nullGroupConfigs = new mutable.ArrayBuffer[String]()
+        config.entrySet().forEach(e => {
+          if (e.getValue == null) {
+            nullGroupConfigs += e.getKey
+          } else {
+            properties.setProperty(e.getKey, e.getValue)
+          }
+        })
+        if (nullGroupConfigs.nonEmpty) {
+          throw new InvalidConfigurationException("Null value not supported for group configs: " +
+            nullGroupConfigs.mkString(","))
+        }
+        GroupConfig.validate(properties)
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }

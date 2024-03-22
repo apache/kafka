@@ -59,6 +59,11 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     _brokers.asInstanceOf[mutable.Buffer[KafkaServer]]
   }
 
+  def brokerServers: mutable.Buffer[BrokerServer] = {
+    checkIsKRaftTest()
+    _brokers.asInstanceOf[mutable.Buffer[BrokerServer]]
+  }
+
   var alive: Array[Boolean] = _
 
   /**

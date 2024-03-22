@@ -1762,7 +1762,7 @@ class ConfigCommandTest extends Logging {
       "--add-config", "interval.ms=1000"))
 
     val exception = assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, alterOpts, dummyAdminZkClient))
-    assertEquals("client-metrics is not a known entityType. Should be one of List(topics, clients, users, brokers, ips)", exception.getMessage)
+    assertEquals("client-metrics is not a known entityType. Should be one of [topics, clients, users, brokers, ips]", exception.getMessage)
   }
 
   class DummyAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {

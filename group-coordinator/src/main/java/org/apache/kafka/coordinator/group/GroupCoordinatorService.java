@@ -102,6 +102,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private Timer timer;
         private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
         private GroupCoordinatorMetrics groupCoordinatorMetrics;
+        private GroupConfigManager groupConfigManager;
 
         public Builder(
             int nodeId,
@@ -141,6 +142,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withGroupConfigManager(GroupConfigManager groupConfigManager) {
+            this.groupConfigManager = groupConfigManager;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
             if (config == null)
                 throw new IllegalArgumentException("Config must be set.");
@@ -156,6 +162,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
             if (groupCoordinatorMetrics == null)
                 throw new IllegalArgumentException("GroupCoordinatorMetrics must be set.");
+            if (groupConfigManager == null) {
+                throw new IllegalArgumentException("GroupConfigManager must be set.");
+            }
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
@@ -185,6 +194,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withDefaultWriteTimeOut(Duration.ofMillis(config.offsetCommitTimeoutMs))
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .withCoordinatorMetrics(groupCoordinatorMetrics)
+                    .withGroupConfigManager(groupConfigManager)
                     .build();
 
             return new GroupCoordinatorService(

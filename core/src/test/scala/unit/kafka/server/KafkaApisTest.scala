@@ -485,6 +485,45 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testIncrementalConsumerGroupAlterConfigs(): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+
+    val consumerGroupId = "consumer_group_1"
+    val resource = new ConfigResource(ConfigResource.Type.GROUP, consumerGroupId)
+
+    authorizeResource(authorizer, AclOperation.ALTER_CONFIGS, ResourceType.GROUP,
+      consumerGroupId, AuthorizationResult.ALLOWED)
+
+    val requestHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS,
+      ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion, clientId, 0)
+
+    val incrementalAlterConfigsRequest = getIncrementalConsumerGroupAlterConfigRequestBuilder(
+      Seq(resource)).build(requestHeader.apiVersion)
+    val request = buildRequest(incrementalAlterConfigsRequest,
+      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
+
+    when(controller.isActive).thenReturn(true)
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      any[Long])).thenReturn(0)
+    when(adminManager.incrementalAlterConfigs(any(), ArgumentMatchers.eq(false)))
+      .thenReturn(Map(resource -> ApiError.NONE))
+
+    createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
+    val response = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
+    verifyIncrementalAlterConfigResult(response, Map(consumerGroupId -> Errors.NONE ))
+    verify(authorizer, times(1)).authorize(any(), any())
+    verify(adminManager).incrementalAlterConfigs(any(), anyBoolean())
+  }
+
+  private def getIncrementalConsumerGroupAlterConfigRequestBuilder(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequest.Builder = {
+    val resourceMap = configResources.map(configResource => {
+      val entryToBeModified = new ConfigEntry("consumer.session.timeout.ms", "45000")
+      configResource -> Set(new AlterConfigOp(entryToBeModified, OpType.SET)).asJavaCollection
+    }).toMap.asJava
+    new IncrementalAlterConfigsRequest.Builder(resourceMap, false)
+  }
+
+  @Test
   def testAlterConfigsClientMetrics(): Unit = {
     val subscriptionName = "client_metric_subscription_1"
     val authorizedResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName)
@@ -1471,7 +1510,7 @@ class KafkaApisTest extends Logging {
       offsetCommitRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-    
+
     kafkaApis = createKafkaApis()
     kafkaApis.handle(
       requestChannelRequest,
@@ -2218,7 +2257,7 @@ class KafkaApisTest extends Logging {
     val transactionalId2 = "txnId2"
     val producerId = 15L
     val epoch = 0.toShort
-    
+
     val tp0 = new TopicPartition(topic, 0)
     val tp1 = new TopicPartition(topic, 1)
 
@@ -2271,12 +2310,12 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleAddPartitionsToTxnRequest(request, requestLocal)
 
     val response = verifyNoThrottling[AddPartitionsToTxnResponse](request)
-    
+
     val expectedErrors = Map(
       transactionalId1 -> Collections.singletonMap(tp0, Errors.NONE),
       transactionalId2 -> Collections.singletonMap(tp1, Errors.PRODUCER_FENCED)
     ).asJava
-    
+
     assertEquals(expectedErrors, response.errors())
   }
 
@@ -2384,7 +2423,7 @@ class KafkaApisTest extends Logging {
     )
 
     val response = verifyNoThrottling[AddPartitionsToTxnResponse](requestChannelRequest)
-    
+
     def checkErrorForTp(tp: TopicPartition, expectedError: Errors): Unit = {
       val error = if (version < 4)
         response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(tp)
@@ -6093,7 +6132,7 @@ class KafkaApisTest extends Logging {
     val header = RequestHeader.parse(buffer)
     // DelegationTokens require the context authenticated to be non SecurityProtocol.PLAINTEXT
     // and have a non KafkaPrincipal.ANONYMOUS principal. This test is done before the check
-    // for forwarding because after forwarding the context will have a different context. 
+    // for forwarding because after forwarding the context will have a different context.
     // We validate the context authenticated failure case in other integration tests.
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, Optional.empty(),
       new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"), listenerName, SecurityProtocol.SSL,
@@ -6888,7 +6927,7 @@ class KafkaApisTest extends Logging {
 
   @Test
   // Test that in KRaft mode, a request that isn't forwarded gets the correct error message.
-  // We skip the pre-forward checks in handleCreateTokenRequest 
+  // We skip the pre-forward checks in handleCreateTokenRequest
   def testRaftShouldAlwaysForwardCreateTokenRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     kafkaApis = createKafkaApis(raftSupport = true)
@@ -6897,7 +6936,7 @@ class KafkaApisTest extends Logging {
 
   @Test
   // Test that in KRaft mode, a request that isn't forwarded gets the correct error message.
-  // We skip the pre-forward checks in handleRenewTokenRequest 
+  // We skip the pre-forward checks in handleRenewTokenRequest
   def testRaftShouldAlwaysForwardRenewTokenRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     kafkaApis = createKafkaApis(raftSupport = true)
@@ -6906,7 +6945,7 @@ class KafkaApisTest extends Logging {
 
   @Test
   // Test that in KRaft mode, a request that isn't forwarded gets the correct error message.
-  // We skip the pre-forward checks in handleExpireTokenRequest 
+  // We skip the pre-forward checks in handleExpireTokenRequest
   def testRaftShouldAlwaysForwardExpireTokenRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     kafkaApis = createKafkaApis(raftSupport = true)

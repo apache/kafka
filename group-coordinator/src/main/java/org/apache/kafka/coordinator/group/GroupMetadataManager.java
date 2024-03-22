@@ -150,6 +150,7 @@ public class GroupMetadataManager {
         private Time time = null;
         private CoordinatorTimer<Void, Record> timer = null;
         private List<PartitionAssignor> consumerGroupAssignors = null;
+        private GroupConfigManager groupConfigManager = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupHeartbeatIntervalMs = 5000;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -184,6 +185,11 @@ public class GroupMetadataManager {
 
         Builder withConsumerGroupAssignors(List<PartitionAssignor> consumerGroupAssignors) {
             this.consumerGroupAssignors = consumerGroupAssignors;
+            return this;
+        }
+
+        Builder withGroupConfigManager(GroupConfigManager groupConfigManager) {
+            this.groupConfigManager = groupConfigManager;
             return this;
         }
 
@@ -254,6 +260,9 @@ public class GroupMetadataManager {
                 throw new IllegalArgumentException("Assignors must be set before building.");
             if (metrics == null)
                 throw new IllegalArgumentException("GroupCoordinatorMetricsShard must be set.");
+            if (groupConfigManager == null) {
+                throw new IllegalArgumentException("GroupConfigManager must be set.");
+            }
 
             return new GroupMetadataManager(
                 snapshotRegistry,
@@ -263,6 +272,7 @@ public class GroupMetadataManager {
                 metrics,
                 consumerGroupAssignors,
                 metadataImage,
+                groupConfigManager,
                 consumerGroupMaxSize,
                 consumerGroupSessionTimeoutMs,
                 consumerGroupHeartbeatIntervalMs,
@@ -326,6 +336,11 @@ public class GroupMetadataManager {
     private final TimelineHashMap<String, TimelineHashSet<String>> groupsByTopics;
 
     /**
+     * The group manager.
+     */
+    private final GroupConfigManager groupConfigManager;
+
+    /**
      * The maximum number of members allowed in a single consumer group.
      */
     private final int consumerGroupMaxSize;
@@ -336,7 +351,7 @@ public class GroupMetadataManager {
     private final int consumerGroupHeartbeatIntervalMs;
 
     /**
-     * The session timeout for consumer groups.
+     * The default session timeout for consumer groups.
      */
     private final int consumerGroupSessionTimeoutMs;
 
@@ -392,6 +407,7 @@ public class GroupMetadataManager {
         GroupCoordinatorMetricsShard metrics,
         List<PartitionAssignor> assignors,
         MetadataImage metadataImage,
+        GroupConfigManager groupConfigManager,
         int consumerGroupMaxSize,
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
@@ -413,6 +429,7 @@ public class GroupMetadataManager {
         this.defaultAssignor = assignors.get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.groupConfigManager = groupConfigManager;
         this.consumerGroupMaxSize = consumerGroupMaxSize;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
         this.consumerGroupHeartbeatIntervalMs = consumerGroupHeartbeatIntervalMs;
@@ -1236,7 +1253,7 @@ public class GroupMetadataManager {
         ConsumerGroupHeartbeatResponseData response = new ConsumerGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs);
+            .setHeartbeatIntervalMs(getConsumerGroupHeartbeatIntervalMs(groupId));
 
         // The assignment is only provided in the following cases:
         // 1. The member sent a full request. It does so when joining or rejoining the group with zero
@@ -1459,7 +1476,7 @@ public class GroupMetadataManager {
         String memberId
     ) {
         String key = consumerGroupSessionTimeoutKey(groupId, memberId);
-        timer.schedule(key, consumerGroupSessionTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
+        timer.schedule(key, getConsumerGroupSessionTimeoutMs(groupId), TimeUnit.MILLISECONDS, true, () -> {
             try {
                 ConsumerGroup group = consumerGroup(groupId);
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
@@ -3675,6 +3692,25 @@ public class GroupMetadataManager {
      */
     public Set<String> groupIds() {
         return Collections.unmodifiableSet(this.groups.keySet());
+    }
+
+
+    /**
+     * Get the session timeout of the provided group.
+     */
+    private int getConsumerGroupSessionTimeoutMs(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.getGroupConfig(groupId);
+        return groupConfig.map(config -> config.sessionTimeoutMs)
+            .orElse(consumerGroupSessionTimeoutMs);
+    }
+
+    /**
+     * Get the heartbeat interval of the provided group.
+     */
+    private int getConsumerGroupHeartbeatIntervalMs(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.getGroupConfig(groupId);
+        return groupConfig.map(config -> config.heartbeatIntervalMs)
+            .orElse(consumerGroupHeartbeatIntervalMs);
     }
 
     /**

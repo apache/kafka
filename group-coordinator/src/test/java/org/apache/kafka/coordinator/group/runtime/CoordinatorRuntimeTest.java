@@ -25,6 +25,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics;
@@ -357,6 +358,12 @@ public class CoordinatorRuntimeTest {
         }
 
         @Override
+        public CoordinatorShardBuilder<MockCoordinatorShard, String> withGroupConfigManager(
+            GroupConfigManager groupConfigManager) {
+            return this;
+        }
+
+        @Override
         public CoordinatorShardBuilder<MockCoordinatorShard, String> withCoordinatorMetrics(CoordinatorMetrics coordinatorMetrics) {
             return this;
         }
@@ -407,6 +414,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -414,6 +422,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
         when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+        when(builder.withGroupConfigManager(any())).thenReturn(builder);
         when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
@@ -476,6 +485,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -483,6 +493,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
         when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+        when(builder.withGroupConfigManager(any())).thenReturn(builder);
         when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
@@ -531,6 +542,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -538,6 +550,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
         when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+        when(builder.withGroupConfigManager(any())).thenReturn(builder);
         when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
@@ -584,6 +597,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -591,6 +605,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
         when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+        when(builder.withGroupConfigManager(any())).thenReturn(builder);
         when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
@@ -654,6 +669,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -661,6 +677,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
         when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+        when(builder.withGroupConfigManager(any())).thenReturn(builder);
         when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
@@ -760,6 +777,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -801,6 +819,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -810,6 +829,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
         when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+        when(builder.withGroupConfigManager(any())).thenReturn(builder);
         when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
@@ -843,6 +863,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Schedule the loading.
@@ -966,6 +987,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Scheduling a write fails with a NotCoordinatorException because the coordinator
@@ -989,6 +1011,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -1016,6 +1039,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -1075,6 +1099,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -1126,6 +1151,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -1232,6 +1258,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(shardBuilderSupplier)
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Schedule the loading.
@@ -1372,6 +1399,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Schedule the loading.
@@ -1481,6 +1509,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -1537,6 +1566,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -1600,6 +1630,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -1691,6 +1722,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -1748,6 +1780,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Schedule a read. It fails because the coordinator does not exist.
@@ -1772,6 +1805,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -1868,6 +1902,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -1936,6 +1971,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         MockCoordinatorShard coordinator0 = mock(MockCoordinatorShard.class);
@@ -1947,6 +1983,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
         when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+        when(builder.withGroupConfigManager(any())).thenReturn(builder);
         when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.build())
@@ -1998,6 +2035,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -2052,6 +2090,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -2126,6 +2165,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -2197,6 +2237,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -2329,6 +2370,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -2378,6 +2420,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -2385,6 +2428,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
         when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+        when(builder.withGroupConfigManager(any())).thenReturn(builder);
         when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
@@ -2455,6 +2499,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -2462,6 +2507,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
         when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+        when(builder.withGroupConfigManager(any())).thenReturn(builder);
         when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
@@ -2510,6 +2556,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -2517,6 +2564,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
         when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+        when(builder.withGroupConfigManager(any())).thenReturn(builder);
         when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
@@ -2566,6 +2614,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -2573,6 +2622,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withTime(any())).thenReturn(builder);
         when(builder.withTimer(any())).thenReturn(builder);
         when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+        when(builder.withGroupConfigManager(any())).thenReturn(builder);
         when(builder.withTopicPartition(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
