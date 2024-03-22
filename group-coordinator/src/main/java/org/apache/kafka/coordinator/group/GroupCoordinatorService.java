@@ -865,9 +865,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
             exception,
             (error, __) -> TxnOffsetCommitRequest.getErrorResponse(
                 request,
-                // Transaction verification can throw `NETWORK_EXCEPTION`s, which older clients may
-                // not expect. Translate them to `COORDINATOR_LOAD_IN_PROGRESS` which triggers a
-                // retry without coordinator lookup.
+                // Transaction verification can fail with `NETWORK_EXCEPTION`, a retriable error
+                // which older clients may not expect and retry correctly. We have the option of
+                // translating `NETWORK_EXCEPTION` to either `COORDINATOR_LOAD_IN_PROGRESS` or
+                // `COORDINATOR_NOT_AVAILABLE`, which trigger the desired retry behavior in older
+                // clients. We use `COORDINATOR_LOAD_IN_PROGRESS` because
+                // `COORDINATOR_NOT_AVAILABLE` also triggers an unnecessary coordinator lookup.
                 error == Errors.NETWORK_EXCEPTION ?
                     Errors.COORDINATOR_LOAD_IN_PROGRESS :
                     error
