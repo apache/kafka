@@ -128,6 +128,7 @@ public interface PartitionWriter<T> {
      * @param transactionalId   The transactional id.
      * @param producerId        The producer id.
      * @param producerEpoch     The producer epoch.
+     * @param apiVersion        The version of the Request used.
      * @return A future failed with any error encountered; or the {@link VerificationGuard}
      *         if the transaction required verification and {@link VerificationGuard#SENTINEL}
      *         if it did not.
@@ -137,6 +138,7 @@ public interface PartitionWriter<T> {
         TopicPartition tp,
         String transactionalId,
         long producerId,
-        short producerEpoch
+        short producerEpoch,
+        short apiVersion
     ) throws KafkaException;
 }

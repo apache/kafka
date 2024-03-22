@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.TransactionResult;
@@ -86,6 +87,8 @@ import static org.mockito.Mockito.when;
 public class CoordinatorRuntimeTest {
     private static final TopicPartition TP = new TopicPartition("__consumer_offsets", 0);
     private static final Duration DEFAULT_WRITE_TIMEOUT = Duration.ofMillis(5);
+
+    private static final short TXN_OFFSET_COMMIT_LATEST_VERSION = ApiKeys.TXN_OFFSET_COMMIT.latestVersion();
 
     /**
      * A CoordinatorEventProcessor that directly executes the operations. This is
@@ -1246,7 +1249,8 @@ public class CoordinatorRuntimeTest {
             TP,
             "transactional-id",
             100L,
-            (short) 50
+            (short) 50,
+            TXN_OFFSET_COMMIT_LATEST_VERSION
         )).thenReturn(CompletableFuture.completedFuture(guard));
 
         // Schedule a transactional write.
@@ -1257,7 +1261,8 @@ public class CoordinatorRuntimeTest {
             100L,
             (short) 50,
             Duration.ofMillis(5000),
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response")
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response"),
+            TXN_OFFSET_COMMIT_LATEST_VERSION
         );
 
         // Verify that the writer got the records with the correct
@@ -1328,7 +1333,8 @@ public class CoordinatorRuntimeTest {
             TP,
             "transactional-id",
             100L,
-            (short) 50
+            (short) 50,
+            TXN_OFFSET_COMMIT_LATEST_VERSION
         )).thenReturn(FutureUtils.failedFuture(Errors.NOT_ENOUGH_REPLICAS.exception()));
 
         // Schedule a transactional write.
@@ -1339,7 +1345,8 @@ public class CoordinatorRuntimeTest {
             100L,
             (short) 50,
             Duration.ofMillis(5000),
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response")
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response"),
+            TXN_OFFSET_COMMIT_LATEST_VERSION
         );
 
         // Verify that the future is failed with the expected exception.
@@ -1391,7 +1398,8 @@ public class CoordinatorRuntimeTest {
             100L,
             (short) 5,
             DEFAULT_WRITE_TIMEOUT,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1")
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"),
+            TXN_OFFSET_COMMIT_LATEST_VERSION
         );
 
         // Verify that the write is not committed yet.
@@ -1556,7 +1564,9 @@ public class CoordinatorRuntimeTest {
             100L,
             (short) 5,
             DEFAULT_WRITE_TIMEOUT,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"),
+            TXN_OFFSET_COMMIT_LATEST_VERSION
+        );
 
         // Verify that the state has been updated.
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
@@ -1638,7 +1648,9 @@ public class CoordinatorRuntimeTest {
             100L,
             (short) 5,
             DEFAULT_WRITE_TIMEOUT,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"),
+            TXN_OFFSET_COMMIT_LATEST_VERSION
+        );
 
         // Verify that the state has been updated.
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
