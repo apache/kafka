@@ -863,18 +863,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "txn-commit-offset",
             request,
             exception,
-            (error, __) -> TxnOffsetCommitRequest.getErrorResponse(
-                request,
-                // Transaction verification can fail with `NETWORK_EXCEPTION`, a retriable error
-                // which older clients may not expect and retry correctly. We have the option of
-                // translating `NETWORK_EXCEPTION` to either `COORDINATOR_LOAD_IN_PROGRESS` or
-                // `COORDINATOR_NOT_AVAILABLE`, which trigger the desired retry behavior in older
-                // clients. We use `COORDINATOR_LOAD_IN_PROGRESS` because
-                // `COORDINATOR_NOT_AVAILABLE` also triggers an unnecessary coordinator lookup.
-                error == Errors.NETWORK_EXCEPTION ?
-                    Errors.COORDINATOR_LOAD_IN_PROGRESS :
-                    error
-            )
+            (error, __) -> TxnOffsetCommitRequest.getErrorResponse(request, error)
         ));
     }
 
@@ -1105,6 +1094,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 log.error("Operation {} with {} hit an unexpected exception: {}.",
                     operationName, operationInput, exception.getMessage(), exception);
                 return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
+
+            case NETWORK_EXCEPTION:
+                // When committing offsets transactionally, we now verify the transaction with the
+                // transaction coordinator. Verification can fail with `NETWORK_EXCEPTION`, a
+                // retriable error which older clients may not expect and retry correctly. We have
+                // the option of translating `NETWORK_EXCEPTION` to either
+                // `COORDINATOR_LOAD_IN_PROGRESS` or `COORDINATOR_NOT_AVAILABLE`, which trigger the
+                // desired retry behavior in older clients. We use `COORDINATOR_LOAD_IN_PROGRESS`
+                // because `COORDINATOR_NOT_AVAILABLE` also triggers an unnecessary coordinator
+                // lookup.
+                return handler.apply(Errors.COORDINATOR_LOAD_IN_PROGRESS, null);
 
             case UNKNOWN_TOPIC_OR_PARTITION:
             case NOT_ENOUGH_REPLICAS:
