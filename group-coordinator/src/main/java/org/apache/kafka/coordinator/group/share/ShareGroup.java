@@ -184,8 +184,6 @@ public class ShareGroup extends AbstractGroup {
      *
      * @param records The list of records.
      */
-    // TODO: records are less generated for share consumer hence we might want to manual things before
-    //  replay.
     @Override
     public void createGroupTombstoneRecords(List<Record> records) {
         records.add(RecordHelpers.newGroupEpochTombstoneRecord(groupId()));
@@ -198,7 +196,7 @@ public class ShareGroup extends AbstractGroup {
 
     @Override
     public boolean isInStates(final Set<String> statesFilter, final long committedOffset) {
-        return false;
+        return statesFilter.contains(state.get(committedOffset).name);
     }
 
     /**

@@ -46,6 +46,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
@@ -67,6 +68,7 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.group.share.ShareGroup;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -494,6 +496,14 @@ public class GroupMetadataManagerTestContext {
     ) {
         return groupMetadataManager
             .getOrMaybeCreateConsumerGroup(groupId, false)
+            .state();
+    }
+
+    public ShareGroup.ShareGroupState shareGroupState(
+        String groupId
+    ) {
+        return groupMetadataManager
+            .getOrMaybeCreateShareGroup(groupId, false)
             .state();
     }
 
@@ -1119,7 +1129,7 @@ public class GroupMetadataManagerTestContext {
     }
 
     public List<ShareGroupDescribeResponseData.DescribedGroup> shareGroupDescribe(List<String> groupIds) {
-        return groupMetadataManager.shareGroupDescribe(groupIds, 0L);
+        return groupMetadataManager.shareGroupDescribe(groupIds, lastCommittedOffset);
     }
 
     public void verifyHeartbeat(
@@ -1251,6 +1261,13 @@ public class GroupMetadataManagerTestContext {
     public void replay(
         Record record
     ) {
+        replay(record, GroupType.CONSUMER);
+    }
+
+    public void replay(
+        Record record,
+        GroupType groupType
+    ) {
         ApiMessageAndVersion key = record.key();
         ApiMessageAndVersion value = record.value();
 
@@ -1269,7 +1286,8 @@ public class GroupMetadataManagerTestContext {
             case ConsumerGroupMemberMetadataKey.HIGHEST_SUPPORTED_VERSION:
                 groupMetadataManager.replay(
                     (ConsumerGroupMemberMetadataKey) key.message(),
-                    (ConsumerGroupMemberMetadataValue) messageOrNull(value)
+                    (ConsumerGroupMemberMetadataValue) messageOrNull(value),
+                    groupType
                 );
                 break;
 
@@ -1283,28 +1301,32 @@ public class GroupMetadataManagerTestContext {
             case ConsumerGroupPartitionMetadataKey.HIGHEST_SUPPORTED_VERSION:
                 groupMetadataManager.replay(
                     (ConsumerGroupPartitionMetadataKey) key.message(),
-                    (ConsumerGroupPartitionMetadataValue) messageOrNull(value)
+                    (ConsumerGroupPartitionMetadataValue) messageOrNull(value),
+                    groupType
                 );
                 break;
 
             case ConsumerGroupTargetAssignmentMemberKey.HIGHEST_SUPPORTED_VERSION:
                 groupMetadataManager.replay(
                     (ConsumerGroupTargetAssignmentMemberKey) key.message(),
-                    (ConsumerGroupTargetAssignmentMemberValue) messageOrNull(value)
+                    (ConsumerGroupTargetAssignmentMemberValue) messageOrNull(value),
+                    groupType
                 );
                 break;
 
             case ConsumerGroupTargetAssignmentMetadataKey.HIGHEST_SUPPORTED_VERSION:
                 groupMetadataManager.replay(
                     (ConsumerGroupTargetAssignmentMetadataKey) key.message(),
-                    (ConsumerGroupTargetAssignmentMetadataValue) messageOrNull(value)
+                    (ConsumerGroupTargetAssignmentMetadataValue) messageOrNull(value),
+                    groupType
                 );
                 break;
 
             case ConsumerGroupCurrentMemberAssignmentKey.HIGHEST_SUPPORTED_VERSION:
                 groupMetadataManager.replay(
                     (ConsumerGroupCurrentMemberAssignmentKey) key.message(),
-                    (ConsumerGroupCurrentMemberAssignmentValue) messageOrNull(value)
+                    (ConsumerGroupCurrentMemberAssignmentValue) messageOrNull(value),
+                    groupType
                 );
                 break;
 

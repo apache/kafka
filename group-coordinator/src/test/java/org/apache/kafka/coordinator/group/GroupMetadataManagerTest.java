@@ -75,6 +75,8 @@ import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.group.share.ShareGroup;
+import org.apache.kafka.coordinator.group.share.ShareGroupMember;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -8474,12 +8476,14 @@ public class GroupMetadataManagerTest {
     public void testListGroups() {
         String consumerGroupId = "consumer-group-id";
         String classicGroupId = "classic-group-id";
+        String shareGroupId = "share-group-id";
         String memberId1 = Uuid.randomUuid().toString();
         String fooTopicName = "foo";
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
+            .withShareGroupAssignor(assignor)
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10))
             .build();
 
@@ -8494,6 +8498,7 @@ public class GroupMetadataManagerTest {
                 .setProtocol("range")
                 .setCurrentStateTimestamp(context.time.milliseconds()),
             MetadataVersion.latestTesting()));
+        context.replay(RecordHelpers.newGroupEpochRecord(shareGroupId, 6, GroupType.SHARE));
         context.commit();
         ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(classicGroupId, false);
         context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, new ConsumerGroupMember.Builder(memberId1)
@@ -8517,7 +8522,12 @@ public class GroupMetadataManagerTest {
                     .setGroupId(consumerGroupId)
                     .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                     .setGroupState(ConsumerGroup.ConsumerGroupState.EMPTY.toString())
-                    .setGroupType(Group.GroupType.CONSUMER.toString())
+                    .setGroupType(Group.GroupType.CONSUMER.toString()),
+                new ListGroupsResponseData.ListedGroup()
+                    .setGroupId(shareGroupId)
+                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                    .setGroupState(ShareGroup.ShareGroupState.EMPTY.toString())
+                    .setGroupType(Group.GroupType.SHARE.toString())
             ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
@@ -8553,7 +8563,12 @@ public class GroupMetadataManagerTest {
                 .setGroupId(classicGroup.groupId())
                 .setProtocolType("classic")
                 .setGroupState(EMPTY.toString())
-                .setGroupType(Group.GroupType.CLASSIC.toString())
+                .setGroupType(Group.GroupType.CLASSIC.toString()),
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(shareGroupId)
+                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState(ShareGroup.ShareGroupState.EMPTY.toString())
+                .setGroupType(Group.GroupType.SHARE.toString())
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
@@ -8584,6 +8599,18 @@ public class GroupMetadataManagerTest {
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
+        actualAllGroupMap = context.sendListGroups(Collections.emptyList(), Collections.singletonList("Share")).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Stream.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(shareGroupId)
+                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState(ShareGroup.ShareGroupState.EMPTY.toString())
+                .setGroupType(GroupType.SHARE.toString())
+        ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
         actualAllGroupMap = context.sendListGroups(Arrays.asList("empty", "Assigning"), Collections.emptyList()).stream()
             .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
         expectAllGroupMap = Stream.of(
@@ -8596,7 +8623,12 @@ public class GroupMetadataManagerTest {
                 .setGroupId(consumerGroupId)
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
-                .setGroupType(Group.GroupType.CONSUMER.toString())
+                .setGroupType(Group.GroupType.CONSUMER.toString()),
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(shareGroupId)
+                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState(ShareGroup.ShareGroupState.EMPTY.toString())
+                .setGroupType(GroupType.SHARE.toString())
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
@@ -9678,6 +9710,62 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testShareGroupDescribeNoErrors() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share-range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.emptyMap()
+        ));
+
+        List<String> groupIds = Arrays.asList("group-id-1", "group-id-2");
+        context.replay(RecordHelpers.newGroupEpochRecord(groupIds.get(0), 100, GroupType.SHARE));
+        context.replay(RecordHelpers.newGroupEpochRecord(groupIds.get(1), 15, GroupType.SHARE));
+
+        CoordinatorResult<ShareGroupHeartbeatResponseData, Record> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupIds.get(1))
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Collections.singletonList("foo")));
+
+        // Verify that a member id was generated for the new member.
+        String memberId = result.response().memberId();
+        assertNotNull(memberId);
+        context.commit();
+
+        List<ShareGroupDescribeResponseData.DescribedGroup> expected = Arrays.asList(
+            new ShareGroupDescribeResponseData.DescribedGroup()
+                .setGroupEpoch(100)
+                .setGroupId(groupIds.get(0))
+                .setGroupState(ShareGroup.ShareGroupState.EMPTY.toString())
+                .setAssignorName("share-range"),
+            new ShareGroupDescribeResponseData.DescribedGroup()
+                .setGroupEpoch(16)
+                .setAssignmentEpoch(16)
+                .setGroupId(groupIds.get(1))
+                .setMembers(Collections.singletonList(
+                    new ShareGroupMember.Builder(memberId)
+                        .setMemberEpoch(16)
+                        .setClientId("client")
+                        .setClientHost("localhost/127.0.0.1")
+                        .setSubscribedTopicNames(Collections.singletonList("foo"))
+                        .build()
+                    .asShareGroupDescribeMember(
+                        new MetadataImageBuilder().build().topics()
+                    )
+                ))
+                .setGroupState(ShareGroup.ShareGroupState.STABLE.toString())
+                .setAssignorName("share-range")
+        );
+        List<ShareGroupDescribeResponseData.DescribedGroup> actual = context.shareGroupDescribe(groupIds);
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
     public void testShareGroupMemberIdGeneration() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("share");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -9966,6 +10054,72 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(0)
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
+    }
+
+    @Test
+    public void testShareGroupDelete() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.groupMetadataManager.getOrMaybeCreateShareGroup("share-group-id", true);
+
+        List<Record> expectedRecords = Collections.singletonList(
+            RecordHelpers.newGroupEpochTombstoneRecord("share-group-id")
+        );
+        List<Record> records = new ArrayList<>();
+        context.groupMetadataManager.deleteGroup("share-group-id", records);
+        assertEquals(expectedRecords, records);
+    }
+
+    @Test
+    public void testShareGroupStates() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share-range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.emptyMap()
+        ));
+
+        context.replay(RecordHelpers.newGroupEpochRecord(groupId, 10, GroupType.SHARE), GroupType.SHARE);
+
+        assertEquals(ShareGroup.ShareGroupState.EMPTY, context.shareGroupState(groupId));
+
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId, new ShareGroupMember.Builder(memberId1)
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
+            .build()), GroupType.SHARE);
+        context.replay(RecordHelpers.newGroupEpochRecord(groupId, 11, GroupType.SHARE), GroupType.SHARE);
+
+        assertEquals(ShareGroup.ShareGroupState.STABLE, context.shareGroupState(groupId));
+
+        context.replay(RecordHelpers.newTargetAssignmentRecord(groupId, memberId1, mkAssignment(
+            mkTopicAssignment(fooTopicId, 1, 2, 3))), GroupType.SHARE);
+        context.replay(RecordHelpers.newTargetAssignmentEpochRecord(groupId, 11), GroupType.SHARE);
+
+        assertEquals(ShareGroup.ShareGroupState.STABLE, context.shareGroupState(groupId));
+
+        context.replay(RecordHelpers.newCurrentAssignmentRecord(groupId, new ShareGroupMember.Builder(memberId1)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(10)
+            .setTargetMemberEpoch(11)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2)))
+            .build()), GroupType.SHARE);
+
+        assertEquals(ShareGroup.ShareGroupState.STABLE, context.shareGroupState(groupId));
+
+        context.replay(RecordHelpers.newCurrentAssignmentRecord(groupId, new ShareGroupMember.Builder(memberId1)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(10)
+            .setTargetMemberEpoch(11)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2, 3)))
+            .build()), GroupType.SHARE);
+
+        assertEquals(ShareGroup.ShareGroupState.STABLE, context.shareGroupState(groupId));
     }
 
     private static void checkJoinGroupResponse(
