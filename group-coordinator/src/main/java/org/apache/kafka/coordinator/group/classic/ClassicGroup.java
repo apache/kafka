@@ -1243,9 +1243,9 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Complete all the awaiting join future.
+     * Complete all the awaiting join future with the given error.
      *
-     * @param response  the join response to complete the future with.
+     * @param error  the error to complete the future with.
      */
     public void completeAllJoinFutures(
         Errors error
