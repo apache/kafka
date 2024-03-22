@@ -14,42 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.header.Headers;
 
-public class ToInternal extends To {
+/**
+ * Function to map Key Value pair into {@link Headers}.
+ *
+ * @param <K> key type
+ * @param <V> value type
+ */
+public interface RecordHeadersMapper<K, V> {
 
-    public ToInternal() {
-        super(To.all());
-    }
-
-    public ToInternal(final To to) {
-        super(to);
-    }
-
-    public void update(final To to) {
-        super.update(to);
-    }
-
-    public boolean hasTimestamp() {
-        return timestamp != -1;
-    }
-
-    public boolean hasHeaders() {
-        return headers != null;
-    }
-
-    public long timestamp() {
-        return timestamp;
-    }
-
-    public Headers headers() {
-        return headers;
-    }
-
-    public String child() {
-        return childName;
-    }
+    Headers get(final K key, final V value);
 }

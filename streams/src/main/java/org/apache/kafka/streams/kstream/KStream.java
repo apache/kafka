@@ -395,6 +395,28 @@ public interface KStream<K, V> {
                                   final Named named);
 
     /**
+     * Reads current record metadata (timestamp, headers) to be used at the DSL level.
+     *
+     * @return org.apache.kafka.streams.kstream.RecordValue
+     */
+    KStream<K, RecordValue<V>> mapRecordValue(final Named named);
+
+    KStream<K, RecordValue<V>> mapRecordValue();
+
+    /**
+     * Set headers to the record crossing the stream.
+     *
+     * If existing headers are needed for this calculation, see {@link KStream#mapRecordValue()}
+     *
+     * @param action to map from K/V to Record headers.
+     * @param named
+     * @return
+     */
+    KStream<K, V> setRecordHeaders(final RecordHeadersMapper<? super K, ? super V> action, final Named named);
+
+    KStream<K, V> setRecordHeaders(final RecordHeadersMapper<? super K, ? super V> action);
+
+    /**
      * Transform each record of the input stream into zero or more records in the output stream (both key and value type
      * can be altered arbitrarily).
      * The provided {@link KeyValueMapper} is applied to each input record and computes zero or more output records.
