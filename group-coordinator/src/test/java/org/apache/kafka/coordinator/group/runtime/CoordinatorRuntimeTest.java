@@ -2663,6 +2663,7 @@ public class CoordinatorRuntimeTest {
         processor.poll();
 
         assertEquals(-1, runtime.contextOrThrow(TP).highWatermarklistener.lastHighWatermark());
+        assertEquals(2, runtime.contextOrThrow(TP).coordinator.lastCommittedOffset());
         assertTrue(write1.isDone());
         assertTrue(write2.isDone());
     }
