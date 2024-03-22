@@ -774,6 +774,16 @@ public class GroupMetadataManager {
         }
     }
 
+    void convertToConsumerGroup(ClassicGroup classicGroup, List<Record> records) {
+        classicGroup.completeAllJoinFutures(Errors.REBALANCE_IN_PROGRESS);
+        classicGroup.completeAllSyncFutures(Errors.REBALANCE_IN_PROGRESS);
+        createGroupTombstoneRecords(classicGroup, records);
+        classicGroup.convertToConsumerGroup(records, metadataImage.topics());
+        if (classicGroup.isInState(PREPARING_REBALANCE) || classicGroup.isInState(COMPLETING_REBALANCE)) {
+            records.add(RecordHelpers.newGroupEpochRecord(classicGroup.groupId(), classicGroup.generationId() + 1));
+        }
+    }
+
     /**
      * Removes the group.
      *
