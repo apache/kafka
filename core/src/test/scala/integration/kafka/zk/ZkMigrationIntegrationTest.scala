@@ -48,7 +48,7 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
-import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
+import org.apache.kafka.server.config.ConfigType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue, fail}
 import org.junit.jupiter.api.{Assumptions, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -227,11 +227,11 @@ class ZkMigrationIntegrationTest {
     createTopicResult.all().get(60, TimeUnit.SECONDS)
 
     val quotas = new util.ArrayList[ClientQuotaAlteration]()
-    val defaultUserEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> ConfigEntityName.DEFAULT).asJava)
+    val defaultUserEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, null))
     quotas.add(new ClientQuotaAlteration(defaultUserEntity, List(new ClientQuotaAlteration.Op("consumer_byte_rate", 900.0)).asJava))
-    val defaultClientIdEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> ConfigEntityName.DEFAULT).asJava)
+    val defaultClientIdEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.CLIENT_ID, null))
     quotas.add(new ClientQuotaAlteration(defaultClientIdEntity, List(new ClientQuotaAlteration.Op("consumer_byte_rate", 900.0)).asJava))
-    val defaultIpEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> null.asInstanceOf[String]).asJava)
+    val defaultIpEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.IP, null))
     quotas.add(new ClientQuotaAlteration(defaultIpEntity, List(new ClientQuotaAlteration.Op("connection_creation_rate", 9.0)).asJava))
     val userEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> "user/1@prod").asJava)
     quotas.add(new ClientQuotaAlteration(userEntity, List(new ClientQuotaAlteration.Op("consumer_byte_rate", 1000.0)).asJava))
@@ -275,15 +275,15 @@ class ZkMigrationIntegrationTest {
       assertEquals(10, image.topics().getTopic("test-topic-3").partitions().size())
 
       val clientQuotas = image.clientQuotas().entities()
-      assertEquals(6, clientQuotas.size())
-      assertEquals(true, clientQuotas.containsKey(defaultUserEntity))
-      assertEquals(true, clientQuotas.containsKey(defaultClientIdEntity))
-      assertEquals(true, clientQuotas.containsKey(new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "").asJava))) // default ip
-      assertEquals(true, clientQuotas.containsKey(userEntity))
-      assertEquals(true, clientQuotas.containsKey(userClientEntity))
-      assertEquals(true, clientQuotas.containsKey(ipEntity))
+      assertEquals(new java.util.HashSet[ClientQuotaEntity](java.util.Arrays.asList(
+        defaultUserEntity,
+        defaultClientIdEntity,
+        defaultIpEntity,
+        userEntity,
+        userClientEntity,
+        ipEntity
+      )), clientQuotas.keySet())
     }
-
     migrationState = migrationClient.releaseControllerLeadership(migrationState)
   }
 

@@ -26,12 +26,13 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type
-import org.apache.kafka.common.errors.{InvalidPartitionsException,PolicyViolationException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.{InvalidPartitionsException, PolicyViolationException, UnsupportedVersionException}
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.metadata.{ConfigRecord, FeatureLevelRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors._
+import org.apache.kafka.common.quota.ClientQuotaAlteration.Op
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -315,6 +316,68 @@ class KRaftClusterTest {
           assertEquals(2, results.size(), "Broker did not see two client quotas")
           assertEquals(9999.0, results.get(entity).get("producer_byte_rate"), 1e-6)
           assertEquals(9998.0, results.get(entity2).get("producer_byte_rate"), 1e-6)
+        }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  def setConsumerByteRate(
+    admin: Admin,
+    entity: ClientQuotaEntity,
+    value: Long
+  ): Unit = {
+    admin.alterClientQuotas(Collections.singletonList(
+      new ClientQuotaAlteration(entity, Collections.singletonList(
+        new Op("consumer_byte_rate", value.doubleValue()))))).
+        all().get()
+  }
+
+  def getConsumerByteRates(admin: Admin): Map[ClientQuotaEntity, Long] = {
+    val allFilter = ClientQuotaFilter.contains(Collections.emptyList())
+    val results = new java.util.HashMap[ClientQuotaEntity, Long]
+    admin.describeClientQuotas(allFilter).entities().get().forEach {
+      case (entity, entityMap) =>
+        Option(entityMap.get("consumer_byte_rate")).foreach {
+          case value => results.put(entity, value.longValue())
+        }
+    }
+    results.asScala.toMap
+  }
+
+  @Test
+  def testDefaultClientQuotas(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
+        "Broker never made it to RUNNING state.")
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val defaultUser = new ClientQuotaEntity(Collections.singletonMap[String, String]("user", null))
+        val bobUser = new ClientQuotaEntity(Collections.singletonMap[String, String]("user", "bob"))
+        TestUtils.retry(30000) {
+          assertEquals(Map(), getConsumerByteRates(admin))
+        }
+        setConsumerByteRate(admin, defaultUser, 100L)
+        TestUtils.retry(30000) {
+          assertEquals(Map(
+              defaultUser -> 100L
+            ), getConsumerByteRates(admin))
+        }
+        setConsumerByteRate(admin, bobUser, 1000L)
+        TestUtils.retry(30000) {
+          assertEquals(Map(
+            defaultUser -> 100L,
+            bobUser -> 1000L
+          ), getConsumerByteRates(admin))
         }
       } finally {
         admin.close()
