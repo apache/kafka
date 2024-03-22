@@ -20,6 +20,7 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchMetadata;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -29,6 +30,8 @@ import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.storage.internals.log.FetchIsolation;
+import org.apache.kafka.storage.internals.log.FetchParams;
 import org.junit.jupiter.api.Test;
 
 import org.junit.jupiter.api.Timeout;
@@ -45,6 +48,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -53,9 +60,17 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.when;
+import static org.mockito.internal.verification.VerificationModeFactory.atLeast;
+import static org.mockito.internal.verification.VerificationModeFactory.atMost;
 
 @Timeout(120)
 public class SharePartitionManagerTest {
+
+    private static final int PARTITION_MAX_BYTES = 40000;
 
     @Test
     public void testSharePartitionKey() {
@@ -1127,5 +1142,157 @@ public class SharePartitionManagerTest {
         ShareFetchResponse resp8 = context8.updateAndGenerateResponseData(groupId, reqMetadata2.memberId(), respData8);
         assertEquals(Errors.NONE, resp8.error());
         assertEquals(4 + resp8.data().size(objectSerializationCache, version), respSize8);
+    }
+
+    @Test
+    public void testMultipleSequentialShareFetches() {
+
+        String groupId = "grp";
+        Uuid memberId1 = Uuid.randomUuid();
+        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+                1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
+        Uuid fooId = Uuid.randomUuid();
+        Uuid barId = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(fooId, new TopicPartition("foo", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(barId, new TopicPartition("bar", 0));
+        TopicIdPartition tp3 = new TopicIdPartition(barId, new TopicPartition("bar", 1));
+        TopicIdPartition tp4 = new TopicIdPartition(fooId, new TopicPartition("foo", 2));
+        TopicIdPartition tp5 = new TopicIdPartition(barId, new TopicPartition("bar", 2));
+        TopicIdPartition tp6 = new TopicIdPartition(fooId, new TopicPartition("foo", 3));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp2, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp3, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp4, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp5, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp6, PARTITION_MAX_BYTES);
+
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+        SharePartitionManager sharePartitionManager = new SharePartitionManager(replicaManager, new MockTime(),
+                new SharePartitionManager.ShareSessionCache(10, 1000));
+
+        doAnswer(invocation -> {
+            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
+            return null;
+        }).when(replicaManager).fetchMessages(any(), any(), any(ReplicaQuota.class), any());
+
+        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), fetchParams, Arrays.asList(tp0, tp1, tp2, tp3), partitionMaxBytes);
+        Mockito.verify(replicaManager, times(1)).fetchMessages(
+                any(), any(), any(ReplicaQuota.class), any());
+
+        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), fetchParams, Collections.singletonList(tp4), partitionMaxBytes);
+        Mockito.verify(replicaManager, times(2)).fetchMessages(
+                any(), any(), any(ReplicaQuota.class), any());
+
+        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), fetchParams, Arrays.asList(tp5, tp6), partitionMaxBytes);
+        Mockito.verify(replicaManager, times(3)).fetchMessages(
+                any(), any(), any(ReplicaQuota.class), any());
+    }
+
+    @Test
+    public void testMultipleConcurrentShareFetches() throws InterruptedException {
+
+        String groupId = "grp";
+        Uuid memberId1 = Uuid.randomUuid();
+        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+                1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
+        Uuid fooId = Uuid.randomUuid();
+        Uuid barId = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(fooId, new TopicPartition("foo", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(barId, new TopicPartition("bar", 0));
+        TopicIdPartition tp3 = new TopicIdPartition(barId, new TopicPartition("bar", 1));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp2, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp3, PARTITION_MAX_BYTES);
+
+        final Time time = new MockTime(0, System.currentTimeMillis(), 0);
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
+        partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp0),
+                k -> new SharePartition(groupId, tp0, 100, 5));
+        partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp1),
+                k -> new SharePartition(groupId, tp1, 100, 5));
+        partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp2),
+                k -> new SharePartition(groupId, tp2, 100, 5));
+        partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp3),
+                k -> new SharePartition(groupId, tp3, 100, 5));
+
+        SharePartitionManager sharePartitionManager = new SharePartitionManager(replicaManager, time,
+                new SharePartitionManager.ShareSessionCache(10, 1000), partitionCacheMap);
+
+        SharePartition sp0 = Mockito.mock(SharePartition.class);
+        SharePartition sp1 = Mockito.mock(SharePartition.class);
+        SharePartition sp2 = Mockito.mock(SharePartition.class);
+        SharePartition sp3 = Mockito.mock(SharePartition.class);
+
+        when(sp0.nextFetchOffset()).thenReturn((long) 1, (long) 15, (long) 6, (long) 30, (long) 25);
+        when(sp1.nextFetchOffset()).thenReturn((long) 4, (long) 1, (long) 18, (long) 5);
+        when(sp2.nextFetchOffset()).thenReturn((long) 10, (long) 25, (long) 26);
+        when(sp3.nextFetchOffset()).thenReturn((long) 20, (long) 15, (long) 23, (long) 16);
+
+        doAnswer(invocation -> {
+            assertEquals(1, sp0.nextFetchOffset());
+            assertEquals(4, sp1.nextFetchOffset());
+            assertEquals(10, sp2.nextFetchOffset());
+            assertEquals(20, sp3.nextFetchOffset());
+            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
+            return null;
+        }).doAnswer(invocation -> {
+            assertEquals(15, sp0.nextFetchOffset());
+            assertEquals(1, sp1.nextFetchOffset());
+            assertEquals(25, sp2.nextFetchOffset());
+            assertEquals(15, sp3.nextFetchOffset());
+            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
+            return null;
+        }).doAnswer(invocation -> {
+            assertEquals(6, sp0.nextFetchOffset());
+            assertEquals(18, sp1.nextFetchOffset());
+            assertEquals(26, sp2.nextFetchOffset());
+            assertEquals(23, sp3.nextFetchOffset());
+            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
+            return null;
+        }).doAnswer(invocation -> {
+            assertEquals(30, sp0.nextFetchOffset());
+            assertEquals(5, sp1.nextFetchOffset());
+            assertEquals(26, sp2.nextFetchOffset());
+            assertEquals(16, sp3.nextFetchOffset());
+            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
+            return null;
+        }).doAnswer(invocation -> {
+            assertEquals(25, sp0.nextFetchOffset());
+            assertEquals(5, sp1.nextFetchOffset());
+            assertEquals(26, sp2.nextFetchOffset());
+            assertEquals(16, sp3.nextFetchOffset());
+            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
+            return null;
+        }).when(replicaManager).fetchMessages(any(), any(), any(ReplicaQuota.class), any());
+
+        int threadCount = 100;
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+
+        try {
+            for (int i = 0; i != threadCount; ++i) {
+                executorService.submit(() -> {
+                    sharePartitionManager.fetchMessages(groupId, memberId1.toString(), fetchParams, Arrays.asList(tp0, tp1, tp2, tp3), partitionMaxBytes);
+                });
+                // We are blocking the main thread at an interval of 10 threads so that the currently running executorService threads can complete.
+                if (i % 10 == 0)
+                    executorService.awaitTermination(50, TimeUnit.MILLISECONDS);
+            }
+        } finally {
+            if (!executorService.awaitTermination(50, TimeUnit.MILLISECONDS))
+                executorService.shutdown();
+        }
+        // We are checking the number of replicaManager fetchMessages() calls
+        Mockito.verify(replicaManager, atMost(100)).fetchMessages(
+                any(), any(), any(ReplicaQuota.class), any());
+        Mockito.verify(replicaManager, atLeast(10)).fetchMessages(
+                any(), any(), any(ReplicaQuota.class), any());
     }
 }

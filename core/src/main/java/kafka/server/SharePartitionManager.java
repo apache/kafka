@@ -70,12 +70,17 @@ public class SharePartitionManager {
     private final AtomicBoolean processFetchQueueLock;
 
     public SharePartitionManager(ReplicaManager replicaManager, Time time, ShareSessionCache cache) {
+        this(replicaManager, time, cache, new ConcurrentHashMap<>());
+    }
+
+    SharePartitionManager(ReplicaManager replicaManager, Time time, ShareSessionCache cache,
+                                  Map<SharePartitionKey, SharePartition> partitionCacheMap) {
         this.replicaManager = replicaManager;
         this.time = time;
         this.cache = cache;
-        this.partitionCacheMap = new ConcurrentHashMap<>();
         this.fetchQueue = new ConcurrentLinkedQueue<>();
         this.processFetchQueueLock = new AtomicBoolean(false);
+        this.partitionCacheMap = partitionCacheMap;
     }
 
     // TODO: Move some part in share session context and change method signature to accept share
@@ -204,7 +209,8 @@ public class SharePartitionManager {
         return result;
     }
 
-    private void releaseFetchQueueAndPartitionsLock(String groupId, Set<TopicIdPartition> topicIdPartitions) {
+    // Visible for testing.
+    void releaseFetchQueueAndPartitionsLock(String groupId, Set<TopicIdPartition> topicIdPartitions) {
         releaseProcessFetchQueueLock();
         topicIdPartitions.forEach(tp -> partitionCacheMap.get(sharePartitionKey(groupId, tp)).releaseFetchLock());
     }
