@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
@@ -272,14 +273,18 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * Commit consumed offsets if auto-commit is enabled, regardless of the auto-commit interval.
      * This is used for committing offsets before revoking partitions. This will retry committing
      * the latest offsets until the request succeeds, fails with a fatal error, or the timeout
-     * expires. Note that this considers {@link Errors#STALE_MEMBER_EPOCH} as a retriable error,
+     * expires. Note that:
+     * - Considers {@link Errors#STALE_MEMBER_EPOCH} as a retriable error,
      * and will retry it including the latest member ID and epoch received from the broker.
+     * - Considers {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} as a fatal error, and will not retry
+     * it although the error extends RetrieableException. The reason is that if a topic or partition
+     * is deleted, revocation would not finish in time since the auto commit would keep retrying.
      *
      * @return Future that will complete when the offsets are successfully committed. It will
      * complete exceptionally if the commit fails with a non-retriable error, or if the retry
      * timeout expires.
      */
-    public CompletableFuture<Void> maybeAutoCommitSyncNow(final long retryExpirationTimeMs) {
+    public CompletableFuture<Void> maybeAutoCommitSyncBeforeRevocation(final long retryExpirationTimeMs) {
         if (!autoCommitEnabled()) {
             return CompletableFuture.completedFuture(null);
         }
@@ -298,9 +303,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             if (error == null) {
                 result.complete(null);
             } else {
-                if (error instanceof RetriableException || isStaleEpochErrorAndValidEpochAvailable(error)) {
+                if ((error instanceof RetriableException || isStaleEpochErrorAndValidEpochAvailable(error))) {
                     if (error instanceof TimeoutException && requestAttempt.isExpired) {
                         log.debug("Auto-commit sync timed out and won't be retried anymore");
+                        result.completeExceptionally(error);
+                    } else if (error instanceof UnknownTopicOrPartitionException) {
+                        log.debug("Auto-commit sync failed because topic or partition were deleted");
                         result.completeExceptionally(error);
                     } else {
                         // Make sure the auto-commit is retries with the latest offsets
