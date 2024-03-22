@@ -25,15 +25,20 @@ import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -190,19 +195,35 @@ public class GetOffsetShellTest {
     public void testTopicPartitionsArg() {
         setUp();
 
+        if (cluster.isKRaftTest()) {
+            Properties props = new Properties();
+            props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+            props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+            props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+            props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-group");
+            props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+            try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+                List<String> topics = new ArrayList<>();
+                for (int i = 0; i < 5; i++) {
+                    topics.add(getTopicName(i));
+                }
+
+                consumer.subscribe(topics);
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+            }
+        }
+
         List<Row> offsets = executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3");
         List<Row> expected = new ArrayList<>(
             Arrays.asList(
+                new Row("__consumer_offsets", 3, 0L),
                 new Row("topic1", 0, 1L),
                 new Row("topic2", 1, 2L),
                 new Row("topic3", 2, 3L),
                 new Row("topic4", 2, 4L)
             )
         );
-
-        if (!cluster.isKRaftTest()) {
-            expected.add(0, new Row("__consumer_offsets", 3, 0L));
-        }
 
         assertEquals(expected, offsets);
     }
