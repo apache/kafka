@@ -228,8 +228,9 @@ public class MembershipManagerImpl implements MembershipManager {
     private boolean reconciliationInProgress;
 
     /**
-     * True if a reconciliation is in progress and the member rejoined the group. Used to know
-     * that the reconciliation in progress should be interrupted and not be applied.
+     * True if a reconciliation is in progress and the member rejoined the group since the start
+     * of the reconciliation. Used to know that the reconciliation in progress should be
+     * interrupted and not be applied.
      */
     private boolean rejoinedWhileReconciliationInProgress;
 
