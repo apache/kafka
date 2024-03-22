@@ -159,8 +159,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = mock(SourceConnector.class);
-        expectConfigValidation(connectorMock, config);
+        expectConfigValidation(SourceSink.SOURCE, config);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
@@ -203,8 +202,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = mock(SourceConnector.class);
-        expectConfigValidation(connectorMock, config, config);
+        expectConfigValidation(SourceSink.SOURCE, config, config);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
@@ -226,8 +224,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SINK);
 
         Map<String, String> config = connectorConfig(SourceSink.SINK);
-        Connector connectorMock = mock(SinkConnector.class);
-        expectConfigValidation(connectorMock, config);
+        expectConfigValidation(SourceSink.SINK, config);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
@@ -238,11 +235,11 @@ public class StandaloneHerderTest {
     public void testCreateConnectorWithStoppedInitialState() throws Exception {
         Map<String, String> config = connectorConfig(SourceSink.SINK);
         Connector connectorMock = mock(SinkConnector.class);
-        expectConfigValidation(connectorMock, config);
+        expectConfigValidation(SourceSink.SINK, config);
         when(plugins.newConnector(anyString())).thenReturn(connectorMock);
 
         // Only the connector should be created; we expect no tasks to be spawned for a connector created with a paused or stopped initial state
-        mockStartConnector(config, null, null, TargetState.STOPPED, null);
+        mockStartConnector(config, null, TargetState.STOPPED, null);
 
         when(worker.isRunning(CONNECTOR_NAME)).thenReturn(true);
         when(herder.connectorType(any())).thenReturn(ConnectorType.SINK);
@@ -261,8 +258,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = mock(SourceConnector.class);
-        expectConfigValidation(connectorMock, config);
+        expectConfigValidation(SourceSink.SOURCE, config);
 
         when(statusBackingStore.getAll(CONNECTOR_NAME)).thenReturn(Collections.emptyList());
 
@@ -294,10 +290,9 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = mock(SourceConnector.class);
-        expectConfigValidation(connectorMock, config);
+        expectConfigValidation(SourceSink.SOURCE, config);
 
-        mockStartConnector(config, null, TargetState.STARTED, TargetState.STARTED, null);
+        mockStartConnector(config, TargetState.STARTED, TargetState.STARTED, null);
 
         when(worker.connectorNames()).thenReturn(Collections.singleton(CONNECTOR_NAME));
         when(worker.getPlugins()).thenReturn(plugins);
@@ -321,14 +316,13 @@ public class StandaloneHerderTest {
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
-        Connector connectorMock = mock(SourceConnector.class);
-        expectConfigValidation(connectorMock, config);
+        expectConfigValidation(SourceSink.SOURCE, config);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
-        mockStartConnector(config, null, TargetState.STARTED, TargetState.STARTED, null);
+        mockStartConnector(config, TargetState.STARTED, TargetState.STARTED, null);
 
         when(worker.connectorNames()).thenReturn(Collections.singleton(CONNECTOR_NAME));
         when(worker.getPlugins()).thenReturn(plugins);
@@ -352,8 +346,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = mock(SourceConnector.class);
-        expectConfigValidation(connectorMock, config);
+        expectConfigValidation(SourceSink.SOURCE, config);
 
         doNothing().when(worker).stopAndAwaitConnector(CONNECTOR_NAME);
 
@@ -364,7 +357,7 @@ public class StandaloneHerderTest {
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
         FutureCallback<Void> restartCallback = new FutureCallback<>();
-        mockStartConnector(config, null, null, TargetState.STARTED, exception);
+        mockStartConnector(config, null, TargetState.STARTED, exception);
         herder.restartConnector(CONNECTOR_NAME, restartCallback);
         try {
             restartCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
@@ -380,8 +373,8 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = mock(SourceConnector.class);
-        expectConfigValidation(connectorMock, connectorConfig);
+
+        expectConfigValidation(SourceSink.SOURCE, connectorConfig);
 
         doNothing().when(worker).stopAndAwaitTask(taskId);
 
@@ -416,8 +409,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = mock(SourceConnector.class);
-        expectConfigValidation(connectorMock, connectorConfig);
+        expectConfigValidation(SourceSink.SOURCE, connectorConfig);
 
         ClusterConfigState configState = new ClusterConfigState(
                 -1,
@@ -466,8 +458,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
-        Connector connectorMock = mock(SinkConnector.class);
-        expectConfigValidation(connectorMock, connectorConfig);
+        expectConfigValidation(SourceSink.SINK, connectorConfig);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
@@ -493,8 +484,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
-        Connector connectorMock = mock(SinkConnector.class);
-        expectConfigValidation(connectorMock, connectorConfig);
+        expectConfigValidation(SourceSink.SINK, connectorConfig);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
@@ -518,12 +508,11 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
-        Connector connectorMock = mock(SinkConnector.class);
-        expectConfigValidation(connectorMock, connectorConfig);
+        expectConfigValidation(SourceSink.SINK, connectorConfig);
 
         doNothing().when(worker).stopAndAwaitConnector(CONNECTOR_NAME);
 
-        mockStartConnector(connectorConfig, null, null, TargetState.STARTED, null);
+        mockStartConnector(connectorConfig, null, TargetState.STARTED, null);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
@@ -553,8 +542,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
-        Connector connectorMock = mock(SinkConnector.class);
-        expectConfigValidation(connectorMock, connectorConfig);
+        expectConfigValidation(SourceSink.SINK, connectorConfig);
 
         doNothing().when(worker).stopAndAwaitTasks(Collections.singletonList(taskId));
 
@@ -605,13 +593,12 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
-        Connector connectorMock = mock(SinkConnector.class);
-        expectConfigValidation(connectorMock, connectorConfig);
+        expectConfigValidation(SourceSink.SINK, connectorConfig);
 
         doNothing().when(worker).stopAndAwaitConnector(CONNECTOR_NAME);
         doNothing().when(worker).stopAndAwaitTasks(Collections.singletonList(taskId));
 
-        mockStartConnector(connectorConfig, null, null, TargetState.STARTED, null);
+        mockStartConnector(connectorConfig, null, TargetState.STARTED, null);
 
         ClusterConfigState configState = new ClusterConfigState(
                 -1,
@@ -647,8 +634,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = mock(SourceConnector.class);
-        expectConfigValidation(connectorMock, connectorConfig);
+        expectConfigValidation(SourceSink.SOURCE, connectorConfig);
 
         expectStop();
 
@@ -682,10 +668,9 @@ public class StandaloneHerderTest {
         doNothing().when(tasksConfigCb).onCompletion(any(NotFoundException.class), isNull());
         doNothing().when(connectorConfigCb).onCompletion(any(NotFoundException.class), isNull());
 
-        // Create connector
-        Connector connector = mock(BogusSourceConnector.class);
+
         expectAdd(SourceSink.SOURCE);
-        expectConfigValidation(connector, connConfig);
+        expectConfigValidation(SourceSink.SOURCE, connConfig);
 
         // Validate accessors with 1 connector
         doNothing().when(listConnectorsCb).onCompletion(null, singleton(CONNECTOR_NAME));
@@ -731,20 +716,19 @@ public class StandaloneHerderTest {
 
         // Create
         expectAdd(SourceSink.SOURCE);
-        Connector connectorMock = mock(SourceConnector.class);
-        expectConfigValidation(connectorMock, connConfig);
+        expectConfigValidation(SourceSink.SOURCE, connConfig);
 
         // Should get first config
         doNothing().when(connectorConfigCb).onCompletion(null, connConfig);
         // Update config, which requires stopping and restarting
         doNothing().when(worker).stopAndAwaitConnector(CONNECTOR_NAME);
         final ArgumentCaptor<Map<String, String>> capturedConfig = ArgumentCaptor.forClass(Map.class);
-        mockStartConnector(null, capturedConfig, TargetState.STARTED, TargetState.STARTED, null);
+        mockStartConnector(newConnConfig, TargetState.STARTED, TargetState.STARTED, null);
         // Generate same task config, which should result in no additional action to restart tasks
         when(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, newConnConfig, true)))
                 .thenReturn(singletonList(taskConfig(SourceSink.SOURCE)));
 
-        expectConfigValidation(connectorMock, newConnConfig);
+        expectConfigValidation(SourceSink.SOURCE, newConnConfig);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
@@ -822,8 +806,7 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = mock(SourceConnector.class);
-        expectConfigValidation(connectorMock, connectorConfig);
+        expectConfigValidation(SourceSink.SOURCE, connectorConfig);
 
         // We pause, then stop, the connector
         expectTargetState(CONNECTOR_NAME, TargetState.PAUSED);
@@ -957,8 +940,7 @@ public class StandaloneHerderTest {
 
         // Start the connector
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        Connector connectorMock = mock(SourceConnector.class);
-        expectConfigValidation(connectorMock, config);
+        expectConfigValidation(SourceSink.SOURCE, config);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
 
@@ -973,7 +955,7 @@ public class StandaloneHerderTest {
         // Prepare for connector and task config update
         Map<String, String> newConfig = connectorConfig(SourceSink.SOURCE);
         newConfig.put("dummy-connector-property", "yes");
-        mockStartConnector(newConfig, null, TargetState.STARTED, TargetState.STARTED, null);
+        mockStartConnector(newConfig, TargetState.STARTED, TargetState.STARTED, null);
 
         // Common invocations
         when(worker.startSourceTask(eq(new ConnectorTaskId(CONNECTOR_NAME, 0)), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
@@ -988,7 +970,7 @@ public class StandaloneHerderTest {
 
         // Set new config on the connector and tasks
         FutureCallback<Herder.Created<ConnectorInfo>> reconfigureCallback = new FutureCallback<>();
-        expectConfigValidation(connectorMock, newConfig);
+        expectConfigValidation(SourceSink.SOURCE, newConfig);
         herder.putConnectorConfig(CONNECTOR_NAME, newConfig, true, reconfigureCallback);
 
         // Reconfigure the tasks
@@ -1008,7 +990,7 @@ public class StandaloneHerderTest {
                 new SourceConnectorConfig(plugins, connectorProps, true) :
                 new SinkConnectorConfig(plugins, connectorProps);
 
-        mockStartConnector(connectorProps, null, TargetState.STARTED, TargetState.STARTED, null);
+        mockStartConnector(connectorProps, TargetState.STARTED, TargetState.STARTED, null);
         when(worker.isRunning(CONNECTOR_NAME)).thenReturn(true);
         if (sourceSink == SourceSink.SOURCE) {
             when(worker.isTopicCreationEnabled()).thenReturn(true);
@@ -1106,10 +1088,11 @@ public class StandaloneHerderTest {
     }
 
     private void expectConfigValidation(
-            Connector connectorMock,
+            SourceSink sourceSink,
             Map<String, String>... configs
     ) {
         // config validation
+        Connector connectorMock = sourceSink == SourceSink.SOURCE ? mock(SourceConnector.class) : mock(SinkConnector.class);
         when(worker.configTransformer()).thenReturn(transformer);
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
@@ -1148,13 +1131,13 @@ public class StandaloneHerderTest {
         assertEquals(AbstractStatus.State.RESTARTING, connectorStatus.getValue().state());
     }
 
-    private void mockStartConnector(Map<String, String> config, ArgumentCaptor<Map<String, String>> capturedConfig, TargetState result, TargetState targetState, Exception exception) {
+    private void mockStartConnector(Map<String, String> config, TargetState result, TargetState targetState, Exception exception) {
         final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
             onStart.getValue().onCompletion(exception, result);
             return true;
-        }).when(worker).startConnector(eq(CONNECTOR_NAME), capturedConfig != null ? capturedConfig.capture() :  eq(config),
-                capturedConfig != null ? any() : any(HerderConnectorContext.class),
+        }).when(worker).startConnector(eq(CONNECTOR_NAME), eq(config),
+                any(HerderConnectorContext.class),
                 eq(herder), eq(targetState), onStart.capture());
     }
 }
