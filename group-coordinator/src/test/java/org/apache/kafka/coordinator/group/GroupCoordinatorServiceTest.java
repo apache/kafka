@@ -24,7 +24,6 @@ import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.KafkaStorageException;
-import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
@@ -74,6 +73,7 @@ import org.apache.kafka.server.util.FutureUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -1900,18 +1900,14 @@ public class GroupCoordinatorServiceTest {
         assertEquals(response, future.get());
     }
 
-    private static Stream<Arguments> testCommitTransactionalOffsetsWithWrappedErrorSource() {
-        return Stream.of(
-            Arguments.arguments(new NotEnoughReplicasException(), Errors.COORDINATOR_NOT_AVAILABLE.code()),
-            Arguments.arguments(new NetworkException(), Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
-        );
-    }
-
     @ParameterizedTest
-    @MethodSource("testCommitTransactionalOffsetsWithWrappedErrorSource")
+    @CsvSource({
+        "NOT_ENOUGH_REPLICAS, COORDINATOR_NOT_AVAILABLE",
+        "NETWORK_EXCEPTION, COORDINATOR_LOAD_IN_PROGRESS"
+    })
     public void testCommitTransactionalOffsetsWithWrappedError(
-        Throwable exception,
-        short expectedErrorCode
+        Errors error,
+        Errors expectedError
     ) throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
@@ -1940,7 +1936,7 @@ public class GroupCoordinatorServiceTest {
                 .setName("topic")
                 .setPartitions(Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
                     .setPartitionIndex(0)
-                    .setErrorCode(expectedErrorCode)))));
+                    .setErrorCode(expectedError.code())))));
 
         when(runtime.scheduleTransactionalWriteOperation(
             ArgumentMatchers.eq("txn-commit-offset"),
@@ -1950,7 +1946,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq((short) 5),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(new CompletionException(exception)));
+        )).thenReturn(FutureUtils.failedFuture(new CompletionException(error.exception())));
 
         CompletableFuture<TxnOffsetCommitResponseData> future = service.commitTransactionalOffsets(
             requestContext(ApiKeys.TXN_OFFSET_COMMIT),
