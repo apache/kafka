@@ -616,7 +616,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private val blockedPercentMeter = metricsGroup.newMeter(blockedPercentMeterMetricName,"blocked time", TimeUnit.NANOSECONDS)
   private var currentProcessorIndex = 0
   private[network] val throttledSockets = new mutable.PriorityQueue[DelayedCloseSocket]()
-  private var started = false
+  private val started = new AtomicBoolean()
   private[network] val startedFuture = new CompletableFuture[Void]()
 
   val thread: KafkaThread = KafkaThread.nonDaemon(
@@ -637,7 +637,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
       debug(s"Starting acceptor thread for listener ${endPoint.listenerName}")
       thread.start()
       startedFuture.complete(null)
-      started = true
+      started.set(true)
     } catch {
       case e: ClosedChannelException =>
         debug(s"Refusing to start acceptor for ${endPoint.listenerName} since the acceptor has already been shut down.")
@@ -674,6 +674,9 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   def close(): Unit = {
     beginShutdown()
     thread.join()
+    if (!started.get) {
+      closeAll()
+    }
     synchronized {
       processors.foreach(_.close())
     }
@@ -699,12 +702,16 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
         }
       }
     } finally {
-      debug("Closing server socket, selector, and any throttled sockets.")
-      CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
-      CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
-      throttledSockets.foreach(throttledSocket => closeSocket(throttledSocket.socket, this))
-      throttledSockets.clear()
+      closeAll()
     }
+  }
+
+  private def closeAll(): Unit = {
+    debug("Closing server socket, selector, and any throttled sockets.")
+    CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
+    CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
+    throttledSockets.foreach(throttledSocket => closeSocket(throttledSocket.socket, this))
+    throttledSockets.clear()
   }
 
   /**
@@ -845,7 +852,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
       listenerProcessors += processor
       requestChannel.addProcessor(processor)
 
-      if (started) {
+      if (started.get) {
         processor.start()
       }
     }
@@ -915,6 +922,7 @@ private[kafka] class Processor(
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val shouldRun: AtomicBoolean = new AtomicBoolean(true)
+  private val started: AtomicBoolean = new AtomicBoolean()
 
   val thread: KafkaThread = KafkaThread.nonDaemon(threadName, this)
 
@@ -1351,7 +1359,11 @@ private[kafka] class Processor(
   private[network] def channel(connectionId: String): Option[KafkaChannel] =
     Option(selector.channel(connectionId))
 
-  def start(): Unit = thread.start()
+  def start(): Unit = {
+    if (!started.getAndSet(true)) {
+      thread.start()
+    }
+  }
 
   /**
    * Wakeup the thread for selection.
@@ -1368,6 +1380,9 @@ private[kafka] class Processor(
     try {
       beginShutdown()
       thread.join()
+      if (!started.get) {
+        CoreUtils.swallow(closeAll(), this, Level.ERROR)
+      }
     } finally {
       metricsGroup.removeMetric("IdlePercent", Map("networkProcessor" -> id.toString).asJava)
       metrics.removeMetric(expiredConnectionsKilledCountMetricName)

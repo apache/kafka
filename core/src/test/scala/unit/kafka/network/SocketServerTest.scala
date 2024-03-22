@@ -1207,6 +1207,17 @@ class SocketServerTest {
   }
 
   @Test
+  def testServerShutdownWithoutEnable(): Unit = {
+    // The harness server has already been enabled, so it's invalid for this test.
+    shutdownServerAndMetrics(server)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(props))
+    overrideServer.shutdown()
+    assertFalse(overrideServer.testableAcceptor.isOpen)
+    overrideServer.testableSelector.waitForOperations(SelectorOperation.CloseSelector, 1)
+  }
+
+  @Test
   def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend(): Unit = {
     shutdownServerAndMetrics(server)
     val serverMetrics = new Metrics
@@ -2136,6 +2147,8 @@ class SocketServerTest {
     override def newProcessor(id: Int, listenerName: ListenerName, securityProtocol: SecurityProtocol): Processor = {
       new TestableProcessor(id, time, requestChannel, listenerName, securityProtocol, cfg, connectionQuotas, connectionQueueSize, isPrivilegedListener)
     }
+
+    def isOpen: Boolean = serverChannel.isOpen
   }
 
   class TestableProcessor(id: Int, time: Time, requestChannel: RequestChannel, listenerName: ListenerName, securityProtocol: SecurityProtocol, config: KafkaConfig, connectionQuotas: ConnectionQuotas, connectionQueueSize: Int, isPrivilegedListener: Boolean)
@@ -2203,9 +2216,12 @@ class SocketServerTest {
     def testableSelector: TestableSelector =
       testableProcessor.selector.asInstanceOf[TestableSelector]
 
-    def testableProcessor: TestableProcessor = {
+    def testableProcessor: TestableProcessor =
+      testableAcceptor.processors(0).asInstanceOf[TestableProcessor]
+
+    def testableAcceptor: TestableAcceptor = {
       val endpoint = this.config.dataPlaneListeners.head
-      dataPlaneAcceptors.get(endpoint).processors(0).asInstanceOf[TestableProcessor]
+      dataPlaneAcceptors.get(endpoint).asInstanceOf[TestableAcceptor]
     }
 
     def waitForChannelClose(connectionId: String, locallyClosed: Boolean): Unit = {
