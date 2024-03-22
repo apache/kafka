@@ -228,7 +228,7 @@ public class MembershipManagerImpl implements MembershipManager {
     private boolean reconciliationInProgress;
 
     /**
-     * True if a reconciliation is in progress and the member rejoins the group. Used to know
+     * True if a reconciliation is in progress and the member rejoined the group. Used to know
      * that the reconciliation in progress should be interrupted and not be applied.
      */
     private boolean rejoinedWhileReconciliationInProgress;
@@ -1058,7 +1058,7 @@ public class MembershipManagerImpl implements MembershipManager {
         boolean shouldAbort = state != MemberState.RECONCILING || rejoinedWhileReconciliationInProgress;
         if (shouldAbort) {
             String reason = interruptedReconciliationReason();
-            log.error("Interrupting reconciliation because " + reason);
+            log.info("Interrupting reconciliation that is not relevant anymore because " + reason);
             markReconciliationCompleted();
         }
         return shouldAbort;
