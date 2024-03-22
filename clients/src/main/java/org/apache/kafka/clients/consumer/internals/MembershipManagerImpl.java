@@ -1019,23 +1019,20 @@ public class MembershipManagerImpl implements MembershipManager {
                 if (!maybeAbortReconciliation()) {
                     // Apply assignment
                     return assignPartitions(assignedTopicIdPartitions, addedPartitions);
-                } else {
-                    CompletableFuture<Void> res = new CompletableFuture<>();
-                    res.completeExceptionally(new KafkaException("Interrupting reconciliation" +
-                        " after revocation. " + interruptedReconciliationReason()));
-                    return res;
                 }
+                return CompletableFuture.completedFuture(null);
             });
 
-        reconciliationResult.whenComplete((result, error) -> {
+        reconciliationResult.whenComplete((__, error) -> {
             if (error != null) {
                 // Leaving member in RECONCILING state after callbacks fail. The member
                 // won't send the ack, and the expectation is that the broker will kick the
                 // member out of the group after the rebalance timeout expires, leading to a
                 // RECONCILING -> FENCED transition.
                 log.error("Reconciliation failed.", error);
+                markReconciliationCompleted();
             } else {
-                if (!maybeAbortReconciliation()) {
+                if (reconciliationInProgress && !maybeAbortReconciliation()) {
                     currentAssignment = resolvedAssignment;
 
                     // Reschedule the auto commit starting from now that the member has a new assignment.
@@ -1043,9 +1040,9 @@ public class MembershipManagerImpl implements MembershipManager {
 
                     // Make assignment effective on the broker by transitioning to send acknowledge.
                     transitionTo(MemberState.ACKNOWLEDGING);
+                    markReconciliationCompleted();
                 }
             }
-            markReconciliationCompleted();
         });
     }
 
@@ -1058,7 +1055,9 @@ public class MembershipManagerImpl implements MembershipManager {
     boolean maybeAbortReconciliation() {
         boolean shouldAbort = state != MemberState.RECONCILING || rejoinedWhileReconciliationInProgress;
         if (shouldAbort) {
-            String reason = interruptedReconciliationReason();
+            String reason = rejoinedWhileReconciliationInProgress ?
+                "the member has re-joined the group" :
+                "the member already transitioned out of the reconciling state into " + state;
             log.info("Interrupting reconciliation that is not relevant anymore because " + reason);
             markReconciliationCompleted();
         }
@@ -1077,16 +1076,6 @@ public class MembershipManagerImpl implements MembershipManager {
         SortedSet<TopicPartition> result = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         topicIdPartitions.forEach(topicIdPartition -> result.add(topicIdPartition.topicPartition()));
         return result;
-    }
-
-    /**
-     * @return Reason for interrupting a reconciliation progress when callbacks complete.
-     */
-    private String interruptedReconciliationReason() {
-        if (rejoinedWhileReconciliationInProgress) {
-            return "the member has re-joined the group";
-        }
-        return "the member already transitioned out of the reconciling state into " + state;
     }
 
     /**
