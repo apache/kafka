@@ -2623,6 +2623,13 @@ public class MembershipManagerImplTest {
         // Assignment received after rejoining should be ready to reconcile on the next
         // reconciliation loop.
         assertEquals(assignmentAfterRejoin, membershipManager.topicPartitionsAwaitingReconciliation());
+
+        // Stale reconciliation should have been aborted and a new one should be triggered on the
+        // next poll
+        assertFalse(membershipManager.reconciliationInProgress());
+        clearInvocations(membershipManager);
+        membershipManager.poll(time.milliseconds());
+        verify(membershipManager).markReconciliationInProgress();
     }
 
     private void receiveEmptyAssignment(MembershipManager membershipManager) {
