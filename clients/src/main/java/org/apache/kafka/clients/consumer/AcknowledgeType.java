@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.Locale;
 
+@InterfaceStability.Evolving
 public enum AcknowledgeType {
     ACCEPT((byte) 0), RELEASE((byte) 1), REJECT((byte) 2);
 

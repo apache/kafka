@@ -433,7 +433,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
             handleCompletedAcknowledgements();
 
             // If using implicit acknowledgement, acknowledge the previously fetched records
-            maybeImplicitlyAcknowledge();
+            maybeSendAcknowledgements();
 
             kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
@@ -515,7 +515,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         acquireAndEnsureOpen();
         try {
             ensureExplicitAcknowledgement();
-            throw new UnsupportedOperationException();
+            if (currentFetch != null) {
+                currentFetch.acknowledge(record, type);
+            } else {
+                throw new IllegalStateException("The record cannot be acknowledged.");
+            }
         } finally {
             release();
         }
@@ -713,21 +717,25 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
      * Called to progressively moves the acknowledgement mode into IMPLICIT if it is not known to be EXPLICIT.
      * If the acknowledgement mode is IMPLICIT, acknowledges the current batch and puts them into the fetch
      * buffer for the background thread to pick up.
+     * If the acknowledgement mode is EXPLICIT, puts any ready acknowledgements into the fetch buffer for the
+     * background thread to pick up.
      */
-    private void maybeImplicitlyAcknowledge() {
+    private void maybeSendAcknowledgements() {
         if (acknowledgementMode == AcknowledgementMode.UNKNOWN) {
             // The first call to poll(Duration) moves into PENDING
             acknowledgementMode = AcknowledgementMode.PENDING;
         } else if (acknowledgementMode == AcknowledgementMode.PENDING) {
             // The second call to poll(Duration) if PENDING moves into IMPLICIT
             acknowledgementMode = AcknowledgementMode.IMPLICIT;
-        } else if (acknowledgementMode == AcknowledgementMode.EXPLICIT) {
-            throw new IllegalStateException("Explicit acknowledgement of delivery is being used.");
         }
 
         if (currentFetch != null) {
+            // If IMPLICIT, acknowledge all records and send
             if (acknowledgementMode == AcknowledgementMode.IMPLICIT) {
                 currentFetch.acknowledgeAll(AcknowledgeType.ACCEPT);
+                fetchBuffer.acknowledgementsReadyToSend(currentFetch.acknowledgementsByPartition());
+            } else if (acknowledgementMode == AcknowledgementMode.EXPLICIT) {
+                // If EXPLICIT, send any acknowledgements which are ready
                 fetchBuffer.acknowledgementsReadyToSend(currentFetch.acknowledgementsByPartition());
             }
 

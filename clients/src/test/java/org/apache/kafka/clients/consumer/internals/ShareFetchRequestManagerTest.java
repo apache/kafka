@@ -362,14 +362,14 @@ public class ShareFetchRequestManagerTest {
     }
 
     @Test
-    public void testFetchSessionIdError() {
+    public void testUnknownTopicIdError() {
         buildFetcher();
         assignFromSubscribed(singleton(tp0));
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(fetchResponseWithTopLevelError(tip0, Errors.FETCH_SESSION_TOPIC_ID_ERROR));
+        client.prepareResponse(fetchResponseWithTopLevelError(tip0, Errors.UNKNOWN_TOPIC_ID));
         networkClientDelegate.poll(time.timer(0));
-        assertEmptyFetch("Should not return records or advance position on fetch error");
+        assertEmptyFetch("Should not return records on fetch error");
         assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
     }
 
@@ -410,8 +410,7 @@ public class ShareFetchRequestManagerTest {
         return Stream.of(
                 Arguments.of(Errors.NOT_LEADER_OR_FOLLOWER, false, true),
                 Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false, true),
-                Arguments.of(Errors.UNKNOWN_TOPIC_ID, false, true),
-                Arguments.of(Errors.FETCH_SESSION_TOPIC_ID_ERROR, true, true),
+                Arguments.of(Errors.UNKNOWN_TOPIC_ID, true, true),
                 Arguments.of(Errors.INCONSISTENT_TOPIC_ID, false, true),
                 Arguments.of(Errors.FENCED_LEADER_EPOCH, false, true),
                 Arguments.of(Errors.UNKNOWN_LEADER_EPOCH, false, false)

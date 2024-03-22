@@ -166,7 +166,7 @@ public class ShareFetchRequestManager implements RequestManager {
             final ShareSessionHandler handler = sessionHandler(fetchTarget.id());
 
             if (handler == null) {
-                log.error("Unable to find ShareSessionHandler for node {}. Ignoring fetch response.",
+                log.error("Unable to find ShareSessionHandler for node {}. Ignoring share fetch response.",
                         fetchTarget.id());
                 return;
             }
@@ -174,7 +174,7 @@ public class ShareFetchRequestManager implements RequestManager {
             final short requestVersion = resp.requestHeader().apiVersion();
 
             if (!handler.handleResponse(response, requestVersion)) {
-                if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR) {
+                if (response.error() == Errors.UNKNOWN_TOPIC_ID) {
                     metadata.requestUpdate(false);
                 }
 
@@ -211,7 +211,7 @@ public class ShareFetchRequestManager implements RequestManager {
 
             metricsManager.recordLatency(resp.requestLatencyMs());
         } finally {
-            log.debug("Removing pending request for node {}", fetchTarget);
+            log.debug("Removing pending request for node {} - success", fetchTarget);
             nodesWithPendingRequests.remove(fetchTarget.id());
         }
     }
@@ -226,6 +226,7 @@ public class ShareFetchRequestManager implements RequestManager {
                 handler.handleError(error);
             }
         } finally {
+            log.debug("Removing pending request for node {} - failed", fetchTarget);
             nodesWithPendingRequests.remove(fetchTarget.id());
         }
     }

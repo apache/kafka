@@ -22,6 +22,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 public class ShareInFlightBatch<K, V> {
@@ -38,6 +39,18 @@ public class ShareInFlightBatch<K, V> {
 
     public void addAcknowledgement(long offset, AcknowledgeType acknowledgeType) {
         acknowledgements.add(offset, acknowledgeType);
+    }
+
+    public void acknowledge(ConsumerRecord<K, V> record, AcknowledgeType type) {
+        Iterator<ConsumerRecord<K, V>> recordIterator = inFlightRecords.iterator();
+        while (recordIterator.hasNext()) {
+            ConsumerRecord<K, V> currentRecord = recordIterator.next();
+            if (currentRecord.offset() == record.offset()) {
+                acknowledgements.add(record.offset(), type);
+                return;
+            }
+        }
+        throw new IllegalStateException("The record cannot be acknowledged.");
     }
 
     public void acknowledgeAll(AcknowledgeType type) {

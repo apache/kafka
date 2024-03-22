@@ -23,6 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,6 +100,31 @@ public class ShareFetch<K, V> {
         return numRecords == 0;
     }
 
+    /**
+     * Acknowledge a single record in the current batch.
+     *
+     * @param record The record to acknowledge
+     * @param type The acknowledge type which indicates whether it was processed successfully
+     */
+    public void acknowledge(final ConsumerRecord<K, V> record, AcknowledgeType type) {
+        Iterator<Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>>> batchIterator = batches.entrySet().iterator();
+        while (batchIterator.hasNext()) {
+            Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> tipBatch = batchIterator.next();
+            TopicIdPartition tip = tipBatch.getKey();
+            if (tip.topic().equals(record.topic()) && (tip.partition() == record.partition())) {
+                tipBatch.getValue().acknowledge(record, type);
+                return;
+            }
+        }
+        throw new IllegalStateException("The record cannot be acknowledged.");
+    }
+
+    /**
+     * Acknowledge all records in the current batch. If any records in the batch already have
+     * been acknowledged, those acknowledgements are not overwritten.
+     *
+     * @param type The acknowledge type which indicates whether it was processed successfully
+     */
     public void acknowledgeAll(final AcknowledgeType type) {
         batches.forEach((tip, batch) -> batch.acknowledgeAll(type));
     }

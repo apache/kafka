@@ -65,7 +65,7 @@ public class ShareSessionHandler {
     private LinkedHashMap<TopicPartition, TopicIdPartition> sessionPartitions;
 
     /**
-     * All of the topic names mapped to topic ids for topics which exist in the fetch request session.
+     * All the topic names mapped to topic ids for topics which exist in the fetch request session.
      */
     private Map<Uuid, String> sessionTopicNames = new HashMap<>(0);
     private final Map<TopicIdPartition, Acknowledgements> nextAcknowledgements = new LinkedHashMap<>();
@@ -172,6 +172,8 @@ public class ShareSessionHandler {
             topicNames.putIfAbsent(topicIdPartition.topicId(), topicIdPartition.topic());
             if (partitionAcknowledgements != null) {
                 nextAcknowledgements.put(topicIdPartition, partitionAcknowledgements);
+            } else {
+                nextAcknowledgements.remove(topicIdPartition);
             }
         }
 

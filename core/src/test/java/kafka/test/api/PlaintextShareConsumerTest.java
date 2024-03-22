@@ -18,6 +18,7 @@ package kafka.test.api;
 
 import kafka.api.AbstractShareConsumerTest;
 import kafka.api.BaseConsumerTest;
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -286,6 +287,115 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
 
         records = shareConsumer.poll(Duration.ofMillis(5000));
         assertEquals(0, records.count());
+        shareConsumer.close();
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testExplicitAcknowledgeSuccess(String quorum) throws Exception {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        producer.send(record);
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(1, records.count());
+        records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord));
+        producer.send(record);
+        records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(1, records.count());
+        shareConsumer.close();
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testExplicitAcknowledgeReleasePollAccept(String quorum) throws Exception {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        producer.send(record);
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(1, records.count());
+        records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
+        records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(1, records.count());
+        records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
+        records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(0, records.count());
+        shareConsumer.close();
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testExplicitAcknowledgeReleaseAccept(String quorum) throws Exception {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        producer.send(record);
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(1, records.count());
+        records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
+        records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
+        records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(0, records.count());
+        shareConsumer.close();
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testExplicitAcknowledgeReleaseClose(String quorum) throws Exception {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        producer.send(record);
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(1, records.count());
+        records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
+        shareConsumer.close();
+    }
+
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testExplicitAcknowledgeThrowsNotInBatch(String quorum) throws Exception {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        producer.send(record);
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(1, records.count());
+        ConsumerRecord<byte[], byte[]> consumedRecord = records.records(tp()).get(0);
+        shareConsumer.acknowledge(consumedRecord);
+        records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(0, records.count());
+        assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(consumedRecord));
+        shareConsumer.close();
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testImplicitAcknowledgeFailsExplicit(String quorum) throws Exception {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        producer.send(record);
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(1, records.count());
+        ConsumerRecord<byte[], byte[]> consumedRecord = records.records(tp()).get(0);
+        records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(0, records.count());
+        assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(consumedRecord));
         shareConsumer.close();
     }
 }

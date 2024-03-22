@@ -222,4 +222,16 @@ public class Acknowledgements {
         batches.add(currentBatch);
         return batches;
     }
+
+    @Override
+    public String toString() {
+        StringBuffer sb = new StringBuffer("Acknowledgements(");
+        sb.append(acknowledgements);
+        if (acknowledgeErrorCode != null) {
+            sb.append(", errorCode=");
+            sb.append(acknowledgeErrorCode.code());
+        }
+        sb.append(")");
+        return sb.toString();
+    }
 }
