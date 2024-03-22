@@ -832,7 +832,7 @@ class ReplicaManager(val config: KafkaConfig,
               case Errors.INVALID_TXN_STATE => Some(error.exception("Partition was not added to the transaction"))
               // Transaction verification can fail with a retriable error that older clients may not
               // retry correctly. Translate these to an error which will cause such clients to retry
-              // the produce request. We use `NOT_ENOUGH_REPLICAS` because it does not trigger a
+              // the produce request. We pick `NOT_ENOUGH_REPLICAS` because it does not trigger a
               // metadata refresh.
               case Errors.CONCURRENT_TRANSACTIONS |
                    Errors.NETWORK_EXCEPTION |
