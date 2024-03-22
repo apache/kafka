@@ -419,6 +419,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_36 = UpgradeFromValues.UPGRADE_FROM_36.toString();
 
     /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.7.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_37 = UpgradeFromValues.UPGRADE_FROM_37.toString();
+
+    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -507,13 +513,14 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code client.id} */
     @SuppressWarnings("WeakerAccess")
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
-    private static final String CLIENT_ID_DOC = "An ID prefix string used for the client IDs of internal [main-|restore-|global-]consumer, producer, and admin clients" +
-        " with pattern <code>&lt;client.id&gt;-[Global]StreamThread[-&lt;threadSequenceNumber$gt;]-&lt;consumer|producer|restore-consumer|global-consumer&gt;</code>.";
+    private static final String CLIENT_ID_DOC = "An ID prefix string used for the client IDs of internal (main, restore, and global) consumers , producers, and admin clients" +
+        " with pattern <code>&lt;client.id&gt;-[Global]StreamThread[-&lt;threadSequenceNumber&gt;]-&lt;consumer|producer|restore-consumer|global-consumer&gt;</code>.";
 
     /** {@code enable.metrics.push} */
     @SuppressWarnings("WeakerAccess")
     public static  final String ENABLE_METRICS_PUSH_CONFIG = CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG;
-    public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of internal [main-|restore-|global]consumer, producer, and admin client metrics to the cluster, if the cluster has a client metrics subscription which matches a client.";
+    public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of internal client metrics for (main, restore, and global) consumers, producers, and admin clients." + 
+        " The cluster must have a client metrics subscription which corresponds to a client.";
 
     /** {@code commit.interval.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -774,7 +781,7 @@ public class StreamsConfig extends AbstractConfig {
         UPGRADE_FROM_25 + "\", \"" + UPGRADE_FROM_26 + "\", \"" + UPGRADE_FROM_27 + "\", \"" +
         UPGRADE_FROM_28 + "\", \"" + UPGRADE_FROM_30 + "\", \"" + UPGRADE_FROM_31 + "\", \"" +
         UPGRADE_FROM_32 + "\", \"" + UPGRADE_FROM_33 + "\", \"" + UPGRADE_FROM_34 + "\", \"" +
-        UPGRADE_FROM_35 + "\", \"" + UPGRADE_FROM_36 + "(for upgrading from the corresponding old version).";
+        UPGRADE_FROM_35 + "\", \"" + UPGRADE_FROM_36 + "\", \"" + UPGRADE_FROM_37 + "(for upgrading from the corresponding old version).";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -878,7 +885,8 @@ public class StreamsConfig extends AbstractConfig {
                     Type.STRING,
                     "",
                     Importance.MEDIUM,
-                    CLIENT_ID_DOC)
+                    CLIENT_ID_DOC,
+                    "<code>&lt;application.id&gt-&lt;random-UUID&gt</code>")
             .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     LogAndFailExceptionHandler.class.getName(),

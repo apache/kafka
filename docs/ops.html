@@ -2538,7 +2538,22 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>buffer-exhausted-rate</td>
+        <td>The average per-second number of record sends that are dropped due to buffer exhaustion</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>buffer-exhausted-total</td>
+        <td>The total number of record sends that are dropped due to buffer exhaustion</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>bufferpool-wait-time</td>
+        <td>The fraction of time an appender waits for space allocation.</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>bufferpool-wait-ratio</td>
         <td>The fraction of time an appender waits for space allocation.</td>
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
@@ -2582,7 +2597,11 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
         <td>The total time the Producer spent aborting transactions in nanoseconds (for EOS).</td>
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
-
+      <tr>
+        <td>metadata-wait-time-ns-total</td>
+        <td>the total time in nanoseconds that has spent waiting for metadata from the Kafka broker</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
   </tbody></table>
 
   <h5 class="anchor-heading"><a id="producer_sender_monitoring" class="anchor-link"></a><a href="#producer_sender_monitoring">Producer Sender Metrics</a></h5>
@@ -3774,17 +3793,11 @@ foo
   <p>The following features are not fully implemented in KRaft mode:</p>
 
   <ul>
-    <li>Supporting JBOD configurations with multiple storage directories</li>
+    <li>Supporting JBOD configurations with multiple storage directories. Note that an Early Access release is supported in 3.7 as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-858%3A+Handle+JBOD+broker+disk+failure+in+KRaft">KIP-858</a>. Note that it is not yet recommended for use in production environments. Please refer to the <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+JBOD+in+KRaft+Early+Access+Release+Notes">release notes</a> to help us test it and provide feedback at <a href="https://issues.apache.org/jira/browse/KAFKA-16061">KAFKA-16061</a>.</li>
     <li>Modifying certain dynamic configurations on the standalone KRaft controller</li>
   </ul>
 
   <h4 class="anchor-heading"><a id="kraft_zk_migration" class="anchor-link"></a><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a></h4>
-
-  <p>
-    <b>ZooKeeper to KRaft migration is considered an Early Access feature and is not recommended for production clusters.</b>
-    Please report issues with ZooKeeper to KRaft migration using the
-    <a href="https://issues.apache.org/jira/projects/KAFKA" target="_blank">project JIRA</a> and the "kraft" component.
-  </p>
 
   <h3>Terminology</h3>
   <ul>
@@ -3807,7 +3820,7 @@ foo
   <h3>Limitations</h3>
   <ul>
     <li>While a cluster is being migrated from ZK mode to KRaft mode, we do not support changing the <i>metadata
-      version</i> (also known as the <i>inter.broker.protocol</i> version.) Please do not attempt to do this during
+      version</i> (also known as the <i>inter.broker.protocol.version</i>.) Please do not attempt to do this during
       a migration, or you may break the cluster.</li>
     <li>After the migration has been finalized, it is not possible to revert back to ZooKeeper mode.</li>
     <li><a href="#kraft_missing">As noted above</a>, some features are not fully implemented in KRaft mode. If you are
@@ -4063,8 +4076,10 @@ listeners=CONTROLLER://:9093
           </ul>
         </td>
         <td>
-          It is important to perform the <code>zookeeper-shell.sh</code> step quickly, to minimize the amount of
-          time that the cluster lacks a controller.
+          It is important to perform the <code>zookeeper-shell.sh</code> step <b>quickly</b>, to minimize the amount of
+          time that the cluster lacks a controller. Until the <code> /controller</code> znode is deleted,
+          you can also ignore any errors in the broker log about failing to connect to the Kraft controller.
+          Those error logs should disappear after second roll to pure zookeeper mode.
         </td>
       </tr>
       <tr>
@@ -4072,7 +4087,8 @@ listeners=CONTROLLER://:9093
         <td>
           <ul>
             <li>
-              On each broker, remove the <code>process.roles</code> configuration, and
+              On each broker, remove the <code>process.roles</code> configuration,
+              replace the <code>node.id</code> with <code>broker.id</code> and
               restore the <code>zookeeper.connect</code> configuration to its previous value.
               If your cluster requires other ZooKeeper configurations for brokers, such as
               <code>zookeeper.ssl.protocol</code>, re-add those configurations as well.
@@ -4088,7 +4104,7 @@ listeners=CONTROLLER://:9093
             <li>
               On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
               <code>controller.listener.names</code>, and <code>controller.quorum.voters</code>
-              configurations. Replace <code>node.id</code> with <code>broker.id</code>.
+              configurations.
               Then perform a second rolling restart of all brokers.
             </li>
             <li>
@@ -4100,7 +4116,9 @@ listeners=CONTROLLER://:9093
           <ul>
             <li>
               It is important to perform the <code>zookeeper-shell.sh</code> step <b>quickly</b>, to minimize the amount of
-              time that the cluster lacks a controller.
+              time that the cluster lacks a controller. Until the <code> /controller</code> znode is deleted,
+              you can also ignore any errors in the broker log about failing to connect to the Kraft controller.
+              Those error logs should disappear after second roll to pure zookeeper mode.
             </li>
             <li>
               Make sure that on the first cluster roll, <code>zookeeper.metadata.migration.enable</code> remains set to

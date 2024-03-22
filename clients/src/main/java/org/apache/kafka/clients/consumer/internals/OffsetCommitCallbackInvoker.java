@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.FencedInstanceIdException;
 
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -33,7 +32,6 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class OffsetCommitCallbackInvoker {
     private final ConsumerInterceptors<?, ?> interceptors;
-    private boolean hasFencedException = false;
 
     OffsetCommitCallbackInvoker(ConsumerInterceptors<?, ?> interceptors) {
         this.interceptors = interceptors;
@@ -62,17 +60,9 @@ public class OffsetCommitCallbackInvoker {
         while (!callbackQueue.isEmpty()) {
             OffsetCommitCallbackTask task = callbackQueue.poll();
             if (task != null) {
-
-                if (task.exception instanceof FencedInstanceIdException)
-                    hasFencedException = true;
-
                 task.callback.onComplete(task.offsets, task.exception);
             }
         }
-    }
-
-    public boolean hasFencedException() {
-        return hasFencedException;
     }
 
     private static class OffsetCommitCallbackTask {

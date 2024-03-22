@@ -294,8 +294,10 @@ public class ProducerConfig extends AbstractConfig {
             "<ul>" +
             "<li>If not set, the default partitioning logic is used. " + 
             "This strategy send records to a partition until at least " + BATCH_SIZE_CONFIG + " bytes is produced to the partition. It works with the strategy:" + 
-            "<p> 1) If no partition is specified but a key is present, choose a partition based on a hash of the key." +
-            "<p> 2) If no partition or key is present, choose the sticky partition that changes when at least " + BATCH_SIZE_CONFIG + " bytes are produced to the partition." +
+            "<ol>" +
+            "<li>If no partition is specified but a key is present, choose a partition based on a hash of the key.</li>" +
+            "<li>If no partition or key is present, choose the sticky partition that changes when at least " + BATCH_SIZE_CONFIG + " bytes are produced to the partition.</li>" +
+            "</ol>" +
             "</li>" +
             "<li><code>org.apache.kafka.clients.producer.RoundRobinPartitioner</code>: A partitioning strategy where " +
             "each record in a series of consecutive records is sent to a different partition, regardless of whether the 'key' is provided or not, " +

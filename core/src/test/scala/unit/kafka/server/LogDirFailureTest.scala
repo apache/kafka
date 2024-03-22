@@ -169,10 +169,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
   }
 
   def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType, quorum: String): Unit = {
-    if (isKRaftTest()) {
-      val value = configs.map(c => c.brokerId -> c.logDirs.contains(c.metadataLogDir))
-      logger.warn(s">>>>>> ${value.mkString(",")}")
-    }
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 
