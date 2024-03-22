@@ -921,16 +921,7 @@ private[group] class GroupCoordinator(
         ): Unit = {
           val (error, verificationGuard) = errorAndGuard
           if (error != Errors.NONE) {
-            val finalError = error match {
-              // Transaction verification can fail with `NETWORK_EXCEPTION`, a retriable error which
-              // older clients may not expect and retry correctly. We have the option of translating
-              // `NETWORK_EXCEPTION` to either `COORDINATOR_LOAD_IN_PROGRESS` or
-              // `COORDINATOR_NOT_AVAILABLE`, which trigger the desired retry behavior in older
-              // clients. We use `COORDINATOR_LOAD_IN_PROGRESS` because `COORDINATOR_NOT_AVAILABLE`
-              // also triggers an unnecessary coordinator lookup.
-              case Errors.NETWORK_EXCEPTION => Errors.COORDINATOR_LOAD_IN_PROGRESS
-              case other => GroupMetadataManager.maybeConvertOffsetCommitError(other)
-            }
+            val finalError = GroupMetadataManager.maybeConvertOffsetCommitError(error)
             responseCallback(offsetMetadata.map { case (k, _) => k -> finalError })
           } else {
             doTxnCommitOffsets(group, memberId, groupInstanceId, generationId, producerId, producerEpoch,
