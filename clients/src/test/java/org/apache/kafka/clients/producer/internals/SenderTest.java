@@ -3258,6 +3258,7 @@ public class SenderTest {
 
         // The sender should directly get closed.
         sender.run();
+        verify(transactionManager, times(1)).close();
     }
 
     /**
