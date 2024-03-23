@@ -23,12 +23,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
 
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Set;
@@ -305,6 +305,9 @@ class PartitionGroup extends AbstractPartitionGroup {
         return Collections.unmodifiableSet(partitionQueues.keySet());
     }
 
+    /**
+     * Return the stream-time of this partition group defined as the largest timestamp seen across all partitions
+     */
     @Override
     long streamTime() {
         return streamTime;
@@ -319,6 +322,16 @@ class PartitionGroup extends AbstractPartitionGroup {
         }
 
         return recordQueue.headRecordOffset();
+    }
+
+    Optional<Integer> headRecordLeaderEpoch(final TopicPartition partition) {
+        final RecordQueue recordQueue = partitionQueues.get(partition);
+
+        if (recordQueue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
+
+        return recordQueue.headRecordLeaderEpoch();
     }
 
     /**

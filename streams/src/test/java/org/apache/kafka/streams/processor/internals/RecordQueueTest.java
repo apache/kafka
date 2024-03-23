@@ -169,82 +169,93 @@ public class RecordQueueTest {
         assertEquals(0, queue.size());
         assertEquals(RecordQueue.UNKNOWN, queue.headRecordTimestamp());
         assertNull(queue.headRecordOffset());
+        assertNull(queue.headRecordLeaderEpoch());
 
         // add three 3 out-of-order records with timestamp 2, 1, 3
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
-            new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty()),
-            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty()),
-            new ConsumerRecord<>("topic", 1, 3, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty()));
+            new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.of(1)),
+            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.of(1)),
+            new ConsumerRecord<>("topic", 1, 3, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.of(2)));
 
         queue.addRawRecords(list1);
 
         assertEquals(3, queue.size());
         assertEquals(2L, queue.headRecordTimestamp());
         assertEquals(2L, queue.headRecordOffset().longValue());
+        assertEquals(Optional.of(1), queue.headRecordLeaderEpoch());
 
         // poll the first record, now with 1, 3
         assertEquals(2L, queue.poll(0).timestamp);
         assertEquals(2, queue.size());
         assertEquals(1L, queue.headRecordTimestamp());
         assertEquals(1L, queue.headRecordOffset().longValue());
+        assertEquals(Optional.of(1), queue.headRecordLeaderEpoch());
 
         // poll the second record, now with 3
         assertEquals(1L, queue.poll(0).timestamp);
         assertEquals(1, queue.size());
         assertEquals(3L, queue.headRecordTimestamp());
         assertEquals(3L, queue.headRecordOffset().longValue());
+        assertEquals(Optional.of(2), queue.headRecordLeaderEpoch());
 
         // add three 3 out-of-order records with timestamp 4, 1, 2
         // now with 3, 4, 1, 2
         final List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
-            new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty()),
-            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty()),
-            new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty()));
+            new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.of(2)),
+            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.of(1)),
+            new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.of(1)));
 
         queue.addRawRecords(list2);
 
         assertEquals(4, queue.size());
         assertEquals(3L, queue.headRecordTimestamp());
         assertEquals(3L, queue.headRecordOffset().longValue());
+        assertEquals(Optional.of(2), queue.headRecordLeaderEpoch());
 
         // poll the third record, now with 4, 1, 2
         assertEquals(3L, queue.poll(0).timestamp);
         assertEquals(3, queue.size());
         assertEquals(4L, queue.headRecordTimestamp());
         assertEquals(4L, queue.headRecordOffset().longValue());
+        assertEquals(Optional.of(2), queue.headRecordLeaderEpoch());
 
         // poll the rest records
         assertEquals(4L, queue.poll(0).timestamp);
         assertEquals(1L, queue.headRecordTimestamp());
         assertEquals(1L, queue.headRecordOffset().longValue());
+        assertEquals(Optional.of(1), queue.headRecordLeaderEpoch());
 
         assertEquals(1L, queue.poll(0).timestamp);
         assertEquals(2L, queue.headRecordTimestamp());
         assertEquals(2L, queue.headRecordOffset().longValue());
+        assertEquals(Optional.of(1), queue.headRecordLeaderEpoch());
 
         assertEquals(2L, queue.poll(0).timestamp);
         assertTrue(queue.isEmpty());
         assertEquals(0, queue.size());
         assertEquals(RecordQueue.UNKNOWN, queue.headRecordTimestamp());
         assertNull(queue.headRecordOffset());
+        assertNull(queue.headRecordLeaderEpoch());
 
         // add three more records with 4, 5, 6
         final List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
-            new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty()),
-            new ConsumerRecord<>("topic", 1, 5, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty()),
-            new ConsumerRecord<>("topic", 1, 6, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty()));
+            new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.of(2)),
+            new ConsumerRecord<>("topic", 1, 5, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.of(3)),
+            new ConsumerRecord<>("topic", 1, 6, 0L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.of(3)));
 
         queue.addRawRecords(list3);
 
         assertEquals(3, queue.size());
         assertEquals(4L, queue.headRecordTimestamp());
         assertEquals(4L, queue.headRecordOffset().longValue());
+        assertEquals(Optional.of(2), queue.headRecordLeaderEpoch());
 
         // poll one record again, the timestamp should advance now
         assertEquals(4L, queue.poll(0).timestamp);
         assertEquals(2, queue.size());
         assertEquals(5L, queue.headRecordTimestamp());
         assertEquals(5L, queue.headRecordOffset().longValue());
+        assertEquals(Optional.of(3), queue.headRecordLeaderEpoch());
 
         // clear the queue
         queue.clear();
@@ -253,6 +264,7 @@ public class RecordQueueTest {
         assertEquals(RecordQueue.UNKNOWN, queue.headRecordTimestamp());
         assertEquals(RecordQueue.UNKNOWN, queue.partitionTime());
         assertNull(queue.headRecordOffset());
+        assertNull(queue.headRecordLeaderEpoch());
 
         // re-insert the three records with 4, 5, 6
         queue.addRawRecords(list3);
@@ -260,6 +272,7 @@ public class RecordQueueTest {
         assertEquals(3, queue.size());
         assertEquals(4L, queue.headRecordTimestamp());
         assertEquals(4L, queue.headRecordOffset().longValue());
+        assertEquals(Optional.of(2), queue.headRecordLeaderEpoch());
     }
 
     @Test
