@@ -24,7 +24,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
-import org.apache.kafka.tools.Tuple2;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -34,6 +33,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -138,8 +138,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
-        Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(group);
-        assertTrue(res.v1.map(s -> s.contains("Dead")).orElse(false) && res.v2.map(Collection::isEmpty).orElse(false),
+        Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(group);
+        assertTrue(res.getKey().map(s -> s.contains("Dead")).orElse(false) && res.getValue().map(Collection::isEmpty).orElse(false),
             "Expected the state to be 'Dead', with no members in the group '" + group + "'.");
     }
 
@@ -155,12 +155,12 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
-        Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(group, false);
-        assertTrue(res.v1.map(s -> s.contains("Dead")).orElse(false) && res.v2.map(Collection::isEmpty).orElse(false),
+        Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(group, false);
+        assertTrue(res.getKey().map(s -> s.contains("Dead")).orElse(false) && res.getValue().map(Collection::isEmpty).orElse(false),
             "Expected the state to be 'Dead', with no members in the group '" + group + "'.");
 
-        Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>> res2 = service.collectGroupMembers(group, true);
-        assertTrue(res2.v1.map(s -> s.contains("Dead")).orElse(false) && res2.v2.map(Collection::isEmpty).orElse(false),
+        Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res2 = service.collectGroupMembers(group, true);
+        assertTrue(res2.getKey().map(s -> s.contains("Dead")).orElse(false) && res2.getValue().map(Collection::isEmpty).orElse(false),
             "Expected the state to be 'Dead', with no members in the group '" + group + "' (verbose option).");
     }
 
@@ -197,8 +197,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
-                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
-                return res.v1.trim().split("\n").length == 2 && res.v2.isEmpty();
+                Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                return res.getKey().trim().split("\n").length == 2 && res.getValue().isEmpty();
             }, "Expected a data row and no error in describe results with describe type " + String.join(" ", describeType) + ".");
         }
     }
@@ -226,9 +226,9 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
-                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
-                long numLines = Arrays.stream(res.v1.trim().split("\n")).filter(line -> !line.isEmpty()).count();
-                return (numLines == expectedNumLines) && res.v2.isEmpty();
+                Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                long numLines = Arrays.stream(res.getKey().trim().split("\n")).filter(line -> !line.isEmpty()).count();
+                return (numLines == expectedNumLines) && res.getValue().isEmpty();
             }, "Expected a data row and no error in describe results with describe type " + String.join(" ", describeType) + ".");
         }
     }
@@ -252,9 +252,9 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
-                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
-                long numLines = Arrays.stream(res.v1.trim().split("\n")).filter(s -> !s.isEmpty()).count();
-                return (numLines == expectedNumLines) && res.v2.isEmpty();
+                Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                long numLines = Arrays.stream(res.getKey().trim().split("\n")).filter(s -> !s.isEmpty()).count();
+                return (numLines == expectedNumLines) && res.getValue().isEmpty();
             }, "Expected a data row and no error in describe results with describe type " + String.join(" ", describeType) + ".");
         }
     }
@@ -271,9 +271,9 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> groupOffsets = service.collectGroupOffsets(GROUP);
-            Optional<String> state = groupOffsets.v1;
-            Optional<Collection<PartitionAssignmentState>> assignments = groupOffsets.v2;
+            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> groupOffsets = service.collectGroupOffsets(GROUP);
+            Optional<String> state = groupOffsets.getKey();
+            Optional<Collection<PartitionAssignmentState>> assignments = groupOffsets.getValue();
 
             Predicate<PartitionAssignmentState> isGrp = s -> Objects.equals(s.group, GROUP);
 
@@ -307,9 +307,9 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>> groupMembers = service.collectGroupMembers(GROUP, false);
-            Optional<String> state = groupMembers.v1;
-            Optional<Collection<MemberAssignmentState>> assignments = groupMembers.v2;
+            Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> groupMembers = service.collectGroupMembers(GROUP, false);
+            Optional<String> state = groupMembers.getKey();
+            Optional<Collection<MemberAssignmentState>> assignments = groupMembers.getValue();
 
             Predicate<MemberAssignmentState> isGrp = s -> Objects.equals(s.group, GROUP);
 
@@ -331,10 +331,10 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
                 !Objects.equals(assignmentState.host, ConsumerGroupCommand.MISSING_COLUMN_VALUE);
         }, "Expected a 'Stable' group status, rows and valid member information for group " + GROUP + ".");
 
-        Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
+        Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
 
-        if (res.v2.isPresent()) {
-            assertTrue(res.v2.get().size() == 1 && res.v2.get().iterator().next().assignment.size() == 1,
+        if (res.getValue().isPresent()) {
+            assertTrue(res.getValue().get().size() == 1 && res.getValue().get().iterator().next().assignment.size() == 1,
                 "Expected a topic partition assigned to the single group member for group " + GROUP);
         } else {
             fail("Expected partition assignments for members of group " + GROUP);
@@ -407,8 +407,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
-                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
-                return res.v1.trim().split("\n").length == 2 && res.v2.isEmpty();
+                Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                return res.getKey().trim().split("\n").length == 2 && res.getValue().isEmpty();
             }, "Expected describe group results with one data row for describe type '" + String.join(" ", describeType) + "'");
 
             // stop the consumer so the group has no active member anymore
@@ -431,18 +431,18 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
-            return res.v1.map(s -> s.contains("Stable")).orElse(false)
-                && res.v2.map(c -> c.stream().anyMatch(assignment -> Objects.equals(assignment.group, GROUP) && assignment.offset.isPresent())).orElse(false);
+            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
+            return res.getKey().map(s -> s.contains("Stable")).orElse(false)
+                && res.getValue().map(c -> c.stream().anyMatch(assignment -> Objects.equals(assignment.group, GROUP) && assignment.offset.isPresent())).orElse(false);
         }, "Expected the group to initially become stable, and to find group in assignments after initial offset commit.");
 
         // stop the consumer so the group has no active member anymore
         executor.shutdown();
 
         TestUtils.waitForCondition(() -> {
-            Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> offsets = service.collectGroupOffsets(GROUP);
-            Optional<String> state = offsets.v1;
-            Optional<Collection<PartitionAssignmentState>> assignments = offsets.v2;
+            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> offsets = service.collectGroupOffsets(GROUP);
+            Optional<String> state = offsets.getKey();
+            Optional<Collection<PartitionAssignmentState>> assignments = offsets.getValue();
             List<PartitionAssignmentState> testGroupAssignments = assignments.get().stream().filter(a -> Objects.equals(a.group, GROUP)).collect(Collectors.toList());
             PartitionAssignmentState assignment = testGroupAssignments.get(0);
             return state.map(s -> s.contains("Empty")).orElse(false) &&
@@ -465,17 +465,17 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
-            return res.v1.map(s -> s.contains("Stable")).orElse(false)
-                && res.v2.map(c -> c.stream().anyMatch(m -> Objects.equals(m.group, GROUP))).orElse(false);
+            Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
+            return res.getKey().map(s -> s.contains("Stable")).orElse(false)
+                && res.getValue().map(c -> c.stream().anyMatch(m -> Objects.equals(m.group, GROUP))).orElse(false);
         }, "Expected the group to initially become stable, and to find group in assignments after initial offset commit.");
 
         // stop the consumer so the group has no active member anymore
         executor.shutdown();
 
         TestUtils.waitForCondition(() -> {
-            Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
-            return res.v1.map(s -> s.contains("Empty")).orElse(false) && res.v2.isPresent() && res.v2.get().isEmpty();
+            Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
+            return res.getKey().map(s -> s.contains("Empty")).orElse(false) && res.getValue().isPresent() && res.getValue().get().isEmpty();
         }, "Expected no member in describe group members results for group '" + GROUP + "'");
     }
 
@@ -521,9 +521,9 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
-                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
                 int expectedNumRows = DESCRIBE_TYPE_MEMBERS.contains(describeType) ? 3 : 2;
-                return res.v2.isEmpty() && res.v1.trim().split("\n").length == expectedNumRows;
+                return res.getValue().isEmpty() && res.getKey().trim().split("\n").length == expectedNumRows;
             }, "Expected a single data row in describe group result with describe type '" + String.join(" ", describeType) + "'");
         }
     }
@@ -540,11 +540,11 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
-            return res.v1.map(s -> s.contains("Stable")).isPresent() &&
-                res.v2.isPresent() &&
-                res.v2.get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 1 &&
-                res.v2.get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.partition.isPresent()).count() == 1;
+            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
+            return res.getKey().map(s -> s.contains("Stable")).isPresent() &&
+                res.getValue().isPresent() &&
+                res.getValue().get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 1 &&
+                res.getValue().get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.partition.isPresent()).count() == 1;
         }, "Expected rows for consumers with no assigned partitions in describe group results");
     }
 
@@ -560,18 +560,18 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
-            return res.v1.map(s -> s.contains("Stable")).orElse(false) &&
-                res.v2.isPresent() &&
-                res.v2.get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 2 &&
-                res.v2.get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.numPartitions == 1).count() == 1 &&
-                res.v2.get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.numPartitions == 0).count() == 1 &&
-                res.v2.get().stream().allMatch(s -> s.assignment.isEmpty());
+            Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
+            return res.getKey().map(s -> s.contains("Stable")).orElse(false) &&
+                res.getValue().isPresent() &&
+                res.getValue().get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 2 &&
+                res.getValue().get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.numPartitions == 1).count() == 1 &&
+                res.getValue().get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.numPartitions == 0).count() == 1 &&
+                res.getValue().get().stream().allMatch(s -> s.assignment.isEmpty());
         }, "Expected rows for consumers with no assigned partitions in describe group results");
 
-        Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
-        assertTrue(res.v1.map(s -> s.contains("Stable")).orElse(false)
-                && res.v2.map(c -> c.stream().anyMatch(s -> !s.assignment.isEmpty())).orElse(false),
+        Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
+        assertTrue(res.getKey().map(s -> s.contains("Stable")).orElse(false)
+                && res.getValue().map(c -> c.stream().anyMatch(s -> !s.assignment.isEmpty())).orElse(false),
             "Expected additional columns in verbose version of describe members");
     }
 
@@ -608,9 +608,9 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
-                Tuple2<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
                 int expectedNumRows = DESCRIBE_TYPE_STATE.contains(describeType) ? 2 : 3;
-                return res.v2.isEmpty() && res.v1.trim().split("\n").length == expectedNumRows;
+                return res.getValue().isEmpty() && res.getKey().trim().split("\n").length == expectedNumRows;
             }, "Expected a single data row in describe group result with describe type '" + String.join(" ", describeType) + "'");
         }
     }
@@ -629,12 +629,12 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
-            return res.v1.map(s -> s.contains("Stable")).orElse(false) &&
-                res.v2.isPresent() &&
-                res.v2.get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 2 &&
-                res.v2.get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.partition.isPresent()).count() == 2 &&
-                res.v2.get().stream().noneMatch(x -> Objects.equals(x.group, GROUP) && !x.partition.isPresent());
+            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
+            return res.getKey().map(s -> s.contains("Stable")).orElse(false) &&
+                res.getValue().isPresent() &&
+                res.getValue().get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 2 &&
+                res.getValue().get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.partition.isPresent()).count() == 2 &&
+                res.getValue().get().stream().noneMatch(x -> Objects.equals(x.group, GROUP) && !x.partition.isPresent());
         }, "Expected two rows (one row per consumer) in describe group results.");
     }
 
@@ -652,16 +652,16 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
-            return res.v1.map(s -> s.contains("Stable")).orElse(false) &&
-                res.v2.isPresent() &&
-                res.v2.get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 2 &&
-                res.v2.get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.numPartitions == 1).count() == 2 &&
-                res.v2.get().stream().noneMatch(x -> Objects.equals(x.group, GROUP) && x.numPartitions == 0);
+            Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
+            return res.getKey().map(s -> s.contains("Stable")).orElse(false) &&
+                res.getValue().isPresent() &&
+                res.getValue().get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 2 &&
+                res.getValue().get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.numPartitions == 1).count() == 2 &&
+                res.getValue().get().stream().noneMatch(x -> Objects.equals(x.group, GROUP) && x.numPartitions == 0);
         }, "Expected two rows (one row per consumer) in describe group members results.");
 
-        Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
-        assertTrue(res.v1.map(s -> s.contains("Stable")).orElse(false) && res.v2.map(s -> s.stream().filter(x -> x.assignment.isEmpty()).count()).orElse(0L) == 0,
+        Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
+        assertTrue(res.getKey().map(s -> s.contains("Stable")).orElse(false) && res.getValue().map(s -> s.stream().filter(x -> x.assignment.isEmpty()).count()).orElse(0L) == 0,
             "Expected additional columns in verbose version of describe members");
     }
 
@@ -698,9 +698,9 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
-            return res.v1.map(s -> s.contains("Empty")).orElse(false)
-                && res.v2.isPresent() && res.v2.get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 2;
+            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
+            return res.getKey().map(s -> s.contains("Empty")).orElse(false)
+                && res.getValue().isPresent() && res.getValue().get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 2;
         }, "Expected a stable group with two members in describe group state result.");
     }
 
@@ -798,18 +798,18 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> groupOffsets = service.collectGroupOffsets(GROUP);
+            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> groupOffsets = service.collectGroupOffsets(GROUP);
 
             Predicate<PartitionAssignmentState> isGrp = s -> Objects.equals(s.group, GROUP);
 
-            boolean res = groupOffsets.v1.map(s -> s.contains("Stable")).orElse(false) &&
-                groupOffsets.v2.isPresent() &&
-                groupOffsets.v2.get().stream().filter(isGrp).count() == 1;
+            boolean res = groupOffsets.getKey().map(s -> s.contains("Stable")).orElse(false) &&
+                groupOffsets.getValue().isPresent() &&
+                groupOffsets.getValue().get().stream().filter(isGrp).count() == 1;
 
             if (!res)
                 return false;
 
-            Optional<PartitionAssignmentState> maybeAssignmentState = groupOffsets.v2.get().stream().filter(isGrp).findFirst();
+            Optional<PartitionAssignmentState> maybeAssignmentState = groupOffsets.getValue().get().stream().filter(isGrp).findFirst();
             if (!maybeAssignmentState.isPresent())
                 return false;
 
