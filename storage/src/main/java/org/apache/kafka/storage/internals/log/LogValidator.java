@@ -68,17 +68,17 @@ public class LogValidator {
         public final long logAppendTimeMs;
         public final MemoryRecords validatedRecords;
         public final long maxTimestampMs;
-        public final long shallowOffsetOfMaxTimestampMs;
+        public final long offsetOfMaxTimestampMs;
         public final boolean messageSizeMaybeChanged;
         public final RecordConversionStats recordConversionStats;
 
         public ValidationResult(long logAppendTimeMs, MemoryRecords validatedRecords, long maxTimestampMs,
-                long shallowOffsetOfMaxTimestampMs, boolean messageSizeMaybeChanged,
-                RecordConversionStats recordConversionStats) {
+                                long offsetOfMaxTimestampMs, boolean messageSizeMaybeChanged,
+                                RecordConversionStats recordConversionStats) {
             this.logAppendTimeMs = logAppendTimeMs;
             this.validatedRecords = validatedRecords;
             this.maxTimestampMs = maxTimestampMs;
-            this.shallowOffsetOfMaxTimestampMs = shallowOffsetOfMaxTimestampMs;
+            this.offsetOfMaxTimestampMs = offsetOfMaxTimestampMs;
             this.messageSizeMaybeChanged = messageSizeMaybeChanged;
             this.recordConversionStats = recordConversionStats;
         }
@@ -149,7 +149,7 @@ public class LogValidator {
      * avoid expensive re-compression.
      *
      * Returns a ValidationAndOffsetAssignResult containing the validated message set, maximum timestamp, the offset
-     * of the shallow message with the max timestamp and a boolean indicating whether the message sizes may have changed.
+     * of the message with the max timestamp and a boolean indicating whether the message sizes may have changed.
      */
     public ValidationResult validateMessagesAndAssignOffsets(PrimitiveRef.LongRef offsetCounter,
                                                              MetricsRecorder metricsRecorder,
@@ -232,7 +232,7 @@ public class LogValidator {
             now,
             convertedRecords,
             info.maxTimestamp,
-            info.shallowOffsetOfMaxTimestamp,
+            info.offsetOfMaxTimestamp,
             true,
             recordConversionStats);
     }
@@ -293,10 +293,7 @@ public class LogValidator {
 
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
             maxTimestamp = now;
-            if (toMagic >= RecordBatch.MAGIC_VALUE_V2)
-                offsetOfMaxTimestamp = offsetCounter.value - 1;
-            else
-                offsetOfMaxTimestamp = initialOffset;
+            offsetOfMaxTimestamp = initialOffset;
         }
 
         return new ValidationResult(
@@ -479,7 +476,7 @@ public class LogValidator {
             logAppendTime,
             records,
             info.maxTimestamp,
-            info.shallowOffsetOfMaxTimestamp,
+            info.offsetOfMaxTimestamp,
             true,
             recordConversionStats);
     }
