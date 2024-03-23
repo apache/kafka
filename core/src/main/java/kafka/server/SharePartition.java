@@ -18,6 +18,7 @@ package kafka.server;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -484,7 +485,7 @@ public class SharePartition {
                             if (inFlightBatch.batchState() != RecordState.ACQUIRED) {
                                 log.debug("The batch is not in the acquired state: {} for share partition: {}-{}",
                                     inFlightBatch, groupId, topicIdPartition);
-                                throwable = new InvalidRequestException("The batch cannot be acknowledged. The subset batch is not in the acquired state.");
+                                throwable = new InvalidRecordStateException("The batch cannot be acknowledged. The subset batch is not in the acquired state.");
                                 break;
                             }
                             // The request batch is a subset or per offset state is managed hence update
@@ -515,7 +516,7 @@ public class SharePartition {
                             if (offsetState.getValue().state != RecordState.ACQUIRED) {
                                 log.debug("The offset is not acquired, offset: {} batch: {} for the share"
                                     + " partition: {}-{}", offsetState.getKey(), inFlightBatch, groupId, topicIdPartition);
-                                throwable = new InvalidRequestException("The batch cannot be acknowledged. The offset is not acquired.");
+                                throwable = new InvalidRecordStateException("The batch cannot be acknowledged. The offset is not acquired.");
                                 break;
                             }
 
@@ -524,7 +525,7 @@ public class SharePartition {
                                 log.debug("Unable to acknowledge records for the offset: {} in batch: {}"
                                         + " for the share partition: {}-{}", offsetState.getKey(),
                                     inFlightBatch, groupId, topicIdPartition);
-                                throwable = new InvalidRequestException("Unable to acknowledge records for the batch");
+                                throwable = new InvalidRecordStateException("Unable to acknowledge records for the batch");
                                 break;
                             }
                             // Successfully updated the state of the offset.
@@ -542,7 +543,7 @@ public class SharePartition {
                     if (inFlightBatch.batchState() != RecordState.ACQUIRED) {
                         log.debug("The batch is not in the acquired state: {} for share partition: {}-{}",
                             inFlightBatch, groupId, topicIdPartition);
-                        throwable = new InvalidRequestException("The batch cannot be acknowledged. The batch is not in the acquired state.");
+                        throwable = new InvalidRecordStateException("The batch cannot be acknowledged. The batch is not in the acquired state.");
                         break;
                     }
 
@@ -550,7 +551,7 @@ public class SharePartition {
                     if (updateResult == null) {
                         log.debug("Unable to acknowledge records for the batch: {} with state: {}"
                             + " for the share partition: {}-{}", inFlightBatch, recordState, groupId, topicIdPartition);
-                        throwable = new InvalidRequestException("Unable to acknowledge records for the batch");
+                        throwable = new InvalidRecordStateException("Unable to acknowledge records for the batch");
                         break;
                     }
 
@@ -578,7 +579,8 @@ public class SharePartition {
             }
 
             if (throwable != null) {
-                log.info("Acknowledgement batch request failed for share partition, rollback any changed state"
+                // the log should be DEBUG to avoid flooding of logs for a faulty client
+                log.debug("Acknowledgement batch request failed for share partition, rollback any changed state"
                     + " for the share partition: {}-{}", groupId, topicIdPartition);
                 updatedStates.forEach(state -> state.completeStateTransition(false));
             } else {
