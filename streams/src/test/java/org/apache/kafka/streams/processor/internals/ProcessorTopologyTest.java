@@ -1569,7 +1569,7 @@ public class ProcessorTopologyTest {
     }
 
     private StreamPartitioner<Object, Object> constantPartitioner(final Integer partition) {
-        return (topic, key, value, numPartitions) -> partition;
+        return (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(partition));
     }
 
     private Topology createSimpleTopology(final int partition) {
@@ -1597,13 +1597,6 @@ public class ProcessorTopologyTest {
     }
 
     static class DroppingPartitioner implements StreamPartitioner<String, String> {
-
-        @Override
-        @Deprecated
-        public Integer partition(final String topic, final String key, final String value, final int numPartitions) {
-            return null;
-        }
-
         @Override
         public Optional<Set<Integer>> partitions(final String topic, final String key, final String value, final int numPartitions) {
             final Set<Integer> partitions = new HashSet<>();

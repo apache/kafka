@@ -129,18 +129,11 @@ public class StreamsMetadataStateTest {
         topologyMetadata.buildAndRewriteTopology();
         metadataState = new StreamsMetadataState(topologyMetadata, hostOne, logContext);
         metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, partitionInfos);
-        partitioner = (topic, key, value, numPartitions) -> 1;
+        partitioner = (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(1));
         storeNames = mkSet("table-one", "table-two", "merged-table", globalTable);
     }
 
     static class MultiValuedPartitioner implements StreamPartitioner<String, Object> {
-
-        @Override
-        @Deprecated
-        public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
-            return null;
-        }
-
         @Override
         public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
             final Set<Integer> partitions = new HashSet<>();
@@ -299,7 +292,7 @@ public class StreamsMetadataStateTest {
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostTwo, mkSet(hostOne), 2);
 
         final KeyQueryMetadata actual = metadataState.getKeyQueryMetadataForKey("merged-table",  "the-key",
-            (topic, key, value, numPartitions) -> 2);
+            (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(2)));
 
         assertEquals(expected, actual);
     }

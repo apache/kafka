@@ -18,12 +18,13 @@
 package org.apache.kafka.streams.integration;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Optional;
-import java.util.Arrays;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -92,12 +93,6 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
     private final static Properties PRODUCER_CONFIG_2 = new Properties();
 
     static class MultiPartitioner implements StreamPartitioner<String, Void> {
-
-        @Override
-        @Deprecated
-        public Integer partition(final String topic, final String key, final Void value, final int numPartitions) {
-            return null;
-        }
 
         @Override
         public Optional<Set<Integer>> partitions(final String topic, final String key, final Void value, final int numPartitions) {
@@ -274,8 +269,8 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         final ValueJoiner<String, String, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
 
         final TableJoined<String, String> tableJoined = TableJoined.with(
-            (topic, key, value, numPartitions) -> Math.abs(getKeyB(key).hashCode()) % numPartitions,
-            (topic, key, value, numPartitions) -> Math.abs(key.hashCode()) % numPartitions
+            (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(getKeyB(key).hashCode()) % numPartitions)),
+            (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(key.hashCode()) % numPartitions))
         );
 
         table1.join(table2, KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest::getKeyB, joiner, tableJoined, materialized)
@@ -317,7 +312,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
 
         final TableJoined<String, String> tableJoined = TableJoined.with(
                 new MultiPartitioner(),
-                (topic, key, value, numPartitions) -> Math.abs(key.hashCode()) % numPartitions
+                (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(key.hashCode()) % numPartitions))
         );
 
         table1.join(table2, KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest::getKeyB, joiner, tableJoined, materialized)
@@ -332,14 +327,14 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
     private static Repartitioned<String, String> repartitionA() {
         final Repartitioned<String, String> repartitioned = Repartitioned.as("a");
         return repartitioned.withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
-            .withStreamPartitioner((topic, key, value, numPartitions) -> Math.abs(getKeyB(key).hashCode()) % numPartitions)
+            .withStreamPartitioner((topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(getKeyB(key).hashCode()) % numPartitions)))
             .withNumberOfPartitions(4);
     }
 
     private static Repartitioned<String, String> repartitionB() {
         final Repartitioned<String, String> repartitioned = Repartitioned.as("b");
         return repartitioned.withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
-            .withStreamPartitioner((topic, key, value, numPartitions) -> Math.abs(key.hashCode()) % numPartitions)
+            .withStreamPartitioner((topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(key.hashCode()) % numPartitions)))
             .withNumberOfPartitions(4);
     }
 

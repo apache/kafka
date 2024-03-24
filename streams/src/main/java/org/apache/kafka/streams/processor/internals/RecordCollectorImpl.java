@@ -151,7 +151,7 @@ public class RecordCollectorImpl implements RecordCollector {
             }
             if (partitions.size() > 0) {
                 final Optional<Set<Integer>> maybeMulticastPartitions = partitioner.partitions(topic, key, value, partitions.size());
-                if (!maybeMulticastPartitions.isPresent()) {
+                if (maybeMulticastPartitions == null || !maybeMulticastPartitions.isPresent()) {
                     // A null//empty partition indicates we should use the default partitioner
                     send(topic, key, value, headers, null, timestamp, keySerializer, valueSerializer, processorNodeId, context);
                 } else {
