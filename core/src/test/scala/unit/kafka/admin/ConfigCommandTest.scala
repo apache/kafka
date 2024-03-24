@@ -16,8 +16,6 @@
  */
 package kafka.admin
 
-import java.util
-import java.util.Properties
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.cluster.Broker
 import kafka.utils.{Exit, Logging, TestUtils}
@@ -36,6 +34,8 @@ import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.{mock, times, verify, when}
 
+import java.util
+import java.util.Properties
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -1104,7 +1104,7 @@ class ConfigCommandTest extends Logging {
       "--alter",
       "--add-config", "message.max.bytes=10,leader.replication.throttled.rate=10") ++ resourceOpts
     val alterOpts = new ConfigCommandOptions(optsList.toArray)
-    val brokerConfigs = mutable.Map[String, String]("num.io.threads" -> "5")
+    var alteredConfigs = false
 
     val resource = new ConfigResource(ConfigResource.Type.BROKER, resourceName)
     val configEntries = util.Collections.singletonList(new ConfigEntry("num.io.threads", "5"))
@@ -1128,19 +1128,25 @@ class ConfigCommandTest extends Logging {
         describeResult
       }
 
-      override def alterConfigs(configs: util.Map[ConfigResource, Config], options: AlterConfigsOptions): AlterConfigsResult = {
+      override def incrementalAlterConfigs(configs: util.Map[ConfigResource, util.Collection[AlterConfigOp]], options: AlterConfigsOptions): AlterConfigsResult = {
         assertEquals(1, configs.size)
         val entry = configs.entrySet.iterator.next
         val resource = entry.getKey
-        val config = entry.getValue
+        val alterConfigOps = entry.getValue
         assertEquals(ConfigResource.Type.BROKER, resource.`type`)
-        config.entries.forEach { e => brokerConfigs.put(e.name, e.value) }
+        assertEquals(2, alterConfigOps.size)
+
+        val expectedConfigOps = List(
+          new AlterConfigOp(new ConfigEntry("message.max.bytes", "10"), AlterConfigOp.OpType.SET),
+          new AlterConfigOp(new ConfigEntry("leader.replication.throttled.rate", "10"), AlterConfigOp.OpType.SET),
+        )
+        assertEquals(expectedConfigOps, alterConfigOps.asScala.toList)
+        alteredConfigs = true
         alterResult
       }
     }
     ConfigCommand.alterConfig(mockAdminClient, alterOpts)
-    assertEquals(Map("message.max.bytes" -> "10", "num.io.threads" -> "5", "leader.replication.throttled.rate" -> "10"),
-      brokerConfigs.toMap)
+    assertTrue(alteredConfigs)
     verify(describeResult).all()
   }
 
