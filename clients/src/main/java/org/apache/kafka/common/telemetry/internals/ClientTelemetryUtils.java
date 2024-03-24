@@ -29,8 +29,6 @@ import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -203,10 +201,10 @@ public class ClientTelemetryUtils {
 
     public static ByteBuffer decompress(byte[] metrics, CompressionType compressionType) {
         ByteBuffer data = ByteBuffer.wrap(metrics);
-        try (InputStream in = compressionType.wrapForInput(data, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create())){
+        try (InputStream in = compressionType.wrapForInput(data, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create())) {
             byte[] bytes = new byte[data.capacity() * 2];
             int nRead = in.read(bytes, 0, bytes.length);
-            try(ByteBufferOutputStream out = new ByteBufferOutputStream(nRead)) {
+            try (ByteBufferOutputStream out = new ByteBufferOutputStream(nRead)) {
                 out.write(bytes, 0, nRead);
                 return out.buffer();
             }
