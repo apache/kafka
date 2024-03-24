@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
@@ -40,6 +41,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.TopicImage;
@@ -1352,37 +1354,53 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Add the records that create a corresponding consumer group.
+     * Convert the current classic group to a consumer group.
+     * Add the records for the conversion.
      *
-     * @param records The list to which the new records are added.
+     * @param consumerGroup     The converted consumer group.
+     * @param records           The list to which the new records are added.
+     *
+     * @throws GroupIdNotFoundException if any of the group's member doesn't support the consumer protocol.
      */
     public void convertToConsumerGroup(
+        ConsumerGroup consumerGroup,
         List<Record> records,
         TopicsImage topicsImage
-    ) {
+    ) throws GroupIdNotFoundException {
         members.forEach((memberId, member) -> {
-            final ByteBuffer buffer = ByteBuffer.wrap(member.assignment());
-            ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(buffer);
+            JoinGroupRequestData.JoinGroupRequestProtocol protocol = member.getConsumerProtocol();
+            if (protocol == null) {
+                throw new GroupIdNotFoundException(String.format(
+                    "Fail to upgrade classic group %s because its member %s does not support the consumer protocol.",
+                    groupId, memberId
+                ));
+            }
 
+            final ByteBuffer buffer = ByteBuffer.wrap(protocol.metadata());
+            ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(buffer);
             Map<Uuid, Set<Integer>> partitions = topicPartitionMapFromList(assignment.partitions(), topicsImage);
-            List<String> subscribedTopicNames = partitions.keySet().stream().map(topicId -> topicsImage.getTopic(topicId).name())
-                .collect(Collectors.toList());
+            ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(buffer);
 
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(memberId)
                 .setMemberEpoch(generationId)
                 .setPreviousMemberEpoch(generationId)
                 .setInstanceId(member.groupInstanceId().orElse(null))
+                .setRackId(subscription.rackId().orElse(null))
                 .setRebalanceTimeoutMs(member.rebalanceTimeoutMs())
                 .setClientId(member.clientId())
                 .setClientHost(member.clientHost())
-                .setSubscribedTopicNames(subscribedTopicNames)
+                .setSubscribedTopicNames(subscription.topics())
                 .setAssignedPartitions(partitions)
                 .build();
+            consumerGroup.members().put(memberId, newMember);
 
             records.add(RecordHelpers.newMemberSubscriptionRecord(groupId(), newMember));
             records.add(RecordHelpers.newCurrentAssignmentRecord(groupId(), newMember));
             records.add(RecordHelpers.newTargetAssignmentRecord(groupId(), memberId, partitions));
         });
+
+        consumerGroup.setGroupEpoch(generationId);
+        consumerGroup.setTargetAssignmentEpoch(generationId);
 
         records.add(RecordHelpers.newGroupEpochRecord(groupId(), generationId));
         // SubscriptionMetadata will be computed in the following consumerGroupHeartbeat
