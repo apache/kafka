@@ -121,7 +121,7 @@ public class LeaderElectionCommandTest {
         Path adminConfigPath = tempAdminConfig(defaultApiTimeoutMs, requestTimeoutMs);
 
         try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class)) {
-            assertEquals(0, LeaderElectionCommand.mainNoExit(
+            assertEquals(1, LeaderElectionCommand.mainNoExit(
                 "--bootstrap-server", cluster.bootstrapServers(),
                 "--election-type", "unclean", "--all-topic-partitions",
                 "--admin.config", adminConfigPath.toString()
@@ -288,7 +288,7 @@ public class LeaderElectionCommandTest {
 
         Path topicPartitionPath = tempTopicPartitionFile(Arrays.asList(topicPartition0, topicPartition1));
         String output = ToolsTestUtils.captureStandardOut(() ->
-            LeaderElectionCommand.main(
+            LeaderElectionCommand.mainNoExit(
                 "--bootstrap-server", cluster.bootstrapServers(),
                 "--election-type", "preferred",
                 "--path-to-json-file", topicPartitionPath.toString()
