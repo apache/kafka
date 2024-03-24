@@ -359,7 +359,13 @@ class RemoteIndexCacheTest {
     verify(spyEntry.timeIndex, times(0)).deleteIfExists()
 
     // verify cleaner thread is shutdown
-    assertTrue(cache.cleanerThread.isShutdownComplete)
+    TestUtils.waitUntilTrue(() => {
+      try {
+        cache.cleanerThread.isShutdownComplete
+      } catch {
+        case e: InterruptedException => true
+      }
+    }, "Failed while waiting for cleaner thread to shutdown")
   }
 
   @Test
