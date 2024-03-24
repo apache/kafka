@@ -65,4 +65,28 @@ public enum GroupProtocolMigrationPolicy {
         return config == null ? NONE : config;
     }
 
+    public static boolean isUpgradeEnabled(GroupProtocolMigrationPolicy policy) {
+        switch (policy) {
+            case BOTH:
+            case UPGRADE:
+                return true;
+            case DOWNGRADE:
+            case NONE:
+            default:
+                return false;
+        }
+    }
+
+    public static boolean isDowngradeEnabled(GroupProtocolMigrationPolicy policy) {
+        switch (policy) {
+            case BOTH:
+            case DOWNGRADE:
+                return true;
+            case UPGRADE:
+            case NONE:
+            default:
+                return false;
+        }
+    }
+
 }

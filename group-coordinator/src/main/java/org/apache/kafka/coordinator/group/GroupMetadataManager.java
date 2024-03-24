@@ -628,10 +628,11 @@ public class GroupMetadataManager {
         } else {
             if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
+            } else if (validateOnlineUpgrade((ClassicGroup) group)) {
+                return convertToConsumerGroup((ClassicGroup) group, records);
             } else {
-                // We don't support upgrading/downgrading between protocols at the moment so
-                // we throw an exception if a group exists with the wrong type.
-                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
+                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
+                    groupId));
             }
         }
     }
@@ -774,14 +775,22 @@ public class GroupMetadataManager {
         }
     }
 
-    void convertToConsumerGroup(ClassicGroup classicGroup, List<Record> records) {
+    public boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
+        return GroupProtocolMigrationPolicy.isUpgradeEnabled(groupProtocolMigrationPolicy) &&
+            !classicGroup.isInState(DEAD) &&
+            classicGroup.size() <= consumerGroupMaxSize;
+    }
+
+    ConsumerGroup convertToConsumerGroup(ClassicGroup classicGroup, List<Record> records) {
         classicGroup.completeAllJoinFutures(Errors.REBALANCE_IN_PROGRESS);
         classicGroup.completeAllSyncFutures(Errors.REBALANCE_IN_PROGRESS);
         createGroupTombstoneRecords(classicGroup, records);
-        classicGroup.convertToConsumerGroup(records, metadataImage.topics());
+        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, classicGroup.groupId(), metrics);
+        classicGroup.convertToConsumerGroup(consumerGroup, records, metadataImage.topics());
         if (classicGroup.isInState(PREPARING_REBALANCE) || classicGroup.isInState(COMPLETING_REBALANCE)) {
             records.add(RecordHelpers.newGroupEpochRecord(classicGroup.groupId(), classicGroup.generationId() + 1));
         }
+        return consumerGroup;
     }
 
     /**

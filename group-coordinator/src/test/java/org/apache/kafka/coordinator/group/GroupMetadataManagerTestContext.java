@@ -353,6 +353,7 @@ public class GroupMetadataManagerTestContext {
         private int classicGroupMinSessionTimeoutMs = 10;
         private int classicGroupMaxSessionTimeoutMs = 10 * 60 * 1000;
         final private GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
+        private GroupProtocolMigrationPolicy groupProtocolMigrationPolicy = GroupProtocolMigrationPolicy.NONE;
 
         public Builder withMetadataImage(MetadataImage metadataImage) {
             this.metadataImage = metadataImage;
@@ -399,6 +400,11 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
+        public Builder withGroupProtocolMigrationPolicy(GroupProtocolMigrationPolicy groupProtocolMigrationPolicy) {
+            this.groupProtocolMigrationPolicy = groupProtocolMigrationPolicy;
+            return this;
+        }
+
         public GroupMetadataManagerTestContext build() {
             if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
             if (consumerGroupAssignors == null) consumerGroupAssignors = Collections.emptyList();
@@ -425,6 +431,7 @@ public class GroupMetadataManagerTestContext {
                     .withClassicGroupInitialRebalanceDelayMs(classicGroupInitialRebalanceDelayMs)
                     .withClassicGroupNewMemberJoinTimeoutMs(classicGroupNewMemberJoinTimeoutMs)
                     .withGroupCoordinatorMetricsShard(metrics)
+                    .withGroupProtocolMigrationPolicy(groupProtocolMigrationPolicy)
                     .build(),
                 classicGroupInitialRebalanceDelayMs,
                 classicGroupNewMemberJoinTimeoutMs

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.coordinator.group.classic;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
@@ -416,6 +417,18 @@ public class ClassicGroupMember {
      */
     public void setIsNew(boolean value) {
         this.isNew = value;
+    }
+
+    /**
+     * @return the first consumer protocol supported.
+     */
+    public JoinGroupRequestProtocol getConsumerProtocol() {
+        for (JoinGroupRequestProtocol supportedProtocol : supportedProtocols) {
+            if (supportedProtocol.name().equals(ConsumerProtocol.PROTOCOL_TYPE)) {
+                return supportedProtocol;
+            }
+        }
+        return null;
     }
 
     @Override
