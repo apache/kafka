@@ -203,17 +203,13 @@ public class ClientTelemetryUtils {
 
     public static ByteBuffer decompress(byte[] metrics, CompressionType compressionType) {
         ByteBuffer data = ByteBuffer.wrap(metrics);
-        try (InputStream in = compressionType.wrapForInput(data, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create());
-            ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-
+        try (InputStream in = compressionType.wrapForInput(data, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create())){
             byte[] bytes = new byte[data.capacity() * 2];
-            int nRead;
-            while ((nRead = in.read(bytes, 0, bytes.length)) != -1) {
+            int nRead = in.read(bytes, 0, bytes.length);
+            try(ByteBufferOutputStream out = new ByteBufferOutputStream(nRead)) {
                 out.write(bytes, 0, nRead);
+                return out.buffer();
             }
-
-            out.flush();
-            return ByteBuffer.wrap(out.toByteArray());
         } catch (IOException e) {
             throw new KafkaException("Failed to decompress metrics data", e);
         }
