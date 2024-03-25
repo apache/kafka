@@ -25,7 +25,6 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -34,7 +33,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
 public class ShareFetchRequest extends AbstractRequest {
 
@@ -67,8 +65,7 @@ public class ShareFetchRequest extends AbstractRequest {
                 Map<Integer, ShareFetchRequestData.FetchPartition> partMap = fetchMap.computeIfAbsent(tip.topicId(), k -> new HashMap<>());
                 ShareFetchRequestData.FetchPartition fetchPartition = new ShareFetchRequestData.FetchPartition()
                         .setPartitionIndex(tip.partition())
-                        .setPartitionMaxBytes(fetchSize)
-                        .setCurrentLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                        .setPartitionMaxBytes(fetchSize);
                 partMap.put(tip.partition(), fetchPartition);
             }
 
@@ -82,8 +79,7 @@ public class ShareFetchRequest extends AbstractRequest {
                     // This topic-partition is only used for acknowledging, so fetch zero bytes
                     fetchPartition = new ShareFetchRequestData.FetchPartition()
                             .setPartitionIndex(tip.partition())
-                            .setPartitionMaxBytes(0)
-                            .setCurrentLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                            .setPartitionMaxBytes(0);
                     partMap.put(tip.partition(), fetchPartition);
                 }
                 fetchPartition.setAcknowledgementBatches(acknowledgeEntry.getValue());
@@ -169,16 +165,13 @@ public class ShareFetchRequest extends AbstractRequest {
     public static final class SharePartitionData {
         public final Uuid topicId;
         public final int maxBytes;
-        public final Optional<Integer> currentLeaderEpoch;
 
         public SharePartitionData(
                 Uuid topicId,
-                int maxBytes,
-                Optional<Integer> currentLeaderEpoch
+                int maxBytes
         ) {
             this.topicId = topicId;
             this.maxBytes = maxBytes;
-            this.currentLeaderEpoch = currentLeaderEpoch;
         }
 
         @Override
@@ -187,13 +180,12 @@ public class ShareFetchRequest extends AbstractRequest {
             if (o == null || getClass() != o.getClass()) return false;
             ShareFetchRequest.SharePartitionData that = (ShareFetchRequest.SharePartitionData) o;
             return Objects.equals(topicId, that.topicId) &&
-                    maxBytes == that.maxBytes &&
-                    Objects.equals(currentLeaderEpoch, that.currentLeaderEpoch);
+                    maxBytes == that.maxBytes;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(topicId, maxBytes, currentLeaderEpoch);
+            return Objects.hash(topicId, maxBytes);
         }
 
         @Override
@@ -201,7 +193,6 @@ public class ShareFetchRequest extends AbstractRequest {
             return "SharePartitionData(" +
                     "topicId=" + topicId +
                     ", maxBytes=" + maxBytes +
-                    ", currentLeaderEpoch=" + currentLeaderEpoch +
                     ')';
         }
     }
@@ -218,14 +209,6 @@ public class ShareFetchRequest extends AbstractRequest {
         return data.maxWaitMs();
     }
 
-    private static Optional<Integer> optionalEpoch(int rawEpochValue) {
-        if (rawEpochValue < 0) {
-            return Optional.empty();
-        } else {
-            return Optional.of(rawEpochValue);
-        }
-    }
-
     public Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData(Map<Uuid, String> topicNames) {
         if (shareFetchData == null) {
             synchronized (this) {
@@ -240,8 +223,7 @@ public class ShareFetchRequest extends AbstractRequest {
                                 shareFetchDataTmp.put(new TopicIdPartition(shareFetchTopic.topicId(), new TopicPartition(name, shareFetchPartition.partitionIndex())),
                                     new ShareFetchRequest.SharePartitionData(
                                         shareFetchTopic.topicId(),
-                                        shareFetchPartition.partitionMaxBytes(),
-                                        optionalEpoch(shareFetchPartition.currentLeaderEpoch())
+                                        shareFetchPartition.partitionMaxBytes()
                                     )
                                 );
                             }

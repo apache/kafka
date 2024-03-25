@@ -198,93 +198,6 @@ public class SharePartitionManagerTest {
 
     private final List<TopicIdPartition> emptyPartList = Collections.unmodifiableList(new ArrayList<>());
 
-    private Map<TopicIdPartition, Optional<Integer>> cachedLeaderEpochs(ShareFetchContext context) {
-        Map<TopicIdPartition, Optional<Integer>> cachedLeaderMap = new HashMap<>();
-        if (context.getClass() == SharePartitionManager.FinalContext.class) {
-            ((SharePartitionManager.FinalContext) context).shareFetchData().forEach((topicIdPartition, sharePartitionData) ->
-                    cachedLeaderMap.put(topicIdPartition, sharePartitionData.currentLeaderEpoch));
-        } else if (context.getClass() == SharePartitionManager.ShareSessionErrorContext.class) {
-            return cachedLeaderMap;
-        } else {
-            SharePartitionManager.ShareSessionContext shareSessionContext = (SharePartitionManager.ShareSessionContext) context;
-            if (!shareSessionContext.isSubsequent()) {
-                shareSessionContext.shareFetchData().forEach((topicIdPartition, sharePartitionData) -> cachedLeaderMap.put(topicIdPartition, sharePartitionData.currentLeaderEpoch));
-            } else {
-                synchronized (shareSessionContext.session()) {
-                    shareSessionContext.session().partitionMap().forEach(cachedSharePartition -> {
-                        TopicIdPartition topicIdPartition = new TopicIdPartition(cachedSharePartition.topicId(), new
-                                TopicPartition(cachedSharePartition.topic(), cachedSharePartition.partition()));
-                        ShareFetchRequest.SharePartitionData reqData = cachedSharePartition.reqData();
-                        cachedLeaderMap.put(topicIdPartition, reqData.currentLeaderEpoch);
-                    });
-                }
-            }
-        }
-        return cachedLeaderMap;
-    }
-
-    @Test
-    public void testCachedLeaderEpoch() {
-        Time time = new MockTime();
-        SharePartitionManager.ShareSessionCache cache = new SharePartitionManager.ShareSessionCache(10, 1000);
-        SharePartitionManager sharePartitionManager = new SharePartitionManager(Mockito.mock(ReplicaManager.class),
-                time, cache);
-        Map<Uuid, String> topicNames = new HashMap<>();
-        Uuid tpId0 = Uuid.randomUuid();
-        Uuid tpId1 = Uuid.randomUuid();
-        topicNames.put(tpId0, "foo");
-        topicNames.put(tpId1, "bar");
-        TopicIdPartition tp0 = new TopicIdPartition(tpId0, new TopicPartition("foo", 0));
-        TopicIdPartition tp1 = new TopicIdPartition(tpId0, new TopicPartition("foo", 1));
-        TopicIdPartition tp2 = new TopicIdPartition(tpId1, new TopicPartition("bar", 1));
-
-        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> requestData1 = new LinkedHashMap<>();
-        requestData1.put(tp0, new ShareFetchRequest.SharePartitionData(tp0.topicId(), 100, Optional.empty()));
-        requestData1.put(tp1, new ShareFetchRequest.SharePartitionData(tp1.topicId(), 100, Optional.of(1)));
-        requestData1.put(tp2, new ShareFetchRequest.SharePartitionData(tp2.topicId(), 100, Optional.of(2)));
-
-        ShareFetchMetadata reqMetadata = new ShareFetchMetadata(Uuid.randomUuid(), ShareFetchMetadata.INITIAL_EPOCH);
-        String groupId = "grp";
-
-        ShareFetchContext context1 = sharePartitionManager.newContext(groupId, requestData1, emptyPartList,
-                topicNames, reqMetadata);
-
-        Map<TopicIdPartition, Optional<Integer>> epochs1 = cachedLeaderEpochs(context1);
-        assertEquals(Optional.empty(), epochs1.get(tp0));
-        assertEquals(Optional.of(1), epochs1.get(tp1));
-        assertEquals(Optional.of(2), epochs1.get(tp2));
-
-        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> response = new LinkedHashMap<>();
-        response.put(tp0, new ShareFetchResponseData.PartitionData().setPartitionIndex(tp0.partition()));
-        response.put(tp1, new ShareFetchResponseData.PartitionData().setPartitionIndex(tp1.partition()));
-        response.put(tp2, new ShareFetchResponseData.PartitionData().setPartitionIndex(tp1.partition()));
-
-        context1.updateAndGenerateResponseData(groupId, reqMetadata.memberId(), response);
-
-        // With no changes, the cached epochs should remain the same
-        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> requestData2 = new LinkedHashMap<>();
-
-        ShareFetchContext context2 = sharePartitionManager.newContext(groupId, requestData2, emptyPartList,
-                topicNames, new ShareFetchMetadata(reqMetadata.memberId(), 1));
-        Map<TopicIdPartition, Optional<Integer>> epochs2 = cachedLeaderEpochs(context2);
-        assertEquals(Optional.empty(), epochs2.get(tp0));
-        assertEquals(Optional.of(1), epochs2.get(tp1));
-        assertEquals(Optional.of(2), epochs2.get(tp2));
-        context2.updateAndGenerateResponseData(groupId, reqMetadata.memberId(), response);
-
-        // Now verify we can change the leader epoch and the context is updated
-        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> requestData3 = new LinkedHashMap<>();
-        requestData3.put(tp0, new ShareFetchRequest.SharePartitionData(tp0.topicId(), 100, Optional.of(6)));
-        requestData3.put(tp1, new ShareFetchRequest.SharePartitionData(tp1.topicId(), 100, Optional.empty()));
-        requestData3.put(tp2, new ShareFetchRequest.SharePartitionData(tp2.topicId(), 100, Optional.of(3)));
-        ShareFetchContext context3 = sharePartitionManager.newContext(groupId, requestData3, emptyPartList,
-                topicNames, new ShareFetchMetadata(reqMetadata.memberId(), 2));
-        Map<TopicIdPartition, Optional<Integer>> epochs3 = cachedLeaderEpochs(context3);
-        assertEquals(Optional.of(6), epochs3.get(tp0));
-        assertEquals(Optional.empty(), epochs3.get(tp1));
-        assertEquals(Optional.of(3), epochs3.get(tp2));
-    }
-
     @Test
     public void testShareFetchRequests() {
         Time time = new MockTime();
@@ -311,8 +224,8 @@ public class SharePartitionManagerTest {
 
         // Create a new share session with an initial share fetch request
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData2 = new LinkedHashMap<>();
-        reqData2.put(tp0, new ShareFetchRequest.SharePartitionData(tp0.topicId(), 100, Optional.empty()));
-        reqData2.put(tp1, new ShareFetchRequest.SharePartitionData(tp1.topicId(), 100, Optional.empty()));
+        reqData2.put(tp0, new ShareFetchRequest.SharePartitionData(tp0.topicId(), 100));
+        reqData2.put(tp1, new ShareFetchRequest.SharePartitionData(tp1.topicId(), 100));
 
 
         ShareFetchMetadata reqMetadata2 = new ShareFetchMetadata(Uuid.randomUuid(), ShareFetchMetadata.INITIAL_EPOCH);
@@ -396,8 +309,8 @@ public class SharePartitionManagerTest {
 
         // Close the subsequent share session.
         LinkedHashMap<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData8 = new LinkedHashMap<>();
-        reqData8.put(tp2, new ShareFetchRequest.SharePartitionData(tp2.topicId(), 100, Optional.empty()));
-        reqData8.put(tp3, new ShareFetchRequest.SharePartitionData(tp3.topicId(), 100, Optional.empty()));
+        reqData8.put(tp2, new ShareFetchRequest.SharePartitionData(tp2.topicId(), 100));
+        reqData8.put(tp3, new ShareFetchRequest.SharePartitionData(tp3.topicId(), 100));
         ShareFetchContext context8 = sharePartitionManager.newContext(groupId, reqData8, emptyPartList,
                 topicNames, new ShareFetchMetadata(reqMetadata2.memberId(), ShareFetchMetadata.FINAL_EPOCH));
         assertEquals(context8.getClass(), SharePartitionManager.FinalContext.class);
@@ -444,7 +357,6 @@ public class SharePartitionManagerTest {
         assertNotEquals(cachedSharePartitionWithIdAndNoName, cachedSharePartitionWithZeroIdAndName);
         assertNotEquals(cachedSharePartitionWithIdAndNoName.hashCode(), cachedSharePartitionWithZeroIdAndName.hashCode());
 
-        assertEquals(cachedSharePartitionWithZeroIdAndName, cachedSharePartitionWithZeroIdAndName);
         assertEquals(cachedSharePartitionWithZeroIdAndName.hashCode(), cachedSharePartitionWithZeroIdAndName.hashCode());
     }
 
@@ -462,8 +374,8 @@ public class SharePartitionManagerTest {
 
         // Create a new share session, session 1
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> session1req = new LinkedHashMap<>();
-        session1req.put(foo0, new ShareFetchRequest.SharePartitionData(foo0.topicId(), 100, Optional.empty()));
-        session1req.put(foo1, new ShareFetchRequest.SharePartitionData(foo1.topicId(), 100, Optional.empty()));
+        session1req.put(foo0, new ShareFetchRequest.SharePartitionData(foo0.topicId(), 100));
+        session1req.put(foo1, new ShareFetchRequest.SharePartitionData(foo1.topicId(), 100));
 
         String groupId = "grp";
         ShareFetchMetadata reqMetadata1 = new ShareFetchMetadata(Uuid.randomUuid(), ShareFetchMetadata.INITIAL_EPOCH);
@@ -488,8 +400,8 @@ public class SharePartitionManagerTest {
 
         // Create a second new share session
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> session2req = new LinkedHashMap<>();
-        session2req.put(foo0, new ShareFetchRequest.SharePartitionData(foo0.topicId(), 100, Optional.empty()));
-        session2req.put(foo1, new ShareFetchRequest.SharePartitionData(foo1.topicId(), 100, Optional.empty()));
+        session2req.put(foo0, new ShareFetchRequest.SharePartitionData(foo0.topicId(), 100));
+        session2req.put(foo1, new ShareFetchRequest.SharePartitionData(foo1.topicId(), 100));
 
         ShareFetchMetadata reqMetadata2 = new ShareFetchMetadata(Uuid.randomUuid(), ShareFetchMetadata.INITIAL_EPOCH);
 
@@ -525,8 +437,8 @@ public class SharePartitionManagerTest {
         // the second share session should be evicted because the first share session was incrementally fetched
         // more recently than the second session was created
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> session3req = new LinkedHashMap<>();
-        session3req.put(foo0, new ShareFetchRequest.SharePartitionData(foo0.topicId(), 100, Optional.empty()));
-        session3req.put(foo1, new ShareFetchRequest.SharePartitionData(foo1.topicId(), 100, Optional.empty()));
+        session3req.put(foo0, new ShareFetchRequest.SharePartitionData(foo0.topicId(), 100));
+        session3req.put(foo1, new ShareFetchRequest.SharePartitionData(foo1.topicId(), 100));
 
         ShareFetchMetadata reqMetadata3 = new ShareFetchMetadata(Uuid.randomUuid(), ShareFetchMetadata.INITIAL_EPOCH);
 
@@ -564,8 +476,8 @@ public class SharePartitionManagerTest {
 
         // Create a new share session with foo-0 and foo-1
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData1 = new LinkedHashMap<>();
-        reqData1.put(tp0, new ShareFetchRequest.SharePartitionData(tp0.topicId(), 100, Optional.empty()));
-        reqData1.put(tp1, new ShareFetchRequest.SharePartitionData(tp1.topicId(), 100, Optional.empty()));
+        reqData1.put(tp0, new ShareFetchRequest.SharePartitionData(tp0.topicId(), 100));
+        reqData1.put(tp1, new ShareFetchRequest.SharePartitionData(tp1.topicId(), 100));
 
         String groupId = "grp";
         ShareFetchMetadata reqMetadata1 = new ShareFetchMetadata(Uuid.randomUuid(), ShareFetchMetadata.INITIAL_EPOCH);
@@ -584,7 +496,7 @@ public class SharePartitionManagerTest {
 
         // Create a subsequent fetch request that removes foo-0 and adds bar-0
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData2 = new LinkedHashMap<>();
-        reqData2.put(tp2, new ShareFetchRequest.SharePartitionData(tp2.topicId(), 100, Optional.empty()));
+        reqData2.put(tp2, new ShareFetchRequest.SharePartitionData(tp2.topicId(), 100));
         List<TopicIdPartition> removed2 = new ArrayList<>();
         removed2.add(tp0);
         ShareFetchContext context2 = sharePartitionManager.newContext(groupId, reqData2, removed2,
@@ -629,8 +541,8 @@ public class SharePartitionManagerTest {
 
         // Create a new share session with foo-0 and foo-1
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData1 = new LinkedHashMap<>();
-        reqData1.put(foo0, new ShareFetchRequest.SharePartitionData(foo0.topicId(), 100, Optional.empty()));
-        reqData1.put(foo1, new ShareFetchRequest.SharePartitionData(foo1.topicId(), 100, Optional.empty()));
+        reqData1.put(foo0, new ShareFetchRequest.SharePartitionData(foo0.topicId(), 100));
+        reqData1.put(foo1, new ShareFetchRequest.SharePartitionData(foo1.topicId(), 100));
 
         String groupId = "grp";
         ShareFetchMetadata reqMetadata1 = new ShareFetchMetadata(Uuid.randomUuid(), ShareFetchMetadata.INITIAL_EPOCH);
@@ -729,8 +641,8 @@ public class SharePartitionManagerTest {
         topicNames.put(barId, "bar");
 
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData1 = new LinkedHashMap<>();
-        reqData1.put(foo, new ShareFetchRequest.SharePartitionData(foo.topicId(), 100, Optional.empty()));
-        reqData1.put(bar, new ShareFetchRequest.SharePartitionData(bar.topicId(), 100, Optional.empty()));
+        reqData1.put(foo, new ShareFetchRequest.SharePartitionData(foo.topicId(), 100));
+        reqData1.put(bar, new ShareFetchRequest.SharePartitionData(bar.topicId(), 100));
 
 
         ShareFetchContext context1 = sharePartitionManager.newContext(groupId, reqData1, emptyPartList, topicNames, reqMetadata1);
@@ -771,8 +683,8 @@ public class SharePartitionManagerTest {
 
         // Create a new share session with foo-0 and bar-1
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData1 = new LinkedHashMap<>();
-        reqData1.put(foo, new ShareFetchRequest.SharePartitionData(foo.topicId(), 100, Optional.empty()));
-        reqData1.put(bar, new ShareFetchRequest.SharePartitionData(bar.topicId(), 100, Optional.empty()));
+        reqData1.put(foo, new ShareFetchRequest.SharePartitionData(foo.topicId(), 100));
+        reqData1.put(bar, new ShareFetchRequest.SharePartitionData(bar.topicId(), 100));
 
         ShareFetchMetadata reqMetadata1 = new ShareFetchMetadata(Uuid.randomUuid(), ShareFetchMetadata.INITIAL_EPOCH);
         ShareFetchContext context1 = sharePartitionManager.newContext(groupId, reqData1, emptyPartList,
@@ -924,9 +836,9 @@ public class SharePartitionManagerTest {
 
         // Create a new share session with an initial share fetch request
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData2 = new LinkedHashMap<>();
-        reqData2.put(tp0, new ShareFetchRequest.SharePartitionData(tp0.topicId(), 100, Optional.empty()));
-        reqData2.put(tp1, new ShareFetchRequest.SharePartitionData(tp1.topicId(), 100, Optional.empty()));
-        reqData2.put(tpNull1, new ShareFetchRequest.SharePartitionData(tpNull1.topicId(), 100, Optional.empty()));
+        reqData2.put(tp0, new ShareFetchRequest.SharePartitionData(tp0.topicId(), 100));
+        reqData2.put(tp1, new ShareFetchRequest.SharePartitionData(tp1.topicId(), 100));
+        reqData2.put(tpNull1, new ShareFetchRequest.SharePartitionData(tpNull1.topicId(), 100));
 
 
         ShareFetchMetadata reqMetadata2 = new ShareFetchMetadata(Uuid.randomUuid(), ShareFetchMetadata.INITIAL_EPOCH);
@@ -995,7 +907,7 @@ public class SharePartitionManagerTest {
 
         // Test generating a throttled response for a subsequent share session
         LinkedHashMap<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData7 = new LinkedHashMap<>();
-        reqData7.put(tpNull2, new ShareFetchRequest.SharePartitionData(tpNull2.topicId(), 100, Optional.empty()));
+        reqData7.put(tpNull2, new ShareFetchRequest.SharePartitionData(tpNull2.topicId(), 100));
         ShareFetchContext context7 = sharePartitionManager.newContext(groupId, reqData7, emptyPartList,
                 topicNames, new ShareFetchMetadata(shareSessionKey2.memberId(), 2));
         // Check for throttled response
@@ -1007,9 +919,9 @@ public class SharePartitionManagerTest {
 
         // Close the subsequent share session.
         LinkedHashMap<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData8 = new LinkedHashMap<>();
-        reqData8.put(tp2, new ShareFetchRequest.SharePartitionData(tp2.topicId(), 100, Optional.empty()));
-        reqData8.put(tp3, new ShareFetchRequest.SharePartitionData(tp3.topicId(), 100, Optional.empty()));
-        reqData8.put(tpNull3, new ShareFetchRequest.SharePartitionData(tp3.topicId(), 100, Optional.empty()));
+        reqData8.put(tp2, new ShareFetchRequest.SharePartitionData(tp2.topicId(), 100));
+        reqData8.put(tp3, new ShareFetchRequest.SharePartitionData(tp3.topicId(), 100));
+        reqData8.put(tpNull3, new ShareFetchRequest.SharePartitionData(tp3.topicId(), 100));
         ShareFetchContext context8 = sharePartitionManager.newContext(groupId, reqData8, emptyPartList,
                 topicNames, new ShareFetchMetadata(reqMetadata2.memberId(), ShareFetchMetadata.FINAL_EPOCH));
         assertEquals(context8.getClass(), SharePartitionManager.FinalContext.class);
@@ -1043,8 +955,8 @@ public class SharePartitionManagerTest {
 
         // Create a new share session with an initial share fetch request
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData2 = new LinkedHashMap<>();
-        reqData2.put(tp0, new ShareFetchRequest.SharePartitionData(tp0.topicId(), 100, Optional.empty()));
-        reqData2.put(tp1, new ShareFetchRequest.SharePartitionData(tp1.topicId(), 100, Optional.empty()));
+        reqData2.put(tp0, new ShareFetchRequest.SharePartitionData(tp0.topicId(), 100));
+        reqData2.put(tp1, new ShareFetchRequest.SharePartitionData(tp1.topicId(), 100));
 
         // For response size expected value calculation
         ObjectSerializationCache objectSerializationCache = new ObjectSerializationCache();
@@ -1092,7 +1004,7 @@ public class SharePartitionManagerTest {
 
         // Continue the first share session we created.
         LinkedHashMap<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData5 = new LinkedHashMap<>();
-        reqData5.put(tp2, new ShareFetchRequest.SharePartitionData(tp2.topicId(), 100, Optional.empty()));
+        reqData5.put(tp2, new ShareFetchRequest.SharePartitionData(tp2.topicId(), 100));
         ShareFetchContext context5 = sharePartitionManager.newContext(groupId, reqData5, emptyPartList,
                 topicNames, new ShareFetchMetadata(shareSessionKey2.memberId(), 1));
         assertEquals(context5.getClass(), SharePartitionManager.ShareSessionContext.class);
@@ -1129,7 +1041,7 @@ public class SharePartitionManagerTest {
 
         // Close the subsequent share session.
         LinkedHashMap<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData8 = new LinkedHashMap<>();
-        reqData8.put(tp3, new ShareFetchRequest.SharePartitionData(tp3.topicId(), 100, Optional.empty()));
+        reqData8.put(tp3, new ShareFetchRequest.SharePartitionData(tp3.topicId(), 100));
         ShareFetchContext context8 = sharePartitionManager.newContext(groupId, reqData8, emptyPartList,
                 topicNames, new ShareFetchMetadata(reqMetadata2.memberId(), ShareFetchMetadata.FINAL_EPOCH));
         assertEquals(context8.getClass(), SharePartitionManager.FinalContext.class);

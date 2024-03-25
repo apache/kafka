@@ -1082,7 +1082,7 @@ public class SharePartitionManager {
 
         /**
          * Try to evict an entry from the session cache.
-         *
+         * <p>
          * A proposed new element A may evict an existing element B if:
          * B is considered "stale" because it has been inactive for a long time.
          *
@@ -1141,8 +1141,9 @@ public class SharePartitionManager {
     public static class CachedSharePartition implements ImplicitLinkedHashCollection.Element {
         private final String topic;
         private final Uuid topicId;
-        private int partition, maxBytes;
-        private Optional<Integer> leaderEpoch;
+        private final int partition;
+        private int maxBytes;
+        private final Optional<Integer> leaderEpoch;
         private boolean requiresUpdateInResponse;
 
         private int cachedNext = ImplicitLinkedHashCollection.INVALID_INDEX;
@@ -1169,7 +1170,7 @@ public class SharePartitionManager {
         public CachedSharePartition(TopicIdPartition topicIdPartition, ShareFetchRequest.SharePartitionData reqData,
                                     boolean requiresUpdateInResponse) {
             this(topicIdPartition.topic(), topicIdPartition.topicId(), topicIdPartition.partition(), reqData.maxBytes,
-                    reqData.currentLeaderEpoch, requiresUpdateInResponse);
+                    Optional.empty(), requiresUpdateInResponse);
         }
 
         public Uuid topicId() {
@@ -1185,13 +1186,12 @@ public class SharePartitionManager {
         }
 
         public ShareFetchRequest.SharePartitionData reqData() {
-            return new ShareFetchRequest.SharePartitionData(topicId, maxBytes, leaderEpoch);
+            return new ShareFetchRequest.SharePartitionData(topicId, maxBytes);
         }
 
         public void updateRequestParams(ShareFetchRequest.SharePartitionData reqData) {
             // Update our cached request parameters.
             maxBytes = reqData.maxBytes;
-            leaderEpoch = reqData.currentLeaderEpoch;
         }
 
         /**

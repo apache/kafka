@@ -44,8 +44,6 @@
         "about": "The partitions to fetch.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
-        { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "0+", "default": "-1", "ignorable": true,
-          "about": "The current leader epoch of the partition." },
         { "name": "PartitionMaxBytes", "type": "int32", "versions": "0+",
           "about": "The maximum bytes to fetch from this partition. See KIP-74 for cases where this limit may not be honored." },
         { "name": "AcknowledgementBatches", "type": "[]AcknowledgementBatch", "versions": "0+",

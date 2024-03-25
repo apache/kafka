@@ -1409,8 +1409,7 @@ public class RequestResponseTest {
                 .setTopics(singletonList(new ShareFetchRequestData.FetchTopic()
                         .setTopicId(Uuid.randomUuid())
                         .setPartitions(singletonList(new ShareFetchRequestData.FetchPartition()
-                                .setPartitionIndex(0)
-                                .setCurrentLeaderEpoch(1)))));
+                                .setPartitionIndex(0)))));
         return new ShareFetchRequest.Builder(data).build(version);
     }
 
