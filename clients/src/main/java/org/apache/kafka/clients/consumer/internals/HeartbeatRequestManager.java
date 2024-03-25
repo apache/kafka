@@ -82,6 +82,11 @@ public class HeartbeatRequestManager implements RequestManager {
     private final int maxPollIntervalMs;
 
     /**
+     * Timeout for individual network requests.
+     */
+    private final int requestTimeoutMs;
+
+    /**
      * CoordinatorRequestManager manages the connection to the group coordinator
      */
     private final CoordinatorRequestManager coordinatorRequestManager;
@@ -132,6 +137,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
+        this.requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.heartbeatState = new HeartbeatState(subscriptions, membershipManager, maxPollIntervalMs);
@@ -156,6 +162,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.logger = logContext.logger(this.getClass());
         this.time = time;
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
+        this.requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG);
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.heartbeatRequestState = heartbeatRequestState;
         this.heartbeatState = heartbeatState;
@@ -277,7 +284,7 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final boolean ignoreResponse) {
-        Timer timer = time.timer(this.heartbeatRequestState.heartbeatIntervalMs);
+        Timer timer = time.timer(requestTimeoutMs);
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
             new ConsumerGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
             coordinatorRequestManager.coordinator(),

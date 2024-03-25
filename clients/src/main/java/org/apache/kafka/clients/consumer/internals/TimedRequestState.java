@@ -63,4 +63,9 @@ public class TimedRequestState extends RequestState {
         long remainingMs = Math.max(0, Math.min(timer.remainingMs(), requestTimeoutMs));
         return time.timer(remainingMs);
     }
+
+    @Override
+    protected String toStringBase() {
+        return super.toStringBase() + ", timer=" + timer.remainingMs();
+    }
 }
