@@ -18,37 +18,37 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.TopicConfig;
+import static org.apache.kafka.server.config.ServerTopicConfigSynonyms.LOG_PREFIX;
 
 public class KafkaConfig {
-    private final static String LOG_CONFIG_PREFIX = "log.";
 
     /** ********* Log Configuration ***********/
     public final static String NUM_PARTITIONS_PROP = "num.partitions";
-    public final static String LOG_DIRS_PROP = LOG_CONFIG_PREFIX + "dirs";
-    public final static String LOG_DIR_PROP = LOG_CONFIG_PREFIX + "dir";
+    public final static String LOG_DIRS_PROP = LOG_PREFIX + "dirs";
+    public final static String LOG_DIR_PROP = LOG_PREFIX + "dir";
     public final static String LOG_SEGMENT_BYTES_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_BYTES_CONFIG);
 
     public final static String LOG_ROLL_TIME_MILLIS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_MS_CONFIG);
-    public final static String LOG_ROLL_TIME_HOURS_PROP = LOG_CONFIG_PREFIX + "roll.hours";
+    public final static String LOG_ROLL_TIME_HOURS_PROP = LOG_PREFIX + "roll.hours";
 
     public final static String LOG_ROLL_TIME_JITTER_MILLIS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
-    public final static String LOG_ROLL_TIME_JITTER_HOURS_PROP = LOG_CONFIG_PREFIX + "roll.jitter.hours";
+    public final static String LOG_ROLL_TIME_JITTER_HOURS_PROP = LOG_PREFIX + "roll.jitter.hours";
 
     public final static String LOG_RETENTION_TIME_MILLIS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.RETENTION_MS_CONFIG);
-    public final static String LOG_RETENTION_TIME_MINUTES_PROP = LOG_CONFIG_PREFIX + "retention.minutes";
-    public final static String LOG_RETENTION_TIME_HOURS_PROP = LOG_CONFIG_PREFIX + "retention.hours";
+    public final static String LOG_RETENTION_TIME_MINUTES_PROP = LOG_PREFIX + "retention.minutes";
+    public final static String LOG_RETENTION_TIME_HOURS_PROP = LOG_PREFIX + "retention.hours";
 
     public final static String LOG_RETENTION_BYTES_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.RETENTION_BYTES_CONFIG);
-    public final static String LOG_CLEANUP_INTERVAL_MS_PROP = LOG_CONFIG_PREFIX + "retention.check.interval.ms";
+    public final static String LOG_CLEANUP_INTERVAL_MS_PROP = LOG_PREFIX + "retention.check.interval.ms";
     public final static String LOG_CLEANUP_POLICY_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.CLEANUP_POLICY_CONFIG);
     public final static String LOG_INDEX_SIZE_MAX_BYTES_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
     public final static String LOG_INDEX_INTERVAL_BYTES_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG);
     public final static String LOG_FLUSH_INTERVAL_MESSAGES_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG);
     public final static String LOG_DELETE_DELAY_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG);
-    public final static String LOG_FLUSH_SCHEDULER_INTERVAL_MS_PROP = LOG_CONFIG_PREFIX + "flush.scheduler.interval.ms";
+    public final static String LOG_FLUSH_SCHEDULER_INTERVAL_MS_PROP = LOG_PREFIX + "flush.scheduler.interval.ms";
     public final static String LOG_FLUSH_INTERVAL_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.FLUSH_MS_CONFIG);
-    public final static String LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_PROP = LOG_CONFIG_PREFIX + "flush.offset.checkpoint.interval.ms";
-    public final static String LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_PROP = LOG_CONFIG_PREFIX + "flush.start.offset.checkpoint.interval.ms";
+    public final static String LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_PROP = LOG_PREFIX + "flush.offset.checkpoint.interval.ms";
+    public final static String LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_PROP = LOG_PREFIX + "flush.start.offset.checkpoint.interval.ms";
     public final static String LOG_PRE_ALLOCATE_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.PREALLOCATE_CONFIG);
 
     /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
