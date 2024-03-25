@@ -1150,8 +1150,8 @@ public class CommitRequestManagerTest {
             int numRequest,
             final Errors error) {
         List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures = new ArrayList<>();
-        Timer timer  = time.timer(defaultApiTimeoutMs);
         for (int i = 0; i < numRequest; i++) {
+            Timer timer  = time.timer(defaultApiTimeoutMs);
             futures.add(commitRequestManger.fetchOffsets(partitions, timer));
         }
 

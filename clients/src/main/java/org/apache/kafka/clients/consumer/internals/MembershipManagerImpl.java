@@ -1331,14 +1331,9 @@ public class MembershipManagerImpl implements MembershipManager {
                                                                              Set<TopicPartition> partitions) {
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.addAll(partitions);
-
         // TODO: we likely want our event to expire at some point.
-        Timer timer = time.timer(Long.MAX_VALUE);
-        CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(
-            methodName,
-            sortedPartitions,
-            timer
-        );
+        Timer t = time.timer(Long.MAX_VALUE);
+        CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions, t);
         backgroundEventHandler.add(event);
         log.debug("The event to trigger the {} method execution was enqueued successfully", methodName.fullyQualifiedMethodName());
         return event.future();

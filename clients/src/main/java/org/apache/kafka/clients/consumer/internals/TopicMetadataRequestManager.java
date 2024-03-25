@@ -63,7 +63,6 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
  */
 
 public class TopicMetadataRequestManager implements RequestManager {
-
     private final Time time;
     private final boolean allowAutoTopicCreation;
     private final List<TopicMetadataRequestState> inflightRequests;
@@ -73,9 +72,7 @@ public class TopicMetadataRequestManager implements RequestManager {
     private final Logger log;
     private final LogContext logContext;
 
-    public TopicMetadataRequestManager(final LogContext context,
-                                       final Time time,
-                                       final ConsumerConfig config) {
+    public TopicMetadataRequestManager(final LogContext context, final Time time, final ConsumerConfig config) {
         logContext = context;
         log = logContext.logger(getClass());
         this.time = time;

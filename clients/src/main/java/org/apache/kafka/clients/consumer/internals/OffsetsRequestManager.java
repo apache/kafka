@@ -261,11 +261,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                     timestampsToSearch, requireTimestamps, listOffsetsRequestState);
             requestsToSend.addAll(unsentRequests);
         } catch (StaleMetadataException e) {
-            if (listOffsetsRequestState.isExpired()) {
-                // What do we do here?
-            } else {
-                requestsToRetry.add(listOffsetsRequestState);
-            }
+            requestsToRetry.add(listOffsetsRequestState);
         }
     }
 
@@ -329,8 +325,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             }
         });
 
-        Timer timer = listOffsetsRequestState.remaining(time, requestTimeoutMs);
-
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> entry : timestampsToSearchByNode.entrySet()) {
             Node node = entry.getKey();
 
@@ -339,7 +333,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                     entry.getValue(),
                     requireTimestamps,
                     unsentRequests,
-                    timer);
+                    listOffsetsRequestState.timer());
 
             partialResult.whenComplete((result, error) -> {
                 if (error != null) {

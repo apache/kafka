@@ -1067,7 +1067,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         @Override
         public String toStringBase() {
-            return toStringBase() + ", requestedPartitions=" + requestedPartitions +
+            return super.toStringBase() + ", requestedPartitions=" + requestedPartitions +
                     ", memberId=" + memberInfo.memberId.orElse("undefined") +
                     ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ? memberInfo.memberEpoch.get() : "undefined") +
                     ", future=" + future +
