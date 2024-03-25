@@ -104,11 +104,11 @@ public class LeaderElectionCommandTest {
         cluster.startBroker(broker3);
         TestUtils.waitForOnlineBroker(client, broker3);
 
-        LeaderElectionCommand.main(
+        assertEquals(0, LeaderElectionCommand.mainNoExit(
             "--bootstrap-server", cluster.bootstrapServers(),
             "--election-type", "unclean",
             "--all-topic-partitions"
-        );
+        ));
 
         TestUtils.assertLeader(client, topicPartition, broker3);
     }
@@ -120,11 +120,11 @@ public class LeaderElectionCommandTest {
         Path adminConfigPath = tempAdminConfig(defaultApiTimeoutMs, requestTimeoutMs);
 
         try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class)) {
-            LeaderElectionCommand.main(
+            assertEquals(1, LeaderElectionCommand.mainNoExit(
                 "--bootstrap-server", cluster.bootstrapServers(),
                 "--election-type", "unclean", "--all-topic-partitions",
                 "--admin.config", adminConfigPath.toString()
-            );
+            ));
 
             ArgumentCaptor<Properties> argumentCaptor = ArgumentCaptor.forClass(Properties.class);
             mockedAdmin.verify(() -> Admin.create(argumentCaptor.capture()));
@@ -160,12 +160,12 @@ public class LeaderElectionCommandTest {
         cluster.startBroker(broker3);
         TestUtils.waitForOnlineBroker(client, broker3);
 
-        LeaderElectionCommand.main(
+        assertEquals(0, LeaderElectionCommand.mainNoExit(
             "--bootstrap-server", cluster.bootstrapServers(),
             "--election-type", "unclean",
             "--topic", topic,
             "--partition", Integer.toString(partition)
-        );
+        ));
 
         TestUtils.assertLeader(client, topicPartition, broker3);
     }
@@ -199,11 +199,11 @@ public class LeaderElectionCommandTest {
 
         Path topicPartitionPath = tempTopicPartitionFile(Collections.singletonList(topicPartition));
 
-        LeaderElectionCommand.main(
+        assertEquals(0, LeaderElectionCommand.mainNoExit(
             "--bootstrap-server", cluster.bootstrapServers(),
             "--election-type", "unclean",
             "--path-to-json-file", topicPartitionPath.toString()
-        );
+        ));
 
         TestUtils.assertLeader(client, topicPartition, broker3);
     }
@@ -232,11 +232,11 @@ public class LeaderElectionCommandTest {
             JavaConverters.asScalaBuffer(Collections.singletonList(broker2)).toSet()
         );
 
-        LeaderElectionCommand.main(
+        assertEquals(0, LeaderElectionCommand.mainNoExit(
             "--bootstrap-server", cluster.bootstrapServers(),
             "--election-type", "preferred",
             "--all-topic-partitions"
-        );
+        ));
 
         TestUtils.assertLeader(client, topicPartition, broker2);
     }
@@ -287,7 +287,7 @@ public class LeaderElectionCommandTest {
 
         Path topicPartitionPath = tempTopicPartitionFile(Arrays.asList(topicPartition0, topicPartition1));
         String output = ToolsTestUtils.captureStandardOut(() ->
-            LeaderElectionCommand.main(
+            LeaderElectionCommand.mainNoExit(
                 "--bootstrap-server", cluster.bootstrapServers(),
                 "--election-type", "preferred",
                 "--path-to-json-file", topicPartitionPath.toString()
