@@ -60,7 +60,7 @@ For example, you can modify the line in `clients/src/test/resources/log4j.proper
     
     ./gradlew cleanTest clients:test --tests NetworkClientTest   
 
-And you should see INFO level logs in the file under the build/test-results directory.
+And you should see INFO level logs in the file under the `./clients/build/test-results/test` directory.
 
 ### Specifying test retries ###
 By default, each failed test is retried once up to a maximum of five retries per test run. Tests are retried at the end of the test task. Adjust these parameters in the following way:
