@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
@@ -778,6 +779,7 @@ public class GroupMetadataManager {
     public boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
         return GroupProtocolMigrationPolicy.isUpgradeEnabled(groupProtocolMigrationPolicy) &&
             !classicGroup.isInState(DEAD) &&
+            ConsumerProtocol.PROTOCOL_TYPE.equals(classicGroup.protocolType().orElse(null)) &&
             classicGroup.size() <= consumerGroupMaxSize;
     }
 
@@ -787,6 +789,7 @@ public class GroupMetadataManager {
         createGroupTombstoneRecords(classicGroup, records);
         ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, classicGroup.groupId(), metrics);
         classicGroup.convertToConsumerGroup(consumerGroup, records, metadataImage.topics());
+        // There's no need to bump the group epoch as
         if (classicGroup.isInState(PREPARING_REBALANCE) || classicGroup.isInState(COMPLETING_REBALANCE)) {
             records.add(RecordHelpers.newGroupEpochRecord(classicGroup.groupId(), classicGroup.generationId() + 1));
         }

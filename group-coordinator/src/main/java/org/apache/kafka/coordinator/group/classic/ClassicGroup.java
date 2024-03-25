@@ -26,7 +26,6 @@ import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
-import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
@@ -1367,19 +1366,18 @@ public class ClassicGroup implements Group {
         List<Record> records,
         TopicsImage topicsImage
     ) throws GroupIdNotFoundException {
-        members.forEach((memberId, member) -> {
-            JoinGroupRequestData.JoinGroupRequestProtocol protocol = member.getConsumerProtocol();
-            if (protocol == null) {
-                throw new GroupIdNotFoundException(String.format(
-                    "Fail to upgrade classic group %s because its member %s does not support the consumer protocol.",
-                    groupId, memberId
-                ));
-            }
+        consumerGroup.setGroupEpoch(generationId);
+        consumerGroup.setTargetAssignmentEpoch(generationId);
 
-            final ByteBuffer buffer = ByteBuffer.wrap(protocol.metadata());
-            ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(buffer);
+        records.add(RecordHelpers.newGroupEpochRecord(groupId(), generationId));
+        // SubscriptionMetadata will be computed in the following consumerGroupHeartbeat
+        records.add(RecordHelpers.newGroupSubscriptionMetadataRecord(groupId(), Collections.emptyMap()));
+        records.add(RecordHelpers.newTargetAssignmentEpochRecord(groupId(), generationId));
+        
+        members.forEach((memberId, member) -> {
+            ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment()));
             Map<Uuid, Set<Integer>> partitions = topicPartitionMapFromList(assignment.partitions(), topicsImage);
-            ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(buffer);
+            ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(member.metadata()));
 
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(memberId)
                 .setMemberEpoch(generationId)
@@ -1392,20 +1390,12 @@ public class ClassicGroup implements Group {
                 .setSubscribedTopicNames(subscription.topics())
                 .setAssignedPartitions(partitions)
                 .build();
-            consumerGroup.members().put(memberId, newMember);
+            consumerGroup.updateMember(newMember);
 
             records.add(RecordHelpers.newMemberSubscriptionRecord(groupId(), newMember));
             records.add(RecordHelpers.newCurrentAssignmentRecord(groupId(), newMember));
             records.add(RecordHelpers.newTargetAssignmentRecord(groupId(), memberId, partitions));
         });
-
-        consumerGroup.setGroupEpoch(generationId);
-        consumerGroup.setTargetAssignmentEpoch(generationId);
-
-        records.add(RecordHelpers.newGroupEpochRecord(groupId(), generationId));
-        // SubscriptionMetadata will be computed in the following consumerGroupHeartbeat
-        records.add(RecordHelpers.newGroupSubscriptionMetadataRecord(groupId(), Collections.emptyMap()));
-        records.add(RecordHelpers.newTargetAssignmentEpochRecord(groupId(), generationId));
     }
 
     private static Map<Uuid, Set<Integer>> topicPartitionMapFromList(

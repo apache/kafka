@@ -17,7 +17,6 @@
 
 package org.apache.kafka.coordinator.group.classic;
 
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
@@ -198,6 +197,17 @@ public class ClassicGroupMember {
 
         throw new IllegalArgumentException("Member does not support protocol " +
             protocolName);
+    }
+
+    /**
+     * Get the metadata of any supported protocol.
+     */
+    public byte[] metadata() {
+        for (JoinGroupRequestProtocol supportedProtocol : supportedProtocols) {
+            return supportedProtocol.metadata();
+        }
+
+        throw new IllegalArgumentException("Member does not support any protocol.");
     }
 
     /**
@@ -417,18 +427,6 @@ public class ClassicGroupMember {
      */
     public void setIsNew(boolean value) {
         this.isNew = value;
-    }
-
-    /**
-     * @return the first consumer protocol supported.
-     */
-    public JoinGroupRequestProtocol getConsumerProtocol() {
-        for (JoinGroupRequestProtocol supportedProtocol : supportedProtocols) {
-            if (supportedProtocol.name().equals(ConsumerProtocol.PROTOCOL_TYPE)) {
-                return supportedProtocol;
-            }
-        }
-        return null;
     }
 
     @Override
