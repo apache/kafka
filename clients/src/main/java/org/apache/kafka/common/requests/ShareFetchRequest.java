@@ -29,6 +29,7 @@ import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,38 +51,54 @@ public class ShareFetchRequest extends AbstractRequest {
             this.data = data;
         }
 
-        public static Builder forConsumer(int maxWait, int minBytes, Map<TopicPartition, TopicIdPartition> send,
-                                          Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgements) {
+        public static Builder forConsumer(int maxWait, int minBytes, int maxBytes, int fetchSize,
+                                          Map<TopicPartition, TopicIdPartition> send,
+                                          Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementsMap) {
             ShareFetchRequestData data = new ShareFetchRequestData();
             data.setMaxWaitMs(maxWait);
             data.setMinBytes(minBytes);
+            data.setMaxBytes(maxBytes);
 
-            // We collect the partitions in a single FetchTopic only if they appear sequentially in the fetchData
-            data.setTopics(new ArrayList<>());
-            ShareFetchRequestData.FetchTopic fetchTopic = null;
-            for (TopicIdPartition topicPartition : send.values()) {
-                if (fetchTopic == null || !topicPartition.topicId().equals(fetchTopic.topicId())) {
-                    fetchTopic = new ShareFetchRequestData.FetchTopic()
-                            .setTopicId(topicPartition.topicId())
-                            .setPartitions(new ArrayList<>());
-                    data.topics().add(fetchTopic);
-                }
+            // Build a map of topics to fetch keyed by topic ID, and within each a map of partitions keyed by index
+            Map<Uuid, Map<Integer, ShareFetchRequestData.FetchPartition>> fetchMap = new HashMap<>();
 
-                // TODO: Remove the hardcoded setPartitionMaxBytes once this field is populated correctly by the client.
-                //  It was added to confirm that the integration tests pass and we are able to fetch records
+            // First, start by adding the list of topic-partitions we are fetching
+            for (TopicIdPartition tip : send.values()) {
+                Map<Integer, ShareFetchRequestData.FetchPartition> partMap = fetchMap.computeIfAbsent(tip.topicId(), k -> new HashMap<>());
                 ShareFetchRequestData.FetchPartition fetchPartition = new ShareFetchRequestData.FetchPartition()
-                        .setPartitionIndex(topicPartition.partition())
-                        .setPartitionMaxBytes(40000)
+                        .setPartitionIndex(tip.partition())
+                        .setPartitionMaxBytes(fetchSize)
                         .setCurrentLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH);
-
-                // Get the list of acknowledgements for the current partition
-                List<ShareFetchRequestData.AcknowledgementBatch> acknowledgementBatches = acknowledgements.get(topicPartition);
-                if (acknowledgementBatches != null) {
-                    fetchPartition.setAcknowledgementBatches(acknowledgementBatches);
-                }
-
-                fetchTopic.partitions().add(fetchPartition);
+                partMap.put(tip.partition(), fetchPartition);
             }
+
+            // Next, add acknowledgements that we are piggybacking onto the fetch. Generally, the list of
+            // topic-partitions will be a subset, but if the assignment changes, there might be new entries to add
+            for (Map.Entry<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgeEntry : acknowledgementsMap.entrySet()) {
+                TopicIdPartition tip = acknowledgeEntry.getKey();
+                Map<Integer, ShareFetchRequestData.FetchPartition> partMap = fetchMap.computeIfAbsent(tip.topicId(), k -> new HashMap<>());
+                ShareFetchRequestData.FetchPartition fetchPartition = partMap.get(tip.partition());
+                if (fetchPartition == null) {
+                    // This topic-partition is only used for acknowledging, so fetch zero bytes
+                    fetchPartition = new ShareFetchRequestData.FetchPartition()
+                            .setPartitionIndex(tip.partition())
+                            .setPartitionMaxBytes(0)
+                            .setCurrentLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                    partMap.put(tip.partition(), fetchPartition);
+                }
+                fetchPartition.setAcknowledgementBatches(acknowledgeEntry.getValue());
+            }
+
+            // Finally, build up the data to fetch
+            data.setTopics(new ArrayList<>());
+            fetchMap.forEach((topicId, partMap) -> {
+                ShareFetchRequestData.FetchTopic fetchTopic = new ShareFetchRequestData.FetchTopic()
+                        .setTopicId(topicId)
+                        .setPartitions(new ArrayList<>());
+                data.topics().add(fetchTopic);
+
+                partMap.forEach((index, fetchPartition) -> fetchTopic.partitions().add(fetchPartition));
+            });
 
             return new Builder(data, true);
         }
@@ -103,11 +120,6 @@ public class ShareFetchRequest extends AbstractRequest {
         @Override
         public String toString() {
             return data.toString();
-        }
-
-        public Builder setMaxBytes(int maxBytes) {
-            data.setMaxBytes(maxBytes);
-            return this;
         }
     }
 

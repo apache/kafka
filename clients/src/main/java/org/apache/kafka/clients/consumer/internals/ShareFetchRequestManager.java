@@ -151,9 +151,9 @@ public class ShareFetchRequestManager implements RequestManager {
 
     private ShareFetchRequest.Builder createShareFetchRequest(Node fetchTarget, ShareSessionHandler.ShareFetchRequestData requestData) {
         final ShareFetchRequest.Builder request = ShareFetchRequest.Builder
-                .forConsumer(fetchConfig.maxWaitMs, fetchConfig.minBytes, requestData.toSend(), acknowledgementBatches(requestData.acknowledgements()))
-                .forShareSession(groupId, requestData.metadata())
-                .setMaxBytes(fetchConfig.maxBytes);
+                .forConsumer(fetchConfig.maxWaitMs, fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.fetchSize,
+                        requestData.toSend(), acknowledgementBatches(requestData.acknowledgements()))
+                .forShareSession(groupId, requestData.metadata());
 
         nodesWithPendingRequests.add(fetchTarget.id());
 

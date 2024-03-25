@@ -398,4 +398,23 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
         assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(consumedRecord));
         shareConsumer.close();
     }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testFetchRecordLargerThanMaxPartitionFetchBytes(String quorum) throws Exception {
+        int maxPartitionFetchBytes = 10000;
+        ProducerRecord<byte[], byte[]> smallRecord = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
+        ProducerRecord<byte[], byte[]> bigRecord = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), new byte[maxPartitionFetchBytes]);
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        producer.send(smallRecord).get();
+        RecordMetadata rm = producer.send(bigRecord).get();
+
+        consumerConfig().setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, String.valueOf(maxPartitionFetchBytes));
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(1, records.count());
+        shareConsumer.close();
+    }
 }
