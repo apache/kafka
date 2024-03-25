@@ -1733,7 +1733,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       } else {
         warn(s"${KafkaConfig.InterBrokerProtocolVersionProp} is deprecated in KRaft mode as of 3.3 and will only " +
           s"be read when first upgrading from a KRaft prior to 3.3. See kafka-storage.sh help for details on setting " +
-          s"the metadata version for a new KRaft cluster.")
+          s"the metadata.version for a new KRaft cluster.")
       }
     }
     // In KRaft mode, we pin this value to the minimum KRaft-supported version. This prevents inadvertent usage of
