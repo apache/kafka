@@ -59,7 +59,7 @@ public class GetOffsetShellTest {
     private final ClusterInstance cluster;
     private final String topicName = "topic";
 
-    private final int consumerTimeout = 100;
+    private final Duration consumerTimeout = Duration.ofMillis(100);
 
     public GetOffsetShellTest(ClusterInstance cluster) {
         this.cluster = cluster;
@@ -113,7 +113,7 @@ public class GetOffsetShellTest {
                 topics.add(getTopicName(i));
             }
             consumer.subscribe(topics);
-            consumer.poll(Duration.ofMillis(consumerTimeout));
+            consumer.poll(consumerTimeout);
         }
     }
 
@@ -217,15 +217,13 @@ public class GetOffsetShellTest {
         createConsumerAndPoll();
 
         List<Row> offsets = executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3");
-        List<Row> expected = new ArrayList<>(
-            Arrays.asList(
+        List<Row> expected = Arrays.asList(
                 new Row("__consumer_offsets", 3, 0L),
                 new Row("topic1", 0, 1L),
                 new Row("topic2", 1, 2L),
                 new Row("topic3", 2, 3L),
                 new Row("topic4", 2, 4L)
-            )
-        );
+            );
 
         assertEquals(expected, offsets);
     }
