@@ -19,6 +19,7 @@ package org.apache.kafka.common.telemetry.internals;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -133,7 +134,7 @@ public class ClientTelemetryUtilsTest {
             assertArrayEquals(testString, compressed);
         }
         ByteBuffer decompressed = ClientTelemetryUtils.decompress(compressed, compressionType);
-        byte[] actualResult = Arrays.copyOfRange(decompressed.array(), 0, testString.length);
+        byte[] actualResult = Utils.toArray(decompressed, testString.length);
         assertNotNull(decompressed);
         assertArrayEquals(testString, actualResult);
     }
