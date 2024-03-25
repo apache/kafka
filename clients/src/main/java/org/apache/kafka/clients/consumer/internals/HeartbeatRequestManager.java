@@ -551,6 +551,11 @@ public class HeartbeatRequestManager implements RequestManager {
             } else {
                 // SubscribedTopicRegex - only sent if it has changed since the last heartbeat
                 //                      - not supported yet
+                TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
+                if (sendAllFields || !subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
+                    data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
+                    sentFields.subscribedTopicNames = subscribedTopicNames;
+                }
             }
 
             // ServerAssignor - sent when joining or if it has changed since the last heartbeat
