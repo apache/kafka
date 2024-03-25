@@ -61,6 +61,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -1676,7 +1677,7 @@ class DefaultStateUpdaterTest {
         final Set<Task> tasks = stateUpdater.getTasks();
 
         assertEquals(expectedActiveTasks.size() + expectedStandbyTasks.size(), tasks.size());
-        tasks.forEach(task -> assertTrue(task instanceof ReadOnlyTask));
+        tasks.forEach(task -> assertInstanceOf(ReadOnlyTask.class, task));
         final Set<TaskId> actualTaskIds = tasks.stream().map(Task::id).collect(Collectors.toSet());
         final Set<Task> expectedTasks = new HashSet<>(expectedActiveTasks);
         expectedTasks.addAll(expectedStandbyTasks);

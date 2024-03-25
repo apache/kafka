@@ -74,6 +74,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class InternalStreamsBuilderTest {
 
@@ -1186,40 +1187,40 @@ public class InternalStreamsBuilderTest {
 
     private void verifyVersionedSemantics(final TableFilterNode<?, ?> filterNode, final boolean expectedValue) {
         final ProcessorSupplier<?, ?, ?, ?> processorSupplier = filterNode.processorParameters().processorSupplier();
-        assertTrue(processorSupplier instanceof KTableFilter);
+        assertInstanceOf(KTableFilter.class, processorSupplier);
         final KTableFilter<?, ?> tableFilter = (KTableFilter<?, ?>) processorSupplier;
         assertEquals(expectedValue, tableFilter.isUseVersionedSemantics());
     }
 
     private void verifyVersionedSemantics(final TableRepartitionMapNode<?, ?> repartitionMapNode, final boolean expectedValue) {
         final ProcessorSupplier<?, ?, ?, ?> processorSupplier = repartitionMapNode.processorParameters().processorSupplier();
-        assertTrue(processorSupplier instanceof KTableRepartitionMap);
+        assertInstanceOf(KTableRepartitionMap.class, processorSupplier);
         final KTableRepartitionMap<?, ?, ?, ?> repartitionMap = (KTableRepartitionMap<?, ?, ?, ?>) processorSupplier;
         assertEquals(expectedValue, repartitionMap.isUseVersionedSemantics());
     }
 
     private void verifyVersionedSemantics(final KTableKTableJoinNode<?, ?, ?, ?> joinNode, final boolean expectedValueLeft, final boolean expectedValueRight) {
         final ProcessorSupplier<?, ?, ?, ?> thisProcessorSupplier = joinNode.thisProcessorParameters().processorSupplier();
-        assertTrue(thisProcessorSupplier instanceof KTableKTableAbstractJoin);
+        assertInstanceOf(KTableKTableAbstractJoin.class, thisProcessorSupplier);
         final KTableKTableAbstractJoin<?, ?, ?, ?> thisJoin = (KTableKTableAbstractJoin<?, ?, ?, ?>) thisProcessorSupplier;
         assertEquals(expectedValueLeft, thisJoin.isUseVersionedSemantics());
 
         final ProcessorSupplier<?, ?, ?, ?> otherProcessorSupplier = joinNode.otherProcessorParameters().processorSupplier();
-        assertTrue(otherProcessorSupplier instanceof KTableKTableAbstractJoin);
+        assertInstanceOf(KTableKTableAbstractJoin.class, otherProcessorSupplier);
         final KTableKTableAbstractJoin<?, ?, ?, ?> otherJoin = (KTableKTableAbstractJoin<?, ?, ?, ?>) otherProcessorSupplier;
         assertEquals(expectedValueRight, otherJoin.isUseVersionedSemantics());
     }
 
     private void verifyVersionedSemantics(final ForeignJoinSubscriptionSendNode<?, ?> joinThisNode, final boolean expectedValue) {
         final ProcessorSupplier<?, ?, ?, ?> thisProcessorSupplier = joinThisNode.processorParameters().processorSupplier();
-        assertTrue(thisProcessorSupplier instanceof SubscriptionSendProcessorSupplier);
+        assertInstanceOf(SubscriptionSendProcessorSupplier.class, thisProcessorSupplier);
         final SubscriptionSendProcessorSupplier<?, ?, ?> joinThis = (SubscriptionSendProcessorSupplier<?, ?, ?>) thisProcessorSupplier;
         assertEquals(expectedValue, joinThis.isUseVersionedSemantics());
     }
 
     private void verifyVersionedSemantics(final ForeignTableJoinNode<?, ?> joinOtherNode, final boolean expectedValue) {
         final ProcessorSupplier<?, ?, ?, ?> otherProcessorSupplier = joinOtherNode.processorParameters().processorSupplier();
-        assertTrue(otherProcessorSupplier instanceof ForeignTableJoinProcessorSupplier);
+        assertInstanceOf(ForeignTableJoinProcessorSupplier.class, otherProcessorSupplier);
         final ForeignTableJoinProcessorSupplier<?, ?, ?> joinThis = (ForeignTableJoinProcessorSupplier<?, ?, ?>) otherProcessorSupplier;
         assertEquals(expectedValue, joinThis.isUseVersionedSemantics());
     }

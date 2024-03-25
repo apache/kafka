@@ -21,15 +21,15 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.List;
 
 class MemberAssignmentState {
-    public final String group;
-    public final String consumerId;
-    public final String host;
-    public final String clientId;
-    public final String groupInstanceId;
-    public final int numPartitions;
-    public final List<TopicPartition> assignment;
+    final String group;
+    final String consumerId;
+    final String host;
+    final String clientId;
+    final String groupInstanceId;
+    final int numPartitions;
+    final List<TopicPartition> assignment;
 
-    public MemberAssignmentState(String group, String consumerId, String host, String clientId, String groupInstanceId,
+    MemberAssignmentState(String group, String consumerId, String host, String clientId, String groupInstanceId,
                                  int numPartitions, List<TopicPartition> assignment) {
         this.group = group;
         this.consumerId = consumerId;

@@ -42,6 +42,17 @@ object AddPartitionsToTxnManager {
   val VerificationTimeMsMetricName = "VerificationTimeMs"
 }
 
+/**
+ * This is an enum which handles the Partition Response based on the Request Version and the exact operation
+ *    defaultError:       This is the default workflow which maps to cases when the Produce Request Version or the Txn_offset_commit request was lower than the first version supporting the new Error Class
+ *    genericError:       This maps to the case when the clients are updated to handle the AbortableTxnException
+ *    addPartition:       This is a WIP. To be updated as a part of KIP-890 Part 2
+ */
+sealed trait SupportedOperation
+case object defaultError extends SupportedOperation
+case object genericError extends SupportedOperation
+case object addPartition extends SupportedOperation
+
 /*
  * Data structure to hold the transactional data to send to a node. Note -- at most one request per transactional ID
  * will exist at a time in the map. If a given transactional ID exists in the map, and a new request with the same ID
@@ -49,7 +60,8 @@ object AddPartitionsToTxnManager {
  */
 class TransactionDataAndCallbacks(val transactionData: AddPartitionsToTxnTransactionCollection,
                                   val callbacks: mutable.Map[String, AddPartitionsToTxnManager.AppendCallback],
-                                  val startTimeMs: mutable.Map[String, Long])
+                                  val startTimeMs: mutable.Map[String, Long],
+                                  val supportedOperation: SupportedOperation)
 
 class AddPartitionsToTxnManager(
   config: KafkaConfig,
@@ -79,7 +91,8 @@ class AddPartitionsToTxnManager(
     producerId: Long,
     producerEpoch: Short,
     topicPartitions: Seq[TopicPartition],
-    callback: AddPartitionsToTxnManager.AppendCallback
+    callback: AddPartitionsToTxnManager.AppendCallback,
+    supportedOperation: SupportedOperation
   ): Unit = {
     val coordinatorNode = getTransactionCoordinator(partitionFor(transactionalId))
     if (coordinatorNode.isEmpty) {
@@ -99,14 +112,16 @@ class AddPartitionsToTxnManager(
         .setVerifyOnly(true)
         .setTopics(topicCollection)
 
-      addTxnData(coordinatorNode.get, transactionData, callback)
+      addTxnData(coordinatorNode.get, transactionData, callback, supportedOperation)
+
     }
   }
 
   private def addTxnData(
     node: Node,
     transactionData: AddPartitionsToTxnTransaction,
-    callback: AddPartitionsToTxnManager.AppendCallback
+    callback: AddPartitionsToTxnManager.AppendCallback,
+    supportedOperation: SupportedOperation
   ): Unit = {
     nodesToTransactions.synchronized {
       val curTime = time.milliseconds()
@@ -115,7 +130,8 @@ class AddPartitionsToTxnManager(
         new TransactionDataAndCallbacks(
           new AddPartitionsToTxnTransactionCollection(1),
           mutable.Map[String, AddPartitionsToTxnManager.AppendCallback](),
-          mutable.Map[String, Long]()))
+          mutable.Map[String, Long](),
+          supportedOperation))
 
       val existingTransactionData = existingNodeAndTransactionData.transactionData.find(transactionData.transactionalId)
 
@@ -210,6 +226,8 @@ class AddPartitionsToTxnManager(
                   val code =
                     if (partitionResult.partitionErrorCode == Errors.PRODUCER_FENCED.code)
                       Errors.INVALID_PRODUCER_EPOCH.code
+                    else if (partitionResult.partitionErrorCode() == Errors.ABORTABLE_TRANSACTION.code && transactionDataAndCallbacks.supportedOperation != genericError) // For backward compatibility with clients.
+                      Errors.INVALID_TXN_STATE.code
                     else
                       partitionResult.partitionErrorCode
                   unverified.put(tp, Errors.forCode(code))

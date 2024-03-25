@@ -31,18 +31,19 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
-import org.apache.kafka.tools.Tuple2;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -174,14 +175,14 @@ public class ReassignPartitionsUnitTest {
             expStates.put(new TopicPartition("foo", 1),
                 new PartitionReassignmentState(asList(1, 2, 3), asList(1, 2, 3), true));
 
-            Tuple2<Map<TopicPartition, PartitionReassignmentState>, Boolean> actual =
+            Entry<Map<TopicPartition, PartitionReassignmentState>, Boolean> actual =
                 findPartitionReassignmentStates(adminClient, asList(
-                    new Tuple2<>(new TopicPartition("foo", 0), asList(0, 1, 3)),
-                    new Tuple2<>(new TopicPartition("foo", 1), asList(1, 2, 3))
+                    new SimpleImmutableEntry<>(new TopicPartition("foo", 0), asList(0, 1, 3)),
+                    new SimpleImmutableEntry<>(new TopicPartition("foo", 1), asList(1, 2, 3))
                 ));
 
-            assertEquals(expStates, actual.v1);
-            assertTrue(actual.v2);
+            assertEquals(expStates, actual.getKey());
+            assertTrue(actual.getValue());
 
             // Cancel the reassignment and test findPartitionReassignmentStates again.
             Map<TopicPartition, Throwable> cancelResult = cancelPartitionReassignments(adminClient,
@@ -198,12 +199,12 @@ public class ReassignPartitionsUnitTest {
                 new PartitionReassignmentState(asList(1, 2, 3), asList(1, 2, 3), true));
 
             actual = findPartitionReassignmentStates(adminClient, asList(
-                new Tuple2<>(new TopicPartition("foo", 0), asList(0, 1, 3)),
-                new Tuple2<>(new TopicPartition("foo", 1), asList(1, 2, 3))
+                new SimpleImmutableEntry<>(new TopicPartition("foo", 0), asList(0, 1, 3)),
+                new SimpleImmutableEntry<>(new TopicPartition("foo", 1), asList(1, 2, 3))
             ));
 
-            assertEquals(expStates, actual.v1);
-            assertFalse(actual.v2);
+            assertEquals(expStates, actual.getKey());
+            assertFalse(actual.getValue());
         }
     }
 
@@ -338,13 +339,13 @@ public class ReassignPartitionsUnitTest {
             assertThrows(AdminCommandFailedException.class, () -> parseGenerateAssignmentArgs(
                 "{\"topics\": [{\"topic\": \"foo\"}], \"version\":1}", "5,2,3,4,5"),
                 "Expected to detect duplicate broker list entries").getMessage());
-        assertEquals(new Tuple2<>(asList(5, 2, 3, 4), asList("foo")),
+        assertEquals(new SimpleImmutableEntry<>(asList(5, 2, 3, 4), asList("foo")),
             parseGenerateAssignmentArgs("{\"topics\": [{\"topic\": \"foo\"}], \"version\":1}", "5,2,3,4"));
         assertStartsWith("List of topics to reassign contains duplicate entries",
             assertThrows(AdminCommandFailedException.class, () -> parseGenerateAssignmentArgs(
                 "{\"topics\": [{\"topic\": \"foo\"},{\"topic\": \"foo\"}], \"version\":1}", "5,2,3,4"),
                 "Expected to detect duplicate topic entries").getMessage());
-        assertEquals(new Tuple2<>(asList(5, 3, 4), asList("foo", "bar")),
+        assertEquals(new SimpleImmutableEntry<>(asList(5, 3, 4), asList("foo", "bar")),
             parseGenerateAssignmentArgs(
                 "{\"topics\": [{\"topic\": \"foo\"},{\"topic\": \"bar\"}], \"version\":1}", "5,3,4"));
     }
@@ -389,7 +390,7 @@ public class ReassignPartitionsUnitTest {
                     () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", true),
                     "Expected generateAssignment to fail").getMessage());
             // It should succeed when --disable-rack-aware is used.
-            Tuple2<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
+            Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
                 proposedCurrent = generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", false);
 
             Map<TopicPartition, List<Integer>> expCurrent = new HashMap<>();
@@ -397,7 +398,7 @@ public class ReassignPartitionsUnitTest {
             expCurrent.put(new TopicPartition("foo", 0), asList(0, 1, 2));
             expCurrent.put(new TopicPartition("foo", 1), asList(1, 2, 3));
 
-            assertEquals(expCurrent, proposedCurrent.v2);
+            assertEquals(expCurrent, proposedCurrent.getValue());
         }
     }
 
@@ -407,7 +408,7 @@ public class ReassignPartitionsUnitTest {
             addTopics(adminClient);
             List<Integer> goalBrokers = asList(0, 1, 3);
 
-            Tuple2<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
+            Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
                 proposedCurrent = generateAssignment(adminClient,
                     "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}",
                     goalBrokers.stream().map(Object::toString).collect(Collectors.joining(",")), false);
@@ -418,12 +419,12 @@ public class ReassignPartitionsUnitTest {
             expCurrent.put(new TopicPartition("foo", 1), asList(1, 2, 3));
             expCurrent.put(new TopicPartition("bar", 0), asList(2, 3, 0));
 
-            assertEquals(expCurrent, proposedCurrent.v2);
+            assertEquals(expCurrent, proposedCurrent.getValue());
 
             // The proposed assignment should only span the provided brokers
-            proposedCurrent.v1.values().forEach(replicas ->
+            proposedCurrent.getKey().values().forEach(replicas ->
                 assertTrue(goalBrokers.containsAll(replicas),
-                    "Proposed assignment " + proposedCurrent.v1 + " puts replicas on brokers other than " + goalBrokers)
+                    "Proposed assignment " + proposedCurrent.getKey() + " puts replicas on brokers other than " + goalBrokers)
             );
         }
     }
@@ -567,14 +568,14 @@ public class ReassignPartitionsUnitTest {
         partitionsToBeReassigned.put(new TopicPartition("foo", 0), asList(1, 2, 3));
         partitionsToBeReassigned.put(new TopicPartition("foo", 1), asList(3, 4, 5));
 
-        Tuple2<Map<TopicPartition, List<Integer>>, Map<TopicPartitionReplica, String>> actual = parseExecuteAssignmentArgs(
+        Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartitionReplica, String>> actual = parseExecuteAssignmentArgs(
             "{\"version\":1,\"partitions\":" +
                 "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[1,2,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
                 "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[3,4,5],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
                 "]}");
 
-        assertEquals(partitionsToBeReassigned, actual.v1);
-        assertTrue(actual.v2.isEmpty());
+        assertEquals(partitionsToBeReassigned, actual.getKey());
+        assertTrue(actual.getValue().isEmpty());
 
         Map<TopicPartitionReplica, String> replicaAssignment = new HashMap<>();
 
@@ -587,8 +588,8 @@ public class ReassignPartitionsUnitTest {
                 "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[1,2,3],\"log_dirs\":[\"/tmp/a\",\"/tmp/b\",\"/tmp/c\"]}" +
                 "]}");
 
-        assertEquals(Collections.singletonMap(new TopicPartition("foo", 0), asList(1, 2, 3)), actual.v1);
-        assertEquals(replicaAssignment, actual.v2);
+        assertEquals(Collections.singletonMap(new TopicPartition("foo", 0), asList(1, 2, 3)), actual.getKey());
+        assertEquals(replicaAssignment, actual.getValue());
     }
 
     @Test

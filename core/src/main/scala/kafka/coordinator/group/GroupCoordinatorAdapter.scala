@@ -476,7 +476,8 @@ private[group] class GroupCoordinatorAdapter(
       request.generationId,
       partitions.toMap,
       callback,
-      RequestLocal(bufferSupplier)
+      RequestLocal(bufferSupplier),
+      context.apiVersion()
     )
 
     future
