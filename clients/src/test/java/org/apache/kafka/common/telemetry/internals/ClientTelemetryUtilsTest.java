@@ -132,9 +132,9 @@ public class ClientTelemetryUtilsTest {
         } else {
             assertArrayEquals(testString, compressed);
         }
-
         ByteBuffer decompressed = ClientTelemetryUtils.decompress(compressed, compressionType);
+        byte[] actualResult = Arrays.copyOfRange(decompressed.array(), 0, testString.length);
         assertNotNull(decompressed);
-        assertArrayEquals(testString, decompressed.array());
+        assertArrayEquals(testString, actualResult);
     }
 }
