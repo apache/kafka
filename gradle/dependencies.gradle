@@ -88,8 +88,9 @@ else
 // See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
 versions += [
   activation: "1.1.1",
-  apacheda: "1.0.2",
-  apacheds: "2.0.0-M24",
+  apacheda: "2.1.5",
+  apacheds: "2.0.0.AM27",
+  kerby: "2.0.3",
   argparse4j: "0.7.0",
   bcpkix: "1.75",
   caffeine: "2.9.3", // 3.x supports JDK 11 and above
@@ -171,14 +172,7 @@ versions += [
 libs += [
   activation: "javax.activation:activation:$versions.activation",
   apacheda: "org.apache.directory.api:api-all:$versions.apacheda",
-  apachedsCoreApi: "org.apache.directory.server:apacheds-core-api:$versions.apacheds",
-  apachedsInterceptorKerberos: "org.apache.directory.server:apacheds-interceptor-kerberos:$versions.apacheds",
   apachedsProtocolShared: "org.apache.directory.server:apacheds-protocol-shared:$versions.apacheds",
-  apachedsProtocolKerberos: "org.apache.directory.server:apacheds-protocol-kerberos:$versions.apacheds",
-  apachedsProtocolLdap: "org.apache.directory.server:apacheds-protocol-ldap:$versions.apacheds",
-  apachedsLdifPartition: "org.apache.directory.server:apacheds-ldif-partition:$versions.apacheds",
-  apachedsMavibotPartition: "org.apache.directory.server:apacheds-mavibot-partition:$versions.apacheds",
-  apachedsJdbmPartition: "org.apache.directory.server:apacheds-jdbm-partition:$versions.apacheds",
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
   bcpkix: "org.bouncycastle:bcpkix-jdk18on:$versions.bcpkix",
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
@@ -236,6 +230,7 @@ libs += [
   kafkaStreams_35: "org.apache.kafka:kafka-streams:$versions.kafka_35",
   kafkaStreams_36: "org.apache.kafka:kafka-streams:$versions.kafka_36",
   kafkaStreams_37: "org.apache.kafka:kafka-streams:$versions.kafka_37",
+  kerbSimpleKDC: "org.apache.kerby:kerb-simplekdc:$versions.kerby",
   log4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
