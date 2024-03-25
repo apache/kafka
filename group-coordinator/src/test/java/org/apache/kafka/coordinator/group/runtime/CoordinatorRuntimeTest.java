@@ -47,12 +47,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalInt;
-import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -96,7 +96,16 @@ public class CoordinatorRuntimeTest {
      */
     private static class DirectEventProcessor implements CoordinatorEventProcessor {
         @Override
-        public void enqueue(CoordinatorEvent event) throws RejectedExecutionException {
+        public void enqueueLast(CoordinatorEvent event) throws RejectedExecutionException {
+            try {
+                event.run();
+            } catch (Throwable ex) {
+                event.complete(ex);
+            }
+        }
+
+        @Override
+        public void enqueueFirst(CoordinatorEvent event) throws RejectedExecutionException {
             try {
                 event.run();
             } catch (Throwable ex) {
@@ -113,11 +122,16 @@ public class CoordinatorRuntimeTest {
      * when poll() is called.
      */
     private static class ManualEventProcessor implements CoordinatorEventProcessor {
-        private Queue<CoordinatorEvent> queue = new LinkedList<>();
+        private Deque<CoordinatorEvent> queue = new LinkedList<>();
 
         @Override
-        public void enqueue(CoordinatorEvent event) throws RejectedExecutionException {
-            queue.add(event);
+        public void enqueueLast(CoordinatorEvent event) throws RejectedExecutionException {
+            queue.addLast(event);
+        }
+
+        @Override
+        public void enqueueFirst(CoordinatorEvent event) throws RejectedExecutionException {
+            queue.addFirst(event);
         }
 
         public boolean poll() {
@@ -507,12 +521,6 @@ public class CoordinatorRuntimeTest {
 
         // Verify that onUnloaded is called.
         verify(coordinator, times(1)).onUnloaded();
-
-        // Verify that the listener is deregistered.
-        verify(writer, times(1)).deregisterListener(
-            eq(TP),
-            any(PartitionWriter.Listener.class)
-        );
     }
 
     @Test
@@ -2601,6 +2609,75 @@ public class CoordinatorRuntimeTest {
         assertEquals(0L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertTrue(ctx.coordinator.snapshotRegistry().hasSnapshot(0L));
+    }
+
+    @Test
+    public void testHighWatermarkUpdate() {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        ManualEventProcessor processor = new ManualEventProcessor();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(processor)
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .build();
+
+        // Loads the coordinator. Poll once to execute the load operation and once
+        // to complete the load.
+        runtime.scheduleLoadOperation(TP, 10);
+        processor.poll();
+        processor.poll();
+
+        // Write #1.
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
+            state -> new CoordinatorResult<>(Collections.singletonList("record1"), "response1")
+        );
+        processor.poll();
+
+        // Write #2.
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
+            state -> new CoordinatorResult<>(Collections.singletonList("record2"), "response2")
+        );
+        processor.poll();
+
+        // Records have been written to the log.
+        assertEquals(Arrays.asList(
+            InMemoryPartitionWriter.LogEntry.value("record1"),
+            InMemoryPartitionWriter.LogEntry.value("record2")
+        ), writer.entries(TP));
+
+        // There is no pending high watermark.
+        assertEquals(-1, runtime.contextOrThrow(TP).highWatermarklistener.lastHighWatermark());
+
+        // Commit the first record.
+        writer.commit(TP, 1);
+
+        // We should have one pending event and the pending high watermark should be set.
+        assertEquals(1, processor.size());
+        assertEquals(1, runtime.contextOrThrow(TP).highWatermarklistener.lastHighWatermark());
+
+        // Commit the second record.
+        writer.commit(TP, 2);
+
+        // We should still have one pending event and the pending high watermark should be updated.
+        assertEquals(1, processor.size());
+        assertEquals(2, runtime.contextOrThrow(TP).highWatermarklistener.lastHighWatermark());
+
+        // Poll once to process the high watermark update and complete the writes.
+        processor.poll();
+
+        assertEquals(-1, runtime.contextOrThrow(TP).highWatermarklistener.lastHighWatermark());
+        assertEquals(2, runtime.contextOrThrow(TP).coordinator.lastCommittedOffset());
+        assertTrue(write1.isDone());
+        assertTrue(write2.isDone());
     }
 
     private static <S extends CoordinatorShard<U>, U> ArgumentMatcher<CoordinatorPlayback<U>> coordinatorMatcher(
