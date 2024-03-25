@@ -716,7 +716,6 @@ public class StandaloneHerderTest {
 
 
         expectAdd(SourceSink.SOURCE);
-        Connector connectorMock = mock(SourceConnector.class);
         expectConfigValidation(SourceSink.SOURCE, connConfig, newConnConfig);
 
         // Should get first config
