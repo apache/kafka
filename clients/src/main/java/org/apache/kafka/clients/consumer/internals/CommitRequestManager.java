@@ -277,7 +277,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * - Considers {@link Errors#STALE_MEMBER_EPOCH} as a retriable error,
      * and will retry it including the latest member ID and epoch received from the broker.
      * - Considers {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} as a fatal error, and will not retry
-     * it although the error extends RetrieableException. The reason is that if a topic or partition
+     * it although the error extends RetriableException. The reason is that if a topic or partition
      * is deleted, revocation would not finish in time since the auto commit would keep retrying.
      *
      * @return Future that will complete when the offsets are successfully committed. It will
