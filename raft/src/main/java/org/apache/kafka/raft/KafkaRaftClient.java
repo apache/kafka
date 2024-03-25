@@ -1584,11 +1584,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // The request or response indicates the leader of the current epoch,
             // which is currently unknown
             transitionToFollower(epoch, leaderId.getAsInt(), currentTimeMs);
-        } else {
-            // TODO: implement this to prospective. Talk about reconfiguration without pre-vote
-            // Maybe if the prospective doesn't exist then transition to candidate.
-            // TODO: take a look at the simulation as to why resign with check quorum shows liveness
-            //
         }
     }
 
