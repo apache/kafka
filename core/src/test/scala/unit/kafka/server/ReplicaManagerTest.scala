@@ -4110,8 +4110,6 @@ class ReplicaManagerTest {
       brokerTopicStats)
     val spyRLM = spy(remoteLogManager)
     val timer = new MockTimer(time)
-    val mockDelayedRemoteFetchMetricsMeter = spy(DelayedRemoteFetchMetrics.expiredRequestMeter)
-    DelayedRemoteFetchMetrics.expiredRequestMeter = mockDelayedRemoteFetchMetricsMeter
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(timer, aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
 
@@ -4166,12 +4164,13 @@ class ReplicaManagerTest {
         mock(classOf[FetchDataInfo])
       }).when(spyRLM).read(any())
 
+      val curExpiresPerSec = DelayedRemoteFetchMetrics.expiredRequestMeter.count()
       replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, fetchCallback)
       // advancing the clock to expire the delayed remote fetch
       timer.advanceClock(2000L)
 
       // verify the DelayedRemoteFetchMetrics.expiredRequestMeter.mark is called since the delayed remote fetch is expired
-      verify(mockDelayedRemoteFetchMetricsMeter, times(1)).mark()
+      assertEquals(curExpiresPerSec + 1, DelayedRemoteFetchMetrics.expiredRequestMeter.count())
       latch.countDown()
     } finally {
       Utils.tryAll(util.Arrays.asList[Callable[Void]](

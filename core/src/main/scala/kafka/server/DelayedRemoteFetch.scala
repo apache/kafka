@@ -124,5 +124,5 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
 
 object DelayedRemoteFetchMetrics {
   private val metricsGroup = new KafkaMetricsGroup(DelayedRemoteFetchMetrics.getClass)
-  var expiredRequestMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
+  val expiredRequestMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 }
