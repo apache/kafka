@@ -9523,7 +9523,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testConsumerGroupHeartbeatWithStableClassicGroup() throws Exception {
+    public void testConsumerGroupHeartbeatWithStableClassicGroup() {
         String groupId = "group-id";
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
@@ -9608,7 +9608,8 @@ public class GroupMetadataManagerTest {
                 }
             })
             .build();
-        ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
+
+        ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder(memberId2)
             .setMemberEpoch(0)
             .setPreviousMemberEpoch(0)
             .setClientId("client")
@@ -9616,17 +9617,11 @@ public class GroupMetadataManagerTest {
             .setServerAssignorName("range")
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(5000)
-            .setAssignedPartitions(Collections.emptyMap())
-            .build();
-        ConsumerGroupMember expectedUpdatedMember2 = new ConsumerGroupMember.Builder(memberId2)
+            .setAssignedPartitions(Collections.emptyMap());
+        ConsumerGroupMember expectedMember2 = memberBuilder.build();
+
+        ConsumerGroupMember expectedUpdatedMember2 = memberBuilder
             .setMemberEpoch(1)
-            .setPreviousMemberEpoch(0)
-            .setClientId("client")
-            .setClientHost("localhost/127.0.0.1")
-            .setServerAssignorName("range")
-            .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
-            .setRebalanceTimeoutMs(5000)
-            .setAssignedPartitions(Collections.emptyMap())
             .setState(MemberState.UNRELEASED_PARTITIONS)
             .build();
 
@@ -9634,18 +9629,20 @@ public class GroupMetadataManagerTest {
             // The existing classic group tombstone.
             RecordHelpers.newGroupMetadataTombstoneRecord(groupId),
 
-            // Create the new consumer group
+            // Create the new consumer group.
             RecordHelpers.newGroupEpochRecord(groupId, 0),
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, Collections.emptyMap()),
             RecordHelpers.newTargetAssignmentEpochRecord(groupId, 0),
 
-            // Convert memberId1
+            // Convert memberId1.
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember1),
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember1),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
 
-            // memberId2 joins the new consumer group
+            // memberId2 joins the new consumer group.
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember2),
+
+            // The subscription metadata hasn't been udpated during the conversion, so a new one is computed.
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
                     put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 1, new HashMap<Integer, Set<String>>() {
@@ -9662,6 +9659,8 @@ public class GroupMetadataManagerTest {
                     }));
                 }
             }),
+
+            // Newly joining member2 bumps the group epoch. A new target assignment is computed.
             RecordHelpers.newGroupEpochRecord(groupId, 1),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId1, new HashMap<Uuid, Set<Integer>>() {
                 {
@@ -9674,6 +9673,8 @@ public class GroupMetadataManagerTest {
                 }
             }),
             RecordHelpers.newTargetAssignmentEpochRecord(groupId, 1),
+
+            // member2 has no pending revoking partition. Bump its member epoch and transition to UNRELEASED_PARTITIONS.
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedUpdatedMember2)
         );
 
