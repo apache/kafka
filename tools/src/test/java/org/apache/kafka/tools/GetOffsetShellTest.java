@@ -60,6 +60,8 @@ public class GetOffsetShellTest {
     private final ClusterInstance cluster;
     private final String topicName = "topic";
 
+    private final int consumerTimeout = 100;
+
     public GetOffsetShellTest(ClusterInstance cluster) {
         this.cluster = cluster;
     }
@@ -95,6 +97,25 @@ public class GetOffsetShellTest {
                         .forEach(msgCount -> producer.send(
                                 new ProducerRecord<>(getTopicName(i), msgCount % i, null, "val" + msgCount)))
                 );
+        }
+    }
+
+    private void createConsumerAndPoll() {
+        Properties props = new Properties();
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-group");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+            List<String> topics = new ArrayList<>();
+            for (int i = 0; i < topicCount + 1; i++) {
+                topics.add(getTopicName(i));
+            }
+
+            consumer.subscribe(topics);
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(consumerTimeout));
         }
     }
 
@@ -195,24 +216,7 @@ public class GetOffsetShellTest {
     public void testTopicPartitionsArg() {
         setUp();
 
-        if (cluster.isKRaftTest()) {
-            Properties props = new Properties();
-            props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-            props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-            props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-            props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-group");
-            props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-
-            try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
-                List<String> topics = new ArrayList<>();
-                for (int i = 0; i < 5; i++) {
-                    topics.add(getTopicName(i));
-                }
-
-                consumer.subscribe(topics);
-                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
-            }
-        }
+        createConsumerAndPoll();
 
         List<Row> offsets = executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3");
         List<Row> expected = new ArrayList<>(
@@ -318,9 +322,11 @@ public class GetOffsetShellTest {
         assertEquals(expected, offsets);
     }
 
-    @ClusterTest(clusterType = Type.ZK)
+    @ClusterTest
     public void testTopicPartitionsArgWithInternalIncluded() {
         setUp();
+
+        createConsumerAndPoll();
 
         List<Row> offsets = executeAndParse("--topic-partitions", "__.*:0");
 
@@ -373,7 +379,6 @@ public class GetOffsetShellTest {
     }
 
     private List<Row> expectedOffsetsWithInternal() {
-
         List<Row> consOffsets = IntStream.range(0, offsetTopicPartitionCount)
                 .mapToObj(i -> new Row("__consumer_offsets", i, 0L))
                 .collect(Collectors.toList());
