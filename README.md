@@ -56,7 +56,11 @@ Follow instructions in https://kafka.apache.org/quickstart
 ### Running a particular unit/integration test with log4j output ###
 Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
 
-    ./gradlew clients:test --tests RequestResponseTest
+For example, you can modify the line in `clients/src/test/resources/log4j.properties` to `log4j.logger.org.apache.kafka=INFO` and then run:
+    
+    ./gradlew cleanTest clients:test --tests NetworkClientTest --info   
+
+And you should see INFO level logs in the console and also find them under the build/test-results directory.
 
 ### Specifying test retries ###
 By default, each failed test is retried once up to a maximum of five retries per test run. Tests are retried at the end of the test task. Adjust these parameters in the following way:
