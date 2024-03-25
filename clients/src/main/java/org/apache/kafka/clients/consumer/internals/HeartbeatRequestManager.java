@@ -73,6 +73,7 @@ import java.util.stream.Collectors;
 public class HeartbeatRequestManager implements RequestManager {
 
     private final Logger logger;
+    private final Time time;
 
     /**
      * Time that the group coordinator will wait on member to revoke its partitions. This is provided by the group
@@ -125,6 +126,7 @@ public class HeartbeatRequestManager implements RequestManager {
         final MembershipManager membershipManager,
         final BackgroundEventHandler backgroundEventHandler,
         final Metrics metrics) {
+        this.time = time;
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.logger = logContext.logger(getClass());
         this.membershipManager = membershipManager;
@@ -142,7 +144,8 @@ public class HeartbeatRequestManager implements RequestManager {
     // Visible for testing
     HeartbeatRequestManager(
         final LogContext logContext,
-        final Timer timer,
+        final Time time,
+        final Timer pollTimer,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final MembershipManager membershipManager,
@@ -151,13 +154,14 @@ public class HeartbeatRequestManager implements RequestManager {
         final BackgroundEventHandler backgroundEventHandler,
         final Metrics metrics) {
         this.logger = logContext.logger(this.getClass());
+        this.time = time;
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.heartbeatRequestState = heartbeatRequestState;
         this.heartbeatState = heartbeatState;
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
-        this.pollTimer = timer;
+        this.pollTimer = pollTimer;
         this.metricsManager = new HeartbeatMetricsManager(metrics);
     }
 
@@ -273,9 +277,12 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final boolean ignoreResponse) {
+        Timer timer = time.timer(this.heartbeatRequestState.heartbeatIntervalMs);
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
             new ConsumerGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
-            coordinatorRequestManager.coordinator());
+            coordinatorRequestManager.coordinator(),
+            timer
+        );
         if (ignoreResponse)
             return logResponse(request);
         else

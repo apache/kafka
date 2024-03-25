@@ -193,9 +193,9 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testResetPositionsProcessFailureIsIgnored() {
-        doThrow(new NullPointerException()).when(offsetsRequestManager).resetPositionsIfNeeded();
-
         Timer timer = time.timer(100);
+        doThrow(new NullPointerException()).when(offsetsRequestManager).resetPositionsIfNeeded(timer);
+
         ResetPositionsEvent event = new ResetPositionsEvent(timer);
         applicationEventsQueue.add(event);
         assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
@@ -239,13 +239,14 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testPollResultTimer() {
+        Timer timer = time.timer(DEFAULT_REQUEST_TIMEOUT_MS);
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(
                         new FindCoordinatorRequestData()
                                 .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
                                 .setKey("foobar")),
-                Optional.empty());
-        req.setTimer(time, DEFAULT_REQUEST_TIMEOUT_MS);
+                Optional.empty(),
+                timer);
 
         // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(

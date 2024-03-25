@@ -962,7 +962,7 @@ public class MembershipManagerImpl implements MembershipManager {
         // best effort to commit the offsets in the case where the epoch might have changed while
         // the current reconciliation is in process. Note this is using the rebalance timeout as
         // it is the limit enforced by the broker to complete the reconciliation process.
-        commitResult = commitRequestManager.maybeAutoCommitSyncBeforeRevocation(getExpirationTimeForTimeout(rebalanceTimeoutMs));
+        commitResult = commitRequestManager.maybeAutoCommitSyncBeforeRevocation(time.timer(rebalanceTimeoutMs));
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
         commitResult.whenComplete((__, commitReqError) -> {
@@ -986,14 +986,6 @@ public class MembershipManagerImpl implements MembershipManager {
             }
             return null;
         });
-    }
-
-    long getExpirationTimeForTimeout(final long timeoutMs) {
-        long expiration = time.milliseconds() + timeoutMs;
-        if (expiration < 0) {
-            return Long.MAX_VALUE;
-        }
-        return expiration;
     }
 
     /**
@@ -1340,7 +1332,7 @@ public class MembershipManagerImpl implements MembershipManager {
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.addAll(partitions);
 
-        // We don't yet have the concept of having an expiring callback, but we will likely want that eventually.
+        // TODO: we likely want our event to expire at some point.
         Timer timer = time.timer(Long.MAX_VALUE);
         CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(
             methodName,

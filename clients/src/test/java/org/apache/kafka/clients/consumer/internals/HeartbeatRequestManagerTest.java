@@ -777,6 +777,7 @@ public class HeartbeatRequestManagerTest {
         pollTimer = time.timer(DEFAULT_MAX_POLL_INTERVAL_MS);
         return new HeartbeatRequestManager(
                 logContext,
+                time,
                 pollTimer,
                 config(),
                 coordinatorRequestManager,

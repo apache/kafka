@@ -43,6 +43,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -94,6 +95,7 @@ import static org.mockito.Mockito.when;
 
 public class CommitRequestManagerTest {
 
+    private final int requestTimeoutMs = 1000;
     private long retryBackoffMs = 100;
     private long retryBackoffMaxMs = 1000;
     private static final String CONSUMER_COORDINATOR_METRICS = "consumer-coordinator-metrics";
@@ -129,7 +131,8 @@ public class CommitRequestManagerTest {
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
-        commitRequestManger.commitAsync(offsets);
+        Timer timer = time.timer(1000);
+        commitRequestManger.commitAsync(offsets, timer);
         assertPoll(false, 0, commitRequestManger);
     }
 
@@ -140,7 +143,8 @@ public class CommitRequestManagerTest {
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
-        commitRequestManger.commitAsync(offsets);
+        Timer timer = time.timer(1000);
+        commitRequestManger.commitAsync(offsets, timer);
         assertPoll(1, commitRequestManger);
     }
 
@@ -180,11 +184,11 @@ public class CommitRequestManagerTest {
         offsets2.put(new TopicPartition("test", 4), new OffsetAndMetadata(20L));
 
         // Add the requests to the CommitRequestManager and store their futures
-        long expirationTimeMs  = time.milliseconds() + defaultApiTimeoutMs;
-        commitManager.commitSync(offsets1, expirationTimeMs);
-        commitManager.fetchOffsets(Collections.singleton(new TopicPartition("test", 0)), expirationTimeMs);
-        commitManager.commitSync(offsets2, expirationTimeMs);
-        commitManager.fetchOffsets(Collections.singleton(new TopicPartition("test", 1)), expirationTimeMs);
+        Timer timer  = time.timer(defaultApiTimeoutMs);
+        commitManager.commitSync(offsets1, timer);
+        commitManager.fetchOffsets(Collections.singleton(new TopicPartition("test", 0)), timer);
+        commitManager.commitSync(offsets2, timer);
+        commitManager.fetchOffsets(Collections.singleton(new TopicPartition("test", 1)), timer);
 
         // Poll the CommitRequestManager and verify that the inflightOffsetFetches size is correct
         NetworkClientDelegate.PollResult result = commitManager.poll(time.milliseconds());
@@ -216,7 +220,8 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
             new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
-        commitRequestManger.commitAsync(offsets);
+        Timer timer = time.timer(1000);
+        commitRequestManger.commitAsync(offsets, timer);
         assertEquals(1, commitRequestManger.unsentOffsetCommitRequests().size());
         assertEquals(1, commitRequestManger.poll(time.milliseconds()).unsentRequests.size());
         assertTrue(commitRequestManger.unsentOffsetCommitRequests().isEmpty());
@@ -274,8 +279,8 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
             new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
-        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
-        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(offsets, expirationTimeMs);
+        Timer timer  = time.timer(defaultApiTimeoutMs);
+        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(offsets, timer);
         sendAndVerifyOffsetCommitRequestFailedAndMaybeRetried(commitRequestManger, error, commitResult);
 
         // We expect that request should have been retried on this sync commit.
@@ -294,8 +299,8 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         // Send sync offset commit that fails and verify it propagates the expected exception.
-        Long expirationTimeMs = time.milliseconds() + retryBackoffMs;
-        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(offsets, expirationTimeMs);
+        Timer timer  = time.timer(retryBackoffMs);
+        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(offsets, timer);
         completeOffsetCommitRequestWithError(commitRequestManger, commitError);
         assertFutureThrows(commitResult, expectedException);
     }
@@ -319,8 +324,8 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
             new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
-        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
-        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(offsets, expirationTimeMs);
+        Timer timer  = time.timer(defaultApiTimeoutMs);
+        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(offsets, timer);
 
         completeOffsetCommitRequestWithError(commitRequestManger, Errors.UNKNOWN_MEMBER_ID);
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
@@ -339,8 +344,8 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         // Send commit request expected to be retried on retriable errors
-        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(
-            offsets, time.milliseconds() + defaultApiTimeoutMs);
+        Timer timer  = time.timer(defaultApiTimeoutMs);
+        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(offsets, timer);
         completeOffsetCommitRequestWithError(commitRequestManger, Errors.STALE_MEMBER_EPOCH);
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
@@ -392,7 +397,8 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         // Async commit that won't be retried.
-        CompletableFuture<Void> commitResult = commitRequestManager.commitAsync(offsets);
+        Timer timer = time.timer(1000);
+        CompletableFuture<Void> commitResult = commitRequestManager.commitAsync(offsets, timer);
 
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
@@ -545,10 +551,9 @@ public class CommitRequestManagerTest {
         CommitRequestManager commitManager = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
-        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
+        Timer timer  = time.timer(defaultApiTimeoutMs);
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult =
-            commitManager.fetchOffsets(Collections.singleton(new TopicPartition("test", 0)),
-                expirationTimeMs);
+            commitManager.fetchOffsets(Collections.singleton(new TopicPartition("test", 0)), timer);
 
         // Send fetch request
         NetworkClientDelegate.PollResult result = commitManager.poll(time.milliseconds());
@@ -593,8 +598,8 @@ public class CommitRequestManagerTest {
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(new TopicPartition("t1", 0));
 
-        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = commitRequestManager.fetchOffsets(partitions, expirationTimeMs);
+        Timer timer  = time.timer(defaultApiTimeoutMs);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = commitRequestManager.fetchOffsets(partitions, timer);
 
         completeOffsetFetchRequestWithError(commitRequestManager, partitions, error);
 
@@ -620,8 +625,8 @@ public class CommitRequestManagerTest {
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(new TopicPartition("t1", 0));
 
-        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = commitRequestManger.fetchOffsets(partitions, expirationTimeMs);
+        Timer timer  = time.timer(defaultApiTimeoutMs);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = commitRequestManger.fetchOffsets(partitions, timer);
 
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
@@ -650,7 +655,8 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         // Send async commit (not expected to be retried).
-        CompletableFuture<Void> commitResult = commitRequestManger.commitAsync(offsets);
+        Timer timer = time.timer(1000);
+        CompletableFuture<Void> commitResult = commitRequestManger.commitAsync(offsets, timer);
         completeOffsetCommitRequestWithError(commitRequestManger, error);
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
@@ -674,8 +680,8 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         // Send sync offset commit request that fails with retriable error.
-        Long expirationTimeMs = time.milliseconds() + retryBackoffMs * 2;
-        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(offsets, expirationTimeMs);
+        Timer timer  = time.timer(retryBackoffMs * 2);
+        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(offsets, timer);
         completeOffsetCommitRequestWithError(commitRequestManger, Errors.REQUEST_TIMED_OUT);
 
         // Request retried after backoff, and fails with retriable again. Should not complete yet
@@ -706,13 +712,13 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         // Send offset commit request that fails with retriable error.
-        long expirationTimeMs = time.milliseconds() + retryBackoffMs * 2;
-        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(offsets, expirationTimeMs);
+        Timer timer  = time.timer(retryBackoffMs * 2);
+        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(offsets, timer);
         completeOffsetCommitRequestWithError(commitRequestManger, Errors.COORDINATOR_NOT_AVAILABLE);
 
         // Sleep to expire the request timeout. Request should fail on the next poll with a
         // TimeoutException.
-        time.sleep(expirationTimeMs);
+        time.sleep(timer.remainingMs());
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
         assertTrue(commitResult.isDone());
@@ -733,7 +739,8 @@ public class CommitRequestManagerTest {
 
         // Send async commit request that fails with retriable error (not expected to be retried).
         Errors retriableError = Errors.COORDINATOR_NOT_AVAILABLE;
-        CompletableFuture<Void> commitResult = commitRequestManger.commitAsync(offsets);
+        Timer timer = time.timer(1000);
+        CompletableFuture<Void> commitResult = commitRequestManger.commitAsync(offsets, timer);
         completeOffsetCommitRequestWithError(commitRequestManger, retriableError);
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
@@ -755,8 +762,8 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
 
-        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
-        commitRequestManger.commitSync(offsets, expirationTimeMs);
+        Timer timer  = time.timer(defaultApiTimeoutMs);
+        commitRequestManger.commitSync(offsets, timer);
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
         res.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new TimeoutException());
@@ -837,8 +844,8 @@ public class CommitRequestManagerTest {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
         // Send request that is expected to fail with invalid epoch.
-        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
-        commitRequestManager.fetchOffsets(partitions, expirationTimeMs);
+        Timer timer  = time.timer(defaultApiTimeoutMs);
+        commitRequestManager.fetchOffsets(partitions, timer);
 
         // Mock member has new a valid epoch.
         int newEpoch = 8;
@@ -876,9 +883,9 @@ public class CommitRequestManagerTest {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
         // Send request that is expected to fail with invalid epoch.
-        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
+        Timer timer  = time.timer(defaultApiTimeoutMs);
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> requestResult =
-            commitRequestManager.fetchOffsets(partitions, expirationTimeMs);
+            commitRequestManager.fetchOffsets(partitions, timer);
 
         // Mock member not having a valid epoch anymore (left/failed/fenced).
         commitRequestManager.onMemberEpochUpdated(Optional.empty(), Optional.empty());
@@ -909,10 +916,10 @@ public class CommitRequestManagerTest {
         TopicPartition tp = new TopicPartition("topic", 1);
         subscriptionState.assignFromUser(singleton(tp));
         subscriptionState.seek(tp, 5);
-        long expirationTimeMs = time.milliseconds() + retryBackoffMs * 2;
+        Timer timer  = time.timer(retryBackoffMs * 2);
 
         // Send commit request expected to be retried on STALE_MEMBER_EPOCH error while it does not expire
-        commitRequestManager.maybeAutoCommitSyncBeforeRevocation(expirationTimeMs);
+        commitRequestManager.maybeAutoCommitSyncBeforeRevocation(timer);
 
         int newEpoch = 8;
         String memberId = "member1";
@@ -974,7 +981,8 @@ public class CommitRequestManagerTest {
                 new OffsetAndMetadata(0));
 
         long commitCreationTimeMs = time.milliseconds();
-        commitRequestManager.commitAsync(offsets);
+        Timer timer = time.timer(1000);
+        commitRequestManager.commitAsync(offsets, timer);
 
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
@@ -1081,9 +1089,9 @@ public class CommitRequestManagerTest {
         TopicPartition tp2 = new TopicPartition("t2", 3);
         partitions.add(tp1);
         partitions.add(tp2);
-        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
+        Timer timer  = time.timer(defaultApiTimeoutMs);
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future =
-                commitRequestManger.fetchOffsets(partitions, expirationTimeMs);
+                commitRequestManger.fetchOffsets(partitions, timer);
 
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
@@ -1112,7 +1120,8 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
 
-        commitRequestManger.commitAsync(offsets);
+        Timer timer = time.timer(1000);
+        commitRequestManger.commitAsync(offsets, timer);
         commitRequestManger.signalClose();
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
@@ -1141,9 +1150,9 @@ public class CommitRequestManagerTest {
             int numRequest,
             final Errors error) {
         List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures = new ArrayList<>();
-        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
+        Timer timer  = time.timer(defaultApiTimeoutMs);
         for (int i = 0; i < numRequest; i++) {
-            futures.add(commitRequestManger.fetchOffsets(partitions, expirationTimeMs));
+            futures.add(commitRequestManger.fetchOffsets(partitions, timer));
         }
 
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
@@ -1209,6 +1218,7 @@ public class CommitRequestManagerTest {
                 this.offsetCommitCallbackInvoker,
                 DEFAULT_GROUP_ID,
                 Optional.of(DEFAULT_GROUP_INSTANCE_ID),
+                requestTimeoutMs,
                 retryBackoffMs,
                 retryBackoffMaxMs,
                 OptionalDouble.of(0),
