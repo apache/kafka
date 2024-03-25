@@ -229,11 +229,11 @@ public class MembershipManagerImpl implements MembershipManager {
     private boolean reconciliationInProgress;
 
     /**
-     * Epoch the member had when the reconciliation in progress started. This is used to identify if
-     * the member has rejoined while it was reconciling an assignment (in which case the result
-     * of the reconciliation is not applied.)
+     * True if a reconciliation is in progress and the member rejoined the group since the start
+     * of the reconciliation. Used to know that the reconciliation in progress should be
+     * interrupted and not be applied.
      */
-    private int memberEpochOnReconciliationStart;
+    private boolean rejoinedWhileReconciliationInProgress;
 
     /**
      * If the member is currently leaving the group after a call to {@link #leaveGroup()}}, this
@@ -642,6 +642,9 @@ public class MembershipManagerImpl implements MembershipManager {
                     "the member is in FATAL state");
             return;
         }
+        if (reconciliationInProgress) {
+            rejoinedWhileReconciliationInProgress = true;
+        }
         resetEpoch();
         transitionTo(MemberState.JOINING);
         clearPendingAssignmentsAndLocalNamesCache();
@@ -959,7 +962,7 @@ public class MembershipManagerImpl implements MembershipManager {
         // best effort to commit the offsets in the case where the epoch might have changed while
         // the current reconciliation is in process. Note this is using the rebalance timeout as
         // it is the limit enforced by the broker to complete the reconciliation process.
-        commitResult = commitRequestManager.maybeAutoCommitSyncNow(getExpirationTimeForTimeout(rebalanceTimeoutMs));
+        commitResult = commitRequestManager.maybeAutoCommitSyncBeforeRevocation(getExpirationTimeForTimeout(rebalanceTimeoutMs));
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
         commitResult.whenComplete((__, commitReqError) -> {
@@ -973,7 +976,10 @@ public class MembershipManagerImpl implements MembershipManager {
                 log.debug("Auto-commit before reconciling new assignment completed successfully.");
             }
 
-            revokeAndAssign(resolvedAssignment, assignedTopicIdPartitions, revokedPartitions, addedPartitions);
+            if (!maybeAbortReconciliation()) {
+                revokeAndAssign(resolvedAssignment, assignedTopicIdPartitions, revokedPartitions, addedPartitions);
+            }
+
         }).exceptionally(error -> {
             if (error != null) {
                 log.error("Reconciliation failed.", error);
@@ -1011,33 +1017,23 @@ public class MembershipManagerImpl implements MembershipManager {
         // and assignment, executed sequentially).
         CompletableFuture<Void> reconciliationResult =
             revocationResult.thenCompose(__ -> {
-                boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
-                if (state == MemberState.RECONCILING && !memberHasRejoined) {
+                if (!maybeAbortReconciliation()) {
                     // Apply assignment
                     return assignPartitions(assignedTopicIdPartitions, addedPartitions);
-                } else {
-                    log.debug("Revocation callback completed but the member already " +
-                        "transitioned out of the reconciling state for epoch {} into " +
-                        "{} state with epoch {}. Interrupting reconciliation as it's " +
-                        "not relevant anymore,", memberEpochOnReconciliationStart, state, memberEpoch);
-                    String reason = interruptedReconciliationErrorMessage();
-                    CompletableFuture<Void> res = new CompletableFuture<>();
-                    res.completeExceptionally(new KafkaException("Interrupting reconciliation" +
-                        " after revocation. " + reason));
-                    return res;
                 }
+                return CompletableFuture.completedFuture(null);
             });
 
-        reconciliationResult.whenComplete((result, error) -> {
-            markReconciliationCompleted();
+        reconciliationResult.whenComplete((__, error) -> {
             if (error != null) {
                 // Leaving member in RECONCILING state after callbacks fail. The member
                 // won't send the ack, and the expectation is that the broker will kick the
                 // member out of the group after the rebalance timeout expires, leading to a
                 // RECONCILING -> FENCED transition.
                 log.error("Reconciliation failed.", error);
+                markReconciliationCompleted();
             } else {
-                if (state == MemberState.RECONCILING) {
+                if (reconciliationInProgress && !maybeAbortReconciliation()) {
                     currentAssignment = resolvedAssignment;
 
                     // Reschedule the auto commit starting from now that the member has a new assignment.
@@ -1045,13 +1041,28 @@ public class MembershipManagerImpl implements MembershipManager {
 
                     // Make assignment effective on the broker by transitioning to send acknowledge.
                     transitionTo(MemberState.ACKNOWLEDGING);
-                } else {
-                    String reason = interruptedReconciliationErrorMessage();
-                    log.error("Interrupting reconciliation after partitions assigned callback " +
-                        "completed. " + reason);
+                    markReconciliationCompleted();
                 }
             }
         });
+    }
+
+    /**
+     * @return True if the reconciliation in progress should not continue. This could be because
+     * the member is not in RECONCILING state anymore (member failed or is leaving the group), or
+     * if it has rejoined the group (note that after rejoining the member could be RECONCILING
+     * again, so checking the state is not enough)
+     */
+    boolean maybeAbortReconciliation() {
+        boolean shouldAbort = state != MemberState.RECONCILING || rejoinedWhileReconciliationInProgress;
+        if (shouldAbort) {
+            String reason = rejoinedWhileReconciliationInProgress ?
+                "the member has re-joined the group" :
+                "the member already transitioned out of the reconciling state into " + state;
+            log.info("Interrupting reconciliation that is not relevant anymore because " + reason);
+            markReconciliationCompleted();
+        }
+        return shouldAbort;
     }
 
     // Visible for testing.
@@ -1069,24 +1080,11 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     /**
-     * @return Reason for interrupting a reconciliation progress when callbacks complete.
-     */
-    private String interruptedReconciliationErrorMessage() {
-        String reason;
-        if (state != MemberState.RECONCILING) {
-            reason = "The member already transitioned out of the reconciling state into " + state;
-        } else {
-            reason = "The member has re-joined the group.";
-        }
-        return reason;
-    }
-
-    /**
      *  Visible for testing.
      */
     void markReconciliationInProgress() {
         reconciliationInProgress = true;
-        memberEpochOnReconciliationStart = memberEpoch;
+        rejoinedWhileReconciliationInProgress = false;
     }
 
     /**
@@ -1094,6 +1092,7 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     void markReconciliationCompleted() {
         reconciliationInProgress = false;
+        rejoinedWhileReconciliationInProgress = false;
     }
 
     /**

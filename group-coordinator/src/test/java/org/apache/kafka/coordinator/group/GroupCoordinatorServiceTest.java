@@ -1887,6 +1887,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(10L),
             ArgumentMatchers.eq((short) 5),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(response));
 
@@ -1937,6 +1938,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(10L),
             ArgumentMatchers.eq((short) 5),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(new CompletionException(Errors.NOT_ENOUGH_REPLICAS.exception())));
 
