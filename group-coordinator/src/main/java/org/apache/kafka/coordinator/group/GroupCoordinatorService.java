@@ -858,7 +858,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             request.producerId(),
             request.producerEpoch(),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
-            coordinator -> coordinator.commitTransactionalOffset(context, request)
+            coordinator -> coordinator.commitTransactionalOffset(context, request),
+            context.apiVersion()
         ).exceptionally(exception -> handleOperationException(
             "txn-commit-offset",
             request,

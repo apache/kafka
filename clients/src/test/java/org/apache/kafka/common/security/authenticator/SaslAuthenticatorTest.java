@@ -140,6 +140,7 @@ import java.util.stream.IntStream;
 import static org.apache.kafka.common.protocol.ApiKeys.LIST_OFFSETS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1204,7 +1205,7 @@ public class SaslAuthenticatorTest {
         try {
             createClientConnection(securityProtocol, "invalid");
         } catch (Exception e) {
-            assertTrue(e.getCause() instanceof LoginException, "Unexpected exception " + e.getCause());
+            assertInstanceOf(LoginException.class, e.getCause(), "Unexpected exception " + e.getCause());
         }
     }
 
@@ -1805,12 +1806,12 @@ public class SaslAuthenticatorTest {
         // Server with extensions, but without a token should fail to start up since it could indicate a configuration error
         saslServerConfigs.put("listener.name.sasl_ssl.oauthbearer." + SaslConfigs.SASL_JAAS_CONFIG,
                 TestJaasConfig.jaasConfigProperty("OAUTHBEARER", Collections.singletonMap("unsecuredLoginExtension_test", "something")));
-        try {
-            createEchoServer(securityProtocol);
-            fail("Server created with invalid login config containing extensions without a token");
-        } catch (Throwable e) {
-            assertTrue(e.getCause() instanceof LoginException, "Unexpected exception " + Utils.stackTrace(e));
-        }
+
+        Throwable throwable = assertThrows(
+            Throwable.class,
+            () -> createEchoServer(securityProtocol),
+            "Server created with invalid login config containing extensions without a token");
+        assertInstanceOf(LoginException.class, throwable.getCause(), "Unexpected exception " + Utils.stackTrace(throwable));
     }
 
     /**
@@ -2221,7 +2222,7 @@ public class SaslAuthenticatorTest {
             String mechanism, String expectedErrorMessage) throws Exception {
         ChannelState finalState = createAndCheckClientConnectionFailure(securityProtocol, node);
         Exception exception = finalState.exception();
-        assertTrue(exception instanceof SaslAuthenticationException, "Invalid exception class " + exception.getClass());
+        assertInstanceOf(SaslAuthenticationException.class, exception, "Invalid exception class " + exception.getClass());
         String expectedExceptionMessage = expectedErrorMessage != null ? expectedErrorMessage :
                 "Authentication failed during authentication due to invalid credentials with SASL mechanism " + mechanism;
         assertEquals(expectedExceptionMessage, exception.getMessage());

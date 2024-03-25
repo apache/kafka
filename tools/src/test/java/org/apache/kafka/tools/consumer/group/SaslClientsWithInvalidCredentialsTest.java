@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.admin.ConsumerGroupCommand;
 import kafka.api.AbstractSaslTest;
 import kafka.api.Both$;
 import kafka.utils.JaasTestUtils;
@@ -36,7 +35,6 @@ import scala.Option;
 import scala.Some$;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
-import scala.collection.immutable.Map$;
 
 import java.io.File;
 import java.io.IOException;
@@ -164,8 +162,8 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
             "--describe",
             "--group", "test.group",
             "--command-config", propsFile.getAbsolutePath()};
-        ConsumerGroupCommand.ConsumerGroupCommandOptions opts = new ConsumerGroupCommand.ConsumerGroupCommandOptions(cgcArgs);
-        return new ConsumerGroupCommand.ConsumerGroupService(opts, Map$.MODULE$.empty());
+        ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(cgcArgs);
+        return new ConsumerGroupCommand.ConsumerGroupService(opts, Collections.emptyMap());
     }
 
     private void verifyAuthenticationException(Executable action) {

@@ -17,7 +17,7 @@
 package kafka.coordinator.group
 
 import kafka.cluster.PartitionListener
-import kafka.server.{ActionQueue, ReplicaManager, RequestLocal}
+import kafka.server.{ActionQueue, ReplicaManager, RequestLocal, defaultError, genericError}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.protocol.Errors
@@ -188,8 +188,10 @@ class CoordinatorPartitionWriter[T](
     tp: TopicPartition,
     transactionalId: String,
     producerId: Long,
-    producerEpoch: Short
+    producerEpoch: Short,
+    apiVersion: Short
   ): CompletableFuture[VerificationGuard] = {
+    val supportedOperation = if (apiVersion >= 4) genericError else defaultError
     val future = new CompletableFuture[VerificationGuard]()
     replicaManager.maybeStartTransactionVerificationForPartition(
       topicPartition = tp,
@@ -204,7 +206,8 @@ class CoordinatorPartitionWriter[T](
         } else {
           future.complete(verificationGuard)
         }
-      }
+      },
+      supportedOperation
     )
     future
   }

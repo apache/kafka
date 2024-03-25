@@ -83,10 +83,10 @@
               files="(ByteUtils|Topic|KafkaLZ4BlockOutputStream).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerCoordinator|CommitRequestManager|FetchCollector|OffsetFetcherUtils|KafkaProducer|Sender|ConfigDef|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|AbstractCoordinator|TransactionManager|AbstractStickyAssignor|Authorizer|FetchSessionHandler|MockAdminClient).java"/>
+              files="(ClientTelemetryReporter|ConsumerCoordinator|CommitRequestManager|FetchCollector|OffsetFetcherUtils|KafkaProducer|Sender|ConfigDef|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|AbstractCoordinator|TransactionManager|AbstractStickyAssignor|Authorizer|FetchSessionHandler|MockAdminClient).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(AbstractRequest|AbstractResponse|KerberosLogin|WorkerSinkTaskTest|TransactionManagerTest|SenderTest|KafkaAdminClient|ConsumerCoordinatorTest|KafkaRaftClientTest).java"/>
+              files="(AbstractRequest|AbstractResponse|KerberosLogin|WorkerSinkTaskTest|TransactionManagerTest|SenderTest|KafkaAdminClient|ConsumerCoordinatorTest|KafkaAdminClientTest|KafkaRaftClientTest).java"/>
 
     <suppress checks="NPathComplexity"
               files="(ConsumerCoordinator|BufferPool|AbstractLegacyRecordBatch|SslTransportLayer|KerberosLogin|Selector|Sender|Serdes|Values|PluginUtils|MiniTrogdorCluster|TasksRequest|KafkaProducer|KafkaRaftClient|Authorizer|FetchSessionHandler).java"/>
@@ -149,20 +149,13 @@
               files="(DistributedHerder|Worker)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
-<<<<<<< HEAD
-              files="(WorkerSource|AbstractWorkerSource|ExactlyOnceWorkerSource|ErrorHandling)TaskTest.java"/>
-=======
-              files="(WorkerSink|WorkerSource|ErrorHandling)Task(|WithTopicCreation|Mockito)Test.java"/>
->>>>>>> upstream/trunk
+              files="(WorkerSink|WorkerSource|ErrorHandling)TaskTest.java"/>
+
     <suppress checks="ClassFanOutComplexity"
-              files="(DistributedHerder|Worker)Test.java"/>
+              files="(DistributedHerder|Worker|WorkerSinkTaskMockito)Test.java"/>
 
     <suppress checks="MethodLength"
-<<<<<<< HEAD
               files="WorkerSinkTaskTest.java"/>
-=======
-              files="(RequestResponse|WorkerSinkTask|WorkerSinkTaskMockito)Test.java"/>
->>>>>>> upstream/trunk
 
     <suppress checks="JavaNCSS"
               files="(DistributedHerder|Worker)Test.java"/>
@@ -209,11 +202,7 @@
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
-<<<<<<< HEAD
-              files="(RecordCollectorTest|StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|TaskManagerTest|KafkaStreamsTest|EosIntegrationTest).java"/>
-=======
-              files="(RecordCollectorTest|StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|TaskManagerTest|TopologyTestDriverTest|KafkaStreamsTest|EosIntegrationTest|RestoreIntegrationTest).java"/>
->>>>>>> upstream/trunk
+              files="(RecordCollectorTest|StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|TaskManagerTest|KafkaStreamsTest|EosIntegrationTest|RestoreIntegrationTest).java"/>
 
     <suppress checks="MethodLength"
               files="(EosIntegrationTest|EosV2UpgradeIntegrationTest|KStreamKStreamJoinTest|RocksDBWindowStoreTest|IQv2IntegrationTest).java"/>
