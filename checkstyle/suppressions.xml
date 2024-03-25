@@ -99,7 +99,7 @@
               files="(AbstractRequest|AbstractResponse|KerberosLogin|WorkerSinkTaskTest|TransactionManagerTest|SenderTest|KafkaAdminClient|ConsumerCoordinatorTest|KafkaAdminClientTest|KafkaRaftClientTest).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(ConsumerCoordinator|BufferPool|MetricName|Node|ConfigDef|RecordBatch|SslFactory|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|TokenInformation|Agent|Values|PluginUtils|MiniTrogdorCluster|TasksRequest|KafkaProducer|AbstractStickyAssignor|KafkaRaftClient|Authorizer|FetchSessionHandler|RecordAccumulator).java"/>
+              files="(ConsumerCoordinator|BufferPool|MetricName|Node|ConfigDef|RecordBatch|SslFactory|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|TokenInformation|Agent|PluginUtils|MiniTrogdorCluster|TasksRequest|KafkaProducer|AbstractStickyAssignor|KafkaRaftClient|Authorizer|FetchSessionHandler|RecordAccumulator).java"/>
 
     <suppress checks="(JavaNCSS|CyclomaticComplexity|MethodLength)"
               files="CoordinatorClient.java"/>
@@ -143,7 +143,7 @@
     <suppress checks="ClassFanOutComplexity"
               files="Worker(|Test).java"/>
     <suppress checks="MethodLength"
-              files="(DistributedHerder|DistributedConfig|KafkaConfigBackingStore|Values|IncrementalCooperativeAssignor).java"/>
+              files="(DistributedHerder|DistributedConfig|KafkaConfigBackingStore|IncrementalCooperativeAssignor).java"/>
     <suppress checks="ParameterNumber"
               files="Worker(SinkTask|SourceTask|Coordinator)?.java"/>
     <suppress checks="ParameterNumber"
@@ -160,10 +160,10 @@
     <suppress checks="CyclomaticComplexity"
               files="(FileStreamSourceTask|DistributedHerder|KafkaConfigBackingStore).java"/>
     <suppress checks="CyclomaticComplexity"
-              files="(JsonConverter|Values|ConnectHeaders).java"/>
+              files="(JsonConverter|ConnectHeaders).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(KafkaConfigBackingStore|Values|ConnectMetricsRegistry).java"/>
+              files="(KafkaConfigBackingStore|ConnectMetricsRegistry).java"/>
 
     <suppress checks="NPathComplexity"
               files="(DistributedHerder|AbstractHerder|RestClient|RestServer|JsonConverter|KafkaConfigBackingStore|FileStreamSourceTask|WorkerSourceTask|TopicAdmin).java"/>

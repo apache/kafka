@@ -949,6 +949,16 @@ public class ValuesTest {
         assertEquals(value, (Double) schemaAndValue.value(), 0);
     }
 
+    @Test
+    public void shouldParseFractionalPartsAsIntegerWhenNoFractionalPart() {
+        assertEquals(new SchemaAndValue(Schema.INT8_SCHEMA, (byte) 1), Values.parseString("1.0"));
+        assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 1.1f), Values.parseString("1.1"));
+        assertEquals(new SchemaAndValue(Schema.INT16_SCHEMA, (short) 300), Values.parseString("300.0"));
+        assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 300.01f), Values.parseString("300.01"));
+        assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, 66000), Values.parseString("66000.0"));
+        assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 66000.0008f), Values.parseString("66000.0008"));
+    }
+
     protected void assertParsed(String input) {
         assertParsed(input, input);
     }
