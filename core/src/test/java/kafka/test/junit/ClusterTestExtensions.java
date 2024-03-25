@@ -34,7 +34,6 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -189,13 +188,13 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             builder.listenerName(annot.listener());
         }
 
-        Properties properties = new Properties();
-        for (ClusterConfigProperty property : annot.serverProperties()) {
-            properties.put(property.key(), property.value());
-        }
-
         ClusterConfig config = builder.build();
-        config.serverProperties().putAll(properties);
+        for (ClusterConfigProperty property : defaults.serverProperties()) {
+            config.serverProperties().put(property.key(), property.value());
+        }
+        for (ClusterConfigProperty property : annot.serverProperties()) {
+            config.serverProperties().put(property.key(), property.value());
+        }
         type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
     }
 

@@ -95,7 +95,7 @@ public class QuorumFeaturesTest {
 
     @Test
     public void testZkMigrationNotReadyIfMetadataVersionTooLow() {
-        assertEquals(Optional.of("Metadata version too low at 3.0-IV1"),
+        assertEquals(Optional.of("The metadata.version too low at 3.0-IV1"),
             QUORUM_FEATURES.reasonAllControllersZkMigrationNotReady(
                 MetadataVersion.IBP_3_0_IV1, Collections.emptyMap()));
     }

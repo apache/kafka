@@ -37,7 +37,7 @@ import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.config.{ConfigEntityName, ConfigType, ServerTopicConfigSynonyms}
+import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ServerTopicConfigSynonyms, ZooKeeperInternals}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin
 import org.apache.kafka.server.telemetry.ClientTelemetry
@@ -98,11 +98,11 @@ object DynamicBrokerConfig {
   private val ClusterLevelListenerConfigs = Set(KafkaConfig.MaxConnectionsProp, KafkaConfig.MaxConnectionCreationRateProp, KafkaConfig.NumNetworkThreadsProp)
   private val PerBrokerConfigs = (DynamicSecurityConfigs ++ DynamicListenerConfig.ReconfigurableConfigs).diff(
     ClusterLevelListenerConfigs)
-  private val ListenerMechanismConfigs = Set(KafkaConfig.SaslJaasConfigProp,
-    KafkaConfig.SaslLoginCallbackHandlerClassProp,
-    KafkaConfig.SaslLoginClassProp,
-    KafkaConfig.SaslServerCallbackHandlerClassProp,
-    KafkaConfig.ConnectionsMaxReauthMsProp)
+  private val ListenerMechanismConfigs = Set(KafkaSecurityConfigs.SASL_JAAS_CONFIG,
+    KafkaSecurityConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS_CONFIG,
+    KafkaSecurityConfigs.SASL_LOGIN_CLASS_CONFIG,
+    KafkaSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
+    KafkaSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG)
 
   private val ReloadableFileConfigs = Set(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG)
 
@@ -197,7 +197,7 @@ object DynamicBrokerConfig {
 
   private[server] def resolveVariableConfigs(propsOriginal: Properties): Properties = {
     val props = new Properties
-    val config = new AbstractConfig(new ConfigDef(), propsOriginal, false)
+    val config = new AbstractConfig(new ConfigDef(), propsOriginal, Utils.castToStringObjectMap(propsOriginal), false)
     config.originals.forEach { (key, value) =>
       if (!key.startsWith(AbstractConfig.CONFIG_PROVIDERS_CONFIG)) {
         props.put(key, value)
@@ -233,7 +233,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
     zkClientOpt.foreach { zkClient =>
       val adminZkClient = new AdminZkClient(zkClient)
-      updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.BROKER, ConfigEntityName.DEFAULT), false)
+      updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.BROKER, ZooKeeperInternals.DEFAULT_STRING), false)
       val props = adminZkClient.fetchEntityConfig(ConfigType.BROKER, kafkaConfig.brokerId.toString)
       val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
       updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)
@@ -967,39 +967,39 @@ object DynamicListenerConfig {
     KafkaConfig.ListenerSecurityProtocolMapProp,
 
     // SSL configs
-    KafkaConfig.PrincipalBuilderClassProp,
-    KafkaConfig.SslProtocolProp,
-    KafkaConfig.SslProviderProp,
-    KafkaConfig.SslCipherSuitesProp,
-    KafkaConfig.SslEnabledProtocolsProp,
-    KafkaConfig.SslKeystoreTypeProp,
-    KafkaConfig.SslKeystoreLocationProp,
-    KafkaConfig.SslKeystorePasswordProp,
-    KafkaConfig.SslKeyPasswordProp,
-    KafkaConfig.SslTruststoreTypeProp,
-    KafkaConfig.SslTruststoreLocationProp,
-    KafkaConfig.SslTruststorePasswordProp,
-    KafkaConfig.SslKeyManagerAlgorithmProp,
-    KafkaConfig.SslTrustManagerAlgorithmProp,
-    KafkaConfig.SslEndpointIdentificationAlgorithmProp,
-    KafkaConfig.SslSecureRandomImplementationProp,
-    KafkaConfig.SslClientAuthProp,
-    KafkaConfig.SslEngineFactoryClassProp,
+    KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
+    KafkaSecurityConfigs.SSL_PROTOCOL_CONFIG,
+    KafkaSecurityConfigs.SSL_PROVIDER_CONFIG,
+    KafkaSecurityConfigs.SSL_CIPHER_SUITES_CONFIG,
+    KafkaSecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
+    KafkaSecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+    KafkaSecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+    KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+    KafkaSecurityConfigs.SSL_KEY_PASSWORD_CONFIG,
+    KafkaSecurityConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+    KafkaSecurityConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+    KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+    KafkaSecurityConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
+    KafkaSecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
+    KafkaSecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
+    KafkaSecurityConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG,
+    KafkaSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
+    KafkaSecurityConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG,
 
     // SASL configs
-    KafkaConfig.SaslMechanismInterBrokerProtocolProp,
-    KafkaConfig.SaslJaasConfigProp,
-    KafkaConfig.SaslEnabledMechanismsProp,
-    KafkaConfig.SaslKerberosServiceNameProp,
-    KafkaConfig.SaslKerberosKinitCmdProp,
-    KafkaConfig.SaslKerberosTicketRenewWindowFactorProp,
-    KafkaConfig.SaslKerberosTicketRenewJitterProp,
-    KafkaConfig.SaslKerberosMinTimeBeforeReloginProp,
-    KafkaConfig.SaslKerberosPrincipalToLocalRulesProp,
-    KafkaConfig.SaslLoginRefreshWindowFactorProp,
-    KafkaConfig.SaslLoginRefreshWindowJitterProp,
-    KafkaConfig.SaslLoginRefreshMinPeriodSecondsProp,
-    KafkaConfig.SaslLoginRefreshBufferSecondsProp,
+    KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG,
+    KafkaSecurityConfigs.SASL_JAAS_CONFIG,
+    KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
+    KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_CONFIG,
+    KafkaSecurityConfigs.SASL_KERBEROS_KINIT_CMD_CONFIG,
+    KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG,
+    KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG,
+    KafkaSecurityConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG,
+    KafkaSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG,
+    KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR_CONFIG,
+    KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER_CONFIG,
+    KafkaSecurityConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_CONFIG,
+    KafkaSecurityConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS_CONFIG,
 
     // Connection limit configs
     KafkaConfig.MaxConnectionsProp,

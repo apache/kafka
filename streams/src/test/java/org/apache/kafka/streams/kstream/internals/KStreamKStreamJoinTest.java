@@ -119,7 +119,7 @@ public class KStreamKStreamJoinTest {
 
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKStreamJoin.class);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKStreamLeftJoin.class);
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, Integer> inputTopic =
@@ -456,8 +456,7 @@ public class KStreamKStreamJoinTest {
          * This test is testing something internal to [[KStreamKStreamJoin]], so we had to setup low-level api manually.
          */
         final KStreamImplJoin.TimeTrackerSupplier tracker = new KStreamImplJoin.TimeTrackerSupplier();
-        final KStreamKStreamJoin<String, String, String, String> join = new KStreamKStreamJoin<>(
-                false,
+        final KStreamKStreamRightJoin<String, String, String, String> join = new KStreamKStreamRightJoin<>(
                 "other",
                 new JoinWindowsInternal(JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(1000))),
                 (key, v1, v2) -> v1 + v2,

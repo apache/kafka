@@ -206,6 +206,8 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
 
     @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
     void checkArgs() {
+        CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.");
+
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
 
         if (options.has(describeOpt)) {

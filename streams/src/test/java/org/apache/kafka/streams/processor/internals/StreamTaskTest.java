@@ -212,7 +212,8 @@ public class StreamTaskTest {
                                      emptyList(),
                                      emptyList(),
                                      emptyMap(),
-                                     repartitionTopics);
+                                     repartitionTopics,
+                                     emptyMap());
     }
 
     private static ProcessorTopology withSources(final List<ProcessorNode<?, ?, ?, ?>> processorNodes,
@@ -223,7 +224,8 @@ public class StreamTaskTest {
                                      emptyList(),
                                      emptyList(),
                                      emptyMap(),
-                                     Collections.emptySet());
+                                     Collections.emptySet(),
+                                     emptyMap());
     }
 
     private static StreamsConfig createConfig() {

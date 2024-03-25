@@ -41,6 +41,7 @@ import org.apache.kafka.common.requests.DeleteTopicsResponse
 import org.apache.kafka.common.security.auth.AuthenticationContext
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -97,7 +98,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.PrincipalBuilderClassProp,
+    properties.put(KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
       classOf[ControllerMutationQuotaTest.TestPrincipalBuilder].getName)
     // Specify number of samples and window size.
     properties.put(KafkaConfig.NumControllerQuotaSamplesProp, ControllerQuotaSamples.toString)

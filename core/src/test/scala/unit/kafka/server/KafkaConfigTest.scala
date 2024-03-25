@@ -35,10 +35,11 @@ import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Properties}
 import org.apache.kafka.common.Node
+import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
-import org.apache.kafka.server.config.ServerTopicConfigSynonyms
+import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerTopicConfigSynonyms, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.function.Executable
@@ -155,7 +156,7 @@ class KafkaConfigTest {
     val hostName = "fake-host"
     val props = new Properties()
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
     props.setProperty(KafkaConfig.ListenersProp, s"PLAINTEXT://$hostName:$port")
     val serverConfig = KafkaConfig.fromProps(props)
 
@@ -186,7 +187,7 @@ class KafkaConfigTest {
   def testDuplicateListeners(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
 
     // listeners with duplicate port
     props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,SSL://localhost:9091")
@@ -212,7 +213,7 @@ class KafkaConfigTest {
   def testIPv4AndIPv6SamePortListeners(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
-    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.put(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
 
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://[::1]:9092,SSL://[::1]:9092")
     var caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
@@ -452,7 +453,7 @@ class KafkaConfigTest {
   def testControllerListenerNameDoesNotMapToPlaintextByDefaultForNonKRaft(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
     props.setProperty(KafkaConfig.ListenersProp, "CONTROLLER://localhost:9092")
     assertBadConfigContainingMessage(props,
       "Error creating broker listeners from 'CONTROLLER://localhost:9092': No security protocol defined for listener CONTROLLER")
@@ -465,7 +466,7 @@ class KafkaConfigTest {
   def testBadListenerProtocol(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
     props.setProperty(KafkaConfig.ListenersProp, "BAD://localhost:9091")
 
     assertFalse(isValidKafkaConfig(props))
@@ -475,7 +476,7 @@ class KafkaConfigTest {
   def testListenerNamesWithAdvertisedListenerUnset(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
 
     props.setProperty(KafkaConfig.ListenersProp, "CLIENT://localhost:9091,REPLICATION://localhost:9092,INTERNAL://localhost:9093")
     props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CLIENT:SSL,REPLICATION:SSL,INTERNAL:PLAINTEXT")
@@ -499,7 +500,7 @@ class KafkaConfigTest {
   def testListenerAndAdvertisedListenerNames(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
 
     props.setProperty(KafkaConfig.ListenersProp, "EXTERNAL://localhost:9091,INTERNAL://localhost:9093")
     props.setProperty(KafkaConfig.AdvertisedListenersProp, "EXTERNAL://lb1.example.com:9000,INTERNAL://host1:9093")
@@ -530,7 +531,7 @@ class KafkaConfigTest {
   def testListenerNameMissingFromListenerSecurityProtocolMap(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
 
     props.setProperty(KafkaConfig.ListenersProp, "SSL://localhost:9091,REPLICATION://localhost:9092")
     props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "SSL")
@@ -541,7 +542,7 @@ class KafkaConfigTest {
   def testInterBrokerListenerNameMissingFromListenerSecurityProtocolMap(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
 
     props.setProperty(KafkaConfig.ListenersProp, "SSL://localhost:9091")
     props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "REPLICATION")
@@ -552,7 +553,7 @@ class KafkaConfigTest {
   def testInterBrokerListenerNameAndSecurityProtocolSet(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
 
     props.setProperty(KafkaConfig.ListenersProp, "SSL://localhost:9091")
     props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "SSL")
@@ -564,7 +565,7 @@ class KafkaConfigTest {
   def testCaseInsensitiveListenerProtocol(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
     props.setProperty(KafkaConfig.ListenersProp, "plaintext://localhost:9091,SsL://localhost:9092")
     val config = KafkaConfig.fromProps(props)
     assertEquals(Some("SSL://localhost:9092"), config.listeners.find(_.listenerName.value == "SSL").map(_.connectionString))
@@ -579,7 +580,7 @@ class KafkaConfigTest {
   def testListenerDefaults(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
 
     // configuration with no listeners
     val conf = KafkaConfig.fromProps(props)
@@ -593,7 +594,7 @@ class KafkaConfigTest {
   def testVersionConfiguration(): Unit = {
     val props = new Properties()
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
     val conf = KafkaConfig.fromProps(props)
     assertEquals(MetadataVersion.latestProduction, conf.interBrokerProtocolVersion)
 
@@ -766,7 +767,7 @@ class KafkaConfigTest {
   def testFromPropsInvalid(): Unit = {
     def baseProperties: Properties = {
       val validRequiredProperties = new Properties()
-      validRequiredProperties.setProperty(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
+      validRequiredProperties.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "127.0.0.1:2181")
       validRequiredProperties
     }
     // to ensure a basis is valid - bootstraps all needed validation
@@ -774,25 +775,25 @@ class KafkaConfigTest {
 
     KafkaConfig.configNames.foreach { name =>
       name match {
-        case KafkaConfig.ZkConnectProp => // ignore string
-        case KafkaConfig.ZkSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.ZkConnectionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.ZkEnableSecureAclsProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
-        case KafkaConfig.ZkMaxInFlightRequestsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case KafkaConfig.ZkSslClientEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
-        case KafkaConfig.ZkClientCnxnSocketProp =>  //ignore string
-        case KafkaConfig.ZkSslKeyStoreLocationProp =>  //ignore string
-        case KafkaConfig.ZkSslKeyStorePasswordProp =>  //ignore string
-        case KafkaConfig.ZkSslKeyStoreTypeProp =>  //ignore string
-        case KafkaConfig.ZkSslTrustStoreLocationProp =>  //ignore string
-        case KafkaConfig.ZkSslTrustStorePasswordProp =>  //ignore string
-        case KafkaConfig.ZkSslTrustStoreTypeProp =>  //ignore string
-        case KafkaConfig.ZkSslProtocolProp =>  //ignore string
-        case KafkaConfig.ZkSslEnabledProtocolsProp =>  //ignore string
-        case KafkaConfig.ZkSslCipherSuitesProp =>  //ignore string
-        case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => //ignore string
-        case KafkaConfig.ZkSslCrlEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
-        case KafkaConfig.ZkSslOcspEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
+        case ZkConfigs.ZK_CONNECT_CONFIG => // ignore string
+        case ZkConfigs.ZK_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
+        case ZkConfigs.ZK_MAX_IN_FLIGHT_REQUESTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
+        case ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG =>  //ignore string
+        case ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG =>  //ignore string
+        case ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_CONFIG =>  //ignore string
+        case ZkConfigs.ZK_SSL_KEY_STORE_TYPE_CONFIG =>  //ignore string
+        case ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_CONFIG =>  //ignore string
+        case ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_CONFIG =>  //ignore string
+        case ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_CONFIG =>  //ignore string
+        case ZkConfigs.ZK_SSL_PROTOCOL_CONFIG =>  //ignore string
+        case ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG =>  //ignore string
+        case ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG =>  //ignore string
+        case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG => //ignore string
+        case ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
+        case ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
 
         case KafkaConfig.BrokerIdProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.NumNetworkThreadsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
@@ -917,65 +918,65 @@ class KafkaConfigTest {
         case KafkaConfig.MetricRecordingLevelProp => // ignore string
         case KafkaConfig.RackProp => // ignore string
         //SSL Configs
-        case KafkaConfig.PrincipalBuilderClassProp =>
-        case KafkaConfig.ConnectionsMaxReauthMsProp =>
-        case KafkaConfig.SslProtocolProp => // ignore string
-        case KafkaConfig.SslProviderProp => // ignore string
-        case KafkaConfig.SslEnabledProtocolsProp =>
-        case KafkaConfig.SslKeystoreTypeProp => // ignore string
-        case KafkaConfig.SslKeystoreLocationProp => // ignore string
-        case KafkaConfig.SslKeystorePasswordProp => // ignore string
-        case KafkaConfig.SslKeyPasswordProp => // ignore string
-        case KafkaConfig.SslKeystoreCertificateChainProp => // ignore string
-        case KafkaConfig.SslKeystoreKeyProp => // ignore string
-        case KafkaConfig.SslTruststoreTypeProp => // ignore string
-        case KafkaConfig.SslTruststorePasswordProp => // ignore string
-        case KafkaConfig.SslTruststoreLocationProp => // ignore string
-        case KafkaConfig.SslTruststoreCertificatesProp => // ignore string
-        case KafkaConfig.SslKeyManagerAlgorithmProp =>
-        case KafkaConfig.SslTrustManagerAlgorithmProp =>
-        case KafkaConfig.SslClientAuthProp => // ignore string
-        case KafkaConfig.SslEndpointIdentificationAlgorithmProp => // ignore string
-        case KafkaConfig.SslSecureRandomImplementationProp => // ignore string
-        case KafkaConfig.SslCipherSuitesProp => // ignore string
-        case KafkaConfig.SslPrincipalMappingRulesProp => // ignore string
+        case KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG =>
+        case KafkaSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG =>
+        case KafkaSecurityConfigs.SSL_PROTOCOL_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_PROVIDER_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG =>
+        case KafkaSecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_KEY_PASSWORD_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_KEYSTORE_KEY_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_TRUSTSTORE_TYPE_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG =>
+        case KafkaSecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG =>
+        case KafkaSecurityConfigs.SSL_CLIENT_AUTH_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_CIPHER_SUITES_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG => // ignore string
 
         //Sasl Configs
         case KafkaConfig.SaslMechanismControllerProtocolProp => // ignore
-        case KafkaConfig.SaslMechanismInterBrokerProtocolProp => // ignore
-        case KafkaConfig.SaslEnabledMechanismsProp =>
-        case KafkaConfig.SaslClientCallbackHandlerClassProp =>
-        case KafkaConfig.SaslServerCallbackHandlerClassProp =>
-        case KafkaConfig.SaslLoginClassProp =>
-        case KafkaConfig.SaslLoginCallbackHandlerClassProp =>
-        case KafkaConfig.SaslKerberosServiceNameProp => // ignore string
-        case KafkaConfig.SaslKerberosKinitCmdProp =>
-        case KafkaConfig.SaslKerberosTicketRenewWindowFactorProp =>
-        case KafkaConfig.SaslKerberosTicketRenewJitterProp =>
-        case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
-        case KafkaConfig.SaslKerberosPrincipalToLocalRulesProp => // ignore string
-        case KafkaConfig.SaslJaasConfigProp =>
-        case KafkaConfig.SaslLoginRefreshWindowFactorProp =>
-        case KafkaConfig.SaslLoginRefreshWindowJitterProp =>
-        case KafkaConfig.SaslLoginRefreshMinPeriodSecondsProp =>
-        case KafkaConfig.SaslLoginRefreshBufferSecondsProp =>
-        case KafkaConfig.SaslLoginConnectTimeoutMsProp =>
-        case KafkaConfig.SaslLoginReadTimeoutMsProp =>
-        case KafkaConfig.SaslLoginRetryBackoffMaxMsProp =>
-        case KafkaConfig.SaslLoginRetryBackoffMsProp =>
-        case KafkaConfig.SaslOAuthBearerScopeClaimNameProp =>
-        case KafkaConfig.SaslOAuthBearerSubClaimNameProp =>
-        case KafkaConfig.SaslOAuthBearerTokenEndpointUrlProp =>
-        case KafkaConfig.SaslOAuthBearerJwksEndpointUrlProp =>
-        case KafkaConfig.SaslOAuthBearerJwksEndpointRefreshMsProp =>
-        case KafkaConfig.SaslOAuthBearerJwksEndpointRetryBackoffMaxMsProp =>
-        case KafkaConfig.SaslOAuthBearerJwksEndpointRetryBackoffMsProp =>
-        case KafkaConfig.SaslOAuthBearerClockSkewSecondsProp =>
-        case KafkaConfig.SaslOAuthBearerExpectedAudienceProp =>
-        case KafkaConfig.SaslOAuthBearerExpectedIssuerProp =>
+        case KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG => // ignore
+        case KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_CLASS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SASL_KERBEROS_KINIT_CMD_CONFIG =>
+        case KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG =>
+        case KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG =>
+        case KafkaSecurityConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG =>
+        case KafkaSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SASL_JAAS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_READ_TIMEOUT_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_RETRY_BACKOFF_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_CONFIG =>
 
         // Security config
-        case KafkaConfig.securityProviderClassProp =>
+        case KafkaSecurityConfigs.SECURITY_PROVIDER_CLASS_CONFIG =>
 
         // Password encoder configs
         case KafkaConfig.PasswordEncoderSecretProp =>
@@ -996,7 +997,7 @@ class KafkaConfigTest {
         case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
         case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
 
-        case KafkaConfig.SaslServerMaxReceiveSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaSecurityConfigs.SASL_SERVER_MAX_RECEIVE_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
         // Raft Quorum Configs
         case RaftConfig.QUORUM_VOTERS_CONFIG => // ignore string
@@ -1051,7 +1052,7 @@ class KafkaConfigTest {
   def testDynamicLogConfigs(): Unit = {
     def baseProperties: Properties = {
       val validRequiredProperties = new Properties()
-      validRequiredProperties.setProperty(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
+      validRequiredProperties.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "127.0.0.1:2181")
       validRequiredProperties
     }
 
@@ -1141,9 +1142,9 @@ class KafkaConfigTest {
   @Test
   def testSpecificProperties(): Unit = {
     val defaults = new Properties()
-    defaults.setProperty(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
+    defaults.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "127.0.0.1:2181")
     // For ZkConnectionTimeoutMs
-    defaults.setProperty(KafkaConfig.ZkSessionTimeoutMsProp, "1234")
+    defaults.setProperty(ZkConfigs.ZK_SESSION_TIMEOUT_MS_CONFIG, "1234")
     defaults.setProperty(KafkaConfig.BrokerIdGenerationEnableProp, "false")
     defaults.setProperty(KafkaConfig.MaxReservedBrokerIdProp, "1")
     defaults.setProperty(KafkaConfig.BrokerIdProp, "1")
@@ -1187,7 +1188,7 @@ class KafkaConfigTest {
   @Test
   def testNonroutableAdvertisedListeners(): Unit = {
     val props = new Properties()
-    props.setProperty(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "127.0.0.1:2181")
     props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://0.0.0.0:9092")
     assertFalse(isValidKafkaConfig(props))
   }
@@ -1601,10 +1602,10 @@ class KafkaConfigTest {
   @Test
   def testSaslJwksEndpointRetryDefaults(): Unit = {
     val props = new Properties()
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
     val config = KafkaConfig.fromProps(props)
-    assertNotNull(config.getLong(KafkaConfig.SaslOAuthBearerJwksEndpointRetryBackoffMsProp))
-    assertNotNull(config.getLong(KafkaConfig.SaslOAuthBearerJwksEndpointRetryBackoffMaxMsProp))
+    assertNotNull(config.getLong(KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_CONFIG))
+    assertNotNull(config.getLong(KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_CONFIG))
   }
 
   @Test
@@ -1769,7 +1770,7 @@ class KafkaConfigTest {
       "If using `zookeeper.metadata.migration.enable` in KRaft mode, `zookeeper.connect` must also be set.",
       assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage)
 
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
     KafkaConfig.fromProps(props)
   }
 
@@ -1829,6 +1830,29 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
     assertTrue(config.isNewGroupCoordinatorEnabled)
+  }
+
+  @Test
+  def testConsumerGroupMigrationPolicy(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    // Invalid GroupProtocolMigrationPolicy name.
+    props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, "foo")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+
+    ConsumerGroupMigrationPolicy.values.foreach { policy =>
+      props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, policy.toString)
+      val config = KafkaConfig.fromProps(props)
+      assertEquals(policy, config.consumerGroupMigrationPolicy)
+    }
+
+    // The config is case-insensitive.
+    ConsumerGroupMigrationPolicy.values.foreach { policy =>
+      props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, policy.toString.toUpperCase())
+      val config = KafkaConfig.fromProps(props)
+      assertEquals(policy, config.consumerGroupMigrationPolicy)
+    }
   }
 
   @Test

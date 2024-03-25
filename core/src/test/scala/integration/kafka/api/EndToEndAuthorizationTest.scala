@@ -18,11 +18,10 @@
 package kafka.api
 
 import com.yammer.metrics.core.Gauge
+
 import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
-
 import kafka.security.authorizer.AclAuthorizer
-import kafka.security.authorizer.AclEntry.WildcardHost
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import kafka.server._
 import kafka.utils._
@@ -38,11 +37,13 @@ import org.apache.kafka.common.resource._
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth._
+import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
+import org.apache.kafka.server.config.{KafkaSecurityConfigs, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{ValueSource, CsvSource}
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.jdk.CollectionConverters._
 
@@ -92,11 +93,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def clientPrincipal: KafkaPrincipal
   def kafkaPrincipal: KafkaPrincipal
 
-  def GroupReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, READ, ALLOW))
-  def TopicReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, READ, ALLOW))
-  def TopicWriteAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, WRITE, ALLOW))
-  def TopicDescribeAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, DESCRIBE, ALLOW))
-  def TopicCreateAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, CREATE, ALLOW))
+  def GroupReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WILDCARD_HOST, READ, ALLOW))
+  def TopicReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WILDCARD_HOST, READ, ALLOW))
+  def TopicWriteAcl = Set(new AccessControlEntry(clientPrincipal.toString, WILDCARD_HOST, WRITE, ALLOW))
+  def TopicDescribeAcl = Set(new AccessControlEntry(clientPrincipal.toString, WILDCARD_HOST, DESCRIBE, ALLOW))
+  def TopicCreateAcl = Set(new AccessControlEntry(clientPrincipal.toString, WILDCARD_HOST, CREATE, ALLOW))
 
   def AclTopicWrite(topicResource : ResourcePattern = topicResource) = new AclBinding(topicResource,
     new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.WRITE, AclPermissionType.ALLOW))
@@ -136,7 +137,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3")
   this.serverConfig.setProperty(KafkaConfig.MinInSyncReplicasProp, "3")
   this.serverConfig.setProperty(KafkaConfig.DefaultReplicationFactorProp, "3")
-  this.serverConfig.setProperty(KafkaConfig.ConnectionsMaxReauthMsProp, "1500")
+  this.serverConfig.setProperty(KafkaSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG, "1500")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
   this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1500")
 
@@ -156,7 +157,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     } else {
       // The next two configuration parameters enable ZooKeeper secure ACLs
       // and sets the Kafka authorizer, both necessary to enable security.
-      this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
+      this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
       this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, authorizerClass.getName)
 
       // Set the specific principal that can update ACLs.
@@ -183,7 +184,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   /**
     * Tests the ability of producing and consuming with the appropriate ACLs set.
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testProduceConsumeViaAssign(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -216,7 +217,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       ._2.asInstanceOf[Gauge[Double]]
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testProduceConsumeViaSubscribe(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -230,7 +231,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testProduceConsumeWithWildcardAcls(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -246,7 +247,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testProduceConsumeWithPrefixedAcls(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -262,7 +263,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testProduceConsumeTopicAutoCreateTopicCreateAcl(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -447,7 +448,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testNoConsumeWithoutDescribeAclViaAssign(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -462,7 +463,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testNoConsumeWithoutDescribeAclViaSubscribe(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -507,7 +508,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testNoConsumeWithDescribeAclViaAssign(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -523,7 +524,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testNoConsumeWithDescribeAclViaSubscribe(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -556,7 +557,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testNoGroupAcl(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {

@@ -25,7 +25,7 @@
   //
   // Version 4 adds support to batch multiple transactions and a top level error code.
   //
-  // Version 5 adds support for new error code ABORTABLE_TRANSACTION (KIP-890).
+  // Version 5 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
   "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [

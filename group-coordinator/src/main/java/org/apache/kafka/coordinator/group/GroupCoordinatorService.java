@@ -1096,6 +1096,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     operationName, operationInput, exception.getMessage(), exception);
                 return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
 
+            case NETWORK_EXCEPTION:
+                // When committing offsets transactionally, we now verify the transaction with the
+                // transaction coordinator. Verification can fail with `NETWORK_EXCEPTION`, a
+                // retriable error which older clients may not expect and retry correctly. We
+                // translate the error to `COORDINATOR_LOAD_IN_PROGRESS` because it causes clients
+                // to retry the request without an unnecessary coordinator lookup.
+                return handler.apply(Errors.COORDINATOR_LOAD_IN_PROGRESS, null);
+
             case UNKNOWN_TOPIC_OR_PARTITION:
             case NOT_ENOUGH_REPLICAS:
             case REQUEST_TIMED_OUT:

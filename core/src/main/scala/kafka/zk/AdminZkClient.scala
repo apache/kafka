@@ -28,7 +28,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.server.common.AdminOperationException
-import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
+import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
@@ -345,7 +345,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
    */
   def parseBroker(broker: String): Option[Int] = {
     broker match {
-      case ConfigEntityName.DEFAULT => None
+      case ZooKeeperInternals.DEFAULT_STRING => None
       case _ =>
         try Some(broker.toInt)
         catch {
@@ -440,7 +440,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
    *
    */
   def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configs: Properties, isUserClientId: Boolean = false): Unit = {
-    if (sanitizedEntityName == ConfigEntityName.DEFAULT || sanitizedEntityName.contains("/clients"))
+    if (sanitizedEntityName == ZooKeeperInternals.DEFAULT_STRING || sanitizedEntityName.contains("/clients"))
       DynamicConfig.Client.validate(configs)
     else
       DynamicConfig.User.validate(configs)
@@ -520,7 +520,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
     */
   def changeBrokerConfig(broker: Option[Int], configs: Properties): Unit = {
     validateBrokerConfig(configs)
-    changeEntityConfig(ConfigType.BROKER, broker.map(_.toString).getOrElse(ConfigEntityName.DEFAULT), configs)
+    changeEntityConfig(ConfigType.BROKER, broker.map(_.toString).getOrElse(ZooKeeperInternals.DEFAULT_STRING), configs)
   }
 
   /**

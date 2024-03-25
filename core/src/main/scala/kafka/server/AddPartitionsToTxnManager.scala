@@ -45,7 +45,7 @@ object AddPartitionsToTxnManager {
 /**
  * This is an enum which handles the Partition Response based on the Request Version and the exact operation
  *    defaultError:       This is the default workflow which maps to cases when the Produce Request Version or the Txn_offset_commit request was lower than the first version supporting the new Error Class
- *    genericError:       This maps to the case when the clients are updated to handle the AbortableTxnException
+ *    genericError:       This maps to the case when the clients are updated to handle the TransactionAbortableException
  *    addPartition:       This is a WIP. To be updated as a part of KIP-890 Part 2
  */
 sealed trait SupportedOperation
@@ -226,7 +226,7 @@ class AddPartitionsToTxnManager(
                   val code =
                     if (partitionResult.partitionErrorCode == Errors.PRODUCER_FENCED.code)
                       Errors.INVALID_PRODUCER_EPOCH.code
-                    else if (partitionResult.partitionErrorCode() == Errors.ABORTABLE_TRANSACTION.code && transactionDataAndCallbacks.supportedOperation != genericError) // For backward compatibility with clients.
+                    else if (partitionResult.partitionErrorCode() == Errors.TRANSACTION_ABORTABLE.code && transactionDataAndCallbacks.supportedOperation != genericError) // For backward compatibility with clients.
                       Errors.INVALID_TXN_STATE.code
                     else
                       partitionResult.partitionErrorCode

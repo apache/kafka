@@ -19,13 +19,13 @@ package kafka.admin
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.{KafkaConfig, QuorumTestHarness}
-import kafka.utils.{Exit, Logging, TestInfoUtils}
+import kafka.utils.{Exit, Logging}
 import kafka.zk.{AdminZkClient, BrokerInfo}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.config.ConfigEntityName
+import org.apache.kafka.server.config.ZooKeeperInternals
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -35,7 +35,7 @@ import scala.jdk.CollectionConverters._
 
 class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def shouldExitWithNonZeroStatusOnUpdatingUnallowedConfigViaZk(quorum: String): Unit = {
     assertNonZeroStatusExit(Array(
@@ -46,7 +46,7 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
       "--add-config", "security.inter.broker.protocol=PLAINTEXT"))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def shouldExitWithNonZeroStatusOnZkCommandAlterUserQuota(quorum: String): Unit = {
     assertNonZeroStatusExit(Array(
@@ -74,7 +74,7 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
     assertEquals(Some(1), exitStatus)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testDynamicBrokerConfigUpdateUsingZooKeeper(quorum: String): Unit = {
     val brokerId = "1"
@@ -93,7 +93,7 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
     }
 
     def verifyConfig(configs: Map[String, String], brokerId: Option[String]): Unit = {
-      val entityConfigs = zkClient.getEntityConfigs("brokers", brokerId.getOrElse(ConfigEntityName.DEFAULT))
+      val entityConfigs = zkClient.getEntityConfigs("brokers", brokerId.getOrElse(ZooKeeperInternals.DEFAULT_STRING))
       assertEquals(configs, entityConfigs.asScala)
     }
 
