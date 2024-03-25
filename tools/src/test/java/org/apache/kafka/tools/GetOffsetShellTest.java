@@ -26,7 +26,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -113,9 +112,8 @@ public class GetOffsetShellTest {
             for (int i = 0; i < topicCount + 1; i++) {
                 topics.add(getTopicName(i));
             }
-
             consumer.subscribe(topics);
-            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(consumerTimeout));
+            consumer.poll(Duration.ofMillis(consumerTimeout));
         }
     }
 
