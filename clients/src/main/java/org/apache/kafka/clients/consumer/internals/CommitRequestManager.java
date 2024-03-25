@@ -292,32 +292,32 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         CompletableFuture<Void> result = new CompletableFuture<>();
         OffsetCommitRequestState requestState =
             createOffsetCommitRequest(subscriptions.allConsumed(), Optional.of(retryExpirationTimeMs));
-        autoCommitSyncNowWithRetries(requestState, result);
+        autoCommitSyncBeforeRevocationWithRetries(requestState, result);
         return result;
     }
 
-    private void autoCommitSyncNowWithRetries(OffsetCommitRequestState requestAttempt,
-                                              CompletableFuture<Void> result) {
+    private void autoCommitSyncBeforeRevocationWithRetries(OffsetCommitRequestState requestAttempt,
+                                                           CompletableFuture<Void> result) {
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitAttempt = requestAutoCommit(requestAttempt);
         commitAttempt.whenComplete((committedOffsets, error) -> {
             if (error == null) {
                 result.complete(null);
             } else {
-                if ((error instanceof RetriableException || isStaleEpochErrorAndValidEpochAvailable(error))) {
+                if (error instanceof RetriableException || isStaleEpochErrorAndValidEpochAvailable(error)) {
                     if (error instanceof TimeoutException && requestAttempt.isExpired) {
-                        log.debug("Auto-commit sync timed out and won't be retried anymore");
+                        log.debug("Auto-commit sync before revocation timed out and won't be retried anymore");
                         result.completeExceptionally(error);
                     } else if (error instanceof UnknownTopicOrPartitionException) {
-                        log.debug("Auto-commit sync failed because topic or partition were deleted");
+                        log.debug("Auto-commit sync before revocation failed because topic or partition were deleted");
                         result.completeExceptionally(error);
                     } else {
                         // Make sure the auto-commit is retries with the latest offsets
                         requestAttempt.offsets = subscriptions.allConsumed();
                         requestAttempt.resetFuture();
-                        autoCommitSyncNowWithRetries(requestAttempt, result);
+                        autoCommitSyncBeforeRevocationWithRetries(requestAttempt, result);
                     }
                 } else {
-                    log.debug("Auto-commit sync failed with non-retriable error", error);
+                    log.debug("Auto-commit sync before revocation failed with non-retriable error", error);
                     result.completeExceptionally(error);
                 }
             }
