@@ -2270,6 +2270,7 @@ public class ReplicationControlManager {
             if (!isAcceptableLeader.test(brokerId)) {
                 return false;
             }
+
             Uuid replicaDirectory = partition.directory(brokerId);
             return clusterControl.hasOnlineDir(brokerId, replicaDirectory);
         }
