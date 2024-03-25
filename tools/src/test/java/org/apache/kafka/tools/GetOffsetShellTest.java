@@ -58,7 +58,6 @@ public class GetOffsetShellTest {
     private final int offsetTopicPartitionCount = 4;
     private final ClusterInstance cluster;
     private final String topicName = "topic";
-
     private final Duration consumerTimeout = Duration.ofMillis(100);
 
     public GetOffsetShellTest(ClusterInstance cluster) {
@@ -156,7 +155,6 @@ public class GetOffsetShellTest {
         } else {
             assertEquals(expectedTestTopicOffsets(), output);
         }
-
     }
 
     @ClusterTest
@@ -223,7 +221,7 @@ public class GetOffsetShellTest {
                 new Row("topic2", 1, 2L),
                 new Row("topic3", 2, 3L),
                 new Row("topic4", 2, 4L)
-            );
+        );
 
         assertEquals(expected, offsets);
     }
