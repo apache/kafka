@@ -1167,6 +1167,9 @@ public class WorkerTest {
 
         Map<String, Object> connConfig = Collections.singletonMap("metadata.max.age.ms", "10000");
         Map<String, String> expectedConfigs = new HashMap<>(workerProps);
+        workerProps.keySet()
+                .stream().filter(key -> key.startsWith(AbstractConfig.CONFIG_PROVIDERS_CONFIG))
+                .forEach(expectedConfigs::remove);
         expectedConfigs.put("bootstrap.servers", "localhost:9092");
         expectedConfigs.put("client.id", "testid");
         expectedConfigs.put("metadata.max.age.ms", "10000");

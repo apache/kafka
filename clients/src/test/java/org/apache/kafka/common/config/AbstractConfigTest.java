@@ -27,6 +27,8 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.config.provider.MockVaultConfigProvider;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
 import org.apache.kafka.test.MockConsumerInterceptor;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -45,6 +47,23 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AbstractConfigTest {
+
+    private String propertyValue;
+
+    @BeforeEach
+    public void setup() {
+        propertyValue = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY);
+        System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY);
+    }
+
+    @AfterEach
+    public void teardown() {
+        if (propertyValue != null) {
+            System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, propertyValue);
+        } else {
+            System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY);
+        }
+    }
 
     @Test
     public void testConfiguredInstances() {
@@ -390,6 +409,23 @@ public class AbstractConfigTest {
     }
 
     @Test
+    public void testOriginalsWithConfigProvidersPropsExcluded() {
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, MockVaultConfigProvider.class.getName());
+        Properties props = new Properties();
+
+        // Test Case: VaultConfigProvider is automatic, but FileConfigProvider is specified
+        props.put("config.providers", "file");
+        props.put("config.providers.file.class", MockFileConfigProvider.class.getName());
+        String id = UUID.randomUUID().toString();
+        props.put("config.providers.file.param.testId", id);
+        props.put("prefix.ssl.truststore.location.number", 5);
+        props.put("sasl.kerberos.service.name", "service name");
+        props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
+        props.put("sasl.kerberos.password", "${file:/usr/kerberos:password}");
+        assertThrows(ConfigException.class, () -> new TestIndirectConfigResolution(props, Collections.emptyMap()));
+    }
+
+    @Test
     public void testConfigProvidersPropsAsParam() {
         // Test Case: Valid Test Case for ConfigProviders as a separate variable
         Properties providers = new Properties();
@@ -462,6 +498,25 @@ public class AbstractConfigTest {
     }
 
     @Test
+    public void testAutoConfigResolutionWithInvalidConfigProviderClassExcluded() {
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "");
+        // Test Case: Invalid class for Config Provider
+        Properties props = new Properties();
+        props.put("config.providers", "file");
+        props.put("config.providers.file.class",
+                "org.apache.kafka.common.config.provider.InvalidConfigProvider");
+        props.put("testKey", "${test:/foo/bar/testpath:testKey}");
+        try {
+            new TestIndirectConfigResolution(props, Collections.emptyMap());
+            fail("Expected a config exception due to invalid props :" + props);
+        } catch (KafkaException e) {
+            // deliver the disallowed message first to prevent probing the classloader
+            assertTrue(e.getMessage().contains(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY));
+            // this is good
+        }
+    }
+
+    @Test
     public void testAutoConfigResolutionWithMissingConfigProvider() {
         // Test Case: Config Provider for a variable missing in config file.
         Properties props = new Properties();
@@ -502,6 +557,8 @@ public class AbstractConfigTest {
 
     @Test
     public void testConfigProviderConfigurationWithConfigParams() {
+        // should have no effect
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, MockFileConfigProvider.class.getName());
         // Test Case: Valid Test Case With Multiple ConfigProviders as a separate variable
         Properties providers = new Properties();
         providers.put("config.providers", "vault");
