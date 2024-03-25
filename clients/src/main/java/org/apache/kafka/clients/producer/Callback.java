@@ -54,7 +54,7 @@ public interface Callback {
      *                      <li>{@link org.apache.kafka.common.errors.OffsetOutOfRangeException OffsetOutOfRangeException}
      *                      <li>{@link org.apache.kafka.common.errors.TimeoutException TimeoutException}
      *                      <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException UnknownTopicOrPartitionException}
-     *                      <li>{@link BufferExhaustedException BufferExhaustedException}
+     *                      <li>{@link org.apache.kafka.clients.producer.BufferExhaustedException BufferExhaustedException}
      *                  </ul>
      */
     void onCompletion(RecordMetadata metadata, Exception exception);
