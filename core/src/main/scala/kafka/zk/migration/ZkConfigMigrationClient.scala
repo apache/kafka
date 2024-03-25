@@ -21,7 +21,7 @@ import kafka.server.{DynamicBrokerConfig, DynamicConfig, ZkAdminManager}
 import kafka.utils.Logging
 import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk._
-import kafka.zk.migration.ZkConfigMigrationClient.getMangledClientQuotaZNodeName
+import kafka.zk.migration.ZkConfigMigrationClient.getSanitizedClientQuotaZNodeName
 import kafka.zookeeper.{CreateRequest, DeleteRequest, SetDataRequest}
 import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.config.types.Password
@@ -81,8 +81,8 @@ class ZkConfigMigrationClient(
       // which have their names set to the empty string instead.
       result.setEntityName(null)
     } else {
-      // ZNode names are mangled before being stored in ZooKeeper.
-      // For example, @ is turned into %40. Undo the mangling here.
+      // ZNode names are sanitized before being stored in ZooKeeper.
+      // For example, @ is turned into %40. Undo the sanitization here.
       result.setEntityName(Sanitizer.desanitize(znodeName))
     }
     result
@@ -261,9 +261,9 @@ class ZkConfigMigrationClient(
     scram: util.Map[String, String],
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = wrapZkException {
-    val user: Option[String] = getMangledClientQuotaZNodeName(entity, ClientQuotaEntity.USER)
-    val client: Option[String] = getMangledClientQuotaZNodeName(entity, ClientQuotaEntity.CLIENT_ID)
-    val ip: Option[String] = getMangledClientQuotaZNodeName(entity, ClientQuotaEntity.IP)
+    val user: Option[String] = getSanitizedClientQuotaZNodeName(entity, ClientQuotaEntity.USER)
+    val client: Option[String] = getSanitizedClientQuotaZNodeName(entity, ClientQuotaEntity.CLIENT_ID)
+    val ip: Option[String] = getSanitizedClientQuotaZNodeName(entity, ClientQuotaEntity.IP)
     val props = new Properties()
 
     val (configType, path, configKeys) = if (user.isDefined && client.isEmpty) {
@@ -369,7 +369,7 @@ object ZkConfigMigrationClient {
    * @param component   The component that we want a znode name for.
    * @return            Some(znodeName) if there is a znode path; None otherwise.
    */
-  def getMangledClientQuotaZNodeName(
+  def getSanitizedClientQuotaZNodeName(
     entity: util.Map[String, String],
     component: String
   ): Option[String] = {
@@ -385,7 +385,7 @@ object ZkConfigMigrationClient {
         // "not present." This is an unfortunate API that should be revisited at some point.
         Some(ZooKeeperInternals.DEFAULT_STRING)
       } else {
-        // We found a non-null value, and now we need to mangle it. For example, "c@@ldude" will
+        // We found a non-null value, and now we need to sanitize it. For example, "c@@ldude" will
         // turn into c%40%40ldude, so that we can use it as a znode name in ZooKeeper.
         Some(Sanitizer.sanitize(rawValue))
       }
