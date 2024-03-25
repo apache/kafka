@@ -40,7 +40,35 @@ class CoreUtilsTest extends Logging {
 
   @Test
   def testSwallow(): Unit = {
-    CoreUtils.swallow(throw new KafkaException("test"), this, Level.INFO)
+    var loggedMessage: Option[String] = None
+    val testLogging: Logging = new Logging {
+      override def info(msg: => String, e: => Throwable): Unit = {
+        loggedMessage = Some(msg+Level.INFO)
+      }
+      override def debug(msg: => String, e: => Throwable): Unit = {
+        loggedMessage = Some(msg+Level.DEBUG)
+      }
+      override def warn(msg: => String, e: => Throwable): Unit = {
+        loggedMessage = Some(msg+Level.WARN)
+      }
+      override def error(msg: => String, e: => Throwable): Unit = {
+        loggedMessage = Some(msg+Level.ERROR)
+      }
+      override def trace(msg: => String, e: => Throwable): Unit = {
+        loggedMessage = Some(msg+Level.TRACE)
+      }
+    }
+
+    CoreUtils.swallow(throw new KafkaException("test"), testLogging, Level.TRACE)
+    assertEquals(Some("test"+Level.TRACE), loggedMessage)
+    CoreUtils.swallow(throw new KafkaException("test"), testLogging, Level.DEBUG)
+    assertEquals(Some("test"+Level.DEBUG), loggedMessage)
+    CoreUtils.swallow(throw new KafkaException("test"), testLogging, Level.INFO)
+    assertEquals(Some("test"+Level.INFO), loggedMessage)
+    CoreUtils.swallow(throw new KafkaException("test"), testLogging, Level.WARN)
+    assertEquals(Some("test"+Level.WARN),loggedMessage)
+    CoreUtils.swallow(throw new KafkaException("test"), testLogging, Level.ERROR)
+    assertEquals(Some("test"+Level.ERROR),loggedMessage)
   }
 
   @Test
