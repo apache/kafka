@@ -470,13 +470,13 @@ public class MembershipManagerImplTest {
     }
 
     /**
-     * This is the case where a member is stuck reconciling an assignment A (waiting on
-     * metadata, commit or callbacks), and it rejoins (due to fence or unsubscribe/subscribe). If
-     * the reconciliation of A completes it should not be applied (it should not update the
-     * assignment on the member or send ack).
+     * This is the case where a member is stuck reconciling an assignment A (waiting for commit
+     * to complete), and it rejoins (due to fence or unsubscribe/subscribe). If the
+     * reconciliation of A completes it should be interrupted, and it should not update the
+     * assignment on the member or send ack.
      */
     @Test
-    public void testDelayedReconciliationResultDiscardedIfMemberRejoins() {
+    public void testDelayedReconciliationResultDiscardedAfterCommitIfMemberRejoins() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         Uuid topicId1 = Uuid.randomUuid();
         String topic1 = "topic1";
@@ -496,25 +496,83 @@ public class MembershipManagerImplTest {
         testFencedMemberReleasesAssignmentAndTransitionsToJoining(membershipManager);
         clearInvocations(subscriptionState);
 
-        // Get new assignment A2 after rejoining. This should not trigger a reconciliation just
-        // yet because there is another on in progress, but should keep the new assignment ready
-        // to be reconciled next.
-        Uuid topicId3 = Uuid.randomUuid();
-        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId3, "topic3", owned);
-        receiveAssignmentAfterRejoin(topicId3, Collections.singletonList(5), membershipManager);
-        verifyReconciliationNotTriggered(membershipManager);
-        Map<Uuid, SortedSet<Integer>> assignmentAfterRejoin = topicIdPartitionsMap(topicId3, 5);
-        assertEquals(assignmentAfterRejoin, membershipManager.topicPartitionsAwaitingReconciliation());
+        Map<Uuid, SortedSet<Integer>> assignmentAfterRejoin = receiveAssignmentAfterRejoin(
+            Collections.singletonList(5), membershipManager, owned);
 
         // Reconciliation completes when the member has already re-joined the group. Should not
-        // update the subscription state or send ack.
+        // proceed with the revocation, update the subscription state or send ack.
         commitResult.complete(null);
-        verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
-        assertNotEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+        assertInitialReconciliationDiscardedAfterRejoin(membershipManager, assignmentAfterRejoin);
+    }
 
-        // Assignment received after rejoining should be ready to reconcile on the next
-        // reconciliation loop.
-        assertEquals(assignmentAfterRejoin, membershipManager.topicPartitionsAwaitingReconciliation());
+    /**
+     * This is the case where a member is stuck reconciling an assignment A (waiting for
+     * onPartitionsRevoked callback to complete), and it rejoins (due to fence or
+     * unsubscribe/subscribe). When the reconciliation of A completes it should be interrupted,
+     * and it should not update the assignment on the member or send ack.
+     */
+    @Test
+    public void testDelayedReconciliationResultDiscardedAfterPartitionsRevokedCallbackIfMemberRejoins() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        Uuid topicId1 = Uuid.randomUuid();
+        String topic1 = "topic1";
+        List<TopicIdPartition> owned = Collections.singletonList(new TopicIdPartition(topicId1,
+            new TopicPartition(topic1, 0)));
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId1, topic1, owned);
+
+        // Reconciliation that does not complete stuck on onPartitionsRevoked callback
+        ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
+        ConsumerRebalanceListenerCallbackCompletedEvent callbackCompletedEvent =
+            mockNewAssignmentStuckOnPartitionsRevokedCallback(membershipManager, topicId1, topic1,
+            Arrays.asList(1, 2), owned.get(0).topicPartition(), invoker);
+        Map<Uuid, SortedSet<Integer>> assignment1 = topicIdPartitionsMap(topicId1,  1, 2);
+        assertEquals(assignment1, membershipManager.topicPartitionsAwaitingReconciliation());
+
+        // Get fenced and rejoin while still reconciling. Get new assignment to reconcile after rejoining.
+        testFencedMemberReleasesAssignmentAndTransitionsToJoining(membershipManager);
+        clearInvocations(subscriptionState);
+
+        Map<Uuid, SortedSet<Integer>> assignmentAfterRejoin = receiveAssignmentAfterRejoin(
+            Collections.singletonList(5), membershipManager, owned);
+
+        // onPartitionsRevoked callback completes when the member has already re-joined the group.
+        // Should not proceed with the assignment, update the subscription state or send ack.
+        completeCallback(callbackCompletedEvent, membershipManager);
+        assertInitialReconciliationDiscardedAfterRejoin(membershipManager, assignmentAfterRejoin);
+    }
+
+    /**
+     * This is the case where a member is stuck reconciling an assignment A (waiting for
+     * onPartitionsAssigned callback to complete), and it rejoins (due to fence or
+     * unsubscribe/subscribe). If the reconciliation of A completes it should be interrupted, and it
+     * should not update the assignment on the member or send ack.
+     */
+    @Test
+    public void testDelayedReconciliationResultDiscardedAfterPartitionsAssignedCallbackIfMemberRejoins() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        Uuid topicId1 = Uuid.randomUuid();
+        String topic1 = "topic1";
+
+        // Reconciliation that does not complete stuck on onPartitionsAssigned callback
+        ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
+        int newPartition = 1;
+        ConsumerRebalanceListenerCallbackCompletedEvent callbackCompletedEvent =
+            mockNewAssignmentStuckOnPartitionsAssignedCallback(membershipManager, topicId1,
+                topic1, newPartition, invoker);
+        Map<Uuid, SortedSet<Integer>> assignment1 = topicIdPartitionsMap(topicId1,  newPartition);
+        assertEquals(assignment1, membershipManager.topicPartitionsAwaitingReconciliation());
+
+        // Get fenced and rejoin while still reconciling. Get new assignment to reconcile after rejoining.
+        testFencedMemberReleasesAssignmentAndTransitionsToJoining(membershipManager);
+        clearInvocations(subscriptionState);
+
+        Map<Uuid, SortedSet<Integer>> assignmentAfterRejoin = receiveAssignmentAfterRejoin(
+            Collections.singletonList(5), membershipManager, Collections.emptyList());
+
+        // onPartitionsAssigned callback completes when the member has already re-joined the group.
+        // Should not update the subscription state or send ack.
+        completeCallback(callbackCompletedEvent, membershipManager);
+        assertInitialReconciliationDiscardedAfterRejoin(membershipManager, assignmentAfterRejoin);
     }
 
     /**
@@ -2147,7 +2205,7 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testRebalanceMetricsForMultipleReconcilations() {
+    public void testRebalanceMetricsForMultipleReconciliations() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
@@ -2297,6 +2355,57 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         return commitResult;
+    }
+
+    private ConsumerRebalanceListenerCallbackCompletedEvent mockNewAssignmentStuckOnPartitionsRevokedCallback(
+        MembershipManagerImpl membershipManager, Uuid topicId, String topicName,
+        List<Integer> partitions, TopicPartition ownedPartition, ConsumerRebalanceListenerInvoker invoker) {
+        doNothing().when(subscriptionState).markPendingRevocation(anySet());
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
+
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
+        receiveAssignment(topicId, partitions, membershipManager);
+        membershipManager.poll(time.milliseconds());
+        verifyReconciliationTriggered(membershipManager);
+        clearInvocations(membershipManager);
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+
+        return performCallback(
+            membershipManager,
+            invoker,
+            ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
+            topicPartitions(ownedPartition.topic(), ownedPartition.partition()),
+            false
+        );
+    }
+
+    private ConsumerRebalanceListenerCallbackCompletedEvent mockNewAssignmentStuckOnPartitionsAssignedCallback(
+        MembershipManagerImpl membershipManager, Uuid topicId, String topicName, int newPartition,
+        ConsumerRebalanceListenerInvoker invoker) {
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
+
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
+        receiveAssignment(topicId, Collections.singletonList(newPartition), membershipManager);
+        membershipManager.poll(time.milliseconds());
+        verifyReconciliationTriggered(membershipManager);
+        clearInvocations(membershipManager);
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+
+        return performCallback(
+            membershipManager,
+            invoker,
+            ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
+            topicPartitions(topicName, newPartition),
+            false
+        );
     }
 
     private void verifyReconciliationTriggered(MembershipManagerImpl membershipManager) {
@@ -2480,7 +2589,15 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatSuccess(heartbeatResponse.data());
     }
 
-    private void receiveAssignmentAfterRejoin(Uuid topicId, List<Integer> partitions, MembershipManager membershipManager) {
+    private Map<Uuid, SortedSet<Integer>> receiveAssignmentAfterRejoin(List<Integer> partitions,
+                                                                       MembershipManagerImpl membershipManager,
+                                                                       Collection<TopicIdPartition> owned) {
+        // Get new assignment after rejoining. This should not trigger a reconciliation just
+        // yet because there is another one in progress, but should keep the new assignment ready
+        // to be reconciled next.
+        Uuid topicId = Uuid.randomUuid();
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, "topic3", owned);
+
         ConsumerGroupHeartbeatResponseData.Assignment targetAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
                 .setTopicPartitions(Collections.singletonList(
                         new ConsumerGroupHeartbeatResponseData.TopicPartitions()
@@ -2489,6 +2606,29 @@ public class MembershipManagerImplTest {
         ConsumerGroupHeartbeatResponse heartbeatResponse =
                 createConsumerGroupHeartbeatResponseWithBumpedEpoch(targetAssignment);
         membershipManager.onHeartbeatSuccess(heartbeatResponse.data());
+
+        verifyReconciliationNotTriggered(membershipManager);
+        Map<Uuid, SortedSet<Integer>> assignmentAfterRejoin = topicIdPartitionsMap(topicId, 5);
+        assertEquals(assignmentAfterRejoin, membershipManager.topicPartitionsAwaitingReconciliation());
+        return assignmentAfterRejoin;
+    }
+
+    private void assertInitialReconciliationDiscardedAfterRejoin(
+        MembershipManagerImpl membershipManager,
+        Map<Uuid, SortedSet<Integer>> assignmentAfterRejoin) {
+        verify(subscriptionState, never()).markPendingRevocation(any());
+        verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
+        assertNotEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+
+        // Assignment received after rejoining should be ready to reconcile on the next
+        // reconciliation loop.
+        assertEquals(assignmentAfterRejoin, membershipManager.topicPartitionsAwaitingReconciliation());
+
+        // Stale reconciliation should have been aborted and a new one should be triggered on the next poll.
+        assertFalse(membershipManager.reconciliationInProgress());
+        clearInvocations(membershipManager);
+        membershipManager.poll(time.milliseconds());
+        verify(membershipManager).markReconciliationInProgress();
     }
 
     private void receiveEmptyAssignment(MembershipManager membershipManager) {
@@ -2578,7 +2718,6 @@ public class MembershipManagerImplTest {
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
-        // doNothing().when(subscriptionState).markPendingRevocation(anySet());
         when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
         membershipManager.transitionToFenced();
         return performCallback(
