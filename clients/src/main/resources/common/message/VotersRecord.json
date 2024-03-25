@@ -33,9 +33,7 @@
         { "name": "Host", "type": "string", "versions": "0+",
           "about": "The hostname" },
         { "name": "Port", "type": "uint16", "versions": "0+",
-          "about": "The port" },
-        { "name": "SecurityProtocol", "type": "int16", "versions": "0+",
-          "about": "The security protocol" }
+          "about": "The port" }
       ]},
       { "name": "KRaftVersionFeature", "type": "KRaftVersionFeature", "versions": "0+",
         "about": "The range of versions of the protocol that the replica supports", "fields": [

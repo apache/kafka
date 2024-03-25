@@ -315,7 +315,7 @@ object DumpLogSegments {
                     print(s" KRaftVersion ${KRaftVersionRecordJsonConverter.write(kraftVersion, kraftVersion.version())}")
                   case ControlRecordType.VOTERS=>
                     val voters = ControlRecordUtils.deserializeVotersRecord(record)
-                    print(s" Voets ${VotersRecordJsonConverter.write(voters, voters.version())}")
+                    print(s" Votes ${VotersRecordJsonConverter.write(voters, voters.version())}")
                   case controlType =>
                     print(s" controlType: $controlType($controlTypeId)")
                 }
