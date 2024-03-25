@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.Map;
 
@@ -26,7 +27,7 @@ import java.util.Map;
  */
 public class AsyncCommitEvent extends CommitEvent {
 
-    public AsyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        super(Type.COMMIT_ASYNC, offsets, Long.MAX_VALUE);
+    public AsyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
+        super(Type.COMMIT_ASYNC, offsets, timer);
     }
 }

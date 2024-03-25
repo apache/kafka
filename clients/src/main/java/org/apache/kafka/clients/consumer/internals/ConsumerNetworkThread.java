@@ -20,6 +20,8 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -31,9 +33,11 @@ import org.slf4j.Logger;
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
@@ -50,6 +54,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private static final String BACKGROUND_THREAD_NAME = "consumer_background_thread";
     private final Time time;
     private final Logger log;
+    private final BlockingQueue<ApplicationEvent> applicationEventQueue;
+    private final CompletableEventReaper applicationEventReaper;
     private final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier;
     private final Supplier<NetworkClientDelegate> networkClientDelegateSupplier;
     private final Supplier<RequestManagers> requestManagersSupplier;
@@ -63,12 +69,15 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
     public ConsumerNetworkThread(LogContext logContext,
                                  Time time,
+                                 BlockingQueue<ApplicationEvent> applicationEventQueue,
                                  Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                  Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                  Supplier<RequestManagers> requestManagersSupplier) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.log = logContext.logger(getClass());
+        this.applicationEventQueue = applicationEventQueue;
+        this.applicationEventReaper = new CompletableEventReaper(logContext);
         this.applicationEventProcessorSupplier = applicationEventProcessorSupplier;
         this.networkClientDelegateSupplier = networkClientDelegateSupplier;
         this.requestManagersSupplier = requestManagersSupplier;
@@ -128,7 +137,19 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         // Process the events—if any—that were produced by the application thread. It is possible that when processing
         // an event generates an error. In such cases, the processor will log an exception, but we do not want those
         // errors to be propagated to the caller.
-        applicationEventProcessor.process();
+        LinkedList<ApplicationEvent> events = new LinkedList<>();
+        applicationEventQueue.drainTo(events);
+
+        for (ApplicationEvent event : events) {
+            try {
+                if (event instanceof CompletableEvent)
+                    applicationEventReaper.add((CompletableEvent<?>) event);
+
+                applicationEventProcessor.process(event);
+            } catch (Throwable t) {
+                log.warn("Error processing event {}", t.getMessage(), t);
+            }
+        }
 
         final long currentTimeMs = time.milliseconds();
         final long pollWaitTimeMs = requestManagers.entries().stream()
@@ -144,6 +165,12 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .map(Optional::get)
                 .map(rm -> rm.maximumTimeToWait(currentTimeMs))
                 .reduce(Long.MAX_VALUE, Math::min);
+
+        // "Complete" any events that have expired. This cleanup step should only be called after the network I/O
+        // thread has made at least one call to poll. This is done to emulate the behavior of the legacy consumer's
+        // handling of timeouts. The legacy consumer makes at least one attempt to satisfy any network requests
+        // before checking if a timeout has expired.
+        applicationEventReaper.reapExpiredAndCompleted(currentTimeMs);
     }
 
     /**
@@ -273,9 +300,9 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             log.error("Unexpected error during shutdown.  Proceed with closing.", e);
         } finally {
             sendUnsentRequests(timer);
+            applicationEventReaper.reapIncomplete(applicationEventQueue);
             closeQuietly(requestManagers, "request managers");
             closeQuietly(networkClientDelegate, "network client delegate");
-            closeQuietly(applicationEventProcessor, "application event processor");
             log.debug("Closed the consumer network thread");
         }
     }

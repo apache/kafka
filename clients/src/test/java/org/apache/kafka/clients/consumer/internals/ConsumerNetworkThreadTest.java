@@ -154,7 +154,8 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testAsyncCommitEvent() {
-        ApplicationEvent e = new AsyncCommitEvent(new HashMap<>());
+        Timer timer = time.timer(100);
+        ApplicationEvent e = new AsyncCommitEvent(new HashMap<>(), timer);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(AsyncCommitEvent.class));
@@ -290,8 +291,9 @@ public class ConsumerNetworkThreadTest {
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        CompletableApplicationEvent<Void> event1 = spy(new AsyncCommitEvent(Collections.emptyMap()));
-        ApplicationEvent event2 = new AsyncCommitEvent(Collections.emptyMap());
+        Timer timer = time.timer(100);
+        CompletableApplicationEvent<Void> event1 = spy(new AsyncCommitEvent(Collections.emptyMap(), timer));
+        ApplicationEvent event2 = new AsyncCommitEvent(Collections.emptyMap(), timer);
         CompletableFuture<Void> future = new CompletableFuture<>();
         when(event1.future()).thenReturn(future);
         applicationEventsQueue.add(event1);
