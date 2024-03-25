@@ -293,7 +293,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     private final String topic;
     // Data is passed to the log already serialized. We use a converter to handle translating to/from generic Connect
     // format to serialized form
-    private final KafkaBasedLog<String, byte[]> configLog;
+    private KafkaBasedLog<String, byte[]> configLog;
     // Connector -> # of tasks
     final Map<String, Integer> connectorTaskCounts = new HashMap<>();
     // Connector and task configs: name or id -> config map
@@ -328,6 +328,11 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     private volatile Producer<String, byte[]> fencableProducer;
     private final Map<String, Object> fencableProducerProps;
     private final Time time;
+
+    //VisibleForTesting
+    void setConfigLog(KafkaBasedLog<String, byte[]> configLog) {
+        this.configLog = configLog;
+    }
 
     @Deprecated
     public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer) {
