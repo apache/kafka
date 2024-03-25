@@ -76,7 +76,6 @@ import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -88,10 +87,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Random;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
@@ -298,7 +295,7 @@ public class PositionRestartIntegrationTest {
 
     @BeforeClass
     public static void before()
-        throws InterruptedException, IOException, ExecutionException, TimeoutException {
+            throws Exception {
 
         CLUSTER.start();
         CLUSTER.deleteAllTopicsAndWait(60 * 1000L);

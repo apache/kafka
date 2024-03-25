@@ -93,7 +93,7 @@ public class SlidingWindowedKStreamIntegrationTest {
     );
 
     @BeforeClass
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
     }
 

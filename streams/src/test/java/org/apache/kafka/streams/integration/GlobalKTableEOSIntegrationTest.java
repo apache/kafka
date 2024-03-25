@@ -59,7 +59,6 @@ import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -89,7 +88,7 @@ public class GlobalKTableEOSIntegrationTest {
             new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
 
     @BeforeClass
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
     }
 
