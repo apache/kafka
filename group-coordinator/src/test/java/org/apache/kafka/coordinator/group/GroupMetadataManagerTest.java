@@ -9681,6 +9681,7 @@ public class GroupMetadataManagerTest {
         assertEquals(expectedRecords, result.records());
     }
 
+    // TODO
     @Test
     public void testConsumerGroupHeartbeatWithRebalancingClassicGroup() throws Exception {}
 
