@@ -1568,12 +1568,14 @@ class GroupCoordinatorTest {
   private def staticMembersJoinAndRebalance(leaderInstanceId: String,
                                             followerInstanceId: String,
                                             sessionTimeout: Int = DefaultSessionTimeout,
-                                            rebalanceTimeout: Int = DefaultRebalanceTimeout): RebalanceResult = {
+                                            rebalanceTimeout: Int = DefaultRebalanceTimeout,
+                                            clientId: String = "clientId",
+                                            clientHost: String = "clientHost"): RebalanceResult = {
     val leaderResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType,
-      protocolSuperset, Some(leaderInstanceId), sessionTimeout, rebalanceTimeout)
+      protocolSuperset, Some(leaderInstanceId), sessionTimeout, rebalanceTimeout, false, true, clientId, clientHost)
 
     val followerResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType,
-      protocolSuperset, Some(followerInstanceId), sessionTimeout, rebalanceTimeout)
+      protocolSuperset, Some(followerInstanceId), sessionTimeout, rebalanceTimeout, false, true, clientId, clientHost)
     // The goal for two timer advance is to let first group initial join complete and set newMemberAdded flag to false. Next advance is
     // to trigger the rebalance as needed for follower delayed join. One large time advance won't help because we could only populate one
     // delayed join from purgatory and the new delayed op is created at that time and never be triggered.
@@ -3824,6 +3826,30 @@ class GroupCoordinatorTest {
   }
 
   @Test
+  def testUpdateStaticMemberButStoreGroupFailed(): Unit = {
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId, DefaultSessionTimeout, DefaultRebalanceTimeout, "oldClientId", "oldClientHost")
+    val group = getGroup(groupId)
+    val oldMemberId = group.currentStaticMemberId(followerInstanceId)
+    val oldMember = group.get(oldMemberId.get)
+    val oldClientId = oldMember.clientId
+    val oldClientHost = oldMember.clientHost
+
+    val joinGroupResult = staticJoinGroupWithPersistence(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID,
+      followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1, appendRecordError = Errors.MESSAGE_TOO_LARGE)
+
+    checkJoinGroupResult(joinGroupResult,
+      Errors.UNKNOWN_SERVER_ERROR,
+      rebalanceResult.generation,
+      Set.empty,
+      Stable,
+      Some(protocolType))
+
+    val newMemberId = group.currentStaticMemberId(followerInstanceId)
+    val newMember = group.get(newMemberId.get)
+    assertEquals(oldClientId, newMember.clientId)
+    assertEquals(oldClientHost, newMember.clientHost)
+  }
+  
   def testVerificationErrorsForTxnOffsetCommits(): Unit = {
     val tip1 = new TopicIdPartition(Uuid.randomUuid(), 0, "topic-1")
     val offset1 = offsetAndMetadata(0)
@@ -3913,13 +3939,15 @@ class GroupCoordinatorTest {
                             sessionTimeout: Int = DefaultSessionTimeout,
                             rebalanceTimeout: Int = DefaultRebalanceTimeout,
                             requireKnownMemberId: Boolean = false,
-                            supportSkippingAssignment: Boolean = true): Future[JoinGroupResult] = {
+                            supportSkippingAssignment: Boolean = true,
+                            clientId: String = "clientId",
+                            clientHost: String = "clientHost"): Future[JoinGroupResult] = {
     val (responseFuture, responseCallback) = setupJoinGroupCallback
 
     when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
 
     groupCoordinator.handleJoinGroup(groupId, memberId, groupInstanceId, requireKnownMemberId, supportSkippingAssignment,
-      "clientId", "clientHost", rebalanceTimeout, sessionTimeout, protocolType, protocols, responseCallback)
+      clientId, clientHost, rebalanceTimeout, sessionTimeout, protocolType, protocols, responseCallback)
     responseFuture
   }
 

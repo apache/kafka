@@ -609,7 +609,7 @@ class GroupMetadataTest {
   @Test
   def testReplaceGroupInstanceWithNonExistingMember(): Unit = {
     val newMemberId = "newMemberId"
-    assertThrows(classOf[IllegalArgumentException], () => group.replaceStaticMember(groupInstanceId, memberId, newMemberId))
+    assertThrows(classOf[IllegalArgumentException], () => group.replaceStaticMember(groupInstanceId, memberId, newMemberId, clientId, clientHost))
   }
 
   @Test
@@ -629,9 +629,13 @@ class GroupMetadataTest {
     assertEquals(Some(memberId), group.currentStaticMemberId(groupInstanceId))
 
     val newMemberId = "newMemberId"
-    group.replaceStaticMember(groupInstanceId, memberId, newMemberId)
+    val newClientId = "newClientId"
+    val newClientHost = "newClientHost"
+    group.replaceStaticMember(groupInstanceId, memberId, newMemberId, newClientId, newClientHost)
     assertTrue(group.isLeader(newMemberId))
     assertEquals(Some(newMemberId), group.currentStaticMemberId(groupInstanceId))
+    assertEquals(Some(newClientId), group.allMemberMetadata.find(_.memberId.equals(newMemberId)).map(_.clientId))
+    assertEquals(Some(newClientHost), group.allMemberMetadata.find(_.memberId.equals(newMemberId)).map(_.clientHost))
     assertTrue(joinAwaitingMemberFenced)
     assertTrue(syncAwaitingMemberFenced)
     assertFalse(member.isAwaitingJoin)
