@@ -25,12 +25,14 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
+import org.apache.kafka.streams.kstream.internals.NamedInternal;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -664,24 +666,20 @@ public class StreamsBuilder {
      * Adds a global {@link StateStore} to the topology.
      * The {@link StateStore} sources its data from all partitions of the provided input topic.
      * There will be exactly one instance of this {@link StateStore} per Kafka Streams instance.
-     * <p>
-     * Use the storeName to name both the store and the source node.
      *
      * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}
      * @param topic                 the topic to source the data from
-     * @param storeName             name of the {@link SourceNode} that will be automatically added
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
     public synchronized StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                      final String topic,
-                                                      final String storeName) {
+                                                      final String topic) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         internalStreamsBuilder.addGlobalStore(
             new StoreBuilderWrapper(storeBuilder),
             topic,
             new ConsumedInternal<>(),
-            () -> ProcessorAdapter.adaptRaw(new KTableSource<>(storeName, storeBuilder.name()).get()),
+            () -> ProcessorAdapter.adaptRaw(new KTableSource<>(storeBuilder.name(), storeBuilder.name()).get()),
             false
         );
         return this;
