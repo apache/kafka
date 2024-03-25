@@ -432,11 +432,11 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             });
         });
 
-        if (!unsentRequests.isEmpty()) {
+        if (unsentRequests.isEmpty()) {
+            globalResult.complete(null);
+        } else {
             expectedResponses.set(unsentRequests.size());
             requestsToSend.addAll(unsentRequests);
-        } else {
-            globalResult.complete(null);
         }
 
         return globalResult;
@@ -512,11 +512,11 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             });
         });
 
-        if (!unsentRequests.isEmpty()) {
+        if (unsentRequests.isEmpty()) {
+            globalResult.complete(null);
+        } else {
             expectedResponses.set(unsentRequests.size());
             requestsToSend.addAll(unsentRequests);
-        } else {
-            globalResult.complete(null);
         }
 
         return globalResult;

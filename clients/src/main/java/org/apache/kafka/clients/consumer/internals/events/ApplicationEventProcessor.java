@@ -107,6 +107,10 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 process((ListOffsetsEvent) event);
                 return;
 
+            case LIST_OFFSETS_FOR_TIME:
+                process((ListOffsetsForTimeEvent) event);
+                return;
+
             case RESET_POSITIONS:
                 process((ResetPositionsEvent) event);
                 return;
@@ -201,18 +205,19 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * List offsets for the given partitions. If the event searches the offsets for a specific timestamp, then
      * fetchOffsetsForTime is used, otherwise beginningOrEndOffsets is used.
      */
-
-    @SuppressWarnings("unchecked")
     private void process(final ListOffsetsEvent event) {
-        if (event.requireTimestamps()) {
-            final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
-                    requestManagers.offsetsRequestManager.fetchOffsetsForTime(event.timestampsToSearch());
-            future.whenComplete(complete(event.future()));
-        } else {
-            final CompletableFuture<Map<TopicPartition, Long>> future =
-                requestManagers.offsetsRequestManager.beginningOrEndOffset(event.timestampsToSearch());
-            future.whenComplete(complete(event.future()));
-        }
+        final CompletableFuture<Map<TopicPartition, Long>> future =
+            requestManagers.offsetsRequestManager.beginningOrEndOffset(event.timestampsToSearch());
+        future.whenComplete(complete(event.future()));
+    }
+
+    /**
+     * List the offsets for the given partitions at the given timestamps.
+     */
+    private void process(final ListOffsetsForTimeEvent event) {
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
+            requestManagers.offsetsRequestManager.fetchOffsetsForTime(event.timestampsToSearch());
+        future.whenComplete(complete(event.future()));
     }
 
     /**
