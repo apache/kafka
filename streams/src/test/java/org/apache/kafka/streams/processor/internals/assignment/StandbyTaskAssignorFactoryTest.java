@@ -31,7 +31,7 @@ import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
 
 import static java.util.Collections.singletonList;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -80,7 +80,7 @@ public class StandbyTaskAssignorFactoryTest {
     @Test
     public void shouldReturnClientTagAwareStandbyTaskAssignorWhenRackAwareAssignmentTagsIsSet() {
         final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(newAssignmentConfigs(singletonList("az")), rackAwareTaskAssignor);
-        assertTrue(standbyTaskAssignor instanceof ClientTagAwareStandbyTaskAssignor);
+        assertInstanceOf(ClientTagAwareStandbyTaskAssignor.class, standbyTaskAssignor);
         if (state != State.NULL) {
             verify(rackAwareTaskAssignor, never()).racksForProcess();
             verify(rackAwareTaskAssignor, never()).validClientRack();
@@ -91,15 +91,15 @@ public class StandbyTaskAssignorFactoryTest {
     public void shouldReturnDefaultOrRackAwareStandbyTaskAssignorWhenRackAwareAssignmentTagsIsEmpty() {
         final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(newAssignmentConfigs(Collections.emptyList()), rackAwareTaskAssignor);
         if (state == State.ENABLED) {
-            assertTrue(standbyTaskAssignor instanceof ClientTagAwareStandbyTaskAssignor);
+            assertInstanceOf(ClientTagAwareStandbyTaskAssignor.class, standbyTaskAssignor);
             verify(rackAwareTaskAssignor, times(1)).racksForProcess();
             verify(rackAwareTaskAssignor, times(1)).validClientRack();
         } else if (state == State.DISABLED) {
-            assertTrue(standbyTaskAssignor instanceof DefaultStandbyTaskAssignor);
+            assertInstanceOf(DefaultStandbyTaskAssignor.class, standbyTaskAssignor);
             verify(rackAwareTaskAssignor, never()).racksForProcess();
             verify(rackAwareTaskAssignor, times(1)).validClientRack();
         } else {
-            assertTrue(standbyTaskAssignor instanceof DefaultStandbyTaskAssignor);
+            assertInstanceOf(DefaultStandbyTaskAssignor.class, standbyTaskAssignor);
         }
     }
 

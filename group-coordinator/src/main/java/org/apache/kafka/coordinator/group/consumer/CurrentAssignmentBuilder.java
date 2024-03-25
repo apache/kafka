@@ -17,12 +17,12 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.FencedMemberEpochException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -33,49 +33,6 @@ import java.util.function.BiFunction;
  * The CurrentAssignmentBuilder class encapsulates the reconciliation engine of the
  * consumer group protocol. Given the current state of a member and a desired or target
  * assignment state, the state machine takes the necessary steps to converge them.
- *
- * The member state has the following properties:
- * - Current Epoch:
- *   The current epoch of the member.
- *
- * - Next Epoch:
- *   The desired epoch of the member. It corresponds to the epoch of the target/desired assignment.
- *   The member transitions to this epoch when it has revoked the partitions that it does not own
- *   or if it does not have to revoke any.
- *
- * - Previous Epoch:
- *   The epoch of the member when the state was last updated.
- *
- * - Assigned Partitions:
- *   The set of partitions currently assigned to the member. This represents what the member should have.
- *
- * - Partitions Pending Revocation:
- *   The set of partitions that the member should revoke before it can transition to the next state.
- *
- * - Partitions Pending Assignment:
- *   The set of partitions that the member will eventually receive. The partitions in this set are
- *   still owned by other members in the group.
- *
- * The state machine has three states:
- * - REVOKING:
- *   This state means that the member must revoke partitions before it can transition to the next epoch
- *   and thus start receiving new partitions. This is to guarantee that offsets of revoked partitions
- *   are committed with the current epoch. The member transitions to the next state only when it has
- *   acknowledged the revocation.
- *
- * - ASSIGNING:
- *   This state means that the member waits on partitions which are still owned by other members in the
- *   group. It remains in this state until they are all freed up.
- *
- * - STABLE:
- *   This state means that the member has received all its assigned partitions.
- *
- * The reconciliation process is started or re-started whenever a new target assignment is installed;
- * the epoch of the new target assignment is different from the next epoch of the member. In this transient
- * state, the assigned partitions, the partitions pending revocation and the partitions pending assignment
- * are updated. If the partitions pending revocation is not empty, the state machine transitions to
- * REVOKING; if partitions pending assignment is not empty, it transitions to ASSIGNING; otherwise it
- * transitions to STABLE.
  */
 public class CurrentAssignmentBuilder {
     /**
@@ -170,72 +127,122 @@ public class CurrentAssignmentBuilder {
      * @return A new ConsumerGroupMember or the current one.
      */
     public ConsumerGroupMember build() {
-        // A new target assignment has been installed, we need to restart
-        // the reconciliation loop from the beginning.
-        if (targetAssignmentEpoch != member.targetMemberEpoch()) {
-            return transitionToNewTargetAssignmentState();
-        }
-
         switch (member.state()) {
-            // Check if the partitions have been revoked by the member.
-            case REVOKING:
-                return maybeTransitionFromRevokingToAssigningOrStable();
-
-            // Check if pending partitions have been freed up.
-            case ASSIGNING:
-                return maybeTransitionFromAssigningToAssigningOrStable();
-
-            // Nothing to do.
             case STABLE:
-                return member;
+                // When the member is in the STABLE state, we verify if a newer
+                // epoch (or target assignment) is available. If it is, we can
+                // reconcile the member towards it. Otherwise, we return.
+                if (member.memberEpoch() != targetAssignmentEpoch) {
+                    return computeNextAssignment(
+                        member.memberEpoch(),
+                        member.assignedPartitions()
+                    );
+                } else {
+                    return member;
+                }
+
+            case UNREVOKED_PARTITIONS:
+                // When the member is in the UNREVOKED_PARTITIONS state, we wait
+                // until the member has revoked the necessary partitions. They are
+                // considered revoked when they are not anymore reported in the
+                // owned partitions set in the ConsumerGroupHeartbeat API.
+
+                // If the member does not provide its owned partitions. We cannot
+                // progress.
+                if (ownedTopicPartitions == null) {
+                    return member;
+                }
+
+                // If the member provides its owned partitions. We verify if it still
+                // owns any of the revoked partitions. If it does, we cannot progress.
+                for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
+                    for (Integer partitionId : topicPartitions.partitions()) {
+                        boolean stillHasRevokedPartition = member
+                            .partitionsPendingRevocation()
+                            .getOrDefault(topicPartitions.topicId(), Collections.emptySet())
+                            .contains(partitionId);
+                        if (stillHasRevokedPartition) {
+                            return member;
+                        }
+                    }
+                }
+
+                // When the member has revoked all the pending partitions, it can
+                // transition to the next epoch (current + 1) and we can reconcile
+                // its state towards the latest target assignment.
+                return computeNextAssignment(
+                    member.memberEpoch() + 1,
+                    member.assignedPartitions()
+                );
+
+            case UNRELEASED_PARTITIONS:
+                // When the member is in the UNRELEASED_PARTITIONS, we reconcile the
+                // member towards the latest target assignment. This will assign any
+                // of the unreleased partitions when they become available.
+                return computeNextAssignment(
+                    member.memberEpoch(),
+                    member.assignedPartitions()
+                );
+
+            case UNKNOWN:
+                // We could only end up in this state if a new state is added in the
+                // future and the group coordinator is downgraded. In this case, the
+                // best option is to fence the member to force it to rejoin the group
+                // without any partitions and to reconcile it again from scratch.
+                if (ownedTopicPartitions == null || !ownedTopicPartitions.isEmpty()) {
+                    throw new FencedMemberEpochException("The consumer group member is in a unknown state. "
+                        + "The member must abandon all its partitions and rejoin.");
+                }
+
+                return computeNextAssignment(
+                    targetAssignmentEpoch,
+                    member.assignedPartitions()
+                );
         }
 
         return member;
     }
 
     /**
-     * Transitions to NewTargetAssignment state. This is a transient state where
-     * we compute the assigned partitions, the partitions pending revocation,
-     * the partitions pending assignment, and transition to the next state.
+     * Computes the next assignment.
      *
+     * @param memberEpoch               The epoch of the member to use. This may be different
+     *                                  from the epoch in {@link CurrentAssignmentBuilder#member}.
+     * @param memberAssignedPartitions  The assigned partitions of the member to use.
      * @return A new ConsumerGroupMember.
      */
-    private ConsumerGroupMember transitionToNewTargetAssignmentState() {
+    private ConsumerGroupMember computeNextAssignment(
+        int memberEpoch,
+        Map<Uuid, Set<Integer>> memberAssignedPartitions
+    ) {
+        boolean hasUnreleasedPartitions = false;
         Map<Uuid, Set<Integer>> newAssignedPartitions = new HashMap<>();
         Map<Uuid, Set<Integer>> newPartitionsPendingRevocation = new HashMap<>();
         Map<Uuid, Set<Integer>> newPartitionsPendingAssignment = new HashMap<>();
 
-        // Compute the combined set of topics.
         Set<Uuid> allTopicIds = new HashSet<>(targetAssignment.partitions().keySet());
-        allTopicIds.addAll(member.assignedPartitions().keySet());
-        allTopicIds.addAll(member.partitionsPendingRevocation().keySet());
-        allTopicIds.addAll(member.partitionsPendingAssignment().keySet());
+        allTopicIds.addAll(memberAssignedPartitions.keySet());
 
         for (Uuid topicId : allTopicIds) {
             Set<Integer> target = targetAssignment.partitions()
                 .getOrDefault(topicId, Collections.emptySet());
-            Set<Integer> currentAssignedPartitions = member.assignedPartitions()
-                .getOrDefault(topicId, Collections.emptySet());
-            Set<Integer> currentRevokingPartitions = member.partitionsPendingRevocation()
+            Set<Integer> currentAssignedPartitions = memberAssignedPartitions
                 .getOrDefault(topicId, Collections.emptySet());
 
-            // Assigned_1 = (Assigned_0 + Pending_Revocation_0) ∩ Target
-            // Assigned_0 + Pending_Revocation_0 is used here because the partitions
-            // being revoked are still owned until the revocation is acknowledged.
+            // New Assigned Partitions = Previous Assigned Partitions ∩ Target
             Set<Integer> assignedPartitions = new HashSet<>(currentAssignedPartitions);
-            assignedPartitions.addAll(currentRevokingPartitions);
             assignedPartitions.retainAll(target);
 
-            // Pending_Revocation_1 = (Assigned_0 + Pending_Revocation_0) - Assigned_1
-            // Assigned_0 + Pending_Revocation_0 is used here because the partitions
-            // being revoked are still owned until the revocation is acknowledged.
+            // Partitions Pending Revocation = Previous Assigned Partitions - New Assigned Partitions
             Set<Integer> partitionsPendingRevocation = new HashSet<>(currentAssignedPartitions);
-            partitionsPendingRevocation.addAll(currentRevokingPartitions);
             partitionsPendingRevocation.removeAll(assignedPartitions);
 
-            // Pending_Assignment_1 = Target - Assigned_1
+            // Partitions Pending Assignment = Target - New Assigned Partitions - Unreleased Partitions
             Set<Integer> partitionsPendingAssignment = new HashSet<>(target);
             partitionsPendingAssignment.removeAll(assignedPartitions);
+            hasUnreleasedPartitions = partitionsPendingAssignment.removeIf(partitionId ->
+                currentPartitionEpoch.apply(topicId, partitionId) != -1
+            ) || hasUnreleasedPartitions;
 
             if (!assignedPartitions.isEmpty()) {
                 newAssignedPartitions.put(topicId, assignedPartitions);
@@ -251,195 +258,51 @@ public class CurrentAssignmentBuilder {
         }
 
         if (!newPartitionsPendingRevocation.isEmpty()) {
-            // If the partition pending revocation set is not empty, we transition the
-            // member to revoking and keep the current epoch. The transition to the new
-            // state is done when the member is updated.
+            // If there are partitions to be revoked, the member remains in its current
+            // epoch and requests the revocation of those partitions. It transitions to
+            // the UNREVOKED_PARTITIONS state to wait until the client acknowledges the
+            // revocation of the partitions.
             return new ConsumerGroupMember.Builder(member)
+                .setState(MemberState.UNREVOKED_PARTITIONS)
+                .updateMemberEpoch(memberEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
                 .setPartitionsPendingRevocation(newPartitionsPendingRevocation)
-                .setPartitionsPendingAssignment(newPartitionsPendingAssignment)
-                .setTargetMemberEpoch(targetAssignmentEpoch)
                 .build();
-        } else {
-            if (!newPartitionsPendingAssignment.isEmpty()) {
-                // If the partitions pending assignment set is not empty, we check
-                // if some or all partitions are free to use. If they are, we move
-                // them to the partitions assigned set.
-                maybeAssignPendingPartitions(newAssignedPartitions, newPartitionsPendingAssignment);
-            }
-
-            // We transition to the target epoch. If the partitions pending assignment
-            // set is empty, the member transition to stable, otherwise to assigning.
-            // The transition to the new state is done when the member is updated.
+        } else if (!newPartitionsPendingAssignment.isEmpty()) {
+            // If there are partitions to be assigned, the member transitions to the
+            // target epoch and requests the assignment of those partitions. Note that
+            // the partitions are directly added to the assigned partitions set. The
+            // member transitions to the STABLE state or to the UNRELEASED_PARTITIONS
+            // state depending on whether there are unreleased partitions or not.
+            newPartitionsPendingAssignment.forEach((topicId, partitions) -> newAssignedPartitions
+                .computeIfAbsent(topicId, __ -> new HashSet<>())
+                .addAll(partitions));
+            MemberState newState = hasUnreleasedPartitions ? MemberState.UNRELEASED_PARTITIONS : MemberState.STABLE;
             return new ConsumerGroupMember.Builder(member)
+                .setState(newState)
+                .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
                 .setPartitionsPendingRevocation(Collections.emptyMap())
-                .setPartitionsPendingAssignment(newPartitionsPendingAssignment)
-                .setPreviousMemberEpoch(member.memberEpoch())
-                .setMemberEpoch(targetAssignmentEpoch)
-                .setTargetMemberEpoch(targetAssignmentEpoch)
                 .build();
-        }
-    }
-
-    /**
-     * Tries to transition from Revoke to Assigning or Stable. This is only
-     * possible when the member acknowledges that it only owns the partition
-     * in the assigned partitions.
-     *
-     * @return A new ConsumerGroupMember with the new state or the current one
-     *         if the member stays in the current state.
-     */
-    private ConsumerGroupMember maybeTransitionFromRevokingToAssigningOrStable() {
-        if (member.partitionsPendingRevocation().isEmpty() || matchesAssignedPartitions(ownedTopicPartitions)) {
-            Map<Uuid, Set<Integer>> newAssignedPartitions = deepCopy(member.assignedPartitions());
-            Map<Uuid, Set<Integer>> newPartitionsPendingAssignment = deepCopy(member.partitionsPendingAssignment());
-
-            if (!newPartitionsPendingAssignment.isEmpty()) {
-                // If the partitions pending assignment set is not empty, we check
-                // if some or all partitions are free to use. If they are, we move
-                // them to the assigned set.
-                maybeAssignPendingPartitions(newAssignedPartitions, newPartitionsPendingAssignment);
-            }
-
-            // We transition to the target epoch. If the partitions pending assignment
-            // set is empty, the member transition to stable, otherwise to assigning.
-            // The transition to the new state is done when the member is updated.
+        } else if (hasUnreleasedPartitions) {
+            // If there are no partitions to be revoked nor to be assigned but some
+            // partitions are not available yet, the member transitions to the target
+            // epoch, to the UNRELEASED_PARTITIONS state and waits.
             return new ConsumerGroupMember.Builder(member)
+                .setState(MemberState.UNRELEASED_PARTITIONS)
+                .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
                 .setPartitionsPendingRevocation(Collections.emptyMap())
-                .setPartitionsPendingAssignment(newPartitionsPendingAssignment)
-                .setPreviousMemberEpoch(member.memberEpoch())
-                .setMemberEpoch(targetAssignmentEpoch)
-                .setTargetMemberEpoch(targetAssignmentEpoch)
                 .build();
         } else {
-            return member;
-        }
-    }
-
-    /**
-     * Tries to transition from Assigning to Assigning or Stable. This is only
-     * possible when one or more partitions in the partitions pending assignment
-     * set have been freed up by other members in the group.
-     *
-     * @return A new ConsumerGroupMember with the new state or the current one
-     *         if the member stays in the current state.
-     */
-    private ConsumerGroupMember maybeTransitionFromAssigningToAssigningOrStable() {
-        Map<Uuid, Set<Integer>> newAssignedPartitions = deepCopy(member.assignedPartitions());
-        Map<Uuid, Set<Integer>> newPartitionsPendingAssignment = deepCopy(member.partitionsPendingAssignment());
-
-        // If any partition can transition from assigning to assigned, we update
-        // the member. Otherwise, we return the current one. The transition to the
-        // new state is done when the member is updated.
-        if (maybeAssignPendingPartitions(newAssignedPartitions, newPartitionsPendingAssignment)) {
+            // Otherwise, the member transitions to the target epoch and to the
+            // STABLE state.
             return new ConsumerGroupMember.Builder(member)
+                .setState(MemberState.STABLE)
+                .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
                 .setPartitionsPendingRevocation(Collections.emptyMap())
-                .setPartitionsPendingAssignment(newPartitionsPendingAssignment)
-                .setPreviousMemberEpoch(member.memberEpoch())
-                .setMemberEpoch(targetAssignmentEpoch)
-                .setTargetMemberEpoch(targetAssignmentEpoch)
                 .build();
-        } else {
-            return member;
         }
-    }
-
-    /**
-     * Tries to move partitions from the partitions pending assignment set to
-     * the partitions assigned set if they are no longer owned.
-     *
-     * @param newAssignedPartitions             The assigned partitions.
-     * @param newPartitionsPendingAssignment    The partitions pending assignment.
-     * @return A boolean indicating if any partitions were moved.
-     */
-    private boolean maybeAssignPendingPartitions(
-        Map<Uuid, Set<Integer>> newAssignedPartitions,
-        Map<Uuid, Set<Integer>> newPartitionsPendingAssignment
-    ) {
-        boolean changed = false;
-
-        Iterator<Map.Entry<Uuid, Set<Integer>>> assigningSetIterator =
-            newPartitionsPendingAssignment.entrySet().iterator();
-
-        while (assigningSetIterator.hasNext()) {
-            Map.Entry<Uuid, Set<Integer>> pair = assigningSetIterator.next();
-            Uuid topicId = pair.getKey();
-            Set<Integer> assigning = pair.getValue();
-
-            Iterator<Integer> assigningIterator = assigning.iterator();
-            while (assigningIterator.hasNext()) {
-                Integer partitionId = assigningIterator.next();
-
-                // A partition can be assigned to this member iff it has been
-                // released by its previous owner. This is signaled by -1.
-                Integer partitionEpoch = currentPartitionEpoch.apply(topicId, partitionId);
-                if (partitionEpoch == -1) {
-                    assigningIterator.remove();
-                    put(newAssignedPartitions, topicId, partitionId);
-                    changed = true;
-                }
-            }
-
-            if (assigning.isEmpty()) {
-                assigningSetIterator.remove();
-            }
-        }
-
-        return changed;
-    }
-
-    /**
-     * Checks whether the owned topic partitions passed by the member to the state
-     * machine via the ConsumerGroupHeartbeat request corresponds to the assigned
-     * partitions.
-     *
-     * @param ownedTopicPartitions The topic partitions owned by the remove client.
-     * @return A boolean indicating if the owned partitions matches the Assigned set.
-     */
-    private boolean matchesAssignedPartitions(
-        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
-    ) {
-        if (ownedTopicPartitions == null) return false;
-        if (ownedTopicPartitions.size() != member.assignedPartitions().size()) return false;
-
-        for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
-            Set<Integer> partitions = member.assignedPartitions().get(topicPartitions.topicId());
-            if (partitions == null) return false;
-            for (Integer partitionId : topicPartitions.partitions()) {
-                if (!partitions.contains(partitionId)) return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Makes a deep copy of an assignment map.
-     *
-     * @param map The Map to copy.
-     * @return The copy.
-     */
-    private Map<Uuid, Set<Integer>> deepCopy(Map<Uuid, Set<Integer>> map) {
-        Map<Uuid, Set<Integer>> copy = new HashMap<>();
-        map.forEach((topicId, partitions) -> copy.put(topicId, new HashSet<>(partitions)));
-        return copy;
-    }
-
-    /**
-     * Puts the given TopicId and Partitions to the given map.
-     */
-    private void put(
-        Map<Uuid, Set<Integer>> map,
-        Uuid topicId,
-        Integer partitionId
-    ) {
-        map.compute(topicId, (__, partitionsOrNull) -> {
-            if (partitionsOrNull == null) partitionsOrNull = new HashSet<>();
-            partitionsOrNull.add(partitionId);
-            return partitionsOrNull;
-        });
     }
 }

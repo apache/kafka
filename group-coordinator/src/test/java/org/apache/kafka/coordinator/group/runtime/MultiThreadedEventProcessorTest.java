@@ -27,15 +27,12 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -53,53 +50,19 @@ import static org.mockito.Mockito.verify;
 
 @Timeout(value = 60)
 public class MultiThreadedEventProcessorTest {
-    private static class MockEventAccumulator<T> extends EventAccumulator<TopicPartition, CoordinatorEvent> {
+    private static class DelayEventAccumulator extends EventAccumulator<TopicPartition, CoordinatorEvent> {
         private final Time time;
-        private final Queue<CoordinatorEvent> events;
-        private final long timeToPollMs;
-        private final AtomicBoolean isClosed;
+        private final long takeDelayMs;
 
-        public MockEventAccumulator(Time time, long timeToPollMs) {
+        public DelayEventAccumulator(Time time, long takeDelayMs) {
             this.time = time;
-            this.events = new LinkedList<>();
-            this.timeToPollMs = timeToPollMs;
-            this.isClosed = new AtomicBoolean(false);
+            this.takeDelayMs = takeDelayMs;
         }
 
         @Override
-        public CoordinatorEvent poll() {
-            synchronized (events) {
-                while (events.isEmpty() && !isClosed.get()) {
-                    try {
-                        events.wait();
-                    } catch (Exception ignored) {
-                        
-                    }
-                }
-                time.sleep(timeToPollMs);
-                return events.poll();
-            }
-        }
-
-        @Override
-        public CoordinatorEvent poll(long timeout, TimeUnit unit) {
-            return null;
-        }
-
-        @Override
-        public void add(CoordinatorEvent event) throws RejectedExecutionException {
-            synchronized (events) {
-                events.add(event);
-                events.notifyAll();
-            }
-        }
-
-        @Override
-        public void close() {
-            isClosed.set(true);
-            synchronized (events) {
-                events.notifyAll();
-            }
+        public CoordinatorEvent take() {
+            time.sleep(takeDelayMs);
+            return super.take();
         }
     }
 
@@ -223,7 +186,7 @@ public class MultiThreadedEventProcessorTest {
                 new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet)
             );
 
-            events.forEach(eventProcessor::enqueue);
+            events.forEach(eventProcessor::enqueueLast);
 
             CompletableFuture.allOf(events
                 .stream()
@@ -260,7 +223,7 @@ public class MultiThreadedEventProcessorTest {
                 new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet, true)  // Event 5
             );
 
-            events.forEach(eventProcessor::enqueue);
+            events.forEach(eventProcessor::enqueueLast);
 
             // Events 0 and 1 are executed.
             assertTrue(events.get(0).awaitExecution(5, TimeUnit.SECONDS));
@@ -338,7 +301,7 @@ public class MultiThreadedEventProcessorTest {
         eventProcessor.close();
 
         assertThrows(RejectedExecutionException.class,
-            () -> eventProcessor.enqueue(new FutureEvent<>(new TopicPartition("foo", 0), () -> 0)));
+            () -> eventProcessor.enqueueLast(new FutureEvent<>(new TopicPartition("foo", 0), () -> 0)));
     }
 
     @Test
@@ -353,7 +316,11 @@ public class MultiThreadedEventProcessorTest {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
 
             // Special event which blocks until the latch is released.
-            FutureEvent<Integer> blockingEvent = new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet, true);
+            FutureEvent<Integer> blockingEvent = new FutureEvent<>(
+                new TopicPartition("foo", 0),
+                numEventsExecuted::incrementAndGet,
+                true
+            );
 
             List<FutureEvent<Integer>> events = Arrays.asList(
                 new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
@@ -365,14 +332,14 @@ public class MultiThreadedEventProcessorTest {
             );
 
             // Enqueue the blocking event.
-            eventProcessor.enqueue(blockingEvent);
+            eventProcessor.enqueueLast(blockingEvent);
 
             // Ensure that the blocking event is executed.
             waitForCondition(() -> numEventsExecuted.get() > 0,
                 "Blocking event not executed.");
 
             // Enqueue the other events.
-            events.forEach(eventProcessor::enqueue);
+            events.forEach(eventProcessor::enqueueLast);
 
             // Events should not be completed.
             events.forEach(event -> assertFalse(event.future.isDone()));
@@ -382,7 +349,7 @@ public class MultiThreadedEventProcessorTest {
 
             // Enqueuing a new event is rejected.
             assertThrows(RejectedExecutionException.class,
-                () -> eventProcessor.enqueue(blockingEvent));
+                () -> eventProcessor.enqueueLast(blockingEvent));
 
             // Release the blocking event to unblock the thread.
             blockingEvent.release();
@@ -428,10 +395,10 @@ public class MultiThreadedEventProcessorTest {
             1, // Use a single thread to block event in the processor.
             mockTime,
             mockRuntimeMetrics,
-            new MockEventAccumulator<>(mockTime, 500L)
+            new DelayEventAccumulator(mockTime, 500L)
         )) {
             // Enqueue the blocking event.
-            eventProcessor.enqueue(blockingEvent);
+            eventProcessor.enqueueLast(blockingEvent);
 
             // Ensure that the blocking event is executed.
             waitForCondition(() -> numEventsExecuted.get() > 0,
@@ -447,7 +414,7 @@ public class MultiThreadedEventProcessorTest {
                 mockTime.milliseconds()
             );
 
-            eventProcessor.enqueue(otherEvent);
+            eventProcessor.enqueueLast(otherEvent);
 
             // Pass the time.
             mockTime.sleep(3000L);
@@ -501,7 +468,7 @@ public class MultiThreadedEventProcessorTest {
             2,
             Time.SYSTEM,
             mockRuntimeMetrics,
-            new MockEventAccumulator<>(Time.SYSTEM, 100L)
+            new DelayEventAccumulator(Time.SYSTEM, 100L)
         )) {
             List<Double> recordedRatios = new ArrayList<>();
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
@@ -525,7 +492,7 @@ public class MultiThreadedEventProcessorTest {
                 new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet)
             );
 
-            events.forEach(eventProcessor::enqueue);
+            events.forEach(eventProcessor::enqueueLast);
 
             CompletableFuture.allOf(events
                 .stream()

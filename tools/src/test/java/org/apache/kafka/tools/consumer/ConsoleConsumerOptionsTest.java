@@ -32,6 +32,7 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,12 +49,12 @@ public class ConsoleConsumerOptionsTest {
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
 
         assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("test", config.topicArg());
+        assertEquals("test", config.topicArg().orElse(""));
         assertTrue(config.fromBeginning());
         assertFalse(config.enableSystestEventsLogging());
         assertFalse(config.skipMessageOnError());
         assertEquals(-1, config.maxMessages());
-        assertEquals(-1, config.timeoutMs());
+        assertEquals(Long.MAX_VALUE, config.timeoutMs());
     }
 
     @Test
@@ -67,7 +68,7 @@ public class ConsoleConsumerOptionsTest {
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
 
         assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("includeTest*", config.includedTopicsArg());
+        assertEquals("includeTest*", config.includedTopicsArg().orElse(""));
         assertTrue(config.fromBeginning());
     }
 
@@ -82,7 +83,7 @@ public class ConsoleConsumerOptionsTest {
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
 
         assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("whitelistTest*", config.includedTopicsArg());
+        assertEquals("whitelistTest*", config.includedTopicsArg().orElse(""));
         assertTrue(config.fromBeginning());
     }
 
@@ -96,7 +97,7 @@ public class ConsoleConsumerOptionsTest {
         };
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
         assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("includeTest*", config.includedTopicsArg());
+        assertEquals("includeTest*", config.includedTopicsArg().orElse(""));
         assertTrue(config.fromBeginning());
     }
 
@@ -112,7 +113,7 @@ public class ConsoleConsumerOptionsTest {
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
 
         assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("test", config.topicArg());
+        assertEquals("test", config.topicArg().orElse(""));
         assertTrue(config.partitionArg().isPresent());
         assertEquals(0, config.partitionArg().getAsInt());
         assertEquals(3, config.offsetArg());
@@ -191,7 +192,7 @@ public class ConsoleConsumerOptionsTest {
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
 
         assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("test", config.topicArg());
+        assertEquals("test", config.topicArg().orElse(""));
         assertTrue(config.partitionArg().isPresent());
         assertEquals(0, config.partitionArg().getAsInt());
         assertEquals(-1, config.offsetArg());
@@ -211,7 +212,7 @@ public class ConsoleConsumerOptionsTest {
         Properties consumerProperties = config.consumerProps();
 
         assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("test", config.topicArg());
+        assertEquals("test", config.topicArg().orElse(""));
         assertFalse(config.fromBeginning());
         assertEquals("latest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
     }
@@ -228,7 +229,7 @@ public class ConsoleConsumerOptionsTest {
         Properties consumerProperties = config.consumerProps();
 
         assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("test", config.topicArg());
+        assertEquals("test", config.topicArg().orElse(""));
         assertFalse(config.fromBeginning());
         assertEquals("earliest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
     }
@@ -246,7 +247,7 @@ public class ConsoleConsumerOptionsTest {
         Properties consumerProperties = config.consumerProps();
 
         assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("test", config.topicArg());
+        assertEquals("test", config.topicArg().orElse(""));
         assertTrue(config.fromBeginning());
         assertEquals("earliest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
     }
@@ -262,7 +263,7 @@ public class ConsoleConsumerOptionsTest {
         Properties consumerProperties = config.consumerProps();
 
         assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("test", config.topicArg());
+        assertEquals("test", config.topicArg().orElse(""));
         assertFalse(config.fromBeginning());
         assertEquals("latest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
     }
@@ -392,11 +393,11 @@ public class ConsoleConsumerOptionsTest {
 
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
 
-        assertTrue(config.formatter() instanceof DefaultMessageFormatter);
+        assertInstanceOf(DefaultMessageFormatter.class, config.formatter());
         assertTrue(config.formatterArgs().containsKey("key.deserializer.my-props"));
         DefaultMessageFormatter formatter = (DefaultMessageFormatter) config.formatter();
         assertTrue(formatter.keyDeserializer().isPresent());
-        assertTrue(formatter.keyDeserializer().get() instanceof MockDeserializer);
+        assertInstanceOf(MockDeserializer.class, formatter.keyDeserializer().get());
         MockDeserializer keyDeserializer = (MockDeserializer) formatter.keyDeserializer().get();
         assertEquals(1, keyDeserializer.configs.size());
         assertEquals("abc", keyDeserializer.configs.get("my-props"));
@@ -419,11 +420,11 @@ public class ConsoleConsumerOptionsTest {
 
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
 
-        assertTrue(config.formatter() instanceof DefaultMessageFormatter);
+        assertInstanceOf(DefaultMessageFormatter.class, config.formatter());
         assertTrue(config.formatterArgs().containsKey("key.deserializer.my-props"));
         DefaultMessageFormatter formatter = (DefaultMessageFormatter) config.formatter();
         assertTrue(formatter.keyDeserializer().isPresent());
-        assertTrue(formatter.keyDeserializer().get() instanceof MockDeserializer);
+        assertInstanceOf(MockDeserializer.class, formatter.keyDeserializer().get());
         MockDeserializer keyDeserializer = (MockDeserializer) formatter.keyDeserializer().get();
         assertEquals(1, keyDeserializer.configs.size());
         assertEquals("abc", keyDeserializer.configs.get("my-props"));
@@ -442,7 +443,7 @@ public class ConsoleConsumerOptionsTest {
 
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
         assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("test", config.topicArg());
+        assertEquals("test", config.topicArg().orElse(""));
         assertEquals(-2, config.offsetArg());
         assertTrue(config.fromBeginning());
 
@@ -455,7 +456,7 @@ public class ConsoleConsumerOptionsTest {
 
         config = new ConsoleConsumerOptions(args);
         assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("test", config.topicArg());
+        assertEquals("test", config.topicArg().orElse(""));
         assertEquals(-1, config.offsetArg());
         assertFalse(config.fromBeginning());
     }
@@ -617,5 +618,31 @@ public class ConsoleConsumerOptionsTest {
         } finally {
             Exit.resetExitProcedure();
         }
+    }
+
+    @Test
+    public void testParseTimeoutMs() throws Exception {
+        String[] withoutTimeoutMs = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0"
+        };
+        assertEquals(Long.MAX_VALUE, new ConsoleConsumerOptions(withoutTimeoutMs).timeoutMs());
+
+        String[] negativeTimeoutMs = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--timeout-ms", "-100"
+        };
+        assertEquals(Long.MAX_VALUE, new ConsoleConsumerOptions(negativeTimeoutMs).timeoutMs());
+
+        String[] validTimeoutMs = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--timeout-ms", "100"
+        };
+        assertEquals(100, new ConsoleConsumerOptions(validTimeoutMs).timeoutMs());
     }
 }

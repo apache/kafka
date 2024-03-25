@@ -22,6 +22,8 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -30,46 +32,54 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * cluster creation and cleanup because the command is expected to fail immediately.
  */
 public class LeaderElectionCommandErrorTest {
+
     @Test
     public void testTopicWithoutPartition() {
-        String out = ToolsTestUtils.captureStandardErr(() -> LeaderElectionCommand.main(
-                "--bootstrap-server", "nohost:9092",
-                "--election-type", "unclean",
-                "--topic", "some-topic"
-            ));
+        String[] args = {
+            "--bootstrap-server", "nohost:9092",
+            "--election-type", "unclean",
+            "--topic", "some-topic"
+        };
+        assertEquals(1, LeaderElectionCommand.mainNoExit(args));
+        String out = ToolsTestUtils.captureStandardErr(() -> LeaderElectionCommand.mainNoExit(args));
         assertTrue(out.startsWith("Missing required option(s)"));
         assertTrue(out.contains(" partition"));
     }
 
     @Test
     public void testPartitionWithoutTopic() {
-        String out = ToolsTestUtils.captureStandardErr(() -> LeaderElectionCommand.main(
+        String[] args = {
             "--bootstrap-server", "nohost:9092",
             "--election-type", "unclean",
             "--all-topic-partitions",
             "--partition", "0"
-        ));
-        String[] rows = out.split("\n");
+        };
+        assertEquals(1, LeaderElectionCommand.mainNoExit(args));
+        String out = ToolsTestUtils.captureStandardErr(() -> LeaderElectionCommand.mainNoExit(args));
         assertTrue(out.startsWith("Option partition is only allowed if topic is used"));
     }
 
     @Test
     public void testMissingElectionType() {
-        String out = ToolsTestUtils.captureStandardErr(() -> LeaderElectionCommand.main(
+        String[] args = {
             "--bootstrap-server", "nohost:9092",
             "--topic", "some-topic",
             "--partition", "0"
-        ));
+        };
+        assertEquals(1, LeaderElectionCommand.mainNoExit(args));
+        String out = ToolsTestUtils.captureStandardErr(() -> LeaderElectionCommand.mainNoExit(args));
         assertTrue(out.startsWith("Missing required option(s)"));
         assertTrue(out.contains(" election-type"));
     }
 
     @Test
     public void testMissingTopicPartitionSelection() {
-        String out = ToolsTestUtils.captureStandardErr(() -> LeaderElectionCommand.main(
+        String[] args = {
             "--bootstrap-server", "nohost:9092",
             "--election-type", "preferred"
-        ));
+        };
+        assertEquals(1, LeaderElectionCommand.mainNoExit(args));
+        String out = ToolsTestUtils.captureStandardErr(() -> LeaderElectionCommand.mainNoExit(args));
         assertTrue(out.startsWith("One and only one of the following options is required: "));
         assertTrue(out.contains(" all-topic-partitions"));
         assertTrue(out.contains(" topic"));
@@ -84,6 +94,6 @@ public class LeaderElectionCommandErrorTest {
             "--election-type", "unclean",
             "--all-topic-partitions"
         ));
-        assertTrue(e.getCause() instanceof TimeoutException);
+        assertInstanceOf(TimeoutException.class, e.getCause());
     }
 }

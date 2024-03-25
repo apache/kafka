@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -128,7 +127,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
         private void handleEvents() {
             while (!shuttingDown) {
                 recordPollStartTime(time.milliseconds());
-                CoordinatorEvent event = accumulator.poll();
+                CoordinatorEvent event = accumulator.take();
                 recordPollEndTime(time.milliseconds());
                 if (event != null) {
                     try {
@@ -148,8 +147,8 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
         }
 
         private void drainEvents() {
-            CoordinatorEvent event = accumulator.poll(0, TimeUnit.MILLISECONDS);
-            while (event != null) {
+            CoordinatorEvent event;
+            while ((event = accumulator.poll()) != null) {
                 try {
                     log.debug("Draining event: {}.", event);
                     metrics.recordEventQueueTime(time.milliseconds() - event.createdTimeMs());
@@ -159,8 +158,6 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
                 } finally {
                     accumulator.done(event);
                 }
-
-                event = accumulator.poll(0, TimeUnit.MILLISECONDS);
             }
         }
 
@@ -201,14 +198,25 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
     }
 
     /**
-     * Enqueues a new {{@link CoordinatorEvent}}.
+     * Enqueues a new {{@link CoordinatorEvent}} at the end of the processor.
      *
      * @param event The event.
      * @throws RejectedExecutionException If the event processor is closed.
      */
     @Override
-    public void enqueue(CoordinatorEvent event) throws RejectedExecutionException {
-        accumulator.add(event);
+    public void enqueueLast(CoordinatorEvent event) throws RejectedExecutionException {
+        accumulator.addLast(event);
+    }
+
+    /**
+     * Enqueues a new {{@link CoordinatorEvent}} at the front of the processor.
+     *
+     * @param event The event.
+     * @throws RejectedExecutionException If the event processor is closed.
+     */
+    @Override
+    public void enqueueFirst(CoordinatorEvent event) throws RejectedExecutionException {
+        accumulator.addFirst(event);
     }
 
     /**

@@ -87,6 +87,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class StreamsConfigTest {
     @Rule
@@ -870,16 +871,16 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
 
         final StreamsConfig config = new StreamsConfig(props);
-        assertTrue(config.defaultKeySerde() instanceof Serdes.LongSerde);
-        assertTrue(config.defaultValueSerde() instanceof Serdes.LongSerde);
-        assertTrue(config.defaultTimestampExtractor() instanceof MockTimestampExtractor);
+        assertInstanceOf(Serdes.LongSerde.class, config.defaultKeySerde());
+        assertInstanceOf(Serdes.LongSerde.class, config.defaultValueSerde());
+        assertInstanceOf(MockTimestampExtractor.class, config.defaultTimestampExtractor());
     }
 
     @Test
     public void shouldUseCorrectDefaultsWhenNoneSpecified() {
         final StreamsConfig config = new StreamsConfig(getStreamsConfig());
 
-        assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
+        assertInstanceOf(FailOnInvalidTimestamp.class, config.defaultTimestampExtractor());
         assertThrows(ConfigException.class, config::defaultKeySerde);
         assertThrows(ConfigException.class, config::defaultValueSerde);
     }
@@ -1460,7 +1461,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldReturnDefaultClientSupplier() {
         final KafkaClientSupplier supplier = streamsConfig.getKafkaClientSupplier();
-        assertTrue(supplier instanceof DefaultKafkaClientSupplier);
+        assertInstanceOf(DefaultKafkaClientSupplier.class, supplier);
     }
 
     @Test
