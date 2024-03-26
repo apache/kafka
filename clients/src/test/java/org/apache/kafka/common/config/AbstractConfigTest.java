@@ -274,12 +274,7 @@ public class AbstractConfigTest {
         Properties props = new Properties();
         props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, configValue);
         TestConfig config = new TestConfig(props);
-        try {
-            config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
-            fail("Expected a config exception due to invalid props :" + props);
-        } catch (KafkaException e) {
-            // this is good
-        }
+        assertThrows(KafkaException.class, () -> config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class));
     }
 
     @Test
@@ -510,12 +505,7 @@ public class AbstractConfigTest {
         props.put("config.providers.file.class",
             "org.apache.kafka.common.config.provider.InvalidConfigProvider");
         props.put("testKey", "${test:/foo/bar/testpath:testKey}");
-        try {
-            new TestIndirectConfigResolution(props);
-            fail("Expected a config exception due to invalid props :" + props);
-        } catch (KafkaException e) {
-            // this is good
-        }
+        assertThrows(KafkaException.class, () -> new TestIndirectConfigResolution(props));
     }
 
     @Test
@@ -527,13 +517,8 @@ public class AbstractConfigTest {
         props.put("config.providers", "file");
         props.put("config.providers.file.class", invalidConfigProvider);
         props.put("testKey", "${test:/foo/bar/testpath:testKey}");
-        try {
-            new TestIndirectConfigResolution(props, Collections.emptyMap());
-            fail("Expected a config exception due to invalid props :" + props);
-        } catch (KafkaException e) {
-            // deliver the disallowed message first to prevent probing the classloader
-            assertTrue(e.getMessage().contains(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY));
-        }
+        KafkaException e = assertThrows(KafkaException.class, () -> new TestIndirectConfigResolution(props, Collections.emptyMap()));
+        assertTrue(e.getMessage().contains(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY));
     }
 
     @Test
@@ -545,13 +530,8 @@ public class AbstractConfigTest {
         props.put("config.providers", "file");
         props.put("config.providers.file.class", invalidConfigProvider);
         props.put("testKey", "${test:/foo/bar/testpath:testKey}");
-        try {
-            new TestIndirectConfigResolution(props, Collections.emptyMap());
-            fail("Expected a config exception due to invalid props :" + props);
-        } catch (KafkaException e) {
-            // deliver the disallowed message first to prevent probing the classloader
-            assertFalse(e.getMessage().contains(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY));
-        }
+        KafkaException e = assertThrows(KafkaException.class, () -> new TestIndirectConfigResolution(props, Collections.emptyMap()));
+        assertFalse(e.getMessage().contains(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY));
     }
 
     @Test
