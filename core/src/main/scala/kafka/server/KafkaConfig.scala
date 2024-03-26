@@ -306,6 +306,12 @@ object KafkaConfig {
   val ShareGroupRecordLockPartitionLimitProp = "group.share.record.lock.partition.limit"
   val ShareGroupMaxGroupsProp = "group.share.max.groups"
   val ShareGroupMaxSizeProp = "group.share.max.size"
+  val ShareGroupSessionTimeoutMsProp = "group.share.session.timeout.ms"
+  val ShareGroupMinSessionTimeoutMsProp = "group.share.min.session.timeout.ms"
+  val ShareGroupMaxSessionTimeoutMsProp = "group.share.max.session.timeout.ms"
+  val ShareGroupHeartbeatIntervalMsProp = "group.share.heartbeat.interval.ms"
+  val ShareGroupMinHeartbeatIntervalMsProp = "group.share.min.heartbeat.interval.ms"
+  val ShareGroupMaxHeartbeatIntervalMsProp = "group.share.max.heartbeat.interval.ms"
 
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeProp = "offset.metadata.max.bytes"
@@ -802,6 +808,12 @@ object KafkaConfig {
   val ShareGroupRecordLockPartitionLimitDoc = "Share-group record lock limit per share-partition."
   val ShareGroupMaxGroupsDoc = "The maximum number of share groups."
   val ShareGroupMaxSizeDoc = "The maximum number of consumers that a single share group can accommodate."
+  val ShareGroupSessionTimeoutMsDoc = "The timeout to detect client failures when using the share group protocol."
+  val ShareGroupMinSessionTimeoutMsDoc = "The minimum allowed session timeout for share group members."
+  val ShareGroupMaxSessionTimeoutMsDoc = "The maximum allowed session timeout for share group members."
+  val ShareGroupHeartbeatIntervalMsDoc = "The heartbeat interval given to the members of a share group."
+  val ShareGroupMinHeartbeatIntervalMsDoc = "The minimum heartbeat interval for share group members."
+  val ShareGroupMaxHeartbeatIntervalMsDoc = "The maximum heartbeat interval for share group members."
 
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeDoc = "The maximum size for a metadata entry associated with an offset commit."
@@ -1177,6 +1189,12 @@ object KafkaConfig {
       .define(ShareGroupRecordLockPartitionLimitProp, SHORT, Defaults.SHARE_GROUP_RECORD_LOCK_PARTITION_LIMIT, between(100, 10000), MEDIUM, ShareGroupRecordLockPartitionLimitDoc)
       .define(ShareGroupMaxGroupsProp, SHORT, Defaults.SHARE_GROUP_MAX_GROUPS, between(1, 100), MEDIUM, ShareGroupMaxGroupsDoc)
       .define(ShareGroupMaxSizeProp, SHORT, Defaults.SHARE_GROUP_MAX_SIZE, between(10, 1000), MEDIUM, ShareGroupMaxSizeDoc)
+      .define(ShareGroupSessionTimeoutMsProp, INT, Defaults.SHARE_GROUP_SESSION_TIMEOUT_MS, atLeast(1), MEDIUM, ShareGroupSessionTimeoutMsDoc)
+      .define(ShareGroupMinSessionTimeoutMsProp, INT, Defaults.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS, atLeast(1), MEDIUM, ShareGroupMinSessionTimeoutMsDoc)
+      .define(ShareGroupMaxSessionTimeoutMsProp, INT, Defaults.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS, atLeast(1), MEDIUM, ShareGroupMaxSessionTimeoutMsDoc)
+      .define(ShareGroupHeartbeatIntervalMsProp, INT, Defaults.SHARE_GROUP_HEARTBEAT_INTERVAL_MS, atLeast(1), MEDIUM, ShareGroupHeartbeatIntervalMsDoc)
+      .define(ShareGroupMinHeartbeatIntervalMsProp, INT, Defaults.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS, atLeast(1), MEDIUM, ShareGroupMinHeartbeatIntervalMsDoc)
+      .define(ShareGroupMaxHeartbeatIntervalMsProp, INT, Defaults.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS, atLeast(1), MEDIUM, ShareGroupMaxHeartbeatIntervalMsDoc)
 
       /** ********* Offset management configuration ***********/
       .define(OffsetMetadataMaxSizeProp, INT, Defaults.OFFSET_METADATA_MAX_SIZE, HIGH, OffsetMetadataMaxSizeDoc)
@@ -1837,6 +1855,12 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val shareGroupRecordLockPartitionLimit = getShort(KafkaConfig.ShareGroupRecordLockPartitionLimitProp)
   val shareGroupMaxGroups = getShort(KafkaConfig.ShareGroupMaxGroupsProp)
   val shareGroupMaxSize = getShort(KafkaConfig.ShareGroupMaxSizeProp)
+  val shareGroupSessionTimeoutMs = getInt(KafkaConfig.ShareGroupSessionTimeoutMsProp)
+  val shareGroupMinSessionTimeoutMs = getInt(KafkaConfig.ShareGroupMinSessionTimeoutMsProp)
+  val shareGroupMaxSessionTimeoutMs = getInt(KafkaConfig.ShareGroupMaxSessionTimeoutMsProp)
+  val shareGroupHeartbeatIntervalMs = getInt(KafkaConfig.ShareGroupHeartbeatIntervalMsProp)
+  val shareGroupMinHeartbeatIntervalMs = getInt(KafkaConfig.ShareGroupMinHeartbeatIntervalMsProp)
+  val shareGroupMaxHeartbeatIntervalMs = getInt(KafkaConfig.ShareGroupMaxHeartbeatIntervalMsProp)
 
   /** ********* Offset management configuration ***********/
   val offsetMetadataMaxSize = getInt(KafkaConfig.OffsetMetadataMaxSizeProp)
@@ -2331,6 +2355,26 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     require(consumerGroupSessionTimeoutMs <= consumerGroupMaxSessionTimeoutMs,
       s"${KafkaConfig.ConsumerGroupSessionTimeoutMsProp} must be less than or equals " +
       s"to ${KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp}")
+
+    require(shareGroupMaxHeartbeatIntervalMs >= shareGroupMinHeartbeatIntervalMs,
+      s"${KafkaConfig.ShareGroupMaxHeartbeatIntervalMsProp} must be greater than or equals " +
+        s"to ${KafkaConfig.ShareGroupMinHeartbeatIntervalMsProp}")
+    require(shareGroupHeartbeatIntervalMs >= shareGroupMinHeartbeatIntervalMs,
+      s"${KafkaConfig.ShareGroupHeartbeatIntervalMsProp} must be greater than or equals " +
+        s"to ${KafkaConfig.ShareGroupMinHeartbeatIntervalMsProp}")
+    require(shareGroupHeartbeatIntervalMs <= shareGroupMaxHeartbeatIntervalMs,
+      s"${KafkaConfig.ShareGroupHeartbeatIntervalMsProp} must be less than or equals " +
+        s"to ${KafkaConfig.ShareGroupMaxHeartbeatIntervalMsProp}")
+
+    require(shareGroupMaxSessionTimeoutMs >= shareGroupMinSessionTimeoutMs,
+      s"${KafkaConfig.ShareGroupMaxSessionTimeoutMsProp} must be greater than or equals " +
+        s"to ${KafkaConfig.ShareGroupMinSessionTimeoutMsProp}")
+    require(shareGroupSessionTimeoutMs >= shareGroupMinSessionTimeoutMs,
+      s"${KafkaConfig.ShareGroupSessionTimeoutMsProp} must be greater than or equals " +
+        s"to ${KafkaConfig.ShareGroupMinSessionTimeoutMsProp}")
+    require(shareGroupSessionTimeoutMs <= shareGroupMaxSessionTimeoutMs,
+      s"${KafkaConfig.ShareGroupSessionTimeoutMsProp} must be less than or equals " +
+        s"to ${KafkaConfig.ShareGroupMaxSessionTimeoutMsProp}")
   }
 
   /**

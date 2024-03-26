@@ -183,6 +183,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 .withClassicGroupMinSessionTimeoutMs(config.classicGroupMinSessionTimeoutMs)
                 .withClassicGroupMaxSessionTimeoutMs(config.classicGroupMaxSessionTimeoutMs)
                 .withGroupCoordinatorMetricsShard(metricsShard)
+                .withShareGroupSessionTimeout(config.shareGroupSessionTimeoutMs)
+                .withShareGroupHeartbeatInterval(config.shareGroupHeartbeatIntervalMs)
                 .build();
 
             OffsetMetadataManager offsetMetadataManager = new OffsetMetadataManager.Builder()

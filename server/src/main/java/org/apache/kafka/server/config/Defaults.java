@@ -174,6 +174,12 @@ public class Defaults {
     public static final short SHARE_GROUP_RECORD_LOCK_PARTITION_LIMIT = 200;
     public static final short SHARE_GROUP_MAX_GROUPS = 10;
     public static final short SHARE_GROUP_MAX_SIZE = 200;
+    public static final int SHARE_GROUP_SESSION_TIMEOUT_MS = 45000;
+    public static final int SHARE_GROUP_MIN_SESSION_TIMEOUT_MS = 45000;
+    public static final int SHARE_GROUP_MAX_SESSION_TIMEOUT_MS = 60000;
+    public static final int SHARE_GROUP_HEARTBEAT_INTERVAL_MS = 5000;
+    public static final int SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS = 5000;
+    public static final int SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS = 15000;
 
     /** ********* Offset management configuration *********/
     public static final int OFFSET_METADATA_MAX_SIZE = OffsetConfig.DEFAULT_MAX_METADATA_SIZE;

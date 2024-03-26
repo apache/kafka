@@ -168,6 +168,8 @@ public class GroupMetadataManager {
         private int classicGroupMinSessionTimeoutMs;
         private int classicGroupMaxSessionTimeoutMs;
         private GroupCoordinatorMetricsShard metrics;
+        private int shareGroupHeartbeatIntervalMs = 5000;
+        private int shareGroupSessionTimeoutMs = 45000;
 
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -254,6 +256,16 @@ public class GroupMetadataManager {
             return this;
         }
 
+        Builder withShareGroupSessionTimeout(int shareGroupSessionTimeoutMs) {
+            this.shareGroupSessionTimeoutMs = shareGroupSessionTimeoutMs;
+            return this;
+        }
+
+        Builder withShareGroupHeartbeatInterval(int shareGroupHeartbeatIntervalMs) {
+            this.shareGroupHeartbeatIntervalMs = shareGroupHeartbeatIntervalMs;
+            return this;
+        }
+
         GroupMetadataManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -286,7 +298,9 @@ public class GroupMetadataManager {
                 classicGroupInitialRebalanceDelayMs,
                 classicGroupNewMemberJoinTimeoutMs,
                 classicGroupMinSessionTimeoutMs,
-                classicGroupMaxSessionTimeoutMs
+                classicGroupMaxSessionTimeoutMs,
+                shareGroupSessionTimeoutMs,
+                shareGroupHeartbeatIntervalMs
             );
         }
     }
@@ -404,6 +418,16 @@ public class GroupMetadataManager {
      */
     private final int classicGroupMaxSessionTimeoutMs;
 
+    /**
+     * The heartbeat interval for share groups.
+     */
+    private final int shareGroupHeartbeatIntervalMs;
+
+    /**
+     * The session timeout for share groups.
+     */
+    private final int shareGroupSessionTimeoutMs;
+
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
@@ -421,7 +445,9 @@ public class GroupMetadataManager {
         int classicGroupInitialRebalanceDelayMs,
         int classicGroupNewMemberJoinTimeoutMs,
         int classicGroupMinSessionTimeoutMs,
-        int classicGroupMaxSessionTimeoutMs
+        int classicGroupMaxSessionTimeoutMs,
+        int shareGroupSessionTimeoutMs,
+        int shareGroupHeartbeatIntervalMs
     ) {
         this.logContext = logContext;
         this.log = logContext.logger(GroupMetadataManager.class);
@@ -444,6 +470,8 @@ public class GroupMetadataManager {
         this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
         this.classicGroupMinSessionTimeoutMs = classicGroupMinSessionTimeoutMs;
         this.classicGroupMaxSessionTimeoutMs = classicGroupMaxSessionTimeoutMs;
+        this.shareGroupSessionTimeoutMs = shareGroupSessionTimeoutMs;
+        this.shareGroupHeartbeatIntervalMs = shareGroupHeartbeatIntervalMs;
     }
 
     /**
@@ -1545,7 +1573,7 @@ public class GroupMetadataManager {
         ShareGroupHeartbeatResponseData response = new ShareGroupHeartbeatResponseData()
                 .setMemberId(updatedMember.memberId())
                 .setMemberEpoch(updatedMember.memberEpoch())
-                .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs);
+                .setHeartbeatIntervalMs(shareGroupHeartbeatIntervalMs);
 
         // The assignment is only provided in the following cases:
         // 1. The member just joined or rejoined to group (epoch equals to zero);
@@ -1812,7 +1840,7 @@ public class GroupMetadataManager {
         String memberId
     ) {
         String key = groupSessionTimeoutKey(groupId, memberId);
-        timer.schedule(key, consumerGroupSessionTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
+        timer.schedule(key, shareGroupSessionTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
                 ShareGroup group = getOrMaybeCreateShareGroup(groupId, false);
                 ShareGroupMember member = group.getOrMaybeCreateMember(memberId, false);

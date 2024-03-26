@@ -118,6 +118,16 @@ public class GroupCoordinatorConfig {
      */
     public final int offsetCommitTimeoutMs;
 
+    /**
+     * The share group session timeout in milliseconds.
+     */
+    public final int shareGroupSessionTimeoutMs;
+
+    /**
+     * The share group heartbeat interval in milliseconds.
+     */
+    public final int shareGroupHeartbeatIntervalMs;
+
     public GroupCoordinatorConfig(
         int numThreads,
         int consumerGroupSessionTimeoutMs,
@@ -133,7 +143,9 @@ public class GroupCoordinatorConfig {
         int classicGroupMaxSessionTimeoutMs,
         long offsetsRetentionCheckIntervalMs,
         long offsetsRetentionMs,
-        int offsetCommitTimeoutMs
+        int offsetCommitTimeoutMs,
+        int shareGroupSessionTimeoutMs,
+        int shareGroupHeartbeatIntervalMs
     ) {
         this.numThreads = numThreads;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
@@ -150,5 +162,7 @@ public class GroupCoordinatorConfig {
         this.offsetsRetentionCheckIntervalMs = offsetsRetentionCheckIntervalMs;
         this.offsetsRetentionMs = offsetsRetentionMs;
         this.offsetCommitTimeoutMs = offsetCommitTimeoutMs;
+        this.shareGroupSessionTimeoutMs = shareGroupSessionTimeoutMs;
+        this.shareGroupHeartbeatIntervalMs = shareGroupHeartbeatIntervalMs;
     }
 }

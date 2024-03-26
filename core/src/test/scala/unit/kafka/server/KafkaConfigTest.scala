@@ -1041,6 +1041,14 @@ class KafkaConfigTest {
         case KafkaConfig.ConsumerGroupMaxSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case KafkaConfig.ConsumerGroupAssignorsProp => // ignore string
 
+        /** Share groups configs */
+        case KafkaConfig.ShareGroupSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ShareGroupMinSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ShareGroupMaxSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ShareGroupHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ShareGroupMinHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ShareGroupMaxHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+
         case _ => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
       }
     }
@@ -1808,6 +1816,44 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp, "5")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     props.put(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp, "25")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testShareGroupSessionTimeoutValidation(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    // Max should be greater than or equals to min.
+    props.put(KafkaConfig.ShareGroupMinSessionTimeoutMsProp, "20")
+    props.put(KafkaConfig.ShareGroupMaxSessionTimeoutMsProp, "10")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+
+    // The timeout should be within the min-max range.
+    props.put(KafkaConfig.ShareGroupMinSessionTimeoutMsProp, "10")
+    props.put(KafkaConfig.ShareGroupMaxSessionTimeoutMsProp, "20")
+    props.put(KafkaConfig.ShareGroupSessionTimeoutMsProp, "5")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    props.put(KafkaConfig.ShareGroupSessionTimeoutMsProp, "25")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testShareGroupHeartbeatIntervalValidation(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    // Max should be greater than or equals to min.
+    props.put(KafkaConfig.ShareGroupMinHeartbeatIntervalMsProp, "20")
+    props.put(KafkaConfig.ShareGroupMaxHeartbeatIntervalMsProp, "10")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+
+    // The timeout should be within the min-max range.
+    props.put(KafkaConfig.ShareGroupMinHeartbeatIntervalMsProp, "10")
+    props.put(KafkaConfig.ShareGroupMaxHeartbeatIntervalMsProp, "20")
+    props.put(KafkaConfig.ShareGroupHeartbeatIntervalMsProp, "5")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    props.put(KafkaConfig.ShareGroupHeartbeatIntervalMsProp, "25")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
 

@@ -548,17 +548,15 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     assertEquals(6, shareGroupHeartbeatResponse.data.memberEpoch)
   }
 
-  //TODO: The heartbeat interval and session timeout should be for share group and not consumer group.
-  // Working with these configs until we have the share group configs available
   @ClusterTest(serverProperties = Array(
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "group.share.enable", value = "true"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-    new ClusterConfigProperty(key = "group.consumer.heartbeat.interval.ms", value = "500"),
-    new ClusterConfigProperty(key = "group.consumer.min.heartbeat.interval.ms", value = "500"),
-    new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "500"),
-    new ClusterConfigProperty(key = "group.consumer.min.session.timeout.ms", value = "500")
+    new ClusterConfigProperty(key = "group.share.heartbeat.interval.ms", value = "500"),
+    new ClusterConfigProperty(key = "group.share.min.heartbeat.interval.ms", value = "500"),
+    new ClusterConfigProperty(key = "group.share.session.timeout.ms", value = "500"),
+    new ClusterConfigProperty(key = "group.share.min.session.timeout.ms", value = "500")
   ))
   def testMemberJoiningAndExpiring(): Unit = {
     val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
