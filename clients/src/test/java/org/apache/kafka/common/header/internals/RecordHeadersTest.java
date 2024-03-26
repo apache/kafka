@@ -29,7 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class RecordHeadersTest {
 
@@ -129,40 +128,22 @@ public class RecordHeadersTest {
 
     @Test
     public void testReadOnly() {
-        RecordHeaders headers = new RecordHeaders();
+        Headers headers = new RecordHeaders();
         headers.add(new RecordHeader("key", "value".getBytes()));
         Iterator<Header> headerIteratorBeforeClose = headers.iterator();
         headers.setReadOnly();
-        try {
-            headers.add(new RecordHeader("key", "value".getBytes()));
-            fail("IllegalStateException expected as headers are closed");
-        } catch (IllegalStateException ise) {
-            //expected  
-        }
 
-        try {
-            headers.remove("key");
-            fail("IllegalStateException expected as headers are closed");
-        } catch (IllegalStateException ise) {
-            //expected  
-        }
-
-        try {
+        assertThrows(IllegalStateException.class, () -> headers.add(new RecordHeader("key", "value".getBytes())));
+        assertThrows(IllegalStateException.class, () -> headers.remove("key"));
+        assertThrows(IllegalStateException.class, () -> {
             Iterator<Header> headerIterator = headers.iterator();
             headerIterator.next();
             headerIterator.remove();
-            fail("IllegalStateException expected as headers are closed");
-        } catch (IllegalStateException ise) {
-            //expected  
-        }
-        
-        try {
+        });
+        assertThrows(IllegalStateException.class, () -> {
             headerIteratorBeforeClose.next();
             headerIteratorBeforeClose.remove();
-            fail("IllegalStateException expected as headers are closed");
-        } catch (IllegalStateException ise) {
-            //expected  
-        }
+        });
     }
 
     @Test

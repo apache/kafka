@@ -52,8 +52,6 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -1026,7 +1024,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // take into account broker load, the amount of data produced to each partition, etc.).
             int partition = partition(record, serializedKey, serializedValue, cluster);
 
-            setReadOnly(record.headers());
+            record.headers().setReadOnly();
             Header[] headers = record.headers().toArray();
 
             int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
@@ -1096,12 +1094,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // we notify interceptor about all exceptions, since onSend is called before anything else in this method
             this.interceptors.onSendError(record, appendCallbacks.topicPartition(), e);
             throw e;
-        }
-    }
-
-    private void setReadOnly(Headers headers) {
-        if (headers instanceof RecordHeaders) {
-            ((RecordHeaders) headers).setReadOnly();
         }
     }
 

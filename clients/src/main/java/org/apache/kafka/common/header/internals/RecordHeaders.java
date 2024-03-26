@@ -104,6 +104,7 @@ public class RecordHeaders implements Headers {
         return closeAware(headers.iterator());
     }
 
+    @Override
     public void setReadOnly() {
         this.isReadOnly = true;
     }

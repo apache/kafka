@@ -69,4 +69,10 @@ public interface Headers extends Iterable<Header> {
      */
     Header[] toArray();
 
+    /**
+     * Set Header to readonly.
+     */
+    default void setReadOnly() {
+    }
+
 }
