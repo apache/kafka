@@ -180,7 +180,7 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
      * fetching records from the leader. The return value is the next offset to fetch from the leader, which is the
      * next offset following the end offset of the remote log portion.
      */
-    private Long buildRemoteLogAuxState(TopicPartition topicPartition,
+    protected Long buildRemoteLogAuxState(TopicPartition topicPartition,
                                         Integer currentLeaderEpoch,
                                         Long leaderLocalLogStartOffset,
                                         Integer epochForLeaderLocalLogStartOffset,
@@ -251,12 +251,8 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
 
                 log.debug("Updated the epoch cache from remote tier till offset: {} with size: {} for {}", leaderLocalLogStartOffset, epochs.size(), partition);
 
-                // Restore producer snapshot
-                File snapshotFile = LogFileUtils.producerSnapshotFile(unifiedLog.dir(), nextOffset);
-                buildProducerSnapshotFile(snapshotFile, remoteLogSegmentMetadata, rlm);
-
                 // Reload producer snapshots.
-                unifiedLog.producerStateManager().truncateFullyAndReloadSnapshots();
+                truncateFullyAndReloadRestoredSnapshots(unifiedLog, nextOffset, remoteLogSegmentMetadata, rlm);
                 unifiedLog.loadProducerState(nextOffset);
                 log.debug("Built the leader epoch cache and producer snapshots from remote tier for {}, " +
                                 "with active producers size: {}, leaderLogStartOffset: {}, and logEndOffset: {}",
@@ -276,5 +272,21 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
         }
 
         return nextOffset;
+    }
+
+    // In `producerStateManager`, first call `truncateFullyAndStartAt` to clean up the snapshot files, and then pull the snapshot file from RemoteLogManager.
+    // If the order of calls is reversed, it may cause the newly built snapshot file to be cleaned up again by `truncateFullyAndStartAt`.
+    private void truncateFullyAndReloadRestoredSnapshots(UnifiedLog unifiedLog,
+                                                         long nextOffset,
+                                                         RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+                                                         RemoteLogManager rlm) throws IOException, RemoteStorageException {
+        log.info("Reloading the restored producer state snapshots.");
+        unifiedLog.producerStateManager().truncateFullyAndStartAt(0L);
+
+        // Restore producer snapshot
+        File snapshotFile = LogFileUtils.producerSnapshotFile(unifiedLog.dir(), nextOffset);
+        buildProducerSnapshotFile(snapshotFile, remoteLogSegmentMetadata, rlm);
+
+        unifiedLog.producerStateManager().reloadSnapshots();
     }
 }
