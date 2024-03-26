@@ -109,8 +109,10 @@ public class OffsetUtils {
         }
 
         if (!(keyList.get(0) instanceof String)) {
-            log.warn("Ignoring offset partition key with an unexpected format for the first element in the partition key list. " +
-                    "Expected type: {}, actual type: {}", String.class.getName(), className(keyList.get(0)));
+            if (keyList.get(0) != null) {
+                log.warn("Ignoring offset partition key with an unexpected format for the first element in the partition key list. " +
+                        "Expected type: {}, actual type: {}", String.class.getName(), className(keyList.get(0)));
+            }
             return;
         }
 

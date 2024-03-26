@@ -144,6 +144,16 @@ public class OffsetUtilsTest {
         }
     }
 
+    @Test
+    public void testProcessPartitionKeyNullConnectorName() {
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(OffsetUtils.class)) {
+            Map<String, Set<Map<String, Object>>> connectorPartitions = new HashMap<>();
+            OffsetUtils.processPartitionKey(serializePartitionKey(Arrays.asList(null, new HashMap<>())), new byte[0], CONVERTER, connectorPartitions);
+            assertEquals(Collections.emptyMap(), connectorPartitions);
+            assertEquals(0, logCaptureAppender.getMessages().size());
+        }
+    }
+
     private byte[] serializePartitionKey(Object key) {
         return CONVERTER.fromConnectData("", null, key);
     }
