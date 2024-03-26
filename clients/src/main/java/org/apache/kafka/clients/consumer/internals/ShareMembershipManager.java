@@ -92,6 +92,11 @@ import java.util.stream.Collectors;
 public class ShareMembershipManager implements RequestManager {
 
     /**
+     * Logger.
+     */
+    private final Logger log;
+
+    /**
      * TopicPartition comparator based on topic name and partition id.
      */
     final static TopicPartitionComparator TOPIC_PARTITION_COMPARATOR = new TopicPartitionComparator();
@@ -147,11 +152,6 @@ public class ShareMembershipManager implements RequestManager {
      * Metadata that allows us to create the partitions needed for {@link ConsumerRebalanceListener}.
      */
     private final ConsumerMetadata metadata;
-
-    /**
-     * Logger.
-     */
-    private final Logger log;
 
     /**
      * Local cache of assigned topic IDs and names. Topics are added here when received in a
@@ -212,13 +212,14 @@ public class ShareMembershipManager implements RequestManager {
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
-    public ShareMembershipManager(String groupId,
+    public ShareMembershipManager(LogContext logContext,
+                                  String groupId,
                                   String rackId,
                                   SubscriptionState subscriptions,
                                   ConsumerMetadata metadata,
-                                  LogContext logContext,
                                   Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                   BackgroundEventHandler backgroundEventHandler) {
+        this.log = logContext.logger(ShareMembershipManager.class);
         this.groupId = groupId;
         this.rackId = rackId;
         this.state = MemberState.UNSUBSCRIBED;
@@ -227,7 +228,6 @@ public class ShareMembershipManager implements RequestManager {
         this.assignedTopicNamesCache = new HashMap<>();
         this.currentTargetAssignment = new HashMap<>();
         this.currentAssignment = new HashMap<>();
-        this.log = logContext.logger(MembershipManagerImpl.class);
         this.stateUpdatesListeners = new ArrayList<>();
         this.clientTelemetryReporter = clientTelemetryReporter;
         this.backgroundEventHandler = backgroundEventHandler;

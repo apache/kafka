@@ -233,10 +233,8 @@ public class ShareHeartbeatRequestManager implements RequestManager {
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
         pollTimer.update(currentTimeMs);
-        if (
-                pollTimer.isExpired() ||
-                        (shareMembershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight())
-        ) {
+        if (pollTimer.isExpired() ||
+                (shareMembershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight())) {
             return 0L;
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.nextHeartbeatMs(currentTimeMs));

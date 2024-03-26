@@ -79,6 +79,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -636,6 +637,7 @@ public class ShareFetchRequestManagerTest {
                                            ShareFetchCollector<K, V> fetchCollector) {
             super(logContext, groupId, metadata, subscriptions, fetchConfig, shareFetchBuffer, metricsManager);
             this.shareFetchCollector = fetchCollector;
+            onMemberEpochUpdated(Optional.empty(), Optional.of(Uuid.randomUuid().toString()));
         }
 
         private ShareFetch<K, V> collectFetch() {

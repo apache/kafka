@@ -50,7 +50,7 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
  * represent the {@link SubscriptionState#fetchablePartitions(Predicate)} based on the share group
  * consumer's assignment.
  */
-public class ShareFetchRequestManager implements RequestManager {
+public class ShareFetchRequestManager implements RequestManager, MemberStateListener {
 
     private final Logger log;
     private final LogContext logContext;
@@ -63,9 +63,7 @@ public class ShareFetchRequestManager implements RequestManager {
     private final Set<Integer> nodesWithPendingRequests;
     private final FetchMetricsManager metricsManager;
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
-
-    // Temporary - to be fixed in AKCORE-51
-    private final Uuid shareSessionUuid;
+    private Uuid memberId;
 
     ShareFetchRequestManager(final LogContext logContext,
                              final String groupId,
@@ -84,11 +82,14 @@ public class ShareFetchRequestManager implements RequestManager {
         this.metricsManager = metricsManager;
         this.sessionHandlers = new HashMap<>();
         this.nodesWithPendingRequests = new HashSet<>();
-        this.shareSessionUuid = Uuid.randomUuid();
     }
 
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
+        if (memberId == null) {
+            return EMPTY;
+        }
+
         List<NetworkClientDelegate.UnsentRequest> requests;
         Map<Node, ShareSessionHandler.ShareFetchRequestData> shareFetchRequests = prepareShareFetchRequests();
 
@@ -122,6 +123,13 @@ public class ShareFetchRequestManager implements RequestManager {
                 continue;
             }
 
+            Uuid topicId = topicIds.get(partition.topic());
+            if (topicId == null) {
+                log.debug("Requesting metadata update for partition {} since topic ID is missing", partition);
+                metadata.requestUpdate(false);
+                continue;
+            }
+
             Node node = leaderOpt.get();
             if (nodesWithPendingRequests.contains(node.id())) {
                 log.trace("Skipping fetch for partition {} because previous fetch request to {} has not been processed", partition, node);
@@ -129,11 +137,10 @@ public class ShareFetchRequestManager implements RequestManager {
                 // if there is a leader and no in-flight requests, issue a new fetch
                 ShareSessionHandler.Builder builder = partitionsToFetch.computeIfAbsent(node, k -> {
                     ShareSessionHandler shareSessionHandler =
-                            sessionHandlers.computeIfAbsent(node.id(), n -> new ShareSessionHandler(logContext, n, shareSessionUuid));
+                            sessionHandlers.computeIfAbsent(node.id(), n -> new ShareSessionHandler(logContext, n, memberId));
                     return shareSessionHandler.newBuilder();
                 });
 
-                Uuid topicId = topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID);
                 TopicIdPartition tip = new TopicIdPartition(topicId, partition);
                 builder.add(tip, shareFetchBuffer.getAcknowledgementsToSend(tip));
 
@@ -263,5 +270,15 @@ public class ShareFetchRequestManager implements RequestManager {
 
     public void close() {
         idempotentCloser.close(this::closeInternal);
+    }
+
+    @Override
+    public void onMemberEpochUpdated(Optional<Integer> memberEpochOpt, Optional<String> memberIdOpt) {
+        // Only set the memberID once for now - will handle changes in AKCORE-57
+        if (memberId == null) {
+            if (memberIdOpt.isPresent()) {
+                memberId = Uuid.fromString(memberIdOpt.get());
+            }
+        }
     }
 }

@@ -279,11 +279,11 @@ public class RequestManagers implements Closeable {
                         backgroundEventHandler,
                         groupRebalanceConfig.groupId);
                 ShareMembershipManager shareMembershipManager = new ShareMembershipManager(
+                        logContext,
                         groupRebalanceConfig.groupId,
                         null,
                         subscriptions,
                         metadata,
-                        logContext,
                         clientTelemetryReporter,
                         backgroundEventHandler);
                 ShareHeartbeatRequestManager shareHeartbeatRequestManager = new ShareHeartbeatRequestManager(
@@ -303,6 +303,7 @@ public class RequestManagers implements Closeable {
                         fetchConfig,
                         fetchBuffer,
                         fetchMetricsManager);
+                shareMembershipManager.registerStateListener(shareFetchRequestManager);
 
                 return new RequestManagers(
                         logContext,

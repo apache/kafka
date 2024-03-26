@@ -100,8 +100,8 @@ public class ShareMembershipManagerTest {
 
     private ShareMembershipManager createMembershipManagerJoiningGroup() {
         ShareMembershipManager manager = spy(new ShareMembershipManager(
-                GROUP_ID, RACK_ID, subscriptionState, metadata,
-                logContext, Optional.empty(), backgroundEventHandler));
+                logContext, GROUP_ID, RACK_ID, subscriptionState, metadata,
+                Optional.empty(), backgroundEventHandler));
         manager.transitionToJoining();
         return manager;
     }
@@ -110,8 +110,8 @@ public class ShareMembershipManagerTest {
     public void testMembershipManagerRegistersForClusterMetadataUpdatesOnFirstJoin() {
         // First join should register to get metadata updates
         ShareMembershipManager manager = new ShareMembershipManager(
-                GROUP_ID, RACK_ID, subscriptionState, metadata,
-                logContext, Optional.empty(), backgroundEventHandler);
+                logContext, GROUP_ID, RACK_ID, subscriptionState, metadata,
+                Optional.empty(), backgroundEventHandler);
         manager.transitionToJoining();
         clearInvocations(metadata);
 
@@ -186,8 +186,8 @@ public class ShareMembershipManagerTest {
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
         ShareMembershipManager membershipManager = new ShareMembershipManager(
-                GROUP_ID, RACK_ID, subscriptionState, metadata,
-                logContext, Optional.empty(), backgroundEventHandler);
+                logContext, GROUP_ID, RACK_ID, subscriptionState, metadata,
+                Optional.empty(), backgroundEventHandler);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 

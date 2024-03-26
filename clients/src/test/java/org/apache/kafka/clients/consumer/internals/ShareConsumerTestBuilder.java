@@ -155,11 +155,11 @@ public class ShareConsumerTestBuilder implements Closeable {
                 metricsManager));
 
         ShareMembershipManager membershipManager = spy(new ShareMembershipManager(
+                logContext,
                 groupInfo.groupId,
                 null,
                 subscriptions,
                 metadata,
-                logContext,
                 Optional.empty(),
                 backgroundEventHandler));
 
