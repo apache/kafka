@@ -66,6 +66,20 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Level;
+import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.TearDown;
+import org.openjdk.jmh.annotations.Warmup;
+
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -78,7 +92,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+@State(Scope.Benchmark)
+@Fork(value = 1)
+@Warmup(iterations = 1)
+@Measurement(iterations = 2)
+@BenchmarkMode(Mode.AverageTime)
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class MetadataTest {
+
+    @Param({"10", "50", "100", "500", "1000", "5000", "10000"})
+    private int numThreads;
 
     private long refreshBackoffMs = 100;
     private long refreshBackoffMaxMs = 1000;
@@ -1270,6 +1293,7 @@ public class MetadataTest {
      * snapshot & cluster contain the relevant updates.
      */
     @Test
+    @Benchmark
     public void testConcurrentUpdateAndFetchForSnapshotAndCluster() throws InterruptedException {
         Time time = new MockTime();
         metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners());
@@ -1301,7 +1325,7 @@ public class MetadataTest {
 
         // Setup 6 threads, where 3 are updating metadata & 3 are reading snapshot/cluster.
         // Metadata will be updated with higher # of nodes, partition-counts, leader-epoch.
-        int numThreads = 6;
+        // int numThreads = 6;
         ExecutorService service = Executors.newFixedThreadPool(numThreads);
         CountDownLatch allThreadsDoneLatch = new CountDownLatch(numThreads);
         CountDownLatch atleastMetadataUpdatedOnceLatch = new CountDownLatch(1);
