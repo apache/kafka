@@ -41,9 +41,9 @@ import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
 
-import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -708,19 +708,14 @@ public class RaftEventSimulationTest {
             nodes.put(nodeId, new PersistentState(nodeId));
         }
 
-        private static RaftConfig.AddressSpec nodeAddress(int id) {
-            return new RaftConfig.InetAddressSpec(new InetSocketAddress("localhost", 9990 + id));
-        }
-
         void start(int nodeId) {
             LogContext logContext = new LogContext("[Node " + nodeId + "] ");
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter, voters);
             MockMessageQueue messageQueue = new MockMessageQueue();
-            Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
-                .collect(Collectors.toMap(id -> id, Cluster::nodeAddress));
-            RaftConfig raftConfig = new RaftConfig(voterAddressMap, REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
-                    ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS);
+            List<String> voterList = voters.stream().map(id -> id + "@localhost:999" + id).collect(Collectors.toList());
+            RaftConfig raftConfig = new RaftConfig(voterList, REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
+                ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS, 0, Arrays.asList("controller"));
             Metrics metrics = new Metrics(time);
 
             persistentState.log.reopen();

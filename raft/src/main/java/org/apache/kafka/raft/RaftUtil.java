@@ -31,7 +31,10 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import static java.util.Collections.singletonList;
@@ -158,5 +161,17 @@ public class RaftUtil {
                    data.topics().get(0).topicName().equals(topicPartition.topic()) &&
                    data.topics().get(0).partitions().size() == 1 &&
                    data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    }
+
+    static int getInt(Map<?, ?> props, String key, int defaultValue) {
+        return props.containsKey(key) ? Integer.parseInt((String) props.get(key)) : defaultValue;
+    }
+
+    static List<String> getStringList(Map<?, ?> props, String key, List<String> defaultValue) {
+        return props.containsKey(key) ? Arrays.asList(((String) props.get(key)).split("\\s*,\\s*")) : defaultValue;
+    }
+
+    static String getString(Map<?, ?> props, String key, String defaultValue) {
+        return props.containsKey(key) ? (String) props.get(key) : defaultValue;
     }
 }

@@ -94,7 +94,17 @@ class LogConfigTest {
       case TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG => assertPropertyInvalid(name, "not_a_boolean")
       case TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG => assertPropertyInvalid(name, "not_a_number", "-3")
       case TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG => assertPropertyInvalid(name, "not_a_number", "-3")
-
+      case LogConfig.LOG_DIR_PROP | LogConfig.LOG_DIRS_PROP | LogConfig.METADATA_LOG_DIR_PROP =>
+        // do nothing because the validation is not happening in LogConfig
+      case LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG => assertPropertyInvalid(name, "foo")
+      case LogConfig.INTER_BROKER_PROTOCOL_VERSION_PROP => assertPropertyInvalid(name, "", "foo")
+      case TopicConfig.INDEX_INTERVAL_BYTES_CONFIG => assertPropertyInvalid(name, "not_a_number", "-1")
+      case LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG => assertPropertyInvalid(name, "foo")
+      case TopicConfig.FLUSH_MS_CONFIG => assertPropertyInvalid(name, "not_a_number", "-1")
+      case TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG => assertPropertyInvalid(name, "not_a_number", "-1")
+      case TopicConfig.FILE_DELETE_DELAY_MS_CONFIG => assertPropertyInvalid(name, "not_a_number", "-1")
+      case TopicConfig.DELETE_RETENTION_MS_CONFIG => assertPropertyInvalid(name, "not_a_number", "-1")
+      case TopicConfig.COMPRESSION_TYPE_CONFIG => assertPropertyInvalid(name, "foo")
       case _ => assertPropertyInvalid(name, "not_a_number", "-1")
     })
   }
