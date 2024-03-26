@@ -285,6 +285,16 @@ See [tests/README.md](tests/README.md).
 
 See [vagrant/README.md](vagrant/README.md).
 
+### Running in Docker ###
+You could use the official docker image to run Kafka in Docker. It is available at [Docker Hub](https://hub.docker.com/r/apache/kafka).
+
+For example, to start a single-node Kafka, you can run the following command: 
+
+     docker compose -f docker/examples/jvm/single-node/plaintext/docker-compose.yml up
+
+
+For the detail, see [docker/examples/README.md](docker/examples/README.md).
+
 ### Contribution ###
 
 Apache Kafka is interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://kafka.apache.org/contact.html).
