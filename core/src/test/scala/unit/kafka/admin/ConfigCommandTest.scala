@@ -30,7 +30,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
+import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyString
@@ -1475,7 +1475,7 @@ class ConfigCommandTest extends Logging {
     val clientId = "client-1"
     for (opts <- Seq(describeOpts, alterOpts)) {
       checkEntity("clients", Some(clientId), clientId, opts)
-      checkEntity("clients", Some(""), ConfigEntityName.DEFAULT, opts)
+      checkEntity("clients", Some(""), ZooKeeperInternals.DEFAULT_STRING, opts)
     }
     checkEntity("clients", None, "", describeOpts)
     checkInvalidArgs("clients", None, alterOpts)
@@ -1487,7 +1487,7 @@ class ConfigCommandTest extends Logging {
     assertEquals(principal, Sanitizer.desanitize(sanitizedPrincipal))
     for (opts <- Seq(describeOpts, alterOpts)) {
       checkEntity("users", Some(principal), sanitizedPrincipal, opts)
-      checkEntity("users", Some(""), ConfigEntityName.DEFAULT, opts)
+      checkEntity("users", Some(""), ZooKeeperInternals.DEFAULT_STRING, opts)
     }
     checkEntity("users", None, "", describeOpts)
     checkInvalidArgs("users", None, alterOpts)
@@ -1497,9 +1497,9 @@ class ConfigCommandTest extends Logging {
     def clientIdOpts(name: String) = Array("--entity-type", "clients", "--entity-name", name)
     for (opts <- Seq(describeOpts, alterOpts)) {
       checkEntity("users", Some(principal), userClient, opts ++ clientIdOpts(clientId))
-      checkEntity("users", Some(principal), sanitizedPrincipal + "/clients/" + ConfigEntityName.DEFAULT, opts ++ clientIdOpts(""))
-      checkEntity("users", Some(""), ConfigEntityName.DEFAULT + "/clients/" + clientId, describeOpts ++ clientIdOpts(clientId))
-      checkEntity("users", Some(""), ConfigEntityName.DEFAULT + "/clients/" + ConfigEntityName.DEFAULT, opts ++ clientIdOpts(""))
+      checkEntity("users", Some(principal), sanitizedPrincipal + "/clients/" + ZooKeeperInternals.DEFAULT_STRING, opts ++ clientIdOpts(""))
+      checkEntity("users", Some(""), ZooKeeperInternals.DEFAULT_STRING + "/clients/" + clientId, describeOpts ++ clientIdOpts(clientId))
+      checkEntity("users", Some(""), ZooKeeperInternals.DEFAULT_STRING + "/clients/" + ZooKeeperInternals.DEFAULT_STRING, opts ++ clientIdOpts(""))
     }
     checkEntity("users", Some(principal), sanitizedPrincipal + "/clients", describeOpts ++ Array("--entity-type", "clients"))
     // Both user and client-id must be provided for alter
