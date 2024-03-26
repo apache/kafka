@@ -19,6 +19,8 @@ package kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.ListGroupsResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.coordinator.group.Group
@@ -35,11 +37,11 @@ import org.junit.jupiter.api.extension.ExtendWith
 @Tag("integration")
 class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
-  def testOfflineUpgrade(): Unit = {
+  def testUpgradeFromEmptyClassicToConsumerGroup(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -73,18 +75,19 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     // Verify that the group is empty.
-    val listGroupsResponseData1 = listGroups(
-      statesFilter = List.empty,
-      typesFilter = List(Group.GroupType.CLASSIC.toString)
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ClassicGroupState.EMPTY.toString)
+          .setGroupType(Group.GroupType.CLASSIC.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CLASSIC.toString)
+      )
     )
-
-    val expectedListResponse1 = List(new ListGroupsResponseData.ListedGroup()
-      .setGroupId(groupId)
-      .setProtocolType("consumer")
-      .setGroupState(ClassicGroupState.EMPTY.toString)
-      .setGroupType(Group.GroupType.CLASSIC.toString))
-
-    assertEquals(expectedListResponse1, listGroupsResponseData1)
 
     // The joining request with a consumer group member is accepted.
     consumerGroupHeartbeat(
@@ -97,26 +100,27 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     // The group has become a consumer group.
-    val listGroupsResponseData2 = listGroups(
-      statesFilter = List.empty,
-      typesFilter = List(Group.GroupType.CONSUMER.toString)
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.STABLE.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
     )
-
-    val expectedListResponse2 = List(new ListGroupsResponseData.ListedGroup()
-      .setGroupId(groupId)
-      .setProtocolType("consumer")
-      .setGroupState(ConsumerGroupState.STABLE.toString)
-      .setGroupType(Group.GroupType.CONSUMER.toString))
-
-    assertEquals(expectedListResponse2, listGroupsResponseData2)
   }
 
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
-  def testOfflineDowngrade(): Unit = {
+  def testDowngradeFromEmptyConsumerToClassicGroup(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -144,34 +148,99 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     // Verify that the group is empty.
-    val listGroupsResponseData1 = listGroups(
-      statesFilter = List.empty,
-      typesFilter = List(Group.GroupType.CONSUMER.toString)
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ClassicGroupState.EMPTY.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
     )
-
-    val expectedListResponse1 = List(new ListGroupsResponseData.ListedGroup()
-      .setGroupId(groupId)
-      .setProtocolType("consumer")
-      .setGroupState(ClassicGroupState.EMPTY.toString)
-      .setGroupType(Group.GroupType.CONSUMER.toString))
-
-    assertEquals(expectedListResponse1, listGroupsResponseData1)
 
     // The joining request with a classic group member is accepted.
     joinDynamicConsumerGroupWithOldProtocol(groupId = groupId)
 
     // The group has become a classic group.
-    val listGroupsResponseData2 = listGroups(
-      statesFilter = List.empty,
-      typesFilter = List(Group.GroupType.CLASSIC.toString)
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ClassicGroupState.STABLE.toString)
+          .setGroupType(Group.GroupType.CLASSIC.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CLASSIC.toString)
+      )
+    )
+  }
+
+  @ClusterTest(serverProperties = Array(
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+  ))
+  def testUpgradeFromSimpleGroupToConsumerGroup(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    val topicName = "foo"
+    // Create the topic.
+    createTopic(
+      topic = topicName,
+      numPartitions = 3
     )
 
-    val expectedListResponse2 = List(new ListGroupsResponseData.ListedGroup()
-      .setGroupId(groupId)
-      .setProtocolType("consumer")
-      .setGroupState(ClassicGroupState.STABLE.toString)
-      .setGroupType(Group.GroupType.CLASSIC.toString))
+    // An admin client commits offsets and creates the simple group.
+    val groupId = "group-id"
+    alterConsumerGroupOffsets(
+      groupId = groupId,
+      offsets = Map(new TopicPartition(topicName, 0) -> new OffsetAndMetadata(1000L))
+    )
 
-    assertEquals(expectedListResponse2, listGroupsResponseData2)
+    // Verify that the simple group is created.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setGroupState(ClassicGroupState.EMPTY.toString)
+          .setGroupType(Group.GroupType.CLASSIC.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CLASSIC.toString)
+      )
+    )
+
+    // The joining request with a consumer group member is accepted.
+    consumerGroupHeartbeat(
+      groupId = groupId,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List(topicName),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    )
+
+    // The group has become a consumer group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.STABLE.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
   }
 }

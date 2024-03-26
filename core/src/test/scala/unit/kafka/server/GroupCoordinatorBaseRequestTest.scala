@@ -20,6 +20,7 @@ import kafka.test.ClusterInstance
 import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.utils.{NotNothing, TestUtils}
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
@@ -71,6 +72,17 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       topic = topic,
       numPartitions = numPartitions
     )
+  }
+
+  protected def alterConsumerGroupOffsets(
+    groupId: String,
+    offsets: Map[TopicPartition, OffsetAndMetadata]
+  ): Unit = {
+    val resultFuture = cluster.createAdminClient().alterConsumerGroupOffsets(groupId, offsets.asJava).all
+
+    TestUtils.waitUntilTrue(() => {
+      resultFuture.isDone && !resultFuture.isCancelled && !resultFuture.isCompletedExceptionally
+    }, msg = s"Could not commit the offsets successfully. Last response ${resultFuture.get()}.")
   }
 
   protected def isUnstableApiEnabled: Boolean = {
