@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
@@ -66,7 +67,7 @@ class BatchAccumulatorTest {
             maxBatchSize,
             memoryPool,
             time,
-            CompressionType.NONE,
+            Compression.NONE,
             serde
         );
     }
@@ -446,7 +447,7 @@ class BatchAccumulatorTest {
             maxBatchSize,
             memoryPool,
             time,
-            CompressionType.NONE,
+            Compression.NONE,
             serde
         );
 

@@ -17,9 +17,9 @@
 
 package org.apache.kafka.metalog;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -841,7 +841,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             MemoryPool.NONE,
             new MockTime(),
             lastContainedLogTimestamp,
-            CompressionType.NONE,
+            Compression.NONE,
             new MetadataRecordSerde()
         );
     }

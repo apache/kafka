@@ -19,9 +19,9 @@ package org.apache.kafka.jmh.record;
 import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
 import kafka.server.RequestLocal;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
@@ -129,19 +129,19 @@ public abstract class BaseRecordBatchBenchmark {
         }).toArray(Header[]::new);
     }
 
-    abstract CompressionType compressionType();
+    abstract Compression compression();
 
     private ByteBuffer createBatch(int batchSize) {
         // Magic v1 does not support record headers
         Header[] headers = messageVersion < RecordBatch.MAGIC_VALUE_V2 ? Record.EMPTY_HEADERS : createHeaders();
         byte[] value = new byte[messageSize];
         final ByteBuffer buf = ByteBuffer.allocate(
-            AbstractRecords.estimateSizeInBytesUpperBound(messageVersion, compressionType(), new byte[0], value,
+            AbstractRecords.estimateSizeInBytesUpperBound(messageVersion, compression().type(), new byte[0], value,
                     headers) * batchSize
         );
 
         final MemoryRecordsBuilder builder =
-            MemoryRecords.builder(buf, messageVersion, compressionType(), TimestampType.CREATE_TIME, startingOffset);
+            MemoryRecords.builder(buf, messageVersion, compression(), TimestampType.CREATE_TIME, startingOffset);
 
         for (int i = 0; i < batchSize; ++i) {
             switch (bytes) {

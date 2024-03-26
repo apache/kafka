@@ -163,13 +163,14 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertEquals(IBP_3_0_IV1, log.config.messageFormatVersion)
     assertEquals(RecordVersion.V2, log.config.recordVersion)
 
-    val compressionType = CompressionType.LZ4.name
+    val compressionType = CompressionType.LZ4
     logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.11.0")
     // set compression type so that we can detect when the config change has propagated
-    logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, compressionType)
+    logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, compressionType.name)
     adminZkClient.changeTopicConfig(tp.topic, logProps)
     TestUtils.waitUntilTrue(() =>
-      server.logManager.getLog(tp).get.config.compressionType == compressionType,
+      server.logManager.getLog(tp).get.config.compression.isPresent &&
+      server.logManager.getLog(tp).get.config.compression.get.`type` == compressionType,
       "Topic config change propagation failed")
     assertEquals(IBP_3_0_IV1, log.config.messageFormatVersion)
     assertEquals(RecordVersion.V2, log.config.recordVersion)

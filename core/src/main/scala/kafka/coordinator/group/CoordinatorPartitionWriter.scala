@@ -19,9 +19,10 @@ package kafka.coordinator.group
 import kafka.cluster.PartitionListener
 import kafka.server.{ActionQueue, ReplicaManager, RequestLocal, defaultError, genericError}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, TimestampType}
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, TimestampType}
 import org.apache.kafka.common.record.Record.EMPTY_HEADERS
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
@@ -64,7 +65,7 @@ private[group] class ListenerAdapter(
 class CoordinatorPartitionWriter[T](
   replicaManager: ReplicaManager,
   serializer: PartitionWriter.Serializer[T],
-  compressionType: CompressionType,
+  compression: Compression,
   time: Time
 ) extends PartitionWriter[T] {
   private val threadLocalBufferSupplier = ThreadLocal.withInitial(
@@ -125,7 +126,7 @@ class CoordinatorPartitionWriter[T](
           val recordsBuilder = MemoryRecords.builder(
             buffer,
             magic,
-            compressionType,
+            compression,
             TimestampType.CREATE_TIME,
             0L,
             time.milliseconds(),

@@ -17,8 +17,8 @@
 
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -45,7 +45,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         MemoryPool memoryPool,
         Time time,
         long lastContainedLogTimestamp,
-        CompressionType compressionType,
+        Compression compression,
         RecordSerde<T> serde
     ) {
         this.snapshot = snapshot;
@@ -59,7 +59,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             maxBatchSize,
             memoryPool,
             time,
-            compressionType,
+            compression,
             serde
         );
     }
@@ -106,7 +106,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
      * @param memoryPool the memory pool for buffer allocation
      * @param snapshotTime the clock implementation
      * @param lastContainedLogTimestamp The append time of the highest record contained in this snapshot
-     * @param compressionType the compression algorithm to use
+     * @param compression the compression algorithm to use
      * @param serde the record serialization and deserialization implementation
      * @return {@link Optional}{@link RecordsSnapshotWriter}
      */
@@ -116,7 +116,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         MemoryPool memoryPool,
         Time snapshotTime,
         long lastContainedLogTimestamp,
-        CompressionType compressionType,
+        Compression compression,
         RecordSerde<T> serde
     ) {
         return supplier.get().map(writer ->
@@ -126,7 +126,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                 memoryPool,
                 snapshotTime,
                 lastContainedLogTimestamp,
-                compressionType,
+                compression,
                 serde
             )
         );
@@ -138,7 +138,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         MemoryPool memoryPool,
         Time snapshotTime,
         long lastContainedLogTimestamp,
-        CompressionType compressionType,
+        Compression compression,
         RecordSerde<T> serde
     ) {
         RecordsSnapshotWriter<T> writer = new RecordsSnapshotWriter<>(
@@ -147,7 +147,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             memoryPool,
             snapshotTime,
             lastContainedLogTimestamp,
-            compressionType,
+            compression,
             serde
         );
         writer.initializeSnapshotWithHeader();

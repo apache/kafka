@@ -20,10 +20,11 @@ import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMillisProp, MetadataLogSegmentMinBytesProp, NodeIdProp, ProcessRolesProp, QuorumVotersProp}
 import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.utils.TestUtils
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.{InvalidConfigurationException, RecordTooLargeException}
 import org.apache.kafka.common.protocol
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft._
 import org.apache.kafka.raft.internals.BatchBuilder
@@ -88,7 +89,7 @@ final class KafkaMetadataLogTest {
     val initialOffset = log.endOffset().offset
 
     log.appendAsLeader(
-      MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+      MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
       currentEpoch
     )
 
@@ -97,7 +98,7 @@ final class KafkaMetadataLogTest {
       classOf[RuntimeException],
       () => {
         log.appendAsLeader(
-          MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+          MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
           currentEpoch
         )
       }
@@ -107,7 +108,7 @@ final class KafkaMetadataLogTest {
       classOf[RuntimeException],
       () => {
         log.appendAsFollower(
-          MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo)
+          MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo)
         )
       }
     )
@@ -651,7 +652,7 @@ final class KafkaMetadataLogTest {
     val batchBuilder = new BatchBuilder[Array[Byte]](
       buffer,
       new ByteArraySerde,
-      CompressionType.NONE,
+      Compression.NONE,
       0L,
       mockTime.milliseconds(),
       false,
@@ -1064,7 +1065,7 @@ object KafkaMetadataLogTest {
     log.appendAsLeader(
       MemoryRecords.withRecords(
         log.endOffset().offset,
-        CompressionType.NONE,
+        Compression.NONE,
         epoch,
         (0 until numberOfRecords).map(number => new SimpleRecord(number.toString.getBytes)): _*
       ),
@@ -1075,7 +1076,7 @@ object KafkaMetadataLogTest {
   def append(snapshotWriter: RawSnapshotWriter, numberOfRecords: Int): Unit = {
     snapshotWriter.append(MemoryRecords.withRecords(
       0,
-      CompressionType.NONE,
+      Compression.NONE,
       0,
       (0 until numberOfRecords).map(number => new SimpleRecord(number.toString.getBytes)): _*
     ))
