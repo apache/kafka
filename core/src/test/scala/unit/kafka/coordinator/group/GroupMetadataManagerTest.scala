@@ -1662,6 +1662,65 @@ class GroupMetadataManagerTest {
   }
 
   @Test
+  def testOffsetMetadataTooLargePartialFailure(): Unit = {
+    val memberId = ""
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
+    val validTopicIdPartition = new TopicIdPartition(topicIdPartition.topicId, 1, "foo")
+    val offset = 37
+    val requireStable = true;
+
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
+    val group = new GroupMetadata(groupId, Empty, time)
+    groupMetadataManager.addGroup(group)
+
+    val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
+    val offsets = immutable.Map(
+      topicIdPartition -> OffsetAndMetadata(offset, "s" * (offsetConfig.maxMetadataSize + 1) , time.milliseconds()),
+      validTopicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
+
+    expectAppendMessage(Errors.NONE)
+
+    var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
+    def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
+      commitErrors = Some(errors)
+    }
+
+    assertEquals(0, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
+    groupMetadataManager.storeOffsets(group, memberId, offsetTopicPartition, offsets, callback, verificationGuard = None)
+    assertTrue(group.hasOffsets)
+
+    assertFalse(commitErrors.isEmpty)
+    assertEquals(
+      Some(Errors.OFFSET_METADATA_TOO_LARGE),
+      commitErrors.get.get(topicIdPartition)
+    )
+    assertEquals(
+      Some(Errors.NONE),
+      commitErrors.get.get(validTopicIdPartition)
+    )
+
+    val cachedOffsets = groupMetadataManager.getOffsets(
+      groupId,
+      requireStable,
+      Some(Seq(topicIdPartition.topicPartition, validTopicIdPartition.topicPartition))
+    )
+    assertEquals(
+      Some(OffsetFetchResponse.INVALID_OFFSET),
+      cachedOffsets.get(topicIdPartition.topicPartition).map(_.offset)
+    )
+    assertEquals(
+      Some(Errors.NONE),
+      cachedOffsets.get(topicIdPartition.topicPartition).map(_.error)
+    )
+    assertEquals(
+      Some(offset),
+      cachedOffsets.get(validTopicIdPartition.topicPartition).map(_.offset)
+    )
+
+    assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
+  }
+
+  @Test
   def testExpireOffset(): Unit = {
     val memberId = ""
     val topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
