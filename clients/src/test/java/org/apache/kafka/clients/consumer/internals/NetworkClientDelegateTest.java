@@ -29,7 +29,6 @@ import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,7 +44,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_M
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -136,14 +134,13 @@ public class NetworkClientDelegateTest {
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {
         Objects.requireNonNull(GROUP_ID);
-        Timer timer = time.timer(REQUEST_TIMEOUT_MS);
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
                     .setKey(GROUP_ID)
                     .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
                 ),
             Optional.empty(),
-                timer
+            time.timer(REQUEST_TIMEOUT_MS)
         );
         return req;
     }

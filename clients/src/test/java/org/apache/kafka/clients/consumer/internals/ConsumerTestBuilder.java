@@ -75,7 +75,6 @@ public class ConsumerTestBuilder implements Closeable {
     public final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     final ConsumerConfig config;
     final long retryBackoffMs;
-    final long retryBackoffMaxMs;
     final SubscriptionState subscriptions;
     final ConsumerMetadata metadata;
     final FetchConfig fetchConfig;
@@ -142,7 +141,6 @@ public class ConsumerTestBuilder implements Closeable {
 
         this.fetchConfig = new FetchConfig(config);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.metrics = createMetrics(config, time);
 
@@ -170,8 +168,8 @@ public class ConsumerTestBuilder implements Closeable {
                 metadata,
                 fetchConfig.isolationLevel,
                 time,
-                retryBackoffMs,
-                retryBackoffMaxMs,
+                DEFAULT_RETRY_BACKOFF_MS,
+                DEFAULT_RETRY_BACKOFF_MAX_MS,
                 requestTimeoutMs,
                 apiVersions,
                 networkClientDelegate,
@@ -187,7 +185,7 @@ public class ConsumerTestBuilder implements Closeable {
                     logContext,
                     requestTimeoutMs,
                     retryBackoffMs,
-                    retryBackoffMaxMs,
+                    DEFAULT_RETRY_BACKOFF_MAX_MS,
                     backgroundEventHandler,
                     gi.groupId
             ));
@@ -225,7 +223,7 @@ public class ConsumerTestBuilder implements Closeable {
                     time,
                     gi.heartbeatIntervalMs,
                     retryBackoffMs,
-                    retryBackoffMaxMs,
+                    DEFAULT_RETRY_BACKOFF_MAX_MS,
                     gi.heartbeatJitterMs));
             HeartbeatRequestManager heartbeat = spy(new HeartbeatRequestManager(
                     logContext,
