@@ -16,7 +16,7 @@ import java.util.Locale
 import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.server.config.ZkConfig
+import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
 @Timeout(600)
@@ -26,7 +26,7 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   private val kafkaServerJaasEntryName =
     s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KafkaServerContextName}"
-  this.serverConfig.setProperty(ZkConfig.ZK_ENABLE_SECURE_ACLS_PROP, "false")
+  this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_PROP, "false")
   // disable secure acls of zkClient in QuorumTestHarness
   override protected def zkAclsEnabled = Some(false)
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT

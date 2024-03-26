@@ -606,7 +606,6 @@
         <allow pkg="org.eclipse.jetty.client"/>
         <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
         <allow class="org.apache.kafka.server.config.ZkConfig" />
-        <allow class="org.apache.zookeeper.client.ZKClientConfig" />
       </subpackage>
     </subpackage>
 

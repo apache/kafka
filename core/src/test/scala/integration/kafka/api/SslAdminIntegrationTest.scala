@@ -23,7 +23,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.config.ZkConfig
+import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -79,7 +79,7 @@ object SslAdminIntegrationTest {
 class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   override val authorizationAdmin = new AclAuthorizationAdmin(classOf[SslAdminIntegrationTest.TestableAclAuthorizer], classOf[AclAuthorizer])
 
-  this.serverConfig.setProperty(ZkConfig.ZK_ENABLE_SECURE_ACLS_PROP, "true")
+  this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_PROP, "true")
 
   override protected def securityProtocol = SecurityProtocol.SSL
   override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
