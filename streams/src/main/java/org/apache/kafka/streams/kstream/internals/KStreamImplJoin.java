@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.kafka.streams.state.internals.JoinSide;
 
 class KStreamImplJoin {
 
@@ -173,7 +174,7 @@ class KStreamImplJoin {
 
         final JoinWindowsInternal internalWindows = new JoinWindowsInternal(windows);
         final KStreamKStreamJoin<K, V1, V2, VOut> joinThis = new KStreamKStreamJoin<>(
-            true,
+            JoinSide.LEFT,
             otherWindowStore.name(),
             internalWindows,
             joiner,
@@ -183,7 +184,7 @@ class KStreamImplJoin {
         );
 
         final KStreamKStreamJoin<K, V2, V1, VOut> joinOther = new KStreamKStreamJoin<>(
-            false,
+            JoinSide.RIGHT,
             thisWindowStore.name(),
             internalWindows,
             AbstractStream.reverseJoinerWithKey(joiner),

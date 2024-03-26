@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.junit.Test;
 
+import static org.apache.kafka.streams.state.internals.JoinSide.LEFT;
+import static org.apache.kafka.streams.state.internals.JoinSide.RIGHT;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
@@ -34,7 +36,7 @@ public class TimestampedKeyAndJoinSideSerializerTest {
     public void shouldSerializeKeyWithJoinSideAsTrue() {
         final String value = "some-string";
 
-        final TimestampedKeyAndJoinSide<String> timestampedKeyAndJoinSide = TimestampedKeyAndJoinSide.make(true, value, 10);
+        final TimestampedKeyAndJoinSide<String> timestampedKeyAndJoinSide = TimestampedKeyAndJoinSide.make(LEFT, value, 10);
 
         final byte[] serialized =
             STRING_SERDE.serializer().serialize(TOPIC, timestampedKeyAndJoinSide);
@@ -51,7 +53,7 @@ public class TimestampedKeyAndJoinSideSerializerTest {
     public void shouldSerializeKeyWithJoinSideAsFalse() {
         final String value = "some-string";
 
-        final TimestampedKeyAndJoinSide<String> timestampedKeyAndJoinSide = TimestampedKeyAndJoinSide.make(false, value, 20);
+        final TimestampedKeyAndJoinSide<String> timestampedKeyAndJoinSide = TimestampedKeyAndJoinSide.make(RIGHT, value, 20);
 
         final byte[] serialized =
             STRING_SERDE.serializer().serialize(TOPIC, timestampedKeyAndJoinSide);
@@ -67,6 +69,6 @@ public class TimestampedKeyAndJoinSideSerializerTest {
     @Test
     public void shouldThrowIfSerializeNullData() {
         assertThrows(NullPointerException.class,
-            () -> STRING_SERDE.serializer().serialize(TOPIC, TimestampedKeyAndJoinSide.make(true, null, 0)));
+            () -> STRING_SERDE.serializer().serialize(TOPIC, TimestampedKeyAndJoinSide.make(LEFT, null, 0)));
     }
 }

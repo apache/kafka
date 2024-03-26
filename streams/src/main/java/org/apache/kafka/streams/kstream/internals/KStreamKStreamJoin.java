@@ -33,6 +33,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.JoinSide;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.slf4j.Logger;
@@ -55,22 +56,22 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
     private final long windowsAfterMs;
 
     private final boolean outer;
-    private final boolean isLeftSide;
+    private final JoinSide joinSide;
     private final Optional<String> outerJoinWindowName;
     private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner;
 
     private final TimeTrackerSupplier sharedTimeTrackerSupplier;
 
-    KStreamKStreamJoin(final boolean isLeftSide,
+    KStreamKStreamJoin(final JoinSide joinSide,
                        final String otherWindowName,
                        final JoinWindowsInternal windows,
                        final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner,
                        final boolean outer,
                        final Optional<String> outerJoinWindowName,
                        final TimeTrackerSupplier sharedTimeTrackerSupplier) {
-        this.isLeftSide = isLeftSide;
+        this.joinSide = joinSide;
         this.otherWindowName = otherWindowName;
-        if (isLeftSide) {
+        if (joinSide.isLeftSide()) {
             this.joinBeforeMs = windows.beforeMs;
             this.joinAfterMs = windows.afterMs;
         } else {
@@ -155,7 +156,8 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                         // we may delete some values with the same key early but since we are going
                         // range over all values of the same key even after failure, since the other window-store
                         // is only cleaned up by stream time, so this is okay for at-least-once.
-                        store.putIfAbsent(TimestampedKeyAndJoinSide.make(!isLeftSide, record.key(), otherRecordTimestamp), null);
+                        final JoinSide otherJoinSide = joinSide.isLeftSide() ? JoinSide.RIGHT : JoinSide.LEFT;
+                        store.putIfAbsent(TimestampedKeyAndJoinSide.make(otherJoinSide, record.key(), otherRecordTimestamp), null);
                     });
 
                     context().forward(
@@ -186,8 +188,8 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     } else {
                         sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
                         outerJoinStore.ifPresent(store -> store.put(
-                            TimestampedKeyAndJoinSide.make(isLeftSide, record.key(), inputRecordTimestamp),
-                            LeftOrRightValue.make(isLeftSide, record.value())));
+                            TimestampedKeyAndJoinSide.make(joinSide, record.key(), inputRecordTimestamp),
+                            joinSide.make(record.value())));
                     }
                 }
             }
@@ -236,7 +238,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     // Skip next records if window has not closed
                     final long outerJoinLookBackTimeMs = getOuterJoinLookBackTimeMs(timestampedKeyAndJoinSide);
                     if (sharedTimeTracker.minTime + outerJoinLookBackTimeMs + joinGraceMs >= sharedTimeTracker.streamTime) {
-                        if (timestampedKeyAndJoinSide.isLeftSide()) {
+                        if (timestampedKeyAndJoinSide.getJoinSide().isLeftSide()) {
                             outerJoinLeftBreak = true; // there are no more candidates to emit on left-outerJoin-side
                         } else {
                             outerJoinRightBreak = true; // there are no more candidates to emit on right-outerJoin-side
@@ -250,7 +252,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     }
 
                     final VOut nullJoinedValue;
-                    if (isLeftSide) {
+                    if (joinSide.isLeftSide()) {
                         nullJoinedValue = joiner.apply(key,
                                 value.getLeftValue(),
                                 value.getRightValue());
@@ -285,7 +287,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
 
         private long getOuterJoinLookBackTimeMs(final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide) {
             // depending on the JoinSide we fill in the outerJoinLookBackTimeMs
-            if (timestampedKeyAndJoinSide.isLeftSide()) {
+            if (timestampedKeyAndJoinSide.getJoinSide().isLeftSide()) {
                 return windowsAfterMs; // On the left-JoinSide we look back in time
             } else {
                 return windowsBeforeMs; // On the right-JoinSide we look forward in time

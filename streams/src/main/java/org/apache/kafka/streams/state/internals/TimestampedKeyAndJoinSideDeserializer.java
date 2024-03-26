@@ -55,11 +55,11 @@ public class TimestampedKeyAndJoinSideDeserializer<K> implements WrappingNullabl
 
     @Override
     public TimestampedKeyAndJoinSide<K> deserialize(final String topic, final byte[] data) {
-        final boolean bool = data[StateSerdes.TIMESTAMP_SIZE] == 1;
+        final JoinSide joinSide = data[StateSerdes.TIMESTAMP_SIZE] == 1 ? JoinSide.LEFT : JoinSide.RIGHT;
         final K key = keyDeserializer.deserialize(topic, rawKey(data));
         final long timestamp = timestampDeserializer.deserialize(topic, rawTimestamp(data));
 
-        return TimestampedKeyAndJoinSide.make(bool, key, timestamp);
+        return TimestampedKeyAndJoinSide.make(joinSide, key, timestamp);
     }
 
     private byte[] rawTimestamp(final byte[] data) {

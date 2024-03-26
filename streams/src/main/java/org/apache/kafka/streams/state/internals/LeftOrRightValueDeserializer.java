@@ -62,8 +62,8 @@ public class LeftOrRightValueDeserializer<V1, V2> implements WrappingNullableDes
         }
 
         return (data[0] == 1)
-            ? LeftOrRightValue.makeLeftValue(leftDeserializer.deserialize(topic, rawValue(data)))
-            : LeftOrRightValue.makeRightValue(rightDeserializer.deserialize(topic, rawValue(data)));
+            ? JoinSide.LEFT.make(leftDeserializer.deserialize(topic, rawValue(data)))
+            : JoinSide.RIGHT.make(rightDeserializer.deserialize(topic, rawValue(data)));
     }
 
     private byte[] rawValue(final byte[] data) {

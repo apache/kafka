@@ -34,7 +34,7 @@ public class LeftOrRightValueSerializerTest {
     public void shouldSerializeStringValue() {
         final String value = "some-string";
 
-        final LeftOrRightValue<String, Integer> leftOrRightValue = LeftOrRightValue.makeLeftValue(value);
+        final LeftOrRightValue<String, Integer> leftOrRightValue = JoinSide.LEFT.make(value);
 
         final byte[] serialized =
             STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, leftOrRightValue);
@@ -51,7 +51,7 @@ public class LeftOrRightValueSerializerTest {
     public void shouldSerializeIntegerValue() {
         final int value = 5;
 
-        final LeftOrRightValue<String, Integer> leftOrRightValue = LeftOrRightValue.makeRightValue(value);
+        final LeftOrRightValue<String, Integer> leftOrRightValue = JoinSide.RIGHT.make(value);
 
         final byte[] serialized =
             STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, leftOrRightValue);
@@ -67,12 +67,12 @@ public class LeftOrRightValueSerializerTest {
     @Test
     public void shouldThrowIfSerializeValueAsNull() {
         assertThrows(NullPointerException.class,
-            () -> STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, LeftOrRightValue.makeLeftValue(null)));
+            () -> STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, JoinSide.LEFT.make(null)));
     }
 
     @Test
     public void shouldThrowIfSerializeOtherValueAsNull() {
         assertThrows(NullPointerException.class,
-            () -> STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, LeftOrRightValue.makeRightValue(null)));
+            () -> STRING_OR_INTEGER_SERDE.serializer().serialize(TOPIC, JoinSide.RIGHT.make(null)));
     }
 }
