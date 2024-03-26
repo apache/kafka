@@ -42,6 +42,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.AbortableTransactionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -3129,6 +3130,45 @@ public class SenderTest {
         // Return InvalidTxnState error. It should be abortable.
         sender.runOnce();
         assertFutureFailure(request, InvalidTxnStateException.class);
+        assertTrue(txnManager.hasAbortableError());
+        TransactionalRequestResult result = txnManager.beginAbort();
+        sender.runOnce();
+
+        // Once the transaction is aborted, we should be able to begin a new one.
+        respondToEndTxn(Errors.NONE);
+        sender.runOnce();
+        assertTrue(txnManager::isInitializing);
+        prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
+        sender.runOnce();
+        assertTrue(txnManager::isReady);
+
+        assertTrue(result.isSuccessful());
+        result.await();
+
+        txnManager.beginTransaction();
+    }
+
+    @Test
+    public void testAbortableTxnExceptionIsAnAbortableError() throws Exception {
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+        apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
+        TransactionManager txnManager = new TransactionManager(logContext, "textAbortableTxnException", 60000, 100, apiVersions);
+
+        setupWithTransactionState(txnManager);
+        doInitTransactions(txnManager, producerIdAndEpoch);
+
+        txnManager.beginTransaction();
+        txnManager.maybeAddPartition(tp0);
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
+        sender.runOnce();
+
+        Future<RecordMetadata> request = appendToAccumulator(tp0);
+        sender.runOnce();  // send request
+        sendIdempotentProducerResponse(0, tp0, Errors.ABORTABLE_TRANSACTION, -1);
+
+        // Return AbortableTransactionException error. It should be abortable.
+        sender.runOnce();
+        assertFutureFailure(request, AbortableTransactionException.class);
         assertTrue(txnManager.hasAbortableError());
         TransactionalRequestResult result = txnManager.beginAbort();
         sender.runOnce();
