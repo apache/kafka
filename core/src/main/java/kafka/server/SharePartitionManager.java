@@ -73,14 +73,14 @@ public class SharePartitionManager {
         this(replicaManager, time, cache, new ConcurrentHashMap<>());
     }
 
-    SharePartitionManager(ReplicaManager replicaManager, Time time, ShareSessionCache cache,
-                                  Map<SharePartitionKey, SharePartition> partitionCacheMap) {
+    // Visible for testing
+    SharePartitionManager(ReplicaManager replicaManager, Time time, ShareSessionCache cache, Map<SharePartitionKey, SharePartition> partitionCacheMap) {
         this.replicaManager = replicaManager;
         this.time = time;
         this.cache = cache;
+        this.partitionCacheMap = partitionCacheMap;
         this.fetchQueue = new ConcurrentLinkedQueue<>();
         this.processFetchQueueLock = new AtomicBoolean(false);
-        this.partitionCacheMap = partitionCacheMap;
     }
 
     // TODO: Move some part in share session context and change method signature to accept share
