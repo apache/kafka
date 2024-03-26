@@ -110,6 +110,13 @@ public class RepartitionTopics {
             .collect(Collectors.toSet());
     }
 
+    public Set<String> missingSourceTopics(){
+        return missingInputTopicsBySubtopology.entrySet().stream()
+                .map(entry -> entry.getValue())
+                .flatMap(missingTopicSet -> missingTopicSet.stream())
+                .collect(Collectors.toSet());
+    }
+
     public Queue<StreamsException> missingSourceTopicExceptions() {
         return missingInputTopicsBySubtopology.entrySet().stream().map(entry -> {
             final Set<String> missingSourceTopics = entry.getValue();
@@ -119,8 +126,7 @@ public class RepartitionTopics {
             return new StreamsException(
                 new MissingSourceTopicException(String.format(
                     "Missing source topics %s for subtopology %d of topology %s",
-                    missingSourceTopics, subtopologyId, topologyName),
-                    missingSourceTopics),
+                    missingSourceTopics, subtopologyId, topologyName)),
                 new TaskId(subtopologyId, 0, topologyName));
         }).collect(Collectors.toCollection(LinkedList::new));
     }
