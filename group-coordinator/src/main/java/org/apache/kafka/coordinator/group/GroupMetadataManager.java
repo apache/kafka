@@ -1957,8 +1957,6 @@ public class GroupMetadataManager {
                                 classicGroup.completeSyncFuture(member, new SyncGroupResponseData()
                                     .setErrorCode(NOT_COORDINATOR.code()));
                             });
-
-                            removeSyncExpiration(classicGroup);
                     }
             }
         });
