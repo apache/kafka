@@ -68,16 +68,16 @@ public class TopicConfig {
         "are using the \"delete\" retention policy. By default there is no size limit only a time limit. " +
         "Since this limit is enforced at the partition level, multiply it by the number of partitions to compute " +
         "the topic retention in bytes. Additionally, retention.bytes configuration " +
-        "operates independently of \"segment.ms\" and \"segment.byte\" configurations. " +
-        "Moreover, it triggers the expiration of active segment if retention.bytes is configured to zero.";
+        "operates independently of \"segment.ms\" and \"segment.bytes\" configurations. " +
+        "Moreover, it triggers the rolling of new segment if the retention.bytes is configured to zero.";
 
     public static final String RETENTION_MS_CONFIG = "retention.ms";
     public static final String RETENTION_MS_DOC = "This configuration controls the maximum time we will retain a " +
         "log before we will discard old log segments to free up space if we are using the " +
         "\"delete\" retention policy. This represents an SLA on how soon consumers must read " +
         "their data. If set to -1, no time limit is applied. Additionally, retention.ms configuration " +
-        "operates independently of \"segment.ms\" and \"segment.byte\" configurations. " +
-        "Moreover, it triggers the expiration of active segment.";
+        "operates independently of \"segment.ms\" and \"segment.bytes\" configurations. " +
+        "Moreover, it triggers the rolling of new segment if the retention.ms condition is satisfied.";
 
     public static final String REMOTE_LOG_STORAGE_ENABLE_CONFIG = "remote.storage.enable";
     public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tiered storage for a topic, set this configuration as true. " +
