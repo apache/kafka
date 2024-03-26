@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, Cons
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.util.Comparator
+import java.util.concurrent.TimeUnit
 import java.util.stream.Collectors
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -82,7 +83,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
     TestUtils.waitUntilTrue(() => {
       resultFuture.isDone && !resultFuture.isCancelled && !resultFuture.isCompletedExceptionally
-    }, msg = s"Could not commit the offsets successfully. Last response ${resultFuture.get()}.")
+    }, msg = s"Could not commit the offsets successfully. Last response ${resultFuture.get(0, TimeUnit.MILLISECONDS)}.")
   }
 
   protected def isUnstableApiEnabled: Boolean = {
