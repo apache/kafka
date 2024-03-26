@@ -1150,18 +1150,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 timestampToSearch,
                 timer);
 
-            // shortcut the request if the timeout is zero.
+            Map<TopicPartition, Long> offsetAndTimestampMap;
             if (timeout.isZero()) {
-                return listOffsetsEvent.emptyResult();
+                applicationEventHandler.add(listOffsetsEvent);
+                offsetAndTimestampMap = listOffsetsEvent.emptyResult();
+            } else {
+                offsetAndTimestampMap = applicationEventHandler.addAndGet(
+                    listOffsetsEvent,
+                    timer);
             }
-
-            Map<TopicPartition, Long> offsetAndTimestampMap = applicationEventHandler.addAndGet(
-                listOffsetsEvent,
-                timer);
-            return offsetAndTimestampMap
-                .entrySet()
-                .stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            return offsetAndTimestampMap;
         } finally {
             release();
         }
