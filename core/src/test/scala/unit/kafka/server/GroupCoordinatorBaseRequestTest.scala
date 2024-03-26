@@ -20,7 +20,6 @@ import kafka.test.ClusterInstance
 import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.utils.{NotNothing, TestUtils}
-import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
@@ -32,7 +31,6 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, Cons
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.util.Comparator
-import java.util.concurrent.TimeUnit
 import java.util.stream.Collectors
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
