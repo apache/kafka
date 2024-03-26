@@ -23,7 +23,7 @@ from ducktape.errors import TimeoutError
 
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.config_property import CLUSTER_ID, LOG_DIRS
+from kafkatest.services.kafka.config_property import CLUSTER_ID
 from kafkatest.services.kafka.quorum import isolated_kraft, ServiceQuorumInfo, zk
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
@@ -58,8 +58,7 @@ class TestMigration(ProduceConsumeValidateTest):
                                   allow_zk_with_kraft=True,
                                   isolated_kafka=self.kafka,
                                   server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
-                                                         ["zookeeper.metadata.migration.enable", "true"],
-                                                         [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]],
+                                                         ["zookeeper.metadata.migration.enable", "true"]],
                                   quorum_info_provider=remote_quorum)
         controller.start()
 
@@ -100,7 +99,6 @@ class TestMigration(ProduceConsumeValidateTest):
                                   allow_zk_with_kraft=True,
                                   server_prop_overrides=[
                                       ["zookeeper.metadata.migration.enable", "false"],
-                                      [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]
                                   ])
         self.kafka.security_protocol = "PLAINTEXT"
         self.kafka.interbroker_security_protocol = "PLAINTEXT"
@@ -157,7 +155,6 @@ class TestMigration(ProduceConsumeValidateTest):
                                   version=LATEST_3_4,
                                   server_prop_overrides=[
                                       ["zookeeper.metadata.migration.enable", "false"],
-                                      [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]
                                   ],
                                   topics={self.topic: {"partitions": self.partitions,
                                                        "replication-factor": self.replication_factor,
@@ -222,7 +219,6 @@ class TestMigration(ProduceConsumeValidateTest):
                                   allow_zk_with_kraft=True,
                                   server_prop_overrides=[
                                       ["zookeeper.metadata.migration.enable", "true"],
-                                      [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]
                                   ])
 
         remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
@@ -230,8 +226,7 @@ class TestMigration(ProduceConsumeValidateTest):
                                   allow_zk_with_kraft=True,
                                   isolated_kafka=self.kafka,
                                   server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
-                                                         ["zookeeper.metadata.migration.enable", "true"],
-                                                         [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]],
+                                                         ["zookeeper.metadata.migration.enable", "true"]],
                                   quorum_info_provider=remote_quorum)
 
         self.kafka.security_protocol = "PLAINTEXT"
@@ -301,16 +296,14 @@ class TestMigration(ProduceConsumeValidateTest):
                                   quorum_info_provider=zk_quorum,
                                   allow_zk_with_kraft=True,
                                   server_prop_overrides=[
-                                      ["zookeeper.metadata.migration.enable", "false"],
-                                      [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]])
+                                      ["zookeeper.metadata.migration.enable", "false"]])
 
         remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
         controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=DEV_BRANCH,
                                   allow_zk_with_kraft=True,
                                   isolated_kafka=self.kafka,
                                   server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
-                                                         ["zookeeper.metadata.migration.enable", "true"],
-                                                         [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]],
+                                                         ["zookeeper.metadata.migration.enable", "true"]],
                                   quorum_info_provider=remote_quorum)
 
         self.kafka.security_protocol = "PLAINTEXT"
