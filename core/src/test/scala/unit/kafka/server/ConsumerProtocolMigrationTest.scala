@@ -19,8 +19,6 @@ package kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
-import org.apache.kafka.clients.consumer.OffsetAndMetadata
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.ListGroupsResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.coordinator.group.Group
@@ -200,9 +198,15 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     // An admin client commits offsets and creates the simple group.
     val groupId = "group-id"
-    alterConsumerGroupOffsets(
+    commitOffset(
       groupId = groupId,
-      offsets = Map(new TopicPartition(topicName, 0) -> new OffsetAndMetadata(1000L))
+      memberId = "member-id",
+      memberEpoch = -1,
+      topic = topicName,
+      partition = 0,
+      offset = 1000L,
+      expectedError = Errors.NONE,
+      version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
     )
 
     // Verify that the simple group is created.

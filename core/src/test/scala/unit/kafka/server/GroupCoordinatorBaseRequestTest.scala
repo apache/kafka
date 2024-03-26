@@ -75,15 +75,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     )
   }
 
-  protected def alterConsumerGroupOffsets(
-    groupId: String,
-    offsets: Map[TopicPartition, OffsetAndMetadata]
-  ): Unit = {
-    cluster.createAdminClient()
-      .alterConsumerGroupOffsets(groupId, offsets.asJava).all
-      .get(15000, TimeUnit.MILLISECONDS)
-  }
-
   protected def isUnstableApiEnabled: Boolean = {
     cluster.config.serverProperties.getProperty("unstable.api.versions.enable") == "true"
   }
