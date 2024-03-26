@@ -139,6 +139,7 @@ public class RequestManagers implements Closeable {
                         fetchConfig.isolationLevel,
                         time,
                         retryBackoffMs,
+                        retryBackoffMaxMs,
                         requestTimeoutMs,
                         apiVersions,
                         networkClientDelegate,
@@ -152,9 +153,11 @@ public class RequestManagers implements Closeable {
                         fetchBuffer,
                         fetchMetricsManager,
                         networkClientDelegate,
-                        apiVersions);
+                        apiVersions,
+                        requestTimeoutMs);
                 final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(
                         logContext,
+                        time,
                         config);
                 HeartbeatRequestManager heartbeatRequestManager = null;
                 MembershipManager membershipManager = null;
@@ -165,6 +168,7 @@ public class RequestManagers implements Closeable {
                     Optional<String> serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
                     coordinator = new CoordinatorRequestManager(time,
                             logContext,
+                            requestTimeoutMs,
                             retryBackoffMs,
                             retryBackoffMaxMs,
                             backgroundEventHandler,

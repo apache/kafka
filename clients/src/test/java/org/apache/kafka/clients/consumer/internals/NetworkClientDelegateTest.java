@@ -29,6 +29,7 @@ import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -123,23 +124,6 @@ public class NetworkClientDelegateTest {
         assertEquals(timeMs, unsentRequest.handler().completionTimeMs());
     }
 
-    @Test
-    public void testEnsureTimerSetOnAdd() {
-        NetworkClientDelegate ncd = newNetworkClientDelegate();
-        NetworkClientDelegate.UnsentRequest findCoordRequest = newUnsentFindCoordinatorRequest();
-        assertNull(findCoordRequest.timer());
-
-        // NetworkClientDelegate#add
-        ncd.add(findCoordRequest);
-        assertEquals(1, ncd.unsentRequests().size());
-        assertEquals(REQUEST_TIMEOUT_MS, ncd.unsentRequests().poll().timer().timeoutMs());
-
-        // NetworkClientDelegate#addAll
-        ncd.addAll(Collections.singletonList(findCoordRequest));
-        assertEquals(1, ncd.unsentRequests().size());
-        assertEquals(REQUEST_TIMEOUT_MS, ncd.unsentRequests().poll().timer().timeoutMs());
-    }
-
     public NetworkClientDelegate newNetworkClientDelegate() {
         LogContext logContext = new LogContext();
         Properties properties = new Properties();
@@ -152,12 +136,14 @@ public class NetworkClientDelegateTest {
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {
         Objects.requireNonNull(GROUP_ID);
+        Timer timer = time.timer(REQUEST_TIMEOUT_MS);
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
                     .setKey(GROUP_ID)
                     .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
                 ),
-            Optional.empty()
+            Optional.empty(),
+                timer
         );
         return req;
     }

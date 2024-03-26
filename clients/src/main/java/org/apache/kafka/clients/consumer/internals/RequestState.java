@@ -154,7 +154,7 @@ class RequestState {
     }
 
     @Override
-    public String toString() {
-        return "RequestState{" + toStringBase() + '}';
+    public final String toString() {
+        return getClass().getSimpleName() + "{" + toStringBase() + '}';
     }
 }

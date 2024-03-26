@@ -234,9 +234,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     public void add(final UnsentRequest r) {
-        Objects.requireNonNull(r);
-        r.setTimer(this.time, this.requestTimeoutMs);
-        unsentRequests.add(r);
+        unsentRequests.add(Objects.requireNonNull(r));
     }
 
     public static class PollResult {
@@ -268,22 +266,16 @@ public class NetworkClientDelegate implements AutoCloseable {
         private final FutureCompletionHandler handler;
         private final Optional<Node> node; // empty if random node can be chosen
 
-        private Timer timer;
+        private final Timer timer;
 
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
-                             final Optional<Node> node) {
+                             final Optional<Node> node,
+                             final Timer timer) {
             Objects.requireNonNull(requestBuilder);
             this.requestBuilder = requestBuilder;
             this.node = node;
             this.handler = new FutureCompletionHandler();
-        }
-
-        void setTimer(final Time time, final long requestTimeoutMs) {
-            this.timer = time.timer(requestTimeoutMs);
-        }
-
-        Timer timer() {
-            return timer;
+            this.timer = timer;
         }
 
         CompletableFuture<ClientResponse> future() {

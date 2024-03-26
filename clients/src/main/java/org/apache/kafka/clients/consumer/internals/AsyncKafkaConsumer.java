@@ -347,7 +347,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
-                    requestManagersSupplier);
+                    requestManagersSupplier,
+                    time);
             this.applicationEventHandler = applicationEventHandlerFactory.build(
                     logContext,
                     time,
@@ -529,7 +530,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
                 metadata,
-                requestManagersSupplier
+                requestManagersSupplier,
+                time
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
                 time,
@@ -1239,7 +1241,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (autoCommitEnabled)
             maybeAutoCommitSync(timer);
 
-        applicationEventHandler.add(new CommitOnCloseEvent());
+        completeQuietly(
+                () -> applicationEventHandler.add(new CommitOnCloseEvent(timer)),
+                "Failed to send commit on close event with a timeout(ms)=" + timer.timeoutMs(), firstException);
         completeQuietly(
             () -> {
                 maybeRevokePartitions();
