@@ -442,12 +442,6 @@ public class SharePartitionManager {
             }
         }
 
-        public EvictableKey evictableKey() {
-            synchronized (this) {
-                return new EvictableKey(key, cachedSize);
-            }
-        }
-
         // Update the cached partition data based on the request.
         public Map<ModifiedTopicIdPartitionType, List<TopicIdPartition>> update(Map<TopicIdPartition,
                 ShareFetchRequest.SharePartitionData> shareFetchData,
@@ -925,46 +919,6 @@ public class SharePartitionManager {
         }
     }
 
-    public static class EvictableKey implements Comparable<EvictableKey> {
-        private final ShareSessionKey key;
-        private final int size;
-
-        public EvictableKey(ShareSessionKey key, int size) {
-            this.key = key;
-            this.size = size;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(key, size);
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj == null) {
-                return false;
-            }
-            if (getClass() != obj.getClass()) {
-                return false;
-            }
-            EvictableKey other = (EvictableKey) obj;
-            return size == other.size && Objects.equals(key, other.key);
-        }
-
-        @Override
-        public int compareTo(EvictableKey other) {
-            int res = Integer.compare(size, other.size);
-            if (res != 0)
-                return res;
-            else {
-                return Integer.compare(key.hashCode(), other.key.hashCode());
-            }
-        }
-    }
-
     /*
      * Caches share sessions.
      *
@@ -985,9 +939,6 @@ public class SharePartitionManager {
 
         // Maps last used times to sessions.
         private TreeMap<LastUsedKey, ShareSession> lastUsed = new TreeMap<>();
-
-        // A map containing sessions which can be evicted by sessions on basis of size
-        private TreeMap<EvictableKey, ShareSession> evictable = new TreeMap<>();
 
         public ShareSessionCache(int maxEntries, long evictionMs) {
             this.maxEntries = maxEntries;
@@ -1038,12 +989,9 @@ public class SharePartitionManager {
          */
         public ShareSession remove(ShareSession session) {
             synchronized (this) {
-                EvictableKey evictableKey;
                 synchronized (session) {
                     lastUsed.remove(session.lastUsedKey());
-                    evictableKey = session.evictableKey();
                 }
-                evictable.remove(evictableKey);
                 ShareSession removeResult = sessions.remove(session.key);
                 if (removeResult != null) {
                     numPartitions = numPartitions - session.cachedSize();
@@ -1053,7 +1001,7 @@ public class SharePartitionManager {
         }
 
         /**
-         * Update a session's position in the lastUsed and evictable trees.
+         * Update a session's position in the lastUsed tree.
          *
          * @param session  The session.
          * @param now      The current time in milliseconds.
@@ -1067,15 +1015,9 @@ public class SharePartitionManager {
 
                 int oldSize = session.cachedSize;
                 if (oldSize != -1) {
-                    EvictableKey oldEvictableKey = session.evictableKey();
-                    evictable.remove(oldEvictableKey);
                     numPartitions = numPartitions - oldSize;
                 }
                 session.cachedSize = session.size();
-                EvictableKey newEvictableKey = session.evictableKey();
-                if (now - session.creationMs > evictionMs) {
-                    evictable.put(newEvictableKey, session);
-                }
                 numPartitions = numPartitions + session.cachedSize;
             }
         }
