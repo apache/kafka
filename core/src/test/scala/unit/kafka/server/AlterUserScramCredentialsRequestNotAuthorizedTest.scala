@@ -17,13 +17,16 @@
 package kafka.server
 
 import kafka.network.SocketServer
+import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse}
+import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.util
 import java.util.Properties
@@ -36,15 +39,19 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
-    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AlterCredentialsTest.TestAuthorizer].getName)
+    if(!isKRaftTest())
+      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AlterCredentialsTest.TestAuthorizer].getName)
+    else
+      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
     properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
   }
 
   private val user1 = "user1"
   private val user2 = "user2"
 
-  @Test
-  def testAlterNothingNotAuthorized(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAlterNothingNotAuthorized(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setDeletions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialDeletion])
@@ -55,8 +62,9 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
     assertEquals(0, results.size)
   }
 
-  @Test
-  def testAlterSomethingNotAuthorized(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAlterSomethingNotAuthorized(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))
@@ -65,15 +73,25 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
 
     val results = response.data.results
     assertEquals(2, results.size)
-    checkAllErrorsAlteringCredentials(results, Errors.CLUSTER_AUTHORIZATION_FAILED, "when not authorized")
+    if(!isKRaftTest())
+      checkAllErrorsAlteringCredentials(results, Errors.CLUSTER_AUTHORIZATION_FAILED, "when not authorized")
+    else{
+      checkErrorAlteringCredentials(results, Errors.RESOURCE_NOT_FOUND, 1, "when not authorized")
+      checkErrorAlteringCredentials(results, Errors.UNACCEPTABLE_CREDENTIAL, 1, "when not authorized")
+    }
   }
 
-  private def sendAlterUserScramCredentialsRequest(request: AlterUserScramCredentialsRequest, socketServer: SocketServer = controllerSocketServer): AlterUserScramCredentialsResponse = {
+  private def sendAlterUserScramCredentialsRequest(request: AlterUserScramCredentialsRequest, socketServer: SocketServer = adminSocketServer): AlterUserScramCredentialsResponse = {
     connectAndReceive[AlterUserScramCredentialsResponse](request, destination = socketServer)
   }
 
   private def checkAllErrorsAlteringCredentials(resultsToCheck: util.List[AlterUserScramCredentialsResult], expectedError: Errors, contextMsg: String): Unit = {
     assertEquals(0, resultsToCheck.asScala.filterNot(_.errorCode == expectedError.code).size,
       s"Expected all '${expectedError.name}' errors when altering credentials $contextMsg")
+  }
+
+  private def checkErrorAlteringCredentials(resultsToCheck: util.List[AlterUserScramCredentialsResult], expectedError: Errors, expectedCount:Int, contextMsg: String): Unit = {
+    assertEquals(expectedCount, resultsToCheck.asScala.count(_.errorCode == expectedError.code),
+      s"Expected '${expectedError.name}' errors when altering credentials $contextMsg")
   }
 }
