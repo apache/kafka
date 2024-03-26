@@ -19,6 +19,7 @@ package org.apache.kafka.common.config;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.provider.FileConfigProvider;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metrics.FakeMetricsReporter;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -410,10 +411,10 @@ public class AbstractConfigTest {
 
     @Test
     public void testOriginalsWithConfigProvidersPropsExcluded() {
-        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, MockVaultConfigProvider.class.getName());
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, MockVaultConfigProvider.class.getName() + " , " + FileConfigProvider.class.getName());
         Properties props = new Properties();
 
-        // Test Case: VaultConfigProvider is automatic, but FileConfigProvider is specified
+        // Test Case: Config provider that is not an allowed class
         props.put("config.providers", "file");
         props.put("config.providers.file.class", MockFileConfigProvider.class.getName());
         String id = UUID.randomUUID().toString();
@@ -423,6 +424,26 @@ public class AbstractConfigTest {
         props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
         props.put("sasl.kerberos.password", "${file:/usr/kerberos:password}");
         assertThrows(ConfigException.class, () -> new TestIndirectConfigResolution(props, Collections.emptyMap()));
+    }
+
+    @Test
+    public void testOriginalsWithConfigProvidersPropsIncluded() {
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, MockFileConfigProvider.class.getName() + " , " + FileConfigProvider.class.getName());
+        Properties props = new Properties();
+
+        // Test Case: Config provider that is an allowed class
+        props.put("config.providers", "file");
+        props.put("config.providers.file.class", MockFileConfigProvider.class.getName());
+        String id = UUID.randomUUID().toString();
+        props.put("config.providers.file.param.testId", id);
+        props.put("prefix.ssl.truststore.location.number", 5);
+        props.put("sasl.kerberos.service.name", "service name");
+        props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
+        props.put("sasl.kerberos.password", "${file:/usr/kerberos:password}");
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, Collections.emptyMap());
+        assertEquals("testKey", config.originals().get("sasl.kerberos.key"));
+        assertEquals("randomPassword", config.originals().get("sasl.kerberos.password"));
+        MockFileConfigProvider.assertClosed(id);
     }
 
     @Test
@@ -499,12 +520,12 @@ public class AbstractConfigTest {
 
     @Test
     public void testAutoConfigResolutionWithInvalidConfigProviderClassExcluded() {
+        String invalidConfigProvider = "org.apache.kafka.common.config.provider.InvalidConfigProvider";
         System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "");
-        // Test Case: Invalid class for Config Provider
+        // Test Case: Any config provider specified while the system property is empty
         Properties props = new Properties();
         props.put("config.providers", "file");
-        props.put("config.providers.file.class",
-                "org.apache.kafka.common.config.provider.InvalidConfigProvider");
+        props.put("config.providers.file.class", invalidConfigProvider);
         props.put("testKey", "${test:/foo/bar/testpath:testKey}");
         try {
             new TestIndirectConfigResolution(props, Collections.emptyMap());
@@ -512,7 +533,24 @@ public class AbstractConfigTest {
         } catch (KafkaException e) {
             // deliver the disallowed message first to prevent probing the classloader
             assertTrue(e.getMessage().contains(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY));
-            // this is good
+        }
+    }
+
+    @Test
+    public void testAutoConfigResolutionWithInvalidConfigProviderClassIncluded() {
+        String invalidConfigProvider = "org.apache.kafka.common.config.provider.InvalidConfigProvider";
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, invalidConfigProvider);
+        // Test Case: Invalid config provider specified, but is also included in the system property
+        Properties props = new Properties();
+        props.put("config.providers", "file");
+        props.put("config.providers.file.class", invalidConfigProvider);
+        props.put("testKey", "${test:/foo/bar/testpath:testKey}");
+        try {
+            new TestIndirectConfigResolution(props, Collections.emptyMap());
+            fail("Expected a config exception due to invalid props :" + props);
+        } catch (KafkaException e) {
+            // deliver the disallowed message first to prevent probing the classloader
+            assertFalse(e.getMessage().contains(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY));
         }
     }
 
@@ -559,7 +597,7 @@ public class AbstractConfigTest {
     public void testConfigProviderConfigurationWithConfigParams() {
         // should have no effect
         System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, MockFileConfigProvider.class.getName());
-        // Test Case: Valid Test Case With Multiple ConfigProviders as a separate variable
+        // Test Case: Specify a config provider not allowed, but passed via the trusted providers argument
         Properties providers = new Properties();
         providers.put("config.providers", "vault");
         providers.put("config.providers.vault.class", MockVaultConfigProvider.class.getName());
