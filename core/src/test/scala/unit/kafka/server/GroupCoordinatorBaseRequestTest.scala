@@ -79,11 +79,9 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     groupId: String,
     offsets: Map[TopicPartition, OffsetAndMetadata]
   ): Unit = {
-    val resultFuture = cluster.createAdminClient().alterConsumerGroupOffsets(groupId, offsets.asJava).all
-
-    TestUtils.waitUntilTrue(() => {
-      resultFuture.isDone && !resultFuture.isCancelled && !resultFuture.isCompletedExceptionally
-    }, msg = s"Could not commit the offsets successfully. Last response ${resultFuture.get(0, TimeUnit.MILLISECONDS)}.")
+    cluster.createAdminClient()
+      .alterConsumerGroupOffsets(groupId, offsets.asJava).all
+      .get(15000, TimeUnit.MILLISECONDS)
   }
 
   protected def isUnstableApiEnabled: Boolean = {
