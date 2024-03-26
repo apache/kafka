@@ -186,6 +186,8 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                                         Integer epochForLeaderLocalLogStartOffset,
                                         Long leaderLogStartOffset) throws IOException, RemoteStorageException {
 
+        System.out.println("!!! buildRemoteLogAuxState:" + topicPartition + ";;" + currentLeaderEpoch + ";;" + leaderLocalLogStartOffset + ";;" + epochForLeaderLocalLogStartOffset + ";;" + leaderLocalLogStartOffset);
+
         UnifiedLog unifiedLog = replicaMgr.localLogOrException(topicPartition);
 
         long nextOffset;
@@ -238,7 +240,6 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                 // Truncate the existing local log before restoring the leader epoch cache and producer snapshots.
                 Partition partition = replicaMgr.getPartitionOrException(topicPartition);
                 partition.truncateFullyAndStartAt(nextOffset, false, Option.apply(leaderLogStartOffset));
-
                 // Increment start offsets
                 unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented);
                 unifiedLog.maybeIncrementLocalLogStartOffset(nextOffset, LeaderOffsetIncremented);
@@ -249,7 +250,7 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                     unifiedLog.leaderEpochCache().get().assign(epochs);
                 }
 
-                log.debug("Updated the epoch cache from remote tier till offset: {} with size: {} for {}", leaderLocalLogStartOffset, epochs.size(), partition);
+                log.info("Updated the epoch cache from remote tier till offset: {} with size: {} for {}", leaderLocalLogStartOffset, epochs.size(), partition);
 
                 // Restore producer snapshot
                 File snapshotFile = LogFileUtils.producerSnapshotFile(unifiedLog.dir(), nextOffset);

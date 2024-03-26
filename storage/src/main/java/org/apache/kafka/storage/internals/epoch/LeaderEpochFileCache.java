@@ -72,7 +72,9 @@ public class LeaderEpochFileCache {
     public void assign(int epoch, long startOffset) {
         EpochEntry entry = new EpochEntry(epoch, startOffset);
         if (assign(entry)) {
-            log.debug("Appended new epoch entry {}. Cache now contains {} entries.", entry, epochs.size());
+            if (topicPartition.topic().contains("tieredTopic"))
+               log.info("!!! Appended new epoch entry {}. Cache now contains {} entries.", entry, epochs.size());
+
             writeToFile(true);
         }
     }
@@ -80,7 +82,9 @@ public class LeaderEpochFileCache {
     public void assign(List<EpochEntry> entries) {
         entries.forEach(entry -> {
             if (assign(entry)) {
-                log.debug("Appended new epoch entry {}. Cache now contains {} entries.", entry, epochs.size());
+                if (topicPartition.topic().contains("tieredTopic"))
+                    log.info("!!! Appended new epoch entry {}. Cache now contains {} entries.", entry, epochs.size());
+
             }
         });
         if (!entries.isEmpty()) writeToFile(true);
@@ -294,8 +298,8 @@ public class LeaderEpochFileCache {
                 }
             }
 
-            if (log.isTraceEnabled())
-                log.trace("Processed end offset request for epoch {} and returning epoch {} with end offset {} from epoch cache of size {}}", requestedEpoch, epochAndOffset.getKey(), epochAndOffset.getValue(), epochs.size());
+//            if (log.isTraceEnabled())
+//                log.info("Processed end offset request for epoch {} and returning epoch {} with end offset {} from epoch cache of size {}}", requestedEpoch, epochAndOffset.getKey(), epochAndOffset.getValue(), epochs.size());
 
             return epochAndOffset;
         } finally {
@@ -307,6 +311,7 @@ public class LeaderEpochFileCache {
      * Removes all epoch entries from the store with start offsets greater than or equal to the passed offset.
      */
     public void truncateFromEnd(long endOffset) {
+        log.info("!!! truncateFromStart:" + epochs + ";;" + endOffset);
         lock.writeLock().lock();
         try {
             Optional<EpochEntry> epochEntry = latestEntry();
@@ -322,7 +327,7 @@ public class LeaderEpochFileCache {
                 //   another truncateFromEnd call on log loading procedure so it won't be a problem
                 writeToFile(false);
 
-                log.debug("Cleared entries {} from epoch cache after truncating to end offset {}, leaving {} entries in the cache.", removedEntries, endOffset, epochs.size());
+                log.info("!!! Cleared entries {} from epoch cache after truncating to end offset {}, leaving {} entries in the cache.", removedEntries, endOffset, epochs.size());
             }
         } finally {
             lock.writeLock().unlock();
@@ -338,6 +343,7 @@ public class LeaderEpochFileCache {
      * @param startOffset the offset to clear up to
      */
     public void truncateFromStart(long startOffset) {
+        log.info("!!! truncateFromStart:" + epochs + ";;" + startOffset);
         lock.writeLock().lock();
         try {
             List<EpochEntry> removedEntries = removeFromStart(entry -> entry.startOffset <= startOffset);
@@ -356,7 +362,7 @@ public class LeaderEpochFileCache {
                 //   another truncateFromStart call on log loading procedure so it won't be a problem
                 writeToFile(false);
 
-                log.debug("Cleared entries {} and rewrote first entry {} after truncating to start offset {}, leaving {} in the cache.", removedEntries, updatedFirstEntry, startOffset, epochs.size());
+                log.info("!!! Cleared entries {} and rewrote first entry {} after truncating to start offset {}, leaving {} in the cache.", removedEntries, updatedFirstEntry, startOffset, epochs.size());
             }
         } finally {
             lock.writeLock().unlock();
@@ -364,12 +370,14 @@ public class LeaderEpochFileCache {
     }
 
     public OptionalInt epochForOffset(long offset) {
+        log.info("!!! epochForOffset:" + offset);
         lock.readLock().lock();
         try {
             OptionalInt previousEpoch = OptionalInt.empty();
             for (EpochEntry epochEntry : epochs.values()) {
                 int epoch = epochEntry.epoch;
                 long startOffset = epochEntry.startOffset;
+
 
                 // Found the exact offset, return the respective epoch.
                 if (startOffset == offset) return OptionalInt.of(epoch);
@@ -400,6 +408,9 @@ public class LeaderEpochFileCache {
      * Delete all entries.
      */
     public void clearAndFlush() {
+        if (topicPartition.topic().contains("tieredTopic")) {
+            log.info("!!! clear and flush");
+        }
         lock.writeLock().lock();
         try {
             epochs.clear();
@@ -410,6 +421,9 @@ public class LeaderEpochFileCache {
     }
 
     public void clear() {
+        if (topicPartition.topic().contains("tieredTopic")) {
+            log.info("!!! clear");
+        }
         lock.writeLock().lock();
         try {
             epochs.clear();

@@ -706,6 +706,10 @@ class ReplicaManager(val config: KafkaConfig,
     getPartitionOrException(topicPartition).futureLog.isDefined
   }
 
+  def futureLogOrException(topicPartition: TopicPartition): UnifiedLog = {
+    getPartitionOrException(topicPartition).futureLocalLogOrException
+  }
+
   def localLog(topicPartition: TopicPartition): Option[UnifiedLog] = {
     onlinePartition(topicPartition).flatMap(_.log)
   }
@@ -1143,6 +1147,7 @@ class ReplicaManager(val config: KafkaConfig,
    * the partition will be created in the specified log directory when broker receives LeaderAndIsrRequest for the partition later.
    */
   def alterReplicaLogDirs(partitionDirs: Map[TopicPartition, String]): Map[TopicPartition, Errors] = {
+    println("!!! alterReplicaLogDirs:" + partitionDirs)
     replicaStateChangeLock synchronized {
       partitionDirs.map { case (topicPartition, destinationDir) =>
         try {
@@ -1164,7 +1169,7 @@ class ReplicaManager(val config: KafkaConfig,
             case HostedPartition.Offline(_) =>
               throw new KafkaStorageException(s"Partition $topicPartition is offline")
 
-            case HostedPartition.None => // Do nothing
+            case HostedPartition.None =>
           }
 
           // If the log for this partition has not been created yet:
@@ -1190,6 +1195,7 @@ class ReplicaManager(val config: KafkaConfig,
 
             val initialFetchState = InitialFetchState(topicId, BrokerEndPoint(config.brokerId, "localhost", -1),
               partition.getLeaderEpoch, futureLog.highWatermark)
+            // Luke
             replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> initialFetchState))
           }
 
@@ -1584,7 +1590,7 @@ class ReplicaManager(val config: KafkaConfig,
     readPartitionInfo: Seq[(TopicIdPartition, PartitionData)],
     quota: ReplicaQuota,
     readFromPurgatory: Boolean): Seq[(TopicIdPartition, LogReadResult)] = {
-    val traceEnabled = isTraceEnabled
+//    val traceEnabled = isTraceEnabled
 
     def checkFetchDataInfo(partition: Partition, givenFetchedDataInfo: FetchDataInfo) = {
       if (params.isFromFollower && shouldLeaderThrottle(quota, partition, params.replicaId)) {
@@ -1600,8 +1606,8 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     def read(tp: TopicIdPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
-      val offset = fetchInfo.fetchOffset
-      val partitionFetchSize = fetchInfo.maxBytes
+//      val offset = fetchInfo.fetchOffset
+//      val partitionFetchSize = fetchInfo.maxBytes
       val followerLogStartOffset = fetchInfo.logStartOffset
 
       val adjustedMaxBytes = math.min(fetchInfo.maxBytes, limitBytes)
@@ -1609,10 +1615,7 @@ class ReplicaManager(val config: KafkaConfig,
       var partition : Partition = null
       val fetchTimeMs = time.milliseconds
       try {
-        if (traceEnabled)
-          trace(s"Fetching log segment for partition $tp, offset $offset, partition fetch size $partitionFetchSize, " +
-            s"remaining response limit $limitBytes" +
-            (if (minOneMessage) s", ignoring response/partition size limits" else ""))
+
 
         partition = getPartitionOrException(tp.topicPartition)
 
@@ -1721,11 +1724,13 @@ class ReplicaManager(val config: KafkaConfig,
                                           adjustedMaxBytes: Int, minOneMessage:
                                           Boolean, log: UnifiedLog, fetchTimeMs: Long,
                                           exception: OffsetOutOfRangeException): LogReadResult = {
+    println("!!! handleOffsetOutOfRangeError")
     val offset = fetchInfo.fetchOffset
     // In case of offset out of range errors, handle it for tiered storage only if all the below conditions are true.
     //   1) remote log manager is enabled and it is available
     //   2) `log` instance should not be null here as that would have been caught earlier with NotLeaderForPartitionException or ReplicaNotAvailableException.
     //   3) fetch offset is within the offset range of the remote storage layer
+
     if (remoteLogManager.isDefined && log != null && log.remoteLogEnabled() &&
       log.logStartOffset <= offset && offset < log.localLogStartOffset())
     {
@@ -1733,7 +1738,7 @@ class ReplicaManager(val config: KafkaConfig,
       val leaderLogStartOffset = log.logStartOffset
       val leaderLogEndOffset = log.logEndOffset
 
-      if (params.isFromFollower) {
+      if (params.isFromFollower || params.isFromFuture) {
         // If it is from a follower then send the offset metadata only as the data is already available in remote
         // storage and throw an error saying that this offset is moved to tiered storage.
         createLogReadResult(highWatermark, leaderLogStartOffset, leaderLogEndOffset,

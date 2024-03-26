@@ -313,7 +313,6 @@ abstract class AbstractFetcherThread(name: String,
     var responseData: Map[TopicPartition, FetchData] = Map.empty
 
     try {
-      trace(s"Sending fetch request $fetchRequest")
       responseData = leader.fetch(fetchRequest)
     } catch {
       case t: Throwable =>
@@ -335,6 +334,7 @@ abstract class AbstractFetcherThread(name: String,
             // In this case, we only want to process the fetch response if the partition state is ready for fetch and
             // the current offset is the same as the offset requested.
             val fetchPartitionData = sessionPartitions.get(topicPartition)
+
             if (fetchPartitionData != null && fetchPartitionData.fetchOffset == currentFetchState.fetchOffset && currentFetchState.isReadyForFetch) {
               Errors.forCode(partitionData.errorCode) match {
                 case Errors.NONE =>
@@ -760,13 +760,14 @@ abstract class AbstractFetcherThread(name: String,
                                                 leaderEpochInRequest: Optional[Integer],
                                                 fetchPartitionData: PartitionData): Boolean = {
     try {
+      println("!!! handleOffsetsMovedToTieredStorage")
       val newFetchState = fetchTierStateMachine.start(topicPartition, fetchState, fetchPartitionData)
 
       // TODO: use fetchTierStateMachine.maybeAdvanceState when implementing async tiering logic in KAFKA-13560
 
       fetcherLagStats.getAndMaybePut(topicPartition).lag = newFetchState.lag.getOrElse(0)
       partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
-      debug(s"Current offset ${fetchState.fetchOffset} for partition $topicPartition is " +
+      info(s"Current offset ${fetchState.fetchOffset} for partition $topicPartition is " +
         s"out of range or moved to remote tier. Reset fetch offset to ${newFetchState.fetchOffset}")
       true
     } catch {

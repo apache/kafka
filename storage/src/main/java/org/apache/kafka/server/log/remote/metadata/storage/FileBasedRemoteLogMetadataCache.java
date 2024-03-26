@@ -35,24 +35,24 @@ import java.util.List;
  */
 public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
     private static final Logger log = LoggerFactory.getLogger(FileBasedRemoteLogMetadataCache.class);
-    private final RemoteLogMetadataSnapshotFile snapshotFile;
+//    private final RemoteLogMetadataSnapshotFile snapshotFile;
     private final TopicIdPartition topicIdPartition;
 
     @SuppressWarnings("this-escape")
     public FileBasedRemoteLogMetadataCache(TopicIdPartition topicIdPartition,
                                            Path partitionDir) {
-        if (!partitionDir.toFile().exists() || !partitionDir.toFile().isDirectory()) {
-            throw new KafkaException("Given partition directory:" + partitionDir + " must be an existing directory.");
-        }
+//        if (!partitionDir.toFile().exists() || !partitionDir.toFile().isDirectory()) {
+//            throw new KafkaException("Given partition directory:" + partitionDir + " must be an existing directory.");
+//        }
 
         this.topicIdPartition = topicIdPartition;
-        snapshotFile = new RemoteLogMetadataSnapshotFile(partitionDir);
-
-        try {
-            snapshotFile.read().ifPresent(snapshot -> loadRemoteLogSegmentMetadata(snapshot));
-        } catch (IOException e) {
-            throw new KafkaException(e);
-        }
+//        snapshotFile = new RemoteLogMetadataSnapshotFile(partitionDir);
+//
+//        try {
+//            snapshotFile.read().ifPresent(snapshot -> loadRemoteLogSegmentMetadata(snapshot));
+//        } catch (IOException e) {
+//            throw new KafkaException(e);
+//        }
     }
 
     protected final void loadRemoteLogSegmentMetadata(RemoteLogMetadataSnapshotFile.Snapshot snapshot) {
@@ -106,6 +106,6 @@ public class FileBasedRemoteLogMetadataCache extends RemoteLogMetadataCache {
             }
         }
 
-        snapshotFile.write(new RemoteLogMetadataSnapshotFile.Snapshot(metadataPartition, metadataPartitionOffset, snapshots));
+//        snapshotFile.write(new RemoteLogMetadataSnapshotFile.Snapshot(metadataPartition, metadataPartitionOffset, snapshots));
     }
 }

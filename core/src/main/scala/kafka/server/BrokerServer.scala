@@ -35,7 +35,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.common.{ClusterResource, KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, RecordSerde}
@@ -298,11 +298,16 @@ class BrokerServer(
         () => lifecycleManager.brokerEpoch
       )
       val directoryEventHandler = new DirectoryEventHandler {
-        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, callback: Runnable): Unit =
+        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, callback: Runnable): Unit = {
+          println("!!! handleAssignment:" + partition)
           assignmentsManager.onAssignment(partition, directoryId, callback)
+        }
 
-        override def handleFailure(directoryId: Uuid): Unit =
+        override def handleFailure(directoryId: Uuid): Unit = {
+          println("!!! handleFailure:" + directoryId)
           lifecycleManager.propagateDirectoryFailure(directoryId)
+        }
+
       }
 
       this._replicaManager = new ReplicaManager(
@@ -606,9 +611,6 @@ class BrokerServer(
 
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
-      if (config.logDirs.size > 1) {
-        throw new KafkaException("Tiered storage is not supported with multiple log dirs.")
-      }
 
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).asJava,

@@ -56,6 +56,10 @@ public class FetchParams {
         return FetchRequest.isValidBrokerId(replicaId);
     }
 
+    public boolean isFromFuture() {
+        return replicaId == -3;
+    }
+
     public boolean isFromConsumer() {
         return FetchRequest.isConsumer(replicaId);
     }

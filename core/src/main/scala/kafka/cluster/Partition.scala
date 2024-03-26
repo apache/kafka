@@ -1419,7 +1419,9 @@ class Partition(val topicPartition: TopicPartition,
       )
     }
 
+
     if (fetchParams.isFromFollower) {
+
       // Check that the request is from a valid replica before doing the read
       val (replica, logReadInfo) = inReadLock(leaderIsrUpdateLock) {
         val localLog = localLogWithEpochOrThrow(
@@ -1462,7 +1464,7 @@ class Partition(val topicPartition: TopicPartition,
     fetchPartitionData: FetchRequest.PartitionData
   ): Replica = {
     getReplica(replicaId).getOrElse {
-      debug(s"Leader $localBrokerId failed to record follower $replicaId's position " +
+      info(s"Leader $localBrokerId failed to record follower $replicaId's position " +
         s"${fetchPartitionData.fetchOffset}, and last sent high watermark since the replica is " +
         s"not recognized to be one of the assigned replicas ${assignmentState.replicas.mkString(",")} " +
         s"for leader epoch $leaderEpoch with partition epoch $partitionEpoch")
@@ -1702,6 +1704,8 @@ class Partition(val topicPartition: TopicPartition,
   def truncateFullyAndStartAt(newOffset: Long,
                               isFuture: Boolean,
                               logStartOffsetOpt: Option[Long] = None): Unit = {
+    logger.info("!!! leaderLogStartOffset:" + newOffset + ";;" + logStartOffsetOpt);
+
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {

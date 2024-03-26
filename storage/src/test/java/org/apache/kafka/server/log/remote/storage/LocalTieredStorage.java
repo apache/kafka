@@ -338,6 +338,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
     public InputStream fetchLogSegment(final RemoteLogSegmentMetadata metadata,
                                        final int startPos,
                                        final int endPos) throws RemoteStorageException {
+        System.out.println("!!! fetchLogSegment:" + metadata + ";;" + startPos + ";;" + endPos);
         checkArgument(startPos >= 0, "Start position must be positive", startPos);
         checkArgument(endPos >= startPos,
                 "End position cannot be less than startPosition", startPos, endPos);

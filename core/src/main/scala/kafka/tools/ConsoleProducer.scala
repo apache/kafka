@@ -393,6 +393,7 @@ object ConsoleProducer extends Logging {
       new java.util.Iterator[ProducerRecord[Array[Byte], Array[Byte]]] {
         private[this] val reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
         private[this] var current: ProducerRecord[Array[Byte], Array[Byte]] = _
+        var par = 0
         override def hasNext: Boolean =
           if (current != null) true
           else {
@@ -410,11 +411,15 @@ object ConsoleProducer extends Logging {
 
                 val value = line.substring(headerOffset + keyOffset)
 
+
                 val record = new ProducerRecord[Array[Byte], Array[Byte]](
                   topic,
+                  par % 2,
                   if (key != null && key != nullMarker) key.getBytes(StandardCharsets.UTF_8) else null,
                   if (value != null && value != nullMarker) value.getBytes(StandardCharsets.UTF_8) else null,
                 )
+                println("!!! change")
+                par = par + 1
 
                 if (headers != null && headers != nullMarker) {
                   splitHeaders(headers)

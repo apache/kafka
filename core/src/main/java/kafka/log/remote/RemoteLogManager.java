@@ -1322,6 +1322,7 @@ public class RemoteLogManager implements Closeable {
     }
 
     public FetchDataInfo read(RemoteStorageFetchInfo remoteStorageFetchInfo) throws RemoteStorageException, IOException {
+        LOGGER.info("remote reading");
         int fetchMaxBytes = remoteStorageFetchInfo.fetchMaxBytes;
         TopicPartition tp = remoteStorageFetchInfo.topicPartition;
         FetchRequest.PartitionData fetchInfo = remoteStorageFetchInfo.fetchInfo;

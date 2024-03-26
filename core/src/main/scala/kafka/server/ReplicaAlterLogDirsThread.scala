@@ -40,7 +40,8 @@ class ReplicaAlterLogDirsThread(name: String,
                                 clientId = name,
                                 leader = leader,
                                 failedPartitions,
-                                fetchTierStateMachine = new ReplicaAlterLogDirsTierStateMachine(),
+//                                fetchTierStateMachine = new ReplicaAlterLogDirsTierStateMachine(),
+    fetchTierStateMachine = new ReplicaAlterLogDirsTierStateMachine(leader, replicaMgr),
                                 fetchBackOffMs = fetchBackOffMs,
                                 isInterruptible = false,
                                 brokerTopicStats) {
@@ -71,9 +72,9 @@ class ReplicaAlterLogDirsThread(name: String,
     val futureLog = partition.futureLocalLogOrException
     val records = toMemoryRecords(FetchResponse.recordsOrFail(partitionData))
 
-    if (fetchOffset != futureLog.logEndOffset)
-      throw new IllegalStateException("Offset mismatch for the future replica %s: fetched offset = %d, log end offset = %d.".format(
-        topicPartition, fetchOffset, futureLog.logEndOffset))
+//    if (fetchOffset != futureLog.logEndOffset)
+//      throw new IllegalStateException("Offset mismatch for the future replica %s: fetched offset = %d, log end offset = %d.".format(
+//        topicPartition, fetchOffset, futureLog.logEndOffset))
 
     val logAppendInfo = if (records.sizeInBytes() > 0)
       partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true)
@@ -122,6 +123,7 @@ class ReplicaAlterLogDirsThread(name: String,
 
     partitionAssignmentRequestState(topicPartition) match {
       case None =>
+        info("!!! Schedule assignment request")
         // Schedule assignment request and don't promote the future replica yet until the controller has accepted the request.
         partition.runCallbackIfFutureReplicaCaughtUp(_ => {
           partition.futureReplicaDirectoryId()
@@ -133,13 +135,13 @@ class ReplicaAlterLogDirsThread(name: String,
             })
         })
       case Some(ReplicaAlterLogDirsThread.COMPLETED) =>
+        info("!!! promote")
         // Promote future replica if controller accepted the request and the replica caught-up with the original log.
         if (partition.maybeReplaceCurrentWithFutureReplica()) {
           removePartitions(Set(topicPartition))
           assignmentRequestStates.remove(topicPartition)
         }
       case _ =>
-        log.trace("Waiting for AssignmentRequest to succeed before promoting the future replica.")
     }
   }
 

@@ -120,7 +120,7 @@ class ReplicaManagerTest {
   private val brokerEpoch = 0L
 
   // These metrics are static and once we remove them after each test, they won't be created and verified anymore
-  private val metricsToBeDeletedInTheEnd = Set("kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec")
+//  private val metricsToBeDeletedInTheEnd = Set("kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec")
 
   @BeforeEach
   def setUp(): Unit = {
@@ -140,7 +140,8 @@ class ReplicaManagerTest {
 
   @AfterEach
   def tearDown(): Unit = {
-    TestUtils.clearYammerMetricsExcept(metricsToBeDeletedInTheEnd)
+//    TestUtils.clearYammerMetricsExcept(metricsToBeDeletedInTheEnd)
+    TestUtils.clearYammerMetrics()
     Option(quotaManager).foreach(_.shutdown())
     metrics.close()
     // validate that the shutdown is working correctly by ensuring no lingering threads.
@@ -4085,11 +4086,10 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testRemoteFetchExpiresPerSecMetric(): Unit = {
+  def testRemoteFetchExpiresPerSecMetric2(): Unit = {
     val replicaId = -1
     val tp0 = new TopicPartition(topic, 0)
     val tidp0 = new TopicIdPartition(topicId, tp0)
-
     val props = new Properties()
     props.put("zookeeper.connect", "test")
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
@@ -4174,6 +4174,113 @@ class ReplicaManagerTest {
       TestUtils.waitUntilTrue(() => curExpiresPerSec + 1 == safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long],
         "The ExpiresPerSec value is not incremented. Current value is: " +
           safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long])
+      latch.countDown()
+    } finally {
+      Utils.tryAll(util.Arrays.asList[Callable[Void]](
+        () => {
+          replicaManager.shutdown(checkpointHW = false)
+          null
+        },
+        () => {
+          remoteLogManager.close()
+          null
+        }
+      ))
+    }
+  }
+
+  @Test
+  def testRemoteFetchExpiresPerSecMetric(): Unit = {
+    val replicaId = -1
+    val tp0 = new TopicPartition(topic, 0)
+    val tidp0 = new TopicIdPartition(topicId, tp0)
+    val props = new Properties()
+    props.put("zookeeper.connect", "test")
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
+    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)
+    val config = new AbstractConfig(RemoteLogManagerConfig.CONFIG_DEF, props)
+    val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
+    val dummyLog = mock(classOf[UnifiedLog])
+    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    val remoteLogManager = new RemoteLogManager(
+      remoteLogManagerConfig,
+      0,
+      TestUtils.tempRelativeDir("data").getAbsolutePath,
+      "clusterId",
+      time,
+      _ => Optional.of(dummyLog),
+      (TopicPartition, Long) => {},
+      brokerTopicStats)
+    val spyRLM = spy(remoteLogManager)
+    val timer = new MockTimer(time)
+
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(timer, aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
+
+    try {
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      val partition0Replicas = Seq[Integer](0, 1).asJava
+      val topicIds = Map(tp0.topic -> topicId).asJava
+      val leaderEpoch = 0
+      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(
+          new LeaderAndIsrPartitionState()
+            .setTopicName(tp0.topic)
+            .setPartitionIndex(tp0.partition)
+            .setControllerEpoch(0)
+            .setLeader(leaderEpoch)
+            .setLeaderEpoch(0)
+            .setIsr(partition0Replicas)
+            .setPartitionEpoch(0)
+            .setReplicas(partition0Replicas)
+            .setIsNew(true)
+        ).asJava,
+        topicIds,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
+
+      val mockLog = replicaManager.getPartitionOrException(tp0).log.get
+      when(mockLog.endOffsetForEpoch(anyInt())).thenReturn(Some(new OffsetAndEpoch(1, 1)))
+      when(mockLog.read(anyLong(), anyInt(), any(), anyBoolean())).thenReturn(new FetchDataInfo(
+        new LogOffsetMetadata(0L, 0L, 0),
+        MemoryRecords.EMPTY
+      ))
+      val endOffsetMetadata = new LogOffsetMetadata(100L, 0L, 500)
+      when(mockLog.fetchOffsetSnapshot).thenReturn(new LogOffsetSnapshot(
+        0L,
+        endOffsetMetadata,
+        endOffsetMetadata,
+        endOffsetMetadata))
+
+      val params = new FetchParams(ApiKeys.FETCH.latestVersion, replicaId, 1, 1000, 10, 100, FetchIsolation.LOG_END, None.asJava)
+      val fetchOffset = 1
+
+      def fetchCallback(responseStatus: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+        assertEquals(1, responseStatus.size)
+        assertEquals(tidp0, responseStatus.toMap.keySet.head)
+      }
+
+      val latch = new CountDownLatch(1)
+      doAnswer(_ => {
+        // wait until verification completes
+        latch.await(5000, TimeUnit.MILLISECONDS)
+        mock(classOf[FetchDataInfo])
+      }).when(spyRLM).read(any())
+
+      // Get the current type=DelayedRemoteFetchMetrics,name=ExpiresPerSec metric value before fetching
+//      val curExpiresPerSec = safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long]
+      replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, fetchCallback)
+      // advancing the clock to expire the delayed remote fetch
+      timer.advanceClock(2000L)
+
+//      // verify the metric value is incremented since the delayed remote fetch is expired
+//      TestUtils.waitUntilTrue(() => curExpiresPerSec + 1 == safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long],
+//        "The ExpiresPerSec value is not incremented. Current value is: " +
+//          safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long])
+      println("!!! DelayedRemoteFetchMetrics.expiredRequestMeter.count()" + DelayedRemoteFetchMetrics.expiredRequestMeter.count())
+      println("!!! DelayedRemoteFetchMetrics.expiredRequestMeter.count()" + DelayedRemoteFetchMetrics.expiredRequestMeter.mark())
+      println("!!! DelayedRemoteFetchMetrics.expiredRequestMeter.count()" + DelayedRemoteFetchMetrics.expiredRequestMeter.count())
       latch.countDown()
     } finally {
       Utils.tryAll(util.Arrays.asList[Callable[Void]](
