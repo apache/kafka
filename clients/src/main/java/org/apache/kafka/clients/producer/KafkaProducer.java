@@ -1458,6 +1458,35 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return clientId;
     }
 
+    public void initTransactions(boolean keepPreparedTxn) {
+        // TODO: to be implemented in KIP-939
+    }
+
+    public PreparedTxnState prepareTransaction() {
+        // TODO: to be implemented in KIP-939
+        return new PreparedTxnState();
+    }
+
+    public void completeTransaction(PreparedTxnState preparedTxnState) {
+        // TODO: to be implemented in KIP-939
+    }
+
+    public static class PreparedTxnState {
+        @Override
+        public String toString() {
+            // TODO: serialize, to be implemented in KIP-939
+            return super.toString();
+        }
+
+        public PreparedTxnState() {
+            // TODO: empty init, to be implemented in KIP-939
+        }
+
+        public PreparedTxnState(String state) {
+            // TODO: deserialize, to be implemented in KIP-939
+        }
+    }
+
     private static class ClusterAndWaitTime {
         final Cluster cluster;
         final long waitedOnMetadataMs;
