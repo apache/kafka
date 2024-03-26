@@ -39,6 +39,7 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.Builder;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -64,6 +65,8 @@ import java.util.Random;
 import java.util.SortedSet;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_JITTER;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_MAX_POLL_INTERVAL_MS;
@@ -531,12 +534,16 @@ public class HeartbeatRequestManagerTest {
         coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         membershipManager = mock(MembershipManager.class);
         heartbeatState = mock(HeartbeatRequestManager.HeartbeatState.class);
+        ExponentialBackoff retryBackoff = new ExponentialBackoff(
+                DEFAULT_RETRY_BACKOFF_MS,
+                RETRY_BACKOFF_EXP_BASE,
+                DEFAULT_RETRY_BACKOFF_MAX_MS,
+                RETRY_BACKOFF_JITTER
+        );
         heartbeatRequestState = spy(new HeartbeatRequestManager.HeartbeatRequestState(
                 new LogContext(),
+                retryBackoff,
                 time,
-                DEFAULT_HEARTBEAT_INTERVAL_MS,
-                DEFAULT_RETRY_BACKOFF_MS,
-                DEFAULT_RETRY_BACKOFF_MAX_MS,
                 0));
         backgroundEventHandler = mock(BackgroundEventHandler.class);
 
@@ -599,12 +606,18 @@ public class HeartbeatRequestManagerTest {
         heartbeatState = mock(HeartbeatRequestManager.HeartbeatState.class);
         time = new MockTime();
         metrics = new Metrics(time);
+        ExponentialBackoff retryBackoff = new ExponentialBackoff(
+                DEFAULT_RETRY_BACKOFF_MS,
+                RETRY_BACKOFF_EXP_BASE,
+                DEFAULT_RETRY_BACKOFF_MAX_MS,
+                RETRY_BACKOFF_JITTER
+        );
+
+        // This initial interval should be 0 to ensure heartbeat on the clock
         heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
             new LogContext(),
+            retryBackoff,
             time,
-            0, // This initial interval should be 0 to ensure heartbeat on the clock
-            DEFAULT_RETRY_BACKOFF_MS,
-            DEFAULT_RETRY_BACKOFF_MAX_MS,
             0);
         backgroundEventHandler = mock(BackgroundEventHandler.class);
         heartbeatRequestManager = createHeartbeatRequestManager(

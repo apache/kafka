@@ -32,6 +32,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -125,24 +126,22 @@ public class HeartbeatRequestManager implements RequestManager {
     public HeartbeatRequestManager(
         final LogContext logContext,
         final Time time,
+        final ExponentialBackoff retryBackoff,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final SubscriptionState subscriptions,
         final MembershipManager membershipManager,
         final BackgroundEventHandler backgroundEventHandler,
         final Metrics metrics) {
+        this.logger = logContext.logger(getClass());
         this.time = time;
         this.coordinatorRequestManager = coordinatorRequestManager;
-        this.logger = logContext.logger(getClass());
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         this.requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG);
-        long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.heartbeatState = new HeartbeatState(subscriptions, membershipManager, maxPollIntervalMs);
-        this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
-            retryBackoffMaxMs, maxPollIntervalMs);
+        this.heartbeatRequestState = new HeartbeatRequestState(logContext, retryBackoff, time, maxPollIntervalMs);
         this.pollTimer = time.timer(maxPollIntervalMs);
         this.metricsManager = new HeartbeatMetricsManager(metrics);
     }
@@ -159,7 +158,7 @@ public class HeartbeatRequestManager implements RequestManager {
         final HeartbeatRequestState heartbeatRequestState,
         final BackgroundEventHandler backgroundEventHandler,
         final Metrics metrics) {
-        this.logger = logContext.logger(this.getClass());
+        this.logger = logContext.logger(getClass());
         this.time = time;
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         this.requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG);
@@ -463,16 +462,24 @@ public class HeartbeatRequestManager implements RequestManager {
          */
         private long heartbeatIntervalMs;
 
-        public HeartbeatRequestState(
-            final LogContext logContext,
-            final Time time,
-            final long heartbeatIntervalMs,
-            final long retryBackoffMs,
-            final long retryBackoffMaxMs,
-            final double jitter) {
-            super(logContext, HeartbeatRequestState.class.getName(), retryBackoffMs, 2, retryBackoffMaxMs, jitter);
+        public HeartbeatRequestState(final LogContext logContext,
+                                     final ExponentialBackoff retryBackoff,
+                                     final Time time,
+                                     final long heartbeatIntervalMs) {
+            super(logContext, retryBackoff);
             this.heartbeatIntervalMs = heartbeatIntervalMs;
             this.heartbeatTimer = time.timer(heartbeatIntervalMs);
+        }
+
+        /**
+         * Reset request state so that new requests can be sent immediately
+         * and the backoff is restored to its minimal configuration.
+         */
+        void reset() {
+            this.lastSentMs = -1;
+            this.lastReceivedMs = -1;
+            this.numAttempts = 0;
+            this.backoffMs = exponentialBackoff.backoff(0);
         }
 
         private void update(final long currentTimeMs) {

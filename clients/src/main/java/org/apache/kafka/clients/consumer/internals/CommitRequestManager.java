@@ -42,6 +42,7 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -57,35 +58,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalDouble;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_LOAD_IN_PROGRESS;
 
 public class CommitRequestManager implements RequestManager, MemberStateListener {
 
-    private final Time time;
-    private final SubscriptionState subscriptions;
-    private final LogContext logContext;
     private final Logger log;
+    private final LogContext logContext;
+    private final Time time;
+    private final ExponentialBackoff retryBackoff;
+    private final int requestTimeoutMs;
+    private final long retryBackoffMs;
+    private final SubscriptionState subscriptions;
     private final Optional<AutoCommitState> autoCommitState;
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
-    private final OffsetCommitMetricsManager metricsManager;
-    private final int requestTimeoutMs;
-    private final long retryBackoffMs;
     private final String groupId;
     private final Optional<String> groupInstanceId;
-    private final long retryBackoffMaxMs;
-    // For testing only
-    private final OptionalDouble jitter;
     private final boolean throwOnFetchStableOffsetUnsupported;
+    private final OffsetCommitMetricsManager metricsManager;
     final PendingRequests pendingRequests;
     private boolean closing = false;
 
@@ -97,70 +94,39 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     private final MemberInfo memberInfo;
 
-    public CommitRequestManager(
-            final Time time,
-            final LogContext logContext,
-            final SubscriptionState subscriptions,
-            final ConsumerConfig config,
-            final CoordinatorRequestManager coordinatorRequestManager,
-            final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
-            final String groupId,
-            final Optional<String> groupInstanceId,
-            final Metrics metrics) {
-        this(time,
-            logContext,
-            subscriptions,
-            config,
-            coordinatorRequestManager,
-            offsetCommitCallbackInvoker,
-            groupId,
-            groupInstanceId,
-            config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-            config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
-            config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
-            OptionalDouble.empty(),
-            metrics);
-    }
-
-    // Visible for testing
     CommitRequestManager(
-        final Time time,
         final LogContext logContext,
+        final Time time,
+        final ExponentialBackoff retryBackoff,
+        final int requestTimeoutMs,
+        final long retryBackoffMs,
         final SubscriptionState subscriptions,
-        final ConsumerConfig config,
+        final boolean enableAutoCommit,
+        final int autoCommitIntervalMs,
         final CoordinatorRequestManager coordinatorRequestManager,
         final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
         final String groupId,
         final Optional<String> groupInstanceId,
-        final int requestTimeoutMs,
-        final long retryBackoffMs,
-        final long retryBackoffMaxMs,
-        final OptionalDouble jitter,
+        final boolean throwOnFetchStableOffsetUnsupported,
         final Metrics metrics) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
-        this.time = time;
-        this.logContext = logContext;
+
         this.log = logContext.logger(getClass());
-        this.pendingRequests = new PendingRequests();
-        if (config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
-            final long autoCommitInterval =
-                Integer.toUnsignedLong(config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
-            this.autoCommitState = Optional.of(new AutoCommitState(time, autoCommitInterval));
-        } else {
-            this.autoCommitState = Optional.empty();
-        }
-        this.coordinatorRequestManager = coordinatorRequestManager;
-        this.groupId = groupId;
-        this.groupInstanceId = groupInstanceId;
-        this.subscriptions = subscriptions;
+        this.logContext = logContext;
+        this.time = time;
+        this.retryBackoff = retryBackoff;
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
-        this.retryBackoffMaxMs = retryBackoffMaxMs;
-        this.jitter = jitter;
-        this.throwOnFetchStableOffsetUnsupported = config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
-        this.memberInfo = new MemberInfo();
-        this.metricsManager = new OffsetCommitMetricsManager(metrics);
+        this.subscriptions = subscriptions;
+        this.autoCommitState = enableAutoCommit? Optional.of(new AutoCommitState(time, autoCommitIntervalMs)) : Optional.empty();
+        this.coordinatorRequestManager = coordinatorRequestManager;
         this.offsetCommitCallbackInvoker = offsetCommitCallbackInvoker;
+        this.groupId = groupId;
+        this.groupInstanceId = groupInstanceId;
+        this.throwOnFetchStableOffsetUnsupported = throwOnFetchStableOffsetUnsupported;
+        this.metricsManager = new OffsetCommitMetricsManager(metrics);
+        this.pendingRequests = new PendingRequests();
+        this.memberInfo = new MemberInfo();
     }
 
     /**
@@ -247,7 +213,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     public void maybeAutoCommitAsync() {
         if (autoCommitEnabled() && autoCommitState.get().shouldAutoCommit()) {
             Timer timer = time.timer(Long.MAX_VALUE);
-            OffsetCommitRequestState requestState = createOffsetCommitRequest(subscriptions.allConsumed(), timer);
+            OffsetCommitRequestState requestState =new OffsetCommitRequestState(timer, subscriptions.allConsumed());
             CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = requestAutoCommit(requestState);
             // Reset timer to the interval (even if no request was generated), but ensure that if
             // the request completes with a retriable error, the timer is reset to send the next
@@ -296,8 +262,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         CompletableFuture<Void> result = new CompletableFuture<>();
-        OffsetCommitRequestState requestState =
-            createOffsetCommitRequest(subscriptions.allConsumed(), timer);
+        OffsetCommitRequestState requestState = new OffsetCommitRequestState(timer, subscriptions.allConsumed());
         autoCommitSyncBeforeRevocationWithRetries(requestState, result);
         return result;
     }
@@ -364,7 +329,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             log.debug("Skipping commit of empty offsets");
             return CompletableFuture.completedFuture(null);
         }
-        OffsetCommitRequestState commitRequest = createOffsetCommitRequest(offsets, timer);
+        OffsetCommitRequestState commitRequest = new OffsetCommitRequestState(timer, offsets);
         pendingRequests.addOffsetCommitRequest(commitRequest);
 
         CompletableFuture<Void> asyncCommitResult = new CompletableFuture<>();
@@ -388,31 +353,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     public CompletableFuture<Void> commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                               final Timer timer) {
         CompletableFuture<Void> result = new CompletableFuture<>();
-        OffsetCommitRequestState requestState = createOffsetCommitRequest(offsets, timer);
+        OffsetCommitRequestState requestState = new OffsetCommitRequestState(timer, offsets);
         commitSyncWithRetries(requestState, result);
         return result;
-    }
-
-    private OffsetCommitRequestState createOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                               final Timer timer) {
-        return jitter.isPresent() ?
-            new OffsetCommitRequestState(
-                offsets,
-                groupId,
-                groupInstanceId,
-                timer,
-                retryBackoffMs,
-                retryBackoffMaxMs,
-                jitter.getAsDouble(),
-                memberInfo) :
-            new OffsetCommitRequestState(
-                offsets,
-                groupId,
-                groupInstanceId,
-                timer,
-                retryBackoffMs,
-                retryBackoffMaxMs,
-                memberInfo);
     }
 
     private void commitSyncWithRetries(OffsetCommitRequestState requestAttempt,
@@ -471,27 +414,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             return CompletableFuture.completedFuture(Collections.emptyMap());
         }
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = new CompletableFuture<>();
-        OffsetFetchRequestState request = createOffsetFetchRequest(partitions, timer);
+        OffsetFetchRequestState request = new OffsetFetchRequestState(timer, partitions);
         fetchOffsetsWithRetries(request, result);
         return result;
-    }
-
-    private OffsetFetchRequestState createOffsetFetchRequest(final Set<TopicPartition> partitions,
-                                                             final Timer timer) {
-        return jitter.isPresent() ?
-            new OffsetFetchRequestState(
-                partitions,
-                retryBackoffMs,
-                retryBackoffMaxMs,
-                timer,
-                jitter.getAsDouble(),
-                memberInfo) :
-            new OffsetFetchRequestState(
-                partitions,
-                retryBackoffMs,
-                retryBackoffMaxMs,
-                timer,
-                memberInfo);
     }
 
     private void fetchOffsetsWithRetries(final OffsetFetchRequestState fetchRequest,
@@ -593,8 +518,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
     private class OffsetCommitRequestState extends RetriableRequestState {
         private Map<TopicPartition, OffsetAndMetadata> offsets;
-        private final String groupId;
-        private final Optional<String> groupInstanceId;
 
         /**
          * Future containing the offsets that were committed. It completes when a response is
@@ -602,35 +525,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
 
-        OffsetCommitRequestState(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                 final String groupId,
-                                 final Optional<String> groupInstanceId,
-                                 final Timer timer,
-                                 final long retryBackoffMs,
-                                 final long retryBackoffMaxMs,
-                                 final MemberInfo memberInfo) {
-            super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs,
-                retryBackoffMaxMs, memberInfo, timer);
+        OffsetCommitRequestState(final Timer timer, final Map<TopicPartition, OffsetAndMetadata> offsets) {
+            super(logContext, retryBackoff, timer);
             this.offsets = offsets;
-            this.groupId = groupId;
-            this.groupInstanceId = groupInstanceId;
-            this.future = new CompletableFuture<>();
-        }
-
-        // Visible for testing
-        OffsetCommitRequestState(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                 final String groupId,
-                                 final Optional<String> groupInstanceId,
-                                 final Timer timer,
-                                 final long retryBackoffMs,
-                                 final long retryBackoffMaxMs,
-                                 final double jitter,
-                                 final MemberInfo memberInfo) {
-            super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, 2,
-                retryBackoffMaxMs, jitter, memberInfo, timer);
-            this.offsets = offsets;
-            this.groupId = groupId;
-            this.groupInstanceId = groupInstanceId;
             this.future = new CompletableFuture<>();
         }
 
@@ -656,7 +553,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             }
 
             OffsetCommitRequestData data = new OffsetCommitRequestData()
-                    .setGroupId(this.groupId)
+                    .setGroupId(groupId)
                     .setGroupInstanceId(groupInstanceId.orElse(null))
                     .setTopics(new ArrayList<>(requestTopicDataMap.values()));
             if (memberInfo.memberId.isPresent()) {
@@ -775,22 +672,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     abstract class RetriableRequestState extends TimedRequestState {
 
-        /**
-         * Member info (ID and epoch) to be included in the request if present.
-         */
-        final MemberInfo memberInfo;
-
-        RetriableRequestState(LogContext logContext, String owner, long retryBackoffMs,
-                              long retryBackoffMaxMs, MemberInfo memberInfo, Timer timer) {
-            super(logContext, owner, retryBackoffMs, retryBackoffMaxMs, timer);
-            this.memberInfo = memberInfo;
-        }
-
-        // Visible for testing
-        RetriableRequestState(LogContext logContext, String owner, long retryBackoffMs, int retryBackoffExpBase,
-                              long retryBackoffMaxMs, double jitter, MemberInfo memberInfo, Timer timer) {
-            super(logContext, owner, retryBackoffMs, retryBackoffExpBase, retryBackoffMaxMs, jitter, timer);
-            this.memberInfo = memberInfo;
+        RetriableRequestState(LogContext logContext, ExponentialBackoff retryBackoff, Timer timer) {
+            super(logContext, retryBackoff, timer);
         }
 
         /**
@@ -871,25 +754,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
 
-        public OffsetFetchRequestState(final Set<TopicPartition> partitions,
-                                       final long retryBackoffMs,
-                                       final long retryBackoffMaxMs,
-                                       final Timer timer,
-                                       final MemberInfo memberInfo) {
-            super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs,
-                retryBackoffMaxMs, memberInfo, timer);
-            this.requestedPartitions = partitions;
-            this.future = new CompletableFuture<>();
-        }
-
-        public OffsetFetchRequestState(final Set<TopicPartition> partitions,
-                                       final long retryBackoffMs,
-                                       final long retryBackoffMaxMs,
-                                       final Timer timer,
-                                       final double jitter,
-                                       final MemberInfo memberInfo) {
-            super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, 2,
-                retryBackoffMaxMs, jitter, memberInfo, timer);
+        public OffsetFetchRequestState(final Timer timer, final Set<TopicPartition> partitions) {
+            super(logContext, retryBackoff, timer);
             this.requestedPartitions = partitions;
             this.future = new CompletableFuture<>();
         }
@@ -1212,9 +1078,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         private final long autoCommitInterval;
         private boolean hasInflightCommit;
 
-        public AutoCommitState(
-                final Time time,
-                final long autoCommitInterval) {
+        public AutoCommitState(final Time time, final long autoCommitInterval) {
             this.autoCommitInterval = autoCommitInterval;
             this.timer = time.timer(autoCommitInterval);
             this.hasInflightCommit = false;

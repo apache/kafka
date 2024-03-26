@@ -16,35 +16,24 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
+import java.util.Objects;
 
 public class TimedRequestState extends RequestState {
 
     private final Timer timer;
 
-    public TimedRequestState(LogContext logContext,
-                             String owner,
-                             long retryBackoffMs,
-                             long retryBackoffMaxMs,
-                             Timer timer) {
-        super(logContext, owner, retryBackoffMs, retryBackoffMaxMs);
-        this.timer = timer;
-    }
-
-    public TimedRequestState(LogContext logContext,
-                             String owner,
-                             long retryBackoffMs,
-                             int retryBackoffExpBase,
-                             long retryBackoffMaxMs,
-                             double jitter,
-                             Timer timer) {
-        super(logContext, owner, retryBackoffMs, retryBackoffExpBase, retryBackoffMaxMs, jitter);
-        this.timer = timer;
+    public TimedRequestState(LogContext logContext, ExponentialBackoff exponentialBackoff, Timer timer) {
+        super(logContext, exponentialBackoff);
+        this.timer = Objects.requireNonNull(timer);
     }
 
     public Timer timer() {
+        timer.update();
         return timer;
     }
 
@@ -55,12 +44,13 @@ public class TimedRequestState extends RequestState {
 
     public Timer remaining(Time time, int requestTimeoutMs) {
         timer.update();
-        return remaining(timer, time, requestTimeoutMs);
-    }
+        long remainingMs = Math.min(timer.remainingMs(), requestTimeoutMs);
 
-    public static Timer remaining(Timer timer, Time time, int requestTimeoutMs) {
-        timer.update();
-        long remainingMs = Math.max(0, Math.min(timer.remainingMs(), requestTimeoutMs));
+        if (remainingMs < 0) {
+            // We need to have remaining be non-negative to avoid an error when creating a Timer
+            remainingMs = 0;
+        }
+
         return time.timer(remainingMs);
     }
 

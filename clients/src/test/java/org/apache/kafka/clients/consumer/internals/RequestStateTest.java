@@ -16,24 +16,24 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
-
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RequestStateTest {
+
     @Test
     public void testRequestStateSimple() {
-        RequestState state = new RequestState(
-                new LogContext(),
-                this.getClass().getSimpleName(),
-                100,
-                2,
-                1000,
-                0);
+        ExponentialBackoff backoff = new ExponentialBackoff(
+            100,
+            2,
+            1000,
+            0
+        );
+        RequestState state = new RequestState(new LogContext(), backoff);
 
         // ensure not permitting consecutive requests
         assertTrue(state.canSendRequest(0));
@@ -45,9 +45,5 @@ public class RequestStateTest {
         assertFalse(state.canSendRequest(200));
         // exponential backoff
         assertTrue(state.canSendRequest(340));
-
-        // test reset
-        state.reset();
-        assertTrue(state.canSendRequest(200));
     }
 }

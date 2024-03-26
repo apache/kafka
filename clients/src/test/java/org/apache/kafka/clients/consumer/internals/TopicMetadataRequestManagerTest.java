@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -32,7 +31,7 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestTestUtils;
-import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Timer;
@@ -49,12 +48,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
-import static org.apache.kafka.clients.consumer.ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_JITTER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -68,15 +65,21 @@ public class TopicMetadataRequestManagerTest {
     @BeforeEach
     public void setup() {
         this.time = new MockTime();
-        Properties props = new Properties();
-        props.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, 100);
-        props.put(ALLOW_AUTO_CREATE_TOPICS_CONFIG, false);
-        props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+
+        final ExponentialBackoff retryBackoff = new ExponentialBackoff(
+                100,
+                RETRY_BACKOFF_EXP_BASE,
+                1000,
+                RETRY_BACKOFF_JITTER
+        );
+
         this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(
             new LogContext(),
             time,
-            new ConsumerConfig(props)));
+            retryBackoff,
+            10000,
+            false
+        ));
     }
 
     @Test

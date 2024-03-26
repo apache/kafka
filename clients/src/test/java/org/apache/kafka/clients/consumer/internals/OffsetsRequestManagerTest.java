@@ -43,6 +43,7 @@ import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Timer;
@@ -70,6 +71,9 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.clients.CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS;
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_JITTER;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -113,18 +117,19 @@ public class OffsetsRequestManagerTest {
         subscriptionState = mock(SubscriptionState.class);
         time = new MockTime(0);
         apiVersions = mock(ApiVersions.class);
+        ExponentialBackoff retryBackoff = new ExponentialBackoff(RETRY_BACKOFF_MS, RETRY_BACKOFF_EXP_BASE, RETRY_BACKOFF_MAX_MS, RETRY_BACKOFF_JITTER);
         requestManager = new OffsetsRequestManager(
+                logContext,
+                time,
+                retryBackoff,
+                REQUEST_TIMEOUT_MS,
+                RETRY_BACKOFF_MS,
                 subscriptionState,
                 metadata,
                 DEFAULT_ISOLATION_LEVEL,
-                time,
-                RETRY_BACKOFF_MS,
-                RETRY_BACKOFF_MAX_MS,
-                REQUEST_TIMEOUT_MS,
                 apiVersions,
                 mock(NetworkClientDelegate.class),
-                backgroundEventHandler,
-                logContext
+                backgroundEventHandler
         );
     }
 

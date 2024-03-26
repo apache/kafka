@@ -32,6 +32,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -45,10 +46,13 @@ import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_JITTER;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_INSTANCE_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
@@ -108,6 +112,12 @@ public class ConsumerTestBuilder implements Closeable {
     public ConsumerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit, boolean enableAutoTick) {
         this.groupInfo = groupInfo;
         this.time = enableAutoTick ? new MockTime(1) : new MockTime();
+        final ExponentialBackoff retryBackoff = new ExponentialBackoff(
+                DEFAULT_RETRY_BACKOFF_MS,
+                RETRY_BACKOFF_EXP_BASE,
+                DEFAULT_RETRY_BACKOFF_MAX_MS,
+                RETRY_BACKOFF_JITTER
+        );
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
@@ -166,39 +176,49 @@ public class ConsumerTestBuilder implements Closeable {
                 config,
                 logContext,
                 client));
-        this.offsetsRequestManager = spy(new OffsetsRequestManager(subscriptions,
+        this.offsetsRequestManager = spy(new OffsetsRequestManager(logContext,
+                time,
+                retryBackoff,
+                requestTimeoutMs,
+                retryBackoffMs,
+                subscriptions,
                 metadata,
                 fetchConfig.isolationLevel,
-                time,
-                retryBackoffMs,
-                retryBackoffMaxMs,
-                requestTimeoutMs,
                 apiVersions,
                 networkClientDelegate,
-                backgroundEventHandler,
-                logContext));
+                backgroundEventHandler));
 
-        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, time, config));
+        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(
+                logContext,
+                time,
+                retryBackoff,
+                requestTimeoutMs,
+                config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG)
+        ));
 
         if (groupInfo.isPresent()) {
             GroupInformation gi = groupInfo.get();
             CoordinatorRequestManager coordinator = spy(new CoordinatorRequestManager(
-                    time,
                     logContext,
+                    time,
+                    retryBackoff,
                     requestTimeoutMs,
-                    retryBackoffMs,
-                    retryBackoffMaxMs,
                     backgroundEventHandler,
                     gi.groupId
             ));
-            CommitRequestManager commit = spy(new CommitRequestManager(time,
-                    logContext,
+            CommitRequestManager commit = spy(new CommitRequestManager(logContext,
+                    time,
+                    retryBackoff,
+                    requestTimeoutMs,
+                    retryBackoffMs,
                     subscriptions,
-                    config,
+                    config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
+                    config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                     coordinator,
                     offsetCommitCallbackInvoker,
                     gi.groupId,
                     gi.groupInstanceId,
+                    config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
                     metrics));
             MembershipManager mm = spy(
                 new MembershipManagerImpl(
@@ -222,11 +242,9 @@ public class ConsumerTestBuilder implements Closeable {
                     DEFAULT_MAX_POLL_INTERVAL_MS));
             HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState = spy(new HeartbeatRequestManager.HeartbeatRequestState(
                     logContext,
+                    retryBackoff,
                     time,
-                    gi.heartbeatIntervalMs,
-                    retryBackoffMs,
-                    retryBackoffMaxMs,
-                    gi.heartbeatJitterMs));
+                    gi.heartbeatIntervalMs));
             HeartbeatRequestManager heartbeat = spy(new HeartbeatRequestManager(
                     logContext,
                     time,
@@ -257,14 +275,14 @@ public class ConsumerTestBuilder implements Closeable {
         this.fetchBuffer = new FetchBuffer(logContext);
         this.fetchRequestManager = spy(new FetchRequestManager(logContext,
                 time,
+                requestTimeoutMs,
                 metadata,
                 subscriptions,
                 fetchConfig,
                 fetchBuffer,
                 metricsManager,
                 networkClientDelegate,
-                apiVersions,
-                requestTimeoutMs));
+                apiVersions));
         this.requestManagers = new RequestManagers(logContext,
                 offsetsRequestManager,
                 topicMetadataRequestManager,

@@ -20,56 +20,20 @@ import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
+import java.util.Objects;
+
 class RequestState {
 
     private final Logger log;
-    protected final String owner;
-    final static int RETRY_BACKOFF_EXP_BASE = 2;
-    final static double RETRY_BACKOFF_JITTER = 0.2;
     protected final ExponentialBackoff exponentialBackoff;
     protected long lastSentMs = -1;
     protected long lastReceivedMs = -1;
     protected int numAttempts = 0;
     protected long backoffMs = 0;
 
-    public RequestState(final LogContext logContext,
-                        final String owner,
-                        final long retryBackoffMs,
-                        final long retryBackoffMaxMs) {
-        this.log = logContext.logger(RequestState.class);
-        this.owner = owner;
-        this.exponentialBackoff = new ExponentialBackoff(
-                retryBackoffMs,
-                RETRY_BACKOFF_EXP_BASE,
-                retryBackoffMaxMs,
-                RETRY_BACKOFF_JITTER);
-    }
-
-    // Visible for testing
-    RequestState(final LogContext logContext,
-                 final String owner,
-                 final long retryBackoffMs,
-                 final int retryBackoffExpBase,
-                 final long retryBackoffMaxMs,
-                 final double jitter) {
-        this.log = logContext.logger(RequestState.class);
-        this.owner = owner;
-        this.exponentialBackoff = new ExponentialBackoff(
-                retryBackoffMs,
-                retryBackoffExpBase,
-                retryBackoffMaxMs,
-                jitter);
-    }
-
-    /**
-     * Reset request state so that new requests can be sent immediately
-     * and the backoff is restored to its minimal configuration.
-     */
-    public void reset() {
-        this.lastSentMs = -1;
-        this.lastReceivedMs = -1;
-        this.numAttempts = 0;
-        this.backoffMs = exponentialBackoff.backoff(0);
+    public RequestState(final LogContext logContext, final ExponentialBackoff exponentialBackoff) {
+        this.log = logContext.logger(getClass());
+        this.exponentialBackoff = Objects.requireNonNull(exponentialBackoff);
     }
 
     public boolean canSendRequest(final long currentTimeMs) {
@@ -109,7 +73,7 @@ class RequestState {
     /**
      * Callback invoked after a successful send. This resets the number of attempts
      * to 0, but the minimal backoff will still be enforced prior to allowing a new
-     * send. To send immediately, use {@link #reset()}.
+     * send.
      *
      * @param currentTimeMs Current time in milliseconds
      */
@@ -145,8 +109,7 @@ class RequestState {
      * @return String version of instance variables.
      */
     protected String toStringBase() {
-        return "owner='" + owner + '\'' +
-                ", exponentialBackoff=" + exponentialBackoff +
+        return ", exponentialBackoff=" + exponentialBackoff +
                 ", lastSentMs=" + lastSentMs +
                 ", lastReceivedMs=" + lastReceivedMs +
                 ", numAttempts=" + numAttempts +

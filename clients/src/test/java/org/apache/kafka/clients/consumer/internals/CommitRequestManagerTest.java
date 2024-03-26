@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.CommitFailedException;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
@@ -40,11 +39,10 @@ import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -60,8 +58,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalDouble;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -69,11 +65,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Collections.singleton;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_JITTER;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
@@ -95,18 +88,15 @@ import static org.mockito.Mockito.when;
 
 public class CommitRequestManagerTest {
 
-    private final int requestTimeoutMs = 1000;
-    private long retryBackoffMs = 100;
-    private long retryBackoffMaxMs = 1000;
+    private final long retryBackoffMs = 100;
     private static final String CONSUMER_COORDINATOR_METRICS = "consumer-coordinator-metrics";
-    private Node mockedNode = new Node(1, "host1", 9092);
+    private final Node mockedNode = new Node(1, "host1", 9092);
     private SubscriptionState subscriptionState;
     private LogContext logContext;
     private MockTime time;
     private CoordinatorRequestManager coordinatorRequestManager;
     private OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
-    private Metrics metrics = new Metrics();
-    private Properties props;
+    private final Metrics metrics = new Metrics();
 
     private final int defaultApiTimeoutMs = 60000;
 
@@ -118,10 +108,6 @@ public class CommitRequestManagerTest {
         this.subscriptionState = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.offsetCommitCallbackInvoker = mock(OffsetCommitCallbackInvoker.class);
-        this.props = new Properties();
-        this.props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 100);
-        this.props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        this.props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     }
 
     @Test
@@ -232,7 +218,7 @@ public class CommitRequestManagerTest {
     // should not be retried).
     @Test
     public void testAsyncAutocommitNotRetriedAfterException() {
-        long commitInterval = retryBackoffMs * 2;
+        int commitInterval = (int) retryBackoffMs * 2;
         CommitRequestManager commitRequestManger = create(true, commitInterval);
         TopicPartition tp = new TopicPartition("topic", 1);
         subscriptionState.assignFromUser(Collections.singleton(tp));
@@ -1202,26 +1188,28 @@ public class CommitRequestManagerTest {
         return res.unsentRequests.stream().map(NetworkClientDelegate.UnsentRequest::handler).collect(Collectors.toList());
     }
 
-    private CommitRequestManager create(final boolean autoCommitEnabled, final long autoCommitInterval) {
-        props.setProperty(AUTO_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(autoCommitInterval));
-        props.setProperty(ENABLE_AUTO_COMMIT_CONFIG, String.valueOf(autoCommitEnabled));
-
-        if (autoCommitEnabled)
-            props.setProperty(GROUP_ID_CONFIG, TestUtils.randomString(10));
-
+    private CommitRequestManager create(final boolean autoCommitEnabled, final int autoCommitInterval) {
+        final ExponentialBackoff retryBackoff = new ExponentialBackoff(
+                100,
+                RETRY_BACKOFF_EXP_BASE,
+                1000,
+                RETRY_BACKOFF_JITTER
+        );
+        int requestTimeoutMs = 1000;
         return spy(new CommitRequestManager(
-                this.time,
                 this.logContext,
+                this.time,
+                retryBackoff,
+                requestTimeoutMs,
+                retryBackoffMs,
                 this.subscriptionState,
-                new ConsumerConfig(props),
+                autoCommitEnabled,
+                autoCommitInterval,
                 this.coordinatorRequestManager,
                 this.offsetCommitCallbackInvoker,
                 DEFAULT_GROUP_ID,
                 Optional.of(DEFAULT_GROUP_INSTANCE_ID),
-                requestTimeoutMs,
-                retryBackoffMs,
-                retryBackoffMaxMs,
-                OptionalDouble.of(0),
+                true,
                 metrics));
     }
 

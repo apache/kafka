@@ -3645,7 +3645,7 @@ public class FetchRequestManagerTest {
                                            NetworkClientDelegate networkClientDelegate,
                                            FetchCollector<K, V> fetchCollector,
                                            ApiVersions apiVersions) {
-            super(logContext, time, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, networkClientDelegate, apiVersions, requestTimeoutMs);
+            super(logContext, time, requestTimeoutMs, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, networkClientDelegate, apiVersions);
             this.fetchCollector = fetchCollector;
         }
 

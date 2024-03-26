@@ -28,6 +28,7 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +37,8 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.Optional;
 
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_JITTER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -189,12 +192,17 @@ public class CoordinatorRequestManagerTest {
     }
 
     private CoordinatorRequestManager setupCoordinatorManager(String groupId) {
+        final ExponentialBackoff retryBackoff = new ExponentialBackoff(
+                RETRY_BACKOFF_MS,
+                RETRY_BACKOFF_EXP_BASE,
+                RETRY_BACKOFF_MS,
+                RETRY_BACKOFF_JITTER
+        );
         return new CoordinatorRequestManager(
-            time,
             new LogContext(),
+            time,
+            retryBackoff,
             REQUEST_TIMEOUT_MS,
-            RETRY_BACKOFF_MS,
-            RETRY_BACKOFF_MS,
             this.backgroundEventHandler,
             groupId
         );

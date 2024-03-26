@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -28,6 +27,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -63,24 +63,27 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
  */
 
 public class TopicMetadataRequestManager implements RequestManager {
+
+    private final LogContext logContext;
+    private final Logger log;
     private final Time time;
+    private final ExponentialBackoff retryBackoff;
+    private final int requestTimeoutMs;
     private final boolean allowAutoTopicCreation;
     private final List<TopicMetadataRequestState> inflightRequests;
-    private final int requestTimeoutMs;
-    private final long retryBackoffMs;
-    private final long retryBackoffMaxMs;
-    private final Logger log;
-    private final LogContext logContext;
 
-    public TopicMetadataRequestManager(final LogContext context, final Time time, final ConsumerConfig config) {
-        logContext = context;
-        log = logContext.logger(getClass());
+    public TopicMetadataRequestManager(final LogContext logContext,
+                                       final Time time,
+                                       final ExponentialBackoff retryBackoff,
+                                       final int requestTimeoutMs,
+                                       final boolean allowAutoTopicCreation) {
+        this.logContext = logContext;
+        this.log = logContext.logger(getClass());
         this.time = time;
-        inflightRequests = new LinkedList<>();
-        requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-        retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        allowAutoTopicCreation = config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG);
+        this.retryBackoff = retryBackoff;
+        this.requestTimeoutMs = requestTimeoutMs;
+        this.allowAutoTopicCreation = allowAutoTopicCreation;
+        this.inflightRequests = new LinkedList<>();
     }
 
     @Override
@@ -106,11 +109,7 @@ public class TopicMetadataRequestManager implements RequestManager {
      * @return the future of the metadata request.
      */
     public CompletableFuture<Map<String, List<PartitionInfo>>> requestAllTopicsMetadata(final Timer timer) {
-        TopicMetadataRequestState newRequest = new TopicMetadataRequestState(
-                logContext,
-                timer,
-                retryBackoffMs,
-                retryBackoffMaxMs);
+        TopicMetadataRequestState newRequest = new TopicMetadataRequestState(timer);
         inflightRequests.add(newRequest);
         return newRequest.future;
     }
@@ -122,12 +121,7 @@ public class TopicMetadataRequestManager implements RequestManager {
      * @return the future of the metadata request.
      */
     public CompletableFuture<Map<String, List<PartitionInfo>>> requestTopicMetadata(final String topic, final Timer timer) {
-        TopicMetadataRequestState newRequest = new TopicMetadataRequestState(
-                logContext,
-                topic,
-                timer,
-                retryBackoffMs,
-                retryBackoffMaxMs);
+        TopicMetadataRequestState newRequest = new TopicMetadataRequestState(timer, topic);
         inflightRequests.add(newRequest);
         return newRequest.future;
     }
@@ -142,25 +136,16 @@ public class TopicMetadataRequestManager implements RequestManager {
         private final boolean allTopics;
         CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
-        public TopicMetadataRequestState(final LogContext logContext,
-                                         final Timer timer,
-                                         final long retryBackoffMs,
-                                         final long retryBackoffMaxMs) {
-            super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
-                    retryBackoffMaxMs, timer);
-            future = new CompletableFuture<>();
+        public TopicMetadataRequestState(final Timer timer) {
+            super(logContext, retryBackoff, timer);
+            this.future = new CompletableFuture<>();
             this.topic = null;
             this.allTopics = true;
         }
 
-        public TopicMetadataRequestState(final LogContext logContext,
-                                         final String topic,
-                                         final Timer timer,
-                                         final long retryBackoffMs,
-                                         final long retryBackoffMaxMs) {
-            super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
-                retryBackoffMaxMs, timer);
-            future = new CompletableFuture<>();
+        public TopicMetadataRequestState(final Timer timer, final String topic) {
+            super(logContext, retryBackoff, timer);
+            this.future = new CompletableFuture<>();
             this.topic = topic;
             this.allTopics = false;
         }

@@ -27,6 +27,7 @@ import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -51,38 +52,31 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
  */
 public class CoordinatorRequestManager implements RequestManager {
     private static final long COORDINATOR_DISCONNECT_LOGGING_INTERVAL_MS = 60 * 1000;
-    private final Time time;
     private final Logger log;
+    private final Time time;
+    private final int requestTimeoutMs;
     private final BackgroundEventHandler backgroundEventHandler;
     private final String groupId;
-
-    private final int requestTimeoutMs;
     private final RequestState coordinatorRequestState;
     private long timeMarkedUnknownMs = -1L; // starting logging a warning only after unable to connect for a while
     private long totalDisconnectedMin = 0;
     private Node coordinator;
 
     public CoordinatorRequestManager(
-        final Time time,
         final LogContext logContext,
+        final Time time,
+        final ExponentialBackoff retryBackoff,
         final int requestTimeoutMs,
-        final long retryBackoffMs,
-        final long retryBackoffMaxMs,
-        final BackgroundEventHandler errorHandler,
+        final BackgroundEventHandler backgroundEventHandler,
         final String groupId
     ) {
         Objects.requireNonNull(groupId);
         this.time = time;
         this.log = logContext.logger(this.getClass());
-        this.backgroundEventHandler = errorHandler;
+        this.backgroundEventHandler = backgroundEventHandler;
         this.groupId = groupId;
         this.requestTimeoutMs = requestTimeoutMs;
-        this.coordinatorRequestState = new RequestState(
-                logContext,
-                CoordinatorRequestManager.class.getSimpleName(),
-                retryBackoffMs,
-                retryBackoffMaxMs
-        );
+        this.coordinatorRequestState = new RequestState(logContext, retryBackoff);
     }
 
     /**

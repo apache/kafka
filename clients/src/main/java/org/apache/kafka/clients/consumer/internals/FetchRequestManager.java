@@ -46,14 +46,14 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
 
     FetchRequestManager(final LogContext logContext,
                         final Time time,
+                        final int requestTimeoutMs,
                         final ConsumerMetadata metadata,
                         final SubscriptionState subscriptions,
                         final FetchConfig fetchConfig,
                         final FetchBuffer fetchBuffer,
                         final FetchMetricsManager metricsManager,
                         final NetworkClientDelegate networkClientDelegate,
-                        final ApiVersions apiVersions,
-                        final int requestTimeoutMs) {
+                        final ApiVersions apiVersions) {
         super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time, apiVersions);
         this.networkClientDelegate = networkClientDelegate;
         this.requestTimeoutMs = requestTimeoutMs;

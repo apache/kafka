@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -35,6 +36,9 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
+import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_JITTER;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
@@ -105,6 +109,17 @@ public class RequestManagers implements Closeable {
         );
     }
 
+    public static ExponentialBackoff retryBackoff(final long retryBackoffMs, final long retryBackoffMaxMs) {
+        return retryBackoff(retryBackoffMs, 2, retryBackoffMaxMs, 0.2);
+    }
+
+    public static ExponentialBackoff retryBackoff(final long retryBackoffMs,
+                                                  final int retryBackoffExpBase,
+                                                  final long retryBackoffMaxMs,
+                                                  final double jitter) {
+        return new ExponentialBackoff(retryBackoffMs, retryBackoffExpBase, retryBackoffMaxMs, jitter);
+    }
+
     /**
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link ConsumerNetworkThread}.
@@ -134,31 +149,41 @@ public class RequestManagers implements Closeable {
                 long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
                 long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
                 final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-                final OffsetsRequestManager listOffsets = new OffsetsRequestManager(subscriptions,
+                final ExponentialBackoff retryBackoff = new ExponentialBackoff(
+                        retryBackoffMs,
+                        RETRY_BACKOFF_EXP_BASE,
+                        retryBackoffMaxMs,
+                        RETRY_BACKOFF_JITTER
+                );
+                final OffsetsRequestManager listOffsets = new OffsetsRequestManager(
+                        logContext,
+                        time,
+                        retryBackoff,
+                        requestTimeoutMs,
+                        retryBackoffMs,
+                        subscriptions,
                         metadata,
                         fetchConfig.isolationLevel,
-                        time,
-                        retryBackoffMs,
-                        retryBackoffMaxMs,
-                        requestTimeoutMs,
                         apiVersions,
                         networkClientDelegate,
-                        backgroundEventHandler,
-                        logContext);
+                        backgroundEventHandler);
                 final FetchRequestManager fetch = new FetchRequestManager(logContext,
                         time,
+                        requestTimeoutMs,
                         metadata,
                         subscriptions,
                         fetchConfig,
                         fetchBuffer,
                         fetchMetricsManager,
                         networkClientDelegate,
-                        apiVersions,
-                        requestTimeoutMs);
+                        apiVersions);
+                final boolean allowAutoTopicCreation = config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG);
                 final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(
                         logContext,
                         time,
-                        config);
+                        retryBackoff,
+                        requestTimeoutMs,
+                        allowAutoTopicCreation);
                 HeartbeatRequestManager heartbeatRequestManager = null;
                 MembershipManager membershipManager = null;
                 CoordinatorRequestManager coordinator = null;
@@ -166,22 +191,28 @@ public class RequestManagers implements Closeable {
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
                     Optional<String> serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
-                    coordinator = new CoordinatorRequestManager(time,
+                    coordinator = new CoordinatorRequestManager(
                             logContext,
+                            time,
+                            retryBackoff,
+                            requestTimeoutMs,
+                            backgroundEventHandler,
+                            groupRebalanceConfig.groupId
+                    );
+                    commit = new CommitRequestManager(
+                            logContext,
+                            time,
+                            retryBackoff,
                             requestTimeoutMs,
                             retryBackoffMs,
-                            retryBackoffMaxMs,
-                            backgroundEventHandler,
-                            groupRebalanceConfig.groupId);
-                    commit = new CommitRequestManager(
-                            time,
-                            logContext,
                             subscriptions,
-                            config,
+                            config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
+                            config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                             coordinator,
                             offsetCommitCallbackInvoker,
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId,
+                            config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
                             metrics);
                     membershipManager = new MembershipManagerImpl(
                             groupRebalanceConfig.groupId,
@@ -201,6 +232,7 @@ public class RequestManagers implements Closeable {
                     heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,
                             time,
+                            retryBackoff,
                             config,
                             coordinator,
                             subscriptions,
