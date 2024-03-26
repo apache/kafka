@@ -96,7 +96,6 @@ Using compiled files:
 Using docker image:
 
     docker run -p 9092:9092 apache/kafka:3.7.0
-    
 
 ### Running a Kafka broker in ZooKeeper mode
 
