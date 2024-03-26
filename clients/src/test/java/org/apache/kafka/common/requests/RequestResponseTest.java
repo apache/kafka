@@ -107,6 +107,8 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupRe
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.message.DeleteRecordsRequestData;
 import org.apache.kafka.common.message.DeleteRecordsResponseData;
+import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
+import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
@@ -162,6 +164,8 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
+import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
+import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
@@ -204,6 +208,10 @@ import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.message.PushTelemetryResponseData;
+import org.apache.kafka.common.message.ReadShareGroupOffsetsStateRequestData;
+import org.apache.kafka.common.message.ReadShareGroupOffsetsStateResponseData;
+import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
+import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -234,6 +242,8 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataP
 import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
+import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
+import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -1097,6 +1107,11 @@ public class RequestResponseTest {
             case SHARE_GROUP_DESCRIBE: return createShareGroupDescribeRequest(version);
             case SHARE_FETCH: return createShareFetchRequest(version);
             case SHARE_ACKNOWLEDGE: return createShareAcknowledgeRequest(version);
+            case INITIALIZE_SHARE_GROUP_STATE: return createInitializeShareGroupStateRequest(version);
+            case READ_SHARE_GROUP_STATE: return createReadShareGroupStateRequest(version);
+            case WRITE_SHARE_GROUP_STATE: return createWriteShareGroupStateRequest(version);
+            case DELETE_SHARE_GROUP_STATE: return createDeleteShareGroupStateRequest(version);
+            case READ_SHARE_GROUP_OFFSETS_STATE: return createReadShareGroupOffsetsStateRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1183,6 +1198,11 @@ public class RequestResponseTest {
             case SHARE_GROUP_DESCRIBE: return createShareGroupDescribeResponse();
             case SHARE_FETCH: return createShareFetchResponse();
             case SHARE_ACKNOWLEDGE: return createShareAcknowledgeResponse();
+            case INITIALIZE_SHARE_GROUP_STATE: return createInitializeShareGroupStateResponse();
+            case READ_SHARE_GROUP_STATE: return createReadShareGroupStateResponse();
+            case WRITE_SHARE_GROUP_STATE: return createWriteShareGroupStateResponse();
+            case DELETE_SHARE_GROUP_STATE: return createDeleteShareGroupStateResponse();
+            case READ_SHARE_GROUP_OFFSETS_STATE: return createReadShareGroupOffsetsStateResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -3801,6 +3821,94 @@ public class RequestResponseTest {
         response.setErrorCode(Errors.NONE.code());
         response.setThrottleTimeMs(10);
         return new ListClientMetricsResourcesResponse(response);
+    }
+
+    private InitializeShareGroupStateRequest createInitializeShareGroupStateRequest(short version) {
+        InitializeShareGroupStateRequestData data = new InitializeShareGroupStateRequestData()
+            .setGroupId("group")
+            .setTopicId(Uuid.randomUuid())
+            .setPartition(0)
+            .setStateEpoch(0)
+            .setStartOffset(0);
+        return new InitializeShareGroupStateRequest.Builder(data).build(version);
+    }
+
+    private InitializeShareGroupStateResponse createInitializeShareGroupStateResponse() {
+        InitializeShareGroupStateResponseData data = new InitializeShareGroupStateResponseData();
+        data.setErrorCode(Errors.NONE.code());
+        return new InitializeShareGroupStateResponse(data);
+    }
+
+    private ReadShareGroupStateRequest createReadShareGroupStateRequest(short version) {
+        ReadShareGroupStateRequestData data = new ReadShareGroupStateRequestData()
+            .setGroupId("group")
+            .setTopicId(Uuid.randomUuid())
+            .setPartition(0);
+        return new ReadShareGroupStateRequest.Builder(data).build(version);
+    }
+
+    private ReadShareGroupStateResponse createReadShareGroupStateResponse() {
+        ReadShareGroupStateResponseData data = new ReadShareGroupStateResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setStateEpoch(0)
+            .setStartOffset(0)
+            .setStateBatches(singletonList(new ReadShareGroupStateResponseData.StateBatch()
+                .setBaseOffset(0)
+                .setLastOffset(0)
+                .setState((byte) 0x0)
+                .setDeliveryCount((short) 0)));
+        return new ReadShareGroupStateResponse(data);
+    }
+
+    private WriteShareGroupStateRequest createWriteShareGroupStateRequest(short version) {
+        WriteShareGroupStateRequestData data = new WriteShareGroupStateRequestData()
+            .setGroupId("group")
+            .setTopicId(Uuid.randomUuid())
+            .setPartition(0)
+            .setStateEpoch(0)
+            .setStartOffset(0)
+            .setStateBatches(singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                .setBaseOffset(0)
+                .setLastOffset(0)
+                .setState((byte) 0x0)
+                .setDeliveryCount((short) 0)));
+        return new WriteShareGroupStateRequest.Builder(data).build(version);
+    }
+
+    private WriteShareGroupStateResponse createWriteShareGroupStateResponse() {
+        WriteShareGroupStateResponseData data = new WriteShareGroupStateResponseData()
+            .setErrorCode(Errors.NONE.code());
+        return new WriteShareGroupStateResponse(data);
+    }
+
+    private DeleteShareGroupStateRequest createDeleteShareGroupStateRequest(short version) {
+        DeleteShareGroupStateRequestData data = new DeleteShareGroupStateRequestData()
+            .setGroupId("group")
+            .setTopicId(Uuid.randomUuid())
+            .setPartition(0);
+        return new DeleteShareGroupStateRequest.Builder(data).build(version);
+    }
+
+    private DeleteShareGroupStateResponse createDeleteShareGroupStateResponse() {
+        DeleteShareGroupStateResponseData data = new DeleteShareGroupStateResponseData()
+            .setErrorCode(Errors.NONE.code());
+        return new DeleteShareGroupStateResponse(data);
+    }
+
+    private ReadShareGroupOffsetsStateRequest createReadShareGroupOffsetsStateRequest(short version) {
+        ReadShareGroupOffsetsStateRequestData data = new ReadShareGroupOffsetsStateRequestData()
+            .setGroupId("group")
+            .setTopicId(Uuid.randomUuid())
+            .setPartition(0);
+        return new ReadShareGroupOffsetsStateRequest.Builder(data).build(version);
+    }
+
+    private ReadShareGroupOffsetsStateResponse createReadShareGroupOffsetsStateResponse() {
+        ReadShareGroupOffsetsStateResponseData data = new ReadShareGroupOffsetsStateResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setStateEpoch(0)
+            .setStartOffset(0);
+        return new ReadShareGroupOffsetsStateResponse(data);
     }
 
     @Test
