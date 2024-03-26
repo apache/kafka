@@ -54,13 +54,14 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testTimeToNextUpdate
 
 ### Running a particular unit/integration test with log4j output ###
-Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
+By default, there will be only small number of logs output while testing. You can adjust it by changing the `log4j.properties` in the test project directory.
 
-For example, you can modify the line in `clients/src/test/resources/log4j.properties` to `log4j.logger.org.apache.kafka=INFO` and then run:
+For example, if you want to see more logs for clients project tests, you can modify the line in `clients/src/test/resources/log4j.properties` 
+to `log4j.logger.org.apache.kafka=INFO` and then run:
     
     ./gradlew cleanTest clients:test --tests NetworkClientTest   
 
-And you should see INFO level logs in the file under the `./clients/build/test-results/test` directory.
+And you should see `INFO` level logs in the file under the `./clients/build/test-results/test` directory.
 
 ### Specifying test retries ###
 By default, each failed test is retried once up to a maximum of five retries per test run. Tests are retried at the end of the test task. Adjust these parameters in the following way:
