@@ -245,8 +245,7 @@ public class OffsetsRequestManagerTest {
         // Building list offsets request fails with unknown leader
         mockFailedRequest_MissingLeader();
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
-                requestManager.fetchOffsets(
-                        timestampsToSearch,
+                requestManager.fetchOffsets(timestampsToSearch,
                         false,
                         time.timer(REQUEST_TIMEOUT_MS));
         assertEquals(0, requestManager.requestsToSend());

@@ -168,7 +168,7 @@ public class ConsumerTestBuilder implements Closeable {
                 metadata,
                 fetchConfig.isolationLevel,
                 time,
-                DEFAULT_RETRY_BACKOFF_MS,
+                retryBackoffMs,
                 DEFAULT_RETRY_BACKOFF_MAX_MS,
                 requestTimeoutMs,
                 apiVersions,
@@ -184,7 +184,7 @@ public class ConsumerTestBuilder implements Closeable {
                     time,
                     logContext,
                     requestTimeoutMs,
-                    retryBackoffMs,
+                    DEFAULT_RETRY_BACKOFF_MS,
                     DEFAULT_RETRY_BACKOFF_MAX_MS,
                     backgroundEventHandler,
                     gi.groupId
