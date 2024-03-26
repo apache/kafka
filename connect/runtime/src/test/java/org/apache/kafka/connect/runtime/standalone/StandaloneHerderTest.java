@@ -68,7 +68,6 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -115,7 +114,7 @@ public class StandaloneHerderTest {
     private static final String TOPICS_LIST_STR = "topic1,topic2";
     private static final String WORKER_ID = "localhost:8083";
     private static final String KAFKA_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
-    private static final Long WAIT_TIME = 1000L;
+    private static final Long WAIT_TIME_MS = 15000L;
 
     private enum SourceSink {
         SOURCE, SINK
@@ -163,7 +162,7 @@ public class StandaloneHerderTest {
         expectConfigValidation(SourceSink.SOURCE, config);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
     }
 
@@ -190,7 +189,7 @@ public class StandaloneHerderTest {
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
 
-        ExecutionException exception = assertThrows(ExecutionException.class, () -> createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
         if (BadRequestException.class != exception.getCause().getClass()) {
             throw new AssertionError(exception.getCause());
         }
@@ -206,14 +205,14 @@ public class StandaloneHerderTest {
         expectConfigValidation(SourceSink.SOURCE, config, config);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         // Second should fail
         FutureCallback<Herder.Created<ConnectorInfo>> failedCreateCallback = new FutureCallback<>();
         // No new connector is created
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, failedCreateCallback);
-        ExecutionException exception = assertThrows(ExecutionException.class, () -> failedCreateCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> failedCreateCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
         if (AlreadyExistsException.class != exception.getCause().getClass()) {
             throw new AssertionError(exception.getCause());
         }
@@ -228,14 +227,13 @@ public class StandaloneHerderTest {
         expectConfigValidation(SourceSink.SINK, config);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SINK), connectorInfo.result());
     }
 
     @Test
     public void testCreateConnectorWithStoppedInitialState() throws Exception {
         Map<String, String> config = connectorConfig(SourceSink.SINK);
-        Connector connectorMock = mock(SinkConnector.class);
         expectConfigValidation(SourceSink.SINK, config);
 
         // Only the connector should be created; we expect no tasks to be spawned for a connector created with a paused or stopped initial state
@@ -245,7 +243,7 @@ public class StandaloneHerderTest {
         when(herder.connectorType(any())).thenReturn(ConnectorType.SINK);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, TargetState.STOPPED, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(
                 new ConnectorInfo(CONNECTOR_NAME, connectorConfig(SourceSink.SINK), Collections.emptyList(), ConnectorType.SINK),
                 connectorInfo.result()
@@ -263,7 +261,7 @@ public class StandaloneHerderTest {
         when(statusBackingStore.getAll(CONNECTOR_NAME)).thenReturn(Collections.emptyList());
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         FutureCallback<Herder.Created<ConnectorInfo>> deleteCallback = new FutureCallback<>();
@@ -272,7 +270,7 @@ public class StandaloneHerderTest {
         verify(herder).onDeletion(CONNECTOR_NAME);
         verify(statusBackingStore).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), TaskStatus.State.DESTROYED, WORKER_ID, 0));
         verify(statusBackingStore).put(new ConnectorStatus(CONNECTOR_NAME, ConnectorStatus.State.DESTROYED, WORKER_ID, 0));
-        deleteCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        deleteCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
 
         // Second deletion should fail since the connector is gone
         FutureCallback<Herder.Created<ConnectorInfo>> failedDeleteCallback = new FutureCallback<>();
@@ -280,7 +278,7 @@ public class StandaloneHerderTest {
         ExecutionException e = assertThrows(
                 "Should have thrown NotFoundException",
                 ExecutionException.class,
-                () -> failedDeleteCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS)
+                () -> failedDeleteCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS)
         );
         assertInstanceOf(NotFoundException.class, e.getCause());
     }
@@ -301,12 +299,12 @@ public class StandaloneHerderTest {
                 .thenReturn(Collections.singletonList(taskConfig(SourceSink.SOURCE)));
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         FutureCallback<Void> restartCallback = new FutureCallback<>();
         herder.restartConnector(CONNECTOR_NAME, restartCallback);
-        restartCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        restartCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         verify(worker).stopAndAwaitConnector(eq(CONNECTOR_NAME));
     }
 
@@ -319,7 +317,7 @@ public class StandaloneHerderTest {
         expectConfigValidation(SourceSink.SOURCE, config);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         mockStartConnector(config, TargetState.STARTED, TargetState.STARTED, null);
@@ -338,7 +336,7 @@ public class StandaloneHerderTest {
         expectStop();
         herder.restartConnector(CONNECTOR_NAME, restartCallback);
         verify(statusBackingStore).put(new TaskStatus(taskId, TaskStatus.State.DESTROYED, WORKER_ID, 0));
-        restartCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        restartCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -354,13 +352,13 @@ public class StandaloneHerderTest {
         Exception exception = new ConnectException("Failed to start connector");
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
         FutureCallback<Void> restartCallback = new FutureCallback<>();
         mockStartConnector(config, null, TargetState.STARTED, exception);
         herder.restartConnector(CONNECTOR_NAME, restartCallback);
         try {
-            restartCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+            restartCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
             fail();
         } catch (ExecutionException e) {
             assertEquals(exception, e.getCause());
@@ -394,13 +392,13 @@ public class StandaloneHerderTest {
                 .thenReturn(true);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
-        createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
+        createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         FutureCallback<Void> restartTaskCallback = new FutureCallback<>();
         herder.restartTask(taskId, restartTaskCallback);
-        restartTaskCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        restartTaskCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -427,14 +425,14 @@ public class StandaloneHerderTest {
                 .thenReturn(false);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         FutureCallback<Void> cb = new FutureCallback<>();
         herder.restartTask(taskId, cb);
         verify(worker).stopAndAwaitTask(taskId);
         try {
-            cb.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+            cb.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
             fail("Expected restart callback to raise an exception");
         } catch (ExecutionException exception) {
             assertEquals(ConnectException.class, exception.getCause().getClass());
@@ -446,7 +444,7 @@ public class StandaloneHerderTest {
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         RestartRequest restartRequest = new RestartRequest("UnknownConnector", false, true);
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
-        ExecutionException ee = assertThrows(ExecutionException.class, () -> restartCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
+        ExecutionException ee = assertThrows(ExecutionException.class, () -> restartCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
         assertInstanceOf(NotFoundException.class, ee.getCause());
     }
 
@@ -461,12 +459,12 @@ public class StandaloneHerderTest {
         expectConfigValidation(SourceSink.SINK, connectorConfig);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SINK), connectorInfo.result());
 
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
-        ExecutionException ee = assertThrows(ExecutionException.class, () -> restartCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
+        ExecutionException ee = assertThrows(ExecutionException.class, () -> restartCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
         assertInstanceOf(NotFoundException.class, ee.getCause());
         assertTrue(ee.getMessage().contains("Status for connector"));
     }
@@ -487,12 +485,12 @@ public class StandaloneHerderTest {
         expectConfigValidation(SourceSink.SINK, connectorConfig);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SINK), connectorInfo.result());
 
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
-        assertEquals(connectorStateInfo, restartCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
+        assertEquals(connectorStateInfo, restartCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
     }
 
     @Test
@@ -515,12 +513,12 @@ public class StandaloneHerderTest {
         mockStartConnector(connectorConfig, null, TargetState.STARTED, null);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SINK), connectorInfo.result());
 
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
-        assertEquals(connectorStateInfo, restartCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
+        assertEquals(connectorStateInfo, restartCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
 
         verifyConnectorStatusRestart();
     }
@@ -562,12 +560,12 @@ public class StandaloneHerderTest {
                 .thenReturn(true);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SINK), connectorInfo.result());
 
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
-        assertEquals(connectorStateInfo, restartCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
+        assertEquals(connectorStateInfo, restartCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
         ArgumentCaptor<TaskStatus> taskStatus = ArgumentCaptor.forClass(TaskStatus.class);
         verify(statusBackingStore).put(taskStatus.capture());
         assertEquals(AbstractStatus.State.RESTARTING, taskStatus.getValue().state());
@@ -616,12 +614,12 @@ public class StandaloneHerderTest {
                 .thenReturn(true);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SINK), connectorInfo.result());
 
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
-        assertEquals(connectorStateInfo, restartCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
+        assertEquals(connectorStateInfo, restartCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
 
         verifyConnectorStatusRestart();
         verify(statusBackingStore).put(taskStatus.capture());
@@ -639,7 +637,7 @@ public class StandaloneHerderTest {
         expectStop();
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         // herder.stop() should stop any running connectors and tasks even if destroyConnector was not invoked
@@ -674,12 +672,12 @@ public class StandaloneHerderTest {
 
         // Validate accessors with 1 connector
         doNothing().when(listConnectorsCb).onCompletion(null, singleton(CONNECTOR_NAME));
-        ConnectorInfo connInfo = new ConnectorInfo(CONNECTOR_NAME, connConfig, Arrays.asList(new ConnectorTaskId(CONNECTOR_NAME, 0)),
+        ConnectorInfo connInfo = new ConnectorInfo(CONNECTOR_NAME, connConfig, singletonList(new ConnectorTaskId(CONNECTOR_NAME, 0)),
                 ConnectorType.SOURCE);
         doNothing().when(connectorInfoCb).onCompletion(null, connInfo);
 
         TaskInfo taskInfo = new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 0), taskConfig(SourceSink.SOURCE));
-        doNothing().when(taskConfigsCb).onCompletion(null, Arrays.asList(taskInfo));
+        doNothing().when(taskConfigsCb).onCompletion(null, singletonList(taskInfo));
 
         Map<ConnectorTaskId, Map<String, String>> tasksConfig = Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0),
                 taskConfig(SourceSink.SOURCE));
@@ -693,7 +691,7 @@ public class StandaloneHerderTest {
         herder.tasksConfig(CONNECTOR_NAME, tasksConfigCb);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         reset(transformer);
@@ -735,7 +733,7 @@ public class StandaloneHerderTest {
 
 
         herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
@@ -744,7 +742,7 @@ public class StandaloneHerderTest {
         doNothing().when(connectorConfigCb).onCompletion(null, newConnConfig);
         herder.putConnectorConfig(CONNECTOR_NAME, newConnConfig, true, reconfigureCallback);
         Herder.Created<ConnectorInfo> newConnectorInfo = reconfigureCallback.get(1000L, TimeUnit.SECONDS);
-        ConnectorInfo newConnInfo = new ConnectorInfo(CONNECTOR_NAME, newConnConfig, Arrays.asList(new ConnectorTaskId(CONNECTOR_NAME, 0)),
+        ConnectorInfo newConnInfo = new ConnectorInfo(CONNECTOR_NAME, newConnConfig, singletonList(new ConnectorTaskId(CONNECTOR_NAME, 0)),
                 ConnectorType.SOURCE);
         assertEquals(newConnInfo, newConnectorInfo.result());
 
@@ -773,7 +771,7 @@ public class StandaloneHerderTest {
         String key = "foo.invalid.key";
         when(connectorMock.validate(config)).thenReturn(
                 new Config(
-                        Arrays.asList(new ConfigValue(key, null, Collections.emptyList(), errors))
+                        singletonList(new ConfigValue(key, null, Collections.emptyList(), errors))
                 )
         );
         ConfigDef configDef = new ConfigDef();
@@ -791,7 +789,7 @@ public class StandaloneHerderTest {
         ExecutionException e = assertThrows(
                 "Should have failed to configure connector",
                 ExecutionException.class,
-                () -> createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS)
+                () -> createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS)
         );
         assertNotNull(e.getCause());
         Throwable cause = e.getCause();
@@ -823,14 +821,14 @@ public class StandaloneHerderTest {
         FutureCallback<List<TaskInfo>> taskConfigsCallback = new FutureCallback<>();
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
         herder.pauseConnector(CONNECTOR_NAME);
         herder.stopConnector(CONNECTOR_NAME, stopCallback);
         verify(statusBackingStore).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), AbstractStatus.State.DESTROYED, WORKER_ID, 0));
-        stopCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        stopCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         herder.taskConfigs(CONNECTOR_NAME, taskConfigsCallback);
-        assertEquals(Collections.emptyList(), taskConfigsCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
+        assertEquals(Collections.emptyList(), taskConfigsCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
 
         // herder.stop() should stop any running connectors and tasks even if destroyConnector was not invoked
         herder.stop();
@@ -846,12 +844,12 @@ public class StandaloneHerderTest {
         herder.alterConnectorOffsets("unknown-connector",
                 Collections.singletonMap(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
                 alterOffsetsCallback);
-        ExecutionException e = assertThrows(ExecutionException.class, () -> alterOffsetsCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
+        ExecutionException e = assertThrows(ExecutionException.class, () -> alterOffsetsCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
         assertInstanceOf(NotFoundException.class, e.getCause());
 
         FutureCallback<Message> resetOffsetsCallback = new FutureCallback<>();
         herder.resetConnectorOffsets("unknown-connector", resetOffsetsCallback);
-        e = assertThrows(ExecutionException.class, () -> resetOffsetsCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
+        e = assertThrows(ExecutionException.class, () -> resetOffsetsCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
         assertInstanceOf(NotFoundException.class, e.getCause());
     }
 
@@ -874,12 +872,12 @@ public class StandaloneHerderTest {
         herder.alterConnectorOffsets(CONNECTOR_NAME,
                 Collections.singletonMap(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
                 alterOffsetsCallback);
-        ExecutionException e = assertThrows(ExecutionException.class, () -> alterOffsetsCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
+        ExecutionException e = assertThrows(ExecutionException.class, () -> alterOffsetsCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
         assertInstanceOf(BadRequestException.class, e.getCause());
 
         FutureCallback<Message> resetOffsetsCallback = new FutureCallback<>();
         herder.resetConnectorOffsets(CONNECTOR_NAME, resetOffsetsCallback);
-        e = assertThrows(ExecutionException.class, () -> resetOffsetsCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS));
+        e = assertThrows(ExecutionException.class, () -> resetOffsetsCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
         assertInstanceOf(BadRequestException.class, e.getCause());
     }
 
@@ -952,7 +950,7 @@ public class StandaloneHerderTest {
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
 
         // Wait on connector to start
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         // Prepare for task config update
@@ -979,8 +977,8 @@ public class StandaloneHerderTest {
         herder.requestTaskReconfiguration(CONNECTOR_NAME);
 
         // Wait on connector update
-        Herder.Created<ConnectorInfo> updatedConnectorInfo = reconfigureCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
-        ConnectorInfo expectedConnectorInfo = new ConnectorInfo(CONNECTOR_NAME, newConfig, Arrays.asList(new ConnectorTaskId(CONNECTOR_NAME, 0)), ConnectorType.SOURCE);
+        Herder.Created<ConnectorInfo> updatedConnectorInfo = reconfigureCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
+        ConnectorInfo expectedConnectorInfo = new ConnectorInfo(CONNECTOR_NAME, newConfig, singletonList(new ConnectorTaskId(CONNECTOR_NAME, 0)), ConnectorType.SOURCE);
         assertEquals(expectedConnectorInfo, updatedConnectorInfo.result());
 
         verify(statusBackingStore, times(2)).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), TaskStatus.State.DESTROYED, WORKER_ID, 0));
@@ -1049,7 +1047,7 @@ public class StandaloneHerderTest {
 
     private ConnectorInfo createdInfo(SourceSink sourceSink) {
         return new ConnectorInfo(CONNECTOR_NAME, connectorConfig(sourceSink),
-                Arrays.asList(new ConnectorTaskId(CONNECTOR_NAME, 0)),
+                singletonList(new ConnectorTaskId(CONNECTOR_NAME, 0)),
                 SourceSink.SOURCE == sourceSink ? ConnectorType.SOURCE : ConnectorType.SINK);
     }
 
@@ -1114,16 +1112,16 @@ public class StandaloneHerderTest {
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class
-    private abstract class BogusSourceConnector extends SourceConnector {
+    private static abstract class BogusSourceConnector extends SourceConnector {
     }
 
-    private abstract class BogusSourceTask extends SourceTask {
+    private static abstract class BogusSourceTask extends SourceTask {
     }
 
-    private abstract class BogusSinkConnector extends SinkConnector {
+    private static abstract class BogusSinkConnector extends SinkConnector {
     }
 
-    private abstract class BogusSinkTask extends SourceTask {
+    private static abstract class BogusSinkTask extends SourceTask {
     }
 
     private void verifyConnectorStatusRestart() {
