@@ -20,7 +20,7 @@ package org.apache.kafka.timeline;
 /**
  * An API which snapshot delta structures implement.
  */
-interface Delta {
+public interface Delta {
     /**
      * Merge the source delta into this one.
      *
