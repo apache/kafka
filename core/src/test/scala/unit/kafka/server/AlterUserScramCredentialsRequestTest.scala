@@ -405,7 +405,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(1, results.size)
     checkAllErrorsAlteringCredentials(results, Errors.UNSUPPORTED_VERSION,
                                       "when altering the credentials on unsupported IBP version")
-    assertEquals("The current metadata version does not support SCRAM", results.get(0).errorMessage)
+    assertEquals("The current metadata.version does not support SCRAM", results.get(0).errorMessage)
   }
 
   private def sendAlterUserScramCredentialsRequest(request: AlterUserScramCredentialsRequest, socketServer: SocketServer = adminSocketServer): AlterUserScramCredentialsResponse = {

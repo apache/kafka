@@ -358,7 +358,7 @@ class KRaftClusterTest {
 
   @Test
   def testCreateClusterInvalidMetadataVersion(): Unit = {
-    assertEquals("Bootstrap metadata versions before 3.3-IV0 are not supported. Can't load " +
+    assertEquals("Bootstrap metadata.version before 3.3-IV0 are not supported. Can't load " +
       "metadata from testkit", assertThrows(classOf[RuntimeException], () => {
         new KafkaClusterTestKit.Builder(
           new TestKitNodes.Builder().
@@ -963,7 +963,7 @@ class KRaftClusterTest {
         admin.close()
       }
       TestUtils.waitUntilTrue(() => cluster.brokers().get(1).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latestTesting()),
-        "Timed out waiting for metadata version update.")
+        "Timed out waiting for metadata.version update.")
     } finally {
       cluster.close()
     }
