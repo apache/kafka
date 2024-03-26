@@ -76,6 +76,9 @@ class FileLock(val file: File) extends Logging {
   def destroy(): Unit = {
     this synchronized {
       unlock()
+      if (file.exists() && file.delete()) {
+        trace(s"Delete ${file.getAbsolutePath}")
+      }
       channel.close()
     }
   }
