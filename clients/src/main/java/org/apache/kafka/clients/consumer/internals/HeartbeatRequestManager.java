@@ -504,6 +504,13 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatIntervalMs = heartbeatIntervalMs;
             this.heartbeatTimer.updateAndReset(heartbeatIntervalMs);
         }
+
+        @Override
+        protected String toStringBase() {
+            return super.toStringBase() +
+                    ", heartbeatTimer=" + heartbeatTimer.remainingMs() +
+                    ", heartbeatIntervalMs=" + heartbeatIntervalMs;
+        }
     }
 
     /**

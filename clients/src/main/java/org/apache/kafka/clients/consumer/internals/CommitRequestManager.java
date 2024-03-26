@@ -772,6 +772,15 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 log.warn("OffsetCommit request to remove not found in the outbound buffer: {}", this);
             }
         }
+
+        @Override
+        protected String toStringBase() {
+            return super.toStringBase() +
+                    ", offsets=" + offsets +
+                    ", groupId=" + groupId +
+                    ", groupInstanceId=" + groupInstanceId.orElse("undefined") +
+                    ", future=" + future;
+        }
     }
 
     /**
@@ -860,6 +869,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         abstract void onResponse(final ClientResponse response);
 
         abstract void removeRequest();
+
+        @Override
+        protected String toStringBase() {
+            return super.toStringBase() + ", memberInfo=" + memberInfo;
+        }
     }
 
     class OffsetFetchRequestState extends RetriableRequestState {
@@ -1071,12 +1085,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         @Override
         public String toStringBase() {
-            return toStringBase() + ", " +
-                    "requestedPartitions=" + requestedPartitions +
-                    ", memberId=" + memberInfo.memberId.orElse("undefined") +
-                    ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ? memberInfo.memberEpoch.get() : "undefined") +
-                    ", future=" + future +
-                    '}';
+            return super.toStringBase() + ", " + ", requestedPartitions=" + requestedPartitions + ", future=" + future;
         }
     }
 
@@ -1258,6 +1267,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         MemberInfo() {
             this.memberId = Optional.empty();
             this.memberEpoch = Optional.empty();
+        }
+
+        @Override
+        public String toString() {
+            return "MemberInfo{" +
+                    "memberId=" + memberId.orElse("undefined") +
+                    ", memberEpoch=" + memberEpoch.map(String::valueOf).orElse("undefined") +
+                    '}';
         }
     }
 }

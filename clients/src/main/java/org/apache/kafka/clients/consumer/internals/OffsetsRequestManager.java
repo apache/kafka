@@ -630,6 +630,17 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             remainingToSearch.putAll(partitionsToRetry.stream()
                     .collect(Collectors.toMap(tp -> tp, timestampsToSearch::get)));
         }
+
+        @Override
+        public String toStringBase() {
+            return super.toStringBase() +
+                    ", timestampsToSearch=" + timestampsToSearch +
+                    ", fetchedOffsets=" + fetchedOffsets +
+                    ", remainingToSearch=" + remainingToSearch +
+                    ", globalResult=" + globalResult +
+                    ", requireTimestamps=" + requireTimestamps +
+                    ", isolationLevel=" + isolationLevel;
+        }
     }
 
     private static class MultiNodeRequest {
