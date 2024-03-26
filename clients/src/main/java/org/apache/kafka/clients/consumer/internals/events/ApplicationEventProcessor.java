@@ -169,10 +169,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(
-            event.partitions(),
-            eventTimer(event)
-        );
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), eventTimer(event));
         future.whenComplete(complete(event.future()));
     }
 
@@ -245,10 +242,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final TopicMetadataEvent event) {
-        final CompletableFuture<Map<String, List<PartitionInfo>>> future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(
-            event.topic(),
-            eventTimer(event)
-        );
+        final CompletableFuture<Map<String, List<PartitionInfo>>> future =
+                requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), eventTimer(event));
         future.whenComplete(complete(event.future()));
     }
 

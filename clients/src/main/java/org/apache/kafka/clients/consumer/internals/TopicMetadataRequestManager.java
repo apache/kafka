@@ -63,7 +63,6 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
  */
 
 public class TopicMetadataRequestManager implements RequestManager {
-
     private final Time time;
     private final boolean allowAutoTopicCreation;
     private final List<TopicMetadataRequestState> inflightRequests;
