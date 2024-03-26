@@ -349,6 +349,7 @@ class ZkMigrationIntegrationTest {
       // implicitly deleted by the KRaft controller and remove from the ZK brokers as stray partitions
       def topicsAllDeleted(admin: Admin): Boolean = {
         val topics = admin.listTopics().names().get(60, TimeUnit.SECONDS)
+        log.info(s"Topics still present: $topics")
         topics.retainAll(util.Arrays.asList(
           "test-topic-1", "test-topic-2", "test-topic-3"
         ))

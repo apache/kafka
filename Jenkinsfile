@@ -29,7 +29,7 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def doTest(env, target = "test") {
+def doTest(env, target = ":core:test") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
@@ -114,6 +114,15 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
             tryStreamsArchetype()
           }
         }
@@ -133,6 +142,15 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
         }
@@ -151,6 +169,15 @@ pipeline {
           }
           steps {
             doValidation()
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
           }
