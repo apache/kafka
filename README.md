@@ -87,14 +87,25 @@ fail due to code changes. You can just run:
 
 ### Running a Kafka broker in KRaft mode
 
+Using compiled files:
+
     KAFKA_CLUSTER_ID="$(./bin/kafka-storage.sh random-uuid)"
     ./bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties
     ./bin/kafka-server-start.sh config/kraft/server.properties
 
+Using docker image:
+
+    docker run -p 9092:9092 apache/kafka:3.7.0
+    
+
 ### Running a Kafka broker in ZooKeeper mode
+
+Using compiled files:
 
     ./bin/zookeeper-server-start.sh config/zookeeper.properties
     ./bin/kafka-server-start.sh config/server.properties
+
+>Since ZooKeeper is planned to be removed in Apache Kafka 4.0, the docker image only support running in KRaft mode
 
 ### Cleaning the build ###
     ./gradlew clean
@@ -285,15 +296,6 @@ See [tests/README.md](tests/README.md).
 
 See [vagrant/README.md](vagrant/README.md).
 
-### Running in Docker ###
-You could use the official docker image to run Kafka in Docker. It is available at [Docker Hub](https://hub.docker.com/r/apache/kafka).
-
-For example, to start a single-node Kafka, you can run the following command: 
-
-     docker compose -f docker/examples/jvm/single-node/plaintext/docker-compose.yml up
-
-
-For the detail, see [docker/examples/README.md](docker/examples/README.md).
 
 ### Contribution ###
 
