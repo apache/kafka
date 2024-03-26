@@ -132,7 +132,7 @@ public class ImageDowngradeTest {
      * Test downgrading to a MetadataVersion that doesn't support ZK migration.
      */
     @Test
-    public void testPreZkMigrationSupportVersion() throws Throwable {
+    public void testPreZkMigrationSupportVersion() {
         writeWithExpectedLosses(MetadataVersion.IBP_3_3_IV3,
             Arrays.asList(
                 "the isMigratingZkBroker state of one or more brokers"),

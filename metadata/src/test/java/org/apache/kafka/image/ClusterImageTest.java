@@ -264,6 +264,7 @@ public class ClusterImageTest {
         testToImage(IMAGE2);
     }
 
+    @Test
     public void testApplyDelta2() {
         assertEquals(IMAGE3, DELTA2.apply());
         // check image2 + delta2 = image3, since records for image2 + delta2 might differ from records from image3
