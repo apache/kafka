@@ -306,7 +306,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                     "requestBuilder=" + requestBuilder +
                     ", handler=" + handler +
                     ", node=" + node +
-                    ", timer=" + timer +
+                    ", timer=" + timer.remainingMs() +
                     '}';
         }
     }
