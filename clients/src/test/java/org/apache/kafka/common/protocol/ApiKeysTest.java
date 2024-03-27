@@ -61,13 +61,16 @@ public class ApiKeysTest {
     @Test
     public void testResponseThrottleTime() {
         Set<ApiKeys> authenticationKeys = EnumSet.of(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE);
+        Set<ApiKeys> shareGroupStateKeys = EnumSet.of(ApiKeys.INITIALIZE_SHARE_GROUP_STATE,
+                ApiKeys.READ_SHARE_GROUP_STATE, ApiKeys.WRITE_SHARE_GROUP_STATE,
+                ApiKeys.DELETE_SHARE_GROUP_STATE, ApiKeys.READ_SHARE_GROUP_OFFSETS_STATE);
         // Newer protocol apis include throttle time ms even for cluster actions
         Set<ApiKeys> clusterActionsWithThrottleTimeMs = EnumSet.of(ApiKeys.ALTER_PARTITION, ApiKeys.ALLOCATE_PRODUCER_IDS, ApiKeys.UPDATE_FEATURES);
         for (ApiKeys apiKey: ApiKeys.clientApis()) {
             Schema responseSchema = apiKey.messageType.responseSchemas()[apiKey.latestVersion()];
             BoundField throttleTimeField = responseSchema.get("throttle_time_ms");
             if ((apiKey.clusterAction && !clusterActionsWithThrottleTimeMs.contains(apiKey))
-                || authenticationKeys.contains(apiKey))
+                || authenticationKeys.contains(apiKey) || shareGroupStateKeys.contains(apiKey))
                 assertNull(throttleTimeField, "Unexpected throttle time field: " + apiKey);
             else
                 assertNotNull(throttleTimeField, "Throttle time field missing: " + apiKey);
