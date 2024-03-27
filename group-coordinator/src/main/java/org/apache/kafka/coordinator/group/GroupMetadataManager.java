@@ -790,7 +790,7 @@ public class GroupMetadataManager {
         ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, classicGroup.groupId(), metrics);
         classicGroup.convertToConsumerGroup(consumerGroup, records, metadataImage.topics());
 
-        // If the group is rejoining, the subscription will not be changes so we need to manually trigger a rebalance.
+        // Manually trigger a rebalance.
         if (classicGroup.isInState(PREPARING_REBALANCE) || classicGroup.isInState(COMPLETING_REBALANCE)) {
             consumerGroup.setGroupEpoch(classicGroup.generationId() + 1);
             records.add(RecordHelpers.newGroupEpochRecord(classicGroup.groupId(), classicGroup.generationId() + 1));

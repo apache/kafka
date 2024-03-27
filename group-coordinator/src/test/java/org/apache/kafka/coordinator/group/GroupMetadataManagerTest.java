@@ -9680,7 +9680,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testNewConsumerGroupHeartbeatWithRebalancingClassicGroup() throws Exception {
+    public void testConsumerGroupHeartbeatWithRebalancingClassicGroup() throws Exception {
         String groupId = "group-id";
         String memberId1 = "member-id-1";
         String memberId2 = "member-id-2";
