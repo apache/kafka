@@ -31,7 +31,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
     new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
@@ -42,7 +42,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
   }
 
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
@@ -51,7 +51,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
   }
 
   @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
