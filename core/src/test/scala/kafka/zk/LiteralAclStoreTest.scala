@@ -18,10 +18,10 @@
 package kafka.zk
 
 import java.nio.charset.StandardCharsets.UTF_8
-import kafka.security.authorizer.AclEntry
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
+import org.apache.kafka.security.authorizer.AclEntry
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 
@@ -66,7 +66,7 @@ class LiteralAclStoreTest {
   @Test
   def shouldDecodeResourceUsingTwoPartLogic(): Unit = {
     val resource = new ResourcePattern(GROUP, "PREFIXED:this, including the PREFIXED part, is a valid two part group name", LITERAL)
-    val encoded = (resource.resourceType.toString + AclEntry.ResourceSeparator + resource.name).getBytes(UTF_8)
+    val encoded = (resource.resourceType.toString + AclEntry.RESOURCE_SEPARATOR + resource.name).getBytes(UTF_8)
 
     val actual = store.changeStore.decode(encoded)
 

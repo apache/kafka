@@ -18,7 +18,7 @@
 package kafka.zk.migration
 
 import kafka.security.authorizer.AclAuthorizer.{ResourceOrdering, VersionedAcls}
-import kafka.security.authorizer.{AclAuthorizer, AclEntry}
+import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.Logging
 import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk.{KafkaZkClient, ResourceZNode, ZkAclStore, ZkVersion}
@@ -26,6 +26,7 @@ import kafka.zookeeper.{CreateRequest, DeleteRequest, SetDataRequest}
 import org.apache.kafka.common.acl.AccessControlEntry
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.metadata.migration.{AclMigrationClient, MigrationClientException, ZkMigrationLeadershipState}
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.KeeperException.Code
 

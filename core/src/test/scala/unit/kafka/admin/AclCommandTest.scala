@@ -20,7 +20,7 @@ import java.io.File
 import java.util.Properties
 import javax.management.InstanceAlreadyExistsException
 import kafka.admin.AclCommand.AclCommandOptions
-import kafka.security.authorizer.{AclAuthorizer, AclEntry}
+import kafka.security.authorizer.AclAuthorizer
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Exit, LogCaptureAppender, Logging, TestUtils}
 import kafka.server.QuorumTestHarness
@@ -33,6 +33,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{AppInfoParser, SecurityUtils}
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
@@ -246,9 +247,9 @@ class AclCommandTest extends QuorumTestHarness with Logging {
     callMain(cmdArgs ++ cmd :+ "--add")
 
     withAuthorizer() { authorizer =>
-      val writeAcl = new AccessControlEntry(principal.toString, AclEntry.WildcardHost, WRITE, ALLOW)
-      val describeAcl = new AccessControlEntry(principal.toString, AclEntry.WildcardHost, DESCRIBE, ALLOW)
-      val createAcl = new AccessControlEntry(principal.toString, AclEntry.WildcardHost, CREATE, ALLOW)
+      val writeAcl = new AccessControlEntry(principal.toString, AclEntry.WILDCARD_HOST, WRITE, ALLOW)
+      val describeAcl = new AccessControlEntry(principal.toString, AclEntry.WILDCARD_HOST, DESCRIBE, ALLOW)
+      val createAcl = new AccessControlEntry(principal.toString, AclEntry.WILDCARD_HOST, CREATE, ALLOW)
       TestUtils.waitAndVerifyAcls(Set(writeAcl, describeAcl, createAcl), authorizer,
         new ResourcePattern(TOPIC, "Test-", PREFIXED))
     }

@@ -20,7 +20,6 @@ package kafka.server
 import java.lang.{Byte => JByte}
 import java.util.Collections
 import kafka.network.RequestChannel
-import kafka.security.authorizer.AclEntry
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.admin.EndpointType
 import org.apache.kafka.common.acl.AclOperation
@@ -34,6 +33,7 @@ import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 
 import scala.collection.Seq
@@ -60,7 +60,7 @@ class AuthHelper(authorizer: Option[Authorizer]) {
   }
 
   def authorizedOperations(request: RequestChannel.Request, resource: Resource): Int = {
-    val supportedOps = AclEntry.supportedOperations(resource.resourceType).toList
+    val supportedOps = AclEntry.supportedOperations(resource.resourceType).asScala.toList
     val authorizedOps = authorizer match {
       case Some(authZ) =>
         val resourcePattern = new ResourcePattern(resource.resourceType, resource.name, PatternType.LITERAL)

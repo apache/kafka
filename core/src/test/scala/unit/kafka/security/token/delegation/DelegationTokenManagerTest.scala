@@ -21,7 +21,6 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.{Base64, Properties}
 import kafka.security.authorizer.AclAuthorizer
-import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{CreateTokenResult, DelegationTokenManager, DelegationTokenManagerZk, KafkaConfig, QuorumTestHarness}
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
@@ -38,6 +37,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{MockTime, SecurityUtils, Time}
 import org.apache.kafka.network.Session
+import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.config.Defaults
@@ -304,7 +304,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
 
     //get all tokens for multiple owners (owner1, renewer4) and with permission
     createAcl(new AclBinding(new ResourcePattern(DELEGATION_TOKEN, tokenId3, LITERAL),
-      new AccessControlEntry(owner1.toString, WildcardHost, DESCRIBE, ALLOW)))
+      new AccessControlEntry(owner1.toString, WILDCARD_HOST, DESCRIBE, ALLOW)))
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, List(owner1, renewer4))
     assertEquals(3, tokens.size)
 
@@ -319,7 +319,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     //get all tokens for multiple owners (renewer2, renewer3) which are token renewers principals and with permissions
     hostSession = new Session(renewer2, InetAddress.getByName("192.168.1.1"))
     createAcl(new AclBinding(new ResourcePattern(DELEGATION_TOKEN, tokenId2, LITERAL),
-      new AccessControlEntry(renewer2.toString, WildcardHost, DESCRIBE, ALLOW)))
+      new AccessControlEntry(renewer2.toString, WILDCARD_HOST, DESCRIBE, ALLOW)))
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession,  renewer2, List(renewer2, renewer3))
     assertEquals(2, tokens.size)
 

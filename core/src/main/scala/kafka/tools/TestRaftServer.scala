@@ -22,7 +22,6 @@ import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDe
 import joptsimple.{OptionException, OptionSpec}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.{KafkaRaftManager, RaftManager}
-import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, SimpleApiVersionManager}
 import kafka.utils.{CoreUtils, Exit, Logging}
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -37,6 +36,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
+import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
