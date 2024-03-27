@@ -214,7 +214,6 @@ class ProducerIdManagerTest {
 
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
 
-    time.sleep(RetryBackoffMs)
     verifyFailure(manager)
 
     time.sleep(RetryBackoffMs)
