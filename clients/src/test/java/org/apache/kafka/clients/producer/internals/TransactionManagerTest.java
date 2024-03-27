@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
@@ -3512,6 +3513,126 @@ public class TransactionManagerTest {
         retryResult.await();
         runUntil(retryResult::isAcked);
         assertFalse(transactionManager.hasOngoingTransaction());
+    }
+
+    @Test
+    public void testTransactionAbortableExceptionInInitProducerId() {
+        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.TRANSACTION_ABORTABLE, false, producerId, RecordBatch.NO_PRODUCER_EPOCH);
+        runUntil(transactionManager::hasError);
+        assertTrue(initPidResult.isCompleted());
+        assertFalse(initPidResult.isSuccessful());
+        assertThrows(TransactionAbortableException.class, initPidResult::await);
+        assertAbortableError(TransactionAbortableException.class);
+    }
+
+    @Test
+    public void testTransactionAbortableExceptionInAddPartitions() {
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp);
+
+        prepareAddPartitionsToTxn(tp, Errors.TRANSACTION_ABORTABLE);
+        runUntil(transactionManager::hasError);
+        assertTrue(transactionManager.lastError() instanceof TransactionAbortableException);
+
+        assertAbortableError(TransactionAbortableException.class);
+    }
+
+    @Test
+    public void testTransactionAbortableExceptionInFindCoordinator() {
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+                singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
+
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
+        runUntil(() -> !transactionManager.hasPartitionsToAdd());
+
+        prepareFindCoordinatorResponse(Errors.TRANSACTION_ABORTABLE, false, CoordinatorType.GROUP, consumerGroupId);
+        runUntil(transactionManager::hasError);
+        assertTrue(transactionManager.lastError() instanceof TransactionAbortableException);
+
+        runUntil(sendOffsetsResult::isCompleted);
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof TransactionAbortableException);
+
+        assertAbortableError(TransactionAbortableException.class);
+    }
+
+    @Test
+    public void testTransactionAbortableExceptionInEndTxn() throws InterruptedException {
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp0);
+        TransactionalRequestResult commitResult = transactionManager.beginCommit();
+
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+
+        assertFalse(responseFuture.isDone());
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
+        prepareProduceResponse(Errors.NONE, producerId, epoch);
+        prepareEndTxnResponse(Errors.TRANSACTION_ABORTABLE, TransactionResult.COMMIT, producerId, epoch);
+
+        runUntil(commitResult::isCompleted);
+        runUntil(responseFuture::isDone);
+
+        assertThrows(KafkaException.class, commitResult::await);
+        assertFalse(commitResult.isSuccessful());
+        assertTrue(commitResult.isAcked());
+
+        assertAbortableError(TransactionAbortableException.class);
+    }
+
+    @Test
+    public void testTransactionAbortableExceptionInAddOffsetsToTxn() {
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+                singletonMap(tp, new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
+
+        prepareAddOffsetsToTxnResponse(Errors.TRANSACTION_ABORTABLE, consumerGroupId, producerId, epoch);
+        runUntil(transactionManager::hasError);
+        assertTrue(transactionManager.lastError() instanceof TransactionAbortableException);
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof TransactionAbortableException);
+
+        assertAbortableError(TransactionAbortableException.class);
+    }
+
+    @Test
+    public void testTransactionAbortableExceptionInTxnOffsetCommit() {
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+                singletonMap(tp, new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
+
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, singletonMap(tp, Errors.TRANSACTION_ABORTABLE));
+        runUntil(transactionManager::hasError);
+
+        assertTrue(transactionManager.lastError() instanceof TransactionAbortableException);
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof TransactionAbortableException);
+        assertAbortableError(TransactionAbortableException.class);
     }
 
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {

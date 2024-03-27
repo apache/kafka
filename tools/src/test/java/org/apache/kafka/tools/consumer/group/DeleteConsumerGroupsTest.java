@@ -92,7 +92,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
-            () -> service.collectGroupMembers(GROUP, false).v2.get().size() == 1,
+            () -> service.collectGroupMembers(GROUP, false).getValue().get().size() == 1,
             "The group did not initialize as expected."
         );
 
@@ -112,7 +112,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
-            () -> service.collectGroupMembers(GROUP, false).v2.get().size() == 1,
+            () -> service.collectGroupMembers(GROUP, false).getValue().get().size() == 1,
             "The group did not initialize as expected."
         );
 

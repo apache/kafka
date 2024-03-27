@@ -14,35 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools;
+package org.apache.kafka.server.config;
 
-import java.util.Objects;
-
-public final class Tuple2<V1, V2> {
-    public final V1 v1;
-
-    public final V2 v2;
-
-    public Tuple2(V1 v1, V2 v2) {
-        this.v1 = v1;
-        this.v2 = v2;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Tuple2<?, ?> tuple = (Tuple2<?, ?>) o;
-        return Objects.equals(v1, tuple.v1) && Objects.equals(v2, tuple.v2);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(v1, v2);
-    }
-
-    @Override
-    public String toString() {
-        return "Tuple2{v1=" + v1 + ", v2=" + v2 + '}';
-    }
+public class ZooKeeperInternals {
+    /**
+     * This string is used in ZooKeeper in several places to indicate a default entity type.
+     * For example, default user quotas are stored under /config/users/&ltdefault&gt
+     * Note that AdminClient does <b>not</b> use this to indicate a default, nor do records in KRaft mode.
+     * This constant will go away in Apache Kafka 4.0 with the end of ZK mode.
+     */
+    public static final String DEFAULT_STRING = "<default>";
 }

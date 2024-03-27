@@ -25,7 +25,7 @@ import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.config.ConfigEntityName
+import org.apache.kafka.server.config.ZooKeeperInternals
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -93,7 +93,7 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
     }
 
     def verifyConfig(configs: Map[String, String], brokerId: Option[String]): Unit = {
-      val entityConfigs = zkClient.getEntityConfigs("brokers", brokerId.getOrElse(ConfigEntityName.DEFAULT))
+      val entityConfigs = zkClient.getEntityConfigs("brokers", brokerId.getOrElse(ZooKeeperInternals.DEFAULT_STRING))
       assertEquals(configs, entityConfigs.asScala)
     }
 

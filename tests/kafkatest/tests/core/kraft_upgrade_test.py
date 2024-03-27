@@ -23,7 +23,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
 from kafkatest.version import LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, \
-    DEV_BRANCH, KafkaVersion, LATEST_METADATA_VERSION
+    DEV_BRANCH, KafkaVersion, LATEST_STABLE_METADATA_VERSION
 
 #
 # Test upgrading between different KRaft versions.
@@ -71,8 +71,8 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
             self.kafka.start_node(node)
             self.wait_until_rejoin()
             self.logger.info("Successfully restarted broker node %s" % node.account.hostname)
-        self.logger.info("Changing metadata.version to %s" % LATEST_METADATA_VERSION)
-        self.kafka.upgrade_metadata_version(LATEST_METADATA_VERSION)
+        self.logger.info("Changing metadata.version to %s" % LATEST_STABLE_METADATA_VERSION)
+        self.kafka.upgrade_metadata_version(LATEST_STABLE_METADATA_VERSION)
 
     def run_upgrade(self, from_kafka_version):
         """Test upgrade of Kafka broker cluster from various versions to the current version
