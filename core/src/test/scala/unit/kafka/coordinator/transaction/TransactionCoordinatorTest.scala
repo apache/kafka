@@ -283,7 +283,7 @@ class TransactionCoordinatorTest {
 
     coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
     errors.foreach { case (_, error) =>
-      assertEquals(Errors.INVALID_TXN_STATE, error)
+      assertEquals(Errors.TRANSACTION_ABORTABLE, error)
     }
   }
 
@@ -399,7 +399,7 @@ class TransactionCoordinatorTest {
     val extraPartitions = partitions ++ Set(new TopicPartition("topic2", 0))
     
     coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, extraPartitions, verifyPartitionsInTxnCallback)
-    assertEquals(Errors.INVALID_TXN_STATE, errors(new TopicPartition("topic2", 0)))
+    assertEquals(Errors.TRANSACTION_ABORTABLE, errors(new TopicPartition("topic2", 0)))
     assertEquals(Errors.NONE, errors(new TopicPartition("topic1", 0)))
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }

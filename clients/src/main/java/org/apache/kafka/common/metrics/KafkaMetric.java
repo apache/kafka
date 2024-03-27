@@ -26,9 +26,17 @@ public final class KafkaMetric implements Metric {
     private final Object lock;
     private final Time time;
     private final MetricValueProvider<?> metricValueProvider;
-    private MetricConfig config;
+    private volatile MetricConfig config;
 
     // public for testing
+    /**
+     * Create a metric to monitor an object that implements MetricValueProvider.
+     * @param lock The lock used to prevent race condition
+     * @param metricName The name of the metric
+     * @param valueProvider The metric value provider associated with this metric
+     * @param config The configuration of the metric
+     * @param time The time instance to use with the metrics
+     */
     public KafkaMetric(Object lock, MetricName metricName, MetricValueProvider<?> valueProvider,
             MetricConfig config, Time time) {
         this.metricName = metricName;
@@ -40,15 +48,29 @@ public final class KafkaMetric implements Metric {
         this.time = time;
     }
 
+    /**
+     * Get the configuration of this metric.
+     * This is supposed to be used by server only.
+     * @return Return the config of this metric
+     */
     public MetricConfig config() {
         return this.config;
     }
 
+    /**
+     * Get the metric name
+     * @return Return the name of this metric
+     */
     @Override
     public MetricName metricName() {
         return this.metricName;
     }
 
+    /**
+     * Take the metric and return the value, which could be a {@link Measurable} or a {@link Gauge}
+     * @return Return the metric value
+     * @throws IllegalStateException if the underlying metric is not a {@link Measurable} or a {@link Gauge}.
+     */
     @Override
     public Object metricValue() {
         long now = time.milliseconds();
@@ -62,6 +84,11 @@ public final class KafkaMetric implements Metric {
         }
     }
 
+    /**
+     * Get the underlying metric provider, which should be a {@link Measurable}
+     * @return Return the metric provider
+     * @throws IllegalStateException if the underlying metric is not a {@link Measurable}.
+     */
     public Measurable measurable() {
         if (this.metricValueProvider instanceof Measurable)
             return (Measurable) metricValueProvider;
@@ -69,6 +96,11 @@ public final class KafkaMetric implements Metric {
             throw new IllegalStateException("Not a measurable: " + this.metricValueProvider.getClass());
     }
 
+    /**
+     * Take the metric and return the value, where the underlying metric provider should be a {@link Measurable}
+     * @param timeMs The time that this metric is taken
+     * @return Return the metric value if it's measurable, otherwise 0
+     */
     double measurableValue(long timeMs) {
         synchronized (this.lock) {
             if (this.metricValueProvider instanceof Measurable)
@@ -78,6 +110,11 @@ public final class KafkaMetric implements Metric {
         }
     }
 
+    /**
+     * Set the metric config.
+     * This is supposed to be used by server only.
+     * @param config configuration for this metrics
+     */
     public void config(MetricConfig config) {
         synchronized (lock) {
             this.config = config;

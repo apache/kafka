@@ -62,13 +62,13 @@ object StorageTool extends Logging {
           val metadataVersion = getMetadataVersion(namespace,
             Option(config.get.originals.get(KafkaConfig.InterBrokerProtocolVersionProp)).map(_.toString))
           if (!metadataVersion.isKRaftSupported) {
-            throw new TerseFailure(s"Must specify a valid KRaft metadata version of at least 3.0.")
+            throw new TerseFailure(s"Must specify a valid KRaft metadata.version of at least ${MetadataVersion.IBP_3_0_IV0}.")
           }
           if (!metadataVersion.isProduction) {
             if (config.get.unstableMetadataVersionsEnabled) {
-              System.out.println(s"WARNING: using pre-production metadata version $metadataVersion.")
+              System.out.println(s"WARNING: using pre-production metadata.version $metadataVersion.")
             } else {
-              throw new TerseFailure(s"Metadata version $metadataVersion is not ready for production use yet.")
+              throw new TerseFailure(s"The metadata.version $metadataVersion is not ready for production use yet.")
             }
           }
           val metaProperties = new MetaProperties.Builder().
@@ -79,7 +79,7 @@ object StorageTool extends Logging {
           val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
           getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
             if (!metadataVersion.isScramSupported) {
-              throw new TerseFailure(s"SCRAM is only supported in metadataVersion IBP_3_5_IV2 or later.")
+              throw new TerseFailure(s"SCRAM is only supported in metadata.version ${MetadataVersion.IBP_3_5_IV2} or later.")
             }
             for (record <- userScramCredentialRecords) {
               metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
@@ -139,7 +139,7 @@ object StorageTool extends Logging {
       action(storeTrue())
     formatParser.addArgument("--release-version", "-r").
       action(store()).
-      help(s"A KRaft release version to use for the initial metadata version. The minimum is 3.0, the default is ${MetadataVersion.LATEST_PRODUCTION.version()}")
+      help(s"A KRaft release version to use for the initial metadata.version. The minimum is ${MetadataVersion.IBP_3_0_IV0}, the default is ${MetadataVersion.LATEST_PRODUCTION}")
 
     parser.parseArgsOrFail(args)
   }

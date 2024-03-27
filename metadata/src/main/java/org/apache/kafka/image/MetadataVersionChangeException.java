@@ -26,7 +26,7 @@ public final class MetadataVersionChangeException extends RuntimeException {
     private final MetadataVersionChange change;
 
     public MetadataVersionChangeException(MetadataVersionChange change) {
-        super("The metadata version is changing from " + change.oldVersion() + " to " +
+        super("The metadata.version is changing from " + change.oldVersion() + " to " +
                 change.newVersion());
         this.change = change;
     }

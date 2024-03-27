@@ -205,7 +205,7 @@ class ControllerRegistrationManager(
       debug("maybeSendControllerRegistration: cannot register yet because the channel manager has " +
           "not been initialized.")
     } else if (!metadataVersion.isControllerRegistrationSupported) {
-      info("maybeSendControllerRegistration: cannot register yet because the metadata version is " +
+      info("maybeSendControllerRegistration: cannot register yet because the metadata.version is " +
           s"still $metadataVersion, which does not support KIP-919 controller registration.")
     } else if (pendingRpc) {
       info("maybeSendControllerRegistration: waiting for the previous RPC to complete.")
