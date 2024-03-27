@@ -77,6 +77,8 @@ public final class ServerTopicConfigSynonyms {
         singleWithLogCleanerPrefix(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "min.cleanable.ratio"),
         sameNameWithLogPrefix(TopicConfig.CLEANUP_POLICY_CONFIG),
         sameName(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG),
+        sameName(TopicConfig.UNCLEAN_RECOVERY_STRATEGY_CONFIG),
+        sameName(TopicConfig.UNCLEAN_RECOVERY_MANAGER_ENABLED_CONFIG),
         sameName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG),
         sameName(TopicConfig.COMPRESSION_TYPE_CONFIG),
         sameNameWithLogPrefix(TopicConfig.PREALLOCATE_CONFIG),

@@ -658,6 +658,56 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testUncleanRecoveryStrategyDefault(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    val serverConfig = KafkaConfig.fromProps(props)
+
+    assertEquals(serverConfig.uncleanRecoveryStrategy, 1)
+  }
+
+  @Test
+  def testUncleanRecoveryManagerDefault(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    val serverConfig = KafkaConfig.fromProps(props)
+
+    assertEquals(serverConfig.uncleanRecoveryManagerEnabled, false)
+  }
+
+  @Test
+  def testUncleanRecoveryStrategy(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.setProperty(KafkaConfig.UncleanRecoveryStrategyProp, String.valueOf(1))
+    val serverConfig = KafkaConfig.fromProps(props)
+
+    assertEquals(serverConfig.uncleanRecoveryStrategy, 1)
+  }
+
+  @Test
+  def testUncleanRecoveryStrategyInvalid(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.setProperty(KafkaConfig.UncleanRecoveryStrategyProp, "invalid")
+
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testUncleanRecoveryManagerEnabled(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.setProperty(KafkaConfig.UncleanRecoveryManagerEnabledProp, String.valueOf(true))
+    val serverConfig = KafkaConfig.fromProps(props)
+
+    assertEquals(serverConfig.uncleanRecoveryManagerEnabled, true)
+  }
+
+  @Test
+  def testUncleanRecoveryManagerInvalid(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.setProperty(KafkaConfig.UncleanRecoveryManagerEnabledProp, "invalid")
+
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
   def testLogRollTimeMsProvided(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.setProperty(KafkaConfig.LogRollTimeMillisProp, "1800000")

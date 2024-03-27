@@ -164,6 +164,8 @@ public class ReplicationControlManager {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private FeatureControlManager featureControl = null;
         private boolean eligibleLeaderReplicasEnabled = false;
+        private int uncleanRecoveryStrategy = 0;
+        private boolean uncleanRecoveryManagerEnabled = false;
 
         Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
             this.snapshotRegistry = snapshotRegistry;
@@ -192,6 +194,16 @@ public class ReplicationControlManager {
 
         Builder setEligibleLeaderReplicasEnabled(boolean eligibleLeaderReplicasEnabled) {
             this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
+            return this;
+        }
+
+        Builder setUncleanRecoveryStrategy(int uncleanRecoveryStrategy) {
+            this.uncleanRecoveryStrategy = uncleanRecoveryStrategy;
+            return this;
+        }
+
+        Builder setUncleanRecoveryManagerEnabled(boolean uncleanRecoveryManagerEnabled) {
+            this.uncleanRecoveryManagerEnabled = uncleanRecoveryManagerEnabled;
             return this;
         }
 
@@ -238,6 +250,8 @@ public class ReplicationControlManager {
                 defaultMinIsr,
                 maxElectionsPerImbalance,
                 eligibleLeaderReplicasEnabled,
+                uncleanRecoveryStrategy,
+                uncleanRecoveryManagerEnabled,
                 configurationControl,
                 clusterControl,
                 createTopicPolicy,
@@ -318,6 +332,10 @@ public class ReplicationControlManager {
      * True if eligible leader replicas is enabled.
      */
     private final boolean eligibleLeaderReplicasEnabled;
+
+    private final int uncleanRecoveryStrategy;
+
+    private final boolean uncleanRecoveryManagerEnabled;
 
     /**
      * Maximum number of leader elections to perform during one partition leader balancing operation.
@@ -404,6 +422,8 @@ public class ReplicationControlManager {
         int defaultMinIsr,
         int maxElectionsPerImbalance,
         boolean eligibleLeaderReplicasEnabled,
+        int uncleanRecoveryStrategy,
+        boolean uncleanRecoveryManagerEnabled,
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         Optional<CreateTopicPolicy> createTopicPolicy,
@@ -416,6 +436,8 @@ public class ReplicationControlManager {
         this.defaultMinIsr = defaultMinIsr;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
         this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
+        this.uncleanRecoveryStrategy = uncleanRecoveryStrategy;
+        this.uncleanRecoveryManagerEnabled = uncleanRecoveryManagerEnabled;
         this.configurationControl = configurationControl;
         this.createTopicPolicy = createTopicPolicy;
         this.featureControl = featureControl;

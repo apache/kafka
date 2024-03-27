@@ -171,6 +171,8 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_MAX_COMPACTION_LAG_MS = Long.MAX_VALUE;
     public static final double DEFAULT_MIN_CLEANABLE_DIRTY_RATIO = 0.5;
     public static final boolean DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE = false;
+    public static final int DEFAULT_UNCLEAN_RECOVERY_STRATEGY = 1;
+    public static boolean DEFAULT_UNCLEAN_RECOVERY_MANAGER_ENABLED = false;
     public static final int DEFAULT_MIN_IN_SYNC_REPLICAS = 1;
     public static final String DEFAULT_COMPRESSION_TYPE = BrokerCompressionType.PRODUCER.name;
     public static final boolean DEFAULT_PREALLOCATE = false;
@@ -264,6 +266,10 @@ public class LogConfig extends AbstractConfig {
                 TopicConfig.CLEANUP_POLICY_DELETE), MEDIUM, TopicConfig.CLEANUP_POLICY_DOC)
             .define(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE,
                 MEDIUM, TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
+            .define(TopicConfig.UNCLEAN_RECOVERY_STRATEGY_CONFIG, INT, DEFAULT_UNCLEAN_RECOVERY_STRATEGY,
+                    MEDIUM, TopicConfig.UNCLEAN_RECOVERY_STRATEGY_DOC)
+            .define(TopicConfig.UNCLEAN_RECOVERY_MANAGER_ENABLED_CONFIG, BOOLEAN, DEFAULT_UNCLEAN_RECOVERY_MANAGER_ENABLED,
+                    MEDIUM, TopicConfig.UNCLEAN_RECOVERY_MANAGER_ENABLED_DOC)
             .define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, INT, DEFAULT_MIN_IN_SYNC_REPLICAS, atLeast(1), MEDIUM,
                 TopicConfig.MIN_IN_SYNC_REPLICAS_DOC)
             .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names().toArray(new String[0])),
@@ -316,6 +322,8 @@ public class LogConfig extends AbstractConfig {
     public final boolean compact;
     public final boolean delete;
     public final boolean uncleanLeaderElectionEnable;
+    public final int uncleanRecoveryStategy;
+    public final boolean uncleanRecoveryManagerEnabled;
     public final int minInSyncReplicas;
     public final String compressionType;
     public final boolean preallocate;
@@ -373,6 +381,8 @@ public class LogConfig extends AbstractConfig {
             .collect(Collectors.toList())
             .contains(TopicConfig.CLEANUP_POLICY_DELETE);
         this.uncleanLeaderElectionEnable = getBoolean(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
+        this.uncleanRecoveryStategy = getInt(TopicConfig.UNCLEAN_RECOVERY_STRATEGY_CONFIG);
+        this.uncleanRecoveryManagerEnabled = getBoolean(TopicConfig.UNCLEAN_RECOVERY_MANAGER_ENABLED_CONFIG);
         this.minInSyncReplicas = getInt(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
         this.compressionType = getString(TopicConfig.COMPRESSION_TYPE_CONFIG).toLowerCase(Locale.ROOT);
         this.preallocate = getBoolean(TopicConfig.PREALLOCATE_CONFIG);
@@ -654,6 +664,8 @@ public class LogConfig extends AbstractConfig {
                 ", compact=" + compact +
                 ", delete=" + delete +
                 ", uncleanLeaderElectionEnable=" + uncleanLeaderElectionEnable +
+                ", uncleanRecoveryStrategy=" + uncleanRecoveryStategy +
+                ", uncleanRecoveryManagerEnabled" + uncleanRecoveryManagerEnabled +
                 ", minInSyncReplicas=" + minInSyncReplicas +
                 ", compressionType='" + compressionType + '\'' +
                 ", preallocate=" + preallocate +

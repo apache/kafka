@@ -111,6 +111,13 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     if (Try(topicConfig.getProperty(KafkaConfig.UncleanLeaderElectionEnableProp).toBoolean).getOrElse(false)) {
       kafkaController.foreach(_.enableTopicUncleanLeaderElection(topic))
     }
+
+    if(Try(topicConfig.getProperty(KafkaConfig.UncleanRecoveryManagerEnabledProp).toBoolean).getOrElse(false)) {
+      kafkaController.foreach(_.enabledTopicUncleanRecoveryManager(topic))
+    }
+
+    kafkaController.foreach(_.enableTopicUncleanRecoveryStrategy(topic))
+
   }
 
   def parseThrottledPartitions(topicConfig: Properties, brokerId: Int, prop: String): Seq[Int] = {

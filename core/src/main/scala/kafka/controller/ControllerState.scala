@@ -114,9 +114,26 @@ object ControllerState {
     def value = 17
   }
 
+  case object UncleanRecoveryStrategy extends ControllerState {
+    def value = 18
+  }
+
+  case object TopicUncleanRecoveryStrategy extends ControllerState {
+    def value = 19
+  }
+
+  case object UncleanRecoveryManagerEnabled extends ControllerState {
+    def value = 20
+  }
+
+  case object TopicUncleanRecoveryManagerEnabled extends ControllerState {
+    def value = 21
+  }
+
   val values: Seq[ControllerState] = Seq(Idle, ControllerChange, BrokerChange, TopicChange, TopicDeletion,
     AlterPartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange,
     LeaderAndIsrResponseReceived, LogDirChange, ControllerShutdown, UncleanLeaderElectionEnable,
     TopicUncleanLeaderElectionEnable, ListPartitionReassignment, UpdateMetadataResponseReceived,
-    UpdateFeatures)
+    UpdateFeatures, UncleanRecoveryStrategy, TopicUncleanRecoveryStrategy, UncleanRecoveryManagerEnabled,
+    TopicUncleanRecoveryManagerEnabled)
 }

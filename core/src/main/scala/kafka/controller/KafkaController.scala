@@ -265,6 +265,26 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
+  private[kafka] def enableUncleanRecoveryStartegy() : Unit = {
+    eventManager.put(UncleanRecoveryStrategy)
+  }
+
+  private[kafka] def enableTopicUncleanRecoveryStrategy(topic: String) : Unit = {
+    if(isActive) {
+      eventManager.put(TopicUncleanRecoveryStrategy(topic))
+    }
+  }
+
+  private[kafka] def enableUncleanRecoveryManager() : Unit = {
+    eventManager.put(UncleanRecoveryManagerEnabled)
+  }
+
+  private[kafka] def enabledTopicUncleanRecoveryManager(topic: String) : Unit = {
+    if(isActive) {
+      eventManager.put(TopicUncleanRecoveryManagerEnabled(topic))
+    }
+  }
+
   def isTopicQueuedForDeletion(topic: String): Boolean = {
     topicDeletionManager.isTopicQueuedUpForDeletion(topic)
   }
@@ -1355,6 +1375,30 @@ class KafkaController(val config: KafkaConfig,
   private def processControlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit): Unit = {
     val controlledShutdownResult = Try { doControlledShutdown(id, brokerEpoch) }
     controlledShutdownCallback(controlledShutdownResult)
+  }
+
+  private def processUncleanRecoveryStrategy(): Unit = {
+    if (!isActive) return
+    info("Unclean recovery strategy has been enabled")
+    partitionStateMachine.triggerOnlinePartitionStateChange()
+  }
+
+  private def processTopicUncleanRecoveryStrategy(topic: String): Unit = {
+    if(!isActive) return
+    info(s"Unclean recovery strategy has been enabled for topic $topic")
+    partitionStateMachine.triggerOnlinePartitionStateChange(topic)
+  }
+
+  private def processUncleanRecoveryManagerEnabled(): Unit = {
+    if (!isActive) return
+    info("Unclean recovery manager has been enabled by default")
+    partitionStateMachine.triggerOnlinePartitionStateChange()
+  }
+
+  private def processTopicUncleanRecoveryManagerEnabled(topic :String): Unit = {
+    if (!isActive) return
+    info(s"Unclean recovery manager has been enabled for topic $topic")
+    partitionStateMachine.triggerOnlinePartitionStateChange(topic)
   }
 
   private def doControlledShutdown(id: Int, brokerEpoch: Long): Set[TopicPartition] = {
@@ -2608,6 +2652,14 @@ class KafkaController(val config: KafkaConfig,
           processUncleanLeaderElectionEnable()
         case TopicUncleanLeaderElectionEnable(topic) =>
           processTopicUncleanLeaderElectionEnable(topic)
+        case UncleanRecoveryStrategy =>
+          processUncleanRecoveryStrategy()
+        case TopicUncleanRecoveryStrategy(topic) =>
+          processTopicUncleanRecoveryStrategy(topic)
+        case UncleanRecoveryManagerEnabled =>
+          processUncleanRecoveryManagerEnabled()
+        case TopicUncleanRecoveryManagerEnabled(topic) =>
+          processTopicUncleanRecoveryManagerEnabled(topic)
         case ControlledShutdown(id, brokerEpoch, callback) =>
           processControlledShutdown(id, brokerEpoch, callback)
         case LeaderAndIsrResponseReceived(response, brokerId) =>
@@ -2836,6 +2888,26 @@ case object UncleanLeaderElectionEnable extends ControllerEvent {
 
 case class TopicUncleanLeaderElectionEnable(topic: String) extends ControllerEvent {
   override def state: ControllerState = ControllerState.TopicUncleanLeaderElectionEnable
+  override def preempt(): Unit = {}
+}
+
+case object UncleanRecoveryStrategy extends ControllerEvent {
+  override def state: ControllerState = ControllerState.UncleanRecoveryStrategy
+  override def preempt(): Unit = {}
+}
+
+case class TopicUncleanRecoveryStrategy(topic: String) extends ControllerEvent {
+  override def state: ControllerState = ControllerState.TopicUncleanRecoveryStrategy
+  override def preempt(): Unit = {}
+}
+
+case object UncleanRecoveryManagerEnabled extends ControllerEvent {
+  override def state: ControllerState = ControllerState.UncleanRecoveryManagerEnabled
+  override def preempt(): Unit = {}
+}
+
+case class TopicUncleanRecoveryManagerEnabled(topic: String) extends ControllerEvent {
+  override def state: ControllerState = ControllerState.TopicUncleanRecoveryManagerEnabled
   override def preempt(): Unit = {}
 }
 

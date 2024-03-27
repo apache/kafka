@@ -129,6 +129,37 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
+  def testUncleanRecoveryStrategy(): Unit = {
+    val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    origProps.put(KafkaConfig.UncleanRecoveryStrategyProp, "1")
+
+    val config = KafkaConfig(origProps)
+    val serverMock = Mockito.mock(classOf[KafkaServer])
+    val controllerMock = Mockito.mock(classOf[KafkaController])
+    val logManagerMock = Mockito.mock(classOf[LogManager])
+
+    Mockito.when(serverMock.config).thenReturn(config)
+    Mockito.when(serverMock.kafkaController).thenReturn(controllerMock)
+    Mockito.when(serverMock.logManager).thenReturn(logManagerMock)
+    Mockito.when(logManagerMock.allLogs).thenReturn(Iterable.empty)
+
+    val currentDefaultLogConfig = new AtomicReference(new LogConfig(new Properties))
+    Mockito.when(logManagerMock.currentDefaultConfig).thenAnswer(_ => currentDefaultLogConfig.get())
+    Mockito.when(logManagerMock.reconfigureDefaultLogConfig(ArgumentMatchers.any(classOf[LogConfig])))
+      .thenAnswer(invocation => currentDefaultLogConfig.set(invocation.getArgument(0)))
+
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(new DynamicLogConfig(logManagerMock, serverMock))
+
+    val props = new Properties()
+
+    props.put(KafkaConfig.UncleanRecoveryStrategyProp, "0")
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(config.uncleanRecoveryStrategy, 0)
+    Mockito.verify(controllerMock).enableUncleanRecoveryStartegy()
+  }
+
+  @Test
   def testUpdateDynamicThreadPool(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     origProps.put(KafkaConfig.NumIoThreadsProp, "4")

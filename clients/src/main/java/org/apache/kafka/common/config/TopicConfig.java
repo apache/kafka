@@ -156,6 +156,15 @@ public class TopicConfig {
         "not in the ISR set to be elected as leader as a last resort, even though doing so may result in data " +
         "loss.";
 
+    public static final String UNCLEAN_RECOVERY_STRATEGY_CONFIG = "unclean.recovery.strategy";
+    public static final String UNCLEAN_RECOVERY_STRATEGY_DOC = "Indicates which strategy to use for unclean leader " +
+            "elections for the unclean recovery manager. Possible options are none(0), balanced(1), and aggresive(2)";
+
+    public static final String UNCLEAN_RECOVERY_MANAGER_ENABLED_CONFIG = "unclean.recovery.manager.enabled";
+
+    public static final String UNCLEAN_RECOVERY_MANAGER_ENABLED_DOC = "Indicates if unclean recovery manager is " +
+            "enabled. If it is not then we will revert to the old method of unclean leader election of manual selection";
+
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = "min.insync.replicas";
     public static final String MIN_IN_SYNC_REPLICAS_DOC = "When a producer sets acks to \"all\" (or \"-1\"), " +
         "this configuration specifies the minimum number of replicas that must acknowledge " +

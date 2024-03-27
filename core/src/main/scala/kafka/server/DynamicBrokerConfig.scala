@@ -739,6 +739,8 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     val originalLogConfig = logManager.currentDefaultConfig
     val originalUncleanLeaderElectionEnable = originalLogConfig.uncleanLeaderElectionEnable
+    val origUncleanRecoveryStrategy = logManager.currentDefaultConfig.uncleanRecoveryStategy
+    val origUncleanRecoveryManagerEnabled = logManager.currentDefaultConfig.uncleanRecoveryManagerEnabled
     val newBrokerDefaults = new util.HashMap[String, Object](originalLogConfig.originals)
     newConfig.valuesFromThisConfig.forEach { (k, v) =>
       if (DynamicLogConfig.ReconfigurableConfigs.contains(k)) {
@@ -759,6 +761,20 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
       server match {
         case kafkaServer: KafkaServer => kafkaServer.kafkaController.enableDefaultUncleanLeaderElection()
         case _ =>
+      }
+    }
+
+    if (logManager.currentDefaultConfig.uncleanRecoveryStategy != origUncleanRecoveryStrategy) {
+      server match {
+        case kafkaServer: KafkaServer => kafkaServer.kafkaController.enableUncleanRecoveryStartegy()
+        case _ => // TODO: implement dynamic reconfiguration of unclean recovery strategy for self-managed brokers
+      }
+    }
+
+    if (logManager.currentDefaultConfig.uncleanRecoveryManagerEnabled && !origUncleanRecoveryManagerEnabled) {
+      server match {
+        case kafkaServer: KafkaServer => kafkaServer.kafkaController.enableUncleanRecoveryManager()
+        case _ => // TODO: implement dynamic reconfiguration of unclean recovery manager for self-managed brokers
       }
     }
   }
