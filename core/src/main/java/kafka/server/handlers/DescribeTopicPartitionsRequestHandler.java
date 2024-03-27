@@ -82,6 +82,11 @@ public class DescribeTopicPartitionsRequestHandler {
             }
         }
 
+        if (cursor != null && cursor.partitionIndex() < 0) {
+            // The partition id in cursor must be valid.
+            throw new InvalidRequestException("DescribeTopicPartitionsRequest cursor partition must be valid: " + cursor);
+        }
+
         // Do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
         Set<DescribeTopicPartitionsResponseTopic> unauthorizedForDescribeTopicMetadata = new HashSet<>();
 
@@ -101,7 +106,7 @@ public class DescribeTopicPartitionsRequestHandler {
             JavaConverters.asScalaIterator(authorizedTopicsStream.iterator()),
             abstractRequest.context().listenerName,
             (String topicName) -> topicName.equals(cursorTopicName) ? cursor.partitionIndex() : 0,
-            Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()),
+            Math.max(Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()), 1),
             fetchAllTopics
         );
 
