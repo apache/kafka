@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.errors;
 
-public class AbortableTransactionException extends ApiException {
-    public AbortableTransactionException(String message) {
+public class TransactionAbortableException extends ApiException {
+    public TransactionAbortableException(String message) {
         super(message);
     }
 }
