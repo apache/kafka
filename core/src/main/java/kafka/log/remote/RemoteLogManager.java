@@ -1277,6 +1277,8 @@ public class RemoteLogManager implements Closeable {
      * does not contain any messages/records associated with them.
      *
      * For ex:
+     * <pre>
+     * {@code
      *  <epoch - start offset>
      *  0 - 0
      *  1 - 10
@@ -1286,8 +1288,12 @@ public class RemoteLogManager implements Closeable {
      *  5 - 60  // epoch 5 does not have records or messages associated with it
      *  6 - 60
      *  7 - 70
+     * }
+     * </pre>
      *
      *  When the above leaderEpochMap is passed to this method, it returns the following map:
+     * <pre>
+     * {@code
      *  <epoch - start offset>
      *  0 - 0
      *  1 - 10
@@ -1296,6 +1302,8 @@ public class RemoteLogManager implements Closeable {
      *  4 - 40
      *  6 - 60
      *  7 - 70
+     * }
+     * </pre>
      *
      * @param leaderEpochs The leader epoch map to be refined.
      */
