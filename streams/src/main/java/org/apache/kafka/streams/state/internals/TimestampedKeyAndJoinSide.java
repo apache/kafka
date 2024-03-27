@@ -33,28 +33,28 @@ import java.util.Objects;
 public class TimestampedKeyAndJoinSide<K> {
     private final K key;
     private final long timestamp;
-    private final boolean leftSide;
+    private final JoinSide joinSide;
 
-    private TimestampedKeyAndJoinSide(final boolean leftSide, final K key, final long timestamp) {
+    private TimestampedKeyAndJoinSide(final JoinSide joinSide, final K key, final long timestamp) {
         this.key = Objects.requireNonNull(key, "key cannot be null");
-        this.leftSide = leftSide;
+        this.joinSide = joinSide;
         this.timestamp = timestamp;
     }
 
     /**
-     * Create a new {@link TimestampedKeyAndJoinSide} instance if the provide {@code key} is not {@code null}.
+     * Create a new {@link TimestampedKeyAndJoinSide} instance if the provided {@code key} is not {@code null}.
      *
-     * @param leftSide True if the key is part of the left join side; False if it is from the right join side
+     * @param joinSide Whether the key is part of the {@link JoinSide#LEFT} side; or it is from the {@link JoinSide#RIGHT} side
      * @param key      the key
      * @param <K>      the type of the key
-     * @return a new {@link TimestampedKeyAndJoinSide} instance if the provide {@code key} is not {@code null}
+     * @return a new {@link TimestampedKeyAndJoinSide} instance if the provided {@code key} is not {@code null}
      */
-    public static <K> TimestampedKeyAndJoinSide<K> make(final boolean leftSide, final K key, final long timestamp) {
-        return new TimestampedKeyAndJoinSide<>(leftSide, key, timestamp);
+    public static <K> TimestampedKeyAndJoinSide<K> make(final JoinSide joinSide, final K key, final long timestamp) {
+        return new TimestampedKeyAndJoinSide<>(joinSide, key, timestamp);
     }
 
-    public boolean isLeftSide() {
-        return leftSide;
+    public JoinSide getJoinSide() {
+        return joinSide;
     }
 
     public K getKey() {
@@ -67,7 +67,7 @@ public class TimestampedKeyAndJoinSide<K> {
 
     @Override
     public String toString() {
-        final String joinSide = leftSide ? "left" : "right";
+        final String joinSide = this.joinSide.toString();
         return "<" + joinSide + "," + key + ":" + timestamp + ">";
     }
 
@@ -80,13 +80,13 @@ public class TimestampedKeyAndJoinSide<K> {
             return false;
         }
         final TimestampedKeyAndJoinSide<?> that = (TimestampedKeyAndJoinSide<?>) o;
-        return leftSide == that.leftSide &&
+        return joinSide == that.joinSide &&
             Objects.equals(key, that.key) &&
             timestamp == that.timestamp;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(leftSide, key, timestamp);
+        return Objects.hash(joinSide, key, timestamp);
     }
 }

@@ -46,6 +46,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.JoinSide;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueBytesStoreSupplier;
@@ -457,7 +458,7 @@ public class KStreamKStreamJoinTest {
          */
         final KStreamImplJoin.TimeTrackerSupplier tracker = new KStreamImplJoin.TimeTrackerSupplier();
         final KStreamKStreamJoin<String, String, String, String> join = new KStreamKStreamJoin<>(
-                false,
+                JoinSide.RIGHT,
                 "other",
                 new JoinWindowsInternal(JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(1000))),
                 (key, v1, v2) -> v1 + v2,

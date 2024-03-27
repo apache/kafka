@@ -55,7 +55,7 @@ public class TimestampedKeyAndJoinSideSerializer<K> implements WrappingNullableS
 
     @Override
     public byte[] serialize(final String topic, final TimestampedKeyAndJoinSide<K> data) {
-        final byte boolByte = (byte) (data.isLeftSide() ? 1 : 0);
+        final byte boolByte = (byte) (data.getJoinSide().isLeftSide() ? 1 : 0);
         final byte[] keyBytes = keySerializer.serialize(topic, data.getKey());
         final byte[] timestampBytes = timestampSerializer.serialize(topic, data.getTimestamp());
 
