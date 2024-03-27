@@ -114,6 +114,8 @@ ext {
   repo = file("$rootDir/.git").isDirectory() ? Grgit.open(currentDir: project.getRootDir()) : null
 
   commitId = determineCommitId()
+
+  junitExtensionsAutodetectionEnabled = "junit.jupiter.extensions.autodetection.enabled"
 }
 
 allprojects {
@@ -438,6 +440,7 @@ subprojects {
       displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+    systemProperty(junitExtensionsAutodetectionEnabled, true)
 
     exclude testsToExclude
 
@@ -466,6 +469,7 @@ subprojects {
       displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+    systemProperty(junitExtensionsAutodetectionEnabled, true)
 
     exclude testsToExclude
 
@@ -509,6 +513,7 @@ subprojects {
       displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+    systemProperty(junitExtensionsAutodetectionEnabled, true)
 
     exclude testsToExclude
 
