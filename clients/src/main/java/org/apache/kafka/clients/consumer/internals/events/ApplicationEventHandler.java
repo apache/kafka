@@ -51,14 +51,16 @@ public class ApplicationEventHandler implements Closeable {
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                    final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                   final Supplier<RequestManagers> requestManagersSupplier) {
+                                   final Supplier<RequestManagers> requestManagersSupplier,
+                                   final BackgroundEventHandler backgroundEventHandler) {
         this.log = logContext.logger(ApplicationEventHandler.class);
         this.applicationEventQueue = applicationEventQueue;
         this.networkThread = new ConsumerNetworkThread(logContext,
                 time,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
-                requestManagersSupplier);
+                requestManagersSupplier,
+                backgroundEventHandler);
         this.networkThread.start();
     }
 

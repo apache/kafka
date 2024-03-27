@@ -20,6 +20,8 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -60,18 +62,21 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private final IdempotentCloser closer = new IdempotentCloser();
     private volatile Duration closeTimeout = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
     private volatile long cachedMaximumTimeToWait = MAX_POLL_TIMEOUT_MS;
+    private final BackgroundEventHandler backgroundEventHandler;
 
     public ConsumerNetworkThread(LogContext logContext,
                                  Time time,
                                  Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                  Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                 Supplier<RequestManagers> requestManagersSupplier) {
+                                 Supplier<RequestManagers> requestManagersSupplier,
+                                 BackgroundEventHandler backgroundEventHandler) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.log = logContext.logger(getClass());
         this.applicationEventProcessorSupplier = applicationEventProcessorSupplier;
         this.networkClientDelegateSupplier = networkClientDelegateSupplier;
         this.requestManagersSupplier = requestManagersSupplier;
+        this.backgroundEventHandler = backgroundEventHandler;
         this.running = true;
     }
 
@@ -87,8 +92,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 try {
                     runOnce();
                 } catch (final Throwable e) {
-                    // Swallow the exception and continue
-                    log.error("Unexpected error caught in consumer network thread", e);
+                    BackgroundEvent error = new ErrorBackgroundEvent(e);
+                    backgroundEventHandler.add(error);
                 }
             }
         } finally {
