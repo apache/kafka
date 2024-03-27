@@ -160,7 +160,7 @@ public class GroupMetadataManager {
         private int classicGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
         private int classicGroupMinSessionTimeoutMs;
         private int classicGroupMaxSessionTimeoutMs;
-        private GroupProtocolMigrationPolicy groupProtocolMigrationPolicy;
+        private GroupConsumerUpgradePolicy groupConsumerUpgradePolicy;
         private GroupCoordinatorMetricsShard metrics;
 
         Builder withLogContext(LogContext logContext) {
@@ -238,8 +238,8 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withGroupProtocolMigrationPolicy(GroupProtocolMigrationPolicy groupProtocolMigrationPolicy) {
-            this.groupProtocolMigrationPolicy = groupProtocolMigrationPolicy;
+        Builder withGroupProtocolMigrationPolicy(GroupConsumerUpgradePolicy groupConsumerUpgradePolicy) {
+            this.groupConsumerUpgradePolicy = groupConsumerUpgradePolicy;
             return this;
         }
 
@@ -278,7 +278,7 @@ public class GroupMetadataManager {
                 classicGroupNewMemberJoinTimeoutMs,
                 classicGroupMinSessionTimeoutMs,
                 classicGroupMaxSessionTimeoutMs,
-                groupProtocolMigrationPolicy
+                groupConsumerUpgradePolicy
             );
         }
     }
@@ -394,7 +394,7 @@ public class GroupMetadataManager {
     /**
      * The config indicating whether group protocol upgrade/downgrade is allowed.
      */
-    private final GroupProtocolMigrationPolicy groupProtocolMigrationPolicy;
+    private final GroupConsumerUpgradePolicy groupConsumerUpgradePolicy;
 
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
@@ -413,7 +413,7 @@ public class GroupMetadataManager {
         int classicGroupNewMemberJoinTimeoutMs,
         int classicGroupMinSessionTimeoutMs,
         int classicGroupMaxSessionTimeoutMs,
-        GroupProtocolMigrationPolicy groupProtocolMigrationPolicy
+        GroupConsumerUpgradePolicy groupConsumerUpgradePolicy
     ) {
         this.logContext = logContext;
         this.log = logContext.logger(GroupMetadataManager.class);
@@ -435,7 +435,7 @@ public class GroupMetadataManager {
         this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
         this.classicGroupMinSessionTimeoutMs = classicGroupMinSessionTimeoutMs;
         this.classicGroupMaxSessionTimeoutMs = classicGroupMaxSessionTimeoutMs;
-        this.groupProtocolMigrationPolicy = groupProtocolMigrationPolicy;
+        this.groupConsumerUpgradePolicy = groupConsumerUpgradePolicy;
     }
 
     /**

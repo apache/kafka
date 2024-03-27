@@ -36,7 +36,7 @@ import java.util
 import java.util.{Collections, Properties}
 import org.apache.kafka.common.Node
 import org.apache.kafka.coordinator.group.Group.GroupType
-import org.apache.kafka.coordinator.group.GroupProtocolMigrationPolicy
+import org.apache.kafka.coordinator.group.GroupConsumerUpgradePolicy
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
@@ -1838,12 +1838,12 @@ class KafkaConfigTest {
     props.putAll(kraftProps())
 
     // Invalid GroupProtocolMigrationPolicy value.
-    props.put(KafkaConfig.GroupProtocolMigrationPolicyProp, "foo")
+    props.put(KafkaConfig.GroupConsumerUpgradePolicyProp, "foo")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
-    props.put(KafkaConfig.GroupProtocolMigrationPolicyProp, "both")
+    props.put(KafkaConfig.GroupConsumerUpgradePolicyProp, "upgrade")
     val config = KafkaConfig.fromProps(props)
-    assertEquals(GroupProtocolMigrationPolicy.BOTH, config.groupProtocolMigrationPolicy)
+    assertEquals(GroupConsumerUpgradePolicy.UPGRADE, config.groupConsumerUpgradePolicy)
   }
 
   @Test

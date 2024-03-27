@@ -18,7 +18,7 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.GroupProtocolMigrationPolicy;
+import org.apache.kafka.coordinator.group.GroupConsumerUpgradePolicy;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslClientAuth;
@@ -149,7 +149,6 @@ public class Defaults {
     public static final boolean NEW_GROUP_COORDINATOR_ENABLE = false;
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS = Collections.singletonList(Group.GroupType.CLASSIC.toString());
     public static final int GROUP_COORDINATOR_NUM_THREADS = 1;
-    public static final String GROUP_PROTOCOL_MIGRATION = GroupProtocolMigrationPolicy.NONE.toString();
 
     /** ********* Consumer group configs *********/
     public static final int CONSUMER_GROUP_SESSION_TIMEOUT_MS = 45000;
@@ -163,6 +162,7 @@ public class Defaults {
         UniformAssignor.class.getName(),
         RangeAssignor.class.getName()
     );
+    public static final String GROUP_CONSUMER_UPGRADE_POLICY = GroupConsumerUpgradePolicy.DISABLED.toString();
 
     /** ********* Offset management configuration *********/
     public static final int OFFSET_METADATA_MAX_SIZE = OffsetConfig.DEFAULT_MAX_METADATA_SIZE;

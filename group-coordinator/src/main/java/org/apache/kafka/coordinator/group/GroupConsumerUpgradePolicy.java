@@ -23,9 +23,9 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public enum GroupProtocolMigrationPolicy {
+public enum GroupConsumerUpgradePolicy {
     /** Both upgrade and downgrade are enabled.*/
-    BOTH("both"),
+    BIDIRECTIONAL("bidirectional"),
 
     /** Only upgrade is enabled.*/
     UPGRADE("upgrade"),
@@ -34,11 +34,11 @@ public enum GroupProtocolMigrationPolicy {
     DOWNGRADE("downgrade"),
 
     /** Neither upgrade nor downgrade is enabled.*/
-    NONE("none");
+    DISABLED("disabled");
 
     private final String policy;
 
-    GroupProtocolMigrationPolicy(String config) {
+    GroupConsumerUpgradePolicy(String config) {
         this.policy = config;
     }
 
@@ -47,22 +47,22 @@ public enum GroupProtocolMigrationPolicy {
         return policy;
     }
 
-    private final static Map<String, GroupProtocolMigrationPolicy> NAME_TO_ENUM = Arrays.stream(values())
+    private final static Map<String, GroupConsumerUpgradePolicy> NAME_TO_ENUM = Arrays.stream(values())
         .collect(Collectors.toMap(config -> config.policy.toLowerCase(Locale.ROOT), Function.identity()));
 
     /**
      * Parse a string into the corresponding {@code GroupProtocolMigrationPolicy} enum value, in a case-insensitive manner.
      *
-     * @return The {{@link GroupProtocolMigrationPolicy}} according to the string passed. None is returned if
+     * @return The {{@link GroupConsumerUpgradePolicy}} according to the string passed. None is returned if
      * the string doesn't correspond to a valid policy.
      */
-    public static GroupProtocolMigrationPolicy parse(String name) {
+    public static GroupConsumerUpgradePolicy parse(String name) {
         if (name == null) {
-            return NONE;
+            return DISABLED;
         }
-        GroupProtocolMigrationPolicy config = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
+        GroupConsumerUpgradePolicy config = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
 
-        return config == null ? NONE : config;
+        return config == null ? DISABLED : config;
     }
 
 }
