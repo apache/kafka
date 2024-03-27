@@ -1897,10 +1897,16 @@ class KafkaController(val config: KafkaConfig,
       val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
       val newAssignment = currentAssignment.reassignTo(replicas)
       val areNewReplicasAlive = newAssignment.addingReplicas.toSet.subsetOf(controllerContext.liveBrokerIds)
+      val currentLeader = controllerContext.partitionLeadershipInfo(topicPartition).get.leaderAndIsr.leader
+      val unneededAddingReplicas = currentAssignment.replicas.diff(newAssignment.replicas)
       if (!areNewReplicasAlive)
         Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
           s"Replica assignment has brokers that are not alive. Replica list: " +
             s"${newAssignment.addingReplicas}, live broker list: ${controllerContext.liveBrokerIds}"))
+      else if (unneededAddingReplicas.contains(currentLeader))
+        Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+          s"Current leader is inside unneeded adding replicas. Current leader: " +
+            s"${currentLeader}, unneeded adding replica list: ${unneededAddingReplicas}"))
       else None
     }
   }
