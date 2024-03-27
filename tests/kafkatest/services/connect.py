@@ -519,12 +519,13 @@ class VerifiableSink(VerifiableConnector):
     Helper class for running a verifiable sink connector on a Kafka Connect cluster and analyzing the output.
     """
 
-    def __init__(self, cc, name="verifiable-sink", tasks=1, topics=["verifiable"]):
+    def __init__(self, cc, name="verifiable-sink", tasks=1, topics=["verifiable"], consumer_group_protocol=None):
         self.cc = cc
         self.logger = self.cc.logger
         self.name = name
         self.tasks = tasks
         self.topics = topics
+        self.consumer_group_protocol = consumer_group_protocol
 
     def flushed_messages(self):
         return list(filter(lambda m: 'flushed' in m and m['flushed'], self.messages()))
@@ -534,33 +535,40 @@ class VerifiableSink(VerifiableConnector):
 
     def start(self):
         self.logger.info("Creating connector VerifiableSinkConnector %s", self.name)
-        self.cc.create_connector({
+        connector_config = {
             'name': self.name,
             'connector.class': 'org.apache.kafka.connect.tools.VerifiableSinkConnector',
             'tasks.max': self.tasks,
             'topics': ",".join(self.topics)
-        })
+        }
+        if self.consumer_group_protocol is not None:
+            connector_config["consumer.override.group.protocol"] = self.consumer_group_protocol
+        self.cc.create_connector(connector_config)
 
 class MockSink(object):
 
-    def __init__(self, cc, topics, mode=None, delay_sec=10, name="mock-sink"):
+    def __init__(self, cc, topics, mode=None, delay_sec=10, name="mock-sink", consumer_group_protocol=None):
         self.cc = cc
         self.logger = self.cc.logger
         self.name = name
         self.mode = mode
         self.delay_sec = delay_sec
         self.topics = topics
+        self.consumer_group_protocol = consumer_group_protocol
 
     def start(self):
         self.logger.info("Creating connector MockSinkConnector %s", self.name)
-        self.cc.create_connector({
+        connector_config = {
             'name': self.name,
             'connector.class': 'org.apache.kafka.connect.tools.MockSinkConnector',
             'tasks.max': 1,
             'topics': ",".join(self.topics),
             'mock_mode': self.mode,
             'delay_ms': self.delay_sec * 1000
-        })
+        }
+        if self.consumer_group_protocol is not None:
+            connector_config["consumer.override.group.protocol"] = self.consumer_group_protocol
+        self.cc.create_connector(connector_config)
 
 class MockSource(object):
 
