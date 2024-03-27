@@ -1398,6 +1398,7 @@ $ bin/kafka-acls.sh \
     <li>commit=num_secs: This tunes the frequency with which ext4 commits to its metadata journal. Setting this to a lower value reduces the loss of unflushed data during a crash. Setting this to a higher value will improve throughput.
     <li>nobh: This setting controls additional ordering guarantees when using data=writeback mode. This should be safe with Kafka as we do not depend on write ordering and improves throughput and latency.
     <li>delalloc: Delayed allocation means that the filesystem avoid allocating any blocks until the physical write occurs. This allows ext4 to allocate a large extent instead of smaller pages and helps ensure the data is written sequentially. This feature is great for throughput. It does seem to involve some locking in the filesystem which adds a bit of latency variance.
+    <li>fast_commit: Added in Linux 5.10, <a href="https://lwn.net/Articles/842385/">fast_commit</a> is a lighter-weight journaling method which can be used with data=ordered journaling mode. This option should result in slightly lower latency than data=writeback.
   </ul>
 
   <h4 class="anchor-heading"><a id="replace_disk" class="anchor-link"></a><a href="#replace_disk">Replace KRaft Controller Disk</a></h4>
