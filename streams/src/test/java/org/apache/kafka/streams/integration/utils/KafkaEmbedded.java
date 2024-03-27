@@ -39,6 +39,11 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
+import static org.apache.kafka.server.config.KafkaConfig.NUM_PARTITIONS_CONFIG;
+import static org.apache.kafka.server.config.KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
+import static org.apache.kafka.server.config.KafkaConfig.LOG_DIR_CONFIG;
+
+
 /**
  * Runs an in-memory, "embedded" instance of a Kafka broker, which listens at `127.0.0.1:9092` by
  * default.
@@ -86,14 +91,14 @@ public class KafkaEmbedded {
     private Properties effectiveConfigFrom(final Properties initialConfig) {
         final Properties effectiveConfig = new Properties();
         effectiveConfig.put(KafkaConfig.BrokerIdProp(), 0);
-        effectiveConfig.put(KafkaConfig.NumPartitionsProp(), 1);
-        effectiveConfig.put(KafkaConfig.AutoCreateTopicsEnableProp(), true);
+        effectiveConfig.put(NUM_PARTITIONS_CONFIG, 1);
+        effectiveConfig.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
         effectiveConfig.put(KafkaConfig.MessageMaxBytesProp(), 1000000);
         effectiveConfig.put(KafkaConfig.ControlledShutdownEnableProp(), true);
         effectiveConfig.put(KafkaConfig.ZkSessionTimeoutMsProp(), 10000);
 
         effectiveConfig.putAll(initialConfig);
-        effectiveConfig.setProperty(KafkaConfig.LogDirProp(), logDir.getAbsolutePath());
+        effectiveConfig.setProperty(LOG_DIR_CONFIG, logDir.getAbsolutePath());
         return effectiveConfig;
     }
 
