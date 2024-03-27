@@ -37,7 +37,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 
 /**
  * ShareSessionHandler maintains the share session state for connecting to a broker.
@@ -74,8 +73,8 @@ public class ShareSessionHandler {
         return sessionTopicNames;
     }
 
-    public Set<TopicPartition> sessionTopics() {
-        return sessionPartitions.keySet();
+    public Collection<TopicIdPartition> sessionPartitions() {
+        return sessionPartitions.values();
     }
 
     public ShareSessionHandler(LogContext logContext, int node, Uuid memberId) {

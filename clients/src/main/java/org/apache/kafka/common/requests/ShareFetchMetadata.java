@@ -102,6 +102,10 @@ public class ShareFetchMetadata {
         return epoch;
     }
 
+    public boolean isFinalEpoch() {
+        return epoch == FINAL_EPOCH;
+    }
+
     public String toString() {
         StringBuilder bld = new StringBuilder();
         bld.append("(memberId=").append(memberId).append(", ");

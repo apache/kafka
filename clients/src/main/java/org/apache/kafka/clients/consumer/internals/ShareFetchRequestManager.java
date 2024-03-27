@@ -17,6 +17,9 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -42,8 +45,6 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-
-import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 
 /**
  * {@code ShareFetchRequestManager} is responsible for generating {@link ShareFetchRequest} that
@@ -85,33 +86,45 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
     }
 
     @Override
-    public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
+    public PollResult poll(long currentTimeMs) {
+        return pollInternal(prepareShareFetchRequests(),
+                this::handleShareFetchSuccess,
+                this::handleShareFetchFailure);
+    }
+
+    @Override
+    public PollResult pollOnClose() {
+        return pollInternal(prepareShareFetchCloseRequests(),
+                this::handleShareFetchCloseSuccess,
+                this::handleShareFetchCloseFailure);
+    }
+
+    private PollResult pollInternal(Map<Node, ShareSessionHandler.ShareFetchRequestData> shareFetchRequests,
+                                    ResponseHandler<ClientResponse> successHandler,
+                                    ResponseHandler<Throwable> failureHandler) {
         if (memberId == null) {
-            return EMPTY;
+            return PollResult.EMPTY;
         }
 
-        List<NetworkClientDelegate.UnsentRequest> requests;
-        Map<Node, ShareSessionHandler.ShareFetchRequestData> shareFetchRequests = prepareShareFetchRequests();
-
-        requests = shareFetchRequests.entrySet().stream().map(entry -> {
+        List<UnsentRequest> requests = shareFetchRequests.entrySet().stream().map(entry -> {
             final Node target = entry.getKey();
             final ShareSessionHandler.ShareFetchRequestData data = entry.getValue();
             final ShareFetchRequest.Builder request = createShareFetchRequest(target, data);
             final BiConsumer<ClientResponse, Throwable> responseHandler = (clientResponse, error) -> {
                 if (error != null) {
-                    handleShareFetchFailure(target, data, error);
+                    failureHandler.accept(target, data, error);
                 } else {
-                    handleShareFetchSuccess(target, data, clientResponse);
+                    successHandler.accept(target, data, clientResponse);
                 }
             };
-            return new NetworkClientDelegate.UnsentRequest(request, Optional.of(target)).whenComplete(responseHandler);
+            return new UnsentRequest(request, Optional.of(target)).whenComplete(responseHandler);
         }).collect(Collectors.toList());
 
-        return new NetworkClientDelegate.PollResult(requests);
+        return new PollResult(requests);
     }
 
     private Map<Node, ShareSessionHandler.ShareFetchRequestData> prepareShareFetchRequests() {
-        Map<Node, ShareSessionHandler.Builder> partitionsToFetch = new HashMap<>();
+        Map<Node, ShareSessionHandler.Builder> requestBuilderMap = new HashMap<>();
         Map<String, Uuid> topicIds = metadata.topicIds();
 
         for (TopicPartition partition : partitionsToFetch()) {
@@ -135,7 +148,7 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
                 log.trace("Skipping fetch for partition {} because previous fetch request to {} has not been processed", partition, node);
             } else {
                 // if there is a leader and no in-flight requests, issue a new fetch
-                ShareSessionHandler.Builder builder = partitionsToFetch.computeIfAbsent(node, k -> {
+                ShareSessionHandler.Builder builder = requestBuilderMap.computeIfAbsent(node, k -> {
                     ShareSessionHandler shareSessionHandler =
                             sessionHandlers.computeIfAbsent(node.id(), n -> new ShareSessionHandler(logContext, n, memberId));
                     return shareSessionHandler.newBuilder();
@@ -149,25 +162,16 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
         }
 
         Map<Node, ShareSessionHandler.ShareFetchRequestData> requests = new LinkedHashMap<>();
-        for (Map.Entry<Node, ShareSessionHandler.Builder> entry : partitionsToFetch.entrySet()) {
+        for (Map.Entry<Node, ShareSessionHandler.Builder> entry : requestBuilderMap.entrySet()) {
             requests.put(entry.getKey(), entry.getValue().build());
         }
 
         return requests;
     }
 
-    private ShareFetchRequest.Builder createShareFetchRequest(Node fetchTarget, ShareSessionHandler.ShareFetchRequestData requestData) {
-        final ShareFetchRequest.Builder request = ShareFetchRequest.Builder
-                .forConsumer(fetchConfig.maxWaitMs, fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.fetchSize,
-                        requestData.toSend(), acknowledgementBatches(requestData.acknowledgements()))
-                .forShareSession(groupId, requestData.metadata());
-
-        nodesWithPendingRequests.add(fetchTarget.id());
-
-        return request;
-    }
-
-    private void handleShareFetchSuccess(Node fetchTarget, ShareSessionHandler.ShareFetchRequestData data, ClientResponse resp) {
+    private void handleShareFetchSuccess(Node fetchTarget,
+                                         ShareSessionHandler.ShareFetchRequestData data,
+                                         ClientResponse resp) {
         try {
             final ShareFetchResponse response = (ShareFetchResponse) resp.responseBody();
             final ShareSessionHandler handler = sessionHandler(fetchTarget.id());
@@ -238,6 +242,57 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
         }
     }
 
+    private Map<Node, ShareSessionHandler.ShareFetchRequestData> prepareShareFetchCloseRequests() {
+        final Cluster cluster = metadata.fetch();
+
+        Map<Node, ShareSessionHandler.Builder> requestBuilderMap = new HashMap<>();
+
+        sessionHandlers.forEach((nodeId, sessionHandler) -> {
+            sessionHandler.notifyClose();
+            Node node = cluster.nodeById(nodeId);
+            if (node != null) {
+                ShareSessionHandler.Builder builder = sessionHandler.newBuilder();
+                requestBuilderMap.put(node, builder);
+
+                for (TopicIdPartition tip : sessionHandler.sessionPartitions()) {
+                    Acknowledgements acknowledgements = shareFetchBuffer.getAcknowledgementsToSend(tip);
+                    if (acknowledgements != null) {
+                        builder.add(tip, acknowledgements);
+
+                        log.debug("Added closing fetch request for partition {} to node {}", tip.topicPartition(), node);
+                    }
+                }
+            }
+        });
+
+        Map<Node, ShareSessionHandler.ShareFetchRequestData> requests = new LinkedHashMap<>();
+        for (Map.Entry<Node, ShareSessionHandler.Builder> entry : requestBuilderMap.entrySet()) {
+            requests.put(entry.getKey(), entry.getValue().build());
+        }
+
+        return requests;
+    }
+
+    private void handleShareFetchCloseSuccess(Node fetchTarget,
+                                              ShareSessionHandler.ShareFetchRequestData data,
+                                              ClientResponse resp) {
+        try {
+            metricsManager.recordLatency(resp.requestLatencyMs());
+        } finally {
+            log.debug("Removing pending request for node {} - success", fetchTarget);
+            nodesWithPendingRequests.remove(fetchTarget.id());
+            sessionHandlers.remove(fetchTarget.id());
+        }
+    }
+
+    private void handleShareFetchCloseFailure(Node fetchTarget,
+                                              ShareSessionHandler.ShareFetchRequestData data,
+                                              Throwable error) {
+        log.debug("Removing pending request for node {} - failed", fetchTarget);
+        nodesWithPendingRequests.remove(fetchTarget.id());
+        sessionHandlers.remove(fetchTarget.id());
+    }
+
     private Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementBatches(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
         Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementBatches = new HashMap<>();
         acknowledgementsMap.forEach((partition, acknowledgements) -> {
@@ -246,18 +301,23 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
         return acknowledgementBatches;
     }
 
+    private ShareFetchRequest.Builder createShareFetchRequest(Node fetchTarget, ShareSessionHandler.ShareFetchRequestData requestData) {
+        final ShareFetchRequest.Builder request = ShareFetchRequest.Builder
+                .forConsumer(groupId, requestData.metadata(),
+                        fetchConfig.maxWaitMs, fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.fetchSize,
+                        requestData.toSend(), acknowledgementBatches(requestData.acknowledgements()));
+
+        nodesWithPendingRequests.add(fetchTarget.id());
+
+        return request;
+    }
+
     private List<TopicPartition> partitionsToFetch() {
         return subscriptions.fetchablePartitions(tp -> true);
     }
 
     public ShareSessionHandler sessionHandler(int node) {
         return sessionHandlers.get(node);
-    }
-
-    @Override
-    public NetworkClientDelegate.PollResult pollOnClose() {
-        // This is where the final ShareFetch or ShareAcknowledge goes
-        return EMPTY;
     }
 
     boolean hasCompletedFetches() {
@@ -280,5 +340,10 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
                 memberId = Uuid.fromString(memberIdOpt.get());
             }
         }
+    }
+
+    @FunctionalInterface
+    public interface ResponseHandler<T> {
+        void accept(Node fetchTarget, ShareSessionHandler.ShareFetchRequestData data, T response);
     }
 }

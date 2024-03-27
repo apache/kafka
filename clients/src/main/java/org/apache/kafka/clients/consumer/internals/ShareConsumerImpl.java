@@ -612,6 +612,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         final Timer closeTimer = time.timer(timeout);
         clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
         closeTimer.update();
+
+        // Send any outstanding acknowledgements and release any acquired records
+        maybeSendAcknowledgementsOnClose();
+
         // Prepare shutting down the network thread
         prepareShutdown(closeTimer, firstException);
         closeTimer.update();
@@ -714,7 +718,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
     }
 
     /**
-     * Called to progressively moves the acknowledgement mode into IMPLICIT if it is not known to be EXPLICIT.
+     * Called to progressively move the acknowledgement mode into IMPLICIT if it is not known to be EXPLICIT.
      * If the acknowledgement mode is IMPLICIT, acknowledges the current batch and puts them into the fetch
      * buffer for the background thread to pick up.
      * If the acknowledgement mode is EXPLICIT, puts any ready acknowledgements into the fetch buffer for the
@@ -740,6 +744,15 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
             }
 
             currentFetch = null;
+        }
+    }
+
+    /**
+     * Called to send any outstanding acknowledgements during close.
+     */
+    private void maybeSendAcknowledgementsOnClose() {
+        if (currentFetch != null) {
+            fetchBuffer.acknowledgementsReadyToSend(currentFetch.acknowledgementsByPartition());
         }
     }
 
