@@ -71,26 +71,6 @@ class ProducerIdManagerTest {
       }
       queue.head.error
     }
-
-    def peekError(): Errors = queue.synchronized {
-      if (queue.isEmpty) {
-        return Errors.NONE
-      }
-      queue.head.error
-    }
-
-    def clearProcessedError(): Unit = {
-      if (queue.isEmpty) {
-        return
-      }
-      TestUtils.waitUntilTrue(() =>
-        queue.synchronized {
-          queue.head.repeat == 0
-        }, "error wasn't processed")
-      queue.synchronized {
-        queue.dequeue()
-      }
-    }
   }
 
   // Mutable test implementation that lets us easily set the idStart and error
@@ -100,8 +80,7 @@ class ProducerIdManagerTest {
     val idLen: Int,
     val errorQueue: ErrorQueue = new ErrorQueue(),
     val isErroneousBlock: Boolean = false,
-    val time: Time = Time.SYSTEM,
-    var remainingRetries: Int = 1
+    val time: Time = Time.SYSTEM
   ) extends RPCProducerIdManager(brokerId, time, () => 1, brokerToController) {
 
     private val brokerToControllerRequestExecutor = Executors.newSingleThreadExecutor()
@@ -127,17 +106,6 @@ class ProducerIdManagerTest {
     override private[transaction] def handleAllocateProducerIdsResponse(response: AllocateProducerIdsResponse): Unit = {
       super.handleAllocateProducerIdsResponse(response)
       capturedFailure.set(nextProducerIdBlock.get == null)
-    }
-
-    override private[transaction] def maybeRequestNextBlock(): Unit = {
-      if (errorQueue.peekError() == Errors.NONE && !isErroneousBlock) {
-        super.maybeRequestNextBlock()
-      } else {
-        if (remainingRetries > 0) {
-          super.maybeRequestNextBlock()
-          remainingRetries -= 1
-        }
-      }
     }
   }
 
@@ -249,7 +217,6 @@ class ProducerIdManagerTest {
     time.sleep(RetryBackoffMs)
     verifyFailure(manager)
 
-    manager.errorQueue.clearProcessedError()
     time.sleep(RetryBackoffMs)
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 1, 1), 1)
   }
@@ -270,10 +237,9 @@ class ProducerIdManagerTest {
   def testRetryBackoff(): Unit = {
     val time = new MockTime()
     val manager = new MockProducerIdManager(0, 0, 1,
-      errorQueue = new ErrorQueue(ErrorCount.once(Errors.UNKNOWN_SERVER_ERROR)), time = time, remainingRetries = 2)
+      errorQueue = new ErrorQueue(ErrorCount.once(Errors.UNKNOWN_SERVER_ERROR)), time = time)
 
     verifyFailure(manager)
-    manager.errorQueue.clearProcessedError()
 
     // We should only get a new block once retry backoff ms has passed.
     assertCoordinatorLoadInProgressExceptionFailure(manager.generateProducerId())
