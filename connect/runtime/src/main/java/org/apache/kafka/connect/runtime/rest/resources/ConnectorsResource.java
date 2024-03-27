@@ -242,6 +242,19 @@ public class ConnectorsResource {
         return response.entity(createdInfo.result()).build();
     }
 
+    @PATCH
+    @Path("/{connector}/config")
+    public Response patchConnectorConfig(final @PathParam("connector") String connector,
+                                         final @Context HttpHeaders headers,
+                                         final @QueryParam("forward") Boolean forward,
+                                         final Map<String, String> connectorConfigPatch) throws Throwable {
+        FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
+        herder.patchConnectorConfig(connector, connectorConfigPatch, cb);
+        Herder.Created<ConnectorInfo> createdInfo = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/config",
+                "PATCH", headers, connectorConfigPatch, new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
+        return Response.ok().entity(createdInfo.result()).build();
+    }
+
     @POST
     @Path("/{connector}/restart")
     @Operation(summary = "Restart the specified connector")

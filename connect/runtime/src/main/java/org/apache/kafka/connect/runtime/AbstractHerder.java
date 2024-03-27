@@ -992,4 +992,15 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return loggers.setLevel(namespace, level);
     }
 
+    protected Map<String, String> applyConnectorConfigPatch(Map<String, String> currentConfig, Map<String, String> configPatch) {
+        Map<String, String> patchedConfig = new HashMap<>(currentConfig);
+        configPatch.forEach((k, v) -> {
+            if (v != null) {
+                patchedConfig.put(k, v);
+            } else {
+                patchedConfig.remove(k);
+            }
+        });
+        return patchedConfig;
+    }
 }
