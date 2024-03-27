@@ -336,6 +336,21 @@ public interface Admin extends AutoCloseable {
     DescribeTopicsResult describeTopics(TopicCollection topics, DescribeTopicsOptions options);
 
     /**
+     * Describe some topics in the cluster.
+     *
+     * When using topic IDs, this operation is supported by brokers with version 3.1.0 or higher.
+     *
+     * @param topics  The topics to describe.
+     * @param options The options to use when describing the topics.
+     * @param subscriber The subscriber to consumer the results.
+     */
+    default void describeTopics(
+        TopicCollection topics,
+        DescribeTopicsOptions options,
+        AdminResultsSubscriber<DescribeTopicPartitionsResult> subscriber) {
+    };
+
+    /**
      * Get information about the nodes in the cluster, using the default options.
      * <p>
      * This is a convenience method for {@link #describeCluster(DescribeClusterOptions)} with default options.

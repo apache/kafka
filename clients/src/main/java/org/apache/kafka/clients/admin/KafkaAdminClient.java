@@ -35,9 +35,9 @@ import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec.TimestampSpec;
 import org.apache.kafka.clients.admin.internals.AbortTransactionHandler;
 import org.apache.kafka.clients.admin.internals.AdminApiDriver;
-import org.apache.kafka.clients.admin.internals.AdminApiHandler;
 import org.apache.kafka.clients.admin.internals.AdminApiFuture;
 import org.apache.kafka.clients.admin.internals.AdminApiFuture.SimpleAdminApiFuture;
+import org.apache.kafka.clients.admin.internals.AdminApiHandler;
 import org.apache.kafka.clients.admin.internals.AdminBootstrapAddresses;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.admin.internals.AllBrokersStrategy;
@@ -138,6 +138,11 @@ import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData.DescribableLogDirTopic;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData;
+import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData.TopicRequest;
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition;
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopic;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
@@ -202,11 +207,13 @@ import org.apache.kafka.common.requests.DescribeDelegationTokenRequest;
 import org.apache.kafka.common.requests.DescribeDelegationTokenResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
-import org.apache.kafka.common.requests.DescribeUserScramCredentialsRequest;
-import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.DescribeQuorumRequest.Builder;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
+import org.apache.kafka.common.requests.DescribeTopicPartitionsRequest;
+import org.apache.kafka.common.requests.DescribeTopicPartitionsResponse;
+import org.apache.kafka.common.requests.DescribeUserScramCredentialsRequest;
+import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ElectLeadersRequest;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
@@ -263,6 +270,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -992,6 +1000,37 @@ public class KafkaAdminClient extends AdminClient {
 
         public boolean isInternal() {
             return internal;
+        }
+    }
+
+    abstract class RecurringCall {
+        private final String name;
+        final long deadlineMs;
+        private final AdminClientRunnable runnable;
+        KafkaFutureImpl<Boolean> nextRun;
+        abstract Call generateCall();
+
+        public RecurringCall(String name, long deadlineMs, AdminClientRunnable runnable) {
+            this.name = name;
+            this.deadlineMs = deadlineMs;
+            this.runnable = runnable;
+        }
+
+        public String toString() {
+            return "RecurringCall(name=" + name + ", deadlineMs=" + deadlineMs + ")";
+        }
+
+        public void run() {
+            try {
+                do {
+                    nextRun = new KafkaFutureImpl<>();
+                    Call call = generateCall();
+                    runnable.call(call, time.milliseconds());
+                } while (nextRun.get());
+            } catch (Exception e) {
+                log.info("Stop the recurring call " + name + " because " + e);
+                e.printStackTrace();
+            }
         }
     }
 
@@ -2109,9 +2148,9 @@ public class KafkaAdminClient extends AdminClient {
     public DescribeTopicsResult describeTopics(final TopicCollection topics, DescribeTopicsOptions options) {
         if (topics instanceof TopicIdCollection)
             return DescribeTopicsResult.ofTopicIds(handleDescribeTopicsByIds(((TopicIdCollection) topics).topicIds(), options));
-        else if (topics instanceof TopicNameCollection)
+        else if (topics instanceof TopicNameCollection) {
             return DescribeTopicsResult.ofTopicNames(handleDescribeTopicsByNames(((TopicNameCollection) topics).topicNames(), options));
-        else
+        } else
             throw new IllegalArgumentException("The TopicCollection: " + topics + " provided did not match any supported classes for describeTopics.");
     }
 
@@ -2256,6 +2295,28 @@ public class KafkaAdminClient extends AdminClient {
         return new HashMap<>(topicFutures);
     }
 
+    // This is used in the describe topics path if using DescribeTopicPartitions API.
+    private Node replicaToFakeNode(int id) {
+        return new Node(id, "Dummy", 0);
+    }
+
+    private TopicDescription getTopicDescriptionFromDescribeTopicsResponseTopic(DescribeTopicPartitionsResponseTopic topic) {
+        List<DescribeTopicPartitionsResponsePartition> partitionInfos = topic.partitions();
+        List<TopicPartitionInfo> partitions = new ArrayList<>(partitionInfos.size());
+        for (DescribeTopicPartitionsResponsePartition partitionInfo : partitionInfos) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
+                partitionInfo.partitionIndex(),
+                replicaToFakeNode(partitionInfo.leaderId()),
+                partitionInfo.replicaNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
+                partitionInfo.isrNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
+                partitionInfo.eligibleLeaderReplicas().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
+                partitionInfo.lastKnownElr().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()));
+            partitions.add(topicPartitionInfo);
+        }
+        partitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));
+        return new TopicDescription(topic.name(), topic.isInternal(), partitions, validAclOperations(topic.topicAuthorizedOperations()), topic.topicId());
+    }
+
     private TopicDescription getTopicDescriptionFromCluster(Cluster cluster, String topicName, Uuid topicId,
                                                             Integer authorizedOperations) {
         boolean isInternal = cluster.internalTopics().contains(topicName);
@@ -2264,7 +2325,7 @@ public class KafkaAdminClient extends AdminClient {
         for (PartitionInfo partitionInfo : partitionInfos) {
             TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
                     partitionInfo.partition(), leader(partitionInfo), Arrays.asList(partitionInfo.replicas()),
-                    Arrays.asList(partitionInfo.inSyncReplicas()));
+                    Arrays.asList(partitionInfo.inSyncReplicas()), Collections.emptyList(), Collections.emptyList());
             partitions.add(topicPartitionInfo);
         }
         partitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));
@@ -2275,6 +2336,141 @@ public class KafkaAdminClient extends AdminClient {
         if (partitionInfo.leader() == null || partitionInfo.leader().id() == Node.noNode().id())
             return null;
         return partitionInfo.leader();
+    }
+
+    @Override
+    public void describeTopics(
+        TopicCollection topics,
+        DescribeTopicsOptions options,
+        AdminResultsSubscriber<DescribeTopicPartitionsResult> subscriber) {
+        if (topics instanceof TopicIdCollection) {
+            subscriber.onError(
+                new IllegalArgumentException("Currently the describeTopics subscription mode does not support topic IDs.")
+            );
+            return;
+        }
+        if (!(topics instanceof TopicNameCollection)) {
+            subscriber.onError(
+                new IllegalArgumentException("The TopicCollection: " + topics + " provided did not match any supported classes for describeTopics.")
+            );
+            return;
+        }
+
+        TreeSet<String> topicNames = new TreeSet<>();
+        ((TopicNameCollection) topics).topicNames().forEach(topicName -> {
+            if (topicNameIsUnrepresentable(topicName)) {
+                subscriber.onNext(DescribeTopicPartitionsResult.onError(topicName, new InvalidTopicException("The given topic name '" +
+                    topicName + "' cannot be represented in a request.")));
+            } else {
+                topicNames.add(topicName);
+            }
+        });
+
+        RecurringCall call = new RecurringCall(
+            "DescribeTopics-Recurring",
+            calcDeadlineMs(time.milliseconds(), options.timeoutMs()),
+            runnable
+        ) {
+
+            Map<String, TopicRequest> pendingTopics = new TreeMap<>();
+            Iterator<String> pendingTopicIterator = topicNames.iterator();
+
+            String partiallyFinishedTopicName = "";
+            int partiallyFinishedTopicNextPartitionId = -1;
+
+            @Override
+            Call generateCall() {
+                return new Call("describeTopics", this.deadlineMs, new LeastLoadedNodeProvider()) {
+                    @Override
+                    DescribeTopicPartitionsRequest.Builder createRequest(int timeoutMs) {
+                        DescribeTopicPartitionsRequestData request = new DescribeTopicPartitionsRequestData()
+                            .setResponsePartitionLimit(options.partitionSizeLimitPerResponse());
+
+                        if (!partiallyFinishedTopicName.isEmpty()) {
+                            request.setCursor(new DescribeTopicPartitionsRequestData.Cursor()
+                                .setTopicName(partiallyFinishedTopicName)
+                                .setPartitionIndex(partiallyFinishedTopicNextPartitionId)
+                            );
+                        }
+
+                        for (int ii = pendingTopics.size(); ii < options.partitionSizeLimitPerResponse() && pendingTopicIterator.hasNext(); ++ii) {
+                            String topicName = pendingTopicIterator.next();
+                            pendingTopics.put(topicName, new TopicRequest().setName(topicName));
+                        }
+                        request.setTopics(pendingTopics.values().stream().collect(Collectors.toList()));
+
+                        return new DescribeTopicPartitionsRequest.Builder(request);
+                    }
+
+                    @Override
+                    void handleResponse(AbstractResponse abstractResponse) {
+                        DescribeTopicPartitionsResponse response = (DescribeTopicPartitionsResponse) abstractResponse;
+                        String cursorTopicName = "";
+                        int cursorPartitionId = -1;
+                        if (response.data().nextCursor() != null) {
+                            DescribeTopicPartitionsResponseData.Cursor cursor = response.data().nextCursor();
+                            cursorTopicName = cursor.topicName();
+                            cursorPartitionId = cursor.partitionIndex();
+                        }
+
+                        for (DescribeTopicPartitionsResponseTopic topic : response.data().topics()) {
+                            String topicName = topic.name();
+                            Errors error = Errors.forCode(topic.errorCode());
+
+                            if (error != Errors.NONE) {
+                                subscriber.onNext(DescribeTopicPartitionsResult.onError(topicName, error.exception()));
+                                if (cursorTopicName.equals(topicName)) {
+                                    cursorTopicName = "";
+                                    cursorPartitionId = -1;
+                                }
+                                pendingTopics.remove(topicName);
+                                continue;
+                            }
+
+                            TopicDescription currentTopicDescription = getTopicDescriptionFromDescribeTopicsResponseTopic(topic);
+
+                            if (!cursorTopicName.equals(topicName)) {
+                                pendingTopics.remove(topicName);
+                            }
+                            subscriber.onNext(DescribeTopicPartitionsResult.onSuccess(currentTopicDescription));
+                        }
+
+                        // At this point, any topics before the cursor topic which stays in the pending topic list do
+                        // not exist.
+                        Iterator<Map.Entry<String, TopicRequest>> mapIterator = pendingTopics.entrySet().iterator();
+                        while (mapIterator.hasNext()) {
+                            String topicName = mapIterator.next().getKey();
+                            if (topicName.compareTo(cursorTopicName) >= 0) break;
+                            subscriber.onNext(DescribeTopicPartitionsResult.onError(
+                                topicName,
+                                new UnknownTopicOrPartitionException("Topic " + topicName + " not found."))
+                            );
+                            mapIterator.remove();
+                        }
+
+                        partiallyFinishedTopicName = cursorTopicName;
+                        partiallyFinishedTopicNextPartitionId = cursorPartitionId;
+                        boolean isMore = !pendingTopics.isEmpty() || pendingTopicIterator.hasNext();
+                        if (!isMore) {
+                            subscriber.onComplete();
+                        }
+                        nextRun.complete(isMore);
+                    }
+
+                    @Override
+                    boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
+                        return false;
+                    }
+
+                    @Override
+                    void handleFailure(Throwable throwable) {
+                        subscriber.onError(new Exception(throwable));
+                        nextRun.completeExceptionally(throwable);
+                    }
+                };
+            }
+        };
+        call.run();
     }
 
     @Override

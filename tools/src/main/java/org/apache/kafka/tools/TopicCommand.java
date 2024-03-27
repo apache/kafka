@@ -22,12 +22,15 @@ import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.AdminResultsSubscriber;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreatePartitionsOptions;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsOptions;
+import org.apache.kafka.clients.admin.DescribeTopicPartitionsResult;
+import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewPartitions;
@@ -45,6 +48,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -72,6 +76,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -367,6 +372,14 @@ public abstract class TopicCommand {
                     .map(node -> node.toString())
                     .collect(Collectors.joining(",")));
             }
+
+            System.out.print("\tElr: " + info.eligibleLeaderReplicas().stream()
+                .map(node -> Integer.toString(node.id()))
+                .collect(Collectors.joining(",")));
+            System.out.print("\tLastKnownElr: " + info.lastKnownEligibleLeaderReplicas().stream()
+                .map(node -> Integer.toString(node.id()))
+                .collect(Collectors.joining(",")));
+
             System.out.print(markedForDeletion ? "\tMarkedForDeletion: true" : "");
             System.out.println();
         }
@@ -558,36 +571,146 @@ public abstract class TopicCommand {
             } else {
                 ensureTopicExists(topics, opts.topic(), !opts.ifExists());
             }
-            List<org.apache.kafka.clients.admin.TopicDescription> topicDescriptions = new ArrayList<>();
 
             if (!topicIds.isEmpty()) {
                 Map<Uuid, org.apache.kafka.clients.admin.TopicDescription> descTopics =
                     adminClient.describeTopics(TopicCollection.ofTopicIds(topicIds)).allTopicIds().get();
-                topicDescriptions = new ArrayList<>(descTopics.values());
+                printTopicDescriptions(new ArrayList<>(descTopics.values()), opts);
+                return;
             }
 
             if (!topics.isEmpty()) {
-                Map<String, org.apache.kafka.clients.admin.TopicDescription> descTopics =
-                    adminClient.describeTopics(TopicCollection.ofTopicNames(topics)).allTopicNames().get();
-                topicDescriptions = new ArrayList<>(descTopics.values());
-            }
+                final int partitionSizeLimit = opts.partitionSizeLimitPerResponse().orElse(2000);
+                KafkaFutureImpl<Boolean> queryFuture = new KafkaFutureImpl<>();
+                AdminResultsSubscriber<DescribeTopicPartitionsResult> subscriber = new AdminResultsSubscriber<DescribeTopicPartitionsResult>() {
+                    ArrayList<org.apache.kafka.clients.admin.TopicDescription> currentBatch = new ArrayList<>();
+                    ConcurrentLinkedQueue<org.apache.kafka.clients.admin.TopicDescription> pending = new ConcurrentLinkedQueue<>();
+                    int partitionCount = 0;
+                    String previousPrintedTopic = "";
+                    boolean canFinish = false;
+                    Exception exception;
+                    @Override
+                    public void onComplete() {
+                        canFinish = true;
+                    }
 
+                    @Override
+                    public void onError(Exception e) {
+                        exception = e;
+                        canFinish = true;
+                    }
+
+                    @Override
+                    public void onNext(DescribeTopicPartitionsResult result) {
+                        if (result.exception != null) {
+                            LOG.error("Fail to describe " + result.topicDescription.name() + ": " + result.exception);
+                            return;
+                        }
+
+                        pending.add(result.topicDescription);
+                    }
+
+                    @Override
+                    public void run() {
+                        Thread thread = new Thread(() -> {
+                            try {
+                                while (!canFinish || !pending.isEmpty()) {
+                                    if (!pending.isEmpty()) {
+                                        org.apache.kafka.clients.admin.TopicDescription topicDescription = pending.poll();
+                                        currentBatch.add(topicDescription);
+                                        partitionCount += topicDescription.partitions().size();
+                                    }
+
+                                    if (partitionCount < partitionSizeLimit) continue;
+                                    try {
+                                        printTopicDescriptions(currentBatch, opts, previousPrintedTopic);
+                                    } catch (Exception e) {
+                                        LOG.error("Fail to do describe topic follow ups: " + e);
+                                    } finally {
+                                        previousPrintedTopic = currentBatch.get(currentBatch.size() - 1).name();
+                                        currentBatch = new ArrayList<>();
+                                        partitionCount = 0;
+                                    }
+                                }
+
+                                if (!currentBatch.isEmpty()) {
+                                    try {
+                                        printTopicDescriptions(currentBatch, opts, previousPrintedTopic);
+                                    } catch (Exception e) {
+                                        LOG.error("Fail to do describe topic follow ups: " + e);
+                                    }
+                                }
+
+                                if (exception != null) {
+                                    if (exception.toString().contains("UnsupportedVersionException")) {
+                                        // Retry the request with Metadata API.
+                                        try {
+                                            Map<String, org.apache.kafka.clients.admin.TopicDescription> descTopics =
+                                                adminClient.describeTopics(TopicCollection.ofTopicNames(topics),
+                                                    new DescribeTopicsOptions()
+                                                        .partitionSizeLimitPerResponse(opts.partitionSizeLimitPerResponse().orElse(2000))).allTopicNames().get();
+                                            printTopicDescriptions(new ArrayList<>(descTopics.values()), opts);
+                                        } catch (Exception e) {
+                                            LOG.error("Hit " + e + " during describe topics with Metadata API");
+                                        }
+                                    } else {
+                                        LOG.error("Hit " + exception + " during describe topics");
+                                    }
+                                }
+                            } catch (RuntimeException e) {
+                                throw e;
+                            } catch (Exception e) {
+                                LOG.error("Hit " + exception + " in describe topics subscriber");
+                                e.printStackTrace();
+                            } finally {
+                                queryFuture.complete(true);
+                            }
+                        });
+                        thread.start();
+                    }
+                };
+
+                subscriber.run();
+                adminClient.describeTopics(
+                    TopicCollection.ofTopicNames(topics),
+                    new DescribeTopicsOptions()
+                        .partitionSizeLimitPerResponse(partitionSizeLimit),
+                    subscriber
+                );
+                queryFuture.get();
+            }
+            printTopicDescriptions(Collections.emptyList(), opts);
+        }
+
+        private void printTopicDescriptions(
+                List<org.apache.kafka.clients.admin.TopicDescription> topicDescriptions,
+                TopicCommandOptions opts
+        ) throws ExecutionException, InterruptedException {
+            printTopicDescriptions(topicDescriptions, opts, "");
+        }
+        private void printTopicDescriptions(
+            List<org.apache.kafka.clients.admin.TopicDescription> topicDescriptions,
+            TopicCommandOptions opts,
+            String previousPrintedTopic
+        ) throws ExecutionException, InterruptedException {
             List<String> topicNames = topicDescriptions.stream()
                 .map(org.apache.kafka.clients.admin.TopicDescription::name)
                 .collect(Collectors.toList());
+
             Map<ConfigResource, KafkaFuture<Config>> allConfigs = adminClient.describeConfigs(
                 topicNames.stream()
                     .map(name -> new ConfigResource(ConfigResource.Type.TOPIC, name))
                     .collect(Collectors.toList())
             ).values();
-            List<Integer> liveBrokers = adminClient.describeCluster().nodes().get().stream()
+            KafkaFuture<Collection<Node>> liveBrokers = adminClient.describeCluster().nodes();
+
+            DescribeOptions describeOptions = new DescribeOptions(opts, new HashSet<>(liveBrokers.get().stream()
                 .map(Node::id)
-                .collect(Collectors.toList());
-            DescribeOptions describeOptions = new DescribeOptions(opts, new HashSet<>(liveBrokers));
+                .collect(Collectors.toList())));
             Set<TopicPartition> topicPartitions = topicDescriptions
                 .stream()
                 .flatMap(td -> td.partitions().stream()
-                    .map(p -> new TopicPartition(td.name(), p.partition())))
+                        .map(p -> new TopicPartition(td.name(), p.partition())))
                 .collect(Collectors.toSet());
             Map<TopicPartition, PartitionReassignment> reassignments = listAllReassignments(topicPartitions);
             for (org.apache.kafka.clients.admin.TopicDescription td : topicDescriptions) {
@@ -596,7 +719,10 @@ public abstract class TopicCommand {
                 Config config = allConfigs.get(new ConfigResource(ConfigResource.Type.TOPIC, topicName)).get();
                 ArrayList<TopicPartitionInfo> sortedPartitions = new ArrayList<>(td.partitions());
                 sortedPartitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));
-                printDescribeConfig(opts, describeOptions, reassignments, td, topicName, topicId, config, sortedPartitions);
+                if (!previousPrintedTopic.equals(topicName)) {
+                    printDescribeConfig(opts, describeOptions, reassignments, td, topicName, topicId, config, sortedPartitions);
+                    previousPrintedTopic = topicName;
+                }
                 printPartitionDescription(describeOptions, reassignments, td, topicName, config, sortedPartitions);
             }
         }
@@ -716,6 +842,8 @@ public abstract class TopicCommand {
 
         private final OptionSpecBuilder excludeInternalTopicOpt;
 
+        private final ArgumentAcceptingOptionSpec<Integer> partitionSizeLimitPerResponseOpt;
+
         private final Set<OptionSpec<?>> allTopicLevelOpts;
 
         private final Set<OptionSpecBuilder> allReplicationReportOpts;
@@ -799,6 +927,11 @@ public abstract class TopicCommand {
                 "if set when creating topics, the action will only execute if the topic does not already exist.");
             excludeInternalTopicOpt = parser.accepts("exclude-internal",
                 "exclude internal topics when running list or describe command. The internal topics will be listed by default");
+            partitionSizeLimitPerResponseOpt = parser.accepts("partition-size-limit-per-response",
+                "the maximum partition size to be included in one DescribeTopicPartitions response. Only valid if use-describe-topics-api is used")
+                    .withRequiredArg()
+                    .describedAs("maximun # of partitions in one response.")
+                    .ofType(java.lang.Integer.class);
             options = parser.parse(args);
 
             allTopicLevelOpts = new HashSet<>(Arrays.asList(alterOpt, createOpt, describeOpt, listOpt, deleteOpt));
@@ -916,6 +1049,10 @@ public abstract class TopicCommand {
 
         public Boolean excludeInternalTopics() {
             return has(excludeInternalTopicOpt);
+        }
+
+        public Optional<Integer> partitionSizeLimitPerResponse() {
+            return valueAsOption(partitionSizeLimitPerResponseOpt);
         }
 
         public Optional<List<String>> topicConfig() {
