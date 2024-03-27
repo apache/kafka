@@ -601,11 +601,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       numPartitions = 2
     )
 
-    val barId = TestUtils.createTopicWithAdminRaw(
-      admin = admin,
-      topic = "bar"
-    )
-
     // This is the expected assignment.
     var expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
       .setAssignedTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
@@ -637,6 +632,11 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         .setMemberEpoch(2)
         .setSubscribedTopicNames(List("foo", "bar").asJava), true
     ).build()
+
+    val barId = TestUtils.createTopicWithAdminRaw(
+      admin = admin,
+      topic = "bar"
+    )
 
     expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
       .setAssignedTopicPartitions(List(
@@ -707,7 +707,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions.containsAll(expectedAssignment.assignedTopicPartitions)
     }, msg = s"Could not get bar partitions assigned upon rejoining. Last response $shareGroupHeartbeatResponse.")
 
-    // Epoch should have been bumped when a member is removed and agin when it joins back.
+    // Epoch should have been bumped when a member is removed and again when it joins back.
     assertEquals(6, shareGroupHeartbeatResponse.data.memberEpoch)
   }
 
