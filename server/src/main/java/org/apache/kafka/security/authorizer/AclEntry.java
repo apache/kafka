@@ -25,6 +25,7 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.server.util.Json;
+import org.apache.kafka.server.util.Utils;
 import org.apache.kafka.server.util.json.DecodeJson;
 import org.apache.kafka.server.util.json.JsonObject;
 import org.apache.kafka.server.util.json.JsonValue;
@@ -128,8 +129,7 @@ public class AclEntry extends AccessControlEntry {
         JsonObject js = jsonValue.get().asJsonObject();
 
         //the acl json version.
-        if (js.apply(VERSION_KEY).to(INT) != CURRENT_VERSION)
-            throw new IllegalArgumentException("requirement failed");
+        Utils.require(js.apply(VERSION_KEY).to(INT) != CURRENT_VERSION);
 
         Set<AclEntry> res = new HashSet<>();
 
@@ -164,7 +164,7 @@ public class AclEntry extends AccessControlEntry {
             case TRANSACTIONAL_ID:
                 return new HashSet<>(Arrays.asList(DESCRIBE, WRITE));
             case DELEGATION_TOKEN:
-                return new HashSet<>(Arrays.asList(DESCRIBE));
+                return Collections.singleton(DESCRIBE);
             case USER:
                 return new HashSet<>(Arrays.asList(CREATE_TOKENS, DESCRIBE_TOKENS));
             default:

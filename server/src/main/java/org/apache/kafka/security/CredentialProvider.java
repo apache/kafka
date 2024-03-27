@@ -26,14 +26,11 @@ import java.util.Collection;
 import java.util.Properties;
 
 public class CredentialProvider {
-    private final Collection<String> scramMechanisms;
     public final DelegationTokenCache tokenCache;
     public final CredentialCache credentialCache = new CredentialCache();
 
     public CredentialProvider(Collection<String> scramMechanisms, DelegationTokenCache tokenCache) {
-        this.scramMechanisms = scramMechanisms;
         this.tokenCache = tokenCache;
-
         ScramCredentialUtils.createCache(credentialCache, scramMechanisms);
     }
 
