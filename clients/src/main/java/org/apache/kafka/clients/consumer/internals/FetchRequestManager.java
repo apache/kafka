@@ -55,15 +55,22 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
         this.networkClientDelegate = networkClientDelegate;
     }
 
+    /**
+     * Node's availability will be checked at a later stage, so we default to return false.
+     * @param node {@link Node} to check for availability
+     * @return
+     */
     @Override
     protected boolean isUnavailable(Node node) {
-        return networkClientDelegate.isUnavailable(node);
+        return false;
     }
 
+    /**
+     * Authentication failure will be checked at a later stage, so we do nothing here.
+     * @param node {@link Node} to check for a previous {@link AuthenticationException}; if found it is thrown
+     */
     @Override
-    protected void maybeThrowAuthFailure(Node node) {
-        networkClientDelegate.maybeThrowAuthFailure(node);
-    }
+    protected void maybeThrowAuthFailure(Node node) {}
 
     /**
      * {@inheritDoc}

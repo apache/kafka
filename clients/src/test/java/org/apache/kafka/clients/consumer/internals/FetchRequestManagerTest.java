@@ -836,10 +836,10 @@ public class FetchRequestManagerTest {
         Node node = initialUpdateResponse.brokers().iterator().next();
 
         client.backoff(node, 500);
-        assertEquals(0, sendFetches());
+        assertEquals(1, sendFetches());
 
         time.sleep(500);
-        assertEquals(1, sendFetches());
+        assertEquals(0, sendFetches());
     }
 
     @Test
