@@ -72,8 +72,12 @@ class ProducerIdManagerTest {
       queue.head.error
     }
 
-    def clearExecutedError(): Unit = queue.synchronized {
-      if (queue.head.repeat == 0) {
+    def clearProcessedError(): Unit = {
+      TestUtils.waitUntilTrue(() =>
+        queue.synchronized {
+          queue.head.repeat == 0
+        }, "error wasn't processed")
+      queue.synchronized {
         queue.dequeue()
       }
     }
@@ -236,7 +240,7 @@ class ProducerIdManagerTest {
     time.sleep(RetryBackoffMs)
     verifyFailure(manager)
 
-    manager.errorQueue.clearExecutedError()
+    manager.errorQueue.clearProcessedError()
     time.sleep(RetryBackoffMs)
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 1, 1), 1)
   }
@@ -260,7 +264,7 @@ class ProducerIdManagerTest {
       errorQueue = new ErrorQueue(ErrorCount(Errors.UNKNOWN_SERVER_ERROR, 1), ErrorCount.indefinitely(Errors.NONE)), time = time, remainingRetries = 2)
 
     verifyFailure(manager)
-    manager.errorQueue.clearExecutedError()
+    manager.errorQueue.clearProcessedError()
 
     // We should only get a new block once retry backoff ms has passed.
     assertCoordinatorLoadInProgressExceptionFailure(manager.generateProducerId())
