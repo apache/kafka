@@ -748,7 +748,7 @@ subprojects {
   }
 
   if (userEnableTestCoverage) {
-    def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
+    def coverageGen = it.path == ':core' ? 'reportTestScoverage' : 'jacocoTestReport'
     tasks.register('reportCoverage').configure { dependsOn(coverageGen) }
   }
 
