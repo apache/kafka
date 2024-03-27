@@ -17,7 +17,9 @@
 
 package org.apache.kafka.controller.errors;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -70,7 +72,13 @@ public final class EventHandlerExceptionInfo {
         Throwable internal,
         Supplier<OptionalInt> latestControllerSupplier
     ) {
-        if (internal instanceof ApiException) {
+        if (internal instanceof CorruptRecordException) {
+            // Even though this is an ApiException, it's an indication of a problem at the log layer, so we treat it as a fault
+            return new EventHandlerExceptionInfo(true, true, internal);
+        } else if (internal instanceof InvalidRecordException) {
+            // Even though this is an ApiException, it's an indication of a problem at the log layer, so we treat it as a fault
+            return new EventHandlerExceptionInfo(true, true, internal);
+        } else if (internal instanceof ApiException) {
             // This exception is a standard API error response from the controller, which can pass
             // through without modification.
             return new EventHandlerExceptionInfo(false, false, internal);
