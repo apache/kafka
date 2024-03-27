@@ -16,17 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.internals.IdempotentCloser;
-import org.apache.kafka.common.utils.LogContext;
-import org.slf4j.Logger;
-
-import java.io.Closeable;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 
 /**
@@ -36,100 +25,7 @@ import java.util.concurrent.BlockingQueue;
  * communication channel is formed around {@link BlockingQueue a shared queue} into which thread <em>A</em>
  * enqueues events and thread <em>B</em> reads and processes those events.
  */
-public abstract class EventProcessor<T> implements Closeable {
+public interface EventProcessor<T> {
 
-    private final Logger log;
-    private final BlockingQueue<T> eventQueue;
-    private final IdempotentCloser closer;
-
-    protected EventProcessor(final LogContext logContext, final BlockingQueue<T> eventQueue) {
-        this.log = logContext.logger(EventProcessor.class);
-        this.eventQueue = eventQueue;
-        this.closer = new IdempotentCloser();
-    }
-
-    public abstract boolean process();
-
-    protected abstract void process(T event);
-
-    @Override
-    public void close() {
-        closer.close(this::closeInternal, () -> log.warn("The event processor was already closed"));
-    }
-
-    protected interface ProcessHandler<T> {
-
-        void onProcess(T event, Optional<KafkaException> error);
-    }
-
-    /**
-     * Drains all available events from the queue, and then processes them in order. If any errors are thrown while
-     * processing the individual events, these are submitted to the given {@link ProcessHandler}.
-     */
-    protected boolean process(ProcessHandler<T> processHandler) {
-        closer.assertOpen("The processor was previously closed, so no further processing can occur");
-
-        List<T> events = drain();
-
-        if (events.isEmpty()) {
-            log.trace("No events to process");
-            return false;
-        }
-
-        try {
-            log.trace("Starting processing of {} event{}", events.size(), events.size() == 1 ? "" : "s");
-
-            for (T event : events) {
-                try {
-                    Objects.requireNonNull(event, "Attempted to process a null event");
-                    log.trace("Processing event: {}", event);
-                    process(event);
-                    processHandler.onProcess(event, Optional.empty());
-                } catch (Throwable t) {
-                    KafkaException error = ConsumerUtils.maybeWrapAsKafkaException(t);
-                    processHandler.onProcess(event, Optional.of(error));
-                }
-            }
-        } finally {
-            log.trace("Completed processing");
-        }
-
-        return true;
-    }
-
-    /**
-     * It is possible for the consumer to close before complete processing all the events in the queue. In
-     * this case, we need to throw an exception to notify the user the consumer is closed.
-     */
-    private void closeInternal() {
-        log.trace("Closing event processor");
-        List<T> incompleteEvents = drain();
-
-        if (incompleteEvents.isEmpty())
-            return;
-
-        KafkaException exception = new KafkaException("The consumer is closed");
-
-        // Check each of the events and if it has a Future that is incomplete, complete it exceptionally.
-        incompleteEvents
-                .stream()
-                .filter(e -> e instanceof CompletableEvent)
-                .map(e -> ((CompletableEvent<?>) e).future())
-                .filter(f -> !f.isDone())
-                .forEach(f -> {
-                    log.debug("Completing {} with exception {}", f, exception.getMessage());
-                    f.completeExceptionally(exception);
-                });
-
-        log.debug("Discarding {} events because the consumer is closing", incompleteEvents.size());
-    }
-
-    /**
-     * Moves all the events from the queue to the returned list.
-     */
-    private List<T> drain() {
-        LinkedList<T> events = new LinkedList<>();
-        eventQueue.drainTo(events);
-        return events;
-    }
+    void process(T event);
 }

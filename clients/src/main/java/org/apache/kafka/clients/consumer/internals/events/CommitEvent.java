@@ -35,11 +35,6 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Void> {
         this.offsets = validate(offsets);
     }
 
-    protected CommitEvent(final Type type, final Map<TopicPartition, OffsetAndMetadata> offsets, final long deadlineMs) {
-        super(type, deadlineMs);
-        this.offsets = validate(offsets);
-    }
-
     /**
      * Validates the offsets are not negative and then returns the given offset map as
      * {@link Collections#unmodifiableMap(Map) as unmodifiable}.

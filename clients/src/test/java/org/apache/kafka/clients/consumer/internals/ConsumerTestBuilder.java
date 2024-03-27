@@ -270,7 +270,6 @@ public class ConsumerTestBuilder implements Closeable {
             );
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 logContext,
-                applicationEventQueue,
                 requestManagers,
                 metadata
             )
@@ -287,7 +286,6 @@ public class ConsumerTestBuilder implements Closeable {
     @Override
     public void close() {
         closeQuietly(requestManagers, RequestManagers.class.getSimpleName());
-        closeQuietly(applicationEventProcessor, ApplicationEventProcessor.class.getSimpleName());
     }
 
     public static class ConsumerNetworkThreadTestBuilder extends ConsumerTestBuilder {
@@ -303,6 +301,7 @@ public class ConsumerTestBuilder implements Closeable {
             this.consumerNetworkThread = new ConsumerNetworkThread(
                     logContext,
                     time,
+                    applicationEventQueue,
                     () -> applicationEventProcessor,
                     () -> networkClientDelegate,
                     () -> requestManagers
