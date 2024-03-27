@@ -59,6 +59,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class GetOffsetShell {
+    static final String USAGE_TEXT = "An interactive shell for getting topic-partition offsets.";
     private static final Pattern TOPIC_PARTITION_PATTERN = Pattern.compile("([^:,]*)(?::(?:([0-9]*)|(?:([0-9]*)-([0-9]*))))?");
 
     public static void main(String... args) {
@@ -142,7 +143,7 @@ public class GetOffsetShell {
             excludeInternalTopicsOpt = parser.accepts("exclude-internal-topics", "By default, internal topics are included. If specified, internal topics are excluded.");
 
             if (args.length == 0) {
-                CommandLineUtils.printUsageAndExit(parser, "An interactive shell for getting topic-partition offsets.");
+                CommandLineUtils.printUsageAndExit(parser, USAGE_TEXT);
             }
 
             try {
@@ -156,6 +157,8 @@ public class GetOffsetShell {
             } else {
                 effectiveBrokerListOpt = brokerListOpt;
             }
+
+            CommandLineUtils.maybePrintHelpOrVersion(this, USAGE_TEXT);
 
             CommandLineUtils.checkRequiredArgs(parser, options, effectiveBrokerListOpt);
 

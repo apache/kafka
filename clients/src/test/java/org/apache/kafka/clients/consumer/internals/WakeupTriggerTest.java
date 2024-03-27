@@ -33,7 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -174,14 +173,7 @@ public class WakeupTriggerTest {
 
     private void assertWakeupExceptionIsThrown(final CompletableFuture<?> future) {
         assertTrue(future.isCompletedExceptionally());
-        try {
-            future.get(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof WakeupException);
-            return;
-        } catch (Exception e) {
-            fail("The task should throw an ExecutionException but got:" + e);
-        }
-        fail("The task should throw an ExecutionException");
+        assertInstanceOf(WakeupException.class,
+            assertThrows(ExecutionException.class, () -> future.get(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)).getCause());
     }
 }

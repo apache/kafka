@@ -186,7 +186,7 @@ public class MultiThreadedEventProcessorTest {
                 new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet)
             );
 
-            events.forEach(eventProcessor::enqueue);
+            events.forEach(eventProcessor::enqueueLast);
 
             CompletableFuture.allOf(events
                 .stream()
@@ -223,7 +223,7 @@ public class MultiThreadedEventProcessorTest {
                 new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet, true)  // Event 5
             );
 
-            events.forEach(eventProcessor::enqueue);
+            events.forEach(eventProcessor::enqueueLast);
 
             // Events 0 and 1 are executed.
             assertTrue(events.get(0).awaitExecution(5, TimeUnit.SECONDS));
@@ -301,7 +301,7 @@ public class MultiThreadedEventProcessorTest {
         eventProcessor.close();
 
         assertThrows(RejectedExecutionException.class,
-            () -> eventProcessor.enqueue(new FutureEvent<>(new TopicPartition("foo", 0), () -> 0)));
+            () -> eventProcessor.enqueueLast(new FutureEvent<>(new TopicPartition("foo", 0), () -> 0)));
     }
 
     @Test
@@ -332,14 +332,14 @@ public class MultiThreadedEventProcessorTest {
             );
 
             // Enqueue the blocking event.
-            eventProcessor.enqueue(blockingEvent);
+            eventProcessor.enqueueLast(blockingEvent);
 
             // Ensure that the blocking event is executed.
             waitForCondition(() -> numEventsExecuted.get() > 0,
                 "Blocking event not executed.");
 
             // Enqueue the other events.
-            events.forEach(eventProcessor::enqueue);
+            events.forEach(eventProcessor::enqueueLast);
 
             // Events should not be completed.
             events.forEach(event -> assertFalse(event.future.isDone()));
@@ -349,7 +349,7 @@ public class MultiThreadedEventProcessorTest {
 
             // Enqueuing a new event is rejected.
             assertThrows(RejectedExecutionException.class,
-                () -> eventProcessor.enqueue(blockingEvent));
+                () -> eventProcessor.enqueueLast(blockingEvent));
 
             // Release the blocking event to unblock the thread.
             blockingEvent.release();
@@ -398,7 +398,7 @@ public class MultiThreadedEventProcessorTest {
             new DelayEventAccumulator(mockTime, 500L)
         )) {
             // Enqueue the blocking event.
-            eventProcessor.enqueue(blockingEvent);
+            eventProcessor.enqueueLast(blockingEvent);
 
             // Ensure that the blocking event is executed.
             waitForCondition(() -> numEventsExecuted.get() > 0,
@@ -414,7 +414,7 @@ public class MultiThreadedEventProcessorTest {
                 mockTime.milliseconds()
             );
 
-            eventProcessor.enqueue(otherEvent);
+            eventProcessor.enqueueLast(otherEvent);
 
             // Pass the time.
             mockTime.sleep(3000L);
@@ -492,7 +492,7 @@ public class MultiThreadedEventProcessorTest {
                 new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet)
             );
 
-            events.forEach(eventProcessor::enqueue);
+            events.forEach(eventProcessor::enqueueLast);
 
             CompletableFuture.allOf(events
                 .stream()

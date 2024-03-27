@@ -37,6 +37,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -158,19 +159,15 @@ class MetadataQuorumCommandTest {
 
     @ClusterTest(clusterType = Type.ZK, brokers = 1)
     public void testDescribeQuorumInZkMode() {
-        assertTrue(
-            assertThrows(
+        assertInstanceOf(UnsupportedVersionException.class, assertThrows(
                 ExecutionException.class,
                 () -> MetadataQuorumCommand.execute("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
-            ).getCause() instanceof UnsupportedVersionException
-        );
+        ).getCause());
 
-        assertTrue(
-            assertThrows(
+        assertInstanceOf(UnsupportedVersionException.class, assertThrows(
                 ExecutionException.class,
                 () -> MetadataQuorumCommand.execute("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
-            ).getCause() instanceof UnsupportedVersionException
-        );
+        ).getCause());
 
     }
 

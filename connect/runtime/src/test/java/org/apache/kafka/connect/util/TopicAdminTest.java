@@ -80,6 +80,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 @SuppressWarnings("ClassDataAbstractionCoupling")
 public class TopicAdminTest {
@@ -100,7 +101,7 @@ public class TopicAdminTest {
             assertTrue(admin.createOrFindTopics(newTopic).isEmpty());
         }
     }
-
+    
     @Test
     public void returnEmptyWithClusterAuthorizationFailureOnCreate() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
@@ -124,7 +125,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(describeTopicResponseWithClusterAuthorizationException(newTopic));
             TopicAdmin admin = new TopicAdmin(env.adminClient());
             Exception e = assertThrows(ConnectException.class, () -> admin.describeTopics(newTopic.name()));
-            assertTrue(e.getCause() instanceof ClusterAuthorizationException);
+            assertInstanceOf(ClusterAuthorizationException.class, e.getCause());
         }
     }
 
@@ -151,7 +152,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(describeTopicResponseWithTopicAuthorizationException(newTopic));
             TopicAdmin admin = new TopicAdmin(env.adminClient());
             Exception e = assertThrows(ConnectException.class, () -> admin.describeTopics(newTopic.name()));
-            assertTrue(e.getCause() instanceof TopicAuthorizationException);
+            assertInstanceOf(TopicAuthorizationException.class, e.getCause());
         }
     }
 
