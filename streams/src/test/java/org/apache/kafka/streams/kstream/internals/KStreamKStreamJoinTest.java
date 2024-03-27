@@ -62,6 +62,7 @@ import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 import org.mockito.Mockito;
 
 import java.time.Duration;
@@ -85,6 +86,7 @@ import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMillis;
 
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
@@ -128,7 +130,7 @@ public class KStreamKStreamJoinTest {
 
             assertThat(
                 appender.getMessages(),
-                hasItem("Skipping record due to null key or value. topic=[left] partition=[0] offset=[0]")
+                hasItem("Skipping record. reason=[null key or value] topic=[left] partition=[0] offset=[0]")
             );
         }
     }
@@ -819,7 +821,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(150)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -1382,7 +1384,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(0)).after(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(0), ofMillis(150)).after(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(),
                 Serdes.String(),
                 Serdes.String())
@@ -1651,7 +1653,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(0)).before(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(0), ofMillis(150)).before(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -1899,6 +1901,15 @@ public class KStreamKStreamJoinTest {
             }
             processor.checkAndClearProcessResult();
         }
+    }
+
+    static void assertRecordDropCount(final double expected, final MockApiProcessor<Integer, String, Void, Void> processor) {
+        final String metricGroup = "stream-task-metrics";
+        final String metricName = "dropped-records-total";
+        Assertions.assertEquals(
+            expected,
+            getMetricByName(processor.context().metrics().metrics(), metricName, metricGroup).metricValue()
+        );
     }
 
     private void buildStreamsJoinThatShouldThrow(final StreamJoined<String, Integer, Integer> streamJoined,

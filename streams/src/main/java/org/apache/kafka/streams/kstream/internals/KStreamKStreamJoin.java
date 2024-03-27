@@ -129,7 +129,10 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
-
+            if (sharedTimeTracker.streamTime > timeTo + joinGraceMs) {
+                StreamStreamJoinUtil.logSkip("record arrived after window close", LOG, droppedRecordsSensor, context());
+                return;
+            }
             if (outer && record.key() == null && record.value() != null) {
                 context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                 return;
