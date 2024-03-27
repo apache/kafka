@@ -806,8 +806,10 @@ public class ReassignPartitionsCommand {
         do {
             Set<TopicPartitionReplica> completed = alterReplicaLogDirs(adminClient, pendingReplicas);
             if (!completed.isEmpty()) {
-                completed.forEach(replica -> System.out.printf("Successfully started moving log directory to %s for replica %s-%s with broker id: %s %n",
-                         pendingReplicas.get(replica), replica.topic(), replica.partition(), replica.brokerId()));
+                completed.stream().sorted(ReassignPartitionsCommand::compareTopicPartitionReplicas).forEach(replica -> {
+                    System.out.printf("Successfully started moving log directory to %s for replica %s-%s with broker id: %s %n",
+                        pendingReplicas.get(replica), replica.topic(), replica.partition(), replica.brokerId());
+                });
             }
             completed.forEach(pendingReplicas::remove);
             if (pendingReplicas.isEmpty()) {
