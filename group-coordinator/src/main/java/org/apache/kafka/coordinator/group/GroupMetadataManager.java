@@ -789,11 +789,10 @@ public class GroupMetadataManager {
         createGroupTombstoneRecords(classicGroup, records);
         ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, classicGroup.groupId(), metrics);
         classicGroup.convertToConsumerGroup(consumerGroup, records, metadataImage.topics());
-        // TODO: The consumer restarts and then joins the consumer group to trigger the migration, so the triggering
-        // consumer group heartbeat must have been from a newly created member. Its subscribedTopicNames will always be
-        // updated and the group epoch will always be bumped. It seems that there's no need to bump the group epoch
-        // even for the rebalancing group...
+
+        // If the group is rejoining, the subscription will not be changes so we need to manually trigger a rebalance.
         if (classicGroup.isInState(PREPARING_REBALANCE) || classicGroup.isInState(COMPLETING_REBALANCE)) {
+            consumerGroup.setGroupEpoch(classicGroup.generationId() + 1);
             records.add(RecordHelpers.newGroupEpochRecord(classicGroup.groupId(), classicGroup.generationId() + 1));
         }
         return consumerGroup;
