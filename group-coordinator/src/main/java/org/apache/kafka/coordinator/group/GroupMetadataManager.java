@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
@@ -160,6 +161,7 @@ public class GroupMetadataManager {
         private int classicGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
         private int classicGroupMinSessionTimeoutMs;
         private int classicGroupMaxSessionTimeoutMs;
+        private GroupConsumerUpgradePolicy groupConsumerUpgradePolicy;
         private GroupCoordinatorMetricsShard metrics;
 
         Builder withLogContext(LogContext logContext) {
@@ -237,6 +239,11 @@ public class GroupMetadataManager {
             return this;
         }
 
+        Builder withGroupProtocolMigrationPolicy(GroupConsumerUpgradePolicy groupConsumerUpgradePolicy) {
+            this.groupConsumerUpgradePolicy = groupConsumerUpgradePolicy;
+            return this;
+        }
+
         Builder withGroupCoordinatorMetricsShard(GroupCoordinatorMetricsShard metrics) {
             this.metrics = metrics;
             return this;
@@ -271,7 +278,8 @@ public class GroupMetadataManager {
                 classicGroupInitialRebalanceDelayMs,
                 classicGroupNewMemberJoinTimeoutMs,
                 classicGroupMinSessionTimeoutMs,
-                classicGroupMaxSessionTimeoutMs
+                classicGroupMaxSessionTimeoutMs,
+                groupConsumerUpgradePolicy
             );
         }
     }
@@ -384,6 +392,11 @@ public class GroupMetadataManager {
      */
     private final int classicGroupMaxSessionTimeoutMs;
 
+    /**
+     * The config indicating whether group protocol upgrade/downgrade is allowed.
+     */
+    private final GroupConsumerUpgradePolicy groupConsumerUpgradePolicy;
+
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
@@ -400,7 +413,8 @@ public class GroupMetadataManager {
         int classicGroupInitialRebalanceDelayMs,
         int classicGroupNewMemberJoinTimeoutMs,
         int classicGroupMinSessionTimeoutMs,
-        int classicGroupMaxSessionTimeoutMs
+        int classicGroupMaxSessionTimeoutMs,
+        GroupConsumerUpgradePolicy groupConsumerUpgradePolicy
     ) {
         this.logContext = logContext;
         this.log = logContext.logger(GroupMetadataManager.class);
@@ -422,6 +436,7 @@ public class GroupMetadataManager {
         this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
         this.classicGroupMinSessionTimeoutMs = classicGroupMinSessionTimeoutMs;
         this.classicGroupMaxSessionTimeoutMs = classicGroupMaxSessionTimeoutMs;
+        this.groupConsumerUpgradePolicy = groupConsumerUpgradePolicy;
     }
 
     /**
@@ -614,10 +629,11 @@ public class GroupMetadataManager {
         } else {
             if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
+            } else if (createIfNotExists && validateOnlineUpgrade((ClassicGroup) group)) {
+                return convertToConsumerGroup((ClassicGroup) group, records);
             } else {
-                // We don't support upgrading/downgrading between protocols at the moment so
-                // we throw an exception if a group exists with the wrong type.
-                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
+                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
+                    groupId));
             }
         }
     }
@@ -758,6 +774,28 @@ public class GroupMetadataManager {
             throw new GroupIdNotFoundException(String.format("Group %s is not a classic group.",
                 groupId));
         }
+    }
+
+    public boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
+        return GroupConsumerUpgradePolicy.isUpgradeEnabled(groupConsumerUpgradePolicy) &&
+            !classicGroup.isInState(DEAD) &&
+            ConsumerProtocol.PROTOCOL_TYPE.equals(classicGroup.protocolType().orElse(null)) &&
+            classicGroup.size() <= consumerGroupMaxSize;
+    }
+
+    ConsumerGroup convertToConsumerGroup(ClassicGroup classicGroup, List<Record> records) {
+        classicGroup.completeAllJoinFutures(Errors.REBALANCE_IN_PROGRESS);
+        classicGroup.completeAllSyncFutures(Errors.REBALANCE_IN_PROGRESS);
+        createGroupTombstoneRecords(classicGroup, records);
+        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, classicGroup.groupId(), metrics);
+        classicGroup.convertToConsumerGroup(consumerGroup, records, metadataImage.topics());
+
+        // Manually trigger a rebalance.
+        if (classicGroup.isInState(PREPARING_REBALANCE) || classicGroup.isInState(COMPLETING_REBALANCE)) {
+            consumerGroup.setGroupEpoch(classicGroup.generationId() + 1);
+            records.add(RecordHelpers.newGroupEpochRecord(classicGroup.groupId(), classicGroup.generationId() + 1));
+        }
+        return consumerGroup;
     }
 
     /**
