@@ -1092,8 +1092,6 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
       if (immutableListenerConfigs(newConfig, listenerName.configPrefix) != immutableListenerConfigs(oldConfig, listenerName.configPrefix))
         throw new ConfigException(s"Configs cannot be updated dynamically for existing listener $listenerName, " +
           "restart broker or create a new listener for update")
-      if (oldConfig.effectiveListenerSecurityProtocolMap(listenerName) != newConfig.effectiveListenerSecurityProtocolMap(listenerName))
-        throw new ConfigException(s"Security protocol cannot be updated for existing listener $listenerName")
     }
     if (!newAdvertisedListeners.contains(newConfig.interBrokerListenerName))
       throw new ConfigException(s"Advertised listener must be specified for inter-broker listener ${newConfig.interBrokerListenerName}")
@@ -1111,8 +1109,8 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     val newListenerMap = listenersToMap(newListeners)
     val oldListeners = oldConfig.listeners
     val oldListenerMap = listenersToMap(oldListeners)
-    val listenersRemoved = oldListeners.filterNot(e => newListenerMap.contains(e.listenerName))
-    val listenersAdded = newListeners.filterNot(e => oldListenerMap.contains(e.listenerName))
+    val listenersRemoved = filterDifferentListeners(oldListeners, newListenerMap)
+    val listenersAdded = filterDifferentListeners(newListeners, oldListenerMap)
     if (listenersRemoved.nonEmpty || listenersAdded.nonEmpty) {
       LoginManager.closeAll() // Clear SASL login cache to force re-login
       if (listenersRemoved.nonEmpty) server.socketServer.removeListeners(listenersRemoved)
@@ -1131,6 +1129,14 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
   private def listenersToMap(listeners: Seq[EndPoint]): Map[ListenerName, EndPoint] =
     listeners.map(e => (e.listenerName, e)).toMap
 
+  private def filterDifferentListeners(listeners: Seq[EndPoint], listenersMap: Map[ListenerName, EndPoint]): Seq[EndPoint] = {
+    listeners.filter(e =>
+      listenersMap.get(e.listenerName) match {
+        case None => true
+        case Some(endpoint) => endpoint != e
+      }
+    )
+  }
 }
 
 class DynamicProducerStateManagerConfig(val producerStateManagerConfig: ProducerStateManagerConfig) extends BrokerReconfigurable with Logging {
