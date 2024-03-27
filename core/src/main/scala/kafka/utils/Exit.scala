@@ -38,22 +38,42 @@ object Exit {
     JExit.addShutdownHook(name, () => shutdownHook)
   }
 
+  /**
+   * For testing only, do not call in main code.
+   */
   def setExitProcedure(exitProcedure: (Int, Option[String]) => Nothing): Unit =
     JExit.setExitProcedure(functionToProcedure(exitProcedure))
 
+  /**
+   * For testing only, do not call in main code.
+   */
   def setHaltProcedure(haltProcedure: (Int, Option[String]) => Nothing): Unit =
     JExit.setHaltProcedure(functionToProcedure(haltProcedure))
 
+  /**
+   * For testing only, do not call in main code.
+   */
   def setShutdownHookAdder(shutdownHookAdder: (String, => Unit) => Unit): Unit = {
     JExit.setShutdownHookAdder((name, runnable) => shutdownHookAdder(name, runnable.run()))
   }
 
+  /**
+   * For testing only, do not call in main code.
+   * <p>Clears the procedure set in [[setExitProcedure]], but does not restore system default behavior of exiting the JVM.
+   */
   def resetExitProcedure(): Unit =
     JExit.resetExitProcedure()
 
+  /**
+   * For testing only, do not call in main code.
+   * <p>Clears the procedure set in [[setHaltProcedure]], but does not restore system default behavior of exiting the JVM.
+   */
   def resetHaltProcedure(): Unit =
     JExit.resetHaltProcedure()
 
+  /**
+   * For testing only, do not call in main code.
+   */
   def resetShutdownHookAdder(): Unit =
     JExit.resetShutdownHookAdder()
 
