@@ -872,9 +872,10 @@ public class NetworkClient implements KafkaClient {
         for (String nodeId : nodes) {
             this.selector.close(nodeId);
             log.info(
-                "Disconnecting from node {} due to socket connection setup timeout. " +
+                "Disconnecting from node {} on {} due to socket connection setup timeout. " +
                 "The timeout value is {} ms.",
                 nodeId,
+                ChannelState.LOCAL_CLOSE.remoteAddress(),
                 connectionStates.connectionSetupTimeoutMs(nodeId));
             processTimeoutDisconnection(responses, nodeId, now);
         }
