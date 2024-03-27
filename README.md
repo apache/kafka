@@ -104,7 +104,7 @@ Using compiled files:
     ./bin/zookeeper-server-start.sh config/zookeeper.properties
     ./bin/kafka-server-start.sh config/server.properties
 
->Since ZooKeeper is planned to be removed in Apache Kafka 4.0, the docker image only support running in KRaft mode
+>Since ZooKeeper mode is already deprecated and planned to be removed in Apache Kafka 4.0, the docker image only supports running in KRaft mode
 
 ### Cleaning the build ###
     ./gradlew clean
@@ -294,7 +294,6 @@ See [tests/README.md](tests/README.md).
 ### Running in Vagrant ###
 
 See [vagrant/README.md](vagrant/README.md).
-
 
 ### Contribution ###
 
