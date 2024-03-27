@@ -174,6 +174,16 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     private boolean catchingUp = true;
 
     /**
+     * True if we have deferred metadata publishing to allow for batch accumulation
+     */
+    private boolean nextBatchLoaderFlushScheduled = false;
+
+    /**
+     * Maximum of nanoseconds during which batches will be accumulated before publishing
+     */
+    private final int batchLoaderFlushLingerNs = 500000;
+
+    /**
      * The current leader and epoch.
      */
     private LeaderAndEpoch currentLeaderAndEpoch = LeaderAndEpoch.UNKNOWN;
@@ -352,6 +362,45 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         }
     }
 
+    // This is not thread-safe and must be called from an event
+    private void maybeScheduleNextBatchLoaderFlush() {
+        if (!nextBatchLoaderFlushScheduled) {
+            nextBatchLoaderFlushScheduled = true;
+
+            EventQueue.Event event = () -> {
+                log.trace("Flushing MetadataBatchLoader after deferral.");
+                nextBatchLoaderFlushScheduled = false;
+                try {
+                    batchLoader.maybeFlushBatches(currentLeaderAndEpoch);
+                } catch (Throwable e) {
+                    // This is a general catch-all block where we don't expect to end up;
+                    // failure-prone operations should have individual try/catch blocks around them.
+                    faultHandler.handleFault("Unhandled fault when publishing MetadataDelta. " +
+                            "Last image offset was " + image.offset(), e);
+                }
+            };
+
+            log.trace("Deferring metadata publish for {} us.", NANOSECONDS.toMicros(batchLoaderFlushLingerNs));
+            long delayNs = time.nanoseconds() + batchLoaderFlushLingerNs;
+            eventQueue.scheduleDeferred("deferredMetadataPublish", new EventQueue.EarliestDeadlineFunction(delayNs), event);
+        }
+    }
+
+    // This is not thread-safe and must be called from an event
+    private void flushMetadataBatchLoaderImmediately() {
+        log.trace("Flushing MetadataBatchLoader immediately");
+        eventQueue.cancelDeferred("deferredMetadataPublish");
+        nextBatchLoaderFlushScheduled = false;
+        try {
+            batchLoader.maybeFlushBatches(currentLeaderAndEpoch);
+        } catch (Throwable e) {
+            // This is a general catch-all block where we don't expect to end up;
+            // failure-prone operations should have individual try/catch blocks around them.
+            faultHandler.handleFault("Unhandled fault when publishing MetadataDelta. " +
+                    "Last image offset was " + image.offset(), e);
+        }
+    }
+
     @Override
     public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
         eventQueue.append(() -> {
@@ -362,7 +411,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                     metrics.updateBatchSize(batch.records().size());
                     metrics.updateBatchProcessingTimeNs(elapsedNs);
                 }
-                batchLoader.maybeFlushBatches(currentLeaderAndEpoch);
             } catch (Throwable e) {
                 // This is a general catch-all block where we don't expect to end up;
                 // failure-prone operations should have individual try/catch blocks around them.
@@ -370,6 +418,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                     "Last image offset was " + image.offset(), e);
             } finally {
                 reader.close();
+                maybeScheduleNextBatchLoaderFlush();
             }
         });
     }
@@ -378,6 +427,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     public void handleLoadSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
         eventQueue.append(() -> {
             try {
+                flushMetadataBatchLoaderImmediately();
+
                 long numLoaded = metrics.incrementHandleLoadSnapshotCount();
                 String snapshotName = Snapshots.filenameFromSnapshotId(reader.snapshotId());
                 log.info("handleLoadSnapshot({}): incrementing HandleLoadSnapshotCount to {}.",
@@ -441,6 +492,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     @Override
     public void handleLeaderChange(LeaderAndEpoch leaderAndEpoch) {
         eventQueue.append(() -> {
+            flushMetadataBatchLoaderImmediately();
+
             currentLeaderAndEpoch = leaderAndEpoch;
             for (MetadataPublisher publisher : publishers.values()) {
                 try {
@@ -469,6 +522,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         CompletableFuture<Void> future = new CompletableFuture<>();
         eventQueue.append(() -> {
             try {
+                flushMetadataBatchLoaderImmediately();
+
                 // Check that none of the publishers we are trying to install are already present.
                 for (MetadataPublisher newPublisher : newPublishers) {
                     MetadataPublisher prev = publishers.get(newPublisher.name());
@@ -504,7 +559,13 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     // VisibleForTesting
     void waitForAllEventsToBeHandled() throws Exception {
         CompletableFuture<Void> future = new CompletableFuture<>();
-        eventQueue.append(() -> future.complete(null));
+        long delayNs = time.nanoseconds() + 2 * batchLoaderFlushLingerNs;
+        eventQueue.scheduleDeferred(
+            "waitForAllEventsToBeHandled",
+            new EventQueue.EarliestDeadlineFunction(delayNs),
+            () -> {
+                future.complete(null);
+            });
         future.get();
     }
 
@@ -520,6 +581,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         CompletableFuture<Void> future = new CompletableFuture<>();
         eventQueue.append(() -> {
             try {
+                flushMetadataBatchLoaderImmediately();
+
                 if (!publishers.remove(publisher.name(), publisher)) {
                     if (!uninitializedPublishers.remove(publisher.name(), publisher)) {
                         throw faultHandler.handleFault("Attempted to remove publisher " + publisher.name() +
