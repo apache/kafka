@@ -105,7 +105,14 @@ public class ProducerIdControlManagerTest {
                     .setBrokerEpoch(100)
                     .setNextProducerId(40));
         }, "Producer ID range must only increase");
-        range = producerIdControlManager.generateNextProducerId(1, 100).response();
+        assertThrows(RuntimeException.class, () -> {
+            producerIdControlManager.replay(
+                new ProducerIdsRecord()
+                    .setBrokerId(2)
+                    .setBrokerEpoch(100)
+                    .setNextProducerId(42));
+        }, "Producer ID range must only increase");
+        range = producerIdControlManager.generateNextProducerId(3, 100).response();
         assertEquals(42, range.firstProducerId());
 
         // Gaps in the ID range are okay.
