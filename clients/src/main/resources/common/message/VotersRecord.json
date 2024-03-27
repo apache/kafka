@@ -26,7 +26,7 @@
         "about": "The replica id of the voter in the topic partition" },
       { "name": "VoterUuid", "type": "uuid", "versions": "0+",
         "about": "The directory id of the voter in the topic partition" },
-      { "name": "EndPoints", "type": "[]Endpoint", "versions": "0+",
+      { "name": "Endpoints", "type": "[]Endpoint", "versions": "0+",
         "about": "The endpoint that can be used to communicate with the voter", "fields": [
         { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
           "about": "The name of the endpoint" },

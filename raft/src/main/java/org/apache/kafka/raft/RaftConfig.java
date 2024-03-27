@@ -251,7 +251,7 @@ public class RaftConfig {
             .filter(connection -> connection.getValue() instanceof InetAddressSpec)
             .map(connection -> {
                 InetAddressSpec spec = (InetAddressSpec) connection.getValue();
-                return new Node(connection.getKey(), spec.address.getHostName(), spec.address.getPort());
+                return new Node(connection.getKey(), spec.address.getHostString(), spec.address.getPort());
             })
             .collect(Collectors.toList());
     }
