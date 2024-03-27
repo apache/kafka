@@ -22,7 +22,6 @@ import scala.collection.Seq
 
 import kafka.utils.{TestUtils, TestInfoUtils}
 import TestUtils._
-import kafka.server.QuorumTestHarness
 import java.io.File
 
 import kafka.server.checkpoints.OffsetCheckpointFile

@@ -29,12 +29,10 @@ import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 
 /**
  * Tests MM2 replication with SSL enabled at backup kafka cluster
  */
-@Tag("integration")
 public class MirrorConnectorsIntegrationSSLTest extends MirrorConnectorsIntegrationBaseTest {
 
     @BeforeEach

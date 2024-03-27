@@ -34,6 +34,7 @@ import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -45,6 +46,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * Tests for the SSL transport layer.
  * Checks different versions of the protocol usage on the server and client.
  */
+// Marked integration for flakiness
+@Tag("integration")
 public class SslVersionsTransportLayerTest {
     private static final int BUFFER_SIZE = 4 * 1024;
     private static final Time TIME = Time.SYSTEM;

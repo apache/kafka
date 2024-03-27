@@ -26,6 +26,7 @@ import org.apache.kafka.connect.runtime.isolation.ReflectionScanner;
 import org.apache.kafka.connect.runtime.isolation.ServiceLoaderScanner;
 import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -65,6 +66,8 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+// Marked integration for runtime
+@Tag("integration")
 public class ConnectPluginPathTest {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectPluginPathTest.class);

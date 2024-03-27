@@ -26,12 +26,14 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.api.{Tag, Test, Timeout}
 
 import java.util.concurrent.{CompletableFuture, Future}
 import scala.jdk.CollectionConverters._
 
 @Timeout(value = 12)
+// Marked integration for flakiness
+@Tag("integration")
 class BrokerLifecycleManagerTest {
   def configProperties = {
     val properties = new Properties()

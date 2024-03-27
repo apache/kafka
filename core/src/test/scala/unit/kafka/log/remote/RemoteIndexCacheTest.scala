@@ -27,7 +27,7 @@ import org.apache.kafka.storage.internals.log.RemoteIndexCache.{DIR_NAME, Entry,
 import org.apache.kafka.storage.internals.log.{AbortedTxn, CorruptIndexException, LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.ArgumentMatchers
@@ -43,6 +43,8 @@ import java.util.{Collections, Optional}
 import java.util.concurrent.{CountDownLatch, Executors, Future, TimeUnit}
 import scala.collection.mutable
 
+// Marked integration for flakiness
+@Tag("integration")
 class RemoteIndexCacheTest {
   private val defaultRemoteIndexCacheSizeBytes = 1024 * 1024L
   private val logger: Logger = LoggerFactory.getLogger(classOf[RemoteIndexCacheTest])

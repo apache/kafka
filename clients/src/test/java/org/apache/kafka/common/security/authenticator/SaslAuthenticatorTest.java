@@ -99,6 +99,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.AssertionFailedError;
 
@@ -149,6 +150,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * Tests for the Sasl authenticator. These use a test harness that runs a simple socket server that echos back responses.
  */
+// Marked integration for flakiness
+@Tag("integration")
 public class SaslAuthenticatorTest {
 
     private static final long CONNECTIONS_MAX_REAUTH_MS_VALUE = 100L;

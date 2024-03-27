@@ -27,7 +27,7 @@ import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentState}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
-import org.junit.jupiter.api.{BeforeEach, Tag, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -38,7 +38,6 @@ import scala.collection.Seq
 import scala.concurrent.ExecutionException
 import scala.util.Random
 
-@Tag("integration")
 class RemoteTopicCrudTest extends IntegrationTestHarness {
 
   val numPartitions = 2
