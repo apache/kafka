@@ -534,9 +534,7 @@ public class StreamsBuilder {
      * of the input topic.
      * <p>
      * The provided {@link org.apache.kafka.streams.processor.ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
-     * records forwarded from the {@link SourceNode}. NOTE: you should not use the {@code Processor} to insert transformed records into
-     * the global state store. This store uses the source topic as changelog and during restore will insert records directly
-     * from the source.
+     * records forwarded from the {@link SourceNode}.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      * <p>
@@ -567,7 +565,8 @@ public class StreamsBuilder {
             new StoreBuilderWrapper(storeBuilder),
             topic,
             new ConsumedInternal<>(consumed),
-            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
+            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get()),
+            true
         );
         return this;
     }
@@ -585,9 +584,6 @@ public class StreamsBuilder {
      * The supplier should always generate a new instance. Creating a single {@link Processor} object
      * and returning the same object reference in {@link ProcessorSupplier#get()} is a
      * violation of the supplier pattern and leads to runtime exceptions.
-     * NOTE: you should not use the {@link Processor} to insert transformed records into
-     * the global state store. This store uses the source topic as changelog and during restore will insert records directly
-     * from the source.
      * This {@link Processor} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      * <p>
@@ -611,7 +607,8 @@ public class StreamsBuilder {
             new StoreBuilderWrapper(storeBuilder),
             topic,
             new ConsumedInternal<>(consumed),
-            stateUpdateSupplier
+            stateUpdateSupplier,
+            true
         );
         return this;
     }

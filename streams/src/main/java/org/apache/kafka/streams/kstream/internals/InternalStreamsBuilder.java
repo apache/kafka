@@ -41,6 +41,7 @@ import org.apache.kafka.streams.kstream.internals.graph.TableSuppressNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.VersionedSemanticsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.WindowedStreamProcessorNode;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -221,7 +222,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     public synchronized <KIn, VIn> void addGlobalStore(final StoreFactory storeFactory,
                                                        final String topic,
                                                        final ConsumedInternal<KIn, VIn> consumed,
-                                                       final org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+                                                       final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier,
+                                                       final boolean reprocessOnRestore) {
         // explicitly disable logging for global stores
         storeFactory.withLoggingDisabled();
 
@@ -235,7 +237,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             topic,
             consumed,
             processorName,
-            stateUpdateSupplier
+            stateUpdateSupplier,
+            reprocessOnRestore
         );
 
         addGraphNode(root, globalStoreNode);
