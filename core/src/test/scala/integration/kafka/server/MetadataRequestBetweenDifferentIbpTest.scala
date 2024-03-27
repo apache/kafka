@@ -81,7 +81,7 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
   private def createConfig(nodeId: Int, interBrokerVersion: MetadataVersion): KafkaConfig = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
-    props.put(INTER_BROKER_PROTOCOL_VERSION_PROP, interBrokerVersion.version)
+    props.put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, interBrokerVersion.version)
     KafkaConfig.fromProps(props)
   }
 

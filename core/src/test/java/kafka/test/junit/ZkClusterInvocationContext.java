@@ -51,7 +51,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.server.config.KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_CONFIG;
 
 /**
  * Wraps a {@link IntegrationTestHarness} inside lifecycle methods for a test invocation. Each instance of this
@@ -112,7 +112,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                     @Override
                     public Properties serverConfig() {
                         Properties props = clusterConfig.serverProperties();
-                        props.put(INTER_BROKER_PROTOCOL_VERSION_PROP, clusterConfig.metadataVersion().version());
+                        props.put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, clusterConfig.metadataVersion().version());
                         return props;
                     }
 

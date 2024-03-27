@@ -768,7 +768,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
 object DynamicThreadPool {
   val ReconfigurableConfigs = Set(
     KafkaConfig.NumIoThreadsProp,
-    NUM_REPLICA_FETCHERS_PROP,
+    NUM_REPLICA_FETCHERS_CONFIG,
     KafkaConfig.NumRecoveryThreadsPerDataDirProp,
     KafkaConfig.BackgroundThreadsProp)
 
@@ -793,7 +793,7 @@ object DynamicThreadPool {
   def getValue(config: KafkaConfig, name: String): Int = {
     name match {
       case KafkaConfig.NumIoThreadsProp => config.numIoThreads
-      case NUM_REPLICA_FETCHERS_PROP => config.numReplicaFetchers
+      case NUM_REPLICA_FETCHERS_CONFIG => config.numReplicaFetchers
       case KafkaConfig.NumRecoveryThreadsPerDataDirProp => config.numRecoveryThreadsPerDataDir
       case KafkaConfig.BackgroundThreadsProp => config.backgroundThreads
       case n => throw new IllegalStateException(s"Unexpected config $n")

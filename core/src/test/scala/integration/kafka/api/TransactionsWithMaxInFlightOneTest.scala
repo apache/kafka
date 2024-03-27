@@ -110,8 +110,8 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 1.toString)
     serverProps.put(KafkaConfig.TransactionsTopicMinISRProp, 1.toString)
     serverProps.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-    serverProps.put(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, false.toString)
-    serverProps.put(AUTO_LEADER_REBALANCE_ENABLE_PROP, false.toString)
+    serverProps.put(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, false.toString)
+    serverProps.put(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)
     serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
     serverProps

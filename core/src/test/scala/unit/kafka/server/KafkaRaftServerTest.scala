@@ -276,7 +276,7 @@ class KafkaRaftServerTest {
     configProperties.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
     configProperties.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9093")
     configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
-    configProperties.put(INTER_BROKER_PROTOCOL_VERSION_PROP, "3.3-IV1")
+    configProperties.put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.3-IV1")
 
     val (metaPropertiesEnsemble, bootstrapMetadata) =
       invokeLoadMetaProperties(metaProperties, configProperties, None)

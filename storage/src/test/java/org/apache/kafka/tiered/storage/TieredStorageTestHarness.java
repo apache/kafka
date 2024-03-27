@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.STORAGE_WAIT_TIMEOUT_SEC;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createPropsForRemoteStorage;
-import static org.apache.kafka.server.config.KafkaConfig.REPLICA_SELECTOR_CLASS_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.REPLICA_SELECTOR_CLASS_CONFIG;
 /**
  * Base class for integration tests exercising the tiered storage functionality in Apache Kafka.
  * This uses a {@link LocalTieredStorage} instance as the second-tier storage system and
@@ -81,7 +81,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         Properties overridingProps = createPropsForRemoteStorage(testClassName, storageDirPath, brokerCount(),
                 numRemoteLogMetadataPartitions(), new Properties());
         readReplicaSelectorClass()
-                .ifPresent(c -> overridingProps.put(REPLICA_SELECTOR_CLASS_PROP, c.getName()));
+                .ifPresent(c -> overridingProps.put(REPLICA_SELECTOR_CLASS_CONFIG, c.getName()));
         return overridingProps;
     }
 

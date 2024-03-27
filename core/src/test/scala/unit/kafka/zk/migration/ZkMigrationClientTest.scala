@@ -331,7 +331,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     val replicas = List(1, 2, 3).map(int2Integer).asJava
     val topicId = Uuid.randomUuid()
     val props = new Properties()
-    props.put(DEFAULT_REPLICATION_FACTOR_PROP, "1") // normal config
+    props.put(DEFAULT_REPLICATION_FACTOR_CONFIG, "1") // normal config
     props.put(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, SECRET) // sensitive config
 
     //    // Leave Zk in an incomplete state.

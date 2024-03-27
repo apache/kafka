@@ -35,7 +35,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     // legacy message formats are only supported with IBP < 3.0
     // KRaft mode is not supported for inter.broker.protocol.version = 2.8, The minimum version required is 3.0-IV1"
     if (!isKRaftTest())
-      properties.put(INTER_BROKER_PROTOCOL_VERSION_PROP, "2.8")
+      properties.put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
   }
 
   @nowarn("cat=deprecation")

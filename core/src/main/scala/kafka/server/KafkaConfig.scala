@@ -425,7 +425,7 @@ object KafkaConfig {
     "control.plane.listener.name = CONTROLLER</code>\n" +
     "then the controller will use \"broker1.example.com:9094\" with security protocol \"SSL\" to connect to the broker.\n" +
     "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections.\n" +
-    s"If explicitly configured, the value cannot be the same as the value of <code>$INTER_BROKER_LISTENER_NAME_PROP</code>."
+    s"If explicitly configured, the value cannot be the same as the value of <code>$INTER_BROKER_LISTENER_NAME_CONFIG</code>."
 
   val SocketSendBufferBytesDoc = "The SO_SNDBUF buffer of the socket server sockets. If the value is -1, the OS default will be used."
   val SocketReceiveBufferBytesDoc = "The SO_RCVBUF buffer of the socket server sockets. If the value is -1, the OS default will be used."
@@ -808,29 +808,29 @@ object KafkaConfig {
       .define(LogMessageDownConversionEnableProp, BOOLEAN, LogConfig.DEFAULT_MESSAGE_DOWNCONVERSION_ENABLE, LOW, LogMessageDownConversionEnableDoc)
 
       /** ********* Replication configuration ***********/
-      .define(CONTROLLER_SOCKET_TIMEOUT_MS_PROP, INT, Defaults.CONTROLLER_SOCKET_TIMEOUT_MS, MEDIUM, CONTROLLER_SOCKET_TIMEOUT_MS_DOC)
-      .define(DEFAULT_REPLICATION_FACTOR_PROP, INT, Defaults.REPLICATION_FACTOR, MEDIUM, DEFAULT_REPLICATION_FACTOR_DOC)
-      .define(REPLICA_LAG_TIME_MAX_MS_PROP, LONG, Defaults.REPLICA_LAG_TIME_MAX_MS, HIGH, REPLICA_LAG_TIME_MAX_MS_DOC)
-      .define(REPLICA_SOCKET_TIMEOUT_MS_PROP, INT, Defaults.REPLICA_SOCKET_TIMEOUT_MS, HIGH, REPLICA_SOCKET_TIMEOUT_MS_DOC)
-      .define(REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_PROP, INT, Defaults.REPLICA_SOCKET_RECEIVE_BUFFER_BYTES, HIGH, REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_DOC)
-      .define(REPLICA_FETCH_MAX_BYTES_PROP, INT, Defaults.REPLICA_FETCH_MAX_BYTES, atLeast(0), MEDIUM, REPLICA_FETCH_MAX_BYTES_DOC)
-      .define(REPLICA_FETCH_WAIT_MAX_MS_PROP, INT, Defaults.REPLICA_FETCH_WAIT_MAX_MS, HIGH, REPLICA_FETCH_WAIT_MAX_MS_DOC)
-      .define(REPLICA_FETCH_BACKOFF_MS_PROP, INT, Defaults.REPLICA_FETCH_BACKOFF_MS, atLeast(0), MEDIUM, REPLICA_FETCH_BACKOFF_MS_DOC)
-      .define(REPLICA_FETCH_MIN_BYTES_PROP, INT, Defaults.REPLICA_FETCH_MIN_BYTES, HIGH, REPLICA_FETCH_MIN_BYTES_DOC)
-      .define(REPLICA_FETCH_RESPONSE_MAX_BYTES_PROP, INT, Defaults.REPLICA_FETCH_RESPONSE_MAX_BYTES, atLeast(0), MEDIUM, REPLICA_FETCH_RESPONSE_MAX_BYTES_DOC)
-      .define(NUM_REPLICA_FETCHERS_PROP, INT, Defaults.NUM_REPLICA_FETCHERS, HIGH, NUM_REPLICA_FETCHERS_DOC)
-      .define(REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_PROP, LONG, Defaults.REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS, HIGH, REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_DOC)
-      .define(FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_PROP, INT, Defaults.FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS, MEDIUM, FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
-      .define(PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_PROP, INT, Defaults.PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS, MEDIUM, PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
-      .define(DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_PROP, INT, Defaults.DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS, MEDIUM, DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
-      .define(AUTO_LEADER_REBALANCE_ENABLE_PROP, BOOLEAN, Defaults.AUTO_LEADER_REBALANCE_ENABLE, HIGH, AUTO_LEADER_REBALANCE_ENABLE_DOC)
-      .define(LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_PROP, INT, Defaults.LEADER_IMBALANCE_PER_BROKER_PERCENTAGE, HIGH, LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_DOC)
-      .define(LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_PROP, LONG, Defaults.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS, atLeast(1), HIGH, LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DOC)
-      .define(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, BOOLEAN, LogConfig.DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE, HIGH, UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
-      .define(INTER_BROKER_SECURITY_PROTOCOL_PROP, STRING, Defaults.INTER_BROKER_SECURITY_PROTOCOL, in(Utils.enumOptions(classOf[SecurityProtocol]):_*), MEDIUM, INTER_BROKER_SECURITY_PROTOCOL_DOC)
-      .define(INTER_BROKER_PROTOCOL_VERSION_PROP, STRING, Defaults.INTER_BROKER_PROTOCOL_VERSION, new MetadataVersionValidator(), MEDIUM, INTER_BROKER_PROTOCOL_VERSION_DOC)
-      .define(INTER_BROKER_LISTENER_NAME_PROP, STRING, null, MEDIUM, INTER_BROKER_LISTENER_NAME_DOC)
-      .define(REPLICA_SELECTOR_CLASS_PROP, STRING, null, MEDIUM, REPLICA_SELECTOR_CLASS_DOC)
+      .define(CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG, INT, Defaults.CONTROLLER_SOCKET_TIMEOUT_MS, MEDIUM, CONTROLLER_SOCKET_TIMEOUT_MS_DOC)
+      .define(DEFAULT_REPLICATION_FACTOR_CONFIG, INT, Defaults.REPLICATION_FACTOR, MEDIUM, DEFAULT_REPLICATION_FACTOR_DOC)
+      .define(REPLICA_LAG_TIME_MAX_MS_CONFIG, LONG, Defaults.REPLICA_LAG_TIME_MAX_MS, HIGH, REPLICA_LAG_TIME_MAX_MS_DOC)
+      .define(REPLICA_SOCKET_TIMEOUT_MS_CONFIG, INT, Defaults.REPLICA_SOCKET_TIMEOUT_MS, HIGH, REPLICA_SOCKET_TIMEOUT_MS_DOC)
+      .define(REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, INT, Defaults.REPLICA_SOCKET_RECEIVE_BUFFER_BYTES, HIGH, REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_DOC)
+      .define(REPLICA_FETCH_MAX_BYTES_CONFIG, INT, Defaults.REPLICA_FETCH_MAX_BYTES, atLeast(0), MEDIUM, REPLICA_FETCH_MAX_BYTES_DOC)
+      .define(REPLICA_FETCH_WAIT_MAX_MS_CONFIG, INT, Defaults.REPLICA_FETCH_WAIT_MAX_MS, HIGH, REPLICA_FETCH_WAIT_MAX_MS_DOC)
+      .define(REPLICA_FETCH_BACKOFF_MS_CONFIG, INT, Defaults.REPLICA_FETCH_BACKOFF_MS, atLeast(0), MEDIUM, REPLICA_FETCH_BACKOFF_MS_DOC)
+      .define(REPLICA_FETCH_MIN_BYTES_CONFIG, INT, Defaults.REPLICA_FETCH_MIN_BYTES, HIGH, REPLICA_FETCH_MIN_BYTES_DOC)
+      .define(REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG, INT, Defaults.REPLICA_FETCH_RESPONSE_MAX_BYTES, atLeast(0), MEDIUM, REPLICA_FETCH_RESPONSE_MAX_BYTES_DOC)
+      .define(NUM_REPLICA_FETCHERS_CONFIG, INT, Defaults.NUM_REPLICA_FETCHERS, HIGH, NUM_REPLICA_FETCHERS_DOC)
+      .define(REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_CONFIG, LONG, Defaults.REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS, HIGH, REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_DOC)
+      .define(FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, Defaults.FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS, MEDIUM, FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
+      .define(PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, Defaults.PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS, MEDIUM, PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
+      .define(DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, Defaults.DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS, MEDIUM, DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
+      .define(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, BOOLEAN, Defaults.AUTO_LEADER_REBALANCE_ENABLE, HIGH, AUTO_LEADER_REBALANCE_ENABLE_DOC)
+      .define(LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_CONFIG, INT, Defaults.LEADER_IMBALANCE_PER_BROKER_PERCENTAGE, HIGH, LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_DOC)
+      .define(LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG, LONG, Defaults.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS, atLeast(1), HIGH, LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DOC)
+      .define(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, LogConfig.DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE, HIGH, UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
+      .define(INTER_BROKER_SECURITY_PROTOCOL_CONFIG, STRING, Defaults.INTER_BROKER_SECURITY_PROTOCOL, in(Utils.enumOptions(classOf[SecurityProtocol]):_*), MEDIUM, INTER_BROKER_SECURITY_PROTOCOL_DOC)
+      .define(INTER_BROKER_PROTOCOL_VERSION_CONFIG, STRING, Defaults.INTER_BROKER_PROTOCOL_VERSION, new MetadataVersionValidator(), MEDIUM, INTER_BROKER_PROTOCOL_VERSION_DOC)
+      .define(INTER_BROKER_LISTENER_NAME_CONFIG, STRING, null, MEDIUM, INTER_BROKER_LISTENER_NAME_DOC)
+      .define(REPLICA_SELECTOR_CLASS_CONFIG, STRING, null, MEDIUM, REPLICA_SELECTOR_CLASS_DOC)
 
 
       /** ********* Controlled shutdown configuration ***********/
@@ -1346,7 +1346,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   /***************** rack configuration **************/
   val rack = Option(getString(KafkaConfig.RackProp))
-  val replicaSelectorClassName = Option(getString(REPLICA_SELECTOR_CLASS_PROP))
+  val replicaSelectorClassName = Option(getString(REPLICA_SELECTOR_CLASS_CONFIG))
 
   /** ********* Log Configuration ***********/
   val autoCreateTopicsEnable = getBoolean(KafkaConfig.AutoCreateTopicsEnableProp)
@@ -1430,40 +1430,40 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def logMessageDownConversionEnable: Boolean = getBoolean(KafkaConfig.LogMessageDownConversionEnableProp)
 
   /** ********* Replication configuration ***********/
-  val controllerSocketTimeoutMs: Int = getInt(CONTROLLER_SOCKET_TIMEOUT_MS_PROP)
-  val defaultReplicationFactor: Int = getInt(DEFAULT_REPLICATION_FACTOR_PROP)
-  val replicaLagTimeMaxMs = getLong(REPLICA_LAG_TIME_MAX_MS_PROP)
-  val replicaSocketTimeoutMs = getInt(REPLICA_SOCKET_TIMEOUT_MS_PROP)
-  val replicaSocketReceiveBufferBytes = getInt(REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_PROP)
-  val replicaFetchMaxBytes = getInt(REPLICA_FETCH_MAX_BYTES_PROP)
-  val replicaFetchWaitMaxMs = getInt(REPLICA_FETCH_WAIT_MAX_MS_PROP)
-  val replicaFetchMinBytes = getInt(REPLICA_FETCH_MIN_BYTES_PROP)
-  val replicaFetchResponseMaxBytes = getInt(REPLICA_FETCH_RESPONSE_MAX_BYTES_PROP)
-  val replicaFetchBackoffMs = getInt(REPLICA_FETCH_BACKOFF_MS_PROP)
-  def numReplicaFetchers = getInt(NUM_REPLICA_FETCHERS_PROP)
-  val replicaHighWatermarkCheckpointIntervalMs = getLong(REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_PROP)
-  val fetchPurgatoryPurgeIntervalRequests = getInt(FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_PROP)
-  val producerPurgatoryPurgeIntervalRequests = getInt(PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_PROP)
-  val deleteRecordsPurgatoryPurgeIntervalRequests = getInt(DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_PROP)
-  val autoLeaderRebalanceEnable = getBoolean(AUTO_LEADER_REBALANCE_ENABLE_PROP)
-  val leaderImbalancePerBrokerPercentage = getInt(LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_PROP)
-  val leaderImbalanceCheckIntervalSeconds: Long = getLong(LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_PROP)
-  def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(UNCLEAN_LEADER_ELECTION_ENABLE_PROP)
+  val controllerSocketTimeoutMs: Int = getInt(CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG)
+  val defaultReplicationFactor: Int = getInt(DEFAULT_REPLICATION_FACTOR_CONFIG)
+  val replicaLagTimeMaxMs = getLong(REPLICA_LAG_TIME_MAX_MS_CONFIG)
+  val replicaSocketTimeoutMs = getInt(REPLICA_SOCKET_TIMEOUT_MS_CONFIG)
+  val replicaSocketReceiveBufferBytes = getInt(REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_CONFIG)
+  val replicaFetchMaxBytes = getInt(REPLICA_FETCH_MAX_BYTES_CONFIG)
+  val replicaFetchWaitMaxMs = getInt(REPLICA_FETCH_WAIT_MAX_MS_CONFIG)
+  val replicaFetchMinBytes = getInt(REPLICA_FETCH_MIN_BYTES_CONFIG)
+  val replicaFetchResponseMaxBytes = getInt(REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG)
+  val replicaFetchBackoffMs = getInt(REPLICA_FETCH_BACKOFF_MS_CONFIG)
+  def numReplicaFetchers = getInt(NUM_REPLICA_FETCHERS_CONFIG)
+  val replicaHighWatermarkCheckpointIntervalMs = getLong(REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_CONFIG)
+  val fetchPurgatoryPurgeIntervalRequests = getInt(FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG)
+  val producerPurgatoryPurgeIntervalRequests = getInt(PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG)
+  val deleteRecordsPurgatoryPurgeIntervalRequests = getInt(DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG)
+  val autoLeaderRebalanceEnable = getBoolean(AUTO_LEADER_REBALANCE_ENABLE_CONFIG)
+  val leaderImbalancePerBrokerPercentage = getInt(LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_CONFIG)
+  val leaderImbalanceCheckIntervalSeconds: Long = getLong(LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG)
+  def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)
 
   // We keep the user-provided String as `MetadataVersion.fromVersionString` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
-  val interBrokerProtocolVersionString = getString(INTER_BROKER_PROTOCOL_VERSION_PROP)
+  val interBrokerProtocolVersionString = getString(INTER_BROKER_PROTOCOL_VERSION_CONFIG)
   val interBrokerProtocolVersion = if (processRoles.isEmpty) {
     MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
   } else {
-    if (originals.containsKey(INTER_BROKER_PROTOCOL_VERSION_PROP)) {
+    if (originals.containsKey(INTER_BROKER_PROTOCOL_VERSION_CONFIG)) {
       // A user-supplied IBP was given
       val configuredVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
       if (!configuredVersion.isKRaftSupported) {
-        throw new ConfigException(s"A non-KRaft version $interBrokerProtocolVersionString given for $INTER_BROKER_PROTOCOL_VERSION_PROP. " +
+        throw new ConfigException(s"A non-KRaft version $interBrokerProtocolVersionString given for $INTER_BROKER_PROTOCOL_VERSION_CONFIG. " +
           s"The minimum version is ${MetadataVersion.MINIMUM_KRAFT_VERSION}")
       } else {
-        warn(s"$INTER_BROKER_PROTOCOL_VERSION_PROP is deprecated in KRaft mode as of 3.3 and will only " +
+        warn(s"$INTER_BROKER_PROTOCOL_VERSION_CONFIG is deprecated in KRaft mode as of 3.3 and will only " +
           s"be read when first upgrading from a KRaft prior to 3.3. See kafka-storage.sh help for details on setting " +
           s"the metadata.version for a new KRaft cluster.")
       }
@@ -1691,19 +1691,19 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   }
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
-    Option(getString(INTER_BROKER_LISTENER_NAME_PROP)) match {
-      case Some(_) if originals.containsKey(INTER_BROKER_SECURITY_PROTOCOL_PROP) =>
-        throw new ConfigException(s"Only one of ${INTER_BROKER_LISTENER_NAME_PROP} and " +
-          s"$INTER_BROKER_SECURITY_PROTOCOL_PROP should be set.")
+    Option(getString(INTER_BROKER_LISTENER_NAME_CONFIG)) match {
+      case Some(_) if originals.containsKey(INTER_BROKER_SECURITY_PROTOCOL_CONFIG) =>
+        throw new ConfigException(s"Only one of ${INTER_BROKER_LISTENER_NAME_CONFIG} and " +
+          s"$INTER_BROKER_SECURITY_PROTOCOL_CONFIG should be set.")
       case Some(name) =>
         val listenerName = ListenerName.normalised(name)
         val securityProtocol = effectiveListenerSecurityProtocolMap.getOrElse(listenerName,
           throw new ConfigException(s"Listener with name ${listenerName.value} defined in " +
-            s"${INTER_BROKER_LISTENER_NAME_PROP} not found in ${KafkaConfig.ListenerSecurityProtocolMapProp}."))
+            s"${INTER_BROKER_LISTENER_NAME_CONFIG} not found in ${KafkaConfig.ListenerSecurityProtocolMapProp}."))
         (listenerName, securityProtocol)
       case None =>
-        val securityProtocol = getSecurityProtocol(getString(INTER_BROKER_SECURITY_PROTOCOL_PROP),
-          INTER_BROKER_SECURITY_PROTOCOL_PROP)
+        val securityProtocol = getSecurityProtocol(getString(INTER_BROKER_SECURITY_PROTOCOL_CONFIG),
+          INTER_BROKER_SECURITY_PROTOCOL_CONFIG)
         (ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
     }
   }
@@ -1906,11 +1906,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         require(controllerListenerNames.nonEmpty,
           s"${KafkaConfig.ControllerListenerNamesProp} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")
         require(interBrokerProtocolVersion.isMigrationSupported, s"Cannot enable ZooKeeper migration without setting " +
-          s"'${INTER_BROKER_PROTOCOL_VERSION_PROP}' to 3.4 or higher")
+          s"'${INTER_BROKER_PROTOCOL_VERSION_CONFIG}' to 3.4 or higher")
         if (logDirs.size > 1) {
           require(interBrokerProtocolVersion.isDirectoryAssignmentSupported,
             s"Cannot enable ZooKeeper migration with multiple log directories (aka JBOD) without setting " +
-            s"'${INTER_BROKER_PROTOCOL_VERSION_PROP}' to ${MetadataVersion.IBP_3_7_IV2} or higher")
+            s"'${INTER_BROKER_PROTOCOL_VERSION_CONFIG}' to ${MetadataVersion.IBP_3_7_IV2} or higher")
         }
       } else {
         // controller listener names must be empty when not in KRaft mode
@@ -1925,7 +1925,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       // validations for all broker setups (i.e. ZooKeeper and KRaft broker-only and KRaft co-located)
       validateAdvertisedListenersNonEmptyForBroker()
       require(advertisedListenerNames.contains(interBrokerListenerName),
-        s"${INTER_BROKER_LISTENER_NAME_PROP} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
+        s"${INTER_BROKER_LISTENER_NAME_CONFIG} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
           s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
       require(advertisedListenerNames.subsetOf(listenerNames),
         s"${KafkaConfig.AdvertisedListenersProp} listener names must be equal to or a subset of the ones defined in ${KafkaConfig.ListenersProp}. " +

@@ -38,7 +38,7 @@ class DescribeClusterRequestTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.setProperty(DEFAULT_REPLICATION_FACTOR_PROP, "2")
+    properties.setProperty(DEFAULT_REPLICATION_FACTOR_CONFIG, "2")
     properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
   }
 

@@ -299,7 +299,7 @@ class PartitionStateMachineTest {
       val apiVersion = if (isLeaderRecoverySupported) IBP_3_2_IV0 else IBP_3_1_IV0
       val properties = TestUtils.createBrokerConfig(brokerId, "zkConnect")
 
-      properties.setProperty(INTER_BROKER_PROTOCOL_VERSION_PROP, apiVersion.toString)
+      properties.setProperty(INTER_BROKER_PROTOCOL_VERSION_CONFIG, apiVersion.toString)
 
       new ZkPartitionStateMachine(
         KafkaConfig.fromProps(properties),

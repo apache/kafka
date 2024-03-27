@@ -48,8 +48,8 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
   // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
   overridingProps.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-  overridingProps.put(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, false.toString)
-  overridingProps.put(AUTO_LEADER_REBALANCE_ENABLE_PROP, false.toString)
+  overridingProps.put(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, false.toString)
+  overridingProps.put(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)
   overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
   overridingProps.put(KafkaConfig.OffsetsTopicReplicationFactorProp, 3.toString)
   overridingProps.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)

@@ -137,7 +137,7 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testZkIsrManager(): Unit = {
     val props = TestUtils.createBrokerConfigs(1, zkConnect).head
-    props.put(INTER_BROKER_PROTOCOL_VERSION_PROP, "2.7-IV1")
+    props.put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.7-IV1")
 
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
     server.replicaManager.alterPartitionManager match {
@@ -150,7 +150,7 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testAlterIsrManager(): Unit = {
     val props = TestUtils.createBrokerConfigs(1, zkConnect).head
-    props.put(INTER_BROKER_PROTOCOL_VERSION_PROP, MetadataVersion.latestTesting.toString)
+    props.put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, MetadataVersion.latestTesting.toString)
 
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
     server.replicaManager.alterPartitionManager match {

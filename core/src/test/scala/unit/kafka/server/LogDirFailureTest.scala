@@ -50,8 +50,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
   private val partitionNum = 12
   override val logDirCount = 3
 
-  this.serverConfig.setProperty(REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_PROP, "60000")
-  this.serverConfig.setProperty(NUM_REPLICA_FETCHERS_PROP, "1")
+  this.serverConfig.setProperty(REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_CONFIG, "60000")
+  this.serverConfig.setProperty(NUM_REPLICA_FETCHERS_CONFIG, "1")
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -85,7 +85,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     var server: KafkaServer = null
     try {
       val props = TestUtils.createBrokerConfig(brokerCount, zkConnect, logDirCount = 3)
-      props.put(INTER_BROKER_PROTOCOL_VERSION_PROP, "0.11.0")
+      props.put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, "0.11.0")
       props.put(KafkaConfig.LogMessageFormatVersionProp, "0.11.0")
       val kafkaConfig = KafkaConfig.fromProps(props)
       val logDir = new File(kafkaConfig.logDirs.head)

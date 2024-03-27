@@ -205,7 +205,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     configs.foreach { config =>
       config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
       config.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-      config.setProperty(AUTO_LEADER_REBALANCE_ENABLE_PROP, "false")
+      config.setProperty(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, "false")
       config.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
       // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
       // set for subclasses with security enabled and we don't want to overwrite it.

@@ -58,7 +58,7 @@ class RaftManagerTest {
     props.setProperty(KafkaConfig.NodeIdProp, nodeId.toString)
     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
     if (processRoles.contains(ProcessRole.BrokerRole)) {
-      props.setProperty(INTER_BROKER_LISTENER_NAME_PROP, "PLAINTEXT")
+      props.setProperty(INTER_BROKER_LISTENER_NAME_CONFIG, "PLAINTEXT")
       if (processRoles.contains(ProcessRole.ControllerRole)) { // co-located
         props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
         props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")

@@ -47,7 +47,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KafkaServerContextName}"
   this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "false")
   this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
-  this.serverConfig.setProperty(INTER_BROKER_PROTOCOL_VERSION_PROP, "2.8")
+  this.serverConfig.setProperty(INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
   this.producerConfig.setProperty(ProducerConfig.LINGER_MS_CONFIG, "10")
   // intentionally slow message down conversion via gzip compression to ensure we can measure the time it takes
   this.producerConfig.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")

@@ -55,7 +55,7 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
       TestUtils.createBrokerConfig(brokerId2, zkConnect))
 
     configs.foreach { config =>
-        config.setProperty(AUTO_LEADER_REBALANCE_ENABLE_PROP, false.toString)}
+        config.setProperty(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)}
 
     // start both servers
     servers = configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))

@@ -86,8 +86,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   protected def configureListeners(props: Seq[Properties]): Unit = {
     props.foreach { config =>
-      config.remove(INTER_BROKER_SECURITY_PROTOCOL_PROP)
-      config.setProperty(INTER_BROKER_LISTENER_NAME_PROP, interBrokerListenerName.value)
+      config.remove(INTER_BROKER_SECURITY_PROTOCOL_CONFIG)
+      config.setProperty(INTER_BROKER_LISTENER_NAME_CONFIG, interBrokerListenerName.value)
 
       val listenerNames = Set(listenerName, interBrokerListenerName)
       val listeners = listenerNames.map(listenerName => s"${listenerName.value}://localhost:${TestUtils.RandomPort}").mkString(",")

@@ -238,7 +238,7 @@ class AclAuthorizer extends Authorizer with Logging {
       try {
         if (!extendedAclSupport && aclBinding.pattern.patternType == PatternType.PREFIXED) {
           throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
-            s"$INTER_BROKER_PROTOCOL_VERSION_PROP of $IBP_2_0_IV1 or greater")
+            s"$INTER_BROKER_PROTOCOL_VERSION_CONFIG of $IBP_2_0_IV1 or greater")
         }
         validateAclBinding(aclBinding)
         true

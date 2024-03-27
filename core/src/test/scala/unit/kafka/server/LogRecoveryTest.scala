@@ -45,9 +45,9 @@ class LogRecoveryTest extends QuorumTestHarness {
   val replicaFetchMinBytes = 20
 
   val overridingProps = new Properties()
-  overridingProps.put(REPLICA_LAG_TIME_MAX_MS_PROP, replicaLagTimeMaxMs.toString)
-  overridingProps.put(REPLICA_FETCH_WAIT_MAX_MS_PROP, replicaFetchWaitMaxMs.toString)
-  overridingProps.put(REPLICA_FETCH_MIN_BYTES_PROP, replicaFetchMinBytes.toString)
+  overridingProps.put(REPLICA_LAG_TIME_MAX_MS_CONFIG, replicaLagTimeMaxMs.toString)
+  overridingProps.put(REPLICA_FETCH_WAIT_MAX_MS_CONFIG, replicaFetchWaitMaxMs.toString)
+  overridingProps.put(REPLICA_FETCH_MIN_BYTES_CONFIG, replicaFetchMinBytes.toString)
 
   var configs: Seq[KafkaConfig] = _
   val topic = "new-topic"

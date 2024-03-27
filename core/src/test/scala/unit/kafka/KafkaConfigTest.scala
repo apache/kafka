@@ -181,7 +181,7 @@ class KafkaTest {
        props.setProperty(KafkaConfig.ListenersProp, brokerListener)
     }
     if (!(hasControllerRole & !hasBrokerRole)) { // not controller-only
-      props.setProperty(INTER_BROKER_LISTENER_NAME_PROP, "PLAINTEXT")
+      props.setProperty(INTER_BROKER_LISTENER_NAME_CONFIG, "PLAINTEXT")
       props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092") 
     }
   }

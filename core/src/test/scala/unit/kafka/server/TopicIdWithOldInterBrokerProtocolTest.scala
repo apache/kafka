@@ -37,9 +37,9 @@ import scala.jdk.CollectionConverters._
 class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.setProperty(INTER_BROKER_PROTOCOL_VERSION_PROP, IBP_2_7_IV0.toString)
+    properties.setProperty(INTER_BROKER_PROTOCOL_VERSION_CONFIG, IBP_2_7_IV0.toString)
     properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.setProperty(DEFAULT_REPLICATION_FACTOR_PROP, "2")
+    properties.setProperty(DEFAULT_REPLICATION_FACTOR_CONFIG, "2")
     properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
   }
 

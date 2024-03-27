@@ -1089,7 +1089,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
     val props = TestUtils.createBrokerConfig(0, zkConnectOrNull)
     props.put(AclAuthorizer.SuperUsersProp, superUsers)
-    protocolVersion.foreach(version => props.put(INTER_BROKER_PROTOCOL_VERSION_PROP, version.toString))
+    protocolVersion.foreach(version => props.put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, version.toString))
 
     config = KafkaConfig.fromProps(props)
 

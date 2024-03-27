@@ -283,7 +283,7 @@ class ReplicaFetcherThreadTest {
 
   private def verifyFetchLeaderEpochOnFirstFetch(ibp: MetadataVersion, epochFetchCount: Int = 1): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
-    props.setProperty(INTER_BROKER_PROTOCOL_VERSION_PROP, ibp.version)
+    props.setProperty(INTER_BROKER_PROTOCOL_VERSION_CONFIG, ibp.version)
     val config = KafkaConfig.fromProps(props)
 
     metadataCache = new ZkMetadataCache(0, ibp, BrokerFeatures.createEmpty())
@@ -846,7 +846,7 @@ class ReplicaFetcherThreadTest {
     val truncateToCapture: ArgumentCaptor[Long] = ArgumentCaptor.forClass(classOf[Long])
 
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
-    props.put(INTER_BROKER_PROTOCOL_VERSION_PROP, "0.11.0")
+    props.put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, "0.11.0")
     val config = KafkaConfig.fromProps(props)
 
     // Setup all dependencies
@@ -1433,7 +1433,7 @@ class ReplicaFetcherThreadTest {
 
   private def kafkaConfigNoTruncateOnFetch: KafkaConfig = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
-    props.setProperty(INTER_BROKER_PROTOCOL_VERSION_PROP, IBP_2_6_IV0.version)
+    props.setProperty(INTER_BROKER_PROTOCOL_VERSION_CONFIG, IBP_2_6_IV0.version)
     KafkaConfig.fromProps(props)
   }
 }

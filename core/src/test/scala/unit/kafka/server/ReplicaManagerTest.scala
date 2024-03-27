@@ -1301,7 +1301,7 @@ class ReplicaManagerTest {
   @Test
   def testBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdateIbp26(): Unit = {
     val extraProps = new Properties
-    extraProps.put(INTER_BROKER_PROTOCOL_VERSION_PROP, IBP_2_6_IV0.version)
+    extraProps.put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, IBP_2_6_IV0.version)
     verifyBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(extraProps, expectTruncation = true)
   }
 
@@ -1514,7 +1514,7 @@ class ReplicaManagerTest {
   @Test
   def testPreferredReplicaAsLeaderWhenSameRackFollowerIsOutOfIsr(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
-      propsModifier = props => props.put(REPLICA_SELECTOR_CLASS_PROP, classOf[MockReplicaSelector].getName))
+      propsModifier = props => props.put(REPLICA_SELECTOR_CLASS_CONFIG, classOf[MockReplicaSelector].getName))
 
     try {
       val leaderBrokerId = 0
@@ -1594,7 +1594,7 @@ class ReplicaManagerTest {
   @Test
   def testFetchFromFollowerShouldNotRunPreferLeaderSelect(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
-      propsModifier = props => props.put(REPLICA_SELECTOR_CLASS_PROP, classOf[MockReplicaSelector].getName))
+      propsModifier = props => props.put(REPLICA_SELECTOR_CLASS_CONFIG, classOf[MockReplicaSelector].getName))
     try {
       val leaderBrokerId = 0
       val followerBrokerId = 1
@@ -1643,7 +1643,7 @@ class ReplicaManagerTest {
   @Test
   def testFetchShouldReturnImmediatelyWhenPreferredReadReplicaIsDefined(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
-      propsModifier = props => props.put(REPLICA_SELECTOR_CLASS_PROP, "org.apache.kafka.common.replica.RackAwareReplicaSelector"))
+      propsModifier = props => props.put(REPLICA_SELECTOR_CLASS_CONFIG, "org.apache.kafka.common.replica.RackAwareReplicaSelector"))
 
     try {
       val leaderBrokerId = 0
@@ -1795,7 +1795,7 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     val props = new Properties()
-    props.put(REPLICA_SELECTOR_CLASS_PROP, "non-a-class")
+    props.put(REPLICA_SELECTOR_CLASS_CONFIG, "non-a-class")
     assertThrows(classOf[ClassNotFoundException], () => prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
       leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props))

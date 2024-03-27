@@ -55,8 +55,8 @@ class ProducerIdsIntegrationTest {
 
   @ClusterTest(clusterType = Type.ZK, brokers = 3, autoStart = AutoStart.NO)
   def testUniqueProducerIdsBumpIBP(clusterInstance: ClusterInstance): Unit = {
-    clusterInstance.config().serverProperties().put(INTER_BROKER_PROTOCOL_VERSION_PROP, "2.8")
-    clusterInstance.config().brokerServerProperties(0).put(INTER_BROKER_PROTOCOL_VERSION_PROP, "3.0-IV0")
+    clusterInstance.config().serverProperties().put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
+    clusterInstance.config().brokerServerProperties(0).put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0-IV0")
     clusterInstance.start()
     verifyUniqueIds(clusterInstance)
     clusterInstance.stop()

@@ -364,8 +364,8 @@ object TestUtils extends Logging {
       props.put(ZkConfigs.ZK_CONNECT_CONFIG, zkConnect)
       props.put(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG, "10000")
     }
-    props.put(REPLICA_SOCKET_TIMEOUT_MS_PROP, "1500")
-    props.put(CONTROLLER_SOCKET_TIMEOUT_MS_PROP, "1500")
+    props.put(REPLICA_SOCKET_TIMEOUT_MS_CONFIG, "1500")
+    props.put(CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG, "1500")
     props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
     props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
     props.put(KafkaConfig.LogDeleteDelayMsProp, "1000")
@@ -388,25 +388,25 @@ object TestUtils extends Logging {
       props ++= JaasTestUtils.saslConfigs(saslProperties)
 
     interBrokerSecurityProtocol.foreach { protocol =>
-      props.put(INTER_BROKER_SECURITY_PROTOCOL_PROP, protocol.name)
+      props.put(INTER_BROKER_SECURITY_PROTOCOL_CONFIG, protocol.name)
     }
 
     if (enableToken)
       props.put(KafkaConfig.DelegationTokenSecretKeyProp, "secretkey")
 
     props.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
-    props.put(DEFAULT_REPLICATION_FACTOR_PROP, defaultReplicationFactor.toString)
+    props.put(DEFAULT_REPLICATION_FACTOR_CONFIG, defaultReplicationFactor.toString)
 
     if (enableFetchFromFollower) {
       props.put(KafkaConfig.RackProp, nodeId.toString)
-      props.put(REPLICA_SELECTOR_CLASS_PROP, "org.apache.kafka.common.replica.RackAwareReplicaSelector")
+      props.put(REPLICA_SELECTOR_CLASS_CONFIG, "org.apache.kafka.common.replica.RackAwareReplicaSelector")
     }
     props
   }
 
   @nowarn("cat=deprecation")
   def setIbpAndMessageFormatVersions(config: Properties, version: MetadataVersion): Unit = {
-    config.setProperty(INTER_BROKER_PROTOCOL_VERSION_PROP, version.version)
+    config.setProperty(INTER_BROKER_PROTOCOL_VERSION_CONFIG, version.version)
     // for clarity, only set the log message format version if it's not ignored
     if (!LogConfig.shouldIgnoreMessageFormatVersion(version))
       config.setProperty(KafkaConfig.LogMessageFormatVersionProp, version.version)

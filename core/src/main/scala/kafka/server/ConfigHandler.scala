@@ -109,7 +109,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     updateThrottledList(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.leader)
     updateThrottledList(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.follower)
 
-    if (Try(topicConfig.getProperty(UNCLEAN_LEADER_ELECTION_ENABLE_PROP).toBoolean).getOrElse(false)) {
+    if (Try(topicConfig.getProperty(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).toBoolean).getOrElse(false)) {
       kafkaController.foreach(_.enableTopicUncleanLeaderElection(topic))
     }
   }
