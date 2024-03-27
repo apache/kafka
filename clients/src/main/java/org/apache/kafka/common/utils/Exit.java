@@ -20,7 +20,7 @@ package org.apache.kafka.common.utils;
  * Internal class that should be used instead of `System.exit()` and `Runtime.getRuntime().halt()` so that tests can
  * easily change the behaviour.
  */
-public class Exit {
+public abstract class Exit {
 
     @FunctionalInterface
     public interface Procedure {
@@ -89,5 +89,52 @@ public class Exit {
 
     public static void resetShutdownHookAdder() {
         shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
+    }
+
+    public void exitOrThrow(int statusCode) {
+        exit(statusCode, null);
+    }
+
+    public abstract void exitOrThrow(int statusCode, String message);
+
+    public void haltOrThrow(int statusCode) {
+        halt(statusCode, null);
+    }
+
+    public abstract void haltOrThrow(int statusCode, String message);
+
+    public abstract void addShutdownRunnable(String name, Runnable runnable);
+
+    /**
+     * The default system exit behavior. Using this grants the ability to stop the JVM at any time.
+     */
+    public static Exit system() {
+        return SystemExit.SYSTEM;
+    }
+
+    private static final class SystemExit extends Exit {
+
+        private static final Exit SYSTEM = new SystemExit();
+
+        private SystemExit() {
+        }
+
+        @Override
+        public void exitOrThrow(int statusCode, String message) {
+            System.exit(statusCode);
+        }
+
+        @Override
+        public void haltOrThrow(int statusCode, String message) {
+            Runtime.getRuntime().halt(statusCode);
+        }
+
+        @Override
+        public void addShutdownRunnable(String name, Runnable runnable) {
+            if (name != null)
+                Runtime.getRuntime().addShutdownHook(KafkaThread.nonDaemon(name, runnable));
+            else
+                Runtime.getRuntime().addShutdownHook(new Thread(runnable));
+        }
     }
 }

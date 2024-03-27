@@ -22,7 +22,28 @@ import org.apache.kafka.common.utils.{Exit => JExit}
   * Internal class that should be used instead of `System.exit()` and `Runtime.getRuntime().halt()` so that tests can
   * easily change the behaviour.
   */
+class Exit(private val jexit: JExit) {
+
+  def exitOrThrow(statusCode: Int, message: Option[String] = None): Nothing = {
+    jexit.exitOrThrow(statusCode, message.orNull)
+    throw new AssertionError("exit should not return, but it did.")
+  }
+
+  def haltOrThrow(statusCode: Int, message: Option[String] = None): Nothing = {
+    jexit.haltOrThrow(statusCode, message.orNull)
+    throw new AssertionError("halt should not return, but it did.")
+  }
+
+  def addShutdownRunnable(name: String, shutdownHook: => Unit): Unit = {
+    jexit.addShutdownRunnable(name, () => shutdownHook)
+  }
+
+  def asJava: JExit = jexit
+}
+
 object Exit {
+
+  val SYSTEM = new Exit(JExit.system)
 
   def exit(statusCode: Int, message: Option[String] = None): Nothing = {
     JExit.exit(statusCode, message.orNull)
