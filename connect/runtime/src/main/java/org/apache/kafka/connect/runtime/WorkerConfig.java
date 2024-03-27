@@ -443,4 +443,10 @@ public class WorkerConfig extends AbstractConfig {
         logPluginPathConfigProviderWarning(props);
     }
 
+    @Override
+    public Map<String, Object> originals() {
+        Map<String, Object> map = super.originals();
+        map.remove(AbstractConfig.CONFIG_PROVIDERS_CONFIG);
+        return map;
+    }
 }

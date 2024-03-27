@@ -37,7 +37,6 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.provider.ConfigProvider;
@@ -103,7 +102,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -927,11 +925,10 @@ public class Worker {
         // Ignore configs that begin with "admin." since those will be added next (with the prefix stripped)
         // and those that begin with "producer." and "consumer.", since we know they aren't intended for
         // the admin client
-        // Also ignore the config.providers configurations because the worker-configured ConfigProviders should
-        // already have been evaluated via the trusted WorkerConfig constructor
-        List<String> excludedPrefixes = Arrays.asList("admin.", "producer.", "consumer.", AbstractConfig.CONFIG_PROVIDERS_CONFIG);
         Map<String, Object> nonPrefixedWorkerConfigs = config.originals().entrySet().stream()
-                .filter(e -> excludedPrefixes.stream().noneMatch(p -> e.getKey().startsWith(p)))
+                .filter(e -> !e.getKey().startsWith("admin.")
+                        && !e.getKey().startsWith("producer.")
+                        && !e.getKey().startsWith("consumer."))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServers());
         adminProps.put(AdminClientConfig.CLIENT_ID_CONFIG, defaultClientId);
