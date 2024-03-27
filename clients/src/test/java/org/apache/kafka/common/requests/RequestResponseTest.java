@@ -150,6 +150,8 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.message.GetReplicaLogInfoRequestData;
+import org.apache.kafka.common.message.GetReplicaLogInfoResponseData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
@@ -1080,6 +1082,7 @@ public class RequestResponseTest {
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsRequest(version);
             case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesRequest(version);
             case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsRequest(version);
+            case GET_REPLICA_LOG_INFO: return createGetReplicaLogInfoRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1162,8 +1165,24 @@ public class RequestResponseTest {
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsResponse();
             case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesResponse();
             case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsResponse();
+            case GET_REPLICA_LOG_INFO: return createGetReplicaLogInfoResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
+    }
+
+    private GetReplicaLogInfoRequest createGetReplicaLogInfoRequest(short version) {
+        GetReplicaLogInfoRequestData data = new GetReplicaLogInfoRequestData()
+            .setBrokerId(0)
+            .setTopicPartitions(singletonList(new GetReplicaLogInfoRequestData.TopicPartitions()
+                .setPartitions(singletonList(0))));
+        return new GetReplicaLogInfoRequest.Builder(data).build(version);
+    }
+
+    private GetReplicaLogInfoResponse createGetReplicaLogInfoResponse() {
+        GetReplicaLogInfoResponseData data = new GetReplicaLogInfoResponseData();
+        data.setBrokerEpoch(0);
+        data.setTopicPartitionLogInfoList(singletonList(new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()));
+        return new GetReplicaLogInfoResponse(data);
     }
 
     private ConsumerGroupDescribeRequest createConsumerGroupDescribeRequest(short version) {
