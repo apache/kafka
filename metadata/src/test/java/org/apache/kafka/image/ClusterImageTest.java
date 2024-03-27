@@ -195,7 +195,7 @@ public class ClusterImageTest {
             setBrokerId(2).setIsMigratingZkBroker(true).setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
             setBrokerEpoch(1002).setEndPoints(new BrokerEndpointCollection(
                 Arrays.asList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                    setPort(9093).setSecurityProtocol((short) 0)).iterator())).
+                    setPort(9094).setSecurityProtocol((short) 0)).iterator())).
             setFeatures(new BrokerFeatureCollection(
                 Collections.singleton(new BrokerFeature().
                     setName(MetadataVersion.FEATURE_NAME).
@@ -224,8 +224,8 @@ public class ClusterImageTest {
             setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
             setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
             setRack(Optional.empty()).
-            setFenced(true).
-            setInControlledShutdown(true).build());
+            setFenced(false).
+            setInControlledShutdown(false).build());
         map3.put(2, new BrokerRegistration.Builder().
             setId(2).
             setEpoch(1002).
