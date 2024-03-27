@@ -40,7 +40,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
 
   private val overridingProps = new Properties
   overridingProps.put(KafkaConfig.DeleteTopicEnableProp, "true")
-  overridingProps.put(AUTO_CREATE_TOPICS_ENABLE_PROP, "false")
+  overridingProps.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false")
   // speed up the test for UnderReplicatedPartitions, which relies on the ISR expiry thread to execute concurrently with topic creation
   // But the replica.lag.time.max.ms value still need to consider the slow Jenkins testing environment
   overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, "4000")

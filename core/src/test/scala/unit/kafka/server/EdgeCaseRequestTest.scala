@@ -45,7 +45,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
   def generateConfigs = {
     val props = TestUtils.createBrokerConfig(1, zkConnectOrNull)
-    props.setProperty(AUTO_CREATE_TOPICS_ENABLE_PROP, "false")
+    props.setProperty(AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false")
     List(KafkaConfig.fromProps(props))
   }
 

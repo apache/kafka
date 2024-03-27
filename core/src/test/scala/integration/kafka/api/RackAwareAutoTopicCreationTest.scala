@@ -33,7 +33,7 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
   val numPartitions = 8
   val replicationFactor = 2
   val overridingProps = new Properties()
-  overridingProps.put(NUM_PARTITIONS_PROP, numPartitions.toString)
+  overridingProps.put(NUM_PARTITIONS_CONFIG, numPartitions.toString)
   overridingProps.put(KafkaConfig.DefaultReplicationFactorProp, replicationFactor.toString)
 
   def generateConfigs =

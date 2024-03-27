@@ -36,7 +36,7 @@ import scala.jdk.CollectionConverters._
 class BrokerLifecycleManagerTest {
   def configProperties = {
     val properties = new Properties()
-    properties.setProperty(LOG_DIRS_PROP, "/tmp/foo")
+    properties.setProperty(LOG_DIRS_CONFIG, "/tmp/foo")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "broker")
     properties.setProperty(KafkaConfig.NodeIdProp, "1")
     properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9093")

@@ -34,7 +34,7 @@ import scala.jdk.CollectionConverters._
 abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit =
-    properties.put(AUTO_CREATE_TOPICS_ENABLE_PROP, false.toString)
+    properties.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
 
   def topicsReq(topics: Seq[CreatableTopic],
                 timeout: Integer = 10000,

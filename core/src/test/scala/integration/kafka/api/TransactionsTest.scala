@@ -59,7 +59,7 @@ class TransactionsTest extends IntegrationTestHarness {
 
   def overridingProps(): Properties = {
     val props = new Properties()
-    props.put(AUTO_CREATE_TOPICS_ENABLE_PROP, false.toString)
+    props.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
      // Set a smaller value for the number of partitions for the __consumer_offsets topic + // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
     props.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
     props.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
@@ -90,7 +90,7 @@ class TransactionsTest extends IntegrationTestHarness {
 
   def topicConfig(): Properties = {
     val topicConfig = new Properties()
-    topicConfig.put(MIN_IN_SYNC_REPLICAS_PROP, 2.toString)
+    topicConfig.put(MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
     topicConfig
   }
 

@@ -49,7 +49,7 @@ class RaftManagerTest {
   ): KafkaConfig = {
     val props = new Properties
     logDir.foreach { value =>
-      props.setProperty(LOG_DIR_PROP, value.toString)
+      props.setProperty(LOG_DIR_CONFIG, value.toString)
     }
     metadataDir.foreach { value =>
       props.setProperty(KafkaConfig.MetadataLogDirProp, value.toString)

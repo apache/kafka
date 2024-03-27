@@ -42,7 +42,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   val numServers = 2
 
   val overridingProps = new Properties()
-  overridingProps.put(AUTO_CREATE_TOPICS_ENABLE_PROP, false.toString)
+  overridingProps.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
   overridingProps.put(KafkaConfig.MessageMaxBytesProp, serverMessageMaxBytes.toString)
   overridingProps.put(KafkaConfig.ReplicaFetchMaxBytesProp, replicaFetchMaxPartitionBytes.toString)
   overridingProps.put(KafkaConfig.ReplicaFetchResponseMaxBytesDoc, replicaFetchMaxResponseBytes.toString)

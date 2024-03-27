@@ -44,7 +44,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
   val numPartitions = 1
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(AUTO_CREATE_TOPICS_ENABLE_PROP, false.toString)
+    properties.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
   }
 
   @BeforeEach

@@ -46,7 +46,7 @@ class ControllerRegistrationManagerTest {
 
   private def configProperties = {
     val properties = new Properties()
-    properties.setProperty(LOG_DIRS_PROP, "/tmp/foo")
+    properties.setProperty(LOG_DIRS_CONFIG, "/tmp/foo")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
     properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:PLAINTEXT")
     properties.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:8001")

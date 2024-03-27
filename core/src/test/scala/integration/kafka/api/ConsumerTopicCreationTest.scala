@@ -58,7 +58,7 @@ object ConsumerTopicCreationTest {
 
     // configure server properties
     this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
-    this.serverConfig.setProperty(AUTO_CREATE_TOPICS_ENABLE_PROP, brokerAutoTopicCreationEnable.toString)
+    this.serverConfig.setProperty(AUTO_CREATE_TOPICS_ENABLE_CONFIG, brokerAutoTopicCreationEnable.toString)
 
     // configure client properties
     this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)

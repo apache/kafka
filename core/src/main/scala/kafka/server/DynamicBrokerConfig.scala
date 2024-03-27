@@ -118,14 +118,14 @@ object DynamicBrokerConfig {
 
   def brokerConfigSynonyms(name: String, matchListenerOverride: Boolean): List[String] = {
     name match {
-      case LOG_ROLL_TIME_MILLIS_PROP | LOG_ROLL_TIME_HOURS_PROP =>
-        List(LOG_ROLL_TIME_MILLIS_PROP, LOG_ROLL_TIME_HOURS_PROP)
-      case LOG_ROLL_TIME_JITTER_MILLIS_PROP | LOG_ROLL_TIME_JITTER_HOURS_PROP =>
-        List(LOG_ROLL_TIME_JITTER_MILLIS_PROP, LOG_ROLL_TIME_JITTER_HOURS_PROP)
-      case LOG_FLUSH_INTERVAL_MS_PROP => // LOG_FLUSH_SCHEDULER_INTERVAL_MS_PROP is used as default
-        List(LOG_FLUSH_INTERVAL_MS_PROP, LOG_FLUSH_SCHEDULER_INTERVAL_MS_PROP)
-      case LOG_RETENTION_TIME_MILLIS_PROP | LOG_RETENTION_TIME_MINUTES_PROP | LOG_RETENTION_TIME_HOURS_PROP =>
-        List(LOG_RETENTION_TIME_MILLIS_PROP, LOG_RETENTION_TIME_MINUTES_PROP, LOG_RETENTION_TIME_HOURS_PROP)
+      case LOG_ROLL_TIME_MILLIS_CONFIG | LOG_ROLL_TIME_HOURS_CONFIG =>
+        List(LOG_ROLL_TIME_MILLIS_CONFIG, LOG_ROLL_TIME_HOURS_CONFIG)
+      case LOG_ROLL_TIME_JITTER_MILLIS_CONFIG | LOG_ROLL_TIME_JITTER_HOURS_CONFIG =>
+        List(LOG_ROLL_TIME_JITTER_MILLIS_CONFIG, LOG_ROLL_TIME_JITTER_HOURS_CONFIG)
+      case LOG_FLUSH_INTERVAL_MS_CONFIG => // LOG_FLUSH_SCHEDULER_INTERVAL_MS_PROP is used as default
+        List(LOG_FLUSH_INTERVAL_MS_CONFIG, LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG)
+      case LOG_RETENTION_TIME_MILLIS_CONFIG | LOG_RETENTION_TIME_MINUTES_CONFIG | LOG_RETENTION_TIME_HOURS_CONFIG =>
+        List(LOG_RETENTION_TIME_MILLIS_CONFIG, LOG_RETENTION_TIME_MINUTES_CONFIG, LOG_RETENTION_TIME_HOURS_CONFIG)
       case ListenerConfigRegex(baseName) if matchListenerOverride =>
         // `ListenerMechanismConfigs` are specified as listenerPrefix.mechanism.<configName>
         // and other listener configs are specified as listenerPrefix.<configName>
@@ -672,7 +672,7 @@ object DynamicLogConfig {
   // Exclude message.format.version for now since we need to check that the version
   // is supported on all brokers in the cluster.
   @nowarn("cat=deprecation")
-  val ExcludedConfigs = Set(LOG_MESSAGE_FORMAT_VERSION_PROP)
+  val ExcludedConfigs = Set(LOG_MESSAGE_FORMAT_VERSION_CONFIG)
 
   val ReconfigurableConfigs = ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values.asScala.toSet -- ExcludedConfigs
   val KafkaConfigToLogConfigName = ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.map { case (k, v) => (v, k) }
@@ -695,11 +695,11 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
       if (logRetentionMs != -1L && logLocalRetentionMs != -2L) {
         if (logLocalRetentionMs == -1L) {
           throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs,
-            s"Value must not be -1 as $LOG_RETENTION_TIME_MILLIS_PROP value is set as $logRetentionMs.")
+            s"Value must not be -1 as $LOG_RETENTION_TIME_MILLIS_CONFIG value is set as $logRetentionMs.")
         }
         if (logLocalRetentionMs > logRetentionMs) {
           throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs,
-            s"Value must not be more than $LOG_RETENTION_TIME_MILLIS_PROP property value: $logRetentionMs")
+            s"Value must not be more than $LOG_RETENTION_TIME_MILLIS_CONFIG property value: $logRetentionMs")
         }
       }
     }
@@ -710,11 +710,11 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
       if (logRetentionBytes > -1 && logLocalRetentionBytes != -2) {
         if (logLocalRetentionBytes == -1) {
           throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes,
-            s"Value must not be -1 as $LOG_RETENTION_BYTES_PROP value is set as $logRetentionBytes.")
+            s"Value must not be -1 as $LOG_RETENTION_BYTES_CONFIG value is set as $logRetentionBytes.")
         }
         if (logLocalRetentionBytes > logRetentionBytes) {
           throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes,
-            s"Value must not be more than $LOG_RETENTION_BYTES_PROP property value: $logRetentionBytes")
+            s"Value must not be more than $LOG_RETENTION_BYTES_CONFIG property value: $logRetentionBytes")
         }
       }
     }
@@ -769,7 +769,7 @@ object DynamicThreadPool {
   val ReconfigurableConfigs = Set(
     KafkaConfig.NumIoThreadsProp,
     KafkaConfig.NumReplicaFetchersProp,
-    NUM_RECOVERY_THREADS_PER_DATA_DIR_PROP,
+    NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG,
     KafkaConfig.BackgroundThreadsProp)
 
   def validateReconfiguration(currentConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
@@ -794,7 +794,7 @@ object DynamicThreadPool {
     name match {
       case KafkaConfig.NumIoThreadsProp => config.numIoThreads
       case KafkaConfig.NumReplicaFetchersProp => config.numReplicaFetchers
-      case NUM_RECOVERY_THREADS_PER_DATA_DIR_PROP => config.numRecoveryThreadsPerDataDir
+      case NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG => config.numRecoveryThreadsPerDataDir
       case KafkaConfig.BackgroundThreadsProp => config.backgroundThreads
       case n => throw new IllegalStateException(s"Unexpected config $n")
     }

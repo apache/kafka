@@ -200,7 +200,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
 
   private def serverProps(): Properties = {
     val serverProps = new Properties()
-    serverProps.put(AUTO_CREATE_TOPICS_ENABLE_PROP, false.toString)
+    serverProps.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
     // Set a smaller value for the number of partitions for the __consumer_offsets topic
     // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long.
     serverProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)

@@ -197,9 +197,9 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     // verify that they show up in the "configs" output of CreateTopics.
     if (testInfo.getTestMethod.toString.contains("testCreateTopicsReturnsConfigs")) {
       configs.foreach(config => {
-        config.setProperty(LOG_ROLL_TIME_HOURS_PROP, "2")
-        config.setProperty(LOG_RETENTION_TIME_MINUTES_PROP, "240")
-        config.setProperty(LOG_ROLL_TIME_JITTER_MILLIS_PROP, "123")
+        config.setProperty(LOG_ROLL_TIME_HOURS_CONFIG, "2")
+        config.setProperty(LOG_RETENTION_TIME_MINUTES_CONFIG, "240")
+        config.setProperty(LOG_ROLL_TIME_JITTER_MILLIS_CONFIG, "123")
       })
     }
     configs.foreach { config =>

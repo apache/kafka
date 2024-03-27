@@ -303,7 +303,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
     // A single partition topic with 2 replicas, min.isr = 1
     TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers,
-      CoreUtils.propsWith((MIN_IN_SYNC_REPLICAS_PROP, "1")))
+      CoreUtils.propsWith((MIN_IN_SYNC_REPLICAS_CONFIG, "1")))
 
     producer = TestUtils.createProducer(plaintextBootstrapServers(brokers), acks = 1)
 
