@@ -35,7 +35,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
-import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals}
+import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals, ZkConfigs}
 import org.apache.kafka.security.{PasswordEncoder, PasswordEncoderConfigs}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -864,7 +864,7 @@ object ConfigCommand extends Logging {
       .ofType(classOf[String])
     val zkTlsConfigFile: OptionSpec[String] = parser.accepts("zk-tls-config-file",
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
-        KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") + " are ignored.")
+        ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.toList.sorted.mkString(", ") + " are ignored.")
       .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
     options = parser.parse(args : _*)
 
