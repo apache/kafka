@@ -54,6 +54,7 @@ import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.LeaveOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
+import org.apache.kafka.clients.consumer.internals.events.ListOffsetsForTimeEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsEvent;
@@ -1093,9 +1094,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return Collections.emptyMap();
             }
             final Timer timer = time.timer(timeout);
-            final ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
+            final ListOffsetsForTimeEvent listOffsetsEvent = new ListOffsetsForTimeEvent(
                 timestampsToSearch,
-                true,
                 timer);
 
             // If timeout is set to zero return empty immediately; otherwise try to get the results
@@ -1141,21 +1141,25 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (partitions.isEmpty()) {
                 return Collections.emptyMap();
             }
+
             Map<TopicPartition, Long> timestampToSearch = partitions
                 .stream()
                 .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
             Timer timer = time.timer(timeout);
             ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
                 timestampToSearch,
-                false,
                 timer);
-            Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = applicationEventHandler.addAndGet(
-                listOffsetsEvent,
-                timer);
-            return offsetAndTimestampMap
-                .entrySet()
-                .stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
+
+            Map<TopicPartition, Long> offsetAndTimestampMap;
+            if (timeout.isZero()) {
+                applicationEventHandler.add(listOffsetsEvent);
+                offsetAndTimestampMap = listOffsetsEvent.emptyResult();
+            } else {
+                offsetAndTimestampMap = applicationEventHandler.addAndGet(
+                    listOffsetsEvent,
+                    timer);
+            }
+            return offsetAndTimestampMap;
         } finally {
             release();
         }

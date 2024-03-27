@@ -131,13 +131,11 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> result = requestManager.fetchOffsets(
-                timestampsToSearch,
-                false);
+        CompletableFuture<Map<TopicPartition, Long>> result = requestManager.beginningOrEndOffset(timestampsToSearch);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
-        Map<TopicPartition, OffsetAndTimestamp> expectedOffsets = Collections.singletonMap(TEST_PARTITION_1, new OffsetAndTimestamp(5L, 1L));
+        Map<TopicPartition, Long> expectedOffsets = Collections.singletonMap(TEST_PARTITION_1, 5L);
         verifySuccessfulPollAndResponseReceived(result, expectedOffsets);
     }
 
@@ -148,8 +146,9 @@ public class OffsetsRequestManagerTest {
 
         // Building list offsets request fails with unknown leader
         mockFailedRequest_MissingLeader();
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
-                requestManager.fetchOffsets(timestampsToSearch, false);
+        CompletableFuture<Map<TopicPartition, Long>> fetchOffsetsFuture =
+            requestManager.beginningOrEndOffset(timestampsToSearch);
+
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(1, requestManager.requestsToRetry());
         verify(metadata).requestUpdate(true);
@@ -172,22 +171,18 @@ public class OffsetsRequestManagerTest {
         partitionLeaders.put(TEST_PARTITION_1, LEADER_1);
         partitionLeaders.put(TEST_PARTITION_2, LEADER_1);
         mockSuccessfulRequest(partitionLeaders);
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> result = requestManager.fetchOffsets(
-                timestampsToSearch,
-                false);
+        CompletableFuture<Map<TopicPartition, Long>> result = requestManager.beginningOrEndOffset(timestampsToSearch);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
-        Map<TopicPartition, OffsetAndTimestamp> expectedOffsets = timestampsToSearch.entrySet().stream()
-                .collect(Collectors.toMap(e -> e.getKey(), e -> new OffsetAndTimestamp(5L, 1L)));
+        Map<TopicPartition, Long> expectedOffsets = timestampsToSearch.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> 5L));
         verifySuccessfulPollAndResponseReceived(result, expectedOffsets);
     }
 
     @Test
     public void testListOffsetsRequestEmpty() throws ExecutionException, InterruptedException {
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> result = requestManager.fetchOffsets(
-                Collections.emptyMap(),
-                false);
+        CompletableFuture<Map<TopicPartition, Long>> result = requestManager.beginningOrEndOffset(Collections.emptyMap());
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -209,9 +204,7 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> result = requestManager.fetchOffsets(
-                timestampsToSearch,
-                false);
+        CompletableFuture<Map<TopicPartition, Long>> result = requestManager.beginningOrEndOffset(timestampsToSearch);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -224,7 +217,7 @@ public class OffsetsRequestManagerTest {
         ClientResponse clientResponse = buildClientResponse(unsentRequest, topicResponses);
         clientResponse.onComplete();
 
-        Map<TopicPartition, OffsetAndTimestamp> expectedOffsets =
+        Map<TopicPartition, Long> expectedOffsets =
                 Collections.singletonMap(TEST_PARTITION_1, null);
         verifyRequestSuccessfullyCompleted(result, expectedOffsets);
     }
@@ -237,9 +230,8 @@ public class OffsetsRequestManagerTest {
 
         // Building list offsets request fails with unknown leader
         mockFailedRequest_MissingLeader();
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
-                requestManager.fetchOffsets(timestampsToSearch,
-                        false);
+        CompletableFuture<Map<TopicPartition, Long>> fetchOffsetsFuture =
+            requestManager.beginningOrEndOffset(timestampsToSearch);
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(1, requestManager.requestsToRetry());
         verify(metadata).requestUpdate(true);
@@ -254,22 +246,22 @@ public class OffsetsRequestManagerTest {
         requestManager.onUpdate(new ClusterResource(""));
         assertEquals(1, requestManager.requestsToSend());
 
-        Map<TopicPartition, OffsetAndTimestamp> expectedOffsets = Collections.singletonMap(
-                TEST_PARTITION_1, new OffsetAndTimestamp(5L, 1L));
+        Map<TopicPartition, Long> expectedOffsets = Collections.singletonMap(
+                TEST_PARTITION_1, 5L);
         verifySuccessfulPollAndResponseReceived(fetchOffsetsFuture, expectedOffsets);
     }
 
     @ParameterizedTest
     @MethodSource("retriableErrors")
+
     public void testRequestFailsWithRetriableError_RetrySucceeds(Errors error) throws ExecutionException, InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture = requestManager.fetchOffsets(
-                timestampsToSearch,
-                false);
+        CompletableFuture<Map<TopicPartition, Long>> fetchOffsetsFuture = requestManager.beginningOrEndOffset(
+                timestampsToSearch);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -293,7 +285,7 @@ public class OffsetsRequestManagerTest {
         requestManager.onUpdate(new ClusterResource(""));
         assertEquals(1, requestManager.requestsToSend());
 
-        Map<TopicPartition, OffsetAndTimestamp> expectedOffsets = Collections.singletonMap(TEST_PARTITION_1, new OffsetAndTimestamp(5L, 1L));
+        Map<TopicPartition, Long> expectedOffsets = Collections.singletonMap(TEST_PARTITION_1, 5L);
         verifySuccessfulPollAndResponseReceived(fetchOffsetsFuture, expectedOffsets);
     }
 
@@ -311,13 +303,12 @@ public class OffsetsRequestManagerTest {
 
     private void testResponseWithErrorCodeAndUnknownOffsets(Errors error) throws ExecutionException, InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
-                ListOffsetsRequest.EARLIEST_TIMESTAMP);
+            ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture = requestManager.fetchOffsets(
-                timestampsToSearch,
-                false);
+        CompletableFuture<Map<TopicPartition, Long>> fetchOffsetsFuture = requestManager.beginningOrEndOffset(
+            timestampsToSearch);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -329,12 +320,12 @@ public class OffsetsRequestManagerTest {
         // Response received with error
         NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
         ClientResponse clientResponse = buildClientResponseWithErrors(
-                unsentRequest,
-                Collections.singletonMap(TEST_PARTITION_1, error));
+            unsentRequest,
+            Collections.singletonMap(TEST_PARTITION_1, error));
         clientResponse.onComplete();
 
         // Null offsets should be returned for each partition
-        Map<TopicPartition, OffsetAndTimestamp> expectedOffsets = Collections.singletonMap(TEST_PARTITION_1, null);
+        Map<TopicPartition, Long> expectedOffsets = Collections.singletonMap(TEST_PARTITION_1, null);
         verifyRequestSuccessfullyCompleted(fetchOffsetsFuture, expectedOffsets);
     }
 
@@ -344,17 +335,16 @@ public class OffsetsRequestManagerTest {
         timestampsToSearch.put(TEST_PARTITION_1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
         timestampsToSearch.put(TEST_PARTITION_2, ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
-        Map<TopicPartition, OffsetAndTimestamp> expectedOffsets = timestampsToSearch.entrySet().stream()
-                .collect(Collectors.toMap(e -> e.getKey(), e -> new OffsetAndTimestamp(5L, 1L)));
+        Map<TopicPartition, Long> expectedOffsets = timestampsToSearch.entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> 5L));
 
         // List offsets request to 2 brokers successfully built
         Map<TopicPartition, Node> partitionLeaders = new HashMap<>();
         partitionLeaders.put(TEST_PARTITION_1, LEADER_1);
         partitionLeaders.put(TEST_PARTITION_2, LEADER_2);
         mockSuccessfulRequest(partitionLeaders);
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture = requestManager.fetchOffsets(
-                timestampsToSearch,
-                false);
+        CompletableFuture<Map<TopicPartition, Long>> fetchOffsetsFuture = requestManager.beginningOrEndOffset(
+            timestampsToSearch);
         assertEquals(2, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -366,14 +356,15 @@ public class OffsetsRequestManagerTest {
         // Mixed response with failures and successes. Offsets successfully fetched from one
         // broker but retriable UNKNOWN_LEADER_EPOCH received from second broker.
         NetworkClientDelegate.UnsentRequest unsentRequest1 = res.unsentRequests.get(0);
+        Long offsets = expectedOffsets.get(TEST_PARTITION_1);
         ClientResponse clientResponse1 = buildClientResponse(
-                unsentRequest1,
-                Collections.singletonMap(TEST_PARTITION_1, expectedOffsets.get(TEST_PARTITION_1)));
+            unsentRequest1,
+            Collections.singletonMap(TEST_PARTITION_1, new OffsetAndTimestamp(offsets, 1L)));
         clientResponse1.onComplete();
         NetworkClientDelegate.UnsentRequest unsentRequest2 = res.unsentRequests.get(1);
         ClientResponse clientResponse2 = buildClientResponseWithErrors(
-                unsentRequest2,
-                Collections.singletonMap(TEST_PARTITION_2, Errors.UNKNOWN_LEADER_EPOCH));
+            unsentRequest2,
+            Collections.singletonMap(TEST_PARTITION_2, Errors.UNKNOWN_LEADER_EPOCH));
         clientResponse2.onComplete();
 
         assertFalse(fetchOffsetsFuture.isDone());
@@ -389,8 +380,9 @@ public class OffsetsRequestManagerTest {
         NetworkClientDelegate.PollResult retriedPoll = requestManager.poll(time.milliseconds());
         verifySuccessfulPollAwaitingResponse(retriedPoll);
         NetworkClientDelegate.UnsentRequest unsentRequest = retriedPoll.unsentRequests.get(0);
+        Long offsets2 = expectedOffsets.get(TEST_PARTITION_2);
         ClientResponse clientResponse = buildClientResponse(unsentRequest,
-                Collections.singletonMap(TEST_PARTITION_2, expectedOffsets.get(TEST_PARTITION_2)));
+            Collections.singletonMap(TEST_PARTITION_2, new OffsetAndTimestamp(offsets2, 1L)));
         clientResponse.onComplete();
 
         // Verify global result with the offset initially retrieved, and the offset that
@@ -401,14 +393,12 @@ public class OffsetsRequestManagerTest {
     @Test
     public void testRequestFailedResponse_NonRetriableAuthError() {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
-                ListOffsetsRequest.EARLIEST_TIMESTAMP);
+            ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
-                requestManager.fetchOffsets(
-                        timestampsToSearch,
-                        false);
+            requestManager.fetchOffsetsForTime(timestampsToSearch);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -419,7 +409,7 @@ public class OffsetsRequestManagerTest {
         // Response received with non-retriable auth error
         NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
         ClientResponse clientResponse = buildClientResponseWithErrors(
-                unsentRequest, Collections.singletonMap(TEST_PARTITION_2, Errors.TOPIC_AUTHORIZATION_FAILED));
+            unsentRequest, Collections.singletonMap(TEST_PARTITION_2, Errors.TOPIC_AUTHORIZATION_FAILED));
         clientResponse.onComplete();
 
         verifyRequestCompletedWithErrorResponse(fetchOffsetsFuture, TopicAuthorizationException.class);
@@ -435,9 +425,7 @@ public class OffsetsRequestManagerTest {
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
-                requestManager.fetchOffsets(
-                        timestampsToSearch,
-                        false);
+            requestManager.fetchOffsetsForTime(timestampsToSearch);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -462,14 +450,13 @@ public class OffsetsRequestManagerTest {
     @Test
     public void testRequestFails_AuthenticationException() {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
-                ListOffsetsRequest.EARLIEST_TIMESTAMP);
+            ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
-                requestManager.fetchOffsets(
-                        timestampsToSearch,
-                        false);
+        CompletableFuture<Map<TopicPartition, Long>> fetchOffsetsFuture =
+            requestManager.beginningOrEndOffset(timestampsToSearch);
+
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -480,11 +467,16 @@ public class OffsetsRequestManagerTest {
         // Response received with auth error
         NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
         ClientResponse clientResponse =
-                buildClientResponseWithAuthenticationException(unsentRequest);
+            buildClientResponse(unsentRequest,
+                Collections.emptyList(),
+                false,
+                new AuthenticationException("Authentication failed"));
         clientResponse.onComplete();
 
-        // Request completed with error. Nothing pending to be sent or retried
-        verifyRequestCompletedWithErrorResponse(fetchOffsetsFuture, AuthenticationException.class);
+        assertTrue(fetchOffsetsFuture.isCompletedExceptionally());
+        Throwable failure = assertThrows(ExecutionException.class, fetchOffsetsFuture::get);
+        assertEquals(AuthenticationException.class, failure.getCause().getClass());
+
         assertEquals(0, requestManager.requestsToRetry());
         assertEquals(0, requestManager.requestsToSend());
     }
@@ -714,16 +706,27 @@ public class OffsetsRequestManagerTest {
     }
 
     private void verifySuccessfulPollAndResponseReceived(
-            CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> actualResult,
-            Map<TopicPartition, OffsetAndTimestamp> expectedResult) throws ExecutionException,
+            CompletableFuture<Map<TopicPartition, Long>> actualResult,
+            Map<TopicPartition, Long> expectedResult) throws ExecutionException,
             InterruptedException {
         // Following poll should send the request and get a response
         NetworkClientDelegate.PollResult retriedPoll = requestManager.poll(time.milliseconds());
         verifySuccessfulPollAwaitingResponse(retriedPoll);
         NetworkClientDelegate.UnsentRequest unsentRequest = retriedPoll.unsentRequests.get(0);
-        ClientResponse clientResponse = buildClientResponse(unsentRequest, expectedResult);
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampRes = expectedResult.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndTimestamp(e.getValue(), 1L)));
+        ClientResponse clientResponse = buildClientResponse(unsentRequest, offsetAndTimestampRes);
         clientResponse.onComplete();
         verifyRequestSuccessfullyCompleted(actualResult, expectedResult);
+    }
+
+
+    private void verifyRequestCompletedWithErrorResponse(CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> actualResult,
+                                                         Class<? extends Throwable> expectedFailure) {
+        assertTrue(actualResult.isDone());
+        assertTrue(actualResult.isCompletedExceptionally());
+        Throwable failure = assertThrows(ExecutionException.class, actualResult::get);
+        assertEquals(expectedFailure, failure.getCause().getClass());
     }
 
     private void mockSuccessfulRequest(Map<TopicPartition, Node> partitionLeaders) {
@@ -752,25 +755,26 @@ public class OffsetsRequestManagerTest {
         assertEquals(requestCount, pollResult.unsentRequests.size());
     }
 
+    @SuppressWarnings("unchecked")
     private void verifyRequestSuccessfullyCompleted(
-            CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> actualResult,
-            Map<TopicPartition, OffsetAndTimestamp> expectedResult) throws ExecutionException, InterruptedException {
+            CompletableFuture<?> actualResult,
+            Map<TopicPartition, Long> expectedResult) throws ExecutionException, InterruptedException {
         assertEquals(0, requestManager.requestsToRetry());
         assertEquals(0, requestManager.requestsToSend());
 
         assertTrue(actualResult.isDone());
         assertFalse(actualResult.isCompletedExceptionally());
-        Map<TopicPartition, OffsetAndTimestamp> partitionOffsets = actualResult.get();
+        Map<TopicPartition, Long> partitionOffsets = (Map<TopicPartition, Long>) actualResult.get();
         assertEquals(expectedResult, partitionOffsets);
 
         // Validate that the subscription state has been updated for all non-null offsets retrieved
-        Map<TopicPartition, OffsetAndTimestamp> validExpectedOffsets = expectedResult.entrySet().stream()
+        Map<TopicPartition, Long> validExpectedOffsets = expectedResult.entrySet().stream()
                 .filter(entry -> entry.getValue() != null)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         verifySubscriptionStateUpdated(validExpectedOffsets);
     }
 
-    private void verifySubscriptionStateUpdated(Map<TopicPartition, OffsetAndTimestamp> expectedResult) {
+    private void verifySubscriptionStateUpdated(Map<TopicPartition, Long> expectedResult) {
         ArgumentCaptor<TopicPartition> tpCaptor = ArgumentCaptor.forClass(TopicPartition.class);
         ArgumentCaptor<Long> offsetCaptor = ArgumentCaptor.forClass(Long.class);
 
@@ -784,16 +788,8 @@ public class OffsetsRequestManagerTest {
 
         assertEquals(expectedResult.values().size(), updatedOffsets.size());
         expectedResult.values().stream()
-                .map(offsetAndTimestamp -> updatedOffsets.contains(offsetAndTimestamp.offset()))
+                .map(updatedOffsets::contains)
                 .forEach(Assertions::assertTrue);
-    }
-
-    private void verifyRequestCompletedWithErrorResponse(CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> actualResult,
-                                                         Class<? extends Throwable> expectedFailure) {
-        assertTrue(actualResult.isDone());
-        assertTrue(actualResult.isCompletedExceptionally());
-        Throwable failure = assertThrows(ExecutionException.class, actualResult::get);
-        assertEquals(expectedFailure, failure.getCause().getClass());
     }
 
     private Metadata.LeaderAndEpoch testLeaderEpoch(Node leader, Optional<Integer> epoch) {
@@ -815,6 +811,7 @@ public class OffsetsRequestManagerTest {
     private ClientResponse buildClientResponse(
             final NetworkClientDelegate.UnsentRequest request,
             final Map<TopicPartition, OffsetAndTimestamp> partitionsOffsets) {
+
         List<ListOffsetsResponseData.ListOffsetsTopicResponse> topicResponses = new
                 ArrayList<>();
         partitionsOffsets.forEach((tp, offsetAndTimestamp) -> {
@@ -901,7 +898,6 @@ public class OffsetsRequestManagerTest {
     private ClientResponse buildClientResponse(
             final NetworkClientDelegate.UnsentRequest request,
             final List<ListOffsetsResponseData.ListOffsetsTopicResponse> topicResponses) {
-
         return buildClientResponse(request, topicResponses, false, null);
     }
 
@@ -917,12 +913,6 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsResponse.UNKNOWN_EPOCH)));
 
         return buildClientResponse(request, topicResponses, false, null);
-    }
-
-    private ClientResponse buildClientResponseWithAuthenticationException(
-            final NetworkClientDelegate.UnsentRequest request) {
-        return buildClientResponse(request, Collections.emptyList(), true,
-                new AuthenticationException("Authentication failed"));
     }
 
     private ClientResponse buildClientResponse(

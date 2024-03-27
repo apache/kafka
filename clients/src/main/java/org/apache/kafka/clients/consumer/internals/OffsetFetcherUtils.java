@@ -50,6 +50,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -240,20 +241,32 @@ class OffsetFetcherUtils {
         return offsetResetTimestamps;
     }
 
-    static Map<TopicPartition, OffsetAndTimestamp> buildOffsetsForTimesResult(final Map<TopicPartition, Long> timestampsToSearch,
-                                                                       final Map<TopicPartition, ListOffsetData> fetchedOffsets) {
-        HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(timestampsToSearch.size());
+    static <T> Map<TopicPartition, T> buildListOffsetsResult(
+        final Map<TopicPartition, Long> timestampsToSearch,
+        final Map<TopicPartition, ListOffsetData> fetchedOffsets,
+        BiFunction<TopicPartition, ListOffsetData, T> resultMapper) {
+
+        HashMap<TopicPartition, T> offsetsResults = new HashMap<>(timestampsToSearch.size());
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
-            offsetsByTimes.put(entry.getKey(), null);
+            offsetsResults.put(entry.getKey(), null);
 
         for (Map.Entry<TopicPartition, ListOffsetData> entry : fetchedOffsets.entrySet()) {
-            // 'entry.getValue().timestamp' will not be null since we are guaranteed
-            // to work with a v1 (or later) ListOffset request
             ListOffsetData offsetData = entry.getValue();
-            offsetsByTimes.put(entry.getKey(), new OffsetAndTimestamp(offsetData.offset, offsetData.timestamp, offsetData.leaderEpoch));
+            offsetsResults.put(entry.getKey(), resultMapper.apply(entry.getKey(), offsetData));
         }
 
-        return offsetsByTimes;
+        return offsetsResults;
+    }
+
+    static Map<TopicPartition, OffsetAndTimestamp> buildOffsetsForTimesResult(
+        final Map<TopicPartition, Long> timestampsToSearch,
+        final Map<TopicPartition, ListOffsetData> fetchedOffsets) {
+
+        return buildListOffsetsResult(timestampsToSearch, fetchedOffsets,
+            (topicPartition, offsetData) -> new OffsetAndTimestamp(
+                offsetData.offset,
+                offsetData.timestamp,
+                offsetData.leaderEpoch));
     }
 
     private Long offsetResetStrategyTimestamp(final TopicPartition partition) {
