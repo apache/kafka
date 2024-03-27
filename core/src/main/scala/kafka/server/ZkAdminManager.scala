@@ -49,7 +49,7 @@ import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, S
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals}
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.KafkaConfig.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.{Map, mutable, _}
