@@ -65,25 +65,25 @@ public enum GroupConsumerUpgradePolicy {
         return config == null ? DISABLED : config;
     }
 
-    public static boolean isUpgradeEnabled(GroupProtocolMigrationPolicy policy) {
+    public static boolean isUpgradeEnabled(GroupConsumerUpgradePolicy policy) {
         switch (policy) {
-            case BOTH:
+            case BIDIRECTIONAL:
             case UPGRADE:
                 return true;
             case DOWNGRADE:
-            case NONE:
+            case DISABLED:
             default:
                 return false;
         }
     }
 
-    public static boolean isDowngradeEnabled(GroupProtocolMigrationPolicy policy) {
+    public static boolean isDowngradeEnabled(GroupConsumerUpgradePolicy policy) {
         switch (policy) {
-            case BOTH:
+            case BIDIRECTIONAL:
             case DOWNGRADE:
                 return true;
             case UPGRADE:
-            case NONE:
+            case DISABLED:
             default:
                 return false;
         }
