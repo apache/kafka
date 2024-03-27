@@ -369,7 +369,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   if (txnMetadata.topicPartitions.contains(part))
                     (part, Errors.NONE)
                   else
-                    (part, Errors.INVALID_TXN_STATE)
+                    (part, Errors.ABORTABLE_TRANSACTION)
                 }.toMap)
               }
             }

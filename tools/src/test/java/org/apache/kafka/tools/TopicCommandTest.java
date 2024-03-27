@@ -50,6 +50,7 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -233,7 +234,7 @@ public class TopicCommandTest {
                 "--delete", "--topic", topicName
             })));
 
-        assertTrue(exception.getCause() instanceof ThrottlingQuotaExceededException);
+        assertInstanceOf(ThrottlingQuotaExceededException.class, exception.getCause());
 
         verify(adminClient).deleteTopics(
             argThat((Collection<String> topics) -> topics.equals(Arrays.asList(topicName))),
@@ -262,7 +263,7 @@ public class TopicCommandTest {
                 "--alter", "--topic", topicName, "--partitions", "3",
                 "--bootstrap-server", bootstrapServer
             })));
-        assertTrue(exception.getCause() instanceof ThrottlingQuotaExceededException);
+        assertInstanceOf(ThrottlingQuotaExceededException.class, exception.getCause());
 
         verify(adminClient, times(1)).createPartitions(
             argThat(newPartitions -> newPartitions.get(topicName).totalCount() == 3),

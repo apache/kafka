@@ -1365,6 +1365,14 @@ object GroupMetadataManager {
 
   def maybeConvertOffsetCommitError(error: Errors) : Errors = {
     error match {
+      case Errors.NETWORK_EXCEPTION =>
+        // When committing offsets transactionally, we now verify the transaction with the
+        // transaction coordinator. Verification can fail with `NETWORK_EXCEPTION`, a retriable
+        // error which older clients may not expect and retry correctly. We translate the error to
+        // `COORDINATOR_LOAD_IN_PROGRESS` because it causes clients to retry the request without an
+        // unnecessary coordinator lookup.
+        Errors.COORDINATOR_LOAD_IN_PROGRESS
+
       case Errors.UNKNOWN_TOPIC_OR_PARTITION
            | Errors.NOT_ENOUGH_REPLICAS
            | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>

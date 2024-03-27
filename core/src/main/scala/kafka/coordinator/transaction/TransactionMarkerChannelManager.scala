@@ -109,23 +109,43 @@ object TransactionMarkerChannelManager {
 
 }
 
-class TxnMarkerQueue(@volatile var destination: Node) {
+class TxnMarkerQueue(@volatile var destination: Node) extends Logging {
 
   // keep track of the requests per txn topic partition so we can easily clear the queue
   // during partition emigration
-  private val markersPerTxnTopicPartition = new ConcurrentHashMap[Int, BlockingQueue[TxnIdAndMarkerEntry]]().asScala
+  private val markersPerTxnTopicPartition = new ConcurrentHashMap[Int, BlockingQueue[PendingCompleteTxnAndMarkerEntry]]().asScala
 
-  def removeMarkersForTxnTopicPartition(partition: Int): Option[BlockingQueue[TxnIdAndMarkerEntry]] = {
+  def removeMarkersForTxnTopicPartition(partition: Int): Option[BlockingQueue[PendingCompleteTxnAndMarkerEntry]] = {
     markersPerTxnTopicPartition.remove(partition)
   }
 
-  def addMarkers(txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry): Unit = {
-    val queue = CoreUtils.atomicGetOrUpdate(markersPerTxnTopicPartition, txnTopicPartition,
-        new LinkedBlockingQueue[TxnIdAndMarkerEntry]())
-    queue.add(txnIdAndMarker)
+  def addMarkers(txnTopicPartition: Int, pendingCompleteTxnAndMarker: PendingCompleteTxnAndMarkerEntry): Unit = {
+    val queue = CoreUtils.atomicGetOrUpdate(markersPerTxnTopicPartition, txnTopicPartition, {
+      // Note that this may get called more than once if threads have a close race while adding new queue.
+      info(s"Creating new marker queue for txn partition $txnTopicPartition to destination broker ${destination.id}")
+      new LinkedBlockingQueue[PendingCompleteTxnAndMarkerEntry]()
+    })
+    queue.add(pendingCompleteTxnAndMarker)
+
+    if (markersPerTxnTopicPartition.get(txnTopicPartition).orNull != queue) {
+      // This could happen if the queue got removed concurrently.
+      // Note that it could create an unexpected state when the queue is removed from
+      // removeMarkersForTxnTopicPartition, we could have:
+      //
+      // 1. [addMarkers] Retrieve queue.
+      // 2. [removeMarkersForTxnTopicPartition] Remove queue.
+      // 3. [removeMarkersForTxnTopicPartition] Iterate over queue, but not removeMarkersForTxn because queue is empty.
+      // 4. [addMarkers] Add markers to the queue.
+      //
+      // Now we've effectively removed the markers while transactionsWithPendingMarkers has an entry.
+      //
+      // While this could lead to an orphan entry in transactionsWithPendingMarkers, sending new markers
+      // will fix the state, so it shouldn't impact the state machine operation.
+      warn(s"Added $pendingCompleteTxnAndMarker to dead queue for txn partition $txnTopicPartition to destination broker ${destination.id}")
+    }
   }
 
-  def forEachTxnTopicPartition[B](f:(Int, BlockingQueue[TxnIdAndMarkerEntry]) => B): Unit =
+  def forEachTxnTopicPartition[B](f:(Int, BlockingQueue[PendingCompleteTxnAndMarkerEntry]) => B): Unit =
     markersPerTxnTopicPartition.forKeyValue { (partition, queue) =>
       if (!queue.isEmpty) f(partition, queue)
     }
@@ -187,17 +207,21 @@ class TransactionMarkerChannelManager(
   // visible for testing
   private[transaction] def queueForUnknownBroker = markersQueueForUnknownBroker
 
-  private[transaction] def addMarkersForBroker(broker: Node, txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry): Unit = {
+  private[transaction] def addMarkersForBroker(broker: Node, txnTopicPartition: Int, pendingCompleteTxnAndMarker: PendingCompleteTxnAndMarkerEntry): Unit = {
     val brokerId = broker.id
 
     // we do not synchronize on the update of the broker node with the enqueuing,
     // since even if there is a race condition we will just retry
-    val brokerRequestQueue = CoreUtils.atomicGetOrUpdate(markersQueuePerBroker, brokerId,
-        new TxnMarkerQueue(broker))
+    val brokerRequestQueue = CoreUtils.atomicGetOrUpdate(markersQueuePerBroker, brokerId, {
+      // Note that this may get called more than once if threads have a close race while adding new queue.
+      info(s"Creating new marker queue map to destination broker $brokerId")
+      new TxnMarkerQueue(broker)
+    })
     brokerRequestQueue.destination = broker
-    brokerRequestQueue.addMarkers(txnTopicPartition, txnIdAndMarker)
+    brokerRequestQueue.addMarkers(txnTopicPartition, pendingCompleteTxnAndMarker)
 
-    trace(s"Added marker ${txnIdAndMarker.txnMarkerEntry} for transactional id ${txnIdAndMarker.txnId} to destination broker $brokerId")
+    trace(s"Added marker ${pendingCompleteTxnAndMarker.txnMarkerEntry} for transactional id" +
+      s" ${pendingCompleteTxnAndMarker.pendingCompleteTxn.transactionalId} to destination broker $brokerId")
   }
 
   private def retryLogAppends(): Unit = {
@@ -211,29 +235,28 @@ class TransactionMarkerChannelManager(
 
   override def generateRequests(): util.Collection[RequestAndCompletionHandler] = {
     retryLogAppends()
-    val txnIdAndMarkerEntries: util.List[TxnIdAndMarkerEntry] = new util.ArrayList[TxnIdAndMarkerEntry]()
+    val pendingCompleteTxnAndMarkerEntries = new util.ArrayList[PendingCompleteTxnAndMarkerEntry]()
     markersQueueForUnknownBroker.forEachTxnTopicPartition { case (_, queue) =>
-      queue.drainTo(txnIdAndMarkerEntries)
+      queue.drainTo(pendingCompleteTxnAndMarkerEntries)
     }
 
-    for (txnIdAndMarker: TxnIdAndMarkerEntry <- txnIdAndMarkerEntries.asScala) {
-      val transactionalId = txnIdAndMarker.txnId
-      val producerId = txnIdAndMarker.txnMarkerEntry.producerId
-      val producerEpoch = txnIdAndMarker.txnMarkerEntry.producerEpoch
-      val txnResult = txnIdAndMarker.txnMarkerEntry.transactionResult
-      val coordinatorEpoch = txnIdAndMarker.txnMarkerEntry.coordinatorEpoch
-      val topicPartitions = txnIdAndMarker.txnMarkerEntry.partitions.asScala.toSet
+    for (pendingCompleteTxnAndMarker: PendingCompleteTxnAndMarkerEntry <- pendingCompleteTxnAndMarkerEntries.asScala) {
+      val producerId = pendingCompleteTxnAndMarker.txnMarkerEntry.producerId
+      val producerEpoch = pendingCompleteTxnAndMarker.txnMarkerEntry.producerEpoch
+      val txnResult = pendingCompleteTxnAndMarker.txnMarkerEntry.transactionResult
+      val pendingCompleteTxn = pendingCompleteTxnAndMarker.pendingCompleteTxn
+      val topicPartitions = pendingCompleteTxnAndMarker.txnMarkerEntry.partitions.asScala.toSet
 
-      addTxnMarkersToBrokerQueue(transactionalId, producerId, producerEpoch, txnResult, coordinatorEpoch, topicPartitions)
+      addTxnMarkersToBrokerQueue(producerId, producerEpoch, txnResult, pendingCompleteTxn, topicPartitions)
     }
 
     val currentTimeMs = time.milliseconds()
     markersQueuePerBroker.values.map { brokerRequestQueue =>
-      val txnIdAndMarkerEntries = new util.ArrayList[TxnIdAndMarkerEntry]()
+      val pendingCompleteTxnAndMarkerEntries = new util.ArrayList[PendingCompleteTxnAndMarkerEntry]()
       brokerRequestQueue.forEachTxnTopicPartition { case (_, queue) =>
-        queue.drainTo(txnIdAndMarkerEntries)
+        queue.drainTo(pendingCompleteTxnAndMarkerEntries)
       }
-      (brokerRequestQueue.destination, txnIdAndMarkerEntries)
+      (brokerRequestQueue.destination, pendingCompleteTxnAndMarkerEntries)
     }.filter { case (_, entries) => !entries.isEmpty }.map { case (node, entries) =>
       val markersToSend = entries.asScala.map(_.txnMarkerEntry).asJava
       val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(node.id, txnStateManager, this, entries)
@@ -300,9 +323,12 @@ class TransactionMarkerChannelManager(
       txnMetadata,
       newMetadata)
 
-    transactionsWithPendingMarkers.put(transactionalId, pendingCompleteTxn)
-    addTxnMarkersToBrokerQueue(transactionalId, txnMetadata.producerId,
-      txnMetadata.producerEpoch, txnResult, coordinatorEpoch, txnMetadata.topicPartitions.toSet)
+    val prev = transactionsWithPendingMarkers.put(transactionalId, pendingCompleteTxn)
+    if (prev != null) {
+      info(s"Replaced an existing pending complete txn $prev with $pendingCompleteTxn while adding markers to send.")
+    }
+    addTxnMarkersToBrokerQueue(txnMetadata.producerId,
+      txnMetadata.producerEpoch, txnResult, pendingCompleteTxn, txnMetadata.topicPartitions.toSet)
     maybeWriteTxnCompletion(transactionalId)
   }
 
@@ -354,41 +380,42 @@ class TransactionMarkerChannelManager(
       txnLogAppend.newMetadata, appendCallback, _ == Errors.COORDINATOR_NOT_AVAILABLE, RequestLocal.NoCaching)
   }
 
-  def addTxnMarkersToBrokerQueue(transactionalId: String,
-                                 producerId: Long,
+  def addTxnMarkersToBrokerQueue(producerId: Long,
                                  producerEpoch: Short,
                                  result: TransactionResult,
-                                 coordinatorEpoch: Int,
+                                 pendingCompleteTxn: PendingCompleteTxn,
                                  topicPartitions: immutable.Set[TopicPartition]): Unit = {
-    val txnTopicPartition = txnStateManager.partitionFor(transactionalId)
+    val txnTopicPartition = txnStateManager.partitionFor(pendingCompleteTxn.transactionalId)
     val partitionsByDestination: immutable.Map[Option[Node], immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
       metadataCache.getPartitionLeaderEndpoint(topicPartition.topic, topicPartition.partition, interBrokerListenerName)
     }
 
+    val coordinatorEpoch = pendingCompleteTxn.coordinatorEpoch
     for ((broker: Option[Node], topicPartitions: immutable.Set[TopicPartition]) <- partitionsByDestination) {
       broker match {
         case Some(brokerNode) =>
           val marker = new TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, result, topicPartitions.toList.asJava)
-          val txnIdAndMarker = TxnIdAndMarkerEntry(transactionalId, marker)
+          val pendingCompleteTxnAndMarker = PendingCompleteTxnAndMarkerEntry(pendingCompleteTxn, marker)
 
           if (brokerNode == Node.noNode) {
             // if the leader of the partition is known but node not available, put it into an unknown broker queue
             // and let the sender thread to look for its broker and migrate them later
-            markersQueueForUnknownBroker.addMarkers(txnTopicPartition, txnIdAndMarker)
+            markersQueueForUnknownBroker.addMarkers(txnTopicPartition, pendingCompleteTxnAndMarker)
           } else {
-            addMarkersForBroker(brokerNode, txnTopicPartition, txnIdAndMarker)
+            addMarkersForBroker(brokerNode, txnTopicPartition, pendingCompleteTxnAndMarker)
           }
 
         case None =>
+          val transactionalId = pendingCompleteTxn.transactionalId
           txnStateManager.getTransactionState(transactionalId) match {
             case Left(error) =>
               info(s"Encountered $error trying to fetch transaction metadata for $transactionalId with coordinator epoch $coordinatorEpoch; cancel sending markers to its partition leaders")
-              transactionsWithPendingMarkers.remove(transactionalId)
+              transactionsWithPendingMarkers.remove(transactionalId, pendingCompleteTxn)
 
             case Right(Some(epochAndMetadata)) =>
               if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
                 info(s"The cached metadata has changed to $epochAndMetadata (old coordinator epoch is $coordinatorEpoch) since preparing to send markers; cancel sending markers to its partition leaders")
-                transactionsWithPendingMarkers.remove(transactionalId)
+                transactionsWithPendingMarkers.remove(transactionalId, pendingCompleteTxn)
               } else {
                 // if the leader of the partition is unknown, skip sending the txn marker since
                 // the partition is likely to be deleted already
@@ -419,24 +446,33 @@ class TransactionMarkerChannelManager(
 
   def removeMarkersForTxnTopicPartition(txnTopicPartitionId: Int): Unit = {
     markersQueueForUnknownBroker.removeMarkersForTxnTopicPartition(txnTopicPartitionId).foreach { queue =>
-      for (entry: TxnIdAndMarkerEntry <- queue.asScala)
-        removeMarkersForTxnId(entry.txnId)
+      for (entry <- queue.asScala) {
+        info(s"Removing $entry for txn partition $txnTopicPartitionId to destination broker -1")
+        removeMarkersForTxn(entry.pendingCompleteTxn)
+      }
     }
 
-    markersQueuePerBroker.foreach { case(_, brokerQueue) =>
+    markersQueuePerBroker.foreach { case(brokerId, brokerQueue) =>
       brokerQueue.removeMarkersForTxnTopicPartition(txnTopicPartitionId).foreach { queue =>
-        for (entry: TxnIdAndMarkerEntry <- queue.asScala)
-          removeMarkersForTxnId(entry.txnId)
+        for (entry <- queue.asScala) {
+          info(s"Removing $entry for txn partition $txnTopicPartitionId to destination broker $brokerId")
+          removeMarkersForTxn(entry.pendingCompleteTxn)
+        }
       }
     }
   }
 
-  def removeMarkersForTxnId(transactionalId: String): Unit = {
-    transactionsWithPendingMarkers.remove(transactionalId)
+  def removeMarkersForTxn(pendingCompleteTxn: PendingCompleteTxn): Unit = {
+    val transactionalId = pendingCompleteTxn.transactionalId
+    val removed = transactionsWithPendingMarkers.remove(transactionalId, pendingCompleteTxn)
+    if (!removed) {
+      val current = transactionsWithPendingMarkers.get(transactionalId)
+      if (current != null) {
+        info(s"Failed to remove pending marker entry $current trying to remove $pendingCompleteTxn")
+      }
+    }
   }
 }
-
-case class TxnIdAndMarkerEntry(txnId: String, txnMarkerEntry: TxnMarkerEntry)
 
 case class PendingCompleteTxn(transactionalId: String,
                               coordinatorEpoch: Int,
@@ -451,3 +487,5 @@ case class PendingCompleteTxn(transactionalId: String,
       s"newMetadata=$newMetadata)"
   }
 }
+
+case class PendingCompleteTxnAndMarkerEntry(pendingCompleteTxn: PendingCompleteTxn, txnMarkerEntry: TxnMarkerEntry)
