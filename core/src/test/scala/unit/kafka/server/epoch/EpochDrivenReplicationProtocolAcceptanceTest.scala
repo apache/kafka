@@ -467,7 +467,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   private def createBrokerForId(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {
     val config = createBrokerConfig(id, zkConnect)
     TestUtils.setIbpAndMessageFormatVersions(config, metadataVersion)
-    config.setProperty(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, enableUncleanLeaderElection.toString)
+    config.setProperty(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, enableUncleanLeaderElection.toString)
     createServer(fromProps(config))
   }
 }

@@ -32,7 +32,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.kafka.server.config.KafkaConfig.INTER_BROKER_LISTENER_NAME_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.INTER_BROKER_LISTENER_NAME_CONFIG;
 
 /**
  * Tests command line SSL setup for reset tool.
@@ -55,7 +55,7 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
             SSL_CONFIG = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
 
             brokerProps.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:0");
-            brokerProps.put(INTER_BROKER_LISTENER_NAME_PROP, "SSL");
+            brokerProps.put(INTER_BROKER_LISTENER_NAME_CONFIG, "SSL");
             brokerProps.putAll(SSL_CONFIG);
         } catch (final Exception e) {
             throw new RuntimeException(e);

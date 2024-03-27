@@ -1307,7 +1307,7 @@ class KafkaApisTest extends Logging {
           true
         case _ =>
           topicConfigOverride.put(KafkaConfig.NumPartitionsProp, numBrokersNeeded.toString)
-          topicConfigOverride.put(DEFAULT_REPLICATION_FACTOR_PROP, numBrokersNeeded.toString)
+          topicConfigOverride.put(DEFAULT_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
           false
       }
 

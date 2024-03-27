@@ -46,8 +46,8 @@ class IsrExpirationTest {
   val leaderLogHighWatermark = 20L
 
   val overridingProps = new Properties()
-  overridingProps.put(REPLICA_LAG_TIME_MAX_MS_PROP, replicaLagTimeMaxMs.toString)
-  overridingProps.put(REPLICA_FETCH_WAIT_MAX_MS_PROP, replicaFetchWaitMaxMs.toString)
+  overridingProps.put(REPLICA_LAG_TIME_MAX_MS_CONFIG, replicaLagTimeMaxMs.toString)
+  overridingProps.put(REPLICA_FETCH_WAIT_MAX_MS_CONFIG, replicaFetchWaitMaxMs.toString)
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps(_, overridingProps))
   val topic = "foo"
 

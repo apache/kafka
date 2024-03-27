@@ -44,7 +44,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
   override def brokerCount = 3
 
   override def brokerPropertyOverrides(props: Properties): Unit = {
-    props.put(INTER_BROKER_PROTOCOL_VERSION_PROP, IBP_2_7_IV0.toString)
+    props.put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, IBP_2_7_IV0.toString)
   }
 
   private def defaultSupportedFeatures(): Features[SupportedVersionRange] = {

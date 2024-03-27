@@ -171,7 +171,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
     props.put(KafkaConfig.NodeIdProp, localId.toString)
     props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     props.put(KafkaConfig.LogDirProp, logDir.getAbsolutePath)
-    props.put(REPLICA_LAG_TIME_MAX_MS_PROP, 5000.toString)
+    props.put(REPLICA_LAG_TIME_MAX_MS_CONFIG, 5000.toString)
 
     val config = new KafkaConfig(props, doLog = false)
 

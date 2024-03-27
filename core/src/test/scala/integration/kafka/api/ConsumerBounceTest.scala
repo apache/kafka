@@ -59,7 +59,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     properties.put(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
     properties.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     properties.put(KafkaConfig.GroupMaxSizeProp, maxGroupSize)
-    properties.put(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, "true")
+    properties.put(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
 
     FixedPortTestUtils.createBrokerConfigs(brokerCount, zkConnect, enableControlledShutdown = false)

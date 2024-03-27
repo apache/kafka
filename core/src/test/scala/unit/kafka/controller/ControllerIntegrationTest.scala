@@ -1942,13 +1942,13 @@ class ControllerIntegrationTest extends QuorumTestHarness {
                           startingIdNumber: Int = 0): Seq[KafkaServer] = {
     val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown, logDirCount = logDirCount, startingIdNumber = startingIdNumber)
     configs.foreach { config =>
-      config.setProperty(AUTO_LEADER_REBALANCE_ENABLE_PROP, autoLeaderRebalanceEnable.toString)
-      config.setProperty(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, uncleanLeaderElectionEnable.toString)
-      config.setProperty(LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_PROP, "1")
+      config.setProperty(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, autoLeaderRebalanceEnable.toString)
+      config.setProperty(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, uncleanLeaderElectionEnable.toString)
+      config.setProperty(LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG, "1")
       listeners.foreach(listener => config.setProperty(KafkaConfig.ListenersProp, listener))
       listenerSecurityProtocolMap.foreach(listenerMap => config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerMap))
       controlPlaneListenerName.foreach(controlPlaneListener => config.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListener))
-      interBrokerProtocolVersion.foreach(ibp => config.setProperty(INTER_BROKER_PROTOCOL_VERSION_PROP, ibp.toString))
+      interBrokerProtocolVersion.foreach(ibp => config.setProperty(INTER_BROKER_PROTOCOL_VERSION_CONFIG, ibp.toString))
     }
     configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))
   }

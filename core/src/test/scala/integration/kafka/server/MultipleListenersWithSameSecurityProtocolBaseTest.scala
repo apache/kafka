@@ -79,7 +79,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
         s"$SecureExternal://localhost:0, $External://localhost:0")
       props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$Internal:PLAINTEXT, $SecureInternal:SASL_SSL," +
         s"$External:PLAINTEXT, $SecureExternal:SASL_SSL")
-      props.put(INTER_BROKER_LISTENER_NAME_PROP, Internal)
+      props.put(INTER_BROKER_LISTENER_NAME_CONFIG, Internal)
       props.put(KafkaConfig.ZkEnableSecureAclsProp, "true")
       props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, kafkaClientSaslMechanism)
       props.put(s"${new ListenerName(SecureInternal).configPrefix}${KafkaConfig.SaslEnabledMechanismsProp}",
@@ -105,7 +105,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       assertEquals(4, config.listeners.size, s"Unexpected listener count for broker ${config.brokerId}")
       // KAFKA-5184 seems to show that this value can sometimes be PLAINTEXT, so verify it here
       assertEquals(Internal, config.interBrokerListenerName.value,
-        s"Unexpected $INTER_BROKER_LISTENER_NAME_PROP for broker ${config.brokerId}")
+        s"Unexpected $INTER_BROKER_LISTENER_NAME_CONFIG for broker ${config.brokerId}")
     }
 
     TestUtils.createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, OffsetConfig.DEFAULT_OFFSETS_TOPIC_NUM_PARTITIONS,

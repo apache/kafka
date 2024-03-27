@@ -37,8 +37,8 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
   val brokerCount: Int = 2
 
   serverConfig.put(KafkaConfig.NumPartitionsProp, 2.toString)
-  serverConfig.put(DEFAULT_REPLICATION_FACTOR_PROP, 2.toString)
-  serverConfig.put(AUTO_LEADER_REBALANCE_ENABLE_PROP, false.toString)
+  serverConfig.put(DEFAULT_REPLICATION_FACTOR_CONFIG, 2.toString)
+  serverConfig.put(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)
 
   producerConfig.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5000L.toString)
   producerConfig.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 10000.toString)

@@ -66,8 +66,8 @@ class TransactionsTest extends IntegrationTestHarness {
     props.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
     props.put(KafkaConfig.TransactionsTopicMinISRProp, 2.toString)
     props.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-    props.put(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, false.toString)
-    props.put(AUTO_LEADER_REBALANCE_ENABLE_PROP, false.toString)
+    props.put(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, false.toString)
+    props.put(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)
     props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     props.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
 
