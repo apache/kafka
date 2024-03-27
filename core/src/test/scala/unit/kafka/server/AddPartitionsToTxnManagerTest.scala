@@ -299,9 +299,9 @@ class AddPartitionsToTxnManagerTest {
     assertEquals(expectedTransaction1Errors, transaction1Errors)
     assertEquals(expectedTransaction2Errors, transaction2Errors)
 
-    val preConvertedAbortableTransaction1Errors = topicPartitions.map(_ -> Errors.ABORTABLE_TRANSACTION).toMap
+    val preConvertedAbortableTransaction1Errors = topicPartitions.map(_ -> Errors.TRANSACTION_ABORTABLE).toMap
     val preConvertedAbortableTransaction2Errors = Map(new TopicPartition("foo", 1) -> Errors.NONE,
-      new TopicPartition("foo", 2) -> Errors.ABORTABLE_TRANSACTION,
+      new TopicPartition("foo", 2) -> Errors.TRANSACTION_ABORTABLE,
       new TopicPartition("foo", 3) -> Errors.NONE)
     val abortableTransaction1ErrorResponse = AddPartitionsToTxnResponse.resultForTransaction(transactionalId1, preConvertedAbortableTransaction1Errors.asJava)
     val abortableTransaction2ErrorResponse = AddPartitionsToTxnResponse.resultForTransaction(transactionalId2, preConvertedAbortableTransaction2Errors.asJava)
@@ -312,8 +312,8 @@ class AddPartitionsToTxnManagerTest {
     val expectedAbortableTransaction1ErrorsLowerVersion = topicPartitions.map(_ -> Errors.INVALID_TXN_STATE).toMap
     val expectedAbortableTransaction2ErrorsLowerVersion = Map(new TopicPartition("foo", 2) -> Errors.INVALID_TXN_STATE)
 
-    val expectedAbortableTransaction1ErrorsHigherVersion = topicPartitions.map(_ -> Errors.ABORTABLE_TRANSACTION).toMap
-    val expectedAbortableTransaction2ErrorsHigherVersion = Map(new TopicPartition("foo", 2) -> Errors.ABORTABLE_TRANSACTION)
+    val expectedAbortableTransaction1ErrorsHigherVersion = topicPartitions.map(_ -> Errors.TRANSACTION_ABORTABLE).toMap
+    val expectedAbortableTransaction2ErrorsHigherVersion = Map(new TopicPartition("foo", 2) -> Errors.TRANSACTION_ABORTABLE)
 
     addTransactionsToVerifyRequestVersion(defaultError)
     receiveResponse(mixedAbortableErrorsResponse)

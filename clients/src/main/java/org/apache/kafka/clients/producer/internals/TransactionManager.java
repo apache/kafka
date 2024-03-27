@@ -1330,7 +1330,7 @@ public class TransactionManager {
                 // We could still receive INVALID_PRODUCER_EPOCH from old versioned transaction coordinator,
                 // just treat it the same as PRODUCE_FENCED.
                 fatalError(Errors.PRODUCER_FENCED.exception());
-            } else if (error == Errors.ABORTABLE_TRANSACTION) {
+            } else if (error == Errors.TRANSACTION_ABORTABLE) {
                 abortableError(error.exception());
             } else {
                 fatalError(new KafkaException("Unexpected error in InitProducerIdResponse; " + error.message()));
@@ -1401,7 +1401,7 @@ public class TransactionManager {
                 } else if (error == Errors.UNKNOWN_PRODUCER_ID || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
                     abortableErrorIfPossible(error.exception());
                     return;
-                } else if (error == Errors.ABORTABLE_TRANSACTION) {
+                } else if (error == Errors.TRANSACTION_ABORTABLE) {
                     abortableError(error.exception());
                     return;
                 } else {
@@ -1507,7 +1507,7 @@ public class TransactionManager {
                 fatalError(error.exception());
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 abortableError(GroupAuthorizationException.forGroupId(key));
-            } else if (error == Errors.ABORTABLE_TRANSACTION) {
+            } else if (error == Errors.TRANSACTION_ABORTABLE) {
                 abortableError(error.exception());
             } else {
                 fatalError(new KafkaException(String.format("Could not find a coordinator with type %s with key %s due to " +
@@ -1562,7 +1562,7 @@ public class TransactionManager {
                 fatalError(error.exception());
             } else if (error == Errors.UNKNOWN_PRODUCER_ID || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
                 abortableErrorIfPossible(error.exception());
-            } else if (error == Errors.ABORTABLE_TRANSACTION) {
+            } else if (error == Errors.TRANSACTION_ABORTABLE) {
                 abortableError(error.exception());
             } else {
                 fatalError(new KafkaException("Unhandled error in EndTxnResponse: " + error.message()));
@@ -1622,7 +1622,7 @@ public class TransactionManager {
                 fatalError(error.exception());
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
-            } else if (error == Errors.ABORTABLE_TRANSACTION) {
+            } else if (error == Errors.TRANSACTION_ABORTABLE) {
                 abortableError(error.exception());
             } else {
                 fatalError(new KafkaException("Unexpected error in AddOffsetsToTxnResponse: " + error.message()));
@@ -1687,7 +1687,7 @@ public class TransactionManager {
                     abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
                     break;
                 } else if (error == Errors.FENCED_INSTANCE_ID ||
-                        error == Errors.ABORTABLE_TRANSACTION) {
+                        error == Errors.TRANSACTION_ABORTABLE) {
                     abortableError(error.exception());
                     break;
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
