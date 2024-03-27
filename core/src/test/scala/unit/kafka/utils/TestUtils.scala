@@ -349,9 +349,9 @@ object TestUtils extends Logging {
         // We can verify this by using a mixture of relative path and absolute path as log directories in the test
         if (i % 2 == 0) tempDir().getAbsolutePath else tempRelativeDir("data")
       ).mkString(",")
-      props.put(LOG_DIRS_PROP, logDirs)
+      props.put(LOG_DIRS_CONFIG, logDirs)
     } else {
-      props.put(LOG_DIR_PROP, tempDir().getAbsolutePath)
+      props.put(LOG_DIR_CONFIG, tempDir().getAbsolutePath)
     }
     if (zkConnect == null) {
       props.put(KafkaConfig.ProcessRolesProp, "broker")
@@ -368,7 +368,7 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.ControllerSocketTimeoutMsProp, "1500")
     props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
     props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
-    props.put(LOG_DELETE_DELAY_MS_PROP, "1000")
+    props.put(LOG_DELETE_DELAY_MS_CONFIG, "1000")
     props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
     props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152")
     props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
@@ -394,7 +394,7 @@ object TestUtils extends Logging {
     if (enableToken)
       props.put(KafkaConfig.DelegationTokenSecretKeyProp, "secretkey")
 
-    props.put(NUM_PARTITIONS_PROP, numPartitions.toString)
+    props.put(NUM_PARTITIONS_CONFIG, numPartitions.toString)
     props.put(KafkaConfig.DefaultReplicationFactorProp, defaultReplicationFactor.toString)
 
     if (enableFetchFromFollower) {
@@ -409,7 +409,7 @@ object TestUtils extends Logging {
     config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, version.version)
     // for clarity, only set the log message format version if it's not ignored
     if (!LogConfig.shouldIgnoreMessageFormatVersion(version))
-      config.setProperty(LOG_MESSAGE_FORMAT_VERSION_PROP, version.version)
+      config.setProperty(LOG_MESSAGE_FORMAT_VERSION_CONFIG, version.version)
   }
 
   def createAdminClient[B <: KafkaBroker](

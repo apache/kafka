@@ -36,7 +36,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
   val producerCount: Int = 1
   val brokerCount: Int = 2
 
-  serverConfig.put(NUM_PARTITIONS_PROP, 2.toString)
+  serverConfig.put(NUM_PARTITIONS_CONFIG, 2.toString)
   serverConfig.put(KafkaConfig.DefaultReplicationFactorProp, 2.toString)
   serverConfig.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
 

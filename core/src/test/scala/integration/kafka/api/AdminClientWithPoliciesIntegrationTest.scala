@@ -77,7 +77,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   }
 
   private def overrideNodeConfigs(props: Properties): Unit = {
-    props.put(ALTER_CONFIG_POLICY_CLASS_NAME_PROP, classOf[Policy])
+    props.put(ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, classOf[Policy])
   }
 
   @ParameterizedTest

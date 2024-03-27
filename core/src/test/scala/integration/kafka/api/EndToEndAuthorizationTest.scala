@@ -136,7 +136,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   // Some needed configuration for brokers, producers, and consumers
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3")
-  this.serverConfig.setProperty(MIN_IN_SYNC_REPLICAS_PROP, "3")
+  this.serverConfig.setProperty(MIN_IN_SYNC_REPLICAS_CONFIG, "3")
   this.serverConfig.setProperty(KafkaConfig.DefaultReplicationFactorProp, "3")
   this.serverConfig.setProperty(KafkaSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG, "1500")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")

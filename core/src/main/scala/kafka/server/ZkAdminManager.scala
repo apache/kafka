@@ -80,10 +80,10 @@ class ZkAdminManager(val config: KafkaConfig,
   private val configHelper = new ConfigHelper(metadataCache, config, new ZkConfigRepository(adminZkClient))
 
   private val createTopicPolicy =
-    Option(config.getConfiguredInstance(ALTER_CONFIG_POLICY_CLASS_NAME_PROP, classOf[CreateTopicPolicy]))
+    Option(config.getConfiguredInstance(ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, classOf[CreateTopicPolicy]))
 
   private val alterConfigPolicy =
-    Option(config.getConfiguredInstance(ALTER_CONFIG_POLICY_CLASS_NAME_PROP, classOf[AlterConfigPolicy]))
+    Option(config.getConfiguredInstance(ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, classOf[AlterConfigPolicy]))
 
   def hasDelayedTopicOperations = topicPurgatory.numDelayed != 0
 

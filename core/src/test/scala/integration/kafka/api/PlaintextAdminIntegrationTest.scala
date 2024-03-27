@@ -2528,7 +2528,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = Admin.create(super.createConfig)
 
     val newLogRetentionProperties = new Properties
-    newLogRetentionProperties.put(LOG_RETENTION_TIME_MILLIS_PROP, "10800000")
+    newLogRetentionProperties.put(LOG_RETENTION_TIME_MILLIS_CONFIG, "10800000")
     TestUtils.incrementalAlterConfigs(null, client, newLogRetentionProperties, perBrokerConfig = false)
       .all().get(15, TimeUnit.SECONDS)
 
@@ -2555,8 +2555,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       waitTimeMs = 60000L)
 
     waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
-      LOG_RETENTION_TIME_MILLIS_PROP, "").toString.equals("10800000")),
-      s"Timed out waiting for change to $LOG_RETENTION_TIME_MILLIS_PROP",
+      LOG_RETENTION_TIME_MILLIS_CONFIG, "").toString.equals("10800000")),
+      s"Timed out waiting for change to $LOG_RETENTION_TIME_MILLIS_CONFIG",
       waitTimeMs = 60000L)
 
     val newTopics = Seq(new NewTopic("foo", Map((0: Integer) -> Seq[Integer](1, 2).asJava,

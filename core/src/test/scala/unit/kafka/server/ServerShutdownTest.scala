@@ -65,11 +65,11 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     priorConfig.foreach { config =>
       // keep the same log directory
       val originals = config.originals
-      val logDirsValue = originals.get(LOG_DIRS_PROP)
+      val logDirsValue = originals.get(LOG_DIRS_CONFIG)
       if (logDirsValue != null) {
-        propsToChangeUponRestart.put(LOG_DIRS_PROP, logDirsValue)
+        propsToChangeUponRestart.put(LOG_DIRS_CONFIG, logDirsValue)
       } else {
-        propsToChangeUponRestart.put(LOG_DIR_PROP, originals.get(LOG_DIR_PROP))
+        propsToChangeUponRestart.put(LOG_DIR_CONFIG, originals.get(LOG_DIR_CONFIG))
       }
     }
     priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnectOrNull).head, propsToChangeUponRestart))

@@ -39,7 +39,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val topic = "topic1"
   val overridingProps = new Properties()
   val metrics = new Metrics()
-  overridingProps.put(NUM_PARTITIONS_PROP, numParts.toString)
+  overridingProps.put(NUM_PARTITIONS_CONFIG, numParts.toString)
 
   override def generateConfigs = TestUtils.createBrokerConfigs(numNodes, zkConnect)
     .map(KafkaConfig.fromProps(_, overridingProps))

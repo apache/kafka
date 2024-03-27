@@ -88,7 +88,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
         val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, newVal.toString()),
           SET)
         val resource2 = new ConfigResource(ConfigResource.Type.BROKER, "")
-        val op2 = new AlterConfigOp(new ConfigEntry(LOG_FLUSH_INTERVAL_MS_PROP, newVal.toString()),
+        val op2 = new AlterConfigOp(new ConfigEntry(LOG_FLUSH_INTERVAL_MS_CONFIG, newVal.toString()),
           SET)
         admin.incrementalAlterConfigs(Map(
           resource -> List(op).asJavaCollection,

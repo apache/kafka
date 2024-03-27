@@ -120,7 +120,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
-import static org.apache.kafka.server.config.KafkaConfig.LOG_DIR_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.LOG_DIR_CONFIG;
 
 /**
  * This class is responsible for
@@ -283,7 +283,7 @@ public class RemoteLogManager implements Closeable {
         rlmmProps.putAll(rlmConfig.remoteLogMetadataManagerProps());
 
         rlmmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
-        rlmmProps.put(LOG_DIR_PROP, logDir);
+        rlmmProps.put(LOG_DIR_CONFIG, logDir);
         rlmmProps.put("cluster.id", clusterId);
 
         remoteLogMetadataManager.configure(rlmmProps);

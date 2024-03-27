@@ -4793,7 +4793,7 @@ class ReplicaManagerTest {
     val topicPartition = new TopicPartition(topic, 0)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
-      propsModifier = props => props.put(LOG_DIRS_PROP, dataDir.getAbsolutePath)
+      propsModifier = props => props.put(LOG_DIRS_CONFIG, dataDir.getAbsolutePath)
     )
 
     try {
@@ -5603,7 +5603,7 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
       brokerId = localId,
-      propsModifier = props => props.put(LOG_DIRS_PROP, dataDir.getAbsolutePath),
+      propsModifier = props => props.put(LOG_DIRS_CONFIG, dataDir.getAbsolutePath),
       enableRemoteStorage = true
     )
 

@@ -40,9 +40,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
-import static org.apache.kafka.server.config.KafkaConfig.NUM_PARTITIONS_PROP;
-import static org.apache.kafka.server.config.KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_PROP;
-import static org.apache.kafka.server.config.KafkaConfig.LOG_DIR_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.NUM_PARTITIONS_CONFIG;
+import static org.apache.kafka.server.config.KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
+import static org.apache.kafka.server.config.KafkaConfig.LOG_DIR_CONFIG;
 
 
 /**
@@ -92,14 +92,14 @@ public class KafkaEmbedded {
     private Properties effectiveConfigFrom(final Properties initialConfig) {
         final Properties effectiveConfig = new Properties();
         effectiveConfig.put(KafkaConfig.BrokerIdProp(), 0);
-        effectiveConfig.put(NUM_PARTITIONS_PROP, 1);
-        effectiveConfig.put(AUTO_CREATE_TOPICS_ENABLE_PROP, true);
+        effectiveConfig.put(NUM_PARTITIONS_CONFIG, 1);
+        effectiveConfig.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
         effectiveConfig.put(KafkaConfig.MessageMaxBytesProp(), 1000000);
         effectiveConfig.put(KafkaConfig.ControlledShutdownEnableProp(), true);
         effectiveConfig.put(ZkConfigs.ZK_SESSION_TIMEOUT_MS_CONFIG, 10000);
 
         effectiveConfig.putAll(initialConfig);
-        effectiveConfig.setProperty(LOG_DIR_PROP, logDir.getAbsolutePath());
+        effectiveConfig.setProperty(LOG_DIR_CONFIG, logDir.getAbsolutePath());
         return effectiveConfig;
     }
 

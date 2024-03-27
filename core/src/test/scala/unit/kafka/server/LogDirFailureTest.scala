@@ -86,7 +86,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     try {
       val props = TestUtils.createBrokerConfig(brokerCount, zkConnect, logDirCount = 3)
       props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.11.0")
-      props.put(LOG_MESSAGE_FORMAT_VERSION_PROP, "0.11.0")
+      props.put(LOG_MESSAGE_FORMAT_VERSION_CONFIG, "0.11.0")
       val kafkaConfig = KafkaConfig.fromProps(props)
       val logDir = new File(kafkaConfig.logDirs.head)
       // Make log directory of the partition on the leader broker inaccessible by replacing it with a file

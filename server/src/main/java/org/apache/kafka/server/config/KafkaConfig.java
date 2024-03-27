@@ -23,76 +23,76 @@ import static org.apache.kafka.server.config.ServerTopicConfigSynonyms.LOG_PREFI
 public class KafkaConfig {
 
     /** ********* Log Configuration ***********/
-    public final static String NUM_PARTITIONS_PROP = "num.partitions";
-    public final static String LOG_DIRS_PROP = LOG_PREFIX + "dirs";
-    public final static String LOG_DIR_PROP = LOG_PREFIX + "dir";
-    public final static String LOG_SEGMENT_BYTES_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_BYTES_CONFIG);
+    public final static String NUM_PARTITIONS_CONFIG = "num.partitions";
+    public final static String LOG_DIRS_CONFIG = LOG_PREFIX + "dirs";
+    public final static String LOG_DIR_CONFIG = LOG_PREFIX + "dir";
+    public final static String LOG_SEGMENT_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_BYTES_CONFIG);
 
-    public final static String LOG_ROLL_TIME_MILLIS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_MS_CONFIG);
-    public final static String LOG_ROLL_TIME_HOURS_PROP = LOG_PREFIX + "roll.hours";
+    public final static String LOG_ROLL_TIME_MILLIS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_MS_CONFIG);
+    public final static String LOG_ROLL_TIME_HOURS_CONFIG = LOG_PREFIX + "roll.hours";
 
-    public final static String LOG_ROLL_TIME_JITTER_MILLIS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
-    public final static String LOG_ROLL_TIME_JITTER_HOURS_PROP = LOG_PREFIX + "roll.jitter.hours";
+    public final static String LOG_ROLL_TIME_JITTER_MILLIS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
+    public final static String LOG_ROLL_TIME_JITTER_HOURS_CONFIG = LOG_PREFIX + "roll.jitter.hours";
 
-    public final static String LOG_RETENTION_TIME_MILLIS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.RETENTION_MS_CONFIG);
-    public final static String LOG_RETENTION_TIME_MINUTES_PROP = LOG_PREFIX + "retention.minutes";
-    public final static String LOG_RETENTION_TIME_HOURS_PROP = LOG_PREFIX + "retention.hours";
+    public final static String LOG_RETENTION_TIME_MILLIS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.RETENTION_MS_CONFIG);
+    public final static String LOG_RETENTION_TIME_MINUTES_CONFIG = LOG_PREFIX + "retention.minutes";
+    public final static String LOG_RETENTION_TIME_HOURS_CONFIG = LOG_PREFIX + "retention.hours";
 
-    public final static String LOG_RETENTION_BYTES_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.RETENTION_BYTES_CONFIG);
-    public final static String LOG_CLEANUP_INTERVAL_MS_PROP = LOG_PREFIX + "retention.check.interval.ms";
-    public final static String LOG_CLEANUP_POLICY_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.CLEANUP_POLICY_CONFIG);
-    public final static String LOG_INDEX_SIZE_MAX_BYTES_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
-    public final static String LOG_INDEX_INTERVAL_BYTES_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG);
-    public final static String LOG_FLUSH_INTERVAL_MESSAGES_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG);
-    public final static String LOG_DELETE_DELAY_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG);
-    public final static String LOG_FLUSH_SCHEDULER_INTERVAL_MS_PROP = LOG_PREFIX + "flush.scheduler.interval.ms";
-    public final static String LOG_FLUSH_INTERVAL_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.FLUSH_MS_CONFIG);
-    public final static String LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_PROP = LOG_PREFIX + "flush.offset.checkpoint.interval.ms";
-    public final static String LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_PROP = LOG_PREFIX + "flush.start.offset.checkpoint.interval.ms";
-    public final static String LOG_PRE_ALLOCATE_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.PREALLOCATE_CONFIG);
+    public final static String LOG_RETENTION_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.RETENTION_BYTES_CONFIG);
+    public final static String LOG_CLEANUP_INTERVAL_MS_CONFIG = LOG_PREFIX + "retention.check.interval.ms";
+    public final static String LOG_CLEANUP_POLICY_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.CLEANUP_POLICY_CONFIG);
+    public final static String LOG_INDEX_SIZE_MAX_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
+    public final static String LOG_INDEX_INTERVAL_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG);
+    public final static String LOG_FLUSH_INTERVAL_MESSAGES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG);
+    public final static String LOG_DELETE_DELAY_MS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG);
+    public final static String LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG = LOG_PREFIX + "flush.scheduler.interval.ms";
+    public final static String LOG_FLUSH_INTERVAL_MS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.FLUSH_MS_CONFIG);
+    public final static String LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG = LOG_PREFIX + "flush.offset.checkpoint.interval.ms";
+    public final static String LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG = LOG_PREFIX + "flush.start.offset.checkpoint.interval.ms";
+    public final static String LOG_PRE_ALLOCATE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.PREALLOCATE_CONFIG);
 
     /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
     /**
      * @deprecated since "3.0"
      */
     @Deprecated
-    public final static String LOG_MESSAGE_FORMAT_VERSION_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG);
+    public final static String LOG_MESSAGE_FORMAT_VERSION_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG);
 
-    public final static String LOG_MESSAGE_TIMESTAMP_TYPE_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG);
+    public final static String LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG);
 
     /* See `TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG` for details */
     /**
      * @deprecated since "3.6"
      */
     @Deprecated
-    public final static String LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG);
+    public final static String LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG);
 
-    public final static String LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG);
-    public final static String LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
+    public final static String LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG);
+    public final static String LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
 
-    public final static String NUM_RECOVERY_THREADS_PER_DATA_DIR_PROP = "num.recovery.threads.per.data.dir";
-    public final static String AUTO_CREATE_TOPICS_ENABLE_PROP = "auto.create.topics.enable";
-    public final static String MIN_IN_SYNC_REPLICAS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
-    public final static String CREATE_TOPIC_POLICY_CLASS_NAME_PROP = "create.topic.policy.class.name";
-    public final static String ALTER_CONFIG_POLICY_CLASS_NAME_PROP = "alter.config.policy.class.name";
-    public final static String LOG_MESSAGE_DOWN_CONVERSION_ENABLE_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
+    public final static String NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG = "num.recovery.threads.per.data.dir";
+    public final static String AUTO_CREATE_TOPICS_ENABLE_CONFIG = "auto.create.topics.enable";
+    public final static String MIN_IN_SYNC_REPLICAS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
+    public final static String CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG = "create.topic.policy.class.name";
+    public final static String ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG = "alter.config.policy.class.name";
+    public final static String LOG_MESSAGE_DOWN_CONVERSION_ENABLE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
 
     // Document
 
     /** ********* Log Configuration ********** */
     public final static String NUM_PARTITIONS_DOC = "The default number of log partitions per topic";
-    public final static String LOG_DIR_DOC = "The directory in which the log data is kept (supplemental for " + LOG_DIRS_PROP + " property)";
-    public final static String LOG_DIRS_DOC = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LOG_DIR_PROP + " is used.";
+    public final static String LOG_DIR_DOC = "The directory in which the log data is kept (supplemental for " + LOG_DIRS_CONFIG + " property)";
+    public final static String LOG_DIRS_DOC = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LOG_DIR_CONFIG + " is used.";
     public final static String LOG_SEGMENT_BYTES_DOC = "The maximum size of a single log file";
-    public final static String LOG_ROLL_TIME_MILLIS_DOC = "The maximum time before a new log segment is rolled out (in milliseconds). If not set, the value in " + LOG_ROLL_TIME_HOURS_PROP + " is used";
-    public final static String LOG_ROLL_TIME_HOURS_DOC = "The maximum time before a new log segment is rolled out (in hours), secondary to " + LOG_ROLL_TIME_MILLIS_PROP + " property";
+    public final static String LOG_ROLL_TIME_MILLIS_DOC = "The maximum time before a new log segment is rolled out (in milliseconds). If not set, the value in " + LOG_ROLL_TIME_HOURS_CONFIG + " is used";
+    public final static String LOG_ROLL_TIME_HOURS_DOC = "The maximum time before a new log segment is rolled out (in hours), secondary to " + LOG_ROLL_TIME_MILLIS_CONFIG + " property";
 
-    public final static String LOG_ROLL_TIME_JITTER_MILLIS_DOC = "The maximum jitter to subtract from logRollTimeMillis (in milliseconds). If not set, the value in " + LOG_ROLL_TIME_JITTER_HOURS_PROP + " is used";
-    public final static String LOG_ROLL_TIME_JITTER_HOURS_DOC = "The maximum jitter to subtract from logRollTimeMillis (in hours), secondary to " + LOG_ROLL_TIME_JITTER_MILLIS_PROP + " property";
+    public final static String LOG_ROLL_TIME_JITTER_MILLIS_DOC = "The maximum jitter to subtract from logRollTimeMillis (in milliseconds). If not set, the value in " + LOG_ROLL_TIME_JITTER_HOURS_CONFIG + " is used";
+    public final static String LOG_ROLL_TIME_JITTER_HOURS_DOC = "The maximum jitter to subtract from logRollTimeMillis (in hours), secondary to " + LOG_ROLL_TIME_JITTER_MILLIS_CONFIG + " property";
 
-    public final static String LOG_RETENTION_TIME_MILLIS_DOC = "The number of milliseconds to keep a log file before deleting it (in milliseconds), If not set, the value in " + LOG_RETENTION_TIME_MINUTES_PROP + " is used. If set to -1, no time limit is applied.";
-    public final static String LOG_RETENTION_TIME_MINUTES_DOC = "The number of minutes to keep a log file before deleting it (in minutes), secondary to " + LOG_RETENTION_TIME_MILLIS_PROP + " property. If not set, the value in " + LOG_RETENTION_TIME_HOURS_PROP + " is used";
-    public final static String LOG_RETENTION_TIME_HOURS_DOC = "The number of hours to keep a log file before deleting it (in hours), tertiary to " + LOG_RETENTION_TIME_MILLIS_PROP + " property";
+    public final static String LOG_RETENTION_TIME_MILLIS_DOC = "The number of milliseconds to keep a log file before deleting it (in milliseconds), If not set, the value in " + LOG_RETENTION_TIME_MINUTES_CONFIG + " is used. If set to -1, no time limit is applied.";
+    public final static String LOG_RETENTION_TIME_MINUTES_DOC = "The number of minutes to keep a log file before deleting it (in minutes), secondary to " + LOG_RETENTION_TIME_MILLIS_CONFIG + " property. If not set, the value in " + LOG_RETENTION_TIME_HOURS_CONFIG + " is used";
+    public final static String LOG_RETENTION_TIME_HOURS_DOC = "The number of hours to keep a log file before deleting it (in hours), tertiary to " + LOG_RETENTION_TIME_MILLIS_CONFIG + " property";
 
     public final static String LOG_RETENTION_BYTES_DOC = "The maximum size of the log before deleting it";
     public final static String LOG_CLEANUP_INTERVAL_MS_DOC = "The frequency in milliseconds that the log cleaner checks whether any log is eligible for deletion";
@@ -102,7 +102,7 @@ public class KafkaConfig {
     public final static String LOG_FLUSH_INTERVAL_MESSAGES_DOC = "The number of messages accumulated on a log partition before messages are flushed to disk.";
     public final static String LOG_DELETE_DELAY_MS_DOC = "The amount of time to wait before deleting a file from the filesystem";
     public final static String LOG_FLUSH_SCHEDULER_INTERVAL_MS_DOC = "The frequency in ms that the log flusher checks whether any log needs to be flushed to disk";
-    public final static String LOG_FLUSH_INTERVAL_MS_DOC = "The maximum time in ms that a message in any topic is kept in memory before flushed to disk. If not set, the value in " + LOG_FLUSH_SCHEDULER_INTERVAL_MS_PROP + " is used";
+    public final static String LOG_FLUSH_INTERVAL_MS_DOC = "The maximum time in ms that a message in any topic is kept in memory before flushed to disk. If not set, the value in " + LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG + " is used";
     public final static String LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_DOC = "The frequency with which we update the persistent record of the last flush which acts as the log recovery point.";
     public final static String LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_DOC = "The frequency with which we update the persistent record of log start offset";
     public final static String LOG_PRE_ALLOCATE_ENABLE_DOC = "Should pre allocate file when create new segment? If you are using Kafka on Windows, you probably need to set it to true.";

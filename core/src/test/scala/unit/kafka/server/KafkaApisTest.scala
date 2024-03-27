@@ -1306,7 +1306,7 @@ class KafkaApisTest extends Logging {
           when(txnCoordinator.transactionTopicConfigs).thenReturn(new Properties)
           true
         case _ =>
-          topicConfigOverride.put(NUM_PARTITIONS_PROP, numBrokersNeeded.toString)
+          topicConfigOverride.put(NUM_PARTITIONS_CONFIG, numBrokersNeeded.toString)
           topicConfigOverride.put(KafkaConfig.DefaultReplicationFactorProp, numBrokersNeeded.toString)
           false
       }

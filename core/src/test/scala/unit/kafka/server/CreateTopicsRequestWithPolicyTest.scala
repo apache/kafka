@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.server.config.KafkaConfig.CREATE_TOPIC_POLICY_CLASS_NAME_PROP
+import org.apache.kafka.server.config.KafkaConfig.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG
 import org.apache.kafka.server.policy.CreateTopicPolicy
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 import org.junit.jupiter.params.ParameterizedTest
@@ -36,12 +36,12 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     super.brokerPropertyOverrides(properties)
-    properties.put(CREATE_TOPIC_POLICY_CLASS_NAME_PROP, classOf[Policy].getName)
+    properties.put(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, classOf[Policy].getName)
   }
 
   override def kraftControllerConfigs(): Seq[Properties] = {
     val properties = new Properties()
-    properties.put(CREATE_TOPIC_POLICY_CLASS_NAME_PROP, classOf[Policy].getName)
+    properties.put(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, classOf[Policy].getName)
     Seq(properties)
   }
 
