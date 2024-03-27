@@ -32,7 +32,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Random;
@@ -172,33 +174,39 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
     }
 
     @Test
-    public void testFormatAuthorizationHeader() {
-        assertAuthorizationHeader("id", "secret");
+    public void testFormatAuthorizationHeader() throws UnsupportedEncodingException {
+        assertAuthorizationHeader("id", "secret", false);
     }
 
     @Test
-    public void testFormatAuthorizationHeaderEncoding() {
+    public void testFormatAuthorizationHeaderEncoding() throws UnsupportedEncodingException {
         // See KAFKA-14496
-        assertAuthorizationHeader("SOME_RANDOM_LONG_USER_01234", "9Q|0`8i~ute-n9ksjLWb\\50\"AX@UUED5E");
+        assertAuthorizationHeader("SOME_RANDOM_LONG_USER_01234", "9Q|0`8i~ute-n9ksjLWb\\50\"AX@UUED5E", false);
+        // See KAFKA-16345
+        assertAuthorizationHeader("user!@~'", "secret-(*)!", true);
     }
 
-    private void assertAuthorizationHeader(String clientId, String clientSecret) {
+    private void assertAuthorizationHeader(String clientId, String clientSecret, boolean urlencode) throws UnsupportedEncodingException {
+        String actual = HttpAccessTokenRetriever.formatAuthorizationHeader(clientId, clientSecret, urlencode);
+        if (urlencode) {
+            clientId = URLEncoder.encode(clientId, StandardCharsets.UTF_8.name());
+            clientSecret = URLEncoder.encode(clientSecret, StandardCharsets.UTF_8.name());
+        }
         String expected = "Basic " + Base64.getEncoder().encodeToString(Utils.utf8(clientId + ":" + clientSecret));
-        String actual = HttpAccessTokenRetriever.formatAuthorizationHeader(clientId, clientSecret);
         assertEquals(expected, actual, String.format("Expected the HTTP Authorization header generated for client ID \"%s\" and client secret \"%s\" to match", clientId, clientSecret));
     }
 
     @Test
     public void testFormatAuthorizationHeaderMissingValues() {
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader(null, "secret"));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", null));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader(null, null));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("", "secret"));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", ""));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("", ""));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("  ", "secret"));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", "  "));
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("  ", "  "));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader(null, "secret", false));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", null, false));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader(null, null, false));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("", "secret", false));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", "", false));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("", "", false));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("  ", "secret", false));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("id", "  ", false));
+        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.formatAuthorizationHeader("  ", "  ", false));
     }
 
     @Test

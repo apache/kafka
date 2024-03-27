@@ -112,6 +112,8 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
     private final Integer loginReadTimeoutMs;
 
+    private final boolean urlencodeHeader;
+
     public HttpAccessTokenRetriever(String clientId,
         String clientSecret,
         String scope,
@@ -120,7 +122,8 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         long loginRetryBackoffMs,
         long loginRetryBackoffMaxMs,
         Integer loginConnectTimeoutMs,
-        Integer loginReadTimeoutMs) {
+        Integer loginReadTimeoutMs,
+        boolean urlencodeHeader) {
         this.clientId = Objects.requireNonNull(clientId);
         this.clientSecret = Objects.requireNonNull(clientSecret);
         this.scope = scope;
@@ -130,6 +133,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         this.loginRetryBackoffMaxMs = loginRetryBackoffMaxMs;
         this.loginConnectTimeoutMs = loginConnectTimeoutMs;
         this.loginReadTimeoutMs = loginReadTimeoutMs;
+        this.urlencodeHeader = urlencodeHeader;
     }
 
     /**
@@ -149,7 +153,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
     @Override
     public String retrieve() throws IOException {
-        String authorizationHeader = formatAuthorizationHeader(clientId, clientSecret);
+        String authorizationHeader = formatAuthorizationHeader(clientId, clientSecret, urlencodeHeader);
         String requestBody = formatRequestBody(scope);
         Retry<String> retry = new Retry<>(loginRetryBackoffMs, loginRetryBackoffMaxMs);
         Map<String, String> headers = Collections.singletonMap(AUTHORIZATION_HEADER, authorizationHeader);
@@ -346,9 +350,16 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         return sanitizeString("the token endpoint response's access_token JSON attribute", accessTokenNode.textValue());
     }
 
-    static String formatAuthorizationHeader(String clientId, String clientSecret) {
+    static String formatAuthorizationHeader(String clientId, String clientSecret, boolean urlencode) throws
+        UnsupportedEncodingException {
         clientId = sanitizeString("the token endpoint request client ID parameter", clientId);
         clientSecret = sanitizeString("the token endpoint request client secret parameter", clientSecret);
+
+        // according to RFC-6749 clientId & clientSecret must be urlencoded, see https://tools.ietf.org/html/rfc6749#section-2.3.1
+        if (urlencode) {
+            clientId = URLEncoder.encode(clientId, StandardCharsets.UTF_8.name());
+            clientSecret = URLEncoder.encode(clientSecret, StandardCharsets.UTF_8.name());
+        }
 
         String s = String.format("%s:%s", clientId, clientSecret);
         // Per RFC-7617, we need to use the *non-URL safe* base64 encoder. See KAFKA-14496.

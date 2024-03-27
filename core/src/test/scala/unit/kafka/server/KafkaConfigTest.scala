@@ -973,6 +973,7 @@ class KafkaConfigTest {
         case KafkaConfig.SaslOAuthBearerClockSkewSecondsProp =>
         case KafkaConfig.SaslOAuthBearerExpectedAudienceProp =>
         case KafkaConfig.SaslOAuthBearerExpectedIssuerProp =>
+        case KafkaConfig.SaslOAuthBearerHeaderUrlencodeEnableProp =>
 
         // Security config
         case KafkaConfig.securityProviderClassProp =>
