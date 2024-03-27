@@ -94,12 +94,13 @@ class HighwatermarkPersistenceTest {
 
       replicaManager.checkpointHighWatermarks()
       fooPartition0Hw = hwmFor(replicaManager, topic, 0)
-      assertEquals(log0.highWatermark, fooPartition0Hw)
+      assertEquals(0L, fooPartition0Hw)
       // set the high watermark for local replica
+      append(partition0, count = 5)
       partition0.localLogOrException.updateHighWatermark(5L)
       replicaManager.checkpointHighWatermarks()
       fooPartition0Hw = hwmFor(replicaManager, topic, 0)
-      assertEquals(log0.highWatermark, fooPartition0Hw)
+      assertEquals(5L, fooPartition0Hw)
     } finally {
       // shutdown the replica manager upon test completion
       replicaManager.shutdown(false)
