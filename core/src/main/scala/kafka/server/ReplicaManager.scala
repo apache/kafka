@@ -795,6 +795,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
+   * @param supportedOperation            determines the supported Operation based on the client's Request api version
    *
    * The responseCallback is wrapped so that it is scheduled on a request handler thread. There, it should be called with
    * that request handler thread's thread local and not the one supplied to this method.
@@ -807,7 +808,8 @@ class ReplicaManager(val config: KafkaConfig,
                           responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                           recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                           requestLocal: RequestLocal = RequestLocal.NoCaching,
-                          actionQueue: ActionQueue = this.defaultActionQueue): Unit = {
+                          actionQueue: ActionQueue = this.defaultActionQueue,
+                          supportedOperation: SupportedOperation): Unit = {
 
     val transactionalProducerInfo = mutable.HashSet[(Long, Short)]()
     val topicPartitionBatchInfo = mutable.Map[TopicPartition, Int]()
@@ -830,7 +832,12 @@ class ReplicaManager(val config: KafkaConfig,
           val customException =
             error match {
               case Errors.INVALID_TXN_STATE => Some(error.exception("Partition was not added to the transaction"))
+              // Transaction verification can fail with a retriable error that older clients may not
+              // retry correctly. Translate these to an error which will cause such clients to retry
+              // the produce request. We pick `NOT_ENOUGH_REPLICAS` because it does not trigger a
+              // metadata refresh.
               case Errors.CONCURRENT_TRANSACTIONS |
+                   Errors.NETWORK_EXCEPTION |
                    Errors.COORDINATOR_LOAD_IN_PROGRESS |
                    Errors.COORDINATOR_NOT_AVAILABLE |
                    Errors.NOT_COORDINATOR => Some(new NotEnoughReplicasException(
@@ -884,7 +891,8 @@ class ReplicaManager(val config: KafkaConfig,
       KafkaRequestHandler.wrapAsyncCallback(
         postVerificationCallback,
         requestLocal
-      )
+      ),
+      supportedOperation
     )
   }
 
@@ -975,12 +983,13 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
    *
-   * @param topicPartition  the topic partition to maybe verify
-   * @param transactionalId the transactional id for the transaction
-   * @param producerId      the producer id for the producer writing to the transaction
-   * @param producerEpoch   the epoch of the producer writing to the transaction
-   * @param baseSequence    the base sequence of the first record in the batch we are trying to append
-   * @param callback        the method to execute once the verification is either completed or returns an error
+   * @param topicPartition        the topic partition to maybe verify
+   * @param transactionalId       the transactional id for the transaction
+   * @param producerId            the producer id for the producer writing to the transaction
+   * @param producerEpoch         the epoch of the producer writing to the transaction
+   * @param baseSequence          the base sequence of the first record in the batch we are trying to append
+   * @param callback              the method to execute once the verification is either completed or returns an error
+   * @param supportedOperation    determines the supported operation based on the client's Request API version
    *
    * When the verification returns, the callback will be supplied the error if it exists or Errors.NONE.
    * If the verification guard exists, it will also be supplied. Otherwise the SENTINEL verification guard will be returned.
@@ -992,7 +1001,8 @@ class ReplicaManager(val config: KafkaConfig,
     producerId: Long,
     producerEpoch: Short,
     baseSequence: Int,
-    callback: ((Errors, VerificationGuard)) => Unit
+    callback: ((Errors, VerificationGuard)) => Unit,
+    supportedOperation: SupportedOperation
   ): Unit = {
     def generalizedCallback(results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
       val (preAppendErrors, verificationGuards) = results
@@ -1007,7 +1017,8 @@ class ReplicaManager(val config: KafkaConfig,
       transactionalId,
       producerId,
       producerEpoch,
-      generalizedCallback
+      generalizedCallback,
+      supportedOperation
     )
   }
 
@@ -1018,6 +1029,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param producerId               the producer id for the producer writing to the transaction
    * @param producerEpoch            the epoch of the producer writing to the transaction
    * @param callback                 the method to execute once the verification is either completed or returns an error
+   * @param supportedOperation       determines the supported operation based on the client's Request API version
    *
    * When the verification returns, the callback will be supplied the errors per topic partition if there were errors.
    * The callback will also be supplied the verification guards per partition if they exist. It is possible to have an
@@ -1029,7 +1041,8 @@ class ReplicaManager(val config: KafkaConfig,
     transactionalId: String,
     producerId: Long,
     producerEpoch: Short,
-    callback: ((Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])) => Unit
+    callback: ((Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])) => Unit,
+    supportedOperation: SupportedOperation
   ): Unit = {
     // Skip verification if the request is not transactional or transaction verification is disabled.
     if (transactionalId == null ||
@@ -1075,7 +1088,8 @@ class ReplicaManager(val config: KafkaConfig,
       producerId = producerId,
       producerEpoch = producerEpoch,
       topicPartitions = verificationGuards.keys.toSeq,
-      callback = invokeCallback
+      callback = invokeCallback,
+      supportedOperation = supportedOperation
     ))
 
   }

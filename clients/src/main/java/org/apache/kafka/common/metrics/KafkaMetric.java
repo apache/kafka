@@ -26,7 +26,7 @@ public final class KafkaMetric implements Metric {
     private final Object lock;
     private final Time time;
     private final MetricValueProvider<?> metricValueProvider;
-    private MetricConfig config;
+    private volatile MetricConfig config;
 
     // public for testing
     /**

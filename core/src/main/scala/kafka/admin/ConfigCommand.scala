@@ -35,7 +35,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
-import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
+import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals, ZkConfigs}
 import org.apache.kafka.security.{PasswordEncoder, PasswordEncoderConfigs}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -153,7 +153,7 @@ object ConfigCommand extends Logging {
       if (!configsToBeAdded.isEmpty || configsToBeDeleted.nonEmpty) {
         validateBrokersNotRunning(entityName, adminZkClient, zkClient, errorMessage)
 
-        val perBrokerConfig = entityName != ConfigEntityName.DEFAULT
+        val perBrokerConfig = entityName != ZooKeeperInternals.DEFAULT_STRING
         preProcessBrokerConfigs(configsToBeAdded, perBrokerConfig)
       }
     }
@@ -178,7 +178,7 @@ object ConfigCommand extends Logging {
                                         adminZkClient: AdminZkClient,
                                         zkClient: KafkaZkClient,
                                         errorMessage: String): Unit = {
-    val perBrokerConfig = entityName != ConfigEntityName.DEFAULT
+    val perBrokerConfig = entityName != ZooKeeperInternals.DEFAULT_STRING
     val info = "Broker configuration operations using ZooKeeper are only supported if the affected broker(s) are not running."
     if (perBrokerConfig) {
       adminZkClient.parseBroker(entityName).foreach { brokerId =>
@@ -697,7 +697,7 @@ object ConfigCommand extends Logging {
         case t => t
       }
       sanitizedName match {
-        case Some(ConfigEntityName.DEFAULT) => "default " + typeName
+        case Some(ZooKeeperInternals.DEFAULT_STRING) => "default " + typeName
         case Some(n) =>
           val desanitized = if (entityType == ConfigType.USER || entityType == ConfigType.CLIENT) Sanitizer.desanitize(n) else n
           s"$typeName '$desanitized'"
@@ -758,7 +758,7 @@ object ConfigCommand extends Logging {
     else {
       // Exactly one entity type and at-most one entity name expected for other entities
       val name = entityNames.headOption match {
-        case Some("") => Some(ConfigEntityName.DEFAULT)
+        case Some("") => Some(ZooKeeperInternals.DEFAULT_STRING)
         case v => v
       }
       ConfigEntity(Entity(entityTypes.head, name), None)
@@ -775,7 +775,7 @@ object ConfigCommand extends Logging {
 
     def sanitizeName(entityType: String, name: String) = {
       if (name.isEmpty)
-        ConfigEntityName.DEFAULT
+        ZooKeeperInternals.DEFAULT_STRING
       else {
         entityType match {
           case ConfigType.USER | ConfigType.CLIENT => Sanitizer.sanitize(name)
@@ -864,7 +864,7 @@ object ConfigCommand extends Logging {
       .ofType(classOf[String])
     val zkTlsConfigFile: OptionSpec[String] = parser.accepts("zk-tls-config-file",
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
-        KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") + " are ignored.")
+        ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.toList.sorted.mkString(", ") + " are ignored.")
       .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
     options = parser.parse(args : _*)
 

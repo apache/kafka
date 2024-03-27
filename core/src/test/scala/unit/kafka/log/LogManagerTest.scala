@@ -1303,6 +1303,26 @@ class LogManagerTest {
         createLeaderAndIsrRequestForStrayDetection(present),
         onDisk.map(mockLog(_))).toSet)
   }
+
+  /**
+   * Test LogManager takes file lock by default and the lock is released after shutdown.
+   */
+  @Test
+  def testLock(): Unit = {
+    val tmpLogDir = TestUtils.tempDir()
+    val tmpLogManager = createLogManager(Seq(tmpLogDir))
+
+    try {
+      // ${tmpLogDir}.lock is acquired by tmpLogManager
+      val fileLock = new FileLock(new File(tmpLogDir, LogManager.LockFileName))
+      assertFalse(fileLock.tryLock())
+    } finally {
+      // ${tmpLogDir}.lock is removed after shutdown
+      tmpLogManager.shutdown()
+      val f = new File(tmpLogDir, LogManager.LockFileName)
+      assertFalse(f.exists())
+    }
+  }
 }
 
 object LogManagerTest {

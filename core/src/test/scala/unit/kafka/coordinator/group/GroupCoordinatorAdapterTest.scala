@@ -761,7 +761,8 @@ class GroupCoordinatorAdapterTest {
         )
       )),
       capturedCallback.capture(),
-      ArgumentMatchers.eq(RequestLocal(bufferSupplier))
+      ArgumentMatchers.eq(RequestLocal(bufferSupplier)),
+      ArgumentMatchers.any()
     )
 
     capturedCallback.getValue.apply(Map(

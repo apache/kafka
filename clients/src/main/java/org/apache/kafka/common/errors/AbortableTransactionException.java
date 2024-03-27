@@ -14,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.config;
+package org.apache.kafka.common.errors;
 
-public class ConfigEntityName {
-    public static final String DEFAULT = "<default>";
+public class AbortableTransactionException extends ApiException {
+    public AbortableTransactionException(String message) {
+        super(message);
+    }
 }

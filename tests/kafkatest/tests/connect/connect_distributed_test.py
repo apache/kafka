@@ -20,7 +20,7 @@ from ducktape.mark import matrix, parametrize
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService, config_property, quorum
+from kafkatest.services.kafka import KafkaService, config_property, quorum, consumer_group
 from kafkatest.services.connect import ConnectDistributedService, VerifiableSource, VerifiableSink, ConnectRestError, MockSink, MockSource
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
@@ -683,16 +683,17 @@ class ConnectDistributedTest(Test):
     @matrix(
         clean=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         clean=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_bounce(self, clean, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_bounce(self, clean, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Validates that source and sink tasks that run continuously and produce a predictable sequence of messages
         run correctly and deliver messages exactly once when Kafka Connect workers undergo clean rolling bounces,
@@ -804,7 +805,8 @@ class ConnectDistributedTest(Test):
         if not success:
             self.mark_for_collect(self.cc)
             # Also collect the data in the topic to aid in debugging
-            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, consumer_timeout_ms=1000, print_key=True)
+            consumer_properties = consumer_group.maybe_set_group_protocol(group_protocol)
+            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, consumer_timeout_ms=1000, print_key=True, consumer_properties=consumer_properties)
             consumer_validator.run()
             self.mark_for_collect(consumer_validator, "consumer_stdout")
 
@@ -814,16 +816,17 @@ class ConnectDistributedTest(Test):
     @matrix(
         clean=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         clean=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_exactly_once_source(self, clean, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_exactly_once_source(self, clean, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Validates that source tasks run correctly and deliver messages exactly once
         when Kafka Connect workers undergo bounces, both clean and unclean.
@@ -878,7 +881,8 @@ class ConnectDistributedTest(Test):
         self.source.stop()
         self.cc.stop()
 
-        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, message_validator=json.loads, consumer_timeout_ms=1000, isolation_level="read_committed")
+        consumer_properties = consumer_group.maybe_set_group_protocol(group_protocol)
+        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, message_validator=json.loads, consumer_timeout_ms=1000, isolation_level="read_committed", consumer_properties=consumer_properties)
         consumer.run()
         src_messages = consumer.messages_consumed[1]
 
@@ -921,15 +925,16 @@ class ConnectDistributedTest(Test):
     @cluster(num_nodes=6)
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_transformations(self, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_transformations(self, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services(timestamp_type='CreateTime', include_filestream_connectors=True)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -959,7 +964,8 @@ class ConnectDistributedTest(Test):
         for node in self.cc.nodes:
             node.account.ssh("echo -e -n " + repr(self.FIRST_INPUTS) + " >> " + self.INPUT_FILE)
 
-        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=15000, print_timestamp=True)
+        consumer_properties = consumer_group.maybe_set_group_protocol(group_protocol)
+        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=15000, print_timestamp=True, consumer_properties=consumer_properties)
         consumer.run()
 
         assert len(consumer.messages_consumed[1]) == len(self.FIRST_INPUT_LIST)

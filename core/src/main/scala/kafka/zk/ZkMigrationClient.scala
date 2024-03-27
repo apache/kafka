@@ -27,7 +27,6 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.scram.ScramCredential
-import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.metadata.DelegationTokenData
 import org.apache.kafka.metadata.PartitionRegistration
@@ -227,9 +226,6 @@ class ZkMigrationClient(
         entityDataList: util.List[ClientQuotaRecord.EntityData],
         quotas: util.Map[String, lang.Double]
       ): Unit = {
-        entityDataList.forEach(entityData => {
-          entityData.setEntityName(Sanitizer.desanitize(entityData.entityName()))
-        })
         val batch = new util.ArrayList[ApiMessageAndVersion]()
         quotas.forEach((key, value) => {
           batch.add(new ApiMessageAndVersion(new ClientQuotaRecord()
