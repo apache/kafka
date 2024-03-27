@@ -29,11 +29,19 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def doTest(env, target = "test") {
-  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
+def doTestParameterized(env, params, target = "test") {
+  sh """./gradlew ${params} ${target} \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
+}
+
+def doTest(env) {
+  doTestParameterized(env, "-PscalaVersion=$SCALA_VERSION", "test")
+}
+
+def streamsTest(env) {
+  doTestParameterized(env, "-PstreamsScalaVersion=3", ":streams:streams-scala:test")
 }
 
 def doStreamsArchetype() {
@@ -54,7 +62,7 @@ def doStreamsArchetype() {
 
     dir('test-streams-archetype') {
       // Note the double quotes for variable interpolation
-      sh """ 
+      sh """
         echo "Y" | mvn archetype:generate \
             -DarchetypeCatalog=local \
             -DarchetypeGroupId=org.apache.kafka \
@@ -89,11 +97,11 @@ def tryStreamsArchetype() {
 
 pipeline {
   agent none
-  
+
   options {
     disableConcurrentBuilds(abortPrevious: isChangeRequest(env))
   }
-  
+
   stages {
     stage('Build') {
       parallel {
@@ -105,7 +113,7 @@ pipeline {
             maven 'maven_3_latest'
           }
           options {
-            timeout(time: 8, unit: 'HOURS') 
+            timeout(time: 8, unit: 'HOURS')
             timestamps()
           }
           environment {
@@ -124,7 +132,7 @@ pipeline {
             jdk 'jdk_11_latest'
           }
           options {
-            timeout(time: 8, unit: 'HOURS') 
+            timeout(time: 8, unit: 'HOURS')
             timestamps()
           }
           environment {
@@ -143,7 +151,7 @@ pipeline {
             jdk 'jdk_17_latest'
           }
           options {
-            timeout(time: 8, unit: 'HOURS') 
+            timeout(time: 8, unit: 'HOURS')
             timestamps()
           }
           environment {
@@ -174,10 +182,24 @@ pipeline {
             echo 'Skipping Kafka Streams archetype test for Java 21'
           }
         }
+
+        stage('JDK 21 and Scala 3 (Streams-Scala only)') {
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_21_latest'
+          }
+          options {
+            timeout(time: 1, unit: 'HOURS')
+            timestamps()
+          }
+          steps {
+            streamsTest(env)
+          }
+        }
       }
     }
   }
-  
+
   post {
     always {
       script {
