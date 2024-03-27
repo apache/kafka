@@ -59,7 +59,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     */
   @Timeout(15)
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testTwoConsumersWithDifferentSaslCredentials(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
       Console.err.println("QuorumName : " + quorum + " is not supported.")

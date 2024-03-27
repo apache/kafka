@@ -185,7 +185,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Tests the ability of producing and consuming with the appropriate ACLs set.
     */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testProduceConsumeViaAssign(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
         Console.err.println("QuorumName : " + quorum + " is not supported.")
@@ -218,7 +218,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testProduceConsumeViaSubscribe(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
         Console.err.println("QuorumName : " + quorum + " is not supported.")
@@ -232,7 +232,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testProduceConsumeWithWildcardAcls(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
         Console.err.println("QuorumName : " + quorum + " is not supported.")
@@ -248,7 +248,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testProduceConsumeWithPrefixedAcls(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
         Console.err.println("QuorumName : " + quorum + " is not supported.")
@@ -264,7 +264,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testProduceConsumeTopicAutoCreateTopicCreateAcl(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
         Console.err.println("QuorumName : " + quorum + " is not supported.")
@@ -340,7 +340,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     "kraft, true",
     "kraft, false",
     "zk, true",
-    "zk, false"
+    "zk, false",
+    "kraft+kip848, true",
+    "kraft+kip848, false",
   ))
   def testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(quorum:String, isIdempotenceEnabled:Boolean): Unit = {
     if (quorum == unimplementedquorum) {
@@ -416,7 +418,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     "kraft, true",
     "kraft, false",
     "zk, true",
-    "zk, false"
+    "zk, false",
+    "kraft+kip848, true",
+    "kraft+kip848, false",
   ))
   def testNoProduceWithDescribeAcl(quorum:String, isIdempotenceEnabled:Boolean): Unit = {
     if (quorum == unimplementedquorum) {
@@ -449,7 +453,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * ACL set.
     */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testNoConsumeWithoutDescribeAclViaAssign(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
         Console.err.println("QuorumName : " + quorum + " is not supported.")
@@ -464,7 +468,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testNoConsumeWithoutDescribeAclViaSubscribe(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
         Console.err.println("QuorumName : " + quorum + " is not supported.")
@@ -509,7 +513,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testNoConsumeWithDescribeAclViaAssign(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
         Console.err.println("QuorumName : " + quorum + " is not supported.")
@@ -525,7 +529,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testNoConsumeWithDescribeAclViaSubscribe(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
         Console.err.println("QuorumName : " + quorum + " is not supported.")
@@ -558,7 +562,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * ACL set.
     */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testNoGroupAcl(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
         Console.err.println("QuorumName : " + quorum + " is not supported.")

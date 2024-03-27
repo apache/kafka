@@ -24,7 +24,6 @@ import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import java.util.Properties
-
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.CompressionType
 
@@ -35,11 +34,14 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
   overridingProps.put(KafkaConfig.OffsetsTopicCompressionCodecProp, offsetsTopicCompressionCodec.id.toString)
 
   override def generateConfigs = TestUtils.createBrokerConfigs(1, zkConnectOrNull, enableControlledShutdown = false).map {
+    if (isNewGroupCoordinatorEnabled()) {
+      overridingProps.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
+    }
     KafkaConfig.fromProps(_, overridingProps)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testGroupCoordinatorPropagatesOffsetsTopicCompressionCodec(quorum: String): Unit = {
     val consumer = TestUtils.createConsumer(bootstrapServers())
     val offsetMap = Map(
