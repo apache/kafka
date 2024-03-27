@@ -1274,4 +1274,8 @@ public class GroupMetadataManagerTestContext {
         lastWrittenOffset++;
         snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
     }
+
+    void onUnloaded() {
+        groupMetadataManager.onUnloaded();
+    }
 }

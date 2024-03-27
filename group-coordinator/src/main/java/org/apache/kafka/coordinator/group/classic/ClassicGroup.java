@@ -72,16 +72,6 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABL
 public class ClassicGroup implements Group {
 
     /**
-     * Empty generation.
-     */
-    public static final int NO_GENERATION = -1;
-
-    /**
-     * Protocol with empty name.
-     */
-    public static final String NO_PROTOCOL_NAME = "";
-
-    /**
      * No leader.
      */
     public static final String NO_LEADER = "";
@@ -545,7 +535,6 @@ public class ClassicGroup implements Group {
         JoinGroupResponseData joinGroupResponse = new JoinGroupResponseData()
             .setMembers(Collections.emptyList())
             .setMemberId(oldMemberId)
-            .setGenerationId(NO_GENERATION)
             .setProtocolName(null)
             .setProtocolType(null)
             .setLeader(NO_LEADER)
