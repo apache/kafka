@@ -45,31 +45,14 @@ class ProducerIdManagerTest {
   var brokerToController: NodeToControllerChannelManager = mock(classOf[NodeToControllerChannelManager])
   val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
 
-  case class ErrorCount(error: Errors, var repeat: Int)
-
-  object ErrorCount {
-    def once(error: Errors): ErrorCount = {
-      ErrorCount(error, 1)
-    }
-  }
-
-  class ErrorQueue(initialErrorCounts: ErrorCount*) {
-    private val queue: mutable.Queue[ErrorCount] = mutable.Queue.empty ++ initialErrorCounts
+  class ErrorQueue(initialErrorCounts: Errors*) {
+    private val queue: mutable.Queue[Errors] = mutable.Queue.empty ++ initialErrorCounts
 
     def takeError(): Errors = queue.synchronized {
       if (queue.isEmpty) {
         return Errors.NONE
       }
-      while (queue.nonEmpty && queue.head.repeat == 0) {
-        queue.dequeue()
-      }
-      if (queue.isEmpty) {
-        return Errors.NONE
-      }
-      if (queue.head.repeat > 0) {
-        queue.head.repeat -= 1
-      }
-      queue.head.error
+      queue.dequeue()
     }
   }
 
@@ -208,8 +191,8 @@ class ProducerIdManagerTest {
   def testUnrecoverableErrors(error: Errors): Unit = {
     val time = new MockTime()
     val manager = new MockProducerIdManager(0, 0, 1, errorQueue = new ErrorQueue(
-      ErrorCount.once(Errors.NONE),
-      ErrorCount.once(error)
+      Errors.NONE,
+      error
     ), time = time)
 
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
@@ -236,7 +219,7 @@ class ProducerIdManagerTest {
   def testRetryBackoff(): Unit = {
     val time = new MockTime()
     val manager = new MockProducerIdManager(0, 0, 1,
-      errorQueue = new ErrorQueue(ErrorCount.once(Errors.UNKNOWN_SERVER_ERROR)), time = time)
+      errorQueue = new ErrorQueue(Errors.UNKNOWN_SERVER_ERROR), time = time)
 
     verifyFailure(manager)
 
