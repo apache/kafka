@@ -64,6 +64,7 @@ public class ConsumerGroupMember {
         private String serverAssignorName = null;
         private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
         private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Collections.emptyMap();
+        private boolean useLegacyProtocol = false;
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);
@@ -86,6 +87,7 @@ public class ConsumerGroupMember {
             this.state = member.state;
             this.assignedPartitions = member.assignedPartitions;
             this.partitionsPendingRevocation = member.partitionsPendingRevocation;
+            this.useLegacyProtocol = member.useLegacyProtocol;
         }
 
         public Builder updateMemberEpoch(int memberEpoch) {
@@ -192,6 +194,11 @@ public class ConsumerGroupMember {
             return this;
         }
 
+        public Builder setUseLegacyProtocol(boolean useLegacyProtocol) {
+            this.useLegacyProtocol = useLegacyProtocol;
+            return this;
+        }
+
         public Builder updateWith(ConsumerGroupMemberMetadataValue record) {
             setInstanceId(record.instanceId());
             setRackId(record.rackId());
@@ -236,7 +243,8 @@ public class ConsumerGroupMember {
                 serverAssignorName,
                 state,
                 assignedPartitions,
-                partitionsPendingRevocation
+                partitionsPendingRevocation,
+                useLegacyProtocol
             );
         }
     }
@@ -311,6 +319,11 @@ public class ConsumerGroupMember {
      */
     private final Map<Uuid, Set<Integer>> partitionsPendingRevocation;
 
+    /**
+     * The boolean indicating whether the consumer is using the old protocol.
+     */
+    private final boolean useLegacyProtocol;
+
     private ConsumerGroupMember(
         String memberId,
         int memberEpoch,
@@ -325,7 +338,8 @@ public class ConsumerGroupMember {
         String serverAssignorName,
         MemberState state,
         Map<Uuid, Set<Integer>> assignedPartitions,
-        Map<Uuid, Set<Integer>> partitionsPendingRevocation
+        Map<Uuid, Set<Integer>> partitionsPendingRevocation,
+        boolean useLegacyProtocol
     ) {
         this.memberId = memberId;
         this.memberEpoch = memberEpoch;
@@ -341,6 +355,7 @@ public class ConsumerGroupMember {
         this.serverAssignorName = serverAssignorName;
         this.assignedPartitions = assignedPartitions;
         this.partitionsPendingRevocation = partitionsPendingRevocation;
+        this.useLegacyProtocol = useLegacyProtocol;
     }
 
     /**
@@ -446,6 +461,13 @@ public class ConsumerGroupMember {
      */
     public Map<Uuid, Set<Integer>> partitionsPendingRevocation() {
         return partitionsPendingRevocation;
+    }
+
+    /**
+     * @return The boolean indicating whether the consumer is using the old protocol.
+     */
+    public boolean useLegacyProtocol() {
+        return useLegacyProtocol;
     }
 
     /**
