@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set -ex
+
 base_dir=$(dirname $0)
 jmh_project_name="jmh-benchmarks"
 
