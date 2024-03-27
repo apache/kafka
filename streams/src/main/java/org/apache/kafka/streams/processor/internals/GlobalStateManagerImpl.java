@@ -257,6 +257,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     public void setDeserializationExceptionHandler(final DeserializationExceptionHandler deserializationExceptionHandler) {
         this.deserializationExceptionHandler = deserializationExceptionHandler;
     }
+
     @SuppressWarnings("unchecked")
     private void reprocessState(final List<TopicPartition> topicPartitions,
                                 final Map<TopicPartition, Long> highWatermarks,
