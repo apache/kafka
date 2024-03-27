@@ -211,8 +211,7 @@ class RPCProducerIdManager(brokerId: Int,
   }
 
 
-  // Visible for testing
-  private[transaction] def maybeRequestNextBlock(): Unit = {
+  private def maybeRequestNextBlock(): Unit = {
     val retryTimestamp = backoffDeadlineMs.get()
     if (retryTimestamp == NoRetry || time.milliseconds() >= retryTimestamp) {
       // Send a request only if we reached the retry deadline, or if no deadline was set.
