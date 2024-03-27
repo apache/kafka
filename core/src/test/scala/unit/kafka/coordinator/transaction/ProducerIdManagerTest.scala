@@ -48,10 +48,8 @@ class ProducerIdManagerTest {
   case class ErrorCount(error: Errors, var repeat: Int)
 
   object ErrorCount {
-    val INDEFINITE: Int = -1
-
-    def indefinitely(error: Errors): ErrorCount = {
-      ErrorCount(error, INDEFINITE)
+    def once(error: Errors): ErrorCount = {
+      ErrorCount(error, 1)
     }
   }
 
@@ -59,8 +57,14 @@ class ProducerIdManagerTest {
     private val queue: mutable.Queue[ErrorCount] = mutable.Queue.empty ++ initialErrorCounts
 
     def takeError(): Errors = queue.synchronized {
-      while (queue.head.repeat == 0) {
+      if (queue.isEmpty) {
+        return Errors.NONE
+      }
+      while (queue.nonEmpty && queue.head.repeat == 0) {
         queue.dequeue()
+      }
+      if (queue.isEmpty) {
+        return Errors.NONE
       }
       if (queue.head.repeat > 0) {
         queue.head.repeat -= 1
@@ -69,10 +73,16 @@ class ProducerIdManagerTest {
     }
 
     def peekError(): Errors = queue.synchronized {
+      if (queue.isEmpty) {
+        return Errors.NONE
+      }
       queue.head.error
     }
 
     def clearProcessedError(): Unit = {
+      if (queue.isEmpty) {
+        return
+      }
       TestUtils.waitUntilTrue(() =>
         queue.synchronized {
           queue.head.repeat == 0
@@ -88,7 +98,7 @@ class ProducerIdManagerTest {
     val brokerId: Int,
     var idStart: Long,
     val idLen: Int,
-    val errorQueue: ErrorQueue = new ErrorQueue(ErrorCount.indefinitely(Errors.NONE)),
+    val errorQueue: ErrorQueue = new ErrorQueue(),
     val isErroneousBlock: Boolean = false,
     val time: Time = Time.SYSTEM,
     var remainingRetries: Int = 1
@@ -230,9 +240,8 @@ class ProducerIdManagerTest {
   def testUnrecoverableErrors(error: Errors): Unit = {
     val time = new MockTime()
     val manager = new MockProducerIdManager(0, 0, 1, errorQueue = new ErrorQueue(
-      ErrorCount(Errors.NONE, 1),
-      ErrorCount(error, 1),
-      ErrorCount.indefinitely(Errors.NONE),
+      ErrorCount.once(Errors.NONE),
+      ErrorCount.once(error)
     ), time = time)
 
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
@@ -261,7 +270,7 @@ class ProducerIdManagerTest {
   def testRetryBackoff(): Unit = {
     val time = new MockTime()
     val manager = new MockProducerIdManager(0, 0, 1,
-      errorQueue = new ErrorQueue(ErrorCount(Errors.UNKNOWN_SERVER_ERROR, 1), ErrorCount.indefinitely(Errors.NONE)), time = time, remainingRetries = 2)
+      errorQueue = new ErrorQueue(ErrorCount.once(Errors.UNKNOWN_SERVER_ERROR)), time = time, remainingRetries = 2)
 
     verifyFailure(manager)
     manager.errorQueue.clearProcessedError()
