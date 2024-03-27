@@ -984,6 +984,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         } finally {
             super.close(timer);
+            // Super-class close may wait for more commit callbacks to complete.
+            invokeCompletedOffsetCommitCallbacks();
         }
     }
 
@@ -1033,16 +1035,22 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             lookupCoordinator().addListener(new RequestFutureListener<Void>() {
                 @Override
                 public void onSuccess(Void value) {
-                    pendingAsyncCommits.decrementAndGet();
-                    doCommitOffsetsAsync(offsets, callback);
-                    client.pollNoWakeup();
+                    try {
+                        doCommitOffsetsAsync(offsets, callback);
+                        client.pollNoWakeup();
+                    } finally {
+                        pendingAsyncCommits.decrementAndGet();
+                    }
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    pendingAsyncCommits.decrementAndGet();
-                    completedOffsetCommits.add(new OffsetCommitCompletion(callback, offsets,
+                    try {
+                        completedOffsetCommits.add(new OffsetCommitCompletion(callback, offsets,
                             new RetriableCommitFailedException(e)));
+                    } finally {
+                        pendingAsyncCommits.decrementAndGet();
+                    }
                 }
             });
         }
@@ -1061,25 +1069,29 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         future.addListener(new RequestFutureListener<Void>() {
             @Override
             public void onSuccess(Void value) {
-                inFlightAsyncCommits.decrementAndGet();
-
-                if (interceptors != null)
-                    interceptors.onCommit(offsets);
-                completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, null));
+                try {
+                    if (interceptors != null)
+                        interceptors.onCommit(offsets);
+                    completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, null));
+                } finally {
+                    inFlightAsyncCommits.decrementAndGet();
+                }
             }
 
             @Override
             public void onFailure(RuntimeException e) {
-                inFlightAsyncCommits.decrementAndGet();
+                try {
+                    Exception commitException = e;
 
-                Exception commitException = e;
-
-                if (e instanceof RetriableException) {
-                    commitException = new RetriableCommitFailedException(e);
-                }
-                completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
-                if (commitException instanceof FencedInstanceIdException) {
-                    asyncCommitFenced.set(true);
+                    if (e instanceof RetriableException) {
+                        commitException = new RetriableCommitFailedException(e);
+                    }
+                    completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
+                    if (commitException instanceof FencedInstanceIdException) {
+                        asyncCommitFenced.set(true);
+                    }
+                } finally {
+                    inFlightAsyncCommits.decrementAndGet();
                 }
             }
         });
@@ -1164,7 +1176,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private boolean invokePendingAsyncCommits(Timer timer) {
-        if (inFlightAsyncCommits.get() == 0) {
+        if (pendingAsyncCommits.get() == 0 && inFlightAsyncCommits.get() == 0) {
+            invokeCompletedOffsetCommitCallbacks();
             return true;
         }
 
@@ -1174,7 +1187,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             client.poll(timer);
             invokeCompletedOffsetCommitCallbacks();
 
-            if (inFlightAsyncCommits.get() == 0) {
+            if (pendingAsyncCommits.get() == 0 && inFlightAsyncCommits.get() == 0) {
+                invokeCompletedOffsetCommitCallbacks();
                 return true;
             }
 

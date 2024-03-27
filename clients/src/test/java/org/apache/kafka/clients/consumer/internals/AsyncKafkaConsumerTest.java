@@ -157,8 +157,10 @@ public class AsyncKafkaConsumerTest {
     @AfterEach
     public void resetAll() {
         backgroundEventQueue.clear();
-        if (consumer != null) {
+        try {
             consumer.close(Duration.ZERO);
+        } catch (Exception e) {
+            // ignore
         }
         consumer = null;
         Mockito.framework().clearInlineMocks();

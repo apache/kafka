@@ -656,6 +656,64 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testCommitAsyncCompletedConsumerCloses(quorum: String, groupProtocol: String): Unit = {
+    // This is testing the contract that asynchronous offset commit are completed before the consumer
+    // is closed.
+    val producer = createProducer()
+    sendRecords(producer, numRecords = 3, tp)
+    sendRecords(producer, numRecords = 3, tp2)
+
+    val consumer = createConsumer()
+    consumer.assign(List(tp, tp2).asJava)
+
+    // Try without looking up the coordinator first
+    val cb = new CountConsumerCommitCallback
+    consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(1L))).asJava, cb)
+    consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(1L))).asJava, cb)
+    consumer.close()
+    assertEquals(2, cb.successCount);
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testCommitAsyncCompletedBeforeCommitSyncReturns(quorum: String, groupProtocol: String): Unit = {
+    // This is testing the contract that asynchronous offset commits sent previously with the
+    // `commitAsync` are guaranteed to have their callbacks invoked prior to completion of
+    // `commitSync` (given that it does not time out).
+    val producer = createProducer()
+    sendRecords(producer, numRecords = 3, tp)
+    sendRecords(producer, numRecords = 3, tp2)
+
+    val consumer = createConsumer()
+    consumer.assign(List(tp, tp2).asJava)
+
+    // Try without looking up the coordinator first
+    val cb = new CountConsumerCommitCallback
+    consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(1L))).asJava, cb)
+    consumer.commitSync(Map.empty[TopicPartition, OffsetAndMetadata].asJava)
+    assertEquals(1, consumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(1, cb.successCount);
+
+    // Enforce looking up the coordinator
+    consumer.committed(Set(tp, tp2).asJava)
+
+    // Try with coordinator known
+    consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(2L))).asJava, cb)
+    consumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(2L))).asJava)
+    assertEquals(2, consumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(2, consumer.committed(Set(tp2).asJava).get(tp2).offset)
+    assertEquals(2, cb.successCount);
+
+    // Try with empty sync commit
+    consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava, cb)
+    consumer.commitSync(Map.empty[TopicPartition, OffsetAndMetadata].asJava)
+    assertEquals(3, consumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(2, consumer.committed(Set(tp2).asJava).get(tp2).offset)
+    assertEquals(3, cb.successCount);
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAutoCommitOnRebalance(quorum: String, groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
