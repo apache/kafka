@@ -610,7 +610,6 @@ public class AbstractConfig {
                             + AUTOMATIC_CONFIG_PROVIDERS_PROPERTY + "' to allow " + providerClassName);
                 }
             }
-
         }
         // Instantiate Config Providers
         Map<String, ConfigProvider> configProviderInstances = new HashMap<>();

@@ -27,6 +27,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.config.provider.MockVaultConfigProvider;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -364,16 +365,6 @@ public class AbstractConfigTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    public Map<String, ?> convertPropertiesToMap(Map<?, ?> props) {
-        for (Map.Entry<?, ?> entry : props.entrySet()) {
-            if (!(entry.getKey() instanceof String))
-                throw new ConfigException(entry.getKey().toString(), entry.getValue(),
-                    "Key must be a string.");
-        }
-        return (Map<String, ?>) props;
-    }
-
     @Test
     public void testOriginalWithOverrides() {
         Properties props = new Properties();
@@ -452,7 +443,7 @@ public class AbstractConfigTest {
         Properties props = new Properties();
         props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
         props.put("sasl.kerberos.password", "${file:/usr/kerberos:password}");
-        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, convertPropertiesToMap(providers));
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, Utils.castToStringObjectMap(providers));
         assertEquals("testKey", config.originals().get("sasl.kerberos.key"));
         assertEquals("randomPassword", config.originals().get("sasl.kerberos.password"));
         MockFileConfigProvider.assertClosed(id);
@@ -469,7 +460,7 @@ public class AbstractConfigTest {
         Properties props = new Properties();
         props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
         Map<?, ?> immutableMap = Collections.unmodifiableMap(props);
-        Map<String, ?> provMap = convertPropertiesToMap(providers);
+        Map<String, ?> provMap = Utils.castToStringObjectMap(providers);
         TestIndirectConfigResolution config = new TestIndirectConfigResolution(immutableMap, provMap);
         assertEquals("testKey", config.originals().get("sasl.kerberos.key"));
         MockFileConfigProvider.assertClosed(id);
@@ -489,7 +480,7 @@ public class AbstractConfigTest {
         props.put("sasl.kerberos.password", "${file:/usr/kerberos:password}");
         props.put("sasl.truststore.key", "${vault:/usr/truststore:truststoreKey}");
         props.put("sasl.truststore.password", "${vault:/usr/truststore:truststorePassword}");
-        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, convertPropertiesToMap(providers));
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, Utils.castToStringObjectMap(providers));
         assertEquals("testKey", config.originals().get("sasl.kerberos.key"));
         assertEquals("randomPassword", config.originals().get("sasl.kerberos.password"));
         assertEquals("testTruststoreKey", config.originals().get("sasl.truststore.key"));
@@ -569,7 +560,7 @@ public class AbstractConfigTest {
         props.put("config.providers", "file");
         props.put("config.providers.file.class", MockVaultConfigProvider.class.getName());
 
-        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, convertPropertiesToMap(providers));
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, Utils.castToStringObjectMap(providers));
         assertEquals("${file:/usr/kerberos:key}", config.originals().get("sasl.kerberos.key"));
     }
 
@@ -587,7 +578,7 @@ public class AbstractConfigTest {
         props.put("sasl.truststore.key", "${vault:/usr/truststore:truststoreKey}");
         props.put("sasl.truststore.password", "${vault:/usr/truststore:truststorePassword}");
         props.put("sasl.truststore.location", "${vault:/usr/truststore:truststoreLocation}");
-        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, convertPropertiesToMap(providers));
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, Utils.castToStringObjectMap(providers));
         assertEquals("/usr/vault", config.originals().get("sasl.truststore.location"));
     }
 
