@@ -25,14 +25,12 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
-import org.apache.kafka.streams.kstream.internals.NamedInternal;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -672,13 +670,14 @@ public class StreamsBuilder {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
-    public synchronized StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                      final String topic) {
+    public synchronized  <KIn, VIn>  StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
+                                                      final String topic,
+                                                      final Consumed<KIn, VIn> consumed) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         internalStreamsBuilder.addGlobalStore(
             new StoreBuilderWrapper(storeBuilder),
             topic,
-            new ConsumedInternal<>(),
+            new ConsumedInternal<>(consumed),
             () -> ProcessorAdapter.adaptRaw(new KTableSource<>(storeBuilder.name(), storeBuilder.name()).get()),
             false
         );
