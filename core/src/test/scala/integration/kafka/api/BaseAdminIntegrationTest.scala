@@ -32,9 +32,8 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
-import scala.collection.{JavaConverters, Seq}
+import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 
 /**
@@ -100,7 +99,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic).get())
       assertEquals(topicIds(topic), createResult.topicId(topic).get())
     }
-    
+
 
     val failedCreateResult = client.createTopics(newTopics.asJava)
     val results = failedCreateResult.values()
@@ -188,9 +187,8 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     assertEquals(expectedOperations, topicResult.authorizedOperations)
   }
 
-  @nowarn("cat=deprecation")
   def configuredClusterPermissions: Set[AclOperation] =
-    JavaConverters.asScalaSet(AclEntry.supportedOperations(ResourceType.CLUSTER)).toSet
+    AclEntry.supportedOperations(ResourceType.CLUSTER).asScala.toSet
 
   override def modifyConfigs(configs: Seq[Properties]): Unit = {
     super.modifyConfigs(configs)
