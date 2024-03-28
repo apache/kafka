@@ -42,7 +42,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.errors.AbortableTransactionException;
+import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -3149,10 +3149,10 @@ public class SenderTest {
     }
 
     @Test
-    public void testAbortableTxnExceptionIsAnAbortableError() throws Exception {
+    public void testTransactionAbortablenExceptionIsAnAbortableError() throws Exception {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
-        TransactionManager txnManager = new TransactionManager(logContext, "textAbortableTxnException", 60000, 100, apiVersions);
+        TransactionManager txnManager = new TransactionManager(logContext, "textTransactionAbortableException", 60000, 100, apiVersions);
 
         setupWithTransactionState(txnManager);
         doInitTransactions(txnManager, producerIdAndEpoch);
@@ -3164,11 +3164,11 @@ public class SenderTest {
 
         Future<RecordMetadata> request = appendToAccumulator(tp0);
         sender.runOnce();  // send request
-        sendIdempotentProducerResponse(0, tp0, Errors.ABORTABLE_TRANSACTION, -1);
+        sendIdempotentProducerResponse(0, tp0, Errors.TRANSACTION_ABORTABLE, -1);
 
-        // Return AbortableTransactionException error. It should be abortable.
+        // Return TransactionAbortableException error. It should be abortable.
         sender.runOnce();
-        assertFutureFailure(request, AbortableTransactionException.class);
+        assertFutureFailure(request, TransactionAbortableException.class);
         assertTrue(txnManager.hasAbortableError());
         TransactionalRequestResult result = txnManager.beginAbort();
         sender.runOnce();
