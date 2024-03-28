@@ -221,7 +221,9 @@ public class InternalTopologyBuilderTest {
                         null,
                         "globalTopic",
                         "global-processor",
-                () -> processor)
+                () -> processor,
+                false
+            )
         );
         assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
@@ -329,7 +331,8 @@ public class InternalTopologyBuilderTest {
             null,
             "globalTopic",
             "global-processor",
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         );
         builder.initializeSubscription();
 
@@ -353,7 +356,8 @@ public class InternalTopologyBuilderTest {
             null,
             "globalTopic",
             "global-processor",
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         );
         builder.initializeSubscription();
 
@@ -465,7 +469,8 @@ public class InternalTopologyBuilderTest {
             null,
             "global-topic",
             "global-processor",
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         );
 
         final TopologyException exception = assertThrows(
@@ -496,7 +501,8 @@ public class InternalTopologyBuilderTest {
                 null,
                 "global-topic",
                 "global-processor",
-                new MockApiProcessorSupplier<>()
+                new MockApiProcessorSupplier<>(),
+                false
             )
         );
 
@@ -521,7 +527,8 @@ public class InternalTopologyBuilderTest {
             null,
             "global-topic",
             "global-processor",
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         );
 
         final TopologyException exception = assertThrows(
@@ -534,7 +541,8 @@ public class InternalTopologyBuilderTest {
                 null,
                 "global-topic",
                 "global-processor-2",
-                new MockApiProcessorSupplier<>()
+                new MockApiProcessorSupplier<>(),
+                false
             )
         );
 
@@ -729,7 +737,8 @@ public class InternalTopologyBuilderTest {
             null,
             "globalTopic",
             "global-processor",
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         );
         newNodeGroups = builder.nodeGroups();
         assertNotEquals(oldNodeGroups, newNodeGroups);
@@ -1153,7 +1162,8 @@ public class InternalTopologyBuilderTest {
             null,
             "anyTopicName",
             sameNameForSourceAndProcessor,
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         ));
     }
 
@@ -1297,7 +1307,8 @@ public class InternalTopologyBuilderTest {
             null,
             globalTopic,
             "global-processor",
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         );
         builder.initializeSubscription();
 

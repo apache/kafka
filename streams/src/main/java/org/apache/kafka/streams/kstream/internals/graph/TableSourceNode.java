@@ -105,7 +105,8 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
                 consumedInternal().valueDeserializer(),
                 topicName,
                 processorParameters.processorName(),
-                (ProcessorSupplier<K, V, Void, Void>) processorParameters.processorSupplier()
+                (ProcessorSupplier<K, V, Void, Void>) processorParameters.processorSupplier(),
+                false
             );
         } else {
             topologyBuilder.addSource(consumedInternal().offsetResetPolicy(),

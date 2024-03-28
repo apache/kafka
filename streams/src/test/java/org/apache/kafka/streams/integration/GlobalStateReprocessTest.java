@@ -22,20 +22,21 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.TestUtils;
@@ -49,29 +50,18 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 
-
-/**
- * This test asserts that when Kafka Streams is closing and shuts
- * down a StreamThread the closing of the GlobalStreamThread happens
- * after all the StreamThreads are completely stopped.
- *
- * The test validates the Processor still has access to the GlobalStateStore while closing.
- * Otherwise if the GlobalStreamThread were to close underneath the StreamThread
- * an exception would be thrown as the GlobalStreamThread closes all global stores on closing.
- */
 @Timeout(600)
 @Tag("integration")
-public class GlobalThreadShutDownOrderTest {
+public class GlobalStateReprocessTest {
     private static final int NUM_BROKERS = 1;
     private static final Properties BROKER_CONFIG;
 
@@ -80,8 +70,6 @@ public class GlobalThreadShutDownOrderTest {
         BROKER_CONFIG.put("transaction.state.log.replication.factor", (short) 1);
         BROKER_CONFIG.put("transaction.state.log.min.isr", 1);
     }
-
-    private final AtomicInteger closeCounter = new AtomicInteger(0);
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
 
@@ -102,13 +90,12 @@ public class GlobalThreadShutDownOrderTest {
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
     private String globalStoreTopic;
-    private String streamTopic;
-    private final List<Long> retrievedValuesList = new ArrayList<>();
-    private boolean firstRecordProcessed;
+
 
     @BeforeEach
     public void before(final TestInfo testInfo) throws Exception {
         builder = new StreamsBuilder();
+
         createTopics();
         streamsConfiguration = new Properties();
         final String safeTestName = safeUniqueTestName(testInfo);
@@ -118,8 +105,6 @@ public class GlobalThreadShutDownOrderTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
-
-        final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
 
         final KeyValueStoreBuilder<String, Long> storeBuilder = new KeyValueStoreBuilder<>(
             Stores.persistentKeyValueStore(globalStore),
@@ -134,7 +119,7 @@ public class GlobalThreadShutDownOrderTest {
                 final KeyValueStore<String, Long> stateStore =
                     context().getStateStore(storeBuilder.name());
                 stateStore.put(
-                    record.key(),
+                    record.key() + "- this is the right value.",
                     record.value()
                 );
             }
@@ -146,11 +131,6 @@ public class GlobalThreadShutDownOrderTest {
             Consumed.with(Serdes.String(), Serdes.Long()),
             processorSupplier
         );
-
-        builder
-            .stream(streamTopic, stringLongConsumed)
-            .process(() -> new GlobalStoreProcessor(globalStore));
-
     }
 
     @AfterEach
@@ -162,42 +142,43 @@ public class GlobalThreadShutDownOrderTest {
     }
 
     @Test
-    public void shouldFinishGlobalStoreOperationOnShutDown() throws Exception {
+    public void shouldReprocessWithUserProvidedStore() throws Exception {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         populateTopics(globalStoreTopic);
-        populateTopics(streamTopic);
 
         kafkaStreams.start();
 
         TestUtils.waitForCondition(
-            () -> firstRecordProcessed,
+            () -> !storeContents(kafkaStreams).isEmpty(),
             30000,
             "Has not processed record within 30 seconds");
 
-        kafkaStreams.close(Duration.ofSeconds(30));
+        assertThat(storeContents(kafkaStreams).get(0), containsString("- this is the right value."));
 
-        final List<Long> expectedRetrievedValues = Arrays.asList(1L, 2L, 3L, 4L);
-        assertEquals(expectedRetrievedValues, retrievedValuesList);
-        assertEquals(1, closeCounter.get());
+
+        kafkaStreams.close();
+        kafkaStreams.cleanUp();
+
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        kafkaStreams.start();
+
+        TestUtils.waitForCondition(
+            () -> !storeContents(kafkaStreams).isEmpty(),
+            30000,
+            "Has not processed record within 30 seconds");
+
+        assertThat(storeContents(kafkaStreams).get(0), containsString("- this is the right value."));
     }
-
 
     private void createTopics() throws Exception {
-        streamTopic = "stream-topic";
         globalStoreTopic = "global-store-topic";
-        CLUSTER.createTopics(streamTopic);
         CLUSTER.createTopic(globalStoreTopic);
     }
-
 
     private void populateTopics(final String topicName) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             topicName,
-            Arrays.asList(
-                new KeyValue<>("A", 1L),
-                new KeyValue<>("B", 2L),
-                new KeyValue<>("C", 3L),
-                new KeyValue<>("D", 4L)),
+            Collections.singletonList(new KeyValue<>("A", 1L)),
             TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
                 StringSerializer.class,
@@ -206,37 +187,15 @@ public class GlobalThreadShutDownOrderTest {
             mockTime);
     }
 
-
-    private class GlobalStoreProcessor implements Processor<String, Long, Void, Void> {
-
-        private KeyValueStore<String, Long> store;
-        private final String storeName;
-
-        GlobalStoreProcessor(final String storeName) {
-            this.storeName = storeName;
+    private List<String> storeContents(final KafkaStreams streams) {
+        final ArrayList<String> keySet = new ArrayList<>();
+        final ReadOnlyKeyValueStore<String, Long> keyValueStore =
+            streams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
+        final KeyValueIterator<String, Long> range = keyValueStore.reverseAll();
+        while (range.hasNext()) {
+            keySet.add(range.next().key);
         }
-
-        @Override
-        public void init(final ProcessorContext<Void, Void> context) {
-            store = context.getStateStore(storeName);
-        }
-
-        @Override
-        public void process(final Record<String, Long> record) {
-            firstRecordProcessed = true;
-        }
-
-
-        @Override
-        public void close() {
-            closeCounter.getAndIncrement();
-            final List<String> keys = Arrays.asList("A", "B", "C", "D");
-            for (final String key : keys) {
-                // need to simulate thread slow in closing
-                Utils.sleep(1000);
-                retrievedValuesList.add(store.get(key));
-            }
-        }
+        range.close();
+        return keySet;
     }
-
 }
