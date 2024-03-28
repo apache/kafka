@@ -524,6 +524,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         if (isMissingInputTopics) {
             if (!taskManager.topologyMetadata().hasNamedTopologies()) {
                 final String errorMsg = String.format("Missing source topics. %s", repartitionTopics.missingSourceTopics());
+                log.error(errorMsg);
                 throw new MissingSourceTopicException(errorMsg);
             } else {
                 nonFatalExceptionsToHandle.addAll(repartitionTopics.missingSourceTopicExceptions());
