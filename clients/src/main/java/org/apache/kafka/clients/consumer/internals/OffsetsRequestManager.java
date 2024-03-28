@@ -149,33 +149,12 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * found .The future will complete when the requests responses are received and
      * processed, following a call to {@link #poll(long)}
      */
-    public CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsForTime(
-        Map<TopicPartition, Long> timestampsToSearch) {
+    public CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsets(
+            Map<TopicPartition, Long> timestampsToSearch,
+            boolean requireTimestamps) {
         if (timestampsToSearch.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyMap());
         }
-        ListOffsetsRequestState listOffsetsRequestState = fetchOffsets(timestampsToSearch, true);
-        return listOffsetsRequestState.globalResult.thenApply(
-            result -> OffsetFetcherUtils.buildOffsetsForTimesResult(timestampsToSearch, result.fetchedOffsets));
-    }
-
-    /**
-     * Handles the API request for getting the first or the last offsets for the given partitions.
-     */
-    public CompletableFuture<Map<TopicPartition, Long>> beginningOrEndOffset(Map<TopicPartition, Long> timestampsToSearch) {
-        if (timestampsToSearch.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyMap());
-        }
-        ListOffsetsRequestState listOffsetsRequestState = fetchOffsets(timestampsToSearch, false);
-        return listOffsetsRequestState.globalResult.thenApply(
-                result -> OffsetFetcherUtils.buildListOffsetsResult(
-                        timestampsToSearch,
-                        result.fetchedOffsets,
-                        (topicPartition, offsetData) -> offsetData.offset));
-    }
-
-    private ListOffsetsRequestState fetchOffsets(
-        Map<TopicPartition, Long> timestampsToSearch, boolean requireTimestamps) {
         metadata.addTransientTopics(OffsetFetcherUtils.topicsForPartitions(timestampsToSearch.keySet()));
         ListOffsetsRequestState listOffsetsRequestState = new ListOffsetsRequestState(
             timestampsToSearch,
@@ -194,7 +173,10 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         });
 
         prepareFetchOffsetsRequests(timestampsToSearch, requireTimestamps, listOffsetsRequestState);
-        return listOffsetsRequestState;
+        return listOffsetsRequestState.globalResult.thenApply(
+                result -> OffsetFetcherUtils.buildOffsetsForTimeInternalResult(
+                        timestampsToSearch,
+                        result.fetchedOffsets));
     }
 
     /**

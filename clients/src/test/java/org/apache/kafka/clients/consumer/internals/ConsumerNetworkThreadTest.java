@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
-import org.apache.kafka.clients.consumer.internals.events.ListOffsetsForTimeEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsEvent;
@@ -174,10 +173,10 @@ public class ConsumerNetworkThreadTest {
     public void testListOffsetsForTimeEventIsProcessed() {
         Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
         Timer timer = time.timer(100);
-        ApplicationEvent e = new ListOffsetsForTimeEvent(timestamps, timer);
+        ApplicationEvent e = new ListOffsetsEvent(timestamps, timer, true);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor).process(any(ListOffsetsForTimeEvent.class));
+        verify(applicationEventProcessor).process(any(ListOffsetsEvent.class));
         assertTrue(applicationEventsQueue.isEmpty());
     }
 
@@ -185,7 +184,7 @@ public class ConsumerNetworkThreadTest {
     public void testListOffsetsEventIsProcessed() {
         Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
         Timer timer = time.timer(100);
-        ApplicationEvent e = new ListOffsetsEvent(timestamps, timer);
+        ApplicationEvent e = new ListOffsetsEvent(timestamps, timer, false);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ListOffsetsEvent.class));

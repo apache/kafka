@@ -17,12 +17,12 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
+import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -105,10 +105,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
 
             case LIST_OFFSETS:
                 process((ListOffsetsEvent) event);
-                return;
-
-            case LIST_OFFSETS_FOR_TIME:
-                process((ListOffsetsForTimeEvent) event);
                 return;
 
             case RESET_POSITIONS:
@@ -206,17 +202,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * fetchOffsetsForTime is used, otherwise beginningOrEndOffsets is used.
      */
     private void process(final ListOffsetsEvent event) {
-        final CompletableFuture<Map<TopicPartition, Long>> future =
-            requestManagers.offsetsRequestManager.beginningOrEndOffset(event.timestampsToSearch());
-        future.whenComplete(complete(event.future()));
-    }
-
-    /**
-     * List the offsets for the given partitions at the given timestamps.
-     */
-    private void process(final ListOffsetsForTimeEvent event) {
-        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
-            requestManagers.offsetsRequestManager.fetchOffsetsForTime(event.timestampsToSearch());
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> future =
+            requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(), event.requireTimestamps);
         future.whenComplete(complete(event.future()));
     }
 

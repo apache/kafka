@@ -269,6 +269,24 @@ class OffsetFetcherUtils {
                 offsetData.leaderEpoch));
     }
 
+    static Map<TopicPartition, OffsetAndTimestampInternal> buildOffsetsForTimeInternalResult(
+            final Map<TopicPartition, Long> timestampsToSearch,
+            final Map<TopicPartition, ListOffsetData> fetchedOffsets) {
+
+        HashMap<TopicPartition, OffsetAndTimestampInternal> offsetsResults = new HashMap<>(timestampsToSearch.size());
+        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+            offsetsResults.put(entry.getKey(), null);
+        }
+        for (Map.Entry<TopicPartition, ListOffsetData> entry : fetchedOffsets.entrySet()) {
+            ListOffsetData offsetData = entry.getValue();
+            offsetsResults.put(entry.getKey(), new OffsetAndTimestampInternal(
+                    offsetData.offset,
+                    offsetData.timestamp,
+                    offsetData.leaderEpoch));
+        }
+        return offsetsResults;
+    }
+
     private Long offsetResetStrategyTimestamp(final TopicPartition partition) {
         OffsetResetStrategy strategy = subscriptionState.resetStrategy(partition);
         if (strategy == OffsetResetStrategy.EARLIEST)

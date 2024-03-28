@@ -54,7 +54,6 @@ import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.LeaveOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
-import org.apache.kafka.clients.consumer.internals.events.ListOffsetsForTimeEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsEvent;
@@ -95,6 +94,7 @@ import org.slf4j.event.Level;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
+import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -1094,16 +1094,22 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return Collections.emptyMap();
             }
             final Timer timer = time.timer(timeout);
-            final ListOffsetsForTimeEvent listOffsetsEvent = new ListOffsetsForTimeEvent(
-                timestampsToSearch,
-                timer);
+            ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
+                    timestampsToSearch,
+                    timer,
+                    true);
 
             // If timeout is set to zero return empty immediately; otherwise try to get the results
             // and throw timeout exception if it cannot complete in time.
             if (timeout.toMillis() == 0L)
-                return listOffsetsEvent.emptyResult();
+                return listOffsetsEvent.emptyResults();
 
-            return applicationEventHandler.addAndGet(listOffsetsEvent, timer);
+            return applicationEventHandler.addAndGet(listOffsetsEvent, timer)
+                    .entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> entry.getValue().buildOffsetAndTimestamp()));
         } finally {
             release();
         }
@@ -1143,23 +1149,27 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             Map<TopicPartition, Long> timestampToSearch = partitions
-                .stream()
-                .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
+                    .stream()
+                    .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
             Timer timer = time.timer(timeout);
             ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
-                timestampToSearch,
-                timer);
+                    timestampToSearch,
+                    timer,
+                    false);
 
-            Map<TopicPartition, Long> offsetAndTimestampMap;
+            Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
             if (timeout.isZero()) {
                 applicationEventHandler.add(listOffsetsEvent);
-                offsetAndTimestampMap = listOffsetsEvent.emptyResult();
-            } else {
-                offsetAndTimestampMap = applicationEventHandler.addAndGet(
+                return listOffsetsEvent.emptyResults();
+            }
+            offsetAndTimestampMap = applicationEventHandler.addAndGet(
                     listOffsetsEvent,
                     timer);
-            }
-            return offsetAndTimestampMap;
+            return offsetAndTimestampMap.entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> entry.getValue().offset()));
         } finally {
             release();
         }
