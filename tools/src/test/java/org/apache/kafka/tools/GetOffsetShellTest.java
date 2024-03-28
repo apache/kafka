@@ -355,8 +355,13 @@ public class GetOffsetShellTest {
 
     @ClusterTest
     public void testPrintHelp() {
-        String out = ToolsTestUtils.captureStandardErr(() -> GetOffsetShell.mainNoExit("--help"));
-        assertTrue(out.startsWith(GetOffsetShell.USAGE_TEXT));
+        Exit.setExitProcedure((statusCode, message) -> { });
+        try {
+            String out = ToolsTestUtils.captureStandardErr(() -> GetOffsetShell.mainNoExit("--help"));
+            assertTrue(out.startsWith(GetOffsetShell.USAGE_TEXT));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @ClusterTest
