@@ -76,6 +76,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                 false
             );
             // register the store
+            open = true;
+
             context.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
