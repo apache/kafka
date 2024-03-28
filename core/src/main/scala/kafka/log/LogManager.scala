@@ -1174,6 +1174,35 @@ class LogManager(logDirs: Seq[File],
     }
   }
 
+  def recoverAbandonedFutureLogs(brokerId: Int, newTopicsImage: TopicsImage): Unit = {
+    val abandonedFutureLogs = findAbandonedFutureLogs(brokerId, newTopicsImage)
+    abandonedFutureLogs.foreach { log =>
+      val tp = log.topicPartition
+
+      log.renameDir(UnifiedLog.logDirName(tp), shouldReinitialize = true)
+      log.removeLogMetrics()
+      futureLogs.remove(tp)
+
+      currentLogs.put(tp, log)
+      log.newMetrics()
+
+      info(s"Successfully renamed abandoned future log for $tp")
+    }
+  }
+
+  private def findAbandonedFutureLogs(brokerId: Int, newTopicsImage: TopicsImage): Iterable[UnifiedLog] = {
+    futureLogs.values.flatMap { log =>
+      val topicId = log.topicId.getOrElse {
+        throw new RuntimeException(s"The log dir $log does not have a topic ID, " +
+          "which is not allowed when running in KRaft mode.")
+      }
+      val partitionId = log.topicPartition.partition()
+      Option(newTopicsImage.getPartition(topicId, partitionId))
+        .filter(pr => directoryId(log.parentDir).contains(pr.directory(brokerId)))
+        .map(_ => log)
+    }
+  }
+
   /**
     * Mark the partition directory in the source log directory for deletion and
     * rename the future log of this partition in the destination log directory to be the current log

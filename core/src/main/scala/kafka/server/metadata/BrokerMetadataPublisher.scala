@@ -297,6 +297,14 @@ class BrokerMetadataPublisher(
       // See KAFKA-14616 for details.
       logManager.deleteStrayKRaftReplicas(brokerId, newImage.topics())
 
+      // Rename all future replicas which are in the same directory as the
+      // one assigned by the controller. This can only happen due to a disk
+      // failure and broker shutdown after the directory assignment has been
+      // updated in the controller but before the future replica could be
+      // promoted.
+      // See KAFKA-16082 for details.
+      logManager.recoverAbandonedFutureLogs(brokerId, newImage.topics())
+
       // Make the LogCleaner available for reconfiguration. We can't do this prior to this
       // point because LogManager#startup creates the LogCleaner object, if
       // log.cleaner.enable is true. TODO: improve this (see KAFKA-13610)
