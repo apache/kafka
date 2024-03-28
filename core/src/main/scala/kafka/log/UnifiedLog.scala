@@ -1337,13 +1337,16 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
         // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
         // constant time access while being safe to use with concurrent collections unlike `toArray`.
-        val segmentsCopy = logSegments.asScala.toBuffer
-        val latestTimestampSegment = segmentsCopy.maxBy(_.maxTimestampSoFar)
-        val latestTimestampAndOffset = latestTimestampSegment.readMaxTimestampAndOffsetSoFar
-
-        Some(new TimestampAndOffset(latestTimestampAndOffset.timestamp,
-          latestTimestampAndOffset.offset,
-          latestEpochAsOptional(leaderEpochCache)))
+        val latestTimestampSegment = logSegments.asScala.toBuffer.maxBy[Long](_.maxTimestampSoFar)
+        // cache the timestamp and offset
+        val maxTimestampSoFar = latestTimestampSegment.readMaxTimestampAndOffsetSoFar
+        // lookup the position of batch to avoid extra I/O
+        val position = latestTimestampSegment.offsetIndex.lookup(maxTimestampSoFar.offset)
+        latestTimestampSegment.log.batchesFrom(position.position).asScala
+          .filter(_.maxTimestamp() == maxTimestampSoFar.timestamp)
+          .map(batch => new TimestampAndOffset(batch.maxTimestamp(), batch.offsetOfMaxTimestamp().orElse(-1),
+            latestEpochAsOptional(leaderEpochCache)))
+          .headOption
       } else {
         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
         if (remoteLogEnabled()) {
