@@ -19,7 +19,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 
 @Timeout(600)
 class SaslSslConsumerTest extends BaseConsumerTest with SaslSetup {
-  this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_PROP, "true")
+  this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
 

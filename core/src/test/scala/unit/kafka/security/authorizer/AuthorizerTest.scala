@@ -880,27 +880,27 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val props = new java.util.Properties()
     val kafkaValue = "kafkaValue"
     val configs = Map("zookeeper.connect" -> "somewhere", // required, otherwise we would omit it
-      ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP -> "true",
-      ZkConfigs.ZK_CLIENT_CNXN_SOCKET_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_KEY_STORE_TYPE_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_CIPHER_SUITES_PROP -> kafkaValue)
+      ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG -> "true",
+      ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_TYPE_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG -> kafkaValue)
     configs.foreach { case (key, value) => props.put(key, value) }
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
     // confirm we get all the values we expect
     ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(prop => prop match {
-      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP | ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP =>
+      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG | ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG =>
         assertEquals("true", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
-      case ZkConfigs.ZK_SSL_CRL_ENABLE_PROP | ZkConfigs.ZK_SSL_OCSP_ENABLE_PROP =>
+      case ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG | ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG =>
         assertEquals("false", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
-      case ZkConfigs.ZK_SSL_PROTOCOL_PROP =>
+      case ZkConfigs.ZK_SSL_PROTOCOL_CONFIG =>
         assertEquals("TLSv1.2", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       case _ => assertEquals(kafkaValue, KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
     })
@@ -911,29 +911,29 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val props = new java.util.Properties()
     val kafkaValue = "kafkaValue"
     val configs = Map("zookeeper.connect" -> "somewhere", // required, otherwise we would omit it
-      ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP -> "true",
-      ZkConfigs.ZK_CLIENT_CNXN_SOCKET_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_KEY_STORE_TYPE_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_PROTOCOL_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_CIPHER_SUITES_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP -> "HTTPS",
-      ZkConfigs.ZK_SSL_CRL_ENABLE_PROP -> "false",
-      ZkConfigs.ZK_SSL_OCSP_ENABLE_PROP -> "false")
+      ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG -> "true",
+      ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_TYPE_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_PROTOCOL_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG -> "HTTPS",
+      ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG -> "false",
+      ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG -> "false")
     configs.foreach{case (key, value) => props.put(key, value.toString) }
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
     // confirm we get all the values we expect
     ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(prop => prop match {
-        case ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP | ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP =>
+        case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG | ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG =>
           assertEquals("true", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
-        case ZkConfigs.ZK_SSL_CRL_ENABLE_PROP | ZkConfigs.ZK_SSL_OCSP_ENABLE_PROP =>
+        case ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG | ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG =>
           assertEquals("false", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
         case _ => assertEquals(kafkaValue, KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       })
@@ -946,43 +946,43 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val prefixedValue = "prefixedValue"
     val prefix = "authorizer."
     val configs = Map("zookeeper.connect" -> "somewhere", // required, otherwise we would omit it
-      ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP -> "false",
-      ZkConfigs.ZK_CLIENT_CNXN_SOCKET_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_KEY_STORE_TYPE_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_PROTOCOL_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_CIPHER_SUITES_PROP -> kafkaValue,
-      ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP -> "HTTPS",
-      ZkConfigs.ZK_SSL_CRL_ENABLE_PROP -> "false",
-      ZkConfigs.ZK_SSL_OCSP_ENABLE_PROP -> "false",
-      prefix + ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP -> "true",
-      prefix + ZkConfigs.ZK_CLIENT_CNXN_SOCKET_PROP -> prefixedValue,
-      prefix + ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_PROP -> prefixedValue,
-      prefix + ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_PROP -> prefixedValue,
-      prefix + ZkConfigs.ZK_SSL_KEY_STORE_TYPE_PROP -> prefixedValue,
-      prefix + ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_PROP -> prefixedValue,
-      prefix + ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_PROP -> prefixedValue,
-      prefix + ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_PROP -> prefixedValue,
-      prefix + ZkConfigs.ZK_SSL_PROTOCOL_PROP -> prefixedValue,
-      prefix + ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_PROP -> prefixedValue,
-      prefix + ZkConfigs.ZK_SSL_CIPHER_SUITES_PROP -> prefixedValue,
-      prefix + ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP -> "",
-      prefix + ZkConfigs.ZK_SSL_CRL_ENABLE_PROP -> "true",
-      prefix + ZkConfigs.ZK_SSL_OCSP_ENABLE_PROP -> "true")
+      ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG -> "false",
+      ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_KEY_STORE_TYPE_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_PROTOCOL_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG -> kafkaValue,
+      ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG -> "HTTPS",
+      ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG -> "false",
+      ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG -> "false",
+      prefix + ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG -> "true",
+      prefix + ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_KEY_STORE_TYPE_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_PROTOCOL_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG -> prefixedValue,
+      prefix + ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG -> "",
+      prefix + ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG -> "true",
+      prefix + ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG -> "true")
     configs.foreach{case (key, value) => props.put(key, value.toString) }
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
     // confirm we get all the values we expect
     ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(prop => prop match {
-      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP | ZkConfigs.ZK_SSL_CRL_ENABLE_PROP | ZkConfigs.ZK_SSL_OCSP_ENABLE_PROP =>
+      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG | ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG | ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG =>
         assertEquals("true", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
-      case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP =>
+      case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG =>
         assertEquals("false", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       case _ => assertEquals(prefixedValue, KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
     })

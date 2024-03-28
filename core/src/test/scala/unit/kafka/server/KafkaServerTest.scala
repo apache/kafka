@@ -67,7 +67,7 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testCreatesProperZkConfigWhenSaslDisabled(): Unit = {
     val props = new Properties
-    props.put(ZkConfigs.ZK_CONNECT_PROP, zkConnect) // required, otherwise we would leave it out
+    props.put(ZkConfigs.ZK_CONNECT_CONFIG, zkConnect) // required, otherwise we would leave it out
     val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
     assertEquals("false", zkClientConfig.getProperty(JaasUtils.ZK_SASL_CLIENT))
   }
@@ -75,8 +75,8 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testCreatesProperZkTlsConfigWhenDisabled(): Unit = {
     val props = new Properties
-    props.put(ZkConfigs.ZK_CONNECT_PROP, zkConnect) // required, otherwise we would leave it out
-    props.put(ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP, "false")
+    props.put(ZkConfigs.ZK_CONNECT_CONFIG, zkConnect) // required, otherwise we would leave it out
+    props.put(ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG, "false")
     val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
     ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach { propName =>
       assertNull(zkClientConfig.getProperty(propName))
@@ -86,20 +86,20 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testCreatesProperZkTlsConfigWithTrueValues(): Unit = {
     val props = new Properties
-    props.put(ZkConfigs.ZK_CONNECT_PROP, zkConnect) // required, otherwise we would leave it out
+    props.put(ZkConfigs.ZK_CONNECT_CONFIG, zkConnect) // required, otherwise we would leave it out
     // should get correct config for all properties if TLS is enabled
     val someValue = "some_value"
     def kafkaConfigValueToSet(kafkaProp: String) : String = kafkaProp match {
-      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP | ZkConfigs.ZK_SSL_CRL_ENABLE_PROP | ZkConfigs.ZK_SSL_OCSP_ENABLE_PROP => "true"
-      case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP => "HTTPS"
+      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG | ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG | ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG => "true"
+      case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG => "HTTPS"
       case _ => someValue
     }
     ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(kafkaProp => props.put(kafkaProp, kafkaConfigValueToSet(kafkaProp)))
     val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
     // now check to make sure the values were set correctly
     def zkClientValueToExpect(kafkaProp: String) : String = kafkaProp match {
-      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP | ZkConfigs.ZK_SSL_CRL_ENABLE_PROP | ZkConfigs.ZK_SSL_OCSP_ENABLE_PROP => "true"
-      case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP => "true"
+      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG | ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG | ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG => "true"
+      case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG => "true"
       case _ => someValue
     }
     ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(kafkaProp =>
@@ -109,24 +109,24 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testCreatesProperZkTlsConfigWithFalseAndListValues(): Unit = {
     val props = new Properties
-    props.put(ZkConfigs.ZK_CONNECT_PROP, zkConnect) // required, otherwise we would leave it out
+    props.put(ZkConfigs.ZK_CONNECT_CONFIG, zkConnect) // required, otherwise we would leave it out
     // should get correct config for all properties if TLS is enabled
     val someValue = "some_value"
     def kafkaConfigValueToSet(kafkaProp: String) : String = kafkaProp match {
-      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP => "true"
-      case ZkConfigs.ZK_SSL_CRL_ENABLE_PROP | ZkConfigs.ZK_SSL_OCSP_ENABLE_PROP => "false"
-      case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP => ""
-      case ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_PROP | ZkConfigs.ZK_SSL_CIPHER_SUITES_PROP => "A,B"
+      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG => "true"
+      case ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG | ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG => "false"
+      case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG => ""
+      case ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG | ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG => "A,B"
       case _ => someValue
     }
     ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(kafkaProp => props.put(kafkaProp, kafkaConfigValueToSet(kafkaProp)))
     val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
     // now check to make sure the values were set correctly
     def zkClientValueToExpect(kafkaProp: String) : String = kafkaProp match {
-      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP => "true"
-      case ZkConfigs.ZK_SSL_CRL_ENABLE_PROP | ZkConfigs.ZK_SSL_OCSP_ENABLE_PROP => "false"
-      case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP => "false"
-      case ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_PROP | ZkConfigs.ZK_SSL_CIPHER_SUITES_PROP => "A,B"
+      case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG => "true"
+      case ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG | ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG => "false"
+      case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG => "false"
+      case ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG | ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG => "A,B"
       case _ => someValue
     }
     ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(kafkaProp =>

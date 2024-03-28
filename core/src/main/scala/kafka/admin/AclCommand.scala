@@ -200,7 +200,7 @@ object AclCommand extends Logging {
       // We will default the value of zookeeper.set.acl to true or false based on whether SASL is configured,
       // but if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication
       // then it will be up to the user to explicitly specify zookeeper.set.acl=true in the authorizer-properties.
-      val defaultProps = Map(ZkConfigs.ZK_ENABLE_SECURE_ACLS_PROP -> JaasUtils.isZkSaslEnabled)
+      val defaultProps = Map(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG -> JaasUtils.isZkSaslEnabled)
       val authorizerPropertiesWithoutTls =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
           val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt)

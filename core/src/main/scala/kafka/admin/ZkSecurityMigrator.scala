@@ -82,7 +82,7 @@ object ZkSecurityMigrator extends Logging {
     if (jaasFile == null && !tlsClientAuthEnabled) {
       val errorMsg = s"No JAAS configuration file has been specified and no TLS client certificate has been specified. Please make sure that you set " +
         s"the system property ${JaasUtils.JAVA_LOGIN_CONFIG_PARAM} or provide a ZooKeeper client TLS configuration via --$tlsConfigFileOption <filename> " +
-        s"identifying at least ${ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP}, ${ZkConfigs.ZK_CLIENT_CNXN_SOCKET_PROP}, and ${ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_PROP}"
+        s"identifying at least ${ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG}, ${ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG}, and ${ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG}"
       System.err.println("ERROR: %s".format(errorMsg))
       throw new IllegalArgumentException("Incorrect configuration")
     }

@@ -896,7 +896,7 @@ class ControllerChannelManagerTest {
   private def createConfig(interBrokerVersion: MetadataVersion): KafkaConfig = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, controllerId.toString)
-    props.put(ZkConfigs.ZK_CONNECT_PROP, "zkConnect")
+    props.put(ZkConfigs.ZK_CONNECT_CONFIG, "zkConnect")
     TestUtils.setIbpAndMessageFormatVersions(props, interBrokerVersion)
     KafkaConfig.fromProps(props)
   }

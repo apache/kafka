@@ -155,7 +155,7 @@ public class EmbeddedKafkaCluster {
     }
 
     private void doStart() {
-        brokerConfig.put(ZkConfigs.ZK_CONNECT_PROP, zKConnectString());
+        brokerConfig.put(ZkConfigs.ZK_CONNECT_CONFIG, zKConnectString());
 
         putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
         putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), 0);

@@ -156,7 +156,7 @@ class KafkaTest {
       "Missing required configuration `zookeeper.connect` which has no default value.")
 
     // Ensure that no exception is thrown once zookeeper.connect is defined (and we clear controller.listener.names)
-    propertiesFile.setProperty(ZkConfigs.ZK_CONNECT_PROP, "localhost:2181")
+    propertiesFile.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
     propertiesFile.setProperty(KafkaConfig.ControllerListenerNamesProp, "")
     KafkaConfig.fromProps(propertiesFile)
   }
@@ -233,61 +233,61 @@ class KafkaTest {
 
   @Test
   def testZkSslClientEnable(): Unit = {
-    testZkConfig(ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP, "zookeeper.ssl.client.enable",
+    testZkConfig(ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG, "zookeeper.ssl.client.enable",
       "zookeeper.client.secure", booleanPropValueToSet, config => Some(config.zkSslClientEnable), booleanPropValueToSet, Some(false))
   }
 
   @Test
   def testZkSslKeyStoreLocation(): Unit = {
-    testZkConfig(ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_PROP, "zookeeper.ssl.keystore.location",
+    testZkConfig(ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG, "zookeeper.ssl.keystore.location",
       "zookeeper.ssl.keyStore.location", stringPropValueToSet, config => config.zkSslKeyStoreLocation, stringPropValueToSet)
   }
 
   @Test
   def testZkSslTrustStoreLocation(): Unit = {
-    testZkConfig(ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_PROP, "zookeeper.ssl.truststore.location",
+    testZkConfig(ZkConfigs.ZK_SSL_TRUST_STORE_LOCATION_CONFIG, "zookeeper.ssl.truststore.location",
       "zookeeper.ssl.trustStore.location", stringPropValueToSet, config => config.zkSslTrustStoreLocation, stringPropValueToSet)
   }
 
   @Test
   def testZookeeperKeyStorePassword(): Unit = {
-    testZkConfig(ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_PROP, "zookeeper.ssl.keystore.password",
+    testZkConfig(ZkConfigs.ZK_SSL_KEY_STORE_PASSWORD_CONFIG, "zookeeper.ssl.keystore.password",
       "zookeeper.ssl.keyStore.password", passwordPropValueToSet, config => config.zkSslKeyStorePassword, new Password(passwordPropValueToSet))
   }
 
   @Test
   def testZookeeperTrustStorePassword(): Unit = {
-    testZkConfig(ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_PROP, "zookeeper.ssl.truststore.password",
+    testZkConfig(ZkConfigs.ZK_SSL_TRUST_STORE_PASSWORD_CONFIG, "zookeeper.ssl.truststore.password",
       "zookeeper.ssl.trustStore.password", passwordPropValueToSet, config => config.zkSslTrustStorePassword, new Password(passwordPropValueToSet))
   }
 
   @Test
   def testZkSslKeyStoreType(): Unit = {
-    testZkConfig(ZkConfigs.ZK_SSL_KEY_STORE_TYPE_PROP, "zookeeper.ssl.keystore.type",
+    testZkConfig(ZkConfigs.ZK_SSL_KEY_STORE_TYPE_CONFIG, "zookeeper.ssl.keystore.type",
       "zookeeper.ssl.keyStore.type", stringPropValueToSet, config => config.zkSslKeyStoreType, stringPropValueToSet)
   }
 
   @Test
   def testZkSslTrustStoreType(): Unit = {
-    testZkConfig(ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_PROP, "zookeeper.ssl.truststore.type",
+    testZkConfig(ZkConfigs.ZK_SSL_TRUST_STORE_TYPE_CONFIG, "zookeeper.ssl.truststore.type",
       "zookeeper.ssl.trustStore.type", stringPropValueToSet, config => config.zkSslTrustStoreType, stringPropValueToSet)
   }
 
   @Test
   def testZkSslProtocol(): Unit = {
-    testZkConfig(ZkConfigs.ZK_SSL_PROTOCOL_PROP, "zookeeper.ssl.protocol",
+    testZkConfig(ZkConfigs.ZK_SSL_PROTOCOL_CONFIG, "zookeeper.ssl.protocol",
       "zookeeper.ssl.protocol", stringPropValueToSet, config => Some(config.ZkSslProtocol), stringPropValueToSet, Some("TLSv1.2"))
   }
 
   @Test
   def testZkSslEnabledProtocols(): Unit = {
-    testZkConfig(ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_PROP, "zookeeper.ssl.enabled.protocols",
+    testZkConfig(ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG, "zookeeper.ssl.enabled.protocols",
       "zookeeper.ssl.enabledProtocols", listPropValueToSet.mkString(","), config => config.ZkSslEnabledProtocols, listPropValueToSet.asJava)
   }
 
   @Test
   def testZkSslCipherSuites(): Unit = {
-    testZkConfig(ZkConfigs.ZK_SSL_CIPHER_SUITES_PROP, "zookeeper.ssl.cipher.suites",
+    testZkConfig(ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG, "zookeeper.ssl.cipher.suites",
       "zookeeper.ssl.ciphersuites", listPropValueToSet.mkString(","), config => config.ZkSslCipherSuites, listPropValueToSet.asJava)
   }
 
@@ -295,7 +295,7 @@ class KafkaTest {
   def testZkSslEndpointIdentificationAlgorithm(): Unit = {
     // this property is different than the others
     // because the system property values and the Kafka property values don't match
-    val kafkaPropName = ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP
+    val kafkaPropName = ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
     assertEquals("zookeeper.ssl.endpoint.identification.algorithm", kafkaPropName)
     val sysProp = "zookeeper.ssl.hostnameVerification"
     val expectedDefaultValue = "HTTPS"
@@ -328,13 +328,13 @@ class KafkaTest {
 
   @Test
   def testZkSslCrlEnable(): Unit = {
-    testZkConfig(ZkConfigs.ZK_SSL_CRL_ENABLE_PROP, "zookeeper.ssl.crl.enable",
+    testZkConfig(ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG, "zookeeper.ssl.crl.enable",
       "zookeeper.ssl.crl", booleanPropValueToSet, config => Some(config.ZkSslCrlEnable), booleanPropValueToSet, Some(false))
   }
 
   @Test
   def testZkSslOcspEnable(): Unit = {
-    testZkConfig(ZkConfigs.ZK_SSL_OCSP_ENABLE_PROP, "zookeeper.ssl.ocsp.enable",
+    testZkConfig(ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG, "zookeeper.ssl.ocsp.enable",
       "zookeeper.ssl.ocsp", booleanPropValueToSet, config => Some(config.ZkSslOcspEnable), booleanPropValueToSet, Some(false))
   }
 
