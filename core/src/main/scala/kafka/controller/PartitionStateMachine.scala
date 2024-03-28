@@ -486,7 +486,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     } else {
       val (logConfigs, failed) = zkClient.getLogConfigs(
         partitionsWithNoLiveInSyncReplicas.iterator.map { case (partition, _) => partition.topic }.toSet,
-        config.originals()
+        config.extractLogConfigMap
       )
 
       partitionsWithNoLiveInSyncReplicas.map { case (partition, leaderAndIsr) =>
