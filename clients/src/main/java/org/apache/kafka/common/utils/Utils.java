@@ -901,15 +901,21 @@ public final class Utils {
         Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
-                // If the root path did not exist, ignore the error; otherwise throw it.
-                if (exc instanceof NoSuchFileException && path.toFile().equals(rootFile))
-                    return FileVisitResult.TERMINATE;
+                if (exc instanceof NoSuchFileException) {
+                    if (path.toFile().equals(rootFile)) {
+                        // If the root path did not exist, ignore the error and terminate;
+                        return FileVisitResult.TERMINATE;
+                    } else {
+                        // Otherwise, just continue walking as the file might already be deleted by other threads.
+                        return FileVisitResult.CONTINUE;
+                    }
+                }
                 throw exc;
             }
 
             @Override
             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-                Files.delete(path);
+                Files.deleteIfExists(path);
                 return FileVisitResult.CONTINUE;
             }
 
@@ -920,7 +926,7 @@ public final class Utils {
                     throw exc;
                 }
 
-                Files.delete(path);
+                Files.deleteIfExists(path);
                 return FileVisitResult.CONTINUE;
             }
         });
