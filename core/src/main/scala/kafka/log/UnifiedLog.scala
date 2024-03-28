@@ -813,7 +813,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
             validRecords = validateAndOffsetAssignResult.validatedRecords
             appendInfo.setMaxTimestamp(validateAndOffsetAssignResult.maxTimestampMs)
-            appendInfo.setOffsetOfMaxTimestamp(validateAndOffsetAssignResult.offsetOfMaxTimestampMs)
+            appendInfo.setOffsetOfMaxTimestamp(validateAndOffsetAssignResult.shallowOffsetOfMaxTimestampMs)
             appendInfo.setLastOffset(offset.value - 1)
             appendInfo.setRecordConversionStats(validateAndOffsetAssignResult.recordConversionStats)
             if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)

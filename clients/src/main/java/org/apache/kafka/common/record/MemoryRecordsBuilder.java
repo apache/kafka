@@ -851,12 +851,12 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
     public static class RecordsInfo {
         public final long maxTimestamp;
-        public final long offsetOfMaxTimestamp;
+        public final long shallowOffsetOfMaxTimestamp;
 
         public RecordsInfo(long maxTimestamp,
-                           long offsetOfMaxTimestamp) {
+                           long shallowOffsetOfMaxTimestamp) {
             this.maxTimestamp = maxTimestamp;
-            this.offsetOfMaxTimestamp = offsetOfMaxTimestamp;
+            this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
         }
     }
 
