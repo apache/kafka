@@ -45,6 +45,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
@@ -132,11 +133,14 @@ public class TopicAdmin implements AutoCloseable {
 
     public static final int NO_PARTITIONS = -1;
     public static final short NO_REPLICATION_FACTOR = -1;
+    // Similar to the default segment size value of __consumer_offsets
+    public static final int DEFAULT_INTERNAL_TOPIC_SEGMENT_BYTES = 100 * 1024 * 1024;
 
     private static final String CLEANUP_POLICY_CONFIG = TopicConfig.CLEANUP_POLICY_CONFIG;
     private static final String CLEANUP_POLICY_COMPACT = TopicConfig.CLEANUP_POLICY_COMPACT;
     private static final String MIN_INSYNC_REPLICAS_CONFIG = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
     private static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
+    private static final String SEGMENT_BYTES_CONFIG = TopicConfig.SEGMENT_BYTES_CONFIG;
 
     /**
      * A builder of {@link NewTopic} instances.
@@ -204,6 +208,33 @@ public class TopicAdmin implements AutoCloseable {
          */
         public NewTopicBuilder compacted() {
             this.configs.put(CLEANUP_POLICY_CONFIG, CLEANUP_POLICY_COMPACT);
+            return this;
+        }
+
+        /**
+         * Specify that the segment size of internal topics(offset.storage.topic, offset.storage.topic,
+         * config.storage.topic) should be set a reasonable value. The default value of the segment size of
+         * __consumer_offsets is referred to here. If follow the default configuration of the broker or set
+         * it larger, then when the MM cluster runs many and complicated tasks, especially the log volume of
+         * the topic 'offset.storage.topic' is very large, it will affect the restart speed of the MM workers.
+         *
+         * @return this builder to allow methods to be chained; never null
+         */
+        public NewTopicBuilder setSegmentSize() {
+            int finalSegmentSize = DEFAULT_INTERNAL_TOPIC_SEGMENT_BYTES;
+            if (this.configs.containsKey(SEGMENT_BYTES_CONFIG)) {
+                int segmentBytes = Integer.parseInt(this.configs.get(SEGMENT_BYTES_CONFIG));
+                // Setting too large a segment size value for the internal topic may cause the active segment to store a
+                // large amount of data without compaction, and eventually cause the MM2 worker to read and consume internal
+                // topic for a long time, resulting in a long overall startup time.
+                if (segmentBytes > DEFAULT_INTERNAL_TOPIC_SEGMENT_BYTES) {
+                    log.warn("Reset internal topic segment bytes size to default size: {}.", DEFAULT_INTERNAL_TOPIC_SEGMENT_BYTES);
+                } else {
+                    if (segmentBytes >= LegacyRecord.RECORD_OVERHEAD_V0)
+                        finalSegmentSize = segmentBytes;
+                }
+            }
+            this.configs.put(SEGMENT_BYTES_CONFIG, Integer.toString(finalSegmentSize));
             return this;
         }
 
