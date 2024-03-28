@@ -142,28 +142,25 @@ public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSup
 
         private void defaultJoinInstructions(final Record<K, Change<V>> record) {
             if (record.value().oldValue != null) {
-                final KO oldForeignKey = record.value().oldValue == null ? null : foreignKeyExtractor.apply(record.value().oldValue);
-                if (oldForeignKey == null) {
+                final KO oldForeignKey = foreignKeyExtractor.apply(record.value().oldValue);
+                final KO newForeignKey = record.value().newValue == null ? null : foreignKeyExtractor.apply(record.value().newValue);
+
+                if (oldForeignKey == null && newForeignKey == null) {
                     logSkippedRecordDueToNullForeignKey();
-                    return;
-                }
-                if (record.value().newValue != null) {
-                    final KO newForeignKey = record.value().newValue == null ? null : foreignKeyExtractor.apply(record.value().newValue);
-                    if (newForeignKey == null) {
-                        logSkippedRecordDueToNullForeignKey();
-                        return;
-                    }
-                    if (!Arrays.equals(serialize(newForeignKey), serialize(oldForeignKey))) {
-                        //Different Foreign Key - delete the old key value and propagate the new one.
-                        //Delete it from the oldKey's state store
-                        forward(record, oldForeignKey, DELETE_KEY_NO_PROPAGATE);
-                    }
+                } else if (oldForeignKey == null) {
+                    forward(record, newForeignKey, PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE);
+                } else if (newForeignKey == null) {
+                    forward(record, oldForeignKey, DELETE_KEY_AND_PROPAGATE);
+                } else if (!Arrays.equals(serialize(newForeignKey), serialize(oldForeignKey))) {
+                    //Different Foreign Key - delete the old key value and propagate the new one.
+                    //Delete it from the oldKey's state store
+                    forward(record, oldForeignKey, DELETE_KEY_NO_PROPAGATE);
                     //Add to the newKey's state store. Additionally, propagate null if no FK is found there,
                     //since we must "unset" any output set by the previous FK-join. This is true for both INNER
                     //and LEFT join.
                     forward(record, newForeignKey, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE);
-                } else {
-                    forward(record, oldForeignKey, DELETE_KEY_AND_PROPAGATE);
+                } else { // unchanged FK
+                    forward(record, newForeignKey, PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE);
                 }
             } else if (record.value().newValue != null) {
                 final KO newForeignKey = foreignKeyExtractor.apply(record.value().newValue);
