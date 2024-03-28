@@ -37,12 +37,12 @@ import static org.apache.kafka.raft.KafkaRaftClient.MAX_BATCH_SIZE_BYTES;
 // TODO: Add unnitest for it
 final class InternalLogListener {
     private final ReplicatedLog log;
-    private final VoterSetHistory voterSetHistory;
     private final RecordSerde<?> serde;
     private final BufferSupplier bufferSupplier;
 
-    // TODO: We need to keep the kraft version history so that the right value is included in the snapshot
-    private short kraftVersion = 0;
+    private final VoterSetHistory voterSetHistory;
+    private final History<Short> kraftVersion = new TreeMapHistory<>();
+
     private long nextOffset = 0;
 
     InternalLogListener(
@@ -60,10 +60,6 @@ final class InternalLogListener {
     void updateListerner() {
         maybeLoadSnapshot();
         maybeLoadLog();
-    }
-
-    short kraftVersion() {
-        return kraftVersion;
     }
 
     private void maybeLoadLog() {
@@ -90,7 +86,7 @@ final class InternalLogListener {
         Optional<RawSnapshotReader> rawSnapshot = log.latestSnapshot();
         if (rawSnapshot.isPresent() && (nextOffset == 0 || nextOffset > log.startOffset())) {
             // Clear the current state
-            kraftVersion = 0;
+            kraftVersion.clear();
             voterSetHistory.clear();
 
             // Load the snapshot since the listener is at the start of the log or the log doesn't have the next entry.
@@ -119,14 +115,11 @@ final class InternalLogListener {
             long currentOffset = overrideOffset.orElse(batch.baseOffset() + index);
             switch (record.type()) {
                 case VOTERS:
-                    voterSetHistory.nextVoterSet(
-                        currentOffset,
-                        VoterSet.fromVotersRecord((VotersRecord) record.message())
-                    );
+                    voterSetHistory.addAt(currentOffset, VoterSet.fromVotersRecord((VotersRecord) record.message()));
                     break;
 
                 case KRAFT_VERSION:
-                    kraftVersion = ((KRaftVersionRecord) record.message()).kRaftVersion();
+                    kraftVersion.addAt(currentOffset, ((KRaftVersionRecord) record.message()).kRaftVersion());
                     break;
 
                 default:

@@ -16,36 +16,26 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.util.Map.Entry;
-import java.util.NavigableMap;
 import java.util.Optional;
-import java.util.TreeMap;
-import java.util.Map;
 
 // TODO: write unittest for VoterSetHistory 
 // TODO: Write documentation
-final public class VoterSetHistory {
+final public class VoterSetHistory implements History<VoterSet> {
     private final Optional<VoterSet> staticVoterSet;
-    private final TreeMap<Long, VoterSet> votersHistory = new TreeMap<>();
+    private final History<VoterSet> votersHistory = new TreeMapHistory<>();
 
     VoterSetHistory(Optional<VoterSet> staticVoterSet) {
         this.staticVoterSet = staticVoterSet;
     }
 
-    void nextVoterSet(long offset, VoterSet voters) {
-        Optional<Map.Entry<Long, VoterSet>> lastEntry = Optional.ofNullable(votersHistory.lastEntry());
-        Optional<Long> currentOffset = lastEntry.map(Map.Entry::getKey);
-        if (currentOffset.isPresent() && offset <= currentOffset.get()) {
-            throw new IllegalArgumentException(
-                String.format("Next offset %d must be greater than the last offset %d", offset, currentOffset.get())
-            );
-        }
-
-        if (lastEntry.isPresent() && lastEntry.get().getKey() >= 0) {
+    @Override
+    public void addAt(long offset, VoterSet voters) {
+        Optional<History.Entry<VoterSet>> lastEntry = votersHistory.lastEntry();
+        if (lastEntry.isPresent() && lastEntry.get().offset() >= 0) {
             // If the last voter set comes from the replicated log then the majorities must overlap. This ignores
             // the static voter set and the bootstrapped voter set since they come from the configuration and the KRaft
             // leader never guaranteed that they are the same across all replicas.
-            VoterSet lastVoterSet = lastEntry.get().getValue();
+            VoterSet lastVoterSet = lastEntry.get().value();
             if (!lastVoterSet.hasOverlappingMajority(voters)) {
                 throw new IllegalArgumentException(
                     String.format(
@@ -57,45 +47,39 @@ final public class VoterSetHistory {
             }
         }
 
-        votersHistory.compute(
-            offset,
-            (key, value) -> {
-                if (value != null) {
-                    throw new IllegalArgumentException(
-                        String.format("Rejected %s sincea voter set already exist at %d: %s", voters, offset, value)
-                    );
-                }
-
-                return voters;
-            }
-        );
+        votersHistory.addAt(offset, voters);
     }
 
     // TODO: document that this doesn't include the static configuration
-    Optional<VoterSet> voterSetAt(long offset) {
-        return Optional.ofNullable(votersHistory.floorEntry(offset)).map(Entry::getValue);
+    @Override
+    public Optional<VoterSet> valueAt(long offset) {
+        return votersHistory.valueAt(offset);
     }
 
-    VoterSet latestVoterSet() {
-        return Optional
-            .ofNullable(votersHistory.lastEntry())
-            .map(Entry::getValue)
-            .orElseGet(() -> staticVoterSet.orElseThrow(() -> new IllegalStateException("No voter set found")));
+    @Override
+    public Optional<History.Entry<VoterSet>> lastEntry() {
+        Optional<History.Entry<VoterSet>> result = votersHistory.lastEntry();
+        if (result.isPresent()) return result;
+
+        return staticVoterSet.map(value -> new History.Entry<>(-1, value));
     }
 
-    void truncateTo(long endOffset) {
-        votersHistory.tailMap(endOffset, false).clear();
+    public VoterSet lastValue() {
+        return lastEntry().orElseThrow(() -> new IllegalStateException("No voter set found")).value();
     }
 
-    void trimPrefixTo(long startOffset) {
-        NavigableMap<Long, VoterSet> lesserVoters = votersHistory.headMap(startOffset, true);
-        while (lesserVoters.size() > 1) {
-            // Poll and ignore the entry to remove the first entry
-            lesserVoters.pollFirstEntry();
-        }
+    @Override
+    public void truncateTo(long endOffset) {
+        votersHistory.truncateTo(endOffset);
     }
 
-    void clear() {
+    @Override
+    public void trimPrefixTo(long startOffset) {
+        votersHistory.trimPrefixTo(startOffset);
+    }
+
+    @Override
+    public void clear() {
         votersHistory.clear();
     }
 }
