@@ -1320,9 +1320,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // constant time access while being safe to use with concurrent collections unlike `toArray`.
         val segmentsCopy = logSegments.toBuffer
         val latestTimestampSegment = segmentsCopy.maxBy(_.maxTimestampSoFar)
-        val batch = latestTimestampSegment.log.batches().asScala.maxBy(_.maxTimestamp())
-        Some(new TimestampAndOffset(batch.maxTimestamp(), batch.offsetOfMaxTimestamp().orElse(-1),
-          latestEpochAsOptional(leaderEpochCache)))
+        latestTimestampSegment.log.batches().asScala
+          // we return the earliest offset if there are multi batches having same max timestamp
+          .find(_.maxTimestamp() == latestTimestampSegment.maxTimestampSoFar)
+          .map(batch => new TimestampAndOffset(batch.maxTimestamp(), batch.offsetOfMaxTimestamp().orElse(-1),
+            latestEpochAsOptional(leaderEpochCache)))
       } else {
         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
         if (remoteLogEnabled()) {
