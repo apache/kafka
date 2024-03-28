@@ -201,6 +201,7 @@ public class ConsumerGroupMember {
             setSubscribedTopicRegex(record.subscribedTopicRegex());
             setRebalanceTimeoutMs(record.rebalanceTimeoutMs());
             setServerAssignorName(record.serverAssignor());
+            setUseLegacyProtocol(record.useLegacyProtocol());
             return this;
         }
 
@@ -522,7 +523,8 @@ public class ConsumerGroupMember {
             && Objects.equals(subscribedTopicRegex, that.subscribedTopicRegex)
             && Objects.equals(serverAssignorName, that.serverAssignorName)
             && Objects.equals(assignedPartitions, that.assignedPartitions)
-            && Objects.equals(partitionsPendingRevocation, that.partitionsPendingRevocation);
+            && Objects.equals(partitionsPendingRevocation, that.partitionsPendingRevocation)
+            && Objects.equals(useLegacyProtocol, that.useLegacyProtocol);
     }
 
     @Override
@@ -541,6 +543,7 @@ public class ConsumerGroupMember {
         result = 31 * result + Objects.hashCode(serverAssignorName);
         result = 31 * result + Objects.hashCode(assignedPartitions);
         result = 31 * result + Objects.hashCode(partitionsPendingRevocation);
+        result = 31 * result + Objects.hashCode(useLegacyProtocol);
         return result;
     }
 
@@ -561,6 +564,7 @@ public class ConsumerGroupMember {
             ", serverAssignorName='" + serverAssignorName + '\'' +
             ", assignedPartitions=" + assignedPartitions +
             ", partitionsPendingRevocation=" + partitionsPendingRevocation +
+            ", useNewProtocol='" + useLegacyProtocol + '\'' +
             ')';
     }
 
