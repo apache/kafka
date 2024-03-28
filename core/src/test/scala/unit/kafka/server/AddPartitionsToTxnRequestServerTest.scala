@@ -163,7 +163,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
 
     val verifyErrors = verifyResponse.errors()
 
-    assertEquals(Collections.singletonMap(transactionalId, Collections.singletonMap(tp0, Errors.ABORTABLE_TRANSACTION)), verifyErrors)
+    assertEquals(Collections.singletonMap(transactionalId, Collections.singletonMap(tp0, Errors.TRANSACTION_ABORTABLE)), verifyErrors)
   }
   
   private def setUpTransactions(transactionalId: String, verifyOnly: Boolean, partitions: Set[TopicPartition]): (Int, AddPartitionsToTxnTransaction) = {

@@ -92,14 +92,24 @@ fail due to code changes. You can just run:
 
 ### Running a Kafka broker in KRaft mode
 
+Using compiled files:
+
     KAFKA_CLUSTER_ID="$(./bin/kafka-storage.sh random-uuid)"
     ./bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties
     ./bin/kafka-server-start.sh config/kraft/server.properties
 
+Using docker image:
+
+    docker run -p 9092:9092 apache/kafka:3.7.0
+
 ### Running a Kafka broker in ZooKeeper mode
+
+Using compiled files:
 
     ./bin/zookeeper-server-start.sh config/zookeeper.properties
     ./bin/kafka-server-start.sh config/server.properties
+
+>Since ZooKeeper mode is already deprecated and planned to be removed in Apache Kafka 4.0, the docker image only supports running in KRaft mode
 
 ### Cleaning the build ###
     ./gradlew clean
