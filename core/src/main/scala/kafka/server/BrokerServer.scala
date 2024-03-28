@@ -167,6 +167,29 @@ class BrokerServer(
     true
   }
 
+  protected def createReplicaManager(isShuttingDown: AtomicBoolean, addPartitionsToTxnManager: AddPartitionsToTxnManager, directoryEventHandler: DirectoryEventHandler): ReplicaManager = {
+    new ReplicaManager(
+      config = config,
+      metrics = metrics,
+      time = time,
+      scheduler = kafkaScheduler,
+      logManager = logManager,
+      remoteLogManager = remoteLogManagerOpt,
+      quotaManagers = quotaManagers,
+      metadataCache = metadataCache,
+      logDirFailureChannel = logDirFailureChannel,
+      alterPartitionManager = alterPartitionManager,
+      brokerTopicStats = brokerTopicStats,
+      isShuttingDown = isShuttingDown,
+      zkClient = None,
+      threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
+      delayedRemoteFetchPurgatoryParam = None,
+      brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
+      addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
+      directoryEventHandler = directoryEventHandler
+    )
+  }
+
   def replicaManager: ReplicaManager = _replicaManager
 
   override def startup(): Unit = {
@@ -305,26 +328,7 @@ class BrokerServer(
           lifecycleManager.propagateDirectoryFailure(directoryId)
       }
 
-      this._replicaManager = new ReplicaManager(
-        config = config,
-        metrics = metrics,
-        time = time,
-        scheduler = kafkaScheduler,
-        logManager = logManager,
-        remoteLogManager = remoteLogManagerOpt,
-        quotaManagers = quotaManagers,
-        metadataCache = metadataCache,
-        logDirFailureChannel = logDirFailureChannel,
-        alterPartitionManager = alterPartitionManager,
-        brokerTopicStats = brokerTopicStats,
-        isShuttingDown = isShuttingDown,
-        zkClient = None,
-        threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
-        delayedRemoteFetchPurgatoryParam = None,
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
-        addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
-        directoryEventHandler = directoryEventHandler
-      )
+      this._replicaManager = createReplicaManager(isShuttingDown, addPartitionsToTxnManager, directoryEventHandler)
 
       /* start token manager */
       tokenManager = new DelegationTokenManager(config, tokenCache, time)
