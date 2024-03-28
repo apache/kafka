@@ -168,13 +168,6 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     public static ApiVersionCollection filterApis(
         RecordVersion minRecordVersion,
-        ApiMessageType.ListenerType listenerType
-    ) {
-        return filterApis(minRecordVersion, listenerType, false, false);
-    }
-
-    public static ApiVersionCollection filterApis(
-        RecordVersion minRecordVersion,
         ApiMessageType.ListenerType listenerType,
         boolean enableUnstableLastVersion,
         boolean clientTelemetryEnabled
