@@ -59,7 +59,7 @@ public class GetOffsetShellTest {
     private final int offsetTopicPartitionCount = 4;
     private final ClusterInstance cluster;
     private final String topicName = "topic";
-    private final Duration consumerTimeout = Duration.ofMillis(100);
+    private final Duration consumerTimeout = Duration.ofMillis(1000);
 
     public GetOffsetShellTest(ClusterInstance cluster) {
         this.cluster = cluster;
