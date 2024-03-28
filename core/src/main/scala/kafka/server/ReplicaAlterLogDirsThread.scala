@@ -105,7 +105,7 @@ class ReplicaAlterLogDirsThread(name: String,
       topicId <- partition.topicId
       directoryId <- partition.logDirectoryId()
       topicIdPartition = new TopicIdPartition(topicId, topicPartition.partition())
-    } directoryEventHandler.handleAssignment(topicIdPartition, directoryId, () => ())
+    } directoryEventHandler.handleAssignment(topicIdPartition, directoryId, "Reverting queued dir reassignment mid future replica promotion", () => ())
 
     super.removePartitions(topicPartitions)
   }
@@ -127,6 +127,7 @@ class ReplicaAlterLogDirsThread(name: String,
           partition.futureReplicaDirectoryId()
             .map(id => {
               directoryEventHandler.handleAssignment(new TopicIdPartition(topicId.get, topicPartition.partition()), id,
+                "Future replica promotion",
                 () => updatedAssignmentRequestState(topicPartition)(ReplicaAlterLogDirsThread.COMPLETED))
               // mark the assignment request state as queued.
               updatedAssignmentRequestState(topicPartition)(ReplicaAlterLogDirsThread.QUEUED)
