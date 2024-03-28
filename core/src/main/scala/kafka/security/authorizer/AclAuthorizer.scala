@@ -97,7 +97,7 @@ object AclAuthorizer {
   }
 
   private[authorizer] def zkClientConfigFromKafkaConfigAndMap(kafkaConfig: KafkaConfig, configMap: mutable.Map[String, _<:Any]): ZKClientConfig = {
-    val zkSslClientEnable = configMap.get(AclAuthorizer.configPrefix + ZkConfigs.ZK_SSL_CLIENT_ENABLE_PROP).
+    val zkSslClientEnable = configMap.get(AclAuthorizer.configPrefix + ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG).
       map(_.toString.trim).getOrElse(kafkaConfig.zkSslClientEnable.toString).toBoolean
     if (!zkSslClientEnable)
       new ZKClientConfig
@@ -109,7 +109,7 @@ object AclAuthorizer {
       ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.forKeyValue { (kafkaProp, sysProp) =>
         configMap.get(AclAuthorizer.configPrefix + kafkaProp).foreach { prefixedValue =>
           zkClientConfig.setProperty(sysProp,
-            if (kafkaProp == ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP)
+            if (kafkaProp == ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
               (prefixedValue.toString.trim.toUpperCase == "HTTPS").toString
             else
               prefixedValue.toString.trim)
