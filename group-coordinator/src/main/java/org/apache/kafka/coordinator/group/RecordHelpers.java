@@ -82,7 +82,8 @@ public class RecordHelpers {
                     .setSubscribedTopicNames(member.subscribedTopicNames())
                     .setSubscribedTopicRegex(member.subscribedTopicRegex())
                     .setServerAssignor(member.serverAssignorName().orElse(null))
-                    .setRebalanceTimeoutMs(member.rebalanceTimeoutMs()),
+                    .setRebalanceTimeoutMs(member.rebalanceTimeoutMs())
+                    .setUseLegacyProtocol(member.useLegacyProtocol()),
                 (short) 0
             )
         );
