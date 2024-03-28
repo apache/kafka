@@ -46,12 +46,10 @@ public class RemoteLogMetadataSerde {
     private static final short REMOTE_PARTITION_DELETE_API_KEY = new RemotePartitionDeleteMetadataRecord().apiKey();
     private static final short REMOTE_LOG_SEGMENT_METADATA_SNAPSHOT_API_KEY = new RemoteLogSegmentMetadataSnapshotRecord().apiKey();
 
-    private final Map<String, Short> remoteLogStorageClassToApiKey;
     private final Map<Short, RemoteLogMetadataTransform> keyToTransform;
     private final BytesApiMessageSerde bytesApiMessageSerde;
 
     public RemoteLogMetadataSerde() {
-        remoteLogStorageClassToApiKey = createRemoteLogStorageClassToApiKeyMap();
         keyToTransform = createRemoteLogMetadataTransforms();
         bytesApiMessageSerde = new BytesApiMessageSerde() {
             @Override
@@ -74,25 +72,25 @@ public class RemoteLogMetadataSerde {
         return map;
     }
 
-    protected final Map<String, Short> createRemoteLogStorageClassToApiKeyMap() {
-        Map<String, Short> map = new HashMap<>();
-        map.put(RemoteLogSegmentMetadata.class.getName(), REMOTE_LOG_SEGMENT_METADATA_API_KEY);
-        map.put(RemoteLogSegmentMetadataUpdate.class.getName(), REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY);
-        map.put(RemotePartitionDeleteMetadata.class.getName(), REMOTE_PARTITION_DELETE_API_KEY);
-        map.put(RemoteLogSegmentMetadataSnapshot.class.getName(), REMOTE_LOG_SEGMENT_METADATA_SNAPSHOT_API_KEY);
-        return map;
-    }
-
     public byte[] serialize(RemoteLogMetadata remoteLogMetadata) {
-        Short apiKey = remoteLogStorageClassToApiKey.get(remoteLogMetadata.getClass().getName());
-        if (apiKey == null) {
-            throw new IllegalArgumentException("ApiKey for given RemoteStorageMetadata class: " + remoteLogMetadata.getClass()
-                                                       + " does not exist.");
+
+        String className = remoteLogMetadata.getClass().getName();
+        RemoteLogMetadataTransform metadataTransform;
+
+        if(className.equals(RemoteLogSegmentMetadata.class.getName())) {
+            metadataTransform = new RemoteLogSegmentMetadataTransform();
+        } else if (className.equals(RemoteLogSegmentMetadataUpdate.class.getName())) {
+            metadataTransform = new RemoteLogSegmentMetadataUpdateTransform();
+        } else if (className.equals(RemotePartitionDeleteMetadata.class.getName())) {
+            metadataTransform = new RemotePartitionDeleteMetadataTransform();
+        } else if (className.equals(RemoteLogSegmentMetadataSnapshot.class.getName())) {
+            metadataTransform = new RemoteLogSegmentMetadataSnapshotTransform();
+        } else {
+            throw new IllegalArgumentException("RemoteLogMetadataTransform for given RemoteStorageMetadata class: " + remoteLogMetadata.getClass()
+                    + " does not exist.");
         }
 
-        @SuppressWarnings("unchecked")
-        ApiMessageAndVersion apiMessageAndVersion = remoteLogMetadataTransform(apiKey).toApiMessageAndVersion(remoteLogMetadata);
-
+        ApiMessageAndVersion apiMessageAndVersion = metadataTransform.toApiMessageAndVersion(remoteLogMetadata);
         return bytesApiMessageSerde.serialize(apiMessageAndVersion);
     }
 
