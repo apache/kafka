@@ -127,7 +127,7 @@ public class UpdateFollowerFetchStateBenchmark {
         partition = new Partition(topicPartition, 100,
                 MetadataVersion.latestTesting(), 0, () -> -1, Time.SYSTEM,
                 alterPartitionListener, delayedOperations,
-                Mockito.mock(MetadataCache.class), logManager, alterPartitionManager);
+                Mockito.mock(MetadataCache.class), logManager, alterPartitionManager, topicId);
         partition.makeLeader(partitionState, offsetCheckpoints, topicId, Option.empty());
         replica1 = partition.getReplica(1).get();
         replica2 = partition.getReplica(2).get();

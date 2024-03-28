@@ -289,13 +289,17 @@ class BrokerMetadataPublisher(
     try {
       // Start log manager, which will perform (potentially lengthy)
       // recovery-from-unclean-shutdown if required.
-      logManager.startup(metadataCache.getAllTopics())
-
-      // Delete partition directories which we're not supposed to have. We have
-      // to do this before starting ReplicaManager, so that the stray replicas
-      // don't block creation of new ones with different IDs but the same names.
-      // See KAFKA-14616 for details.
-      logManager.deleteStrayKRaftReplicas(brokerId, newImage.topics())
+      logManager.startup(
+        metadataCache.getAllTopics(),
+        isStray = (topicId, partition) => {
+          val tid = topicId.getOrElse {
+            throw new RuntimeException(s"Partition $partition does not have a topic ID, " +
+              "which is not allowed when running in KRaft mode.")
+          }
+          Option(newImage.topics().getPartition(tid, partition.partition()))
+            .exists(_.replicas.contains(brokerId))
+        }
+      )
 
       // Make the LogCleaner available for reconfiguration. We can't do this prior to this
       // point because LogManager#startup creates the LogCleaner object, if
