@@ -1678,11 +1678,10 @@ public final class Utils {
     /**
      * Checks requirement. Throw {@link IllegalArgumentException} if {@code requirement} failed.
      * @param requirement Requirement to check.
-     * @param msg Detailed message supplier.
      */
-    public static void require(boolean requirement, Supplier<String> msg) {
+    public static void require(boolean requirement) {
         if (!requirement)
-            throw new IllegalArgumentException("requirement failed: " + msg);
+            throw new IllegalArgumentException("requirement failed");
     }
 
     /**
