@@ -128,6 +128,39 @@ public class ImageDowngradeTest {
                         TEST_RECORDS.get(1)));
     }
 
+    /**
+     * Test downgrading to a MetadataVersion that doesn't support ZK migration.
+     */
+    @Test
+    public void testPreZkMigrationSupportVersion() {
+        writeWithExpectedLosses(MetadataVersion.IBP_3_3_IV3,
+            Arrays.asList(
+                "the isMigratingZkBroker state of one or more brokers"),
+            Arrays.asList(
+                metadataVersionRecord(MetadataVersion.IBP_3_4_IV0),
+                new ApiMessageAndVersion(new RegisterBrokerRecord().
+                    setBrokerId(123).
+                    setIncarnationId(Uuid.fromString("XgjKo16hRWeWrTui0iR5Nw")).
+                    setBrokerEpoch(456).
+                    setRack(null).
+                    setFenced(false).
+                    setInControlledShutdown(true).
+                    setIsMigratingZkBroker(true), (short) 2),
+                TEST_RECORDS.get(0),
+                TEST_RECORDS.get(1)),
+            Arrays.asList(
+                metadataVersionRecord(MetadataVersion.IBP_3_3_IV3),
+                new ApiMessageAndVersion(new RegisterBrokerRecord().
+                    setBrokerId(123).
+                    setIncarnationId(Uuid.fromString("XgjKo16hRWeWrTui0iR5Nw")).
+                    setBrokerEpoch(456).
+                    setRack(null).
+                    setFenced(false).
+                    setInControlledShutdown(true), (short) 1),
+                TEST_RECORDS.get(0),
+                TEST_RECORDS.get(1)));
+    }
+
     @Test
     void testDirectoryAssignmentState() {
         MetadataVersion outputMetadataVersion = MetadataVersion.IBP_3_7_IV0;
