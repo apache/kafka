@@ -19,20 +19,31 @@ package org.apache.kafka.streams.processor.internals.assignment;
 public enum AssignorError {
     // Note: this error code should be reserved for fatal errors, as the receiving clients are future-proofed
     // to throw an exception upon an unrecognized error code.
-    NONE(0),
-    INCOMPLETE_SOURCE_TOPIC_METADATA(1),
-    VERSION_PROBING(2), // not actually used anymore, but we may hit it during a rolling upgrade from earlier versions
-    ASSIGNMENT_ERROR(3),
-    SHUTDOWN_REQUESTED(4);
+    NONE(0, "NONE", "NONE"),
+    INCOMPLETE_SOURCE_TOPIC_METADATA(1, "INCOMPLETE_SOURCE_TOPIC_METADATA","Missing source topics are existed. To check which topics are missing, please look into the logs of the consumer group leader. Only the leaders knows and logs the name of the missing topics."),
+    VERSION_PROBING(2, "VERSION_PROBING", "VERSION_PROBING"), // not actually used anymore, but we may hit it during a rolling upgrade from earlier versions
+    ASSIGNMENT_ERROR(3, "ASSIGNMENT_ERROR", "Hit an unexpected exception during task assignment phase of rebalance."),
+    SHUTDOWN_REQUESTED(4, "SHUTDOWN_REQUESTED","Encountered fatal error, and should send shutdown request for the entire application.");
 
     private final int code;
+    private final String codeName;
+    private final String description;
 
-    AssignorError(final int code) {
+    AssignorError(final int code, final String codeName, final String description) {
         this.code = code;
+        this.codeName = codeName;
+        this.description = description;
     }
 
     public int code() {
         return code;
+    }
+
+    public String codeName() {
+        return codeName;
+    }
+    public String description() {
+        return description;
     }
 
 }
