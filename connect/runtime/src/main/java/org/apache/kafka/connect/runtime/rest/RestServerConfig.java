@@ -258,7 +258,7 @@ public abstract class RestServerConfig extends AbstractConfig {
     }
 
     protected RestServerConfig(ConfigDef configDef, Map<?, ?> props) {
-        super(configDef, props);
+        super(configDef, props, Utils.castToStringObjectMap(props), true);
     }
 
     // Visible for testing
