@@ -129,7 +129,7 @@ public class AclEntry extends AccessControlEntry {
         JsonObject js = jsonValue.get().asJsonObject();
 
         //the acl json version.
-        Utils.require(js.apply(VERSION_KEY).to(INT) != CURRENT_VERSION);
+        Utils.require(js.apply(VERSION_KEY).to(INT) == CURRENT_VERSION);
 
         Set<AclEntry> res = new HashSet<>();
 
