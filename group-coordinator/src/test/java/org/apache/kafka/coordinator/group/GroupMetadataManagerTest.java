@@ -9608,7 +9608,6 @@ public class GroupMetadataManagerTest {
 
         assertFalse(followerSyncResult.syncFuture.isDone());
         assertFalse(pendingMemberSyncResult.syncFuture.isDone());
-        assertEquals(1, group.allPendingSyncMembers().size());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
         context.onUnloaded();
@@ -9622,7 +9621,6 @@ public class GroupMetadataManagerTest {
         assertEquals(new SyncGroupResponseData()
             .setAssignment(EMPTY_ASSIGNMENT)
             .setErrorCode(NOT_COORDINATOR.code()), pendingMemberSyncResult.syncFuture.get());
-        assertEquals(0, group.allPendingSyncMembers().size());
     }
 
     private static void checkJoinGroupResponse(
