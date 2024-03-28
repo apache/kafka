@@ -1200,6 +1200,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             log.flush(false);
         }
 
+        // TODO: Update the internal listener
+
         OffsetAndEpoch endOffset = endOffset();
         kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
         kafkaRaftMetrics.updateLogEnd(endOffset);
@@ -1210,6 +1212,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Records records
     ) {
         LogAppendInfo info = log.appendAsLeader(records, quorum.epoch());
+
+        // TODO: Notify the internal listener
+
         OffsetAndEpoch endOffset = endOffset();
         kafkaRaftMetrics.updateAppendRecords(info.lastOffset - info.firstOffset + 1);
         kafkaRaftMetrics.updateLogEnd(endOffset);
@@ -1926,12 +1931,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
             future.whenComplete((commitTimeMs, exception) -> {
                 if (exception != null) {
-                    logger.debug("Failed to commit {} records at {}", batch.numRecords, offsetAndEpoch, exception);
+                    logger.debug("Failed to commit {} records up to last offset {}", batch.numRecords, offsetAndEpoch, exception);
                 } else {
                     long elapsedTime = Math.max(0, commitTimeMs - appendTimeMs);
                     double elapsedTimePerRecord = (double) elapsedTime / batch.numRecords;
                     kafkaRaftMetrics.updateCommitLatency(elapsedTimePerRecord, appendTimeMs);
-                    logger.debug("Completed commit of {} records at {}", batch.numRecords, offsetAndEpoch);
+                    logger.debug("Completed commit of {} records up to last offset {}", batch.numRecords, offsetAndEpoch);
                     batch.records.ifPresent(records -> {
                         maybeFireHandleCommit(batch.baseOffset, epoch, batch.appendTimestamp(), batch.sizeInBytes(), records);
                     });

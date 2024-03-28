@@ -25,14 +25,14 @@ import java.util.Map;
 // TODO: write unittest for VoterSetHistory 
 // TODO: Write documentation
 final public class VoterSetHistory {
-    Optional<VoterSet> staticVoterSet;
-    TreeMap<Long, VoterSet> votersHistory = new TreeMap<>();
+    private final Optional<VoterSet> staticVoterSet;
+    private final TreeMap<Long, VoterSet> votersHistory = new TreeMap<>();
 
-    public VoterSetHistory(Optional<VoterSet> staticVoterSet) {
+    VoterSetHistory(Optional<VoterSet> staticVoterSet) {
         this.staticVoterSet = staticVoterSet;
     }
 
-    public void nextVoterSet(long offset, VoterSet voters) {
+    void nextVoterSet(long offset, VoterSet voters) {
         Optional<Map.Entry<Long, VoterSet>> lastEntry = Optional.ofNullable(votersHistory.lastEntry());
         Optional<Long> currentOffset = lastEntry.map(Map.Entry::getKey);
         if (currentOffset.isPresent() && offset <= currentOffset.get()) {
@@ -72,11 +72,11 @@ final public class VoterSetHistory {
     }
 
     // TODO: document that this doesn't include the static configuration
-    public Optional<VoterSet> voterSetAt(long offset) {
+    Optional<VoterSet> voterSetAt(long offset) {
         return Optional.ofNullable(votersHistory.floorEntry(offset)).map(Entry::getValue);
     }
 
-    public VoterSet latestVoterSet() {
+    VoterSet latestVoterSet() {
         return Optional
             .ofNullable(votersHistory.lastEntry())
             .map(Entry::getValue)
@@ -93,5 +93,9 @@ final public class VoterSetHistory {
             // Poll and ignore the entry to remove the first entry
             lesserVoters.pollFirstEntry();
         }
+    }
+
+    void clear() {
+        votersHistory.clear();
     }
 }
