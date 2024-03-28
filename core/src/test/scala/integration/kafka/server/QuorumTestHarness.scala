@@ -98,7 +98,7 @@ class KRaftQuorumImplementation(
   ): KafkaBroker = {
     val sharedServer = new SharedServer(config,
       new MetaProperties(clusterId, config.nodeId),
-      time,
+      Time.SYSTEM,
       new Metrics(),
       controllerQuorumVotersFuture,
       faultHandlerFactory)
