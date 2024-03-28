@@ -807,7 +807,7 @@ public class ReassignPartitionsCommand {
             Set<TopicPartitionReplica> completed = alterReplicaLogDirs(adminClient, pendingReplicas);
             if (!completed.isEmpty()) {
                 completed.stream().sorted(ReassignPartitionsCommand::compareTopicPartitionReplicas).forEach(replica -> {
-                    System.out.printf("Successfully started moving log directory to %s for replica %s-%s with broker id: %s %n",
+                    System.out.printf("Successfully started moving log directory to %s for replica %s-%s with broker %s %n",
                         pendingReplicas.get(replica), replica.topic(), replica.partition(), replica.brokerId());
                 });
             }
@@ -1483,7 +1483,6 @@ public class ReassignPartitionsCommand {
         for (Entry<TopicPartitionReplica, KafkaFuture<Void>> e : values.entrySet()) {
             TopicPartitionReplica replica = e.getKey();
             KafkaFuture<Void> future = e.getValue();
-
             try {
                 future.get();
                 results.add(replica);
