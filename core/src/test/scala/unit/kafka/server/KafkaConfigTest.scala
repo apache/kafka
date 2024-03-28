@@ -36,6 +36,7 @@ import java.util
 import java.util.{Collections, Properties}
 import org.apache.kafka.common.Node
 import org.apache.kafka.coordinator.group.Group.GroupType
+import org.apache.kafka.coordinator.group.GroupConsumerUpgradePolicy
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
 import org.apache.kafka.server.config.{ServerTopicConfigSynonyms, ZkConfigs}
@@ -1829,6 +1830,20 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
     assertTrue(config.isNewGroupCoordinatorEnabled)
+  }
+
+  @Test
+  def testGroupProtocolMigrationPolicy(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    // Invalid GroupProtocolMigrationPolicy value.
+    props.put(KafkaConfig.GroupConsumerUpgradePolicyProp, "foo")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+
+    props.put(KafkaConfig.GroupConsumerUpgradePolicyProp, "upgrade")
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(GroupConsumerUpgradePolicy.UPGRADE, config.groupConsumerUpgradePolicy)
   }
 
   @Test
