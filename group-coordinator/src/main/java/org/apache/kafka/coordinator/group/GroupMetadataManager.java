@@ -2451,6 +2451,8 @@ public class GroupMetadataManager {
 
         if (group.isInState(DEAD)) {
             log.info("Group {} is dead, skipping rebalance stage.", groupId);
+        } else if (!containsClassicGroup(group.groupId())) {
+            log.info("Group {} is null or not a classic group, skipping rebalance stage.", groupId);
         } else if (!group.maybeElectNewJoinedLeader() && !group.allMembers().isEmpty()) {
             // If all members are not rejoining, we will postpone the completion
             // of rebalance preparing stage, and send out another delayed operation
@@ -2552,6 +2554,10 @@ public class GroupMetadataManager {
         if (group.isInState(DEAD)) {
             log.info("Received notification of heartbeat expiration for member {} after group {} " +
                     "had already been unloaded or deleted.",
+                memberId, group.groupId());
+        } else if (!containsClassicGroup(group.groupId())) {
+            log.info("Received notification of heartbeat expiration for member {} after group {} " +
+                    "had already been deleted or upgraded.",
                 memberId, group.groupId());
         } else if (group.isPendingMember(memberId)) {
             log.info("Pending member {} in group {} has been removed after session timeout expiration.",
@@ -2814,7 +2820,9 @@ public class GroupMetadataManager {
         int delayMs,
         int remainingMs
     ) {
-        if (group.newMemberAdded() && remainingMs != 0) {
+        if (!containsClassicGroup(group.groupId())) {
+            log.info("Group {} is null or not a classic group, skipping the initial rebalance stage.", group.groupId());
+        } else if (group.newMemberAdded() && remainingMs != 0) {
             // A new member was added. Extend the delay.
             group.setNewMemberAdded(false);
             int newDelayMs = Math.min(classicGroupInitialRebalanceDelayMs, remainingMs);
@@ -2963,7 +2971,9 @@ public class GroupMetadataManager {
         ClassicGroup group,
         int generationId
     ) {
-        if (generationId != group.generationId()) {
+        if (!containsClassicGroup(group.groupId())) {
+            log.debug("Received notification of sync expiration for an unknown classic group {}.", group.groupId());
+        } else if (generationId != group.generationId()) {
             log.error("Received unexpected notification of sync expiration for {} with an old " +
                 "generation {} while the group has {}.", group.groupId(), generationId, group.generationId());
         } else {
@@ -3651,6 +3661,14 @@ public class GroupMetadataManager {
             createGroupTombstoneRecords(group, records);
             removeGroup(groupId);
         }
+    }
+
+    /**
+     * @return true if the group map contains a classic group with the given group id.
+     */
+    private boolean containsClassicGroup(String groupId) {
+        Group group = groups.get(groupId);
+        return group != null && group.type() == CLASSIC;
     }
 
     /**
