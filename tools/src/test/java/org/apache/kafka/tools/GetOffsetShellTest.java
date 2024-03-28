@@ -25,9 +25,12 @@ import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
@@ -35,6 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -48,13 +52,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.ZK)
+@ClusterTestDefaults(clusterType = Type.ALL)
 @Tag("integration")
 public class GetOffsetShellTest {
     private final int topicCount = 4;
     private final int offsetTopicPartitionCount = 4;
     private final ClusterInstance cluster;
     private final String topicName = "topic";
+    private final Duration consumerTimeout = Duration.ofMillis(100);
 
     public GetOffsetShellTest(ClusterInstance cluster) {
         this.cluster = cluster;
@@ -72,7 +77,7 @@ public class GetOffsetShellTest {
     }
 
     private void setUp() {
-        try (Admin admin = Admin.create(cluster.config().adminClientProperties())) {
+        try (Admin admin = cluster.createAdminClient()) {
             List<NewTopic> topics = new ArrayList<>();
 
             IntStream.range(0, topicCount + 1).forEach(i -> topics.add(new NewTopic(getTopicName(i), i, (short) 1)));
@@ -81,7 +86,7 @@ public class GetOffsetShellTest {
         }
 
         Properties props = new Properties();
-        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.config().producerProperties().get("bootstrap.servers"));
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
@@ -91,6 +96,24 @@ public class GetOffsetShellTest {
                         .forEach(msgCount -> producer.send(
                                 new ProducerRecord<>(getTopicName(i), msgCount % i, null, "val" + msgCount)))
                 );
+        }
+    }
+
+    private void createConsumerAndPoll() {
+        Properties props = new Properties();
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-group");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+            List<String> topics = new ArrayList<>();
+            for (int i = 0; i < topicCount + 1; i++) {
+                topics.add(getTopicName(i));
+            }
+            consumer.subscribe(topics);
+            consumer.poll(consumerTimeout);
         }
     }
 
@@ -128,7 +151,11 @@ public class GetOffsetShellTest {
 
         List<Row> output = executeAndParse();
 
-        assertEquals(expectedOffsetsWithInternal(), output);
+        if (!cluster.isKRaftTest()) {
+            assertEquals(expectedOffsetsWithInternal(), output);
+        } else {
+            assertEquals(expectedTestTopicOffsets(), output);
+        }
     }
 
     @ClusterTest
@@ -166,7 +193,11 @@ public class GetOffsetShellTest {
 
         List<Row> offsets = executeAndParse("--partitions", "0,1");
 
-        assertEquals(expectedOffsetsWithInternal().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+        if (!cluster.isKRaftTest()) {
+            assertEquals(expectedOffsetsWithInternal().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+        } else {
+            assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+        }
     }
 
     @ClusterTest
@@ -181,6 +212,8 @@ public class GetOffsetShellTest {
     @ClusterTest
     public void testTopicPartitionsArg() {
         setUp();
+
+        createConsumerAndPoll();
 
         List<Row> offsets = executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3");
         List<Row> expected = Arrays.asList(
@@ -288,6 +321,8 @@ public class GetOffsetShellTest {
     public void testTopicPartitionsArgWithInternalIncluded() {
         setUp();
 
+        createConsumerAndPoll();
+
         List<Row> offsets = executeAndParse("--topic-partitions", "__.*:0");
 
         assertEquals(Arrays.asList(new Row("__consumer_offsets", 0, 0L)), offsets);
@@ -320,8 +355,13 @@ public class GetOffsetShellTest {
 
     @ClusterTest
     public void testPrintHelp() {
-        String out = ToolsTestUtils.captureStandardErr(() -> GetOffsetShell.mainNoExit("--help"));
-        assertTrue(out.startsWith(GetOffsetShell.USAGE_TEXT));
+        Exit.setExitProcedure((statusCode, message) -> { });
+        try {
+            String out = ToolsTestUtils.captureStandardErr(() -> GetOffsetShell.mainNoExit("--help"));
+            assertTrue(out.startsWith(GetOffsetShell.USAGE_TEXT));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @ClusterTest
