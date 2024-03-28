@@ -486,8 +486,7 @@ object AclCommand extends Logging {
 
   private def validateOperation(opts: AclCommandOptions, resourceToAcls: Map[ResourcePatternFilter, Set[AccessControlEntry]]): Unit = {
     for ((resource, acls) <- resourceToAcls) {
-      val validOps = AclEntry.supportedOperations(resource.resourceType).asScala
-      validOps += AclOperation.ALL
+      val validOps = AclEntry.supportedOperations(resource.resourceType).asScala.toSet + AclOperation.ALL
       if ((acls.map(_.operation) -- validOps).nonEmpty)
         CommandLineUtils.printUsageAndExit(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.map(JSecurityUtils.operationName).mkString(", ")}")
     }

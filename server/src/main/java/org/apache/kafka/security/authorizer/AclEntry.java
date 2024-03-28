@@ -90,14 +90,6 @@ public class AclEntry extends AccessControlEntry {
             : SecurityUtils.parseKafkaPrincipal(ace.principal());
     }
 
-    public static AclEntry apply(KafkaPrincipal principal,
-                                 AclPermissionType permissionType,
-                                 String host,
-                                 AclOperation operation) {
-        return new AclEntry(new AccessControlEntry(principal == null ? null : principal.toString(),
-            host, operation, permissionType));
-    }
-
     /**
      * Parse JSON representation of ACLs
      * @param bytes of acls json string
@@ -129,7 +121,7 @@ public class AclEntry extends AccessControlEntry {
         JsonObject js = jsonValue.get().asJsonObject();
 
         //the acl json version.
-        Utils.require(js.apply(VERSION_KEY).to(INT) == CURRENT_VERSION);
+        Utils.require(js.apply(VERSION_KEY).to(INT) == CURRENT_VERSION, () -> "Version must be equal to " + CURRENT_VERSION);
 
         Set<AclEntry> res = new HashSet<>();
 
@@ -140,7 +132,9 @@ public class AclEntry extends AccessControlEntry {
             AclPermissionType permissionType = SecurityUtils.permissionType(itemJs.apply(PERMISSION_TYPE_KEY).to(STRING));
             String host = itemJs.apply(HOSTS_KEY).to(STRING);
             AclOperation operation = SecurityUtils.operation(itemJs.apply(OPERATION_KEY).to(STRING));
-            res.add(AclEntry.apply(principal, permissionType, host, operation));
+
+            res.add(new AclEntry(new AccessControlEntry(principal.toString(),
+                host, operation, permissionType)));
         }
 
         return res;

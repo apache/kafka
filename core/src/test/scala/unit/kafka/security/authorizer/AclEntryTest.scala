@@ -18,6 +18,7 @@ package kafka.security.authorizer
 
 import java.nio.charset.StandardCharsets.UTF_8
 import kafka.utils.Json
+import org.apache.kafka.common.acl.AccessControlEntry
 import org.apache.kafka.common.acl.AclOperation.READ
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -35,9 +36,9 @@ class AclEntryTest {
 
   @Test
   def testAclJsonConversion(): Unit = {
-    val acl1 = AclEntry.apply(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), DENY, "host1" , READ)
-    val acl2 = AclEntry.apply(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), ALLOW, "*", READ)
-    val acl3 = AclEntry.apply(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), DENY, "host1", READ)
+    val acl1 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice").toString, "host1", READ, DENY))
+    val acl2 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob").toString, "*", READ, ALLOW))
+    val acl3 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob").toString, "host1", READ, DENY))
 
     val acls = new util.HashSet[AclEntry](util.Arrays.asList(acl1, acl2, acl3))
 
