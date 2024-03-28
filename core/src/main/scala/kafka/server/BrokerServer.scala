@@ -569,7 +569,7 @@ class BrokerServer(
         config.offsetsRetentionCheckIntervalMs,
         config.offsetsRetentionMinutes * 60 * 1000L,
         config.offsetCommitTimeoutMs,
-        config.groupProtocolMigrationPolicy
+        config.groupConsumerUpgradePolicy
       )
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",

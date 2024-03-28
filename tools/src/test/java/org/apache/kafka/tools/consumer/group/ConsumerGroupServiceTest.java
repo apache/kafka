@@ -38,7 +38,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.tools.Tuple2;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatcher;
 import org.mockito.ArgumentMatchers;
@@ -49,11 +48,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -91,10 +91,10 @@ public class ConsumerGroupServiceTest {
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
 
-        Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
-        assertEquals(Optional.of("Stable"), statesAndAssignments.v1);
-        assertTrue(statesAndAssignments.v2.isPresent());
-        assertEquals(TOPIC_PARTITIONS.size(), statesAndAssignments.v2.get().size());
+        Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
+        assertEquals(Optional.of("Stable"), statesAndAssignments.getKey());
+        assertTrue(statesAndAssignments.getValue().isPresent());
+        assertEquals(TOPIC_PARTITIONS.size(), statesAndAssignments.getValue().get().size());
 
         verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any());
         verify(admin, times(1)).listConsumerGroupOffsets(ArgumentMatchers.eq(listConsumerGroupOffsetsSpec()), any());
@@ -157,16 +157,16 @@ public class ConsumerGroupServiceTest {
                 ArgumentMatchers.argThat(offsetsArgMatcher.apply(assignedTopicPartitions)),
                 any()
         )).thenReturn(new ListOffsetsResult(endOffsets.entrySet().stream().filter(e -> assignedTopicPartitions.contains(e.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
+                .collect(Collectors.toMap(Entry::getKey, Entry::getValue))));
         when(admin.listOffsets(
                 ArgumentMatchers.argThat(offsetsArgMatcher.apply(unassignedTopicPartitions)),
                 any()
         )).thenReturn(new ListOffsetsResult(endOffsets.entrySet().stream().filter(e -> unassignedTopicPartitions.contains(e.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
+                .collect(Collectors.toMap(Entry::getKey, Entry::getValue))));
 
-        Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
-        Optional<String> state = statesAndAssignments.v1;
-        Optional<Collection<PartitionAssignmentState>> assignments = statesAndAssignments.v2;
+        Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
+        Optional<String> state = statesAndAssignments.getKey();
+        Optional<Collection<PartitionAssignmentState>> assignments = statesAndAssignments.getValue();
 
         Map<TopicPartition, Optional<Long>> returnedOffsets = assignments.map(results ->
             results.stream().collect(Collectors.toMap(

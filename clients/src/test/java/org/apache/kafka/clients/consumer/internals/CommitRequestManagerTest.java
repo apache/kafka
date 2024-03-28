@@ -912,7 +912,7 @@ public class CommitRequestManagerTest {
         long expirationTimeMs = time.milliseconds() + retryBackoffMs * 2;
 
         // Send commit request expected to be retried on STALE_MEMBER_EPOCH error while it does not expire
-        commitRequestManager.maybeAutoCommitSyncNow(expirationTimeMs);
+        commitRequestManager.maybeAutoCommitSyncBeforeRevocation(expirationTimeMs);
 
         int newEpoch = 8;
         String memberId = "member1";
@@ -923,7 +923,7 @@ public class CommitRequestManagerTest {
 
         completeOffsetCommitRequestWithError(commitRequestManager, error);
 
-        if (error.exception() instanceof RetriableException || error == Errors.STALE_MEMBER_EPOCH) {
+        if ((error.exception() instanceof RetriableException || error == Errors.STALE_MEMBER_EPOCH) && error != Errors.UNKNOWN_TOPIC_OR_PARTITION) {
             assertEquals(1, commitRequestManager.pendingRequests.unsentOffsetCommits.size(),
                 "Request to be retried should be added to the outbound queue");
 

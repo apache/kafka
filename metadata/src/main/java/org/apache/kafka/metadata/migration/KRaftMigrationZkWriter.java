@@ -250,11 +250,6 @@ public class KRaftMigrationZkWriter {
                 migrationState -> migrationClient.topicClient().deleteTopic(topicName, migrationState)
             );
             ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topicName);
-            operationConsumer.accept(
-                UPDATE_TOPIC_CONFIG,
-                "Updating Configs for Topic " + topicName + ", ID " + topicId,
-                migrationState -> migrationClient.configClient().deleteConfigs(resource, migrationState)
-            );
         });
 
         newPartitions.forEach((topicId, partitionMap) -> {
