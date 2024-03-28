@@ -24,7 +24,6 @@ public class SlowEventsLogger {
 
     private final Supplier<Double> p99Supplier;
     private final Logger log;
-    private final Time time;
     private double p99;
     private Timer percentileUpdateTimer;
 
@@ -35,8 +34,8 @@ public class SlowEventsLogger {
     ) {
         this.p99Supplier = p99Supplier;
         this.log = log;
-        this.time = time;
         this.percentileUpdateTimer = time.timer(P99_REFRESH_INTERVAL_MS);
+        this.p99 = p99Supplier.get();
     }
 
     public void maybeLog(String name, long durationNs) {

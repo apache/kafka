@@ -197,7 +197,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
             Histogram histogram = registry.get().newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, false);
             return histogram.getSnapshot().get99thPercentile();
         } else {
-            return -1.0;
+            // Only returned in unit tests when a metrics registry is not set.
+            return 0.0;
         }
     }
 
