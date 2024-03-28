@@ -242,23 +242,34 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
     /**
      * Get the max timestamp and its offset. The details of the offset returned are a bit subtle.
-     * Note: The semantic for the offset of max timestamp is the first offset with the max timestamp if there are multi-records having same timestamp.
      *
-     * If the log append time is used, the offset will be the first offset of the record.
+     * If the log append time is used, the offset will be the last offset unless no compression is used and
+     * the message format version is 0 or 1, in which case, it will be the first offset.
      *
-     * If create time is used, the offset will always be the offset of the record with the max timestamp.
-     *
-     * If it's NO_TIMESTAMP (i.e. MAGIC_VALUE_V0), we'll return offset -1 since no timestamp info in records.
+     * If create time is used, the offset will be the last offset unless no compression is used and the message
+     * format version is 0 or 1, in which case, it will be the offset of the record with the max timestamp.
      *
      * @return The max timestamp and its offset
      */
     public RecordsInfo info() {
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
-            return new RecordsInfo(logAppendTime, baseOffset);
+            long shallowOffsetOfMaxTimestamp;
+            // Use the last offset when dealing with record batches
+            if (compressionType != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2)
+                shallowOffsetOfMaxTimestamp = lastOffset;
+            else
+                shallowOffsetOfMaxTimestamp = baseOffset;
+            return new RecordsInfo(logAppendTime, shallowOffsetOfMaxTimestamp);
+        } else if (maxTimestamp == RecordBatch.NO_TIMESTAMP) {
+            return new RecordsInfo(RecordBatch.NO_TIMESTAMP, lastOffset);
         } else {
-            // For create time, we always use offsetOfMaxTimestamp for the correct time -> offset mapping
-            // If it's MAGIC_VALUE_V0, the value will be the default value: [-1, -1]
-            return new RecordsInfo(maxTimestamp, offsetOfMaxTimestamp);
+            long shallowOffsetOfMaxTimestamp;
+            // Use the last offset when dealing with record batches
+            if (compressionType != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2)
+                shallowOffsetOfMaxTimestamp = lastOffset;
+            else
+                shallowOffsetOfMaxTimestamp = offsetOfMaxTimestamp;
+            return new RecordsInfo(maxTimestamp, shallowOffsetOfMaxTimestamp);
         }
     }
 
