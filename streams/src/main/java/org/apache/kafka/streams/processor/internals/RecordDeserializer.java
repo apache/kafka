@@ -29,7 +29,7 @@ import java.util.Optional;
 
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 
-class RecordDeserializer {
+public class RecordDeserializer {
     private final Logger log;
     private final SourceNode<?, ?> sourceNode;
     private final Sensor droppedRecordsSensor;
@@ -68,39 +68,48 @@ class RecordDeserializer {
                 Optional.empty()
             );
         } catch (final Exception deserializationException) {
-            final DeserializationExceptionHandler.DeserializationHandlerResponse response;
-            try {
-                response = deserializationExceptionHandler.handle(
-                    (InternalProcessorContext<?, ?>) processorContext,
-                    rawRecord,
-                    deserializationException);
-            } catch (final Exception fatalUserException) {
-                log.error(
-                    "Deserialization error callback failed after deserialization error for record {}",
-                    rawRecord,
-                    deserializationException);
-                throw new StreamsException("Fatal user code error in deserialization error callback", fatalUserException);
-            }
-
-            if (response == DeserializationExceptionHandler.DeserializationHandlerResponse.FAIL) {
-                throw new StreamsException("Deserialization exception handler is set to fail upon" +
-                    " a deserialization error. If you would rather have the streaming pipeline" +
-                    " continue after a deserialization error, please set the " +
-                    DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
-                    deserializationException);
-            } else {
-                log.warn(
-                    "Skipping record due to deserialization error. topic=[{}] partition=[{}] offset=[{}]",
-                    rawRecord.topic(),
-                    rawRecord.partition(),
-                    rawRecord.offset(),
-                    deserializationException
-                );
-                droppedRecordsSensor.record();
-                return null;
-            }
+            handleDeserializationFailure(deserializationExceptionHandler, processorContext, deserializationException, rawRecord, log, droppedRecordsSensor);
+            return null; //  'handleDeserializationFailure' would either throw or swallow -- if we swallow we need to skip the record by returning 'null'
         }
     }
+
+    public static void handleDeserializationFailure(final DeserializationExceptionHandler deserializationExceptionHandler,
+                                                    final ProcessorContext<?, ?> processorContext,
+                                                    final Exception deserializationException,
+                                                    final ConsumerRecord<byte[], byte[]> rawRecord,
+                                                    final Logger log,
+                                                    final Sensor droppedRecordsSensor) {
+        final DeserializationExceptionHandler.DeserializationHandlerResponse response;
+        try {
+            response = deserializationExceptionHandler.handle(
+                (InternalProcessorContext<?, ?>) processorContext,
+                rawRecord,
+                deserializationException);
+        } catch (final Exception fatalUserException) {
+            log.error(
+                "Deserialization error callback failed after deserialization error for record {}",
+                rawRecord,
+                deserializationException);
+            throw new StreamsException("Fatal user code error in deserialization error callback", fatalUserException);
+        }
+        if (response == DeserializationExceptionHandler.DeserializationHandlerResponse.FAIL) {
+            throw new StreamsException("Deserialization exception handler is set to fail upon" +
+                " a deserialization error. If you would rather have the streaming pipeline" +
+                " continue after a deserialization error, please set the " +
+                DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
+                deserializationException);
+        } else {
+            log.warn(
+                "Skipping record due to deserialization error. topic=[{}] partition=[{}] offset=[{}]",
+                rawRecord.topic(),
+                rawRecord.partition(),
+                rawRecord.offset(),
+                deserializationException
+            );
+            droppedRecordsSensor.record();
+        }
+    }
+
 
     SourceNode<?, ?> sourceNode() {
         return sourceNode;

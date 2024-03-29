@@ -54,9 +54,14 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testTimeToNextUpdate
 
 ### Running a particular unit/integration test with log4j output ###
-Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
+By default, there will be only small number of logs output while testing. You can adjust it by changing the `log4j.properties` file in the module's `src/test/resources` directory.
 
-    ./gradlew clients:test --tests RequestResponseTest
+For example, if you want to see more logs for clients project tests, you can modify [the line](https://github.com/apache/kafka/blob/trunk/clients/src/test/resources/log4j.properties#L21) in `clients/src/test/resources/log4j.properties` 
+to `log4j.logger.org.apache.kafka=INFO` and then run:
+    
+    ./gradlew cleanTest clients:test --tests NetworkClientTest   
+
+And you should see `INFO` level logs in the file under the `clients/build/test-results/test` directory.
 
 ### Specifying test retries ###
 By default, each failed test is retried once up to a maximum of five retries per test run. Tests are retried at the end of the test task. Adjust these parameters in the following way:
@@ -87,14 +92,24 @@ fail due to code changes. You can just run:
 
 ### Running a Kafka broker in KRaft mode
 
+Using compiled files:
+
     KAFKA_CLUSTER_ID="$(./bin/kafka-storage.sh random-uuid)"
     ./bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties
     ./bin/kafka-server-start.sh config/kraft/server.properties
 
+Using docker image:
+
+    docker run -p 9092:9092 apache/kafka:3.7.0
+
 ### Running a Kafka broker in ZooKeeper mode
+
+Using compiled files:
 
     ./bin/zookeeper-server-start.sh config/zookeeper.properties
     ./bin/kafka-server-start.sh config/server.properties
+
+>Since ZooKeeper mode is already deprecated and planned to be removed in Apache Kafka 4.0, the docker image only supports running in KRaft mode
 
 ### Cleaning the build ###
     ./gradlew clean

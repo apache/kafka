@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
@@ -124,6 +125,20 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }
         assertEquals(1, exitStatus.get());
         assertTrue(exitMessage.get().contains("Option [describe] does not take a value for [state]"));
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
+    public void testPrintVersion(String quorum) {
+        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
+        Exit.setExitProcedure(exitProcedure);
+        try {
+            String out = ToolsTestUtils.captureStandardOut(() -> ConsumerGroupCommandOptions.fromArgs(new String[]{"--version"}));
+            assertEquals(0, exitProcedure.statusCode());
+            assertEquals(AppInfoParser.getVersion(), out);
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)

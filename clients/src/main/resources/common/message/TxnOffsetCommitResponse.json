@@ -23,7 +23,7 @@
   //
   // Version 3 adds illegal generation, fenced instance id, and unknown member id errors.
   //
-  // Version 4 adds support for new error code ABORTABLE_TRANSACTION (KIP-890).
+  // Version 4 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
   "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
