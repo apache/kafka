@@ -262,6 +262,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -2193,11 +2194,13 @@ public class KafkaAdminClient extends AdminClient {
         DescribeTopicsOptions options,
         long now
     ) {
+        Map<String, TopicRequest> topicsRequests = new LinkedHashMap<>();
+        topicNamesList.stream().sorted().forEach(topic -> {
+            topicsRequests.put(topic, new TopicRequest().setName(topic));
+        });
         return new Call("describeTopicPartitions", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
-            Map<String, TopicRequest> pendingTopics =
-                topicNamesList.stream().map(topicName -> new TopicRequest().setName(topicName))
-                    .collect(Collectors.toMap(topicRequest -> topicRequest.name(), topicRequest -> topicRequest, (t1, t2) -> t1, TreeMap::new));
+            Map<String, TopicRequest> pendingTopics = topicsRequests;
 
             TopicDescription partiallyFinishedTopicDescription = null;
 
@@ -2207,8 +2210,8 @@ public class KafkaAdminClient extends AdminClient {
                     .setTopics(new ArrayList<>(pendingTopics.values()))
                     .setResponsePartitionLimit(options.partitionSizeLimitPerResponse());
                 if (partiallyFinishedTopicDescription != null) {
-                    // If the previous cursor points to the partition 0, the cursor will not be set as the first one
-                    // in the topic list should be the previous cursor topic.
+                    // If the previous cursor points to partition 0, it will not be set here. Instead, the previous
+                    // cursor topic will be the first topic in the request.
                     request.setCursor(new DescribeTopicPartitionsRequestData.Cursor()
                         .setTopicName(partiallyFinishedTopicDescription.name())
                         .setPartitionIndex(partiallyFinishedTopicDescription.partitions().size())
