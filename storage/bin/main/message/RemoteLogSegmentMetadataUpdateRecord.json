@@ -1,0 +1,90 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 1,
+  "type": "metadata",
+  "name": "RemoteLogSegmentMetadataUpdateRecord",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    {
+      "name": "RemoteLogSegmentId",
+      "type": "RemoteLogSegmentIdEntry",
+      "versions": "0+",
+      "about": "Unique representation of the remote log segment.",
+      "fields": [
+        {
+          "name": "TopicIdPartition",
+          "type": "TopicIdPartitionEntry",
+          "versions": "0+",
+          "about": "Represents unique topic partition.",
+          "fields": [
+            {
+              "name": "Name",
+              "type": "string",
+              "versions": "0+",
+              "about": "Topic name."
+            },
+            {
+              "name": "Id",
+              "type": "uuid",
+              "versions": "0+",
+              "about": "Unique identifier of the topic."
+            },
+            {
+              "name": "Partition",
+              "type": "int32",
+              "versions": "0+",
+              "about": "Partition number."
+            }
+          ]
+        },
+        {
+          "name": "Id",
+          "type": "uuid",
+          "versions": "0+",
+          "about": "Unique identifier of the remote log segment."
+        }
+      ]
+    },
+    {
+      "name": "BrokerId",
+      "type": "int32",
+      "versions": "0+",
+      "about": "Broker id from which this event is generated."
+    },
+    {
+      "name": "EventTimestampMs",
+      "type": "int64",
+      "versions": "0+",
+      "about": "Epoch time in milli seconds at which this event is generated."
+    },
+    {
+      "name": "CustomMetadata",
+      "type": "bytes",
+      "default": "null",
+      "versions": "0+",
+      "nullableVersions": "0+",
+      "about": "Custom metadata."
+    },
+    {
+      "name": "RemoteLogSegmentState",
+      "type": "int8",
+      "versions": "0+",
+      "about": "State identifier of the remote log segment, which is RemoteLogSegmentState.id()."
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+{
+    "variables": {
+      "aws_access_key": "",
+      "aws_secret_key": "",
+      "region": "",
+      "source_ami": "",
+      "ami_name": "",
+      "install_type": "",
+      "resource_url": "",
+      "instance_type": "",
+      "ssh_account": "ubuntu",
+      "linux_distro": "ubuntu",
+      "jdk_version": "8",
+      "mvn_user": "{{env `ORG_GRADLE_PROJECT_mavenUsername`}}",
+      "mvn_pass": "{{env `ORG_GRADLE_PROJECT_mavenPassword`}}"
+    },
+    "builders": [
+      {
+        "type": "amazon-ebssurrogate",
+        "access_key": "{{user `aws_access_key`}}",
+        "secret_key": "{{user `aws_secret_key`}}",
+        "region": "{{user `region`}}",
+        "source_ami": "{{user `source_ami`}}",
+        "instance_type": "{{user `instance_type`}}",
+        "ssh_username": "{{user `ssh_account`}}",
+        "ami_name": "{{user `ami_name`}}",
+        "ami_architecture": "arm64",
+        "ami_virtualization_type": "hvm",
+        "ena_support": "true",
+        "tags": {
+          "Owner": "tools",
+          "Service": "Kafka",
+          "Type": "Worker",
+          "role": "kafkatest-worker",
+          "Name": "{{user `instance_name`}}",
+          "ResourceUrl": "{{user `resource_url`}}",
+          "NightlyRun": "{{user `nightly_run`}}",
+          "Distro": "{{user `linux_distro`}}",
+          "JdkVersion": "{{user `jdk_version`}}",
+          "Arch": "arm64"
+        },
+        "launch_block_device_mappings": [
+          {
+            "volume_type": "gp3",
+            "device_name": "/dev/sda1",
+            "delete_on_termination": true,
+            "volume_size":  "{{user `volume_size`}}"
+          }
+        ],
+        "ami_root_device": {
+          "volume_type": "gp3",
+          "source_device_name": "/dev/sda1",
+          "device_name": "/dev/sda1",
+          "delete_on_termination": true,
+          "volume_size":  "{{user `volume_size`}}"
+        }
+      }
+    ],
+    "provisioners": [
+      {
+        "type": "shell",
+        "inline": [
+          "sudo mkdir -p /vagrant/.gradle",
+          "sudo mkdir -p ~/.gradle",
+          "sudo mkdir -p ~/.m2",
+          "sudo chown -R {{user `ssh_account`}}:{{user `ssh_account`}} ~/.gradle",
+          "sudo chown -R {{user `ssh_account`}}:{{user `ssh_account`}} ~/.m2",
+          "sudo chown -R {{user `ssh_account`}}:{{user `ssh_account`}} /vagrant",
+          "sudo ln -s /vagrant /opt/muckrake"
+        ]
+      },
+      {
+        "type": "file",
+        "source": "./",
+        "destination": "/vagrant/"
+      },
+      {
+        "type": "file",
+        "source": "github.pem",
+        "destination": "/vagrant/github.pem"
+      },
+      {
+        "type": "file",
+        "source": "gradle.properties",
+        "destination": "/vagrant/.gradle/gradle.properties"
+      },
+      {
+        "type": "file",
+        "source": "gradle.properties",
+        "destination": "~/.gradle/gradle.properties"
+      },
+      {
+        "type": "file",
+        "source": "/home/jenkins/.m2/settings.xml",
+        "destination": "~/.m2/settings.xml"
+      },
+      {
+        "type": "file",
+        "source": "/home/jenkins/.m2/",
+        "destination": "/vagrant/.m2"
+      },
+      {
+        "type": "shell",
+        "inline": [
+          "git config --global url.\"git@github.com:\".insteadOf \"https://github.com/\"",
+          "git config --global user.name ConfluentJenkins",
+          "git config --global core.sshCommand 'ssh -i /vagrant/github.pem -F /dev/null'",
+          "chmod 400 /vagrant/github.pem",
+          "ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts"
+        ]
+      },
+      {
+        "type": "shell",
+        "inline": [
+          "/vagrant/vagrant/cp-source.sh {{user `install_type`}}",
+          "if [ {{user `install_type`}} = tarball ]; then /vagrant/vagrant/cp-tarball.sh {{user `resource_url`}}; fi",
+          "if [ {{user `install_type`}} = version_tarball ]; then /vagrant/vagrant/cp-tarball.sh {{user `resource_url`}}; fi",
+          "if [ {{user `install_type`}} = distro ]; then /vagrant/vagrant/cp-{{user `linux_distro`}}.sh {{user `resource_url`}} {{user `cp_package_name`}}; fi"
+        ]
+      },
+      {
+        "type": "shell",
+        "inline": [
+          "cd /vagrant",
+          "ls /vagrant/.m2/",
+          "export GRADLE_PROPERTIES_FILE=/vagrant/.gradle/gradle.properties; export ORG_GRADLE_PROJECT_mavenUsername={{user `mvn_user`}}; ORG_GRADLE_PROJECT_mavenPassword={{user `mvn_pass`}}; python3.7 -m muckrake.util.project_overrides"
+        ]
+      }
+    ]
+  }

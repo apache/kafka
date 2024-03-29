@@ -1,0 +1,20 @@
+groups:
+  - kafka
+
+users:
+  - default
+  - name: terraform
+    gecos: terraform
+    shell: /bin/bash
+    primary_group: kafka
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: users, admin, sudo, ubuntu, adm, dialout, cdrom, floppy, audio, dip, video, plugdev, netdev, lxd
+    lock_passwd: false
+    ssh_authorized_keys:
+      - ${ public_key }
+
+runcmd:
+  - bash /vagrant/vagrant/base-${ deployment }.sh
+  - python3.7 -m pip install -U pip
+  - python3.7 -m pip install -r /terraform/resources/requirements.txt
+  - sudo python3.7 -m pip install awscli

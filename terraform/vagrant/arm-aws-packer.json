@@ -1,0 +1,82 @@
+{
+    "variables": {
+      "aws_access_key": "",
+      "aws_secret_key": "",
+      "region": "",
+      "source_ami": "",
+      "ami_name": "",
+      "instance_type": "",
+      "ssh_account": "ubuntu",
+      "linux_distro": "ubuntu",
+      "jdk_version": "8"
+    },
+    "builders": [
+      {
+        "type": "amazon-ebssurrogate",
+        "access_key": "{{user `aws_access_key`}}",
+        "secret_key": "{{user `aws_secret_key`}}",
+        "region": "{{user `region`}}",
+        "source_ami": "{{user `source_ami`}}",
+        "instance_type": "{{user `instance_type`}}",
+        "ssh_username": "{{user `ssh_account`}}",
+        "ami_name": "{{user `ami_name`}}",
+        "ami_architecture": "arm64",
+        "ami_virtualization_type": "hvm",
+        "ena_support": "true",
+        "tags": {
+            "Owner": "tools",
+            "Service": "Muckrake",
+            "Type": "Base",
+            "role": "muckrake"
+        },
+        "launch_block_device_mappings": [
+          {
+            "volume_type": "gp2",
+            "device_name": "/dev/sda1",
+            "delete_on_termination": true,
+            "volume_size": 50
+          }
+        ],
+        "ami_root_device": {
+          "volume_type": "gp2",
+          "source_device_name": "/dev/sda1",
+          "device_name": "/dev/sda1",
+          "delete_on_termination": true,
+          "volume_size": 50
+        }
+      }
+    ],
+    "provisioners": [
+      {
+          "type": "shell",
+          "inline": ["while [ ! -f /var/lib/cloud/instance/boot-finished ]; do echo 'Waiting for cloud-init...'; sleep 1; done"]
+      },{
+          "type": "file",
+          "source": "vagrant/jdk.sh",
+          "destination": "/tmp/jdk.sh"
+      }, {
+          "type": "file",
+          "source": "vagrant/common-dependencies.sh",
+          "destination": "/tmp/common-dependencies.sh"
+      },{
+          "environment_vars": [
+            "DEFAULT_JDK_VERSION={{ user `jdk_version` }}"
+          ],
+          "execute_command": "echo 'packer' | {{ .Vars }} sudo -E -S bash '{{ .Path }}'",
+          "type": "shell",
+          "scripts": [
+            "vagrant/base-{{ user `linux_distro` }}.sh"
+          ]
+      },{
+        "type": "file",
+        "source": "./resources/requirements.txt",
+        "destination": "requirements.txt"
+      },{
+        "type": "shell",
+        "inline": [
+          "python3.7 -m pip install -U pip",
+          "python3.7 -m pip install -r requirements.txt --ignore-installed"
+        ]
+      }
+    ]
+  }
