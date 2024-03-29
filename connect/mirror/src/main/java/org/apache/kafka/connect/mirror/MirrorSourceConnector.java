@@ -510,7 +510,7 @@ public class MirrorSourceConnector extends SourceConnector {
                             }));
                     return null;
                 },
-                () -> String.format("create topics %s on cluster %s", newTopics, config.targetClusterAlias())
+                () -> String.format("create topics %s on %s cluster", newTopics, config.targetClusterAlias())
         );
     }
 
@@ -528,7 +528,7 @@ public class MirrorSourceConnector extends SourceConnector {
                     }));
                     return null;
                 },
-                () -> String.format("create partitions %s on cluster %s", newPartitions, config.targetClusterAlias())
+                () -> String.format("create partitions %s on %s cluster", newPartitions, config.targetClusterAlias())
         );
     }
 
@@ -536,7 +536,7 @@ public class MirrorSourceConnector extends SourceConnector {
             throws InterruptedException, ExecutionException {
         return adminCall(
                 () -> adminClient.listTopics().names().get(),
-                () -> "list topics on cluster " + actualClusterAlias(adminClient)
+                () -> "list topics on " + actualClusterAlias(adminClient) + " cluster"
         );
     }
 
@@ -564,7 +564,7 @@ public class MirrorSourceConnector extends SourceConnector {
                     }
                     return Optional.of(bindings);
                 },
-                () -> "describe acls on cluster " + config.sourceClusterAlias()
+                () -> "describe ACLs on " + config.sourceClusterAlias() + " cluster"
         );
     }
 
@@ -572,7 +572,7 @@ public class MirrorSourceConnector extends SourceConnector {
             throws InterruptedException, ExecutionException {
         return adminCall(
                 () -> adminClient.describeTopics(topics).allTopicNames().get().values(),
-                () -> String.format("describe topics %s on the cluster %s", topics, actualClusterAlias(adminClient))
+                () -> String.format("describe topics %s on %s cluster", topics, actualClusterAlias(adminClient))
         );
     }
 
@@ -598,7 +598,7 @@ public class MirrorSourceConnector extends SourceConnector {
                     }));
                     return null;
                 },
-                () -> String.format("alter configs %s on cluster %s", topicConfigs, config.targetClusterAlias())
+                () -> String.format("alter topic configs %s on %s cluster", topicConfigs, config.targetClusterAlias())
         );
     }
 
@@ -644,7 +644,7 @@ public class MirrorSourceConnector extends SourceConnector {
                     }));
                     return null;
                 },
-                () -> String.format("incremental alter configs %s on cluster %s", topicConfigs, config.targetClusterAlias())
+                () -> String.format("incremental alter topic configs %s on %s cluster", topicConfigs, config.targetClusterAlias())
         );
     }
 
@@ -659,7 +659,7 @@ public class MirrorSourceConnector extends SourceConnector {
                     }));
                     return null;
                 },
-                () -> String.format("create acls %s on cluster %s", bindings, config.targetClusterAlias())
+                () -> String.format("create ACLs %s on %s cluster", bindings, config.targetClusterAlias())
         );
     }
 
@@ -677,7 +677,7 @@ public class MirrorSourceConnector extends SourceConnector {
         return adminCall(
                 () -> sourceAdminClient.describeConfigs(resources).all().get().entrySet().stream()
                         .collect(Collectors.toMap(x -> x.getKey().name(), Entry::getValue)),
-                () -> String.format("describe configs for topics %s on the cluster %s", topics, config.sourceClusterAlias())
+                () -> String.format("describe configs for topics %s on %s cluster", topics, config.sourceClusterAlias())
         );
     }
 

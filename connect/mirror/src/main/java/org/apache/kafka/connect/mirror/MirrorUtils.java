@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -328,8 +329,10 @@ public final class MirrorUtils {
         try {
             return callable.call();
         } catch (ExecutionException | InterruptedException e) {
-            if (e.getCause() instanceof TopicAuthorizationException ||
-                    e.getCause() instanceof ClusterAuthorizationException) {
+            Throwable cause = e.getCause();
+            if (cause instanceof TopicAuthorizationException ||
+                    cause instanceof ClusterAuthorizationException ||
+                    cause instanceof GroupAuthorizationException) {
                 log.error("Authorization error occurred while trying to " + errMsg.get());
             }
             throw e;

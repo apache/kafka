@@ -256,7 +256,7 @@ public class MirrorSourceConnectorTest {
             topics.add("topic2");
             assertThrows(ExecutionException.class, () -> connector.describeTopicConfigs(topics));
             assertEquals(
-                    "Authorization error occurred while trying to describe configs for topics [topic1, topic2] on the cluster source1",
+                    "Authorization error occurred while trying to describe configs for topics [topic1, topic2] on source1 cluster",
                     connectorLogs.getMessages().get(0)
             );
         }

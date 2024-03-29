@@ -219,7 +219,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
             throws InterruptedException, ExecutionException {
         return adminCall(
                 () -> sourceAdminClient.listConsumerGroups().valid().get(),
-                () -> "list consumer groups on cluster " + config.sourceClusterAlias()
+                () -> "list consumer groups on " + config.sourceClusterAlias() + " cluster"
         );
     }
 
@@ -235,7 +235,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
             throws InterruptedException, ExecutionException {
         return adminCall(
                 () -> sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get(),
-                () -> String.format("list offsets for consumer group %s on cluster %s", group,
+                () -> String.format("list offsets for consumer group %s on %s cluster", group,
                         config.sourceClusterAlias())
         );
     }
