@@ -1754,12 +1754,27 @@ class ReplicaManager(val config: KafkaConfig,
         createLogReadResult(highWatermark, leaderLogStartOffset, leaderLogEndOffset,
           new OffsetMovedToTieredStorageException("Given offset" + offset + " is moved to tiered storage"))
       } else {
-        // For consume fetch requests, create a dummy FetchDataInfo with the remote storage fetch information.
-        // For the first topic-partition that needs remote data, we will use this information to read the data in another thread.
-        val fetchDataInfo =
-        new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false, Optional.empty(),
-          Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp.topicPartition(),
-            fetchInfo, params.isolation, params.hardMaxBytesLimit())))
+        val fetchDataInfo = if (remoteLogManager.get.isRemoteLogFetchQuotaExceeded) {
+          // We do not want to send an exception in LogReadResult response (like we do in other cases when we send
+          // UnknownOffsetMetadata), because then it is classified as error in reading data, and a response is
+          // immediately sent back to the client. Instead, we want that we should be able to serve data for the
+          // other topic partitions via delayed fetch if required (when sending immediate response, we skip
+          // delayed fetch). Also, immediately sending response would make the consumer retry again immediately,
+          // which may run into quota exceeded situation again and thus get it into a loop.
+          new FetchDataInfo(
+            LogOffsetMetadata.UNKNOWN_OFFSET_METADATA,
+            MemoryRecords.EMPTY,
+            false,
+            Optional.empty(),
+            Optional.empty()
+          )
+        } else {
+          // For consume fetch requests, create a dummy FetchDataInfo with the remote storage fetch information.
+          // For the first topic-partition that needs remote data, we will use this information to read the data in another thread.
+          new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false, Optional.empty(),
+            Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp.topicPartition(),
+              fetchInfo, params.isolation, params.hardMaxBytesLimit())))
+        }
 
         LogReadResult(fetchDataInfo,
           divergingEpoch = None,
