@@ -130,7 +130,7 @@ def main():
                 pair = (check, filename)
                 if pair[0] == "FinalLocalVariable" and "org/apache/kafka/streams" not in path:
                     continue
-                if pair[0] == "ClassDataAbstractionCoupling" and "streams" in path and "test" in path:
+                if pair[0] == "ClassDataAbstractionCoupling" and "streams" in path and "test/" in path:
                     continue
                 total_errors = total_errors + 1
                 if pair in expected:

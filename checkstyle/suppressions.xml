@@ -44,7 +44,6 @@
 
     <!-- server tests -->
     <suppress checks="MethodLength|JavaNCSS|NPathComplexity" files="DescribeTopicPartitionsRequestHandlerTest.java"/>
-    <suppress checks="CyclomaticComplexity" files="ListConsumerGroupTest.java"/>
 
     <!-- Clients -->
     <suppress id="dontUseSystemExit"
@@ -86,7 +85,7 @@
               files="(ClientTelemetryReporter|ConsumerCoordinator|CommitRequestManager|FetchCollector|OffsetFetcherUtils|KafkaProducer|Sender|ConfigDef|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|AbstractCoordinator|TransactionManager|AbstractStickyAssignor|Authorizer|FetchSessionHandler|MockAdminClient).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(AbstractRequest|AbstractResponse|KerberosLogin|WorkerSinkTaskTest|TransactionManagerTest|SenderTest|KafkaAdminClient|ConsumerCoordinatorTest|KafkaAdminClientTest|KafkaRaftClientTest).java"/>
+              files="(AbstractRequest|AbstractResponse|KerberosLogin|WorkerSinkTaskTest|TransactionManagerTest|SenderTest|KafkaAdminClient|ConsumerCoordinatorTest|KafkaRaftClientTest).java"/>
 
     <suppress checks="NPathComplexity"
               files="(ConsumerCoordinator|BufferPool|AbstractLegacyRecordBatch|SslTransportLayer|KerberosLogin|Selector|Sender|Serdes|Values|PluginUtils|MiniTrogdorCluster|TasksRequest|KafkaProducer|KafkaRaftClient|Authorizer|FetchSessionHandler).java"/>
@@ -112,8 +111,6 @@
 
     <suppress checks="JavaNCSS"
               files="(RequestResponseTest|FetcherTest|FetchRequestManagerTest|KafkaAdminClientTest).java"/>
-
-    <suppress checks="NPathComplexity" files="MemoryRecordsTest.java"/>
 
     <suppress checks="MethodLength"
               files="ConsumerTestBuilder.java"/>
@@ -149,10 +146,10 @@
               files="(DistributedHerder|Worker)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
-              files="(WorkerSink|WorkerSource|ErrorHandling)TaskTest.java"/>
+              files="(WorkerSink|AbstractWorkerSource|ExactlyOnceWorkerSource|WorkerSource|ErrorHandling)TaskTest.java"/>
 
     <suppress checks="ClassFanOutComplexity"
-              files="(DistributedHerder|Worker|WorkerSinkTaskMockito)Test.java"/>
+              files="(DistributedHerder|Worker)Test.java"/>
 
     <suppress checks="MethodLength"
               files="WorkerSinkTaskTest.java"/>
@@ -237,7 +234,7 @@
 
     <!-- Tools -->
     <suppress checks="CyclomaticComplexity"
-              files="(ConsoleConsumer|DefaultMessageFormatter|StreamsResetter|ProducerPerformance).java"/>
+              files="(DefaultMessageFormatter|StreamsResetter|ProducerPerformance).java"/>
     <suppress checks="NPathComplexity"
               files="(DefaultMessageFormatter|ProducerPerformance|StreamsResetter|ReplicaVerificationTool).java"/>
     <suppress checks="ParameterNumber"
