@@ -26,13 +26,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Application event to list offsets for partitions by timestamps. It is completed with the map of
- * {@link TopicPartition} and {@link OffsetAndTimestamp} found (offset of the first message whose timestamp is
- * greater than or equals to the target timestamp)
+ * Event for retrieving partition offsets by performing a
+ * {@link org.apache.kafka.common.requests.ListOffsetsRequest ListOffsetsRequest}.
+ * This event is created with a map of {@link TopicPartition} and target timestamps to search
+ * offsets for. It is completed with the map of {@link TopicPartition} and
+ * {@link OffsetAndTimestamp} found (offset of the first message whose timestamp is greater than
+ * or equals to the target timestamp)
  */
 public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndTimestampInternal>> {
     private final Map<TopicPartition, Long> timestampsToSearch;
-    public final boolean requireTimestamps;
+    private final boolean requireTimestamps;
 
     public ListOffsetsEvent(Map<TopicPartition, Long> timestampToSearch,
                             Timer timer,
@@ -42,6 +45,12 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
         this.requireTimestamps = requireTimestamps;
     }
 
+    /**
+     * Build result representing that no offsets were found as part of the current event.
+     *
+     * @return Map containing all the partitions the event was trying to get offsets for, and
+     * null {@link OffsetAndTimestamp} as value
+     */
     public <T> Map<TopicPartition, T> emptyResults() {
         Map<TopicPartition, T> result = new HashMap<>();
         timestampsToSearch.keySet().forEach(tp -> result.put(tp, null));
@@ -52,10 +61,14 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
         return timestampsToSearch;
     }
 
+    public boolean requireTimestamps() {
+        return requireTimestamps;
+    }
+
     @Override
     public String toStringBase() {
         return super.toStringBase() +
-                ", timestampsToSearch=" + timestampsToSearch;
+                ", timestampsToSearch=" + timestampsToSearch +
+                ", requireTimestamps=" + requireTimestamps;
     }
-
 }

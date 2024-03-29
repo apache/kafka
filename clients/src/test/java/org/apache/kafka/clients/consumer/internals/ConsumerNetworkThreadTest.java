@@ -47,6 +47,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -169,22 +171,12 @@ public class ConsumerNetworkThreadTest {
         verify(applicationEventProcessor).process(any(SyncCommitEvent.class));
     }
 
-    @Test
-    public void testListOffsetsForTimeEventIsProcessed() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testListOffsetsEventIsProcessed(boolean requireTimestamp) {
         Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
         Timer timer = time.timer(100);
-        ApplicationEvent e = new ListOffsetsEvent(timestamps, timer, true);
-        applicationEventsQueue.add(e);
-        consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor).process(any(ListOffsetsEvent.class));
-        assertTrue(applicationEventsQueue.isEmpty());
-    }
-
-    @Test
-    public void testListOffsetsEventIsProcessed() {
-        Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
-        Timer timer = time.timer(100);
-        ApplicationEvent e = new ListOffsetsEvent(timestamps, timer, false);
+        ApplicationEvent e = new ListOffsetsEvent(timestamps, timer, requireTimestamp);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ListOffsetsEvent.class));

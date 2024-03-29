@@ -130,7 +130,9 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> result = requestManager.fetchOffsets(timestampsToSearch, false);
+        CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> result = requestManager.fetchOffsets(
+                timestampsToSearch,
+                false);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -172,8 +174,9 @@ public class OffsetsRequestManagerTest {
         partitionLeaders.put(TEST_PARTITION_1, LEADER_1);
         partitionLeaders.put(TEST_PARTITION_2, LEADER_1);
         mockSuccessfulRequest(partitionLeaders);
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> result =
-                requestManager.fetchOffsets(timestampsToSearch, false);
+        CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> result = requestManager.fetchOffsets(
+                        timestampsToSearch,
+                        false);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -185,8 +188,9 @@ public class OffsetsRequestManagerTest {
 
     @Test
     public void testListOffsetsRequestEmpty() throws ExecutionException, InterruptedException {
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> result =
-                requestManager.fetchOffsets(Collections.emptyMap(), false);
+        CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> result = requestManager.fetchOffsets(
+                        Collections.emptyMap(),
+                        false);
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -257,15 +261,15 @@ public class OffsetsRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("retriableErrors")
-
     public void testRequestFailsWithRetriableError_RetrySucceeds(Errors error) throws ExecutionException, InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
-        CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsetsFuture =
-                requestManager.fetchOffsets(timestampsToSearch, false);
+        CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsetsFuture = requestManager.fetchOffsets(
+                timestampsToSearch,
+                false);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -308,12 +312,13 @@ public class OffsetsRequestManagerTest {
 
     private void testResponseWithErrorCodeAndUnknownOffsets(Errors error) throws ExecutionException, InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
-            ListOffsetsRequest.EARLIEST_TIMESTAMP);
+                ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsetsFuture = requestManager.fetchOffsets(
-            timestampsToSearch, false);
+                timestampsToSearch,
+                false);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -325,8 +330,8 @@ public class OffsetsRequestManagerTest {
         // Response received with error
         NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
         ClientResponse clientResponse = buildClientResponseWithErrors(
-            unsentRequest,
-            Collections.singletonMap(TEST_PARTITION_1, error));
+                unsentRequest,
+                Collections.singletonMap(TEST_PARTITION_1, error));
         clientResponse.onComplete();
 
         // Null offsets should be returned for each partition
@@ -352,7 +357,8 @@ public class OffsetsRequestManagerTest {
         partitionLeaders.put(TEST_PARTITION_2, LEADER_2);
         mockSuccessfulRequest(partitionLeaders);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsetsFuture = requestManager.fetchOffsets(
-            timestampsToSearch, false);
+                timestampsToSearch,
+                false);
         assertEquals(2, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -366,9 +372,9 @@ public class OffsetsRequestManagerTest {
         NetworkClientDelegate.UnsentRequest unsentRequest1 = res.unsentRequests.get(0);
         long offsets = expectedOffsets.get(TEST_PARTITION_1).offset();
         ClientResponse clientResponse1 = buildClientResponse(
-            unsentRequest1,
-            Collections.singletonMap(TEST_PARTITION_1,
-                    new OffsetAndTimestampInternal(offsets, -1L, Optional.empty())));
+                unsentRequest1,
+                Collections.singletonMap(TEST_PARTITION_1,
+                        new OffsetAndTimestampInternal(offsets, -1L, Optional.empty())));
         clientResponse1.onComplete();
         NetworkClientDelegate.UnsentRequest unsentRequest2 = res.unsentRequests.get(1);
         ClientResponse clientResponse2 = buildClientResponseWithErrors(
@@ -403,12 +409,14 @@ public class OffsetsRequestManagerTest {
     @Test
     public void testRequestFailedResponse_NonRetriableAuthError() {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
-            ListOffsetsRequest.EARLIEST_TIMESTAMP);
+                ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsetsFuture =
-            requestManager.fetchOffsets(timestampsToSearch, true);
+                requestManager.fetchOffsets(
+                        timestampsToSearch,
+                        false);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -419,7 +427,7 @@ public class OffsetsRequestManagerTest {
         // Response received with non-retriable auth error
         NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
         ClientResponse clientResponse = buildClientResponseWithErrors(
-            unsentRequest, Collections.singletonMap(TEST_PARTITION_2, Errors.TOPIC_AUTHORIZATION_FAILED));
+                unsentRequest, Collections.singletonMap(TEST_PARTITION_2, Errors.TOPIC_AUTHORIZATION_FAILED));
         clientResponse.onComplete();
 
         verifyRequestCompletedWithErrorResponse(fetchOffsetsFuture, TopicAuthorizationException.class);
@@ -435,7 +443,9 @@ public class OffsetsRequestManagerTest {
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsetsFuture =
-            requestManager.fetchOffsets(timestampsToSearch, true);
+                requestManager.fetchOffsets(
+                        timestampsToSearch,
+                        false);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
@@ -460,12 +470,14 @@ public class OffsetsRequestManagerTest {
     @Test
     public void testRequestFails_AuthenticationException() {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
-            ListOffsetsRequest.EARLIEST_TIMESTAMP);
+                ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
         CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsetsFuture =
-            requestManager.fetchOffsets(timestampsToSearch, false);
+            requestManager.fetchOffsets(
+                    timestampsToSearch,
+                    false);
 
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());

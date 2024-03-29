@@ -261,7 +261,6 @@ class OffsetFetcherUtils {
     static Map<TopicPartition, OffsetAndTimestamp> buildOffsetsForTimesResult(
         final Map<TopicPartition, Long> timestampsToSearch,
         final Map<TopicPartition, ListOffsetData> fetchedOffsets) {
-
         return buildListOffsetsResult(timestampsToSearch, fetchedOffsets,
             (topicPartition, offsetData) -> new OffsetAndTimestamp(
                 offsetData.offset,
@@ -272,7 +271,6 @@ class OffsetFetcherUtils {
     static Map<TopicPartition, OffsetAndTimestampInternal> buildOffsetsForTimeInternalResult(
             final Map<TopicPartition, Long> timestampsToSearch,
             final Map<TopicPartition, ListOffsetData> fetchedOffsets) {
-
         HashMap<TopicPartition, OffsetAndTimestampInternal> offsetsResults = new HashMap<>(timestampsToSearch.size());
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
             offsetsResults.put(entry.getKey(), null);

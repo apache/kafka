@@ -145,6 +145,8 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * target timestamp.
      *
      * @param timestampsToSearch Partitions and target timestamps to get offsets for
+     * @param requireTimestamps  True if this should fail with an UnsupportedVersionException if the
+     *                           broker does not support fetching precise timestamps for offsets
      * @return Future containing the map of {@link TopicPartition} and {@link OffsetAndTimestamp}
      * found .The future will complete when the requests responses are received and
      * processed, following a call to {@link #poll(long)}
@@ -157,18 +159,18 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         }
         metadata.addTransientTopics(OffsetFetcherUtils.topicsForPartitions(timestampsToSearch.keySet()));
         ListOffsetsRequestState listOffsetsRequestState = new ListOffsetsRequestState(
-            timestampsToSearch,
-            requireTimestamps,
-            offsetFetcherUtils,
-            isolationLevel);
+                timestampsToSearch,
+                requireTimestamps,
+                offsetFetcherUtils,
+                isolationLevel);
         listOffsetsRequestState.globalResult.whenComplete((result, error) -> {
             metadata.clearTransientTopics();
             if (error != null) {
                 log.debug("Fetch offsets completed with error for partitions and timestamps {}.",
-                    timestampsToSearch, error);
+                        timestampsToSearch, error);
             } else {
                 log.debug("Fetch offsets completed successfully for partitions and timestamps {}." +
-                    " Result {}", timestampsToSearch, result);
+                        " Result {}", timestampsToSearch, result);
             }
         });
 
