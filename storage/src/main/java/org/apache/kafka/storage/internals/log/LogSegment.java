@@ -232,17 +232,17 @@ public class LogSegment implements Closeable {
      *
      * @param largestOffset The last offset in the message set
      * @param largestTimestampMs The largest timestamp in the message set.
-     * @param shallowOffsetOfMaxTimestamp The offset of the message that has the largest timestamp in the messages to append.
+     * @param offsetOfMaxTimestamp The offset of the message that has the largest timestamp in the messages to append.
      * @param records The log entries to append.
      * @throws LogSegmentOffsetOverflowException if the largest offset causes index offset overflow
      */
     public void append(long largestOffset,
                        long largestTimestampMs,
-                       long shallowOffsetOfMaxTimestamp,
+                       long offsetOfMaxTimestamp,
                        MemoryRecords records) throws IOException {
         if (records.sizeInBytes() > 0) {
-            LOGGER.trace("Inserting {} bytes at end offset {} at position {} with largest timestamp {} at shallow offset {}",
-                records.sizeInBytes(), largestOffset, log.sizeInBytes(), largestTimestampMs, shallowOffsetOfMaxTimestamp);
+            LOGGER.trace("Inserting {} bytes at end offset {} at position {} with largest timestamp {} at offset {}",
+                records.sizeInBytes(), largestOffset, log.sizeInBytes(), largestTimestampMs, offsetOfMaxTimestamp);
             int physicalPosition = log.sizeInBytes();
             if (physicalPosition == 0)
                 rollingBasedTimestamp = OptionalLong.of(largestTimestampMs);
@@ -254,7 +254,7 @@ public class LogSegment implements Closeable {
             LOGGER.trace("Appended {} to {} at end offset {}", appendedBytes, log.file(), largestOffset);
             // Update the in memory max timestamp and corresponding offset.
             if (largestTimestampMs > maxTimestampSoFar()) {
-                maxTimestampAndOffsetSoFar = new TimestampOffset(largestTimestampMs, shallowOffsetOfMaxTimestamp);
+                maxTimestampAndOffsetSoFar = new TimestampOffset(largestTimestampMs, offsetOfMaxTimestamp);
             }
             // append an entry to the index (if needed)
             if (bytesSinceLastIndexEntry > indexIntervalBytes) {

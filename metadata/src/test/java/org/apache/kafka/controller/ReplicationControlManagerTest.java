@@ -151,6 +151,7 @@ import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partit
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -328,7 +329,7 @@ public class ReplicationControlManagerTest {
             assertEquals(1, result.records().size());
 
             ApiMessageAndVersion removeRecordAndVersion = result.records().get(0);
-            assertTrue(removeRecordAndVersion.message() instanceof RemoveTopicRecord);
+            assertInstanceOf(RemoveTopicRecord.class, removeRecordAndVersion.message());
 
             RemoveTopicRecord removeRecord = (RemoveTopicRecord) removeRecordAndVersion.message();
             assertEquals(topicId, removeRecord.topicId());
@@ -2296,7 +2297,7 @@ public class ReplicationControlManagerTest {
         assertEquals(1, result.records().size());
 
         ApiMessageAndVersion record = result.records().get(0);
-        assertTrue(record.message() instanceof PartitionChangeRecord);
+        assertInstanceOf(PartitionChangeRecord.class, record.message());
 
         PartitionChangeRecord partitionChangeRecord = (PartitionChangeRecord) record.message();
         assertEquals(0, partitionChangeRecord.partitionId());

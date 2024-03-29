@@ -905,7 +905,8 @@ private[group] class GroupCoordinator(
                              generationId: Int,
                              offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                              responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
-                             requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                             requestLocal: RequestLocal = RequestLocal.NoCaching,
+                             apiVersion: Short): Unit = {
     validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
       case None =>
@@ -928,7 +929,7 @@ private[group] class GroupCoordinator(
               offsetTopicPartition, offsetMetadata, newRequestLocal, responseCallback, Some(verificationGuard))
           }
         }
-
+        val supportedOperation = if (apiVersion >= 4) genericError else defaultError
         groupManager.replicaManager.maybeStartTransactionVerificationForPartition(
           topicPartition = offsetTopicPartition,
           transactionalId,
@@ -941,7 +942,8 @@ private[group] class GroupCoordinator(
           KafkaRequestHandler.wrapAsyncCallback(
             postVerificationCallback,
             requestLocal
-          )
+          ),
+          supportedOperation
         )
     }
   }

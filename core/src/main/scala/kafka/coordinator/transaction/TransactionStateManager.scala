@@ -557,6 +557,7 @@ class TransactionStateManager(brokerId: Int,
           loadingPartitions.remove(partitionAndLeaderEpoch)
 
           transactionsPendingForCompletion.foreach { txnTransitMetadata =>
+            info(s"Sending txn markers for $txnTransitMetadata after loading partition $partitionId")
             sendTxnMarkers(txnTransitMetadata.coordinatorEpoch, txnTransitMetadata.result,
               txnTransitMetadata.txnMetadata, txnTransitMetadata.transitMetadata)
           }

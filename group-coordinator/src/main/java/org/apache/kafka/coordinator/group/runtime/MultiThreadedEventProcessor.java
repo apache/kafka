@@ -198,14 +198,25 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
     }
 
     /**
-     * Enqueues a new {{@link CoordinatorEvent}}.
+     * Enqueues a new {{@link CoordinatorEvent}} at the end of the processor.
      *
      * @param event The event.
      * @throws RejectedExecutionException If the event processor is closed.
      */
     @Override
-    public void enqueue(CoordinatorEvent event) throws RejectedExecutionException {
-        accumulator.add(event);
+    public void enqueueLast(CoordinatorEvent event) throws RejectedExecutionException {
+        accumulator.addLast(event);
+    }
+
+    /**
+     * Enqueues a new {{@link CoordinatorEvent}} at the front of the processor.
+     *
+     * @param event The event.
+     * @throws RejectedExecutionException If the event processor is closed.
+     */
+    @Override
+    public void enqueueFirst(CoordinatorEvent event) throws RejectedExecutionException {
+        accumulator.addFirst(event);
     }
 
     /**

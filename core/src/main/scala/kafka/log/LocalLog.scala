@@ -406,8 +406,8 @@ class LocalLog(@volatile private var _dir: File,
     }
   }
 
-  private[log] def append(lastOffset: Long, largestTimestamp: Long, shallowOffsetOfMaxTimestamp: Long, records: MemoryRecords): Unit = {
-    segments.activeSegment.append(lastOffset, largestTimestamp, shallowOffsetOfMaxTimestamp, records)
+  private[log] def append(lastOffset: Long, largestTimestamp: Long, offsetOfMaxTimestamp: Long, records: MemoryRecords): Unit = {
+    segments.activeSegment.append(lastOffset, largestTimestamp, offsetOfMaxTimestamp, records)
     updateLogEndOffset(lastOffset + 1)
   }
 

@@ -271,6 +271,7 @@ import static org.apache.kafka.common.message.ListPartitionReassignmentsResponse
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -294,7 +295,7 @@ public class KafkaAdminClientTest {
         final AdminClientConfig config = newConfMap(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "500");
         KafkaException exception = assertThrows(KafkaException.class,
             () -> KafkaAdminClient.createInternal(config, null));
-        assertTrue(exception.getCause() instanceof ConfigException);
+        assertInstanceOf(ConfigException.class, exception.getCause());
     }
 
     @Test
@@ -499,7 +500,7 @@ public class KafkaAdminClientTest {
         ExecutionException e = assertThrows(ExecutionException.class, () -> env.adminClient().createTopics(
                 singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
                 new CreateTopicsOptions().timeoutMs(10000)).all().get());
-        assertTrue(e.getCause() instanceof IllegalStateException,
+        assertInstanceOf(IllegalStateException.class, e.getCause(),
                 "Expected an IllegalStateException error, but got " + Utils.stackTrace(e));
     }
 
@@ -1456,38 +1457,38 @@ public class KafkaAdminClientTest {
         ExecutionException e = assertThrows(ExecutionException.class, () -> env.adminClient().createTopics(
             singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
             new CreateTopicsOptions().timeoutMs(10000)).all().get());
-        assertTrue(e.getCause() instanceof AuthenticationException,
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
             "Expected an authentication error, but got " + Utils.stackTrace(e));
 
         Map<String, NewPartitions> counts = new HashMap<>();
         counts.put("my_topic", NewPartitions.increaseTo(3));
         counts.put("other_topic", NewPartitions.increaseTo(3, asList(asList(2), asList(3))));
         e = assertThrows(ExecutionException.class, () -> env.adminClient().createPartitions(counts).all().get());
-        assertTrue(e.getCause() instanceof AuthenticationException,
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
             "Expected an authentication error, but got " + Utils.stackTrace(e));
 
         e = assertThrows(ExecutionException.class, () -> env.adminClient().createAcls(asList(ACL1, ACL2)).all().get());
-        assertTrue(e.getCause() instanceof AuthenticationException,
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
             "Expected an authentication error, but got " + Utils.stackTrace(e));
 
         e = assertThrows(ExecutionException.class, () -> env.adminClient().describeAcls(FILTER1).values().get());
-        assertTrue(e.getCause() instanceof AuthenticationException,
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
             "Expected an authentication error, but got " + Utils.stackTrace(e));
 
         e = assertThrows(ExecutionException.class, () -> env.adminClient().deleteAcls(asList(FILTER1, FILTER2)).all().get());
-        assertTrue(e.getCause() instanceof AuthenticationException,
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
             "Expected an authentication error, but got " + Utils.stackTrace(e));
 
         e = assertThrows(ExecutionException.class, () -> env.adminClient().describeConfigs(
             singleton(new ConfigResource(ConfigResource.Type.BROKER, "0"))).all().get());
-        assertTrue(e.getCause() instanceof AuthenticationException,
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
             "Expected an authentication error, but got " + Utils.stackTrace(e));
     }
 
     private void callClientQuotasApisAndExpectAnAuthenticationError(AdminClientUnitTestEnv env) {
         ExecutionException e = assertThrows(ExecutionException.class,
             () -> env.adminClient().describeClientQuotas(ClientQuotaFilter.all()).entities().get());
-        assertTrue(e.getCause() instanceof AuthenticationException,
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
             "Expected an authentication error, but got " + Utils.stackTrace(e));
 
         ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
@@ -1495,7 +1496,7 @@ public class KafkaAdminClientTest {
         e = assertThrows(ExecutionException.class,
             () -> env.adminClient().alterClientQuotas(asList(alteration)).all().get());
 
-        assertTrue(e.getCause() instanceof AuthenticationException,
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
             "Expected an authentication error, but got " + Utils.stackTrace(e));
     }
 
@@ -1877,7 +1878,7 @@ public class KafkaAdminClientTest {
                     env.cluster().nodeById(0));
             final DescribeLogDirsResult errorResult = env.adminClient().describeLogDirs(brokers);
             ExecutionException exception = assertThrows(ExecutionException.class, () -> errorResult.allDescriptions().get());
-            assertTrue(exception.getCause() instanceof ClusterAuthorizationException);
+            assertInstanceOf(ClusterAuthorizationException.class, exception.getCause());
 
             // Empty results with an error with version >= 3
             env.kafkaClient().prepareResponseFrom(
@@ -1885,7 +1886,7 @@ public class KafkaAdminClientTest {
                     env.cluster().nodeById(0));
             final DescribeLogDirsResult errorResult2 = env.adminClient().describeLogDirs(brokers);
             exception = assertThrows(ExecutionException.class, () -> errorResult2.allDescriptions().get());
-            assertTrue(exception.getCause() instanceof UnknownServerException);
+            assertInstanceOf(UnknownServerException.class, exception.getCause());
         }
     }
 
@@ -1941,7 +1942,7 @@ public class KafkaAdminClientTest {
                     env.cluster().nodeById(0));
             final DescribeLogDirsResult errorResult = env.adminClient().describeLogDirs(brokers);
             ExecutionException exception = assertThrows(ExecutionException.class, () -> errorResult.allDescriptions().get());
-            assertTrue(exception.getCause() instanceof ClusterAuthorizationException);
+            assertInstanceOf(ClusterAuthorizationException.class, exception.getCause());
 
             // Empty results with an error with version >= 3
             env.kafkaClient().prepareResponseFrom(
@@ -1949,7 +1950,7 @@ public class KafkaAdminClientTest {
                     env.cluster().nodeById(0));
             final DescribeLogDirsResult errorResult2 = env.adminClient().describeLogDirs(brokers);
             exception = assertThrows(ExecutionException.class, () -> errorResult2.allDescriptions().get());
-            assertTrue(exception.getCause() instanceof UnknownServerException);
+            assertInstanceOf(UnknownServerException.class, exception.getCause());
         }
     }
 
@@ -2168,14 +2169,9 @@ public class KafkaAdminClientTest {
             KafkaFuture<Void> myTopicResult = values.get("my_topic");
             myTopicResult.get();
             KafkaFuture<Void> otherTopicResult = values.get("other_topic");
-            try {
-                otherTopicResult.get();
-                fail("get() should throw ExecutionException");
-            } catch (ExecutionException e0) {
-                assertTrue(e0.getCause() instanceof InvalidTopicException);
-                InvalidTopicException e = (InvalidTopicException) e0.getCause();
-                assertEquals("some detailed reason", e.getMessage());
-            }
+            assertEquals("some detailed reason",
+                assertInstanceOf(InvalidTopicException.class,
+                    assertThrows(ExecutionException.class, otherTopicResult::get).getCause()).getMessage());
         }
     }
 
@@ -2434,30 +2430,18 @@ public class KafkaAdminClientTest {
 
             // "offset out of range" failure on records deletion for partition 1
             KafkaFuture<DeletedRecords> myTopicPartition1Result = values.get(myTopicPartition1);
-            try {
-                myTopicPartition1Result.get();
-                fail("get() should throw ExecutionException");
-            } catch (ExecutionException e0) {
-                assertTrue(e0.getCause() instanceof OffsetOutOfRangeException);
-            }
+            assertInstanceOf(OffsetOutOfRangeException.class,
+                assertThrows(ExecutionException.class, myTopicPartition1Result::get).getCause());
 
             // not authorized to delete records for partition 2
             KafkaFuture<DeletedRecords> myTopicPartition2Result = values.get(myTopicPartition2);
-            try {
-                myTopicPartition2Result.get();
-                fail("get() should throw ExecutionException");
-            } catch (ExecutionException e1) {
-                assertTrue(e1.getCause() instanceof TopicAuthorizationException);
-            }
+            assertInstanceOf(TopicAuthorizationException.class,
+                assertThrows(ExecutionException.class, myTopicPartition2Result::get).getCause());
 
             // the response does not contain a result for partition 3
             KafkaFuture<DeletedRecords> myTopicPartition3Result = values.get(myTopicPartition3);
-            try {
-                myTopicPartition3Result.get();
-                fail("get() should throw ExecutionException");
-            } catch (ExecutionException e1) {
-                assertTrue(e1.getCause() instanceof ApiException);
-            }
+            assertInstanceOf(ApiException.class,
+                assertThrows(ExecutionException.class, myTopicPartition3Result::get).getCause());
         }
     }
 
@@ -4736,8 +4720,8 @@ public class KafkaAdminClientTest {
                     new RemoveMembersFromConsumerGroupOptions()
             );
             ExecutionException exception = assertThrows(ExecutionException.class, () -> partialFailureResults.all().get());
-            assertTrue(exception.getCause() instanceof KafkaException);
-            assertTrue(exception.getCause().getCause() instanceof UnknownMemberIdException);
+            assertInstanceOf(KafkaException.class, exception.getCause());
+            assertInstanceOf(UnknownMemberIdException.class, exception.getCause().getCause());
 
             // Return with success for "removeAll" scenario
             // 1 prepare response for AdminClient.describeConsumerGroups

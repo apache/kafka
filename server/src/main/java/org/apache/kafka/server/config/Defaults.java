@@ -44,16 +44,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class Defaults {
-    /** ********* Zookeeper Configuration *********/
-    public static final int ZK_SESSION_TIMEOUT_MS = 18000;
-    public static final boolean ZK_ENABLE_SECURE_ACLS = false;
-    public static final int ZK_MAX_IN_FLIGHT_REQUESTS = 10;
-    public static final boolean ZK_SSL_CLIENT_ENABLE = false;
-    public static final String ZK_SSL_PROTOCOL = "TLSv1.2";
-    public static final String ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM = "HTTPS";
-    public static final boolean ZK_SSL_CRL_ENABLE = false;
-    public static final boolean ZK_SSL_OCSP_ENABLE = false;
-
     /** ********* General Configuration *********/
     public static final boolean BROKER_ID_GENERATION_ENABLE = true;
     public static final int MAX_RESERVED_BROKER_ID = 1000;

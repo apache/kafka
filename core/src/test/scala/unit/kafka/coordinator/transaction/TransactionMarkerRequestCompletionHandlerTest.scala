@@ -18,7 +18,6 @@ package kafka.coordinator.transaction
 
 import java.{lang, util}
 import java.util.Arrays.asList
-
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -43,18 +42,19 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val coordinatorEpoch = 0
   private val txnResult = TransactionResult.COMMIT
   private val topicPartition = new TopicPartition("topic1", 0)
-  private val txnIdAndMarkers = asList(
-      TxnIdAndMarkerEntry(transactionalId, new WriteTxnMarkersRequest.TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, txnResult, asList(topicPartition))))
-
   private val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, producerEpoch, lastProducerEpoch,
     txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](topicPartition), 0L, 0L)
+  private val pendingCompleteTxnAndMarkers = asList(
+    PendingCompleteTxnAndMarkerEntry(
+      PendingCompleteTxn(transactionalId, coordinatorEpoch, txnMetadata, txnMetadata.prepareComplete(42)),
+      new WriteTxnMarkersRequest.TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, txnResult, asList(topicPartition))))
 
   private val markerChannelManager: TransactionMarkerChannelManager =
     mock(classOf[TransactionMarkerChannelManager])
 
   private val txnStateManager: TransactionStateManager = mock(classOf[TransactionStateManager])
 
-  private val handler = new TransactionMarkerRequestCompletionHandler(brokerId, txnStateManager, markerChannelManager, txnIdAndMarkers)
+  private val handler = new TransactionMarkerRequestCompletionHandler(brokerId, txnStateManager, markerChannelManager, pendingCompleteTxnAndMarkers)
 
   private def mockCache(): Unit = {
     when(txnStateManager.partitionFor(transactionalId))
@@ -70,8 +70,9 @@ class TransactionMarkerRequestCompletionHandlerTest {
     handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
       null, null, 0, 0, true, null, null, null))
 
-    verify(markerChannelManager).addTxnMarkersToBrokerQueue(transactionalId,
-      producerId, producerEpoch, txnResult, coordinatorEpoch, Set[TopicPartition](topicPartition))
+    verify(markerChannelManager).addTxnMarkersToBrokerQueue(producerId,
+      producerEpoch, txnResult, pendingCompleteTxnAndMarkers.get(0).pendingCompleteTxn,
+      Set[TopicPartition](topicPartition))
   }
 
   @Test
@@ -193,8 +194,9 @@ class TransactionMarkerRequestCompletionHandlerTest {
       null, null, 0, 0, false, null, null, response))
 
     assertEquals(txnMetadata.topicPartitions, mutable.Set[TopicPartition](topicPartition))
-    verify(markerChannelManager).addTxnMarkersToBrokerQueue(transactionalId,
-      producerId, producerEpoch, txnResult, coordinatorEpoch, Set[TopicPartition](topicPartition))
+    verify(markerChannelManager).addTxnMarkersToBrokerQueue(producerId,
+      producerEpoch, txnResult, pendingCompleteTxnAndMarkers.get(0).pendingCompleteTxn,
+      Set[TopicPartition](topicPartition))
   }
 
   private def verifyThrowIllegalStateExceptionOnError(error: Errors) = {
@@ -222,7 +224,8 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private def verifyRemoveDelayedOperationOnError(error: Errors): Unit = {
 
     var removed = false
-    when(markerChannelManager.removeMarkersForTxnId(transactionalId))
+    val pendingCompleteTxn = pendingCompleteTxnAndMarkers.get(0).pendingCompleteTxn
+    when(markerChannelManager.removeMarkersForTxn(pendingCompleteTxn))
       .thenAnswer(_ => removed = true)
 
     val response = new WriteTxnMarkersResponse(createProducerIdErrorMap(error))

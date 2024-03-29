@@ -168,7 +168,8 @@ public class RecordCollectorTest {
             emptyList(),
             emptyList(),
             emptyMap(),
-            emptySet()
+            emptySet(),
+            emptyMap()
         );
         collector = new RecordCollectorImpl(
             logContext,
@@ -333,7 +334,8 @@ public class RecordCollectorTest {
                 emptyList(),
                 emptyList(),
                 emptyMap(),
-                emptySet()
+                emptySet(),
+                emptyMap()
         );
         collector = new RecordCollectorImpl(
                 logContext,
@@ -400,7 +402,8 @@ public class RecordCollectorTest {
                 emptyList(),
                 emptyList(),
                 emptyMap(),
-                emptySet()
+                emptySet(),
+                emptyMap()
         );
         collector = new RecordCollectorImpl(
                 logContext,
@@ -467,7 +470,8 @@ public class RecordCollectorTest {
                 emptyList(),
                 emptyList(),
                 emptyMap(),
-                emptySet()
+                emptySet(),
+                emptyMap()
         );
         collector = new RecordCollectorImpl(
                 logContext,
@@ -546,7 +550,8 @@ public class RecordCollectorTest {
                 emptyList(),
                 emptyList(),
                 emptyMap(),
-                emptySet()
+                emptySet(),
+                emptyMap()
         );
         collector = new RecordCollectorImpl(
                 logContext,
@@ -599,7 +604,8 @@ public class RecordCollectorTest {
                 emptyList(),
                 emptyList(),
                 emptyMap(),
-                emptySet()
+                emptySet(),
+                emptyMap()
         );
         collector = new RecordCollectorImpl(
                 logContext,
@@ -649,7 +655,8 @@ public class RecordCollectorTest {
                 emptyList(),
                 emptyList(),
                 emptyMap(),
-                emptySet()
+                emptySet(),
+                emptyMap()
         );
         collector = new RecordCollectorImpl(
                 logContext,

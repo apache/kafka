@@ -21,6 +21,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -213,7 +214,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
         Map<String, Object> jaasConfigs = Collections.emptyMap();
         configureHandler(handler, configs, jaasConfigs);
-        assertTrue(handler.getAccessTokenRetriever() instanceof FileTokenRetriever);
+        assertInstanceOf(FileTokenRetriever.class, handler.getAccessTokenRetriever());
     }
 
     @Test
@@ -224,7 +225,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         jaasConfigs.put(CLIENT_ID_CONFIG, "an ID");
         jaasConfigs.put(CLIENT_SECRET_CONFIG, "a secret");
         configureHandler(handler, configs, jaasConfigs);
-        assertTrue(handler.getAccessTokenRetriever() instanceof HttpAccessTokenRetriever);
+        assertInstanceOf(HttpAccessTokenRetriever.class, handler.getAccessTokenRetriever());
     }
 
     private void testInvalidAccessToken(String accessToken, String expectedMessageSubstring) throws Exception {

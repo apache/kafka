@@ -748,7 +748,7 @@ subprojects {
   }
 
   if (userEnableTestCoverage) {
-    def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
+    def coverageGen = it.path == ':core' ? 'reportTestScoverage' : 'jacocoTestReport'
     tasks.register('reportCoverage').configure { dependsOn(coverageGen) }
   }
 
@@ -1980,6 +1980,9 @@ project(':tools') {
     implementation project(':log4j-appender')
     implementation project(':tools:tools-api')
     implementation libs.argparse4j
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonDataformatCsv
+    implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
     implementation libs.log4j
     implementation libs.joptSimple
@@ -2157,6 +2160,7 @@ project(':streams') {
     testImplementation project(':storage')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':server')
     testImplementation libs.log4j
     testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
@@ -2739,6 +2743,7 @@ project(':jmh-benchmarks') {
       exclude group: 'net.sf.jopt-simple', module: 'jopt-simple'
     }
     implementation project(':server-common')
+    implementation project(':server')
     implementation project(':clients')
     implementation project(':group-coordinator')
     implementation project(':metadata')
@@ -2896,7 +2901,7 @@ project(':connect:json') {
     api libs.jacksonAfterburner
 
     implementation libs.slf4jApi
-    
+
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.slf4jlog4j
@@ -2966,6 +2971,7 @@ project(':connect:runtime') {
     testImplementation project(':metadata')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
+    testImplementation project(':server')
     testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
 
