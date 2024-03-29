@@ -998,4 +998,8 @@ public class ConsumerGroup implements Group {
         );
         return describedGroup;
     }
+
+    public boolean allUseLegacyProtocol() {
+        return members().values().stream().allMatch(ConsumerGroupMember::useLegacyProtocol);
+    }
 }

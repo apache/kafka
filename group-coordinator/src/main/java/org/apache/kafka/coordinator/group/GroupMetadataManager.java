@@ -776,6 +776,53 @@ public class GroupMetadataManager {
         }
     }
 
+    public boolean validateOnlineDowngrade(ConsumerGroup consumerGroup) {
+        return GroupConsumerUpgradePolicy.isDowngradeEnabled(groupConsumerUpgradePolicy) &&
+            consumerGroup.allUseLegacyProtocol() &&
+            consumerGroup.numMembers() <= classicGroupMaxSize;
+    }
+
+    ClassicGroup convertToClassicGroup(ConsumerGroup consumerGroup, List<Record> records) {
+        createGroupTombstoneRecords(consumerGroup, records);
+        ClassicGroup classicGroup = new ClassicGroup(
+            logContext,
+            consumerGroup.groupId(),
+            STABLE,
+            time,
+            metrics,
+            consumerGroup.groupEpoch(),
+            Optional.ofNullable(ConsumerProtocol.PROTOCOL_TYPE),
+            Optional.empty(),
+            consumerGroup.members().keySet().stream().findAny(),
+            Optional.of(time.milliseconds())
+        );
+
+        classicGroup.convertToConsumerGroup(consumerGroup, records, metadataImage.topics());
+
+        consumerGroup.members().forEach((memberId, member) ->
+            classicGroup.add(
+                new ClassicGroupMember(
+                    memberId,
+                    Optional.ofNullable(member.instanceId()),
+                    member.clientId(),
+                    member.clientHost(),
+                    member.rebalanceTimeoutMs(),
+                    consumerGroupSessionTimeoutMs,
+                    ConsumerProtocol.PROTOCOL_TYPE,
+                    null,
+                    null
+                )
+            )
+        );
+        records.add(RecordHelpers.newGroupMetadataRecord(
+            classicGroup, Collections.emptyMap(), metadataImage.features().metadataVersion()));
+
+        groups.put(consumerGroup.groupId(), classicGroup);
+        metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
+        prepareRebalance(classicGroup, "Protocol downgrade.");
+        return classicGroup;
+    }
+
     public boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
         return GroupConsumerUpgradePolicy.isUpgradeEnabled(groupConsumerUpgradePolicy) &&
             !classicGroup.isInState(DEAD) &&
