@@ -35,8 +35,8 @@ import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{mock, when}
 
-import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{ConcurrentLinkedQueue, CountDownLatch, Executors, TimeUnit}
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 
@@ -45,23 +45,12 @@ class ProducerIdManagerTest {
   var brokerToController: NodeToControllerChannelManager = mock(classOf[NodeToControllerChannelManager])
   val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
 
-  class ErrorQueue(initialErrorCounts: Errors*) {
-    private val queue: mutable.Queue[Errors] = mutable.Queue.empty ++ initialErrorCounts
-
-    def takeError(): Errors = queue.synchronized {
-      if (queue.isEmpty) {
-        return Errors.NONE
-      }
-      queue.dequeue()
-    }
-  }
-
   // Mutable test implementation that lets us easily set the idStart and error
   class MockProducerIdManager(
     val brokerId: Int,
     var idStart: Long,
     val idLen: Int,
-    val errorQueue: ErrorQueue = new ErrorQueue(),
+    val errorQueue: ConcurrentLinkedQueue[Errors] = new ConcurrentLinkedQueue[Errors](),
     val isErroneousBlock: Boolean = false,
     val time: Time = Time.SYSTEM
   ) extends RPCProducerIdManager(brokerId, time, () => 1, brokerToController) {
@@ -72,8 +61,8 @@ class ProducerIdManagerTest {
     override private[transaction] def sendRequest(): Unit = {
 
       brokerToControllerRequestExecutor.submit(() => {
-        val error = errorQueue.takeError()
-        if (error == Errors.NONE) {
+        val error = errorQueue.poll()
+        if (error == null || error == Errors.NONE) {
           handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
             new AllocateProducerIdsResponseData().setProducerIdStart(idStart).setProducerIdLen(idLen)))
           if (!isErroneousBlock) {
@@ -190,10 +179,7 @@ class ProducerIdManagerTest {
   @EnumSource(value = classOf[Errors], names = Array("UNKNOWN_SERVER_ERROR", "INVALID_REQUEST"))
   def testUnrecoverableErrors(error: Errors): Unit = {
     val time = new MockTime()
-    val manager = new MockProducerIdManager(0, 0, 1, errorQueue = new ErrorQueue(
-      Errors.NONE,
-      error
-    ), time = time)
+    val manager = new MockProducerIdManager(0, 0, 1, errorQueue = queue(Errors.NONE, error), time = time)
 
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
 
@@ -219,7 +205,7 @@ class ProducerIdManagerTest {
   def testRetryBackoff(): Unit = {
     val time = new MockTime()
     val manager = new MockProducerIdManager(0, 0, 1,
-      errorQueue = new ErrorQueue(Errors.UNKNOWN_SERVER_ERROR), time = time)
+      errorQueue = queue(Errors.UNKNOWN_SERVER_ERROR), time = time)
 
     verifyFailure(manager)
 
@@ -227,6 +213,12 @@ class ProducerIdManagerTest {
     assertCoordinatorLoadInProgressExceptionFailure(manager.generateProducerId())
     time.sleep(RetryBackoffMs)
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
+  }
+
+  private def queue(errors: Errors*): ConcurrentLinkedQueue[Errors] = {
+    val queue = new ConcurrentLinkedQueue[Errors]()
+    errors.foreach(queue.add)
+    queue
   }
 
   private def verifyFailure(manager: MockProducerIdManager): Unit = {
