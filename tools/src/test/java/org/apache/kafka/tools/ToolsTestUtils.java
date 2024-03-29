@@ -31,12 +31,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -155,7 +157,7 @@ public class ToolsTestUtils {
     }
 
     public static void assignThrottledPartitionReplicas(Admin adminClient, Map<TopicPartition, List<Integer>> allReplicasByPartition) throws InterruptedException, ExecutionException {
-        Map<ConfigResource, List<Map.Entry<TopicPartition, List<Integer>>>> configResourceToPartitionReplicas =
+        Map<ConfigResource, List<Entry<TopicPartition, List<Integer>>>> configResourceToPartitionReplicas =
             allReplicasByPartition.entrySet().stream()
             .collect(Collectors.groupingBy(
                 topicPartitionListEntry -> new ConfigResource(ConfigResource.Type.TOPIC, topicPartitionListEntry.getKey().topic()))
@@ -163,10 +165,10 @@ public class ToolsTestUtils {
 
         Map<ConfigResource, List<AlterConfigOp>> throttles = configResourceToPartitionReplicas.entrySet().stream()
             .collect(
-                Collectors.toMap(Map.Entry::getKey, entry -> {
+                Collectors.toMap(Entry::getKey, entry -> {
                     List<AlterConfigOp> alterConfigOps = new ArrayList<>();
                     Map<TopicPartition, List<Integer>> replicaThrottle =
-                        entry.getValue().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                        entry.getValue().stream().collect(Collectors.toMap(Entry::getKey, Entry::getValue));
                     alterConfigOps.add(new AlterConfigOp(
                         new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
                         AlterConfigOp.OpType.SET));
@@ -204,7 +206,7 @@ public class ToolsTestUtils {
 
     public static File tempPropertiesFile(Map<String, String> properties) throws IOException {
         StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, String> entry : properties.entrySet()) {
+        for (Entry<String, String> entry : properties.entrySet()) {
             sb.append(entry.getKey() + "=" + entry.getValue() + System.lineSeparator());
         }
         return org.apache.kafka.test.TestUtils.tempFile(sb.toString());
@@ -249,7 +251,7 @@ public class ToolsTestUtils {
     /**
      * Capture both the console output and console error during the execution of the provided function.
      */
-    public static Tuple2<String, String> grabConsoleOutputAndError(Runnable f) {
+    public static Entry<String, String> grabConsoleOutputAndError(Runnable f) {
         ByteArrayOutputStream outBuf = new ByteArrayOutputStream();
         ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
         PrintStream out = new PrintStream(outBuf);
@@ -267,7 +269,7 @@ public class ToolsTestUtils {
         }
         out.flush();
         err.flush();
-        return new Tuple2<>(outBuf.toString(), errBuf.toString());
+        return new SimpleImmutableEntry<>(outBuf.toString(), errBuf.toString());
     }
 
     public static class MockExitProcedure implements Exit.Procedure {

@@ -28,6 +28,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ElectionNotNeededException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
@@ -62,11 +63,17 @@ public class LeaderElectionCommand {
     private static final DecodeJson.DecodeInteger INT = new DecodeJson.DecodeInteger();
 
     public static void main(String... args) {
+        Exit.exit(mainNoExit(args));
+    }
+
+    static int mainNoExit(String... args) {
         try {
             run(Duration.ofMillis(30000), args);
-        } catch (Exception e) {
+            return 0;
+        } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
+            return 1;
         }
     }
 

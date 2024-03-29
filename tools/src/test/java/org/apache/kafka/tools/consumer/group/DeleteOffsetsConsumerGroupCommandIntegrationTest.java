@@ -29,12 +29,12 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.config.Defaults;
-import org.apache.kafka.tools.Tuple2;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
@@ -60,8 +60,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGr
         String topic = "foo:1";
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(getArgs(group, topic));
 
-        Tuple2<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, Collections.singletonList(topic));
-        assertEquals(Errors.GROUP_ID_NOT_FOUND, res.v1);
+        Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, Collections.singletonList(topic));
+        assertEquals(Errors.GROUP_ID_NOT_FOUND, res.getKey());
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
@@ -145,9 +145,9 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGr
         withConsumerGroup.accept(() -> {
             String topic = inputPartition >= 0 ? inputTopic + ":" + inputPartition : inputTopic;
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(getArgs(GROUP, topic));
-            Tuple2<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(GROUP, Collections.singletonList(topic));
-            Errors topLevelError = res.v1;
-            Map<TopicPartition, Throwable> partitions = res.v2;
+            Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(GROUP, Collections.singletonList(topic));
+            Errors topLevelError = res.getKey();
+            Map<TopicPartition, Throwable> partitions = res.getValue();
             TopicPartition tp = new TopicPartition(inputTopic, expectedPartition);
             // Partition level error should propagate to top level, unless this is due to a missed partition attempt.
             if (inputPartition >= 0) {

@@ -38,6 +38,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.api.{BeforeEach, Disabled, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
@@ -150,8 +151,8 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       shutdownKRaftController()
       verifyCleanShutdownAfterFailedStartup[CancellationException]
     } else {
-      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
-      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
+      propsToChangeUponRestart.setProperty(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG, "50")
+      propsToChangeUponRestart.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "some.invalid.hostname.foo.bar.local:65535")
       verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException]
     }
   }

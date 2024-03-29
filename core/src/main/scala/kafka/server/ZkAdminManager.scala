@@ -48,7 +48,7 @@ import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.common.AdminOperationException
-import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
+import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals}
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.{Map, mutable, _}
@@ -518,7 +518,7 @@ class ZkAdminManager(val config: KafkaConfig,
             val perBrokerConfig = brokerId.nonEmpty
 
             val persistentProps = if (perBrokerConfig) adminZkClient.fetchEntityConfig(ConfigType.BROKER, brokerId.get.toString)
-            else adminZkClient.fetchEntityConfig(ConfigType.BROKER, ConfigEntityName.DEFAULT)
+            else adminZkClient.fetchEntityConfig(ConfigType.BROKER, ZooKeeperInternals.DEFAULT_STRING)
 
             val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
             prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
@@ -559,13 +559,13 @@ class ZkAdminManager(val config: KafkaConfig,
 
   private def sanitizeEntityName(entityName: String): String =
     Option(entityName) match {
-      case None => ConfigEntityName.DEFAULT
+      case None => ZooKeeperInternals.DEFAULT_STRING
       case Some(name) => Sanitizer.sanitize(name)
     }
 
   private def desanitizeEntityName(sanitizedEntityName: String): String =
     sanitizedEntityName match {
-      case ConfigEntityName.DEFAULT => null
+      case ZooKeeperInternals.DEFAULT_STRING => null
       case name => Sanitizer.desanitize(name)
     }
 

@@ -74,7 +74,7 @@ import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.server.config.{Defaults, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
@@ -359,8 +359,8 @@ object TestUtils extends Logging {
       // controllerQuorumVotersFuture instead.
       props.put(KafkaConfig.QuorumVotersProp, "1000@localhost:0")
     } else {
-      props.put(KafkaConfig.ZkConnectProp, zkConnect)
-      props.put(KafkaConfig.ZkConnectionTimeoutMsProp, "10000")
+      props.put(ZkConfigs.ZK_CONNECT_CONFIG, zkConnect)
+      props.put(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG, "10000")
     }
     props.put(KafkaConfig.ReplicaSocketTimeoutMsProp, "1500")
     props.put(KafkaConfig.ControllerSocketTimeoutMsProp, "1500")
