@@ -19,7 +19,7 @@ package kafka.admin
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils.{createProducer, plaintextBootstrapServers}
+import kafka.utils.TestUtils.{createProducer, plaintextBootstrapServers, waitForAllReassignmentsToComplete}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -31,7 +31,8 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import java.util.Properties
+import java.io.File
+import java.util.{Optional, Properties}
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
@@ -189,14 +190,47 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   private def verifyListOffsets(topic: String = topicName, expectedMaxTimestampOffset: Int = 1): Unit = {
-    val earliestOffset = runFetchOffsets(adminClient, OffsetSpec.earliest(), topic)
-    assertEquals(0, earliestOffset.offset())
+    def check(): Unit = {
+      val earliestOffset = runFetchOffsets(adminClient, OffsetSpec.earliest(), topic)
+      assertEquals(0, earliestOffset.offset())
 
-    val latestOffset = runFetchOffsets(adminClient, OffsetSpec.latest(), topic)
-    assertEquals(3, latestOffset.offset())
+      val latestOffset = runFetchOffsets(adminClient, OffsetSpec.latest(), topic)
+      assertEquals(3, latestOffset.offset())
 
-    val maxTimestampOffset = runFetchOffsets(adminClient, OffsetSpec.maxTimestamp(), topic)
-    assertEquals(expectedMaxTimestampOffset, maxTimestampOffset.offset())
+      val maxTimestampOffset = runFetchOffsets(adminClient, OffsetSpec.maxTimestamp(), topic)
+      assertEquals(expectedMaxTimestampOffset, maxTimestampOffset.offset())
+    }
+
+    // case 0: test the offsets from leader's append path
+    check()
+
+    // case 1: test the offsets from follower's append path.
+    // we make a follower be the new leader to handle the ListOffsetRequest
+    val partitionAssignment = adminClient.describeTopics(java.util.Collections.singletonList(topic))
+      .allTopicNames().get().get(topic).partitions().get(0)
+    val newLeader = brokers.map(_.config.brokerId).find(_ != partitionAssignment.leader().id()).get
+    adminClient.alterPartitionReassignments(java.util.Collections.singletonMap(new TopicPartition(topic, 0),
+      Optional.of(new NewPartitionReassignment(java.util.Arrays.asList(newLeader))))).all().get()
+    waitForAllReassignmentsToComplete(adminClient)
+    assertEquals(newLeader, adminClient.describeTopics(java.util.Collections.singletonList(topic))
+      .allTopicNames().get().get(topic).partitions().get(0).leader().id())
+    check()
+
+    // case 2: test the offsets from recovery path.
+    // server will rebuild offset index according to log files if the index files are nonexistent
+    val indexFiles = brokers.flatMap(_.config.logDirs).toSet
+    brokers.foreach(b => killBroker(b.config.brokerId))
+    indexFiles.foreach { root =>
+      val files = new File(s"$root/$topic-0").listFiles()
+      if (files != null) files.foreach { f =>
+        if (f.getName.endsWith(".index")) f.delete()
+      }
+    }
+    restartDeadBrokers()
+    Utils.closeQuietly(adminClient, "ListOffsetsAdminClient")
+    adminClient = Admin.create(java.util.Collections.singletonMap(
+      AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers().asInstanceOf[Object]))
+    check()
   }
 
   private def runFetchOffsets(adminClient: Admin,
@@ -261,7 +295,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(1, zkConnectOrNull).map{ props =>
+    TestUtils.createBrokerConfigs(2, zkConnectOrNull).map{ props =>
       if (setOldMessageFormat) {
         props.setProperty("log.message.format.version", "0.10.0")
         props.setProperty("inter.broker.protocol.version", "0.10.0")
