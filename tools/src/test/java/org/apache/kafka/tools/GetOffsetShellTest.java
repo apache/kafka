@@ -129,6 +129,11 @@ public class GetOffsetShellTest {
         }
 
         @Override
+        public String toString() {
+            return "Row[name:" + name + ",partition:" + partition + ",timestamp:" + timestamp;
+        }
+
+        @Override
         public boolean equals(Object o) {
             if (o == this) return true;
 
