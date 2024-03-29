@@ -86,12 +86,6 @@ public class TopicMetadataRequestManager implements RequestManager {
 
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        // Prune any requests which have timed out
-        List<TopicMetadataRequestState> expiredRequests = inflightRequests.stream()
-                .filter(TimedRequestState::isExpired)
-                .collect(Collectors.toList());
-        expiredRequests.forEach(TopicMetadataRequestState::expire);
-
         List<NetworkClientDelegate.UnsentRequest> requests = inflightRequests.stream()
             .map(req -> req.send(currentTimeMs))
             .filter(Optional::isPresent)
@@ -171,10 +165,6 @@ public class TopicMetadataRequestManager implements RequestManager {
          * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest} if needed.
          */
         private Optional<NetworkClientDelegate.UnsentRequest> send(final long currentTimeMs) {
-            if (isExpired()) {
-                return Optional.empty();
-            }
-
             if (!canSendRequest(currentTimeMs)) {
                 return Optional.empty();
             }
@@ -187,14 +177,9 @@ public class TopicMetadataRequestManager implements RequestManager {
             return Optional.of(createUnsentRequest(request));
         }
 
-        private void expire() {
-            completeFutureAndRemoveRequest(
-                    new TimeoutException("Timeout expired while fetching topic metadata"));
-        }
-
         private NetworkClientDelegate.UnsentRequest createUnsentRequest(
                 final MetadataRequest.Builder request) {
-            Timer t = remaining(time, requestTimeoutMs);
+            Timer t = time.timer(requestTimeoutMs);
             NetworkClientDelegate.UnsentRequest unsent = new NetworkClientDelegate.UnsentRequest(
                 request,
                 Optional.empty(),

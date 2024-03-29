@@ -193,9 +193,9 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testResetPositionsProcessFailureIsIgnored() {
-        Timer timer = time.timer(100);
-        doThrow(new NullPointerException()).when(offsetsRequestManager).resetPositionsIfNeeded(timer);
+        doThrow(new NullPointerException()).when(offsetsRequestManager).resetPositionsIfNeeded();
 
+        Timer timer = time.timer(100);
         ResetPositionsEvent event = new ResetPositionsEvent(timer);
         applicationEventsQueue.add(event);
         assertDoesNotThrow(() -> consumerNetworkThread.runOnce());

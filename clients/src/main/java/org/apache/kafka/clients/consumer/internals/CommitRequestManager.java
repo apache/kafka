@@ -767,13 +767,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         @Override
-        void removeRequest() {
-            if (!unsentOffsetCommitRequests().remove(this)) {
-                log.warn("OffsetCommit request to remove not found in the outbound buffer: {}", this);
-            }
-        }
-
-        @Override
         protected String toStringBase() {
             return super.toStringBase() +
                     ", offsets=" + offsets +
@@ -819,22 +812,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         abstract CompletableFuture<?> future();
 
         /**
-         * Complete the request future with a TimeoutException if the request timeout has been
-         * reached, based on the provided current time.
-         */
-        void maybeExpire() {
-            if (isExpired()) {
-                removeRequest();
-                future().completeExceptionally(new TimeoutException(requestDescription() +
-                    " could not complete before timeout expired."));
-            }
-        }
-
-        /**
          * Build request with the given builder, including response handling logic.
          */
         NetworkClientDelegate.UnsentRequest buildRequestWithResponseHandling(final AbstractRequest.Builder<?> builder) {
-            Timer timer = this.remaining(time, requestTimeoutMs);
+            Timer timer = time.timer(requestTimeoutMs);
             NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
                 builder,
                 coordinatorRequestManager.coordinator(),
@@ -842,8 +823,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             );
             request.whenComplete(
                 (response, throwable) -> {
-                    long currentTimeMs = request.handler().completionTimeMs();
-                    handleClientResponse(response, throwable, currentTimeMs);
+                    long requestCompletionTimeMs = request.handler().completionTimeMs();
+                    handleClientResponse(response, throwable, requestCompletionTimeMs);
                 });
             return request;
         }
@@ -867,8 +848,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         abstract void onResponse(final ClientResponse response);
-
-        abstract void removeRequest();
 
         @Override
         protected String toStringBase() {
@@ -1000,13 +979,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             future = new CompletableFuture<>();
         }
 
-        @Override
-        void removeRequest() {
-            if (!unsentOffsetFetchRequests().remove(this)) {
-                log.warn("OffsetFetch request to remove not found in the outbound buffer: {}", this);
-            }
-        }
-
         /**
          * Handle OffsetFetch response that has no group level errors. This will look for
          * partition level errors and fail the future accordingly, also recording a failed request
@@ -1085,7 +1057,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         @Override
         public String toStringBase() {
-            return super.toStringBase() + ", " + ", requestedPartitions=" + requestedPartitions + ", future=" + future;
+            return super.toStringBase() + ", requestedPartitions=" + requestedPartitions + ", future=" + future;
         }
     }
 
@@ -1155,8 +1127,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 .filter(request -> !request.canSendRequest(currentTimeMs))
                 .collect(Collectors.toList());
 
-            failAndRemoveExpiredCommitRequests();
-
             // Add all unsent offset commit requests to the unsentRequests list
             unsentRequests.addAll(
                     unsentOffsetCommits.stream()
@@ -1169,8 +1139,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             Map<Boolean, List<OffsetFetchRequestState>> partitionedBySendability =
                     unsentOffsetFetches.stream()
                             .collect(Collectors.partitioningBy(request -> request.canSendRequest(currentTimeMs)));
-
-            failAndRemoveExpiredFetchRequests();
 
             // Add all sendable offset fetch requests to the unsentRequests list and to the inflightOffsetFetches list
             for (OffsetFetchRequestState request : partitionedBySendability.get(true)) {
@@ -1185,24 +1153,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             unsentOffsetCommits.addAll(unreadyCommitRequests);
 
             return Collections.unmodifiableList(unsentRequests);
-        }
-
-        /**
-         * Find the unsent commit requests that have expired, remove them and complete their
-         * futures with a TimeoutException.
-         */
-        private void failAndRemoveExpiredCommitRequests() {
-            Queue<OffsetCommitRequestState> requestsToPurge = new LinkedList<>(unsentOffsetCommits);
-            requestsToPurge.forEach(RetriableRequestState::maybeExpire);
-        }
-
-        /**
-         * Find the unsent fetch requests that have expired, remove them and complete their
-         * futures with a TimeoutException.
-         */
-        private void failAndRemoveExpiredFetchRequests() {
-            Queue<OffsetFetchRequestState> requestsToPurge = new LinkedList<>(unsentOffsetFetches);
-            requestsToPurge.forEach(RetriableRequestState::maybeExpire);
         }
 
         private void clearAll() {

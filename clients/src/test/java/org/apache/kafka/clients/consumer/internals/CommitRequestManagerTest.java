@@ -667,61 +667,6 @@ public class CommitRequestManagerTest {
         assertExceptionHandling(commitRequestManger, error, false);
     }
 
-    @Test
-    public void testOffsetCommitSyncTimeoutNotReturnedOnPollAndFails() {
-        CommitRequestManager commitRequestManger = create(false, 100);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
-
-        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
-            new TopicPartition("topic", 1),
-            new OffsetAndMetadata(0));
-
-        // Send sync offset commit request that fails with retriable error.
-        Timer timer = time.timer(retryBackoffMs * 2);
-        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(offsets, timer);
-        completeOffsetCommitRequestWithError(commitRequestManger, Errors.REQUEST_TIMED_OUT);
-
-        // Request retried after backoff, and fails with retriable again. Should not complete yet
-        // given that the request timeout hasn't expired.
-        time.sleep(retryBackoffMs);
-        completeOffsetCommitRequestWithError(commitRequestManger, Errors.REQUEST_TIMED_OUT);
-        assertFalse(commitResult.isDone());
-
-        // Sleep to expire the request timeout. Request should fail on the next poll.
-        time.sleep(retryBackoffMs);
-        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
-        assertEquals(0, res.unsentRequests.size());
-        assertTrue(commitResult.isDone());
-        assertTrue(commitResult.isCompletedExceptionally());
-    }
-
-    /**
-     * Sync commit requests that fail with an expected retriable error should be retried
-     * while there is time. When time expires, they should fail with a TimeoutException.
-     */
-    @Test
-    public void testOffsetCommitSyncFailedWithRetriableThrowsTimeoutWhenRetryTimeExpires() {
-        CommitRequestManager commitRequestManger = create(false, 100);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
-
-        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
-            new TopicPartition("topic", 1),
-            new OffsetAndMetadata(0));
-
-        // Send offset commit request that fails with retriable error.
-        Timer timer = time.timer(retryBackoffMs * 2);
-        CompletableFuture<Void> commitResult = commitRequestManger.commitSync(offsets, timer);
-        completeOffsetCommitRequestWithError(commitRequestManger, Errors.COORDINATOR_NOT_AVAILABLE);
-
-        // Sleep to expire the request timeout. Request should fail on the next poll with a
-        // TimeoutException.
-        time.sleep(timer.remainingMs());
-        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
-        assertEquals(0, res.unsentRequests.size());
-        assertTrue(commitResult.isDone());
-        assertFutureThrows(commitResult, TimeoutException.class);
-    }
-
     /**
      * Async commit requests that fail with a retriable error are not retried, and they should fail
      * with a RetriableCommitException.

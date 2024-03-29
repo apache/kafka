@@ -23,7 +23,7 @@ import java.util.concurrent.TimeoutException;
  * {@code CompletableEvent} is an interface that is used by both {@link CompletableApplicationEvent} and
  * {@link CompletableBackgroundEvent} for common processing and logic. A {@code CompletableEvent} is one that
  * allows the caller to get the {@link #future() future} related to the event and the event's
- * {@link #deadlineMs() expiration timestamp}.
+ * {@link #deadlineMs() expiration timestamp} and {@link #timeoutMs() timeout}.
  *
  * @param <T> Return type for the event when completed
  */
@@ -54,12 +54,16 @@ public interface CompletableEvent<T> {
     CompletableFuture<T> future();
 
     /**
-     * This is the deadline that represents the absolute wall clock time by which any event-specific execution should
-     * complete. This is not a timeout value. <em>After</em> this time has passed,
-     * {@link CompletableFuture#completeExceptionally(Throwable)} will be invoked with an instance of
+     * This represents the <em>absolute</em> time by which any event should complete. <em>After</em> this deadline
+     * has passed, a {@link CompletableFuture#completeExceptionally(Throwable)} will be invoked with an instance of
      * {@link TimeoutException}.
-     *
-     * @return
      */
     long deadlineMs();
+
+    /**
+     * This represents the <em>relative</em>> timeout for which the event should complete. <em>After</em> this
+     * timeout has elapsed, a {@link CompletableFuture#completeExceptionally(Throwable)} will be invoked with an
+     * instance of {@link TimeoutException}.
+     */
+    long timeoutMs();
 }

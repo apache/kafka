@@ -134,42 +134,6 @@ public class TopicMetadataRequestManagerTest {
         }
     }
 
-    @Test
-    public void testExpiringRequest() {
-        String topic = "hello";
-
-        // Request topic metadata with 1000ms expiration
-        CompletableFuture<Map<String, List<PartitionInfo>>> future =
-            this.topicMetadataRequestManager.requestTopicMetadata(topic, time.timer(1000L));
-        assertEquals(1, this.topicMetadataRequestManager.inflightRequests().size());
-
-        // Poll the request manager to get the list of requests to send
-        // - fail the request with a RetriableException
-        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
-        assertEquals(1, res.unsentRequests.size());
-        res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
-            res.unsentRequests.get(0),
-            topic,
-            Errors.REQUEST_TIMED_OUT));
-
-        // Sleep for long enough to exceed the backoff delay but still within the expiration
-        // - fail the request again with a RetriableException
-        this.time.sleep(500);
-        res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
-        assertEquals(1, res.unsentRequests.size());
-        res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
-            res.unsentRequests.get(0),
-            topic,
-            Errors.REQUEST_TIMED_OUT));
-
-        // Sleep for long enough to expire the request which should fail
-        this.time.sleep(1000);
-        res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
-        assertEquals(0, res.unsentRequests.size());
-        assertEquals(0, this.topicMetadataRequestManager.inflightRequests().size());
-        assertTrue(future.isCompletedExceptionally());
-    }
-
     @ParameterizedTest
     @MethodSource("hardFailureExceptionProvider")
     public void testHardFailures(Exception exception) {

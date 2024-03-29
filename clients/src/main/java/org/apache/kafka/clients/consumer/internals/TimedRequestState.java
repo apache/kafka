@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
 public class TimedRequestState extends RequestState {
@@ -45,30 +44,14 @@ public class TimedRequestState extends RequestState {
         this.timer = timer;
     }
 
-    public Timer timer() {
-        timer.update();
-        return timer;
-    }
-
     public boolean isExpired() {
         timer.update();
         return timer.isExpired();
     }
 
-    public Timer remaining(Time time, int requestTimeoutMs) {
-        timer.update();
-        long remainingMs = Math.min(timer.remainingMs(), requestTimeoutMs);
-
-        if (remainingMs < 0) {
-            // We need to have remaining be non-negative to avoid an error when creating a Timer
-            remainingMs = 0;
-        }
-
-        return time.timer(remainingMs);
-    }
-
     @Override
     protected String toStringBase() {
+        timer.update();
         return super.toStringBase() + ", timer=" + timer.remainingMs();
     }
 }

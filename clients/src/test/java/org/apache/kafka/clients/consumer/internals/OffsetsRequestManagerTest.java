@@ -45,7 +45,6 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -506,7 +505,7 @@ public class OffsetsRequestManagerTest {
     @Test
     public void testResetPositionsSendNoRequestIfNoPartitionsNeedingReset() {
         when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.emptySet());
-        requestManager.resetPositionsIfNeeded(time.timer(REQUEST_TIMEOUT_MS));
+        requestManager.resetPositionsIfNeeded();
         assertEquals(0, requestManager.requestsToSend());
     }
 
@@ -515,7 +514,7 @@ public class OffsetsRequestManagerTest {
         mockFailedRequest_MissingLeader();
         when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
-        requestManager.resetPositionsIfNeeded(time.timer(REQUEST_TIMEOUT_MS));
+        requestManager.resetPositionsIfNeeded();
         verify(metadata).requestUpdate(true);
         assertEquals(0, requestManager.requestsToSend());
     }
@@ -540,8 +539,7 @@ public class OffsetsRequestManagerTest {
         when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
 
-        Timer timer = time.timer(REQUEST_TIMEOUT_MS);
-        requestManager.resetPositionsIfNeeded(timer);
+        requestManager.resetPositionsIfNeeded();
 
         // Reset positions response with TopicAuthorizationException
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
@@ -559,7 +557,7 @@ public class OffsetsRequestManagerTest {
 
         // Following resetPositions should enqueue the previous exception in the background event queue
         // without performing any request
-        assertDoesNotThrow(() -> requestManager.resetPositionsIfNeeded(timer));
+        assertDoesNotThrow(() -> requestManager.resetPositionsIfNeeded());
         assertEquals(0, requestManager.requestsToSend());
 
         // Check that the event was enqueued during resetPositionsIfNeeded
@@ -588,7 +586,7 @@ public class OffsetsRequestManagerTest {
 
         mockSuccessfulBuildRequestForValidatingPositions(position, LEADER_1);
 
-        requestManager.validatePositionsIfNeeded(time.timer(REQUEST_TIMEOUT_MS));
+        requestManager.validatePositionsIfNeeded();
         assertEquals(1, requestManager.requestsToSend(), "Invalid request count");
 
         verify(subscriptionState).setNextAllowedRetry(any(), anyLong());
@@ -615,7 +613,7 @@ public class OffsetsRequestManagerTest {
         when(subscriptionState.position(any())).thenReturn(position, position);
         NodeApiVersions nodeApiVersions = NodeApiVersions.create();
         when(apiVersions.get(LEADER_1.idString())).thenReturn(nodeApiVersions);
-        requestManager.validatePositionsIfNeeded(time.timer(REQUEST_TIMEOUT_MS));
+        requestManager.validatePositionsIfNeeded();
         verify(metadata).requestUpdate(true);
         assertEquals(0, requestManager.requestsToSend());
     }
@@ -628,8 +626,7 @@ public class OffsetsRequestManagerTest {
                 Optional.of(10), leaderAndEpoch);
         mockSuccessfulBuildRequestForValidatingPositions(position, LEADER_1);
 
-        Timer timer = time.timer(REQUEST_TIMEOUT_MS);
-        requestManager.validatePositionsIfNeeded(timer);
+        requestManager.validatePositionsIfNeeded();
 
         // Validate positions response with TopicAuthorizationException
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
@@ -643,7 +640,7 @@ public class OffsetsRequestManagerTest {
 
         // Following validatePositions should raise the previous exception without performing any
         // request
-        assertThrows(TopicAuthorizationException.class, () -> requestManager.validatePositionsIfNeeded(timer));
+        assertThrows(TopicAuthorizationException.class, () -> requestManager.validatePositionsIfNeeded());
         assertEquals(0, requestManager.requestsToSend());
     }
 
@@ -658,11 +655,9 @@ public class OffsetsRequestManagerTest {
         when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.position(any())).thenReturn(position, position);
 
-        Timer timer = time.timer(REQUEST_TIMEOUT_MS);
-
         // No api version info initially available
         when(apiVersions.get(LEADER_1.idString())).thenReturn(null);
-        requestManager.validatePositionsIfNeeded(timer);
+        requestManager.validatePositionsIfNeeded();
         assertEquals(0, requestManager.requestsToSend(), "Invalid request count");
         verify(subscriptionState, never()).completeValidation(TEST_PARTITION_1);
         verify(subscriptionState, never()).setNextAllowedRetry(any(), anyLong());
@@ -671,7 +666,7 @@ public class OffsetsRequestManagerTest {
         when(apiVersions.get(LEADER_1.idString())).thenReturn(NodeApiVersions.create());
         when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.position(any())).thenReturn(position, position);
-        requestManager.validatePositionsIfNeeded(timer);
+        requestManager.validatePositionsIfNeeded();
         assertEquals(1, requestManager.requestsToSend(), "Invalid request count");
     }
 
@@ -693,7 +688,7 @@ public class OffsetsRequestManagerTest {
         when(subscriptionState.resetStrategy(any())).thenReturn(strategy);
         mockSuccessfulRequest(Collections.singletonMap(tp, leader));
 
-        requestManager.resetPositionsIfNeeded(time.timer(REQUEST_TIMEOUT_MS));
+        requestManager.resetPositionsIfNeeded();
         assertEquals(1, requestManager.requestsToSend());
 
         // Reset positions response with offsets

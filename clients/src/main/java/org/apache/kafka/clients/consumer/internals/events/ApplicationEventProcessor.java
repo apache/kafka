@@ -232,12 +232,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final ResetPositionsEvent event) {
-        CompletableFuture<Void> future = requestManagers.offsetsRequestManager.resetPositionsIfNeeded(eventTimer(event));
+        CompletableFuture<Void> future = requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
         future.whenComplete(complete(event.future()));
     }
 
     private void process(final ValidatePositionsEvent event) {
-        CompletableFuture<Void> future = requestManagers.offsetsRequestManager.validatePositionsIfNeeded(eventTimer(event));
+        CompletableFuture<Void> future = requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
         future.whenComplete(complete(event.future()));
     }
 
@@ -299,12 +299,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * Recreate a {@link Timer} from the event's {@link CompletableApplicationEvent#deadlineMs() deadline/expiration}.
      */
     private Timer eventTimer(final CompletableApplicationEvent<?> event) {
-        long diffMs = event.deadlineMs() - time.milliseconds();
-
-        // It's possible that the timeout has already passed, so make sure the timeout is non-negative
-        // to avoid an exception when creating the timer.
-        long timeoutMs = Math.max(0, diffMs);
-        return time.timer(timeoutMs);
+        return time.timer(event.timeoutMs());
     }
 
     /**
