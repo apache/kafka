@@ -1419,9 +1419,10 @@ project(':clients') {
     implementation libs.opentelemetryProto
     
     // JMH libraries
-    implementation libs.jmhCore
-    annotationProcessor libs.jmhGeneratorAnnProcess
-    implementation libs.jmhCoreBenchmarks
+    testImplementation libs.jmhCore
+    testAnnotationProcessor libs.jmhGeneratorAnnProcess
+    testImplementation libs.jmhCoreBenchmarks
+    testImplementation libs.slf4jlog4j
 
     // libraries which should be added as runtime dependencies in generated pom.xml should be defined here:
     shadow libs.zstd
