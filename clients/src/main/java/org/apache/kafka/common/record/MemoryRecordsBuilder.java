@@ -260,7 +260,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                 // case 0: there is only one batch so use the last offset
                 return new RecordsInfo(logAppendTime, lastOffset);
             else
-                // case 1: there is many single-record batches having same max timestamp, so the base offset is
+                // case 1: there are many single-record batches having same max timestamp, so the base offset is
                 // equal with the last offset of earliest batch
                 return new RecordsInfo(logAppendTime, baseOffset);
         } else if (maxTimestamp == RecordBatch.NO_TIMESTAMP) {
@@ -270,8 +270,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                 // ditto to case 0
                 return new RecordsInfo(maxTimestamp, lastOffset);
             else
-                // case 2: there is many single-record batches, and so offsetOfMaxTimestamp is equal with
-                // the last offset of batch which having max timestamp
+                // case 2: Each batch is composed of single record, and offsetOfMaxTimestamp points to the record having
+                // max timestamp. Hence, offsetOfMaxTimestamp is equal to the last offset of earliest batch (record)
                 return new RecordsInfo(maxTimestamp, offsetOfMaxTimestamp);
         }
     }
