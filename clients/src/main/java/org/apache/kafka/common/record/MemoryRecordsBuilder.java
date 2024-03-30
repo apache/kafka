@@ -240,25 +240,39 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         return builtRecords;
     }
 
+
     /**
-     * Get the max timestamp and its offset. The details of the offset returned are a bit subtle.
-     * Note: The semantic for the offset of max timestamp is the first offset with the max timestamp if there are multi-records having same timestamp.
+     * We want to align the shallowOffsetOfMaxTimestamp for all paths (leader append, follower append, and index recovery)
+     * The definition of shallowOffsetOfMaxTimestamp is the "last offset" of a batch which having max timestamp.
+     * If there are many batches having same max timestamp, we pick up the earliest batch.
      *
-     * If the log append time is used, the offset will be the first offset of the record.
+     * If the log append time is used, the offset will be the last offset unless no compression is used and
+     * the message format version is 0 or 1, in which case, it will be the first offset.
      *
-     * If create time is used, the offset will always be the offset of the record with the max timestamp.
-     *
-     * If it's NO_TIMESTAMP (i.e. MAGIC_VALUE_V0), we'll return offset -1 since no timestamp info in records.
+     * If create time is used, the offset will be the last offset unless no compression is used and the message
+     * format version is 0 or 1, in which case, it will be the offset of the record with the max timestamp.
      *
      * @return The max timestamp and its offset
      */
     public RecordsInfo info() {
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
-            return new RecordsInfo(logAppendTime, baseOffset);
+            if (compressionType != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2)
+                // case 0: there is only one batch so use the last offset
+                return new RecordsInfo(logAppendTime, lastOffset);
+            else
+                // case 1: there is many single-record batches having same max timestamp, so the base offset is
+                // equal with the last offset of earliest batch
+                return new RecordsInfo(logAppendTime, baseOffset);
+        } else if (maxTimestamp == RecordBatch.NO_TIMESTAMP) {
+            return new RecordsInfo(RecordBatch.NO_TIMESTAMP, lastOffset);
         } else {
-            // For create time, we always use offsetOfMaxTimestamp for the correct time -> offset mapping
-            // If it's MAGIC_VALUE_V0, the value will be the default value: [-1, -1]
-            return new RecordsInfo(maxTimestamp, offsetOfMaxTimestamp);
+            if (compressionType != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2)
+                // ditto to case 0
+                return new RecordsInfo(maxTimestamp, lastOffset);
+            else
+                // case 2: there is many single-record batches, and so offsetOfMaxTimestamp is equal with
+                // the last offset of batch which having max timestamp
+                return new RecordsInfo(maxTimestamp, offsetOfMaxTimestamp);
         }
     }
 
@@ -851,12 +865,12 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
     public static class RecordsInfo {
         public final long maxTimestamp;
-        public final long offsetOfMaxTimestamp;
+        public final long shallowOffsetOfMaxTimestamp;
 
         public RecordsInfo(long maxTimestamp,
-                           long offsetOfMaxTimestamp) {
+                           long shallowOffsetOfMaxTimestamp) {
             this.maxTimestamp = maxTimestamp;
-            this.offsetOfMaxTimestamp = offsetOfMaxTimestamp;
+            this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
         }
     }
 

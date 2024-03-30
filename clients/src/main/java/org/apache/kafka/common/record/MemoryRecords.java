@@ -209,7 +209,7 @@ public class MemoryRecords extends AbstractRecords {
                                 partition, batch.lastOffset(), maxRecordBatchSize, filteredBatchSize);
 
                         MemoryRecordsBuilder.RecordsInfo info = builder.info();
-                        filterResult.updateRetainedBatchMetadata(info.maxTimestamp, info.offsetOfMaxTimestamp,
+                        filterResult.updateRetainedBatchMetadata(info.maxTimestamp, info.shallowOffsetOfMaxTimestamp,
                             maxOffset, retainedRecords.size(), filteredBatchSize);
                     }
                 }
