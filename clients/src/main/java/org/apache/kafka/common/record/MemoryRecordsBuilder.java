@@ -243,7 +243,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
     /**
      * We want to align the shallowOffsetOfMaxTimestamp for all paths (leader append, follower append, and index recovery)
-     * The definition of shallowOffsetOfMaxTimestamp is the "last offset" of a batch which having max timestamp.
+     * The definition of shallowOffsetOfMaxTimestamp is the last offset of the batch which having max timestamp.
      * If there are many batches having same max timestamp, we pick up the earliest batch.
      *
      * If the log append time is used, the offset will be the last offset unless no compression is used and
