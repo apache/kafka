@@ -120,17 +120,17 @@ public class GetOffsetShellTest {
     static class Row {
         private String name;
         private int partition;
-        private Long timestamp;
+        private Long offset;
 
-        public Row(String name, int partition, Long timestamp) {
+        public Row(String name, int partition, Long offset) {
             this.name = name;
             this.partition = partition;
-            this.timestamp = timestamp;
+            this.offset = offset;
         }
 
         @Override
         public String toString() {
-            return "Row[name:" + name + ",partition:" + partition + ",timestamp:" + timestamp;
+            return "Row[name:" + name + ",partition:" + partition + ",offset:" + offset;
         }
 
         @Override
@@ -141,12 +141,12 @@ public class GetOffsetShellTest {
 
             Row r = (Row) o;
 
-            return name.equals(r.name) && partition == r.partition && Objects.equals(timestamp, r.timestamp);
+            return name.equals(r.name) && partition == r.partition && Objects.equals(offset, r.offset);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(name, partition, timestamp);
+            return Objects.hash(name, partition, offset);
         }
     }
 
@@ -274,7 +274,7 @@ public class GetOffsetShellTest {
             List<Row> offsets = executeAndParse("--topic-partitions", "topic.*", "--time", time);
 
             offsets.forEach(
-                    row -> assertTrue(row.timestamp >= 0 && row.timestamp <= Integer.parseInt(row.name.replace("topic", "")))
+                    row -> assertTrue(row.offset >= 0 && row.offset <= Integer.parseInt(row.name.replace("topic", "")))
             );
         }
     }
