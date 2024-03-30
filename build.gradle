@@ -829,6 +829,7 @@ project(':server') {
     implementation project(':transaction-coordinator')
     implementation project(':raft')
     implementation libs.metrics
+    implementation libs.jacksonDatabind
 
     implementation libs.slf4jApi
 

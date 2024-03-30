@@ -16,8 +16,7 @@
  */
 package kafka.zk.migration
 
-import kafka.security.authorizer.{AclAuthorizer, AclEntry}
-import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
+import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.acl._
@@ -27,6 +26,8 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.migration.KRaftMigrationZkWriter
+import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.Test
@@ -80,14 +81,14 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
     val prefixedResource = new ResourcePattern(ResourceType.TOPIC, "bar-" + Uuid.randomUuid(), PatternType.PREFIXED)
     val username = "alice"
     val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
-    val wildcardPrincipal = SecurityUtils.parseKafkaPrincipal(WildcardPrincipalString)
+    val wildcardPrincipal = SecurityUtils.parseKafkaPrincipal(WILDCARD_PRINCIPAL_STRING)
 
-    val ace1 = new AccessControlEntry(principal.toString, WildcardHost, AclOperation.READ, AclPermissionType.ALLOW)
+    val ace1 = new AccessControlEntry(principal.toString, WILDCARD_HOST, AclOperation.READ, AclPermissionType.ALLOW)
     val acl1 = new AclBinding(resource1, ace1)
     val ace2 = new AccessControlEntry(principal.toString, "192.168.0.1", AclOperation.WRITE, AclPermissionType.ALLOW)
     val acl2 = new AclBinding(resource1, ace2)
-    val acl3 = new AclBinding(resource2, new AccessControlEntry(principal.toString, WildcardHost, AclOperation.DESCRIBE, AclPermissionType.ALLOW))
-    val acl4 = new AclBinding(prefixedResource, new AccessControlEntry(wildcardPrincipal.toString, WildcardHost, AclOperation.READ, AclPermissionType.ALLOW))
+    val acl3 = new AclBinding(resource2, new AccessControlEntry(principal.toString, WILDCARD_HOST, AclOperation.DESCRIBE, AclPermissionType.ALLOW))
+    val acl4 = new AclBinding(prefixedResource, new AccessControlEntry(wildcardPrincipal.toString, WILDCARD_HOST, AclOperation.READ, AclPermissionType.ALLOW))
 
     val authorizer = new AclAuthorizer()
     try {
@@ -128,8 +129,8 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
     val username2 = "blah"
     val principal1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username1)
     val principal2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username2)
-    val acl1Resource1 = new AclEntry(new AccessControlEntry(principal1.toString, WildcardHost, AclOperation.WRITE, AclPermissionType.ALLOW))
-    val acl1Resource2 = new AclEntry(new AccessControlEntry(principal2.toString, WildcardHost, AclOperation.READ, AclPermissionType.ALLOW))
+    val acl1Resource1 = new AclEntry(new AccessControlEntry(principal1.toString, WILDCARD_HOST, AclOperation.WRITE, AclPermissionType.ALLOW))
+    val acl1Resource2 = new AclEntry(new AccessControlEntry(principal2.toString, WILDCARD_HOST, AclOperation.READ, AclPermissionType.ALLOW))
 
     zkClient.createAclPaths()
     zkClient.createAclsForResourceIfNotExists(resource1, Set(acl1Resource1))
@@ -144,7 +145,7 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
       .setId(Uuid.randomUuid())
       .setHost("192.168.10.1")
       .setOperation(AclOperation.READ.code())
-      .setPrincipal(WildcardPrincipalString)
+      .setPrincipal(WILDCARD_PRINCIPAL_STRING)
       .setPermissionType(AclPermissionType.ALLOW.code())
       .setPatternType(resource3.patternType().code())
       .setResourceName(resource3.name())
