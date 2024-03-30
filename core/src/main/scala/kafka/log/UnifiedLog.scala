@@ -1531,20 +1531,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           }
         }
         localLog.checkIfMemoryMappedBufferClosed()
-        if (remoteLogEnabled()) {
-          /**
-           * See @link{https://issues.apache.org/jira/browse/KAFKA-16073} for the background of this fix
-           */
-          val newLocalLogStartOffset = localLog.segments.higherSegment(deletable.last.baseOffset()).get().baseOffset()
+        if (segmentsToDelete.nonEmpty) {
+          // increment the local-log-start-offset before removing the segment for lookups
+          val newLocalLogStartOffset = localLog.segments.higherSegment(segmentsToDelete.last.baseOffset()).get.baseOffset()
           incrementStartOffset(newLocalLogStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
           // remove the segments for lookups
           localLog.removeAndDeleteSegments(segmentsToDelete, asyncDelete = true, reason)
-          deleteProducerSnapshots(deletable, asyncDelete = true)
-        } else {
-          // remove the segments for lookups
-          localLog.removeAndDeleteSegments(segmentsToDelete, asyncDelete = true, reason)
-          deleteProducerSnapshots(deletable, asyncDelete = true)
-          incrementStartOffset(localLog.segments.firstSegmentBaseOffset.getAsLong, LogStartOffsetIncrementReason.SegmentDeletion)
+          deleteProducerSnapshots(segmentsToDelete, asyncDelete = true)
         }
       }
       numToDelete
