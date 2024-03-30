@@ -19,7 +19,6 @@ package kafka.api
 import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
-import kafka.security.authorizer.AclEntry
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
@@ -29,6 +28,7 @@ import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.security.authorizer.AclEntry
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
@@ -99,7 +99,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic).get())
       assertEquals(topicIds(topic), createResult.topicId(topic).get())
     }
-    
+
 
     val failedCreateResult = client.createTopics(newTopics.asJava)
     val results = failedCreateResult.values()
@@ -183,12 +183,12 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
     //with includeAuthorizedOperations flag
     topicResult = getTopicMetadata(client, topic, new DescribeTopicsOptions().includeAuthorizedOperations(true))
-    expectedOperations = AclEntry.supportedOperations(ResourceType.TOPIC).asJava
+    expectedOperations = AclEntry.supportedOperations(ResourceType.TOPIC)
     assertEquals(expectedOperations, topicResult.authorizedOperations)
   }
 
   def configuredClusterPermissions: Set[AclOperation] =
-    AclEntry.supportedOperations(ResourceType.CLUSTER)
+    AclEntry.supportedOperations(ResourceType.CLUSTER).asScala.toSet
 
   override def modifyConfigs(configs: Seq[Properties]): Unit = {
     super.modifyConfigs(configs)

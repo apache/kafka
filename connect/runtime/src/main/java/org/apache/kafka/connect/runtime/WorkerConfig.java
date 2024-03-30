@@ -438,9 +438,15 @@ public class WorkerConfig extends AbstractConfig {
 
     @SuppressWarnings("this-escape")
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
-        super(definition, props);
+        super(definition, props, Utils.castToStringObjectMap(props), true);
         logInternalConverterRemovalWarnings(props);
         logPluginPathConfigProviderWarning(props);
     }
 
+    @Override
+    public Map<String, Object> originals() {
+        Map<String, Object> map = super.originals();
+        map.remove(AbstractConfig.CONFIG_PROVIDERS_CONFIG);
+        return map;
+    }
 }
