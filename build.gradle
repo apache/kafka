@@ -1455,7 +1455,7 @@ project(':clients') {
   
   task testJar2(type: ShadowJar) {
     archiveClassifier.set("tests")
-    from sourceSets.test.output
+    from sourceSets.main.output, sourceSets.test.output
     configurations = [project.configurations.testImplementation]
     manifest {
       attributes "Main-Class": "org.openjdk.jmh.Main"
