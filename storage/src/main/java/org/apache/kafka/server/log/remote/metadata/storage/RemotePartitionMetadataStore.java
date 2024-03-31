@@ -153,8 +153,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         }
 
         if (!remoteLogMetadataCache.isInitialized()) {
-            // Throwing a retriable ReplicaNotAvailableException here for clients retry. We can introduce a new more
-            // appropriate exception with a KIP in the future.
+            // Throwing a retriable ReplicaNotAvailableException here for clients retry.
             throw new ReplicaNotAvailableException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
         }
 
