@@ -1537,8 +1537,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           incrementStartOffset(newLocalLogStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
           // remove the segments for lookups
           localLog.removeAndDeleteSegments(segmentsToDelete, asyncDelete = true, reason)
-          deleteProducerSnapshots(segmentsToDelete, asyncDelete = true)
         }
+        deleteProducerSnapshots(deletable, asyncDelete = true)
       }
       numToDelete
     }
