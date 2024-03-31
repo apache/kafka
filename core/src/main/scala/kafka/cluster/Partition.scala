@@ -877,9 +877,8 @@ class Partition(val topicPartition: TopicPartition,
         if (logManager.onlineLogDirId(directoryId) || !logManager.hasOfflineLogDirs() || directoryId == DirectoryId.UNASSIGNED) {
           createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId, targetLogDirectoryId)
         } else {
-          warn(s"Skipping creation of log because there are potentially offline log " +
-            s"directories and log may already exist there. directoryId=$directoryId, " +
-            s"topicId=$topicId, targetLogDirectoryId=$targetLogDirectoryId")
+          throw new KafkaStorageException(s"Skipping creation of log because there are potentially offline log " +
+            s"directories and log may already exist there. directoryId=$directoryId, topicId=$topicId")
         }
 
       case None =>
