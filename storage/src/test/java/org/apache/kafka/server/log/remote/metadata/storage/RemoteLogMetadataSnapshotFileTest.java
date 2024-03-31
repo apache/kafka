@@ -20,67 +20,95 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import static org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataSnapshotFile.Snapshot;
 
 public class RemoteLogMetadataSnapshotFileTest {
 
-    @Test
-    public void testEmptyCommittedLogMetadataFile() throws Exception {
-        File metadataStoreDir = TestUtils.tempDirectory("_rlmm_committed");
-        RemoteLogMetadataSnapshotFile snapshotFile = new RemoteLogMetadataSnapshotFile(metadataStoreDir.toPath());
+    File logDir = TestUtils.tempDirectory();
+    File partitionDir = new File(logDir, "test-0");
+    RemoteLogMetadataSnapshotFile snapshotFile = new RemoteLogMetadataSnapshotFile(partitionDir.toPath());
 
-        // There should be an empty snapshot as nothing is written into it.
-        Assertions.assertFalse(snapshotFile.read().isPresent());
+    @BeforeEach
+    public void setUp() {
+        partitionDir.mkdirs();
     }
 
     @Test
-    public void testEmptySnapshotWithCommittedLogMetadataFile() throws Exception {
-        File metadataStoreDir = TestUtils.tempDirectory("_rlmm_committed");
-        RemoteLogMetadataSnapshotFile snapshotFile = new RemoteLogMetadataSnapshotFile(metadataStoreDir.toPath());
-
-        snapshotFile.write(new RemoteLogMetadataSnapshotFile.Snapshot(0, 0L, Collections.emptyList()));
-
-        // There should be an empty snapshot as the written snapshot did not have any remote log segment metadata.
-        Assertions.assertTrue(snapshotFile.read().isPresent());
-        Assertions.assertTrue(snapshotFile.read().get().remoteLogSegmentMetadataSnapshots().isEmpty());
+    public void testReadWhenSnapshotFileDoesNotExist() throws IOException {
+        assertFalse(snapshotFile.read().isPresent());
     }
 
     @Test
-    public void testWriteReadCommittedLogMetadataFile() throws Exception {
-        File metadataStoreDir = TestUtils.tempDirectory("_rlmm_committed");
-        RemoteLogMetadataSnapshotFile snapshotFile = new RemoteLogMetadataSnapshotFile(metadataStoreDir.toPath());
+    public void testReadWhenSnapshotFileIsEmpty() throws IOException {
+        assertTrue(snapshotFile.getMetadataStoreFile().createNewFile());
+        assertFalse(snapshotFile.read().isPresent());
+    }
 
-        List<RemoteLogSegmentMetadataSnapshot> remoteLogSegmentMetadatas = new ArrayList<>();
-        long startOffset = 0;
-        for (int i = 0; i < 100; i++) {
-            long endOffset = startOffset + 100L;
-            CustomMetadata customMetadata = new CustomMetadata(new byte[]{(byte) i});
-            remoteLogSegmentMetadatas.add(
-                    new RemoteLogSegmentMetadataSnapshot(Uuid.randomUuid(), startOffset, endOffset,
-                                                         System.currentTimeMillis(), 1, 100, 1024,
-                                                         Optional.of(customMetadata),
-                                                         RemoteLogSegmentState.COPY_SEGMENT_FINISHED, Collections.singletonMap(i, startOffset)
-                    ));
-            startOffset = endOffset + 1;
-        }
-
-        RemoteLogMetadataSnapshotFile.Snapshot snapshot = new RemoteLogMetadataSnapshotFile.Snapshot(0, 120,
-                                                                                                     remoteLogSegmentMetadatas);
+    @Test
+    public void testWriteEmptySnapshot() throws IOException {
+        int metadataPartition = 0;
+        long metadataOffset = 99L;
+        List<RemoteLogSegmentMetadataSnapshot> metadataSnapshots = Collections.emptyList();
+        Snapshot snapshot = new Snapshot(metadataPartition, metadataOffset, metadataSnapshots);
         snapshotFile.write(snapshot);
+        assertTrue(snapshotFile.read().isPresent());
+        assertTrue(snapshotFile.read().get().remoteLogSegmentMetadataSnapshots().isEmpty());
+    }
 
-        Optional<RemoteLogMetadataSnapshotFile.Snapshot> maybeReadSnapshot = snapshotFile.read();
-        Assertions.assertTrue(maybeReadSnapshot.isPresent());
+    @Test
+    public void testWriteSnapshot() throws IOException {
+        int metadataPartition = 0;
+        long metadataOffset = 99L;
+        List<RemoteLogSegmentMetadataSnapshot> metadataSnapshots = new ArrayList<>();
+        metadataSnapshots.add(segmentSnapshot(0, 100, Collections.singletonMap(1, 0L)));
+        metadataSnapshots.add(segmentSnapshot(101, 200, Collections.singletonMap(2, 101L)));
+        Snapshot expectedSnapshot = new Snapshot(metadataPartition, metadataOffset, metadataSnapshots);
 
-        Assertions.assertEquals(snapshot, maybeReadSnapshot.get());
-        Assertions.assertEquals(new HashSet<>(snapshot.remoteLogSegmentMetadataSnapshots()),
-                                new HashSet<>(maybeReadSnapshot.get().remoteLogSegmentMetadataSnapshots()));
+        snapshotFile.write(expectedSnapshot);
+        assertTrue(snapshotFile.read().isPresent());
+        assertEquals(expectedSnapshot, snapshotFile.read().get());
+    }
+
+    @Test
+    public void testOverwriteEmptySnapshot() throws IOException {
+        int metadataPartition = 0;
+        long metadataOffset = 99L;
+        List<RemoteLogSegmentMetadataSnapshot> metadataSnapshots = Collections.emptyList();
+        Snapshot snapshot = new Snapshot(metadataPartition, metadataOffset, metadataSnapshots);
+        snapshotFile.write(snapshot);
+        assertTrue(snapshotFile.read().isPresent());
+        assertTrue(snapshotFile.read().get().remoteLogSegmentMetadataSnapshots().isEmpty());
+
+        List<RemoteLogSegmentMetadataSnapshot> newMetadataSnapshots = new ArrayList<>();
+        newMetadataSnapshots.add(segmentSnapshot(0, 100, Collections.singletonMap(1, 0L)));
+        newMetadataSnapshots.add(segmentSnapshot(101, 200, Collections.singletonMap(2, 101L)));
+        Snapshot newSnapshot = new Snapshot(metadataPartition, metadataOffset, newMetadataSnapshots);
+        snapshotFile.write(newSnapshot);
+        assertTrue(snapshotFile.read().isPresent());
+        assertEquals(newSnapshot, snapshotFile.read().get());
+    }
+
+    private RemoteLogSegmentMetadataSnapshot segmentSnapshot(long startOffset,
+                                                             long endOffset,
+                                                             Map<Integer, Long> segmentLeaderEpochs) {
+        CustomMetadata customMetadata = new CustomMetadata(new byte[]{'a'});
+        return new RemoteLogSegmentMetadataSnapshot(
+                Uuid.randomUuid(), startOffset, endOffset, 1L, 1, 100, 1024,
+                Optional.of(customMetadata), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, segmentLeaderEpochs);
     }
 }

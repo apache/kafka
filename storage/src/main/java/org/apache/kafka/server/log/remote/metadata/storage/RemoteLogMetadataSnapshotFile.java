@@ -16,11 +16,8 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -29,7 +26,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -45,9 +41,7 @@ import java.util.Optional;
  * broker restarts.
  */
 public class RemoteLogMetadataSnapshotFile {
-    private static final Logger log = LoggerFactory.getLogger(RemoteLogMetadataSnapshotFile.class);
-
-    public static final String COMMITTED_LOG_METADATA_SNAPSHOT_FILE_NAME = "remote_log_snapshot";
+    static final String COMMITTED_LOG_METADATA_SNAPSHOT_FILE_NAME = "remote_log_snapshot";
 
     // File format:
     // <header>[<entry>...]
@@ -68,17 +62,6 @@ public class RemoteLogMetadataSnapshotFile {
      */
     RemoteLogMetadataSnapshotFile(Path metadataStoreDir) {
         this.metadataStoreFile = new File(metadataStoreDir.toFile(), COMMITTED_LOG_METADATA_SNAPSHOT_FILE_NAME);
-
-        // Create an empty file if it does not exist.
-        try {
-            final boolean fileExists = Files.exists(metadataStoreFile.toPath());
-            if (!fileExists) {
-                Files.createFile(metadataStoreFile.toPath());
-            }
-            log.info("Remote log metadata snapshot file: [{}], newFileCreated: [{}]", metadataStoreFile, !fileExists);
-        } catch (IOException e) {
-            throw new KafkaException(e);
-        }
     }
 
     /**
@@ -140,7 +123,7 @@ public class RemoteLogMetadataSnapshotFile {
      */
     public synchronized Optional<Snapshot> read() throws IOException {
 
-        // Checking for empty files.
+        // Checking for empty/no file
         if (metadataStoreFile.length() == 0) {
             return Optional.empty();
         }
@@ -194,6 +177,11 @@ public class RemoteLogMetadataSnapshotFile {
 
             return Optional.of(new Snapshot(version, metadataPartition, metadataPartitionOffset, result));
         }
+    }
+
+    // visibleForTesting
+    File getMetadataStoreFile() {
+        return metadataStoreFile;
     }
 
     /**
