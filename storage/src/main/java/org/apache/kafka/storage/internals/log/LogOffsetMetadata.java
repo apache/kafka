@@ -28,6 +28,7 @@ public final class LogOffsetMetadata {
 
     //TODO KAFKA-14484 remove once UnifiedLog has been moved to the storage module
     private static final long UNIFIED_LOG_UNKNOWN_OFFSET = -1L;
+    public static final long REMOTE_LOG_UNKNOWN_OFFSET = -2L;
 
     public static final LogOffsetMetadata UNKNOWN_OFFSET_METADATA = new LogOffsetMetadata(-1L, 0L, 0);
 
@@ -42,6 +43,11 @@ public final class LogOffsetMetadata {
     }
 
     public LogOffsetMetadata(long messageOffset,
+                             long segmentBaseOffset) {
+        this(messageOffset, segmentBaseOffset, UNKNOWN_FILE_POSITION);
+    }
+
+    public LogOffsetMetadata(long messageOffset,
                              long segmentBaseOffset,
                              int relativePositionInSegment) {
         this.messageOffset = messageOffset;
@@ -51,6 +57,8 @@ public final class LogOffsetMetadata {
 
     // check if this offset is already on an older segment compared with the given offset
     public boolean onOlderSegment(LogOffsetMetadata that) {
+        if (this.segmentBaseOffset == REMOTE_LOG_UNKNOWN_OFFSET || that.segmentBaseOffset == REMOTE_LOG_UNKNOWN_OFFSET)
+            return false;
         if (messageOffsetOnly())
             throw new KafkaException(this + " cannot compare its segment info with " + that + " since it only has message offset info");
 
@@ -65,6 +73,8 @@ public final class LogOffsetMetadata {
     // compute the number of bytes between this offset to the given offset
     // if they are on the same segment and this offset precedes the given offset
     public int positionDiff(LogOffsetMetadata that) {
+        if (this.segmentBaseOffset == REMOTE_LOG_UNKNOWN_OFFSET || that.segmentBaseOffset == REMOTE_LOG_UNKNOWN_OFFSET)
+            return 1;
         if (messageOffsetOnly())
             throw new KafkaException(this + " cannot compare its segment position with " + that + " since it only has message offset info");
         if (!onSameSegment(that))
@@ -75,7 +85,8 @@ public final class LogOffsetMetadata {
 
     // decide if the offset metadata only contains message offset info
     public boolean messageOffsetOnly() {
-        return segmentBaseOffset == UNIFIED_LOG_UNKNOWN_OFFSET && relativePositionInSegment == UNKNOWN_FILE_POSITION;
+        return (segmentBaseOffset == UNIFIED_LOG_UNKNOWN_OFFSET || segmentBaseOffset == REMOTE_LOG_UNKNOWN_OFFSET)
+                && relativePositionInSegment == UNKNOWN_FILE_POSITION;
     }
 
     @Override

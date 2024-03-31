@@ -1429,7 +1429,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     */
   private def convertToOffsetMetadataOrThrow(offset: Long): LogOffsetMetadata = {
     checkLogStartOffset(offset)
-    localLog.convertToOffsetMetadataOrThrow(offset)
+    if (remoteLogEnabled() && offset < localLogStartOffset()) {
+      new LogOffsetMetadata(offset, LogOffsetMetadata.REMOTE_LOG_UNKNOWN_OFFSET)
+    } else {
+      localLog.convertToOffsetMetadataOrThrow(offset)
+    }
   }
 
   /**
