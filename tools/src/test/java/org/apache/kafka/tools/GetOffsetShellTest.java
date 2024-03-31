@@ -34,6 +34,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,6 +45,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -114,6 +116,15 @@ public class GetOffsetShellTest {
             }
             consumer.subscribe(topics);
             consumer.poll(consumerTimeout);
+            TestUtils.waitForCondition(
+                    () -> {
+                        Set<String> allTopics = consumer.listTopics().keySet();
+                        return allTopics.contains("__consumer_offsets");
+                    },
+                    "internal topic __consumer_offsets was not created in time"
+            );
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 
