@@ -136,16 +136,16 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   @volatile private var firstUnstableOffsetMetadata: Option[LogOffsetMetadata] = None
 
+  @volatile private[kafka] var _localLogStartOffset: Long = logStartOffset
+
   /* Keep track of the current high watermark in order to ensure that segments containing offsets at or above it are
    * not eligible for deletion. This means that the active segment is only eligible for deletion if the high watermark
    * equals the log end offset (which may never happen for a partition under consistent load). This is needed to
    * prevent the log start offset (which is exposed in fetch responses) from getting ahead of the high watermark.
    */
-  @volatile private var highWatermarkMetadata: LogOffsetMetadata = new LogOffsetMetadata(logStartOffset)
+  @volatile private var highWatermarkMetadata: LogOffsetMetadata = new LogOffsetMetadata(_localLogStartOffset)
 
   @volatile var partitionMetadataFile: Option[PartitionMetadataFile] = None
-
-  @volatile private[kafka] var _localLogStartOffset: Long = logStartOffset
 
   def localLogStartOffset(): Long = _localLogStartOffset
 
@@ -269,7 +269,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   /**
    * Update the high watermark to a new offset. The new high watermark will be lower
-   * bounded by the log start offset and upper bounded by the log end offset.
+   * bounded by the local-log-start-offset and upper bounded by the log-end-offset.
    *
    * This is intended to be called by the leader when initializing the high watermark.
    *
@@ -282,15 +282,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   /**
    * Update high watermark with offset metadata. The new high watermark will be lower
-   * bounded by the log start offset and upper bounded by the log end offset.
+   * bounded by the local-log-start-offset and upper bounded by the log-end-offset.
    *
    * @param highWatermarkMetadata the suggested high watermark with offset metadata
    * @return the updated high watermark offset
    */
   def updateHighWatermark(highWatermarkMetadata: LogOffsetMetadata): Long = {
     val endOffsetMetadata = localLog.logEndOffsetMetadata
-    val newHighWatermarkMetadata = if (highWatermarkMetadata.messageOffset < logStartOffset) {
-      new LogOffsetMetadata(logStartOffset)
+    val newHighWatermarkMetadata = if (highWatermarkMetadata.messageOffset < _localLogStartOffset) {
+      new LogOffsetMetadata(_localLogStartOffset)
     } else if (highWatermarkMetadata.messageOffset >= endOffsetMetadata.messageOffset) {
       endOffsetMetadata
     } else {
@@ -332,7 +332,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   /**
    * Update high watermark with a new value. The new high watermark will be lower
-   * bounded by the log start offset and upper bounded by the log end offset.
+   * bounded by the local-log-start-offset and upper bounded by the log-end-offset.
    *
    * This method is intended to be used by the follower to update its high watermark after
    * replication from the leader.
@@ -1224,6 +1224,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         s"but we only have log segments starting from offset: $logStartOffset.")
   }
 
+  private def checkLocalLogStartOffset(offset: Long): Unit = {
+    if (offset < localLogStartOffset())
+      throw new OffsetOutOfRangeException(s"Received request for offset $offset for partition $topicPartition, " +
+        s"but we only have local-log segments starting from offset: ${localLogStartOffset()}.")
+  }
+
   /**
    * Read messages from the log.
    *
@@ -1428,7 +1434,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     * If the message offset is out of range, throw an OffsetOutOfRangeException
     */
   private def convertToOffsetMetadataOrThrow(offset: Long): LogOffsetMetadata = {
-    checkLogStartOffset(offset)
+    checkLocalLogStartOffset(offset)
     localLog.convertToOffsetMetadataOrThrow(offset)
   }
 

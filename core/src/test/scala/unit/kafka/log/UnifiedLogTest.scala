@@ -318,6 +318,80 @@ class UnifiedLogTest {
     assertHighWatermark(4L)
   }
 
+  @Test
+  def testHighWatermarkMaintenanceForRemoteTopic(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024, remoteLogStorageEnable = true)
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+    val leaderEpoch = 0
+
+    def assertHighWatermark(offset: Long): Unit = {
+      assertEquals(offset, log.highWatermark)
+      assertValidLogOffsetMetadata(log, log.fetchOffsetSnapshot.highWatermark)
+    }
+
+    // High watermark initialized to 0
+    assertHighWatermark(0L)
+
+    var offset = 0L
+    for(_ <- 0 until 50) {
+      val records = TestUtils.singletonRecords("test".getBytes())
+      val info = log.appendAsLeader(records, leaderEpoch)
+      offset = info.lastOffset
+      if (offset != 0 && offset % 10 == 0)
+        log.roll()
+    }
+    assertEquals(5, log.logSegments.size)
+
+    // High watermark not changed by append
+    assertHighWatermark(0L)
+
+    // Update high watermark as leader
+    log.maybeIncrementHighWatermark(new LogOffsetMetadata(50L))
+    assertHighWatermark(50L)
+    assertEquals(50L, log.logEndOffset)
+
+    // Cannot update high watermark past the log end offset
+    log.updateHighWatermark(60L)
+    assertHighWatermark(50L)
+
+    // simulate calls to upload 3 segments to remote storage and remove them from local-log.
+    log.updateHighestOffsetInRemoteStorage(30)
+    log.maybeIncrementLocalLogStartOffset(31L, LogStartOffsetIncrementReason.SegmentDeletion)
+    log.deleteOldSegments()
+    assertEquals(2, log.logSegments.size)
+    assertEquals(31L, log.localLogStartOffset())
+    assertHighWatermark(50L)
+
+    // simulate one remote-log segment deletion
+    val logStartOffset = 11L
+    log.maybeIncrementLogStartOffset(logStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
+    assertEquals(11, log.logStartOffset)
+
+    // Updating the HW below the log-start-offset / local-log-start-offset is not allowed. HW should reset to local-log-start-offset.
+    log.updateHighWatermark(new LogOffsetMetadata(5L))
+    assertHighWatermark(31L)
+    // Updating the HW between log-start-offset and local-log-start-offset is not allowed. HW should reset to local-log-start-offset.
+    log.updateHighWatermark(new LogOffsetMetadata(25L))
+    assertHighWatermark(31L)
+    // Updating the HW between local-log-start-offset and log-end-offset is allowed.
+    log.updateHighWatermark(new LogOffsetMetadata(32L))
+    assertHighWatermark(32L)
+    assertEquals(11L, log.logStartOffset)
+    assertEquals(31L, log.localLogStartOffset())
+
+    // Truncating the logs to below the local-log-start-offset, should update the high watermark
+    log.truncateTo(15L)
+    assertHighWatermark(15L)
+    assertEquals(15L, log.logStartOffset)
+    assertEquals(15L, log.localLogStartOffset())
+
+    // Truncate the logs to below the log-start-offset, should update the high watermark
+    log.truncateFullyAndStartAt(10L)
+    assertHighWatermark(10L)
+    assertEquals(10L, log.logStartOffset)
+    assertEquals(10L, log.localLogStartOffset())
+  }
+
   private def assertNonEmptyFetch(log: UnifiedLog, offset: Long, isolation: FetchIsolation): Unit = {
     val readInfo = log.read(startOffset = offset,
       maxLength = Int.MaxValue,
