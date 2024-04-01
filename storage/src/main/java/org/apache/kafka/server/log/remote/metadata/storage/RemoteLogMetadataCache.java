@@ -115,9 +115,6 @@ public class RemoteLogMetadataCache {
         return initializedLatch.getCount() == 0;
     }
 
-    public RemoteLogMetadataCache() {
-    }
-
     /**
      * Returns {@link RemoteLogSegmentMetadata} if it exists for the given leader-epoch containing the offset and with
      * {@link RemoteLogSegmentState#COPY_SEGMENT_FINISHED} state, else returns {@link Optional#empty()}.
