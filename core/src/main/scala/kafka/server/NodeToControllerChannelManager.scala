@@ -345,8 +345,10 @@ class NodeToControllerRequestThread(
   private[server] def handleResponse(queueItem: NodeToControllerQueueItem)(response: ClientResponse): Unit = {
     debug(s"Request ${queueItem.request} received $response")
     if (response.authenticationException != null) {
-      error(s"Request ${queueItem.request} failed due to authentication error with controller",
+      error(s"Request ${queueItem.request} failed due to authentication error with controller. Disconnecting the " +
+        s"connection to the stale controller ${activeControllerAddress().map(_.idString).getOrElse("null")}",
         response.authenticationException)
+      maybeDisconnectAndUpdateController()
       queueItem.callback.onComplete(response)
     } else if (response.versionMismatch != null) {
       error(s"Request ${queueItem.request} failed due to unsupported version error",
@@ -358,20 +360,23 @@ class NodeToControllerRequestThread(
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       debug(s"Request ${queueItem.request} received NOT_CONTROLLER exception. Disconnecting the " +
         s"connection to the stale controller ${activeControllerAddress().map(_.idString).getOrElse("null")}")
-      // just close the controller connection and wait for metadata cache update in doWork
-      activeControllerAddress().foreach { controllerAddress =>
-        try {
-          // We don't care if disconnect has an error, just log it and get a new network client
-          networkClient.disconnect(controllerAddress.idString)
-        } catch {
-          case t: Throwable => error("Had an error while disconnecting from NetworkClient.", t)
-        }
-        updateControllerAddress(null)
-      }
-
+      maybeDisconnectAndUpdateController()
       requestQueue.putFirst(queueItem)
     } else {
       queueItem.callback.onComplete(response)
+    }
+  }
+
+  private def maybeDisconnectAndUpdateController(): Unit = {
+    // just close the controller connection and wait for metadata cache update in doWork
+    activeControllerAddress().foreach { controllerAddress =>
+      try {
+        // We don't care if disconnect has an error, just log it and get a new network client
+        networkClient.disconnect(controllerAddress.idString)
+      } catch {
+        case t: Throwable => error("Had an error while disconnecting from NetworkClient.", t)
+      }
+      updateControllerAddress(null)
     }
   }
 
