@@ -126,12 +126,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
   private def assertPathExistenceAndData(expectedPath: String, data: String): Unit = {
     assertTrue(zkClient.pathExists(expectedPath))
-    assertEquals(Some(data), dataAsString(expectedPath))
-  }
-
-  private def dataAsString(path: String): Option[String] = {
-    val (data, _) = zkClient.getDataAndStat(path)
-    data.map(new String(_, UTF_8))
+    assertEquals(Some(data), zkClient.getDataAndStat(expectedPath)._1.map(new String(_, UTF_8)))
   }
 
   @Test
