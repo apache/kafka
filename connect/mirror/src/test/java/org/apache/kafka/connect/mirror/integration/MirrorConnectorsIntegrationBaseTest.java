@@ -900,7 +900,7 @@ public class MirrorConnectorsIntegrationBaseTest {
 
         String backupTopic = remoteTopicName(topic, PRIMARY_CLUSTER_ALIAS);
         // wait for at least the expected number of records to be replicated to the backup cluster
-        primary.kafka().consume(NUM_PARTITIONS * NUM_RECORDS_PER_PARTITION, RECORD_TRANSFER_DURATION_MS, backupTopic);
+        primary.kafka().consume(NUM_PARTITIONS * NUM_RECORDS_PER_PARTITION, RECORD_TRANSFER_DURATION_MS, topic);
         // consume all records from backup cluster
         ConsumerRecords<byte[], byte[]> replicatedRecords = backup.kafka().consumeAll(RECORD_TRANSFER_DURATION_MS, backupTopic);
         // ensure that we only replicated the records produced after startup
