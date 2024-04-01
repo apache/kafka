@@ -1712,7 +1712,10 @@ object TestUtils extends Logging {
 
     // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
     waitUntilTrue(() => !leaderBroker.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
-    assertTrue(leaderBroker.replicaManager.localLog(partition).isEmpty)
+    // in kraft mode, the local log can get recreated on another folder when applying metadata change
+    // hence, we accept both empty local log and local log located at different folder
+    assertTrue(!leaderBroker.replicaManager.localLog(partition)
+      .exists(_.dir.getParentFile.getAbsolutePath == logDir.getAbsolutePath))
     logDir
   }
 
