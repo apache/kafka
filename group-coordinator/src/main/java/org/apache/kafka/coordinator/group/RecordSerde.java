@@ -35,6 +35,8 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.group.runtime.PartitionWriter;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -138,6 +140,8 @@ public class RecordSerde implements PartitionWriter.Serializer<Record>, Coordina
                 return new ConsumerGroupTargetAssignmentMemberKey();
             case 8:
                 return new ConsumerGroupCurrentMemberAssignmentKey();
+            case 9:
+                return new ShareGroupPartitionMetadataKey();
             default:
                 throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
         }
@@ -162,6 +166,8 @@ public class RecordSerde implements PartitionWriter.Serializer<Record>, Coordina
                 return new ConsumerGroupTargetAssignmentMemberValue();
             case 8:
                 return new ConsumerGroupCurrentMemberAssignmentValue();
+            case 9:
+                return new ShareGroupPartitionMetadataValue();
             default:
                 throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
         }
