@@ -4185,16 +4185,13 @@ class ReplicaManagerTest {
         mock(classOf[FetchDataInfo])
       }).when(spyRLM).read(any())
 
-      // Get the current type=DelayedRemoteFetchMetrics,name=ExpiresPerSec metric value before fetching
-      val curExpiresPerSec = safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long]
+      val curExpiresPerSec = DelayedRemoteFetchMetrics.expiredRequestMeter.count()
       replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, fetchCallback)
       // advancing the clock to expire the delayed remote fetch
       timer.advanceClock(2000L)
 
-      // verify the metric value is incremented since the delayed remote fetch is expired
-      TestUtils.waitUntilTrue(() => curExpiresPerSec + 1 == safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long],
-        "The ExpiresPerSec value is not incremented. Current value is: " +
-          safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long])
+      // verify the DelayedRemoteFetchMetrics.expiredRequestMeter.mark is called since the delayed remote fetch is expired
+      TestUtils.waitUntilTrue(() => (curExpiresPerSec + 1) == DelayedRemoteFetchMetrics.expiredRequestMeter.count(), "DelayedRemoteFetchMetrics.expiredRequestMeter.count() should be 1, but got: " + DelayedRemoteFetchMetrics.expiredRequestMeter.count(), 10000L)
       latch.countDown()
     } finally {
       Utils.tryAll(util.Arrays.asList[Callable[Void]](
@@ -4207,20 +4204,6 @@ class ReplicaManagerTest {
           null
         }
       ))
-    }
-  }
-
-  private def safeYammerMetricValue(name: String): Any = {
-    val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-    val opt = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
-    if (opt.isEmpty)
-      0L
-    else {
-      opt.get._2 match {
-        case m: Gauge[_] => m.value
-        case m: Meter => m.count()
-        case m => fail(s"Unexpected broker metric of class ${m.getClass}")
-      }
     }
   }
 
@@ -5161,7 +5144,8 @@ class ReplicaManagerTest {
       }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
+      val otherEndpoint = ClusterImageTest.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
+      assertEquals(Some(BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port())), fetcher.map(_.leader.brokerEndPoint()))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -5193,7 +5177,8 @@ class ReplicaManagerTest {
       }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
+      val otherEndpoint = ClusterImageTest.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
+      assertEquals(Some(BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port())), fetcher.map(_.leader.brokerEndPoint()))
 
       // Append on a follower should fail
       val followerResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
@@ -5255,7 +5240,8 @@ class ReplicaManagerTest {
       }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
+      val otherEndpoint = ClusterImageTest.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
+      assertEquals(Some(BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port())), fetcher.map(_.leader.brokerEndPoint()))
 
       // Apply the same delta again
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
@@ -5270,7 +5256,7 @@ class ReplicaManagerTest {
       }
 
       val noChangeFetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), noChangeFetcher.map(_.leader.brokerEndPoint()))
+      assertEquals(Some(BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port())), noChangeFetcher.map(_.leader.brokerEndPoint()))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -5301,7 +5287,8 @@ class ReplicaManagerTest {
       }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
+      val otherEndpoint = ClusterImageTest.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
+      assertEquals(Some(BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port())), fetcher.map(_.leader.brokerEndPoint()))
 
       // Apply changes that remove replica
       val notReplicaTopicsDelta = topicsChangeDelta(followerMetadataImage.topics(), otherId, true)
@@ -5348,7 +5335,8 @@ class ReplicaManagerTest {
       }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      assertEquals(Some(BrokerEndPoint(otherId, "localhost", 9093)), fetcher.map(_.leader.brokerEndPoint()))
+      val otherEndpoint = ClusterImageTest.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
+      assertEquals(Some(BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port())), fetcher.map(_.leader.brokerEndPoint()))
 
       // Apply changes that remove topic and replica
       val removeTopicsDelta = topicsDeleteDelta(followerMetadataImage.topics())
@@ -5652,11 +5640,12 @@ class ReplicaManagerTest {
 
       // Verify that addFetcherForPartitions was called with the correct
       // init offset.
+      val otherEndpoint = ClusterImageTest.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
       verify(mockReplicaFetcherManager)
         .addFetcherForPartitions(
           Map(topicPartition -> InitialFetchState(
             topicId = Some(FOO_UUID),
-            leader = BrokerEndPoint(otherId, "localhost", 9093),
+            leader = BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port()),
             currentLeaderEpoch = 0,
             initOffset = 0
           ))
@@ -5700,7 +5689,7 @@ class ReplicaManagerTest {
         .addFetcherForPartitions(
           Map(topicPartition -> InitialFetchState(
             topicId = Some(FOO_UUID),
-            leader = BrokerEndPoint(otherId, "localhost", 9093),
+            leader = BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port()),
             currentLeaderEpoch = 1,
             initOffset = 1
           ))
@@ -5857,10 +5846,11 @@ class ReplicaManagerTest {
       }
 
       // Verify that the partition was removed and added back.
+      val localIdPlus1Endpoint = ClusterImageTest.IMAGE1.broker(localId + 1).listeners().get("PLAINTEXT")
       verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
       verify(mockReplicaFetcherManager).addFetcherForPartitions(Map(topicPartition -> InitialFetchState(
         topicId = Some(FOO_UUID),
-        leader = BrokerEndPoint(localId + 1, "localhost", 9093),
+        leader = BrokerEndPoint(localId + 1, localIdPlus1Endpoint.host(), localIdPlus1Endpoint.port()),
         currentLeaderEpoch = 0,
         initOffset = 0
       )))
@@ -5916,10 +5906,11 @@ class ReplicaManagerTest {
       }
 
       // Verify that the partition was removed and added back.
+      val localIdPlus2Endpoint = ClusterImageTest.IMAGE1.broker(localId + 2).listeners().get("PLAINTEXT")
       verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
       verify(mockReplicaFetcherManager).addFetcherForPartitions(Map(topicPartition -> InitialFetchState(
         topicId = Some(FOO_UUID),
-        leader = BrokerEndPoint(localId + 2, "localhost", 9093),
+        leader = BrokerEndPoint(localId + 2, localIdPlus2Endpoint.host(), localIdPlus2Endpoint.port()),
         currentLeaderEpoch = 1,
         initOffset = 0
       )))
