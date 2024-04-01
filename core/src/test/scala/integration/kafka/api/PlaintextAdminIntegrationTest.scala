@@ -26,7 +26,6 @@ import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
-import kafka.security.authorizer.AclEntry
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.{DynamicConfig, KafkaConfig}
 import kafka.utils.TestUtils._
@@ -44,6 +43,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{Defaults, ZkConfigs}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions._
@@ -1226,7 +1226,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             assertEquals(testNumPartitions, topicPartitions.size)
           }
 
-          val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP).asJava
+          val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
           assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
           // Test that the fake group is listed as dead.
