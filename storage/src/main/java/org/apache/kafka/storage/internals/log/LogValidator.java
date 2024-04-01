@@ -68,6 +68,9 @@ public class LogValidator {
         public final long logAppendTimeMs;
         public final MemoryRecords validatedRecords;
         public final long maxTimestampMs;
+        // we only maintain batch level offset for max timestamp since we want to align the behavior of updating time
+        // indexing entries. The paths of follower sync and replica recovery do not iterate all records, so they have no
+        // idea about record level offset for max timestamp.
         public final long shallowOffsetOfMaxTimestampMs;
         public final boolean messageSizeMaybeChanged;
         public final RecordValidationStats recordValidationStats;
@@ -243,6 +246,7 @@ public class LogValidator {
         long now = time.milliseconds();
         long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         long shallowOffsetOfMaxTimestamp = -1L;
+        long initialOffset = offsetCounter.value;
 
         RecordBatch firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, CompressionType.NONE);
 
@@ -292,6 +296,13 @@ public class LogValidator {
 
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
             maxTimestamp = now;
+            if (toMagic >= RecordBatch.MAGIC_VALUE_V2)
+                // case 0: there is only one batch so use the last offset
+                shallowOffsetOfMaxTimestamp = offsetCounter.value - 1;
+            else
+                // case 1: Those single-record batches have same max timestamp, so the initial offset is equal with
+                // the last offset of earliest batch
+                shallowOffsetOfMaxTimestamp = initialOffset;
         }
 
         return new ValidationResult(

@@ -37,7 +37,7 @@ public class LogAppendInfo {
     private long firstOffset;
     private long lastOffset;
     private long maxTimestamp;
-    private long offsetOfMaxTimestamp;
+    private long shallowOffsetOfMaxTimestamp;
     private long logAppendTime;
     private long logStartOffset;
     private RecordValidationStats recordValidationStats;
@@ -117,7 +117,7 @@ public class LogAppendInfo {
         this.lastOffset = lastOffset;
         this.lastLeaderEpoch = lastLeaderEpoch;
         this.maxTimestamp = maxTimestamp;
-        this.offsetOfMaxTimestamp = offsetOfMaxTimestamp;
+        this.shallowOffsetOfMaxTimestamp = offsetOfMaxTimestamp;
         this.logAppendTime = logAppendTime;
         this.logStartOffset = logStartOffset;
         this.recordValidationStats = recordValidationStats;
@@ -156,12 +156,12 @@ public class LogAppendInfo {
         this.maxTimestamp = maxTimestamp;
     }
 
-    public long offsetOfMaxTimestamp() {
-        return offsetOfMaxTimestamp;
+    public long shallowOffsetOfMaxTimestamp() {
+        return shallowOffsetOfMaxTimestamp;
     }
 
-    public void setOffsetOfMaxTimestamp(long offsetOfMaxTimestamp) {
-        this.offsetOfMaxTimestamp = offsetOfMaxTimestamp;
+    public void setShallowOffsetOfMaxTimestamp(long shallowOffsetOfMaxTimestamp) {
+        this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
     }
 
     public long logAppendTime() {
@@ -233,7 +233,7 @@ public class LogAppendInfo {
      * @return a new instance with the given LeaderHwChange
      */
     public LogAppendInfo copy(LeaderHwChange newLeaderHwChange) {
-        return new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, offsetOfMaxTimestamp, logAppendTime, logStartOffset, recordValidationStats,
+        return new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, shallowOffsetOfMaxTimestamp, logAppendTime, logStartOffset, recordValidationStats,
                 sourceCompression, validBytes, lastOffsetOfFirstBatch, recordErrors, newLeaderHwChange);
     }
 
@@ -259,7 +259,7 @@ public class LogAppendInfo {
                 ", lastOffset=" + lastOffset +
                 ", lastLeaderEpoch=" + lastLeaderEpoch +
                 ", maxTimestamp=" + maxTimestamp +
-                ", offsetOfMaxTimestamp=" + offsetOfMaxTimestamp +
+                ", offsetOfMaxTimestamp=" + shallowOffsetOfMaxTimestamp +
                 ", logAppendTime=" + logAppendTime +
                 ", logStartOffset=" + logStartOffset +
                 ", recordConversionStats=" + recordValidationStats +
