@@ -100,7 +100,7 @@ class ReplicaAlterLogDirsThread(name: String,
     for (topicPartition <- topicPartitions) {
       // Revert any reassignments for partitions that did not complete the future replica promotion
       val PromotionState(reassignmentState, topicId, originalDir) = this.promotionState(topicPartition)
-      if (reassignmentState.inconsistentMetadata) {
+      if (reassignmentState.maybeInconsistentMetadata) {
         directoryEventHandler.handleAssignment(new TopicIdPartition(topicId, topicPartition.partition()), originalDir, () => ())
       }
 
@@ -213,7 +213,7 @@ object ReplicaAlterLogDirsThread {
      * @return true if the directory assignment in the cluster metadata may be inconsistent with the actual
      *         directory where the main replica is hosted.
      */
-    def inconsistentMetadata: Boolean = false
+    def maybeInconsistentMetadata: Boolean = false
   }
 
   object ReassignmentState {
@@ -226,15 +226,15 @@ object ReplicaAlterLogDirsThread {
     /**
      * The request has been queued, it may or may not yet have been sent to the Controller.
      */
-    case object Queued extends ReassignmentState{
-      override def inconsistentMetadata: Boolean = true
+    case object Queued extends ReassignmentState {
+      override def maybeInconsistentMetadata: Boolean = true
     }
 
     /**
      * The controller has acknowledged the new directory assignment and persisted the change in metadata.
      */
-    case object Accepted extends ReassignmentState{
-      override def inconsistentMetadata: Boolean = true
+    case object Accepted extends ReassignmentState {
+      override def maybeInconsistentMetadata: Boolean = true
     }
 
     /**
