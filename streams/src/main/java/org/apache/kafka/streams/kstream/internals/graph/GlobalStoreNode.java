@@ -29,6 +29,7 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
     private final ConsumedInternal<KIn, VIn> consumed;
     private final String processorName;
     private final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier;
+    private final boolean reprocessOnRestore;
 
 
     public GlobalStoreNode(final StoreFactory storeBuilder,
@@ -36,7 +37,8 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
                            final String topic,
                            final ConsumedInternal<KIn, VIn> consumed,
                            final String processorName,
-                           final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+                           final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier,
+                           final boolean reprocessOnRestore) {
 
         super(storeBuilder);
         this.sourceName = sourceName;
@@ -44,6 +46,7 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
         this.consumed = consumed;
         this.processorName = processorName;
         this.stateUpdateSupplier = stateUpdateSupplier;
+        this.reprocessOnRestore = reprocessOnRestore;
     }
 
     @Override
@@ -56,7 +59,8 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
                                        consumed.valueDeserializer(),
                                        topic,
                                        processorName,
-                                       stateUpdateSupplier);
+                                       stateUpdateSupplier,
+                                       reprocessOnRestore);
 
     }
 
@@ -66,6 +70,7 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
                "sourceName='" + sourceName + '\'' +
                ", topic='" + topic + '\'' +
                ", processorName='" + processorName + '\'' +
+               ", reprocessOnRestore='" + reprocessOnRestore + '\'' +
                "} ";
     }
 }

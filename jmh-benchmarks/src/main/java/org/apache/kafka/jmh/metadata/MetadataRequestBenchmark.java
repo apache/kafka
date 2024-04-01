@@ -177,7 +177,7 @@ public class MetadataRequestBenchmark {
 
     private KafkaApis createKafkaApis() {
         Properties kafkaProps =  new Properties();
-        kafkaProps.put(ZkConfigs.ZK_CONNECT_PROP, "zk");
+        kafkaProps.put(ZkConfigs.ZK_CONNECT_CONFIG, "zk");
         kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
         KafkaConfig config = new KafkaConfig(kafkaProps);
         return new KafkaApisBuilder().
