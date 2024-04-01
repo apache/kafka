@@ -168,9 +168,9 @@ public class GetOffsetShellTest {
         List<Row> output = executeAndParse();
 
         if (!cluster.isKRaftTest()) {
-            assertEquals(expectedOffsetsWithInternal(), output);
+            retryUntilEqual(expectedOffsetsWithInternal(), output);
         } else {
-            assertEquals(expectedTestTopicOffsets(), output);
+            retryUntilEqual(expectedTestTopicOffsets(), output);
         }
     }
 
@@ -180,7 +180,7 @@ public class GetOffsetShellTest {
 
         List<Row> output = executeAndParse("--exclude-internal-topics");
 
-        assertEquals(expectedTestTopicOffsets(), output);
+        retryUntilEqual(expectedTestTopicOffsets(), output);
     }
 
     @ClusterTest
@@ -190,7 +190,7 @@ public class GetOffsetShellTest {
         IntStream.range(1, topicCount + 1).forEach(i -> {
             List<Row> offsets = executeAndParse("--topic", getTopicName(i));
 
-            assertEquals(expectedOffsetsForTopic(i), offsets, () -> "Offset output did not match for " + getTopicName(i));
+            retryUntilEqual(expectedOffsetsForTopic(i), offsets);
         });
     }
 
@@ -200,7 +200,7 @@ public class GetOffsetShellTest {
 
         List<Row> offsets = executeAndParse("--topic", "topic.*");
 
-        assertEquals(expectedTestTopicOffsets(), offsets);
+        retryUntilEqual(expectedTestTopicOffsets(), offsets);
     }
 
     @ClusterTest
@@ -210,9 +210,9 @@ public class GetOffsetShellTest {
         List<Row> offsets = executeAndParse("--partitions", "0,1");
 
         if (!cluster.isKRaftTest()) {
-            assertEquals(expectedOffsetsWithInternal().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+            retryUntilEqual(expectedOffsetsWithInternal().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
         } else {
-            assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+            retryUntilEqual(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
         }
     }
 
@@ -222,7 +222,7 @@ public class GetOffsetShellTest {
 
         List<Row> offsets = executeAndParse("--topic", "topic.*", "--partitions", "0,1");
 
-        assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+        retryUntilEqual(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
     }
 
     @ClusterTest
@@ -240,7 +240,7 @@ public class GetOffsetShellTest {
                 new Row("topic4", 2, 4L)
         );
 
-        assertEquals(expected, offsets);
+        retryUntilEqual(expected, offsets);
     }
 
     @ClusterTest
@@ -256,7 +256,7 @@ public class GetOffsetShellTest {
                     new Row("topic4", 0, 4L)
             );
 
-            assertEquals(expected, offsets);
+            retryUntilEqual(expected, offsets);
         }
     }
 
@@ -273,7 +273,7 @@ public class GetOffsetShellTest {
                     new Row("topic4", 0, 0L)
             );
 
-            assertEquals(expected, offsets);
+            retryUntilEqual(expected, offsets);
         }
     }
 
@@ -304,7 +304,7 @@ public class GetOffsetShellTest {
                 new Row("topic4", 0, 0L)
         );
 
-        assertEquals(expected, offsets);
+        retryUntilEqual(expected, offsets);
     }
 
     @ClusterTest
@@ -315,7 +315,7 @@ public class GetOffsetShellTest {
 
         List<Row> offsets = executeAndParse("--topic-partitions", "topic.*", "--time", time);
 
-        assertEquals(new ArrayList<Row>(), offsets);
+        retryUntilEqual(new ArrayList<>(), offsets);
     }
 
     @ClusterTest
@@ -330,7 +330,7 @@ public class GetOffsetShellTest {
                 new Row("topic4", 2, 4L)
         );
 
-        assertEquals(expected, offsets);
+        retryUntilEqual(expected, offsets);
     }
 
     @ClusterTest
@@ -341,7 +341,7 @@ public class GetOffsetShellTest {
 
         List<Row> offsets = executeAndParse("--topic-partitions", "__.*:0");
 
-        assertEquals(Arrays.asList(new Row("__consumer_offsets", 0, 0L)), offsets);
+        retryUntilEqual(Arrays.asList(new Row("__consumer_offsets", 0, 0L)), offsets);
     }
 
     @ClusterTest
@@ -446,5 +446,16 @@ public class GetOffsetShellTest {
         newArgs.add(cluster.bootstrapServers());
 
         return newArgs.toArray(new String[0]);
+    }
+
+    private void retryUntilEqual(List<Row> expected, List<Row> output) {
+        try {
+            TestUtils.waitForCondition(
+                    () -> expected.equals(output),
+                    "TopicOffsets did not match. Expected: " + expectedTestTopicOffsets() + ", but was: " + output
+            );
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
