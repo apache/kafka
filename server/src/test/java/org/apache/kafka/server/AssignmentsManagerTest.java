@@ -349,12 +349,15 @@ public class AssignmentsManagerTest {
         activeWait(() -> remainingInvocations.getCount() == 0);
     }
 
-    void activeWait(Supplier<Boolean> predicate) {
-        while (!predicate.get()) {
-            time.sleep(100);
-            manager.wakeup();
-            Thread.yield();
-        }
+    void activeWait(Supplier<Boolean> predicate) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            boolean conditionSatisfied = predicate.get();
+            if (!conditionSatisfied) {
+                time.sleep(100);
+                manager.wakeup();
+            }
+            return conditionSatisfied;
+        }, TestUtils.DEFAULT_MAX_WAIT_MS, 0, null);
     }
 
     static Metric findMetric(String name) {

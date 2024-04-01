@@ -188,6 +188,7 @@ public class AssignmentsManager {
         }
         @Override
         public void run() throws Exception {
+            log.trace("Received assignment {}", this);
             AssignmentEvent existing = pending.getOrDefault(partition, null);
             boolean existingIsInFlight = false;
             if (existing == null && inflight != null) {
@@ -209,7 +210,7 @@ public class AssignmentsManager {
                     log.debug("Dropping existing assignment {} because it's older than {}", existing, this);
                 }
             }
-            log.debug("Received new assignment {}", this);
+            log.debug("Queueing new assignment {}", this);
             pending.put(partition, this);
 
             if (inflight == null || inflight.isEmpty()) {
