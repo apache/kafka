@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -31,7 +33,7 @@ public interface CompletableEvent<T> {
 
     /**
      * Returns the {@link CompletableFuture future} associated with this event. Any event will have some related
-     * logic that is executed on its behalf. The event can complete in one of three ways:
+     * logic that is executed on its behalf. The event can complete in one of the following ways:
      *
      * <ul>
      *     <li>
@@ -47,9 +49,16 @@ public interface CompletableEvent<T> {
      *         instance of {@link TimeoutException} should be created and passed to
      *         {@link CompletableFuture#completeExceptionally(Throwable)}.
      *     </li>
+     *     <li>
+     *         Cancelled: when an event remains incomplete when the consumer closes, the future will be
+     *         {@link CompletableFuture#cancel(boolean) cancelled}. Attempts to {@link Future#get() get the result}
+     *         of the processing will throw a {@link CancellationException}.
+     *     </li>
      * </ul>
      *
      * @return Future on which the caller may block or query for completion
+     *
+     * @see CompletableEventReaper
      */
     CompletableFuture<T> future();
 
@@ -59,7 +68,9 @@ public interface CompletableEvent<T> {
      * {@link CompletableFuture#completeExceptionally(Throwable)} will be invoked with an instance of
      * {@link TimeoutException}.
      *
-     * @return
+     * @return Absolute time for event to be completed
+     *
+     * @see CompletableEventReaper
      */
     long deadlineMs();
 }

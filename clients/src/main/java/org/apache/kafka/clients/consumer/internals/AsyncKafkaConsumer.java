@@ -47,7 +47,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.clients.consumer.internals.events.CommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
@@ -215,7 +215,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final String clientId;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final BackgroundEventProcessor backgroundEventProcessor;
-    private final CompletableEventReaper backgroundEventReaper;
+    private final CompletableEventReaper<CompletableBackgroundEvent<?>> backgroundEventReaper;
     private final Deserializers<K, V> deserializers;
 
     /**
@@ -365,7 +365,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.backgroundEventProcessor = new BackgroundEventProcessor(
                     rebalanceListenerInvoker
             );
-            this.backgroundEventReaper = new CompletableEventReaper(logContext);
+            this.backgroundEventReaper = new CompletableEventReaper<>(logContext);
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
@@ -429,7 +429,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.time = time;
         this.backgroundEventQueue = backgroundEventQueue;
         this.backgroundEventProcessor = new BackgroundEventProcessor(rebalanceListenerInvoker);
-        this.backgroundEventReaper = new CompletableEventReaper(logContext);
+        this.backgroundEventReaper = new CompletableEventReaper<>(logContext);
         this.metrics = metrics;
         this.groupMetadata.set(initializeGroupMetadata(groupId, Optional.empty()));
         this.metadata = metadata;
@@ -538,7 +538,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 networkClientDelegateSupplier,
                 requestManagersSupplier);
         this.backgroundEventProcessor = new BackgroundEventProcessor(rebalanceListenerInvoker);
-        this.backgroundEventReaper = new CompletableEventReaper(logContext);
+        this.backgroundEventReaper = new CompletableEventReaper<>(logContext);
     }
 
     // auxiliary interface for testing
@@ -1207,8 +1207,20 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.", this::maybeInvokeCommitCallbacks,
             firstException);
         closeTimer.update();
-        if (backgroundEventReaper != null && backgroundEventQueue != null)
-            backgroundEventReaper.reapIncomplete(backgroundEventQueue);
+
+        if (backgroundEventReaper != null && backgroundEventQueue != null) {
+            // Copy over the completable events to a separate list, then reap any incomplete
+            // events on that list.
+            LinkedList<BackgroundEvent> allEvents = new LinkedList<>();
+            backgroundEventQueue.drainTo(allEvents);
+            List<CompletableBackgroundEvent<?>> completableEvents = allEvents
+                    .stream()
+                    .filter(e -> e instanceof CompletableBackgroundEvent<?>)
+                    .map(e -> (CompletableBackgroundEvent<?>) e)
+                    .collect(Collectors.toList());
+            backgroundEventReaper.reapIncomplete(completableEvents);
+        }
+
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
@@ -1770,8 +1782,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         for (BackgroundEvent event : events) {
             try {
-                if (event instanceof CompletableEvent)
-                    backgroundEventReaper.add((CompletableEvent<?>) event);
+                if (event instanceof CompletableBackgroundEvent)
+                    backgroundEventReaper.add((CompletableBackgroundEvent<?>) event);
 
                 backgroundEventProcessor.process(event);
             } catch (Throwable t) {

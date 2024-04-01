@@ -22,36 +22,45 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.LinkedList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * The {@code CompletableEventReaper} is responsible for tracking any {@link CompletableEvent}s that were processed,
  * making sure to reap them if they complete normally or pass their deadline. This is done so that we enforce an upper
  * bound on the amount of time the event logic will execute.
  */
-public class CompletableEventReaper {
+public class CompletableEventReaper<T extends CompletableEvent<?>> {
 
     private final Logger log;
-    private final List<CompletableEvent<?>> completableEvents;
+
+    /**
+     * List of tracked events that we are candidates to expire or cancel when reviewed.
+     */
+    private final List<T> tracked;
+
+    /**
+     * {@link Predicate} to check if a {@link Future} is {@link Future#isDone() done}.
+     */
+    private final Predicate<T> doneFilter = e -> e.future().isDone();
 
     public CompletableEventReaper(LogContext logContext) {
         this.log = logContext.logger(CompletableEventReaper.class);
-        this.completableEvents = new ArrayList<>();
+        this.tracked = new ArrayList<>();
     }
 
     /**
-     * Adds a new {@link CompletableEvent event} to our list so that we can track it for later completion/expiration.
+     * Adds a new {@link CompletableEvent event} to track for later completion/expiration.
      *
      * @param event Event to track
      */
-    public void add(CompletableEvent<?> event) {
-        completableEvents.add(Objects.requireNonNull(event));
+    public void add(T event) {
+        tracked.add(Objects.requireNonNull(event, "Event to track must be non-null"));
     }
 
     /**
@@ -88,15 +97,16 @@ public class CompletableEventReaper {
             f.completeExceptionally(error);
         };
 
-        // First, complete (exceptionally) any events that have passed their deadline.
-        completableEvents
+        // First, complete (exceptionally) any events that have passed their deadline AND aren't already complete.
+        tracked
                 .stream()
-                .filter(e -> !e.future().isDone() && currentTimeMs > e.deadlineMs())
+                .filter(not(doneFilter))
+                .filter(e -> currentTimeMs > e.deadlineMs())
                 .forEach(completeEvent);
 
         // Second, remove any events that are already complete, just to make sure we don't hold references. This will
         // include any events that finished successfully as well as any events we just completed exceptionally above.
-        completableEvents.removeIf(e -> e.future().isDone());
+        tracked.removeIf(doneFilter);
 
         log.trace("Finished reaping expired events");
     }
@@ -115,9 +125,13 @@ public class CompletableEventReaper {
      *
      * <em>Note</em>: because this is called in the context of {@link AsyncKafkaConsumer#close() closing consumer},
      * don't take the deadline into consideration, just close it regardless.
+     *
+     * @param events Events from a queue that have not yet been tracked that also need to be reviewed
      */
-    public <T> void reapIncomplete(BlockingQueue<T> eventQueue) {
+    public void reapIncomplete(Collection<T> events) {
         log.trace("Reaping incomplete events");
+
+        Objects.requireNonNull(events, "Event queue to reap must be non-null");
 
         Consumer<CompletableEvent<?>> completeEvent = e -> {
             log.debug("Canceling event {} since the consumer is closing", e);
@@ -125,21 +139,25 @@ public class CompletableEventReaper {
             f.cancel(true);
         };
 
-        completableEvents
+        tracked
                 .stream()
-                .filter(e -> !e.future().isDone())
+                .filter(not(doneFilter))
                 .forEach(completeEvent);
-        completableEvents.clear();
+        tracked.clear();
 
-        LinkedList<T> events = new LinkedList<>();
-        eventQueue.drainTo(events);
         events
                 .stream()
-                .filter(e -> e instanceof CompletableEvent)
-                .map(e -> (CompletableEvent<?>) e)
-                .filter(e -> !e.future().isDone())
+                .filter(not(doneFilter))
                 .forEach(completeEvent);
 
         log.trace("Finished reaping incomplete events");
+    }
+
+    int size() {
+        return tracked.size();
+    }
+
+    private Predicate<T> not(Predicate<T> p) {
+        return p.negate();
     }
 }
