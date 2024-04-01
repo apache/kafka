@@ -357,7 +357,7 @@ public class AssignmentsManagerTest {
                 manager.wakeup();
             }
             return conditionSatisfied;
-        }, TestUtils.DEFAULT_MAX_WAIT_MS, 0, null);
+        }, TestUtils.DEFAULT_MAX_WAIT_MS, 50, null);
     }
 
     static Metric findMetric(String name) {
