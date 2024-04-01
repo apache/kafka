@@ -890,7 +890,7 @@ public class MirrorConnectorsIntegrationBaseTest {
 
         // consume from the ends of topics when no committed offsets are found
         mm2Props.put(PRIMARY_CLUSTER_ALIAS + ".consumer." + AUTO_OFFSET_RESET_CONFIG, "latest");
-        // one way replication from primary to backup
+        // one way replication from primary to back up
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
         mm2Config = new MirrorMakerConfig(mm2Props);
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
@@ -900,7 +900,7 @@ public class MirrorConnectorsIntegrationBaseTest {
 
         String backupTopic = remoteTopicName(topic, PRIMARY_CLUSTER_ALIAS);
         // wait for at least the expected number of records to be replicated to the backup cluster
-        backup.kafka().consume(NUM_PARTITIONS * NUM_RECORDS_PER_PARTITION, RECORD_TRANSFER_DURATION_MS, backupTopic);
+        primary.kafka().consume(NUM_PARTITIONS * NUM_RECORDS_PER_PARTITION, RECORD_TRANSFER_DURATION_MS, backupTopic);
         // consume all records from backup cluster
         ConsumerRecords<byte[], byte[]> replicatedRecords = backup.kafka().consumeAll(RECORD_TRANSFER_DURATION_MS, backupTopic);
         // ensure that we only replicated the records produced after startup
