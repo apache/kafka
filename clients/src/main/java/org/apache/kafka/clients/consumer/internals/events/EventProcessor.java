@@ -19,13 +19,23 @@ package org.apache.kafka.clients.consumer.internals.events;
 import java.util.concurrent.BlockingQueue;
 
 /**
- * An {@link EventProcessor} is the means by which events <em>produced</em> by thread <em>A</em> are
- * <em>processed</em> by thread <em>B</em>. By definition, threads <em>A</em> and <em>B</em> run in parallel to
- * each other, so a mechanism is needed with which to receive and process the events from the other thread. That
- * communication channel is formed around {@link BlockingQueue a shared queue} into which thread <em>A</em>
- * enqueues events and thread <em>B</em> reads and processes those events.
+ * An {@code EventProcessor} is the means by which events are <em>processed</em>, the meaning of which is left
+ * intentionally loose. This is in large part to keep the {@code EventProcessor} focused on what it means to process
+ * the events, and <em>not</em> linking itself too closely with the rest of the surrounding application.
+ *
+ * <p/>
+ *
+ * The {@code EventProcessor} is envisaged as a stateless service that acts as a conduit, receiving an event and
+ * dispatching to another block of code to process. The semantic meaning of each event is different, so the
+ * {@code EventProcessor} will need to interact with other parts of the system that maintain state. The
+ * implementation should not be concerned with the mechanism by which an event arrived for processing. While the
+ * events are shuffled around the consumer subsystem by means of {@link BlockingQueue shared queues}, it should
+ * be considered an anti-pattern to need to know how it arrived or what happens after its is processed.
  */
 public interface EventProcessor<T> {
 
+    /**
+     * Process an event that is received.
+     */
     void process(T event);
 }
