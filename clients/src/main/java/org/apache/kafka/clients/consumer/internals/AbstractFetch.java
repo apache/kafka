@@ -200,6 +200,9 @@ public abstract class AbstractFetch implements Closeable {
                     if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
                         partitionsWithUpdatedLeaderInfo.put(partition, new Metadata.LeaderIdAndEpoch(
                             Optional.of(partitionData.currentLeader().leaderId()), Optional.of(partitionData.currentLeader().leaderEpoch())));
+                    } else {
+                        requestMetadataUpdate(metadata, subscriptions, partition);
+                        subscriptions.awaitUpdate(partition);
                     }
                 }
 

@@ -3550,11 +3550,15 @@ public class FetcherTest {
         assertEquals(Optional.of(nodeId0.id()),
             subscriptions.preferredReadReplica(tp1, time.milliseconds()));
 
-        // Validate subscription is still valid & fetch-able for both tp0 & tp1. And tp0 points to original leader.
-        assertTrue(subscriptions.isFetchable(tp0));
+        // Validate subscription state is transitioned to AWAIT_UPDATE for tp0.
+        // And tp0 points to original leader.
+        assertFalse(subscriptions.isFetchable(tp0));
+        assertTrue(subscriptions.awaitingUpdate(tp0));
         Metadata.LeaderAndEpoch currentLeader = subscriptions.position(tp0).currentLeader;
         assertEquals(tp0Leader.id(), currentLeader.leader.get().id());
         assertEquals(validLeaderEpoch, currentLeader.epoch.get());
+
+        // Validate subscription is still valid & fetch-able for tp1.
         assertTrue(subscriptions.isFetchable(tp1));
     }
 
