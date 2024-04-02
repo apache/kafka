@@ -257,8 +257,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * There are five cases of finding shallowOffsetOfMaxTimestamp to return:
      * 1) version 0: It is always the -1
      * 2) LogAppendTime with single batch: It is the offset of last record
-     * 3) LogAppendTime with many single-record batches: Those single-record batches have same max timestamp, so the
-     *                                                   base offset is equal with the last offset of earliest batch
+     * 3) LogAppendTime with many single-record batches: Those single-record batches have same max timestamp, so we return
+     *                                                   the base offset, which is equal to the last offset of earliest batch
      * 4) CreateTime with single batch: We return offset of last record to follow the spec we mentioned above. Of course,
      *                                  we do have the OffsetOfMaxTimestamp for this case, but we want to make all paths
      *                                  find the shallowOffsetOfMaxTimestamp rather than offsetOfMaxTimestamp
