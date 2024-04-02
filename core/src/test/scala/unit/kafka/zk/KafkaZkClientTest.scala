@@ -22,11 +22,11 @@ import java.util.{Collections, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.security.authorizer.AclEntry
 import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.utils.CoreUtils
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
+import org.apache.kafka.common.acl.AccessControlEntry
 import org.apache.kafka.common.acl.AclOperation.READ
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.config.TopicConfig
@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.{ConfigType, ZkConfigs}
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -599,7 +600,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
     ZkAclStore.stores.foreach(store => {
       assertFalse(zkClient.pathExists(store.aclPath))
       assertFalse(zkClient.pathExists(store.changeStore.aclChangePath))
-      AclEntry.ResourceTypes.foreach(resource => assertFalse(zkClient.pathExists(store.path(resource))))
+      AclEntry.RESOURCE_TYPES.forEach(resource => assertFalse(zkClient.pathExists(store.path(resource))))
     })
 
     // create acl paths
@@ -608,7 +609,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
     ZkAclStore.stores.foreach(store => {
       assertTrue(zkClient.pathExists(store.aclPath))
       assertTrue(zkClient.pathExists(store.changeStore.aclChangePath))
-      AclEntry.ResourceTypes.foreach(resource => assertTrue(zkClient.pathExists(store.path(resource))))
+      AclEntry.RESOURCE_TYPES.forEach(resource => assertTrue(zkClient.pathExists(store.path(resource))))
 
       val resource1 = new ResourcePattern(TOPIC, Uuid.randomUuid().toString, store.patternType)
       val resource2 = new ResourcePattern(TOPIC, Uuid.randomUuid().toString, store.patternType)
@@ -620,9 +621,9 @@ class KafkaZkClientTest extends QuorumTestHarness {
       assertFalse(zkClient.resourceExists(resource1))
 
 
-      val acl1 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), DENY, "host1" , READ)
-      val acl2 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), ALLOW, "*", READ)
-      val acl3 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), DENY, "host1", READ)
+      val acl1 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice").toString, "host1" , READ, DENY))
+      val acl2 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob").toString, "*", READ, ALLOW))
+      val acl3 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob").toString, "host1", READ, DENY))
 
       // Conditional set should fail if path not created
       assertFalse(zkClient.conditionalSetAclsForResource(resource1, Set(acl1, acl3), 0)._1)
@@ -647,7 +648,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
       assertEquals(1, versionedAcls.zkVersion)
 
       //get resource Types
-      assertEquals(AclEntry.ResourceTypes.map(SecurityUtils.resourceTypeName), zkClient.getResourceTypes(store.patternType).toSet)
+      assertEquals(AclEntry.RESOURCE_TYPES.asScala.map(SecurityUtils.resourceTypeName), zkClient.getResourceTypes(store.patternType).toSet)
 
       //get resource name
       val resourceNames = zkClient.getResourceNames(store.patternType, TOPIC)

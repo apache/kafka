@@ -27,7 +27,6 @@ import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaMetricsReporter
 import kafka.network.{ControlPlaneAcceptor, DataPlaneAcceptor, RequestChannel, SocketServer}
 import kafka.raft.KafkaRaftManager
-import kafka.security.CredentialProvider
 import kafka.server.metadata.{OffsetTrackingListener, ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
@@ -53,6 +52,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion._
@@ -617,17 +617,22 @@ class KafkaServer(
             }
           }
         }
+
         val enableRequestProcessingFuture = socketServer.enableRequestProcessing(authorizerFutures)
         // Block here until all the authorizer futures are complete
         try {
+          info("Start processing authorizer futures")
           CompletableFuture.allOf(authorizerFutures.values.toSeq: _*).join()
+          info("End processing authorizer futures")
         } catch {
           case t: Throwable => throw new RuntimeException("Received a fatal error while " +
             "waiting for all of the authorizer futures to be completed.", t)
         }
         // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
         try {
+          info("Start processing enable request processing future")
           enableRequestProcessingFuture.join()
+          info("End processing enable request processing future")
         } catch {
           case t: Throwable => throw new RuntimeException("Received a fatal error while " +
             "waiting for the SocketServer Acceptors to be started.", t)

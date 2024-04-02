@@ -154,6 +154,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -1166,6 +1167,7 @@ public class WorkerTest {
 
         Map<String, Object> connConfig = Collections.singletonMap("metadata.max.age.ms", "10000");
         Map<String, String> expectedConfigs = new HashMap<>(workerProps);
+        expectedConfigs.remove(AbstractConfig.CONFIG_PROVIDERS_CONFIG);
         expectedConfigs.put("bootstrap.servers", "localhost:9092");
         expectedConfigs.put("client.id", "testid");
         expectedConfigs.put("metadata.max.age.ms", "10000");
@@ -2123,7 +2125,7 @@ public class WorkerTest {
                 Collections.singletonMap("position", 20)
         );
 
-        assertTrue(offsets.values().iterator().next().get("position") instanceof Integer);
+        assertInstanceOf(Integer.class, offsets.values().iterator().next().get("position"));
 
         mockInternalConverters();
 
@@ -2135,7 +2137,7 @@ public class WorkerTest {
         assertEquals(1, normalizedOffsets.size());
 
         // The integer value 20 gets deserialized as a long value by the JsonConverter
-        assertTrue(normalizedOffsets.values().iterator().next().get("position") instanceof Long);
+        assertInstanceOf(Long.class, normalizedOffsets.values().iterator().next().get("position"));
     }
 
     @Test

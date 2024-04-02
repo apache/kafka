@@ -835,7 +835,7 @@ public class OffsetsRequestManagerTest {
             final int endOffset) {
 
         AbstractRequest abstractRequest = request.requestBuilder().build();
-        assertTrue(abstractRequest instanceof OffsetsForLeaderEpochRequest);
+        assertInstanceOf(OffsetsForLeaderEpochRequest.class, abstractRequest);
         OffsetsForLeaderEpochRequest offsetsForLeaderEpochRequest = (OffsetsForLeaderEpochRequest) abstractRequest;
         OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
         partitions.forEach(tp -> {
@@ -870,7 +870,7 @@ public class OffsetsRequestManagerTest {
             final Map<TopicPartition, Errors> partitionErrors) {
 
         AbstractRequest abstractRequest = request.requestBuilder().build();
-        assertTrue(abstractRequest instanceof OffsetsForLeaderEpochRequest);
+        assertInstanceOf(OffsetsForLeaderEpochRequest.class, abstractRequest);
         OffsetsForLeaderEpochRequest offsetsForLeaderEpochRequest = (OffsetsForLeaderEpochRequest) abstractRequest;
         OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
         partitionErrors.keySet().forEach(tp -> {
@@ -931,7 +931,7 @@ public class OffsetsRequestManagerTest {
             final boolean disconnected,
             final AuthenticationException authenticationException) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
-        assertTrue(abstractRequest instanceof ListOffsetsRequest);
+        assertInstanceOf(ListOffsetsRequest.class, abstractRequest);
         ListOffsetsRequest offsetFetchRequest = (ListOffsetsRequest) abstractRequest;
         ListOffsetsResponse response = buildListOffsetsResponse(topicResponses);
         return new ClientResponse(

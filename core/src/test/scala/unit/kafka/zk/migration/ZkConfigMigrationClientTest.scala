@@ -40,9 +40,10 @@ import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.util.MockRandom
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.Test
 
+import java.nio.charset.StandardCharsets.UTF_8
 import java.util
 import java.util.Properties
 import scala.collection.Map
@@ -112,10 +113,20 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
         assertEquals(newProps.get(key), value)
       }
     }
+    assertPathExistenceAndData("/config/changes/config_change_0000000000", """{"version":2,"entity_path":"brokers/1"}""")
 
     migrationState = migrationClient.configClient().deleteConfigs(
       new ConfigResource(ConfigResource.Type.BROKER, "1"), migrationState)
     assertEquals(0, zkClient.getEntityConfigs(ConfigType.BROKER, "1").size())
+    assertPathExistenceAndData("/config/changes/config_change_0000000001", """{"version":2,"entity_path":"brokers/1"}""")
+
+    // make sure there is no more config change notification in znode
+    assertFalse(zkClient.pathExists("/config/changes/config_change_0000000002"))
+  }
+
+  private def assertPathExistenceAndData(expectedPath: String, data: String): Unit = {
+    assertTrue(zkClient.pathExists(expectedPath))
+    assertEquals(Some(data), zkClient.getDataAndStat(expectedPath)._1.map(new String(_, UTF_8)))
   }
 
   @Test
@@ -142,15 +153,17 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     RecordTestUtils.replayAllBatches(delta, batches)
     val image = delta.apply()
 
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("user" -> "").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("user" -> "user1").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("user" -> "user1", "client-id" -> "clientA").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("user" -> "", "client-id" -> "").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("user" -> "", "client-id" -> "clientA").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("client-id" -> "").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("client-id" -> "clientB").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("ip" -> "1.1.1.1").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("ip" -> "").asJava)))
+    assertEquals(new util.HashSet[ClientQuotaEntity](java.util.Arrays.asList(
+      new ClientQuotaEntity(Map("user" -> null.asInstanceOf[String]).asJava),
+      new ClientQuotaEntity(Map("user" -> "user1").asJava),
+      new ClientQuotaEntity(Map("user" -> "user1", "client-id" -> "clientA").asJava),
+      new ClientQuotaEntity(Map("user" -> null.asInstanceOf[String], "client-id" -> null.asInstanceOf[String]).asJava),
+      new ClientQuotaEntity(Map("user" -> null.asInstanceOf[String], "client-id" -> "clientA").asJava),
+      new ClientQuotaEntity(Map("client-id" -> null.asInstanceOf[String]).asJava),
+      new ClientQuotaEntity(Map("client-id" -> "clientB").asJava),
+      new ClientQuotaEntity(Map("ip" -> "1.1.1.1").asJava),
+      new ClientQuotaEntity(Map("ip" -> null.asInstanceOf[String]).asJava))),
+      image.entities().keySet())
   }
 
   @Test
@@ -186,7 +199,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(4, migrationState.migrationZkVersion())
 
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
-      Map(ClientQuotaEntity.USER -> ""),
+      Map(ClientQuotaEntity.USER -> null.asInstanceOf[String]),
       Map(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 200.0),
       ConfigType.USER, "<default>")
     assertEquals(5, migrationState.migrationZkVersion())

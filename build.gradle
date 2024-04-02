@@ -748,7 +748,7 @@ subprojects {
   }
 
   if (userEnableTestCoverage) {
-    def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
+    def coverageGen = it.path == ':core' ? 'reportTestScoverage' : 'jacocoTestReport'
     tasks.register('reportCoverage').configure { dependsOn(coverageGen) }
   }
 
@@ -829,6 +829,7 @@ project(':server') {
     implementation project(':transaction-coordinator')
     implementation project(':raft')
     implementation libs.metrics
+    implementation libs.jacksonDatabind
 
     implementation libs.slf4jApi
     implementation(libs.zookeeper) {
@@ -1991,6 +1992,9 @@ project(':tools') {
     implementation project(':log4j-appender')
     implementation project(':tools:tools-api')
     implementation libs.argparse4j
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonDataformatCsv
+    implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
     implementation libs.log4j
     implementation libs.joptSimple

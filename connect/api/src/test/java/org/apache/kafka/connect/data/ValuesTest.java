@@ -38,6 +38,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -829,14 +830,14 @@ public class ValuesTest {
             String.valueOf(value)
         );
         assertEquals(Decimal.schema(0), schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof BigDecimal);
+        assertInstanceOf(BigDecimal.class, schemaAndValue.value());
         assertEquals(value, ((BigDecimal) schemaAndValue.value()).unscaledValue());
         value = BigInteger.valueOf(Long.MIN_VALUE).subtract(new BigInteger("1"));
         schemaAndValue = Values.parseString(
             String.valueOf(value)
         );
         assertEquals(Decimal.schema(0), schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof BigDecimal);
+        assertInstanceOf(BigDecimal.class, schemaAndValue.value());
         assertEquals(value, ((BigDecimal) schemaAndValue.value()).unscaledValue());
     }
 
@@ -847,14 +848,14 @@ public class ValuesTest {
             String.valueOf(value)
         );
         assertEquals(Schema.INT8_SCHEMA, schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof Byte);
+        assertInstanceOf(Byte.class, schemaAndValue.value());
         assertEquals(value.byteValue(), ((Byte) schemaAndValue.value()).byteValue());
         value = Byte.MIN_VALUE;
         schemaAndValue = Values.parseString(
             String.valueOf(value)
         );
         assertEquals(Schema.INT8_SCHEMA, schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof Byte);
+        assertInstanceOf(Byte.class, schemaAndValue.value());
         assertEquals(value.byteValue(), ((Byte) schemaAndValue.value()).byteValue());
     }
 
@@ -865,14 +866,14 @@ public class ValuesTest {
             String.valueOf(value)
         );
         assertEquals(Schema.INT16_SCHEMA, schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof Short);
+        assertInstanceOf(Short.class, schemaAndValue.value());
         assertEquals(value.shortValue(), ((Short) schemaAndValue.value()).shortValue());
         value = Short.MIN_VALUE;
         schemaAndValue = Values.parseString(
             String.valueOf(value)
         );
         assertEquals(Schema.INT16_SCHEMA, schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof Short);
+        assertInstanceOf(Short.class, schemaAndValue.value());
         assertEquals(value.shortValue(), ((Short) schemaAndValue.value()).shortValue());
     }
 
@@ -883,14 +884,14 @@ public class ValuesTest {
             String.valueOf(value)
         );
         assertEquals(Schema.INT32_SCHEMA, schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof Integer);
+        assertInstanceOf(Integer.class, schemaAndValue.value());
         assertEquals(value.intValue(), ((Integer) schemaAndValue.value()).intValue());
         value = Integer.MIN_VALUE;
         schemaAndValue = Values.parseString(
             String.valueOf(value)
         );
         assertEquals(Schema.INT32_SCHEMA, schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof Integer);
+        assertInstanceOf(Integer.class, schemaAndValue.value());
         assertEquals(value.intValue(), ((Integer) schemaAndValue.value()).intValue());
     }
 
@@ -901,14 +902,14 @@ public class ValuesTest {
             String.valueOf(value)
         );
         assertEquals(Schema.INT64_SCHEMA, schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof Long);
+        assertInstanceOf(Long.class, schemaAndValue.value());
         assertEquals(value.longValue(), ((Long) schemaAndValue.value()).longValue());
         value = Long.MIN_VALUE;
         schemaAndValue = Values.parseString(
             String.valueOf(value)
         );
         assertEquals(Schema.INT64_SCHEMA, schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof Long);
+        assertInstanceOf(Long.class, schemaAndValue.value());
         assertEquals(value.longValue(), ((Long) schemaAndValue.value()).longValue());
     }
 
@@ -919,14 +920,14 @@ public class ValuesTest {
             String.valueOf(value)
         );
         assertEquals(Schema.FLOAT32_SCHEMA, schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof Float);
+        assertInstanceOf(Float.class, schemaAndValue.value());
         assertEquals(value, (Float) schemaAndValue.value(), 0);
         value = -Float.MAX_VALUE;
         schemaAndValue = Values.parseString(
             String.valueOf(value)
         );
         assertEquals(Schema.FLOAT32_SCHEMA, schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof Float);
+        assertInstanceOf(Float.class, schemaAndValue.value());
         assertEquals(value, (Float) schemaAndValue.value(), 0);
     }
 
@@ -937,14 +938,14 @@ public class ValuesTest {
             String.valueOf(value)
         );
         assertEquals(Schema.FLOAT64_SCHEMA, schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof Double);
+        assertInstanceOf(Double.class, schemaAndValue.value());
         assertEquals(value, (Double) schemaAndValue.value(), 0);
         value = -Double.MAX_VALUE;
         schemaAndValue = Values.parseString(
             String.valueOf(value)
         );
         assertEquals(Schema.FLOAT64_SCHEMA, schemaAndValue.schema());
-        assertTrue(schemaAndValue.value() instanceof Double);
+        assertInstanceOf(Double.class, schemaAndValue.value());
         assertEquals(value, (Double) schemaAndValue.value(), 0);
     }
 

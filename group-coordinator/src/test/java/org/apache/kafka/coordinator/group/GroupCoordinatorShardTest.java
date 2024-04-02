@@ -225,14 +225,14 @@ public class GroupCoordinatorShardTest {
             List<Record> records = invocation.getArgument(1);
             records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId));
             return null;
-        }).when(groupMetadataManager).deleteGroup(anyString(), anyList());
+        }).when(groupMetadataManager).createGroupTombstoneRecords(anyString(), anyList());
 
         CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> coordinatorResult =
             coordinator.deleteGroups(context, groupIds);
 
         for (String groupId : groupIds) {
             verify(groupMetadataManager, times(1)).validateDeleteGroup(ArgumentMatchers.eq(groupId));
-            verify(groupMetadataManager, times(1)).deleteGroup(ArgumentMatchers.eq(groupId), anyList());
+            verify(groupMetadataManager, times(1)).createGroupTombstoneRecords(ArgumentMatchers.eq(groupId), anyList());
             verify(offsetMetadataManager, times(1)).deleteAllOffsets(ArgumentMatchers.eq(groupId), anyList());
         }
         assertEquals(expectedResult, coordinatorResult);
@@ -291,7 +291,7 @@ public class GroupCoordinatorShardTest {
             List<Record> records = invocation.getArgument(1);
             records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId));
             return null;
-        }).when(groupMetadataManager).deleteGroup(anyString(), anyList());
+        }).when(groupMetadataManager).createGroupTombstoneRecords(anyString(), anyList());
 
         CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> coordinatorResult =
             coordinator.deleteGroups(context, groupIds);
@@ -299,7 +299,7 @@ public class GroupCoordinatorShardTest {
         for (String groupId : groupIds) {
             verify(groupMetadataManager, times(1)).validateDeleteGroup(eq(groupId));
             if (!groupId.equals("group-id-2")) {
-                verify(groupMetadataManager, times(1)).deleteGroup(eq(groupId), anyList());
+                verify(groupMetadataManager, times(1)).createGroupTombstoneRecords(eq(groupId), anyList());
                 verify(offsetMetadataManager, times(1)).deleteAllOffsets(eq(groupId), anyList());
             }
         }

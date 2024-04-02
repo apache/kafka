@@ -18,9 +18,7 @@ package kafka.security.authorizer
 
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
-
 import com.typesafe.scalalogging.Logger
-import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
 import kafka.utils.Implicits._
@@ -29,11 +27,13 @@ import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
+import org.apache.kafka.security.authorizer.AclEntry.RESOURCE_SEPARATOR
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.resource._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_0_IV1
@@ -410,8 +410,8 @@ class AclAuthorizer extends Authorizer with Logging {
                                 principal: String, host: String, op: AclOperation, permission: AclPermissionType,
                                 resourceType: ResourceType, patternType: PatternType): ArrayBuffer[Set[String]] = {
     val matched = ArrayBuffer[immutable.Set[String]]()
-    for (p <- Set(principal, AclEntry.WildcardPrincipalString);
-         h <- Set(host, AclEntry.WildcardHost);
+    for (p <- Set(principal, AclEntry.WILDCARD_PRINCIPAL_STRING);
+         h <- Set(host, AclEntry.WILDCARD_HOST);
          o <- Set(op, AclOperation.ALL)) {
       val resourceTypeKey = ResourceTypeKey(
         new AccessControlEntry(p, h, o, permission), resourceType, patternType)
@@ -426,8 +426,8 @@ class AclAuthorizer extends Authorizer with Logging {
   private def hasMatchingResources(resourceSnapshot: immutable.Map[ResourceTypeKey, immutable.Set[String]],
                                    principal: String, host: String, op: AclOperation, permission: AclPermissionType,
                                    resourceType: ResourceType, patternType: PatternType): Boolean = {
-    for (p <- Set(principal, AclEntry.WildcardPrincipalString);
-         h <- Set(host, AclEntry.WildcardHost);
+    for (p <- Set(principal, AclEntry.WILDCARD_PRINCIPAL_STRING);
+         h <- Set(host, AclEntry.WILDCARD_HOST);
          o <- Set(op, AclOperation.ALL)) {
           val resourceTypeKey = ResourceTypeKey(
             new AccessControlEntry(p, h, o, permission), resourceType, patternType)
@@ -566,9 +566,9 @@ class AclAuthorizer extends Authorizer with Logging {
                                 acls: AclSeqs): Boolean = {
     acls.find { acl =>
       acl.permissionType == permissionType &&
-        (acl.kafkaPrincipal == principal || acl.kafkaPrincipal == AclEntry.WildcardPrincipal) &&
+        (acl.kafkaPrincipal == principal || acl.kafkaPrincipal == AclEntry.WILDCARD_PRINCIPAL) &&
         (operation == acl.operation || acl.operation == AclOperation.ALL) &&
-        (acl.host == host || acl.host == AclEntry.WildcardHost)
+        (acl.host == host || acl.host == AclEntry.WILDCARD_HOST)
     }.exists { acl =>
       authorizerLogger.debug(s"operation = $operation on resource = $resource from host = $host is $permissionType based on acl = $acl")
       true
@@ -603,7 +603,7 @@ class AclAuthorizer extends Authorizer with Logging {
       val operation = SecurityUtils.operationName(action.operation)
       val host = requestContext.clientAddress.getHostAddress
       val resourceType = SecurityUtils.resourceTypeName(action.resourcePattern.resourceType)
-      val resource = s"$resourceType$ResourceSeparator${action.resourcePattern.patternType}$ResourceSeparator${action.resourcePattern.name}"
+      val resource = s"$resourceType$RESOURCE_SEPARATOR${action.resourcePattern.patternType}$RESOURCE_SEPARATOR${action.resourcePattern.name}"
       val authResult = if (authorized) "Allowed" else "Denied"
       val apiKey = if (ApiKeys.hasId(requestContext.requestType)) ApiKeys.forId(requestContext.requestType).name else requestContext.requestType
       val refCount = action.resourceReferenceCount

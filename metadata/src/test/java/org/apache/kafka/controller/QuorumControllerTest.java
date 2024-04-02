@@ -1257,7 +1257,7 @@ public class QuorumControllerTest {
             QuorumController active = controlEnv.activeController();
             TestUtils.waitForCondition(() ->
                 active.featureControl().metadataVersion().equals(MetadataVersion.IBP_3_0_IV1),
-                "Failed to get a metadata version of " + MetadataVersion.IBP_3_0_IV1);
+                "Failed to get a metadata.version of " + MetadataVersion.IBP_3_0_IV1);
             // The ConfigRecord in our bootstrap should not have been applied, since there
             // were already records present.
             assertEquals(Collections.emptyMap(), active.configurationControl().
@@ -1288,7 +1288,7 @@ public class QuorumControllerTest {
                 FinalizedControllerFeatures features = active.finalizedFeatures(ctx).get();
                 Optional<Short> metadataVersionOpt = features.get(MetadataVersion.FEATURE_NAME);
                 return Optional.of(MetadataVersion.IBP_3_3_IV1.featureLevel()).equals(metadataVersionOpt);
-            }, "Failed to see expected metadata version from bootstrap metadata");
+            }, "Failed to see expected metadata.version from bootstrap metadata");
 
             TestUtils.waitForCondition(() -> {
                 ConfigResource defaultBrokerResource = new ConfigResource(BROKER, "");

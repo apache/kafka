@@ -34,10 +34,10 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FlattenTest {
     private final Flatten<SourceRecord> xformKey = new Flatten.Key<>();
@@ -145,7 +145,7 @@ public class FlattenTest {
                 null, twoLevelNestedMap));
 
         assertNull(transformed.valueSchema());
-        assertTrue(transformed.value() instanceof Map);
+        assertInstanceOf(Map.class, transformed.value());
         @SuppressWarnings("unchecked")
         Map<String, Object> transformedMap = (Map<String, Object>) transformed.value();
         assertEquals(9, transformedMap.size());
@@ -241,7 +241,7 @@ public class FlattenTest {
                 null, oneLevelNestedMap));
 
         assertNull(transformed.valueSchema());
-        assertTrue(transformed.value() instanceof Map);
+        assertInstanceOf(Map.class, transformed.value());
         @SuppressWarnings("unchecked")
         Map<String, Object> transformedMap = (Map<String, Object>) transformed.value();
 
@@ -257,7 +257,7 @@ public class FlattenTest {
         SourceRecord transformed = xformKey.apply(src);
 
         assertNull(transformed.keySchema());
-        assertTrue(transformed.key() instanceof Map);
+        assertInstanceOf(Map.class, transformed.key());
         @SuppressWarnings("unchecked")
         Map<String, Object> transformedMap = (Map<String, Object>) transformed.key();
         assertEquals(12, transformedMap.get("A.B"));
