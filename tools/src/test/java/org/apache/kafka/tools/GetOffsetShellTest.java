@@ -24,12 +24,16 @@ import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicListing;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -41,10 +45,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -425,10 +433,25 @@ public class GetOffsetShellTest {
         try {
             TestUtils.waitForCondition(
                     () -> expected.equals(outputSupplier.get()),
-                    "TopicOffsets did not match. Expected: " + expectedTestTopicOffsets() + ", but was: " + outputSupplier.get()
+                    "TopicOffsets did not match. Expected: " + expectedTestTopicOffsets() + ", but was: "
+                            + outputSupplier.get() + ". Final offsets: " + getFinalOffsets()
             );
-        } catch (InterruptedException e) {
+        } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    private Set<Row> getFinalOffsets() throws ExecutionException, InterruptedException {
+        try (Admin admin = cluster.createAdminClient()) {
+            Set<String> topics = admin.listTopics(new ListTopicsOptions().listInternal(true)).listings().get()
+                    .stream().map(TopicListing::name).collect(Collectors.toSet());
+            Map<TopicPartition, OffsetSpec> offsetRequest = admin.describeTopics(topics)
+                    .allTopicNames().get().entrySet().stream().flatMap(entry -> entry.getValue().partitions()
+                            .stream().map(p -> new AbstractMap.SimpleImmutableEntry<>(new TopicPartition(entry.getKey(), p.partition()), OffsetSpec.latest())))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            return admin.listOffsets(offsetRequest).all().get().entrySet().stream()
+                    .map(entry -> new Row(entry.getKey().topic(), entry.getKey().partition(), entry.getValue().offset()))
+                    .collect(Collectors.toSet());
         }
     }
 }
