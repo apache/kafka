@@ -52,31 +52,31 @@ public class LogAppendInfo {
     /**
      * Creates an instance with the given params.
      *
-     * @param firstOffset            The first offset in the message set unless the message format is less than V2 and we are appending
-     *                               to the follower.
-     * @param lastOffset             The last offset in the message set
-     * @param lastLeaderEpoch        The partition leader epoch corresponding to the last offset, if available.
-     * @param maxTimestamp           The maximum timestamp of the message set.
-     * @param offsetOfMaxTimestamp   The offset of the message with the maximum timestamp.
-     * @param logAppendTime          The log append time (if used) of the message set, otherwise Message.NoTimestamp
-     * @param logStartOffset         The start offset of the log at the time of this append.
-     * @param recordValidationStats  Statistics collected during record processing, `null` if `assignOffsets` is `false`
-     * @param sourceCompression      The source codec used in the message set (send by the producer)
-     * @param validBytes             The number of valid bytes
-     * @param lastOffsetOfFirstBatch The last offset of the first batch
+     * @param firstOffset                   The first offset in the message set unless the message format is less than V2 and we are appending
+     *                                      to the follower.
+     * @param lastOffset                    The last offset in the message set
+     * @param lastLeaderEpoch               The partition leader epoch corresponding to the last offset, if available.
+     * @param maxTimestamp                  The maximum timestamp of the message set.
+     * @param shallowOffsetOfMaxTimestamp   The last offset of the batch with the maximum timestamp.
+     * @param logAppendTime                 The log append time (if used) of the message set, otherwise Message.NoTimestamp
+     * @param logStartOffset                The start offset of the log at the time of this append.
+     * @param recordValidationStats         Statistics collected during record processing, `null` if `assignOffsets` is `false`
+     * @param sourceCompression             The source codec used in the message set (send by the producer)
+     * @param validBytes                    The number of valid bytes
+     * @param lastOffsetOfFirstBatch        The last offset of the first batch
      */
     public LogAppendInfo(long firstOffset,
                          long lastOffset,
                          OptionalInt lastLeaderEpoch,
                          long maxTimestamp,
-                         long offsetOfMaxTimestamp,
+                         long shallowOffsetOfMaxTimestamp,
                          long logAppendTime,
                          long logStartOffset,
                          RecordValidationStats recordValidationStats,
                          CompressionType sourceCompression,
                          int validBytes,
                          long lastOffsetOfFirstBatch) {
-        this(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, offsetOfMaxTimestamp, logAppendTime, logStartOffset,
+        this(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, shallowOffsetOfMaxTimestamp, logAppendTime, logStartOffset,
             recordValidationStats, sourceCompression, validBytes, lastOffsetOfFirstBatch, Collections.<RecordError>emptyList(),
                 LeaderHwChange.NONE);
     }

@@ -186,7 +186,7 @@ class LogValidatorTest {
       case RecordBatch.MAGIC_VALUE_V1 => 0
       case _ => 2
     }
-    assertEquals(expectedMaxTimestampOffset, validatedResults.shallowOffsetOfMaxTimestampMs)
+    assertEquals(expectedMaxTimestampOffset, validatedResults.shallowOffsetOfMaxTimestamp)
     verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 0, records,
       compressed = false)
   }
@@ -229,7 +229,7 @@ class LogValidatorTest {
       "MessageSet should still valid")
     assertEquals(now, validatedResults.maxTimestampMs,
       s"Max timestamp should be $now")
-    assertEquals(2, validatedResults.shallowOffsetOfMaxTimestampMs,
+    assertEquals(2, validatedResults.shallowOffsetOfMaxTimestamp,
       s"The shallow offset of max timestamp should be 2 if logAppendTime is used")
     assertTrue(validatedResults.messageSizeMaybeChanged,
       "Message size may have been changed")
@@ -281,7 +281,7 @@ class LogValidatorTest {
       "MessageSet should still valid")
     assertEquals(now, validatedResults.maxTimestampMs,
       s"Max timestamp should be $now")
-    assertEquals(2, validatedResults.shallowOffsetOfMaxTimestampMs,
+    assertEquals(2, validatedResults.shallowOffsetOfMaxTimestamp,
       s"The shallow offset of max timestamp should be the last offset 2 if logAppendTime is used")
     assertFalse(validatedResults.messageSizeMaybeChanged,
       "Message size should not have been changed")
@@ -414,7 +414,7 @@ class LogValidatorTest {
     assertEquals(now + 1, validatingResults.maxTimestampMs,
       s"Max timestamp should be ${now + 1}")
 
-    assertEquals(2, validatingResults.shallowOffsetOfMaxTimestampMs)
+    assertEquals(2, validatingResults.shallowOffsetOfMaxTimestamp)
 
     assertFalse(validatingResults.messageSizeMaybeChanged,
       "Message size should not have been changed")
@@ -488,7 +488,7 @@ class LogValidatorTest {
     }
     assertEquals(now + 1, validatingResults.maxTimestampMs,
       s"Max timestamp should be ${now + 1}")
-    assertEquals(2, validatingResults.shallowOffsetOfMaxTimestampMs,
+    assertEquals(2, validatingResults.shallowOffsetOfMaxTimestamp,
       "Shallow offset of max timestamp should be 2")
     assertTrue(validatingResults.messageSizeMaybeChanged,
       "Message size should have been changed")
@@ -540,7 +540,7 @@ class LogValidatorTest {
     }
     assertEquals(validatedResults.maxTimestampMs, RecordBatch.NO_TIMESTAMP,
       s"Max timestamp should be ${RecordBatch.NO_TIMESTAMP}")
-    assertEquals(-1, validatedResults.shallowOffsetOfMaxTimestampMs)
+    assertEquals(-1, validatedResults.shallowOffsetOfMaxTimestamp)
     assertTrue(validatedResults.messageSizeMaybeChanged, "Message size should have been changed")
 
     verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
@@ -586,7 +586,7 @@ class LogValidatorTest {
       assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence)
     }
     assertEquals(timestamp, validatedResults.maxTimestampMs)
-    assertEquals(2, validatedResults.shallowOffsetOfMaxTimestampMs,
+    assertEquals(2, validatedResults.shallowOffsetOfMaxTimestamp,
       s"Offset of max timestamp should be the last offset 2.")
     assertTrue(validatedResults.messageSizeMaybeChanged, "Message size should have been changed")
 
@@ -659,7 +659,7 @@ class LogValidatorTest {
     assertEquals(now + 1, validatedResults.maxTimestampMs, s"Max timestamp should be ${now + 1}")
 
     val expectedShallowOffsetOfMaxTimestamp = 2
-    assertEquals(expectedShallowOffsetOfMaxTimestamp, validatedResults.shallowOffsetOfMaxTimestampMs,
+    assertEquals(expectedShallowOffsetOfMaxTimestamp, validatedResults.shallowOffsetOfMaxTimestamp,
       s"Shallow offset of max timestamp should be 2")
     assertFalse(validatedResults.messageSizeMaybeChanged, "Message size should not have been changed")
 

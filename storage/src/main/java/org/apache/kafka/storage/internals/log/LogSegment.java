@@ -275,7 +275,7 @@ public class LogSegment implements Closeable {
     private int appendChunkFromFile(FileRecords records, int position, BufferSupplier bufferSupplier) throws IOException {
         int bytesToAppend = 0;
         long maxTimestamp = Long.MIN_VALUE;
-        long offsetOfMaxTimestamp = Long.MIN_VALUE;
+        long shallowOffsetOfMaxTimestamp = Long.MIN_VALUE;
         long maxOffset = Long.MIN_VALUE;
         ByteBuffer readBuffer = bufferSupplier.get(1024 * 1024);
 
@@ -286,7 +286,7 @@ public class LogSegment implements Closeable {
         while ((batch = nextAppendableBatch(nextBatches, readBuffer, bytesToAppend)) != null) {
             if (batch.maxTimestamp() > maxTimestamp) {
                 maxTimestamp = batch.maxTimestamp();
-                offsetOfMaxTimestamp = batch.lastOffset();
+                shallowOffsetOfMaxTimestamp = batch.lastOffset();
             }
             maxOffset = batch.lastOffset();
             bytesToAppend += batch.sizeInBytes();
@@ -300,7 +300,7 @@ public class LogSegment implements Closeable {
             readBuffer.limit(bytesToAppend);
             records.readInto(readBuffer, position);
 
-            append(maxOffset, maxTimestamp, offsetOfMaxTimestamp, MemoryRecords.readableRecords(readBuffer));
+            append(maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp, MemoryRecords.readableRecords(readBuffer));
         }
 
         bufferSupplier.release(readBuffer);

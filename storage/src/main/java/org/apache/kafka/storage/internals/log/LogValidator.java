@@ -71,17 +71,17 @@ public class LogValidator {
         // we only maintain batch level offset for max timestamp since we want to align the behavior of updating time
         // indexing entries. The paths of follower append and replica recovery do not iterate all records, so they have no
         // idea about record level offset for max timestamp.
-        public final long shallowOffsetOfMaxTimestampMs;
+        public final long shallowOffsetOfMaxTimestamp;
         public final boolean messageSizeMaybeChanged;
         public final RecordValidationStats recordValidationStats;
 
         public ValidationResult(long logAppendTimeMs, MemoryRecords validatedRecords, long maxTimestampMs,
-                                long shallowOffsetOfMaxTimestampMs, boolean messageSizeMaybeChanged,
+                                long shallowOffsetOfMaxTimestamp, boolean messageSizeMaybeChanged,
                                 RecordValidationStats recordValidationStats) {
             this.logAppendTimeMs = logAppendTimeMs;
             this.validatedRecords = validatedRecords;
             this.maxTimestampMs = maxTimestampMs;
-            this.shallowOffsetOfMaxTimestampMs = shallowOffsetOfMaxTimestampMs;
+            this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
             this.messageSizeMaybeChanged = messageSizeMaybeChanged;
             this.recordValidationStats = recordValidationStats;
         }
@@ -442,7 +442,7 @@ public class LogValidator {
                 now,
                 records,
                 maxTimestamp,
-                // there is only one batch in this path, so last offset can be viewed as shallowOffsetOfMaxTimestampMs
+                // there is only one batch in this path, so last offset can be viewed as shallowOffsetOfMaxTimestamp
                 lastOffset,
                 false,
                 recordValidationStats);
