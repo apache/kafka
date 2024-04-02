@@ -71,7 +71,22 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Level;
+import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.TearDown;
+import org.openjdk.jmh.annotations.Warmup;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -81,7 +96,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@State(Scope.Benchmark)
+@Fork(value = 1)
+@Warmup(iterations = 1)
+@Measurement(iterations = 2)
+@BenchmarkMode(Mode.AverageTime)
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class RecordAccumulatorTest {
+
+    @Param({"10", "50", "100", "500", "1000", "5000", "10000"})
+    private int numThreads;
+    @Param({"10000"})
+    private int msgs;
 
     private String topic = "test";
     private int partition1 = 0;
@@ -369,9 +395,8 @@ public class RecordAccumulatorTest {
 
     @SuppressWarnings("unused")
     @Test
+    @Benchmark
     public void testStressfulSituation() throws Exception {
-        final int numThreads = 5;
-        final int msgs = 10000;
         final int numParts = 2;
         final RecordAccumulator accum = createTestRecordAccumulator(
             1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024, CompressionType.NONE, 0);

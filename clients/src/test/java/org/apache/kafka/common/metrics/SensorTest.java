@@ -41,6 +41,20 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.mockito.Mockito;
 
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Level;
+import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.TearDown;
+import org.openjdk.jmh.annotations.Warmup;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -48,7 +62,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@State(Scope.Benchmark)
+@Fork(value = 1)
+@Warmup(iterations = 1)
+@Measurement(iterations = 2)
+@BenchmarkMode(Mode.AverageTime)
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class SensorTest {
+
+    @Param({"10", "50", "100", "500", "1000", "5000", "10000"})
+    private int threadCount;
 
     private static final MetricConfig INFO_CONFIG = new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO);
     private static final MetricConfig DEBUG_CONFIG = new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG);
@@ -179,6 +202,7 @@ public class SensorTest {
      * The Sensor#checkQuotas should be thread-safe since the method may be used by many ReplicaFetcherThreads.
      */
     @Test
+    @Benchmark
     public void testCheckQuotasInMultiThreads() throws InterruptedException, ExecutionException {
         final Metrics metrics = new Metrics(new MetricConfig().quota(Quota.upperBound(Double.MAX_VALUE))
             // decreasing the value of time window make SampledStat always record the given value
@@ -188,7 +212,6 @@ public class SensorTest {
         final Sensor sensor = metrics.sensor("sensor");
 
         assertTrue(sensor.add(metrics.metricName("test-metric", "test-group"), new Rate()));
-        final int threadCount = 10;
         final CountDownLatch latch = new CountDownLatch(1);
         ExecutorService service = Executors.newFixedThreadPool(threadCount);
         List<Future<Throwable>> workers = new ArrayList<>(threadCount);

@@ -275,7 +275,7 @@ subprojects {
     // --release is the recommended way to select the target release, but it's only supported in Java 9 so we also
     // set --source and --target via `sourceCompatibility` and `targetCompatibility` a couple of lines below
     if (JavaVersion.current().isJava9Compatible())
-      options.release = minJavaVersion
+      options.release = 21
     // --source/--target 8 is deprecated in Java 20, suppress warning until Java 8 support is dropped in Kafka 4.0
     if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_20))
       options.compilerArgs << "-Xlint:-options"
