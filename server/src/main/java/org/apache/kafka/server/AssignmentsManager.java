@@ -181,9 +181,6 @@ public class AssignmentsManager {
             if (!partition.equals(other.partition)) {
                 throw new IllegalArgumentException("Cannot merge events for different partitions");
             }
-            if (!dirId.equals(other.dirId)) {
-                throw new IllegalArgumentException("Cannot merge events for different directories");
-            }
             completionHandlers.addAll(other.completionHandlers);
         }
         void onComplete() {
@@ -193,25 +190,29 @@ public class AssignmentsManager {
         }
         @Override
         public void run() throws Exception {
+            log.trace("Received assignment {}", this);
             AssignmentEvent existing = pending.getOrDefault(partition, null);
+            boolean existingIsInFlight = false;
             if (existing == null && inflight != null) {
                 existing = inflight.getOrDefault(partition, null);
+                existingIsInFlight = true;
             }
             if (existing != null) {
                 if (existing.dirId.equals(dirId)) {
                     existing.merge(this);
-                    if (log.isDebugEnabled()) log.debug("Ignoring duplicate assignment {}", this);
+                    log.debug("Ignoring duplicate assignment {}", this);
                     return;
                 }
                 if (existing.timestampNs > timestampNs) {
-                    existing.onComplete();
-                    if (log.isDebugEnabled()) log.debug("Dropping assignment {} because it's older than {}", this, existing);
+                    existing.merge(this);
+                    log.debug("Dropping assignment {} because it's older than existing {}", this, existing);
                     return;
+                } else if (!existingIsInFlight) {
+                    this.merge(existing);
+                    log.debug("Dropping existing assignment {} because it's older than {}", existing, this);
                 }
             }
-            if (log.isDebugEnabled()) {
-                log.debug("Received new assignment {}", this);
-            }
+            log.debug("Queueing new assignment {}", this);
             pending.put(partition, this);
 
             if (inflight == null || inflight.isEmpty()) {
@@ -272,9 +273,7 @@ public class AssignmentsManager {
             }
             Map<TopicIdPartition, Uuid> assignment = inflight.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().dirId));
-            if (log.isDebugEnabled()) {
-                log.debug("Dispatching {} assignments:  {}", assignment.size(), assignment);
-            }
+            log.debug("Dispatching {} assignments:  {}", assignment.size(), assignment);
             channelManager.sendRequest(new AssignReplicasToDirsRequest.Builder(
                     buildRequestData(brokerId, brokerEpochSupplier.get(), assignment)),
                     new AssignReplicasToDirsRequestCompletionHandler());
@@ -331,9 +330,7 @@ public class AssignmentsManager {
         }
         @Override
         public void onComplete(ClientResponse response) {
-            if (log.isDebugEnabled()) {
-                log.debug("Received controller response: {}", response);
-            }
+            log.debug("Received controller response: {}", response);
             appendResponseEvent(response);
         }
         void appendResponseEvent(ClientResponse response) {
@@ -352,9 +349,7 @@ public class AssignmentsManager {
     }
 
     private void scheduleDispatch(long delayNs) {
-        if (log.isDebugEnabled()) {
-            log.debug("Scheduling dispatch in {}ns", delayNs);
-        }
+        log.debug("Scheduling dispatch in {}ns", delayNs);
         eventQueue.enqueue(EventQueue.EventInsertionType.DEFERRED, DispatchEvent.TAG,
                 new EventQueue.LatestDeadlineFunction(time.nanoseconds() + delayNs), new DispatchEvent());
     }
