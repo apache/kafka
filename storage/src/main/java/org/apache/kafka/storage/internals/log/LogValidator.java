@@ -294,9 +294,9 @@ public class LogValidator {
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
             maxTimestamp = now;
             // those checks should be equal to MemoryRecordsBuilder#info
-            switch(toMagic) {
+            switch (toMagic) {
                 case RecordBatch.MAGIC_VALUE_V0:
-                    // value will be the default value -1
+                    // value will be the default value: -1
                     shallowOffsetOfMaxTimestamp = -1;
                     break;
                 case RecordBatch.MAGIC_VALUE_V1:
