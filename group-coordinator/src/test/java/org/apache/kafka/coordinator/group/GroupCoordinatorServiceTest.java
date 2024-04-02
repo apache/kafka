@@ -1852,7 +1852,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(shorts = {3, 4})
+    @ValueSource(shorts = {4, 5})
     public void testCommitTransactionalOffsets(Short txnOffsetCommitVersion) throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(

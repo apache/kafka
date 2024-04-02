@@ -42,7 +42,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
     private final TxnOffsetCommitRequestData data;
 
-    final static short transactionV2MinimalVersion = 4;
+    static final short transactionV2MinimalVersion = 5;
 
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {
 

@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 
 public class ProduceRequest extends AbstractRequest {
-    static final short transactionV2MinimalVersion = 11;
+    static final short transactionV2MinimalVersion = 12;
 
     public static Builder forMagic(byte magic, ProduceRequestData data) {
         // Message format upgrades correspond with a bump in the produce request version. Older
