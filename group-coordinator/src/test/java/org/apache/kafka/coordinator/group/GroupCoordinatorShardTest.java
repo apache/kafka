@@ -1056,4 +1056,26 @@ public class GroupCoordinatorShardTest {
         assertEquals(records, result.records());
         assertNull(result.response());
     }
+
+    @Test
+    public void testOnUnloaded() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        Time mockTime = new MockTime();
+        MockCoordinatorTimer<Void, Record> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            mockTime,
+            timer,
+            GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 24 * 60),
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        coordinator.onUnloaded();
+        assertEquals(0, timer.size());
+        verify(groupMetadataManager, times(1)).onUnloaded();
+    }
 }
