@@ -119,7 +119,7 @@ class AbstractDynamicBrokerReconfigurationTest extends QuorumTestHarness with Sa
         properties
       } else {
         val properties = TestUtils.createBrokerConfig(brokerId, zkConnect)
-        properties.put(ZkConfigs.ZK_ENABLE_SECURE_ACLS_PROP, "true")
+        properties.put(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
         properties
       }
       props ++= securityProps(sslProperties1, TRUSTSTORE_PROPS)

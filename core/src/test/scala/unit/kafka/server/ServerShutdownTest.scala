@@ -151,8 +151,8 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       shutdownKRaftController()
       verifyCleanShutdownAfterFailedStartup[CancellationException]
     } else {
-      propsToChangeUponRestart.setProperty(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_PROP, "50")
-      propsToChangeUponRestart.setProperty(ZkConfigs.ZK_CONNECT_PROP, "some.invalid.hostname.foo.bar.local:65535")
+      propsToChangeUponRestart.setProperty(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG, "50")
+      propsToChangeUponRestart.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "some.invalid.hostname.foo.bar.local:65535")
       verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException]
     }
   }
