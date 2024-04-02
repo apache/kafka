@@ -21,7 +21,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import java.util.Optional;
 
 /**
- * Internal representation of {@link OffsetAndTimestamp}.
+ * Internal representation of {@link OffsetAndTimestamp} to allow negative timestamps and offset.
  */
 public class OffsetAndTimestampInternal {
     private final long timestamp;

@@ -241,12 +241,12 @@ class OffsetFetcherUtils {
         return offsetResetTimestamps;
     }
 
-    static <T> Map<TopicPartition, T> buildListOffsetsResult(
+    static Map<TopicPartition, OffsetAndTimestamp> buildListOffsetsResult(
         final Map<TopicPartition, Long> timestampsToSearch,
         final Map<TopicPartition, ListOffsetData> fetchedOffsets,
-        BiFunction<TopicPartition, ListOffsetData, T> resultMapper) {
+        BiFunction<TopicPartition, ListOffsetData, OffsetAndTimestamp> resultMapper) {
 
-        HashMap<TopicPartition, T> offsetsResults = new HashMap<>(timestampsToSearch.size());
+        HashMap<TopicPartition, OffsetAndTimestamp> offsetsResults = new HashMap<>(timestampsToSearch.size());
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
             offsetsResults.put(entry.getKey(), null);
 
