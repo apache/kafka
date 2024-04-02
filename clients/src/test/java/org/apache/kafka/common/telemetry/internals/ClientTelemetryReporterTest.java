@@ -59,6 +59,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -247,7 +248,7 @@ public class ClientTelemetryReporterTest {
         Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
         assertNotNull(requestOptional);
         assertTrue(requestOptional.isPresent());
-        assertTrue(requestOptional.get().build() instanceof GetTelemetrySubscriptionsRequest);
+        assertInstanceOf(GetTelemetrySubscriptionsRequest.class, requestOptional.get().build());
         GetTelemetrySubscriptionsRequest request = (GetTelemetrySubscriptionsRequest) requestOptional.get().build();
 
         GetTelemetrySubscriptionsRequest expectedResult = new GetTelemetrySubscriptionsRequest.Builder(
@@ -266,7 +267,7 @@ public class ClientTelemetryReporterTest {
         Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
         assertNotNull(requestOptional);
         assertTrue(requestOptional.isPresent());
-        assertTrue(requestOptional.get().build() instanceof GetTelemetrySubscriptionsRequest);
+        assertInstanceOf(GetTelemetrySubscriptionsRequest.class, requestOptional.get().build());
         GetTelemetrySubscriptionsRequest request = (GetTelemetrySubscriptionsRequest) requestOptional.get().build();
 
         GetTelemetrySubscriptionsRequest expectedResult = new GetTelemetrySubscriptionsRequest.Builder(
@@ -290,7 +291,7 @@ public class ClientTelemetryReporterTest {
         Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
         assertNotNull(requestOptional);
         assertTrue(requestOptional.isPresent());
-        assertTrue(requestOptional.get().build() instanceof PushTelemetryRequest);
+        assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
         PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build();
 
         PushTelemetryRequest expectedResult = new PushTelemetryRequest.Builder(
@@ -373,7 +374,7 @@ public class ClientTelemetryReporterTest {
         Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
         assertNotNull(requestOptional);
         assertTrue(requestOptional.isPresent());
-        assertTrue(requestOptional.get().build() instanceof PushTelemetryRequest);
+        assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
         PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build();
 
         assertEquals(subscription.clientInstanceId(), request.data().clientInstanceId());
@@ -401,7 +402,7 @@ public class ClientTelemetryReporterTest {
             Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
             assertNotNull(requestOptional);
             assertTrue(requestOptional.isPresent());
-            assertTrue(requestOptional.get().build() instanceof PushTelemetryRequest);
+            assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
             PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build();
 
             assertEquals(subscription.clientInstanceId(), request.data().clientInstanceId());

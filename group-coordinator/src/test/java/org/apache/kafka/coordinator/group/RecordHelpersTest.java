@@ -22,11 +22,9 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.consumer.ClientAssignor;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.consumer.MemberState;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
-import org.apache.kafka.coordinator.group.consumer.VersionedMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -55,8 +53,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -105,14 +101,6 @@ public class RecordHelpersTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "zar", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setClientAssignors(Collections.singletonList(new ClientAssignor(
-                "assignor",
-                (byte) 0,
-                (byte) 1,
-                (byte) 10,
-                new VersionedMetadata(
-                    (byte) 5,
-                    ByteBuffer.wrap("hello".getBytes(StandardCharsets.UTF_8))))))
             .build();
 
         Record expectedRecord = new Record(
@@ -130,13 +118,7 @@ public class RecordHelpersTest {
                     .setClientHost("client-host")
                     .setSubscribedTopicNames(Arrays.asList("bar", "foo", "zar"))
                     .setSubscribedTopicRegex("regex")
-                    .setServerAssignor("range")
-                    .setAssignors(Collections.singletonList(new ConsumerGroupMemberMetadataValue.Assignor()
-                        .setName("assignor")
-                        .setMinimumVersion((short) 1)
-                        .setMaximumVersion((short) 10)
-                        .setVersion((short) 5)
-                        .setMetadata("hello".getBytes(StandardCharsets.UTF_8)))),
+                    .setServerAssignor("range"),
                 (short) 0));
 
         assertEquals(expectedRecord, newMemberSubscriptionRecord(

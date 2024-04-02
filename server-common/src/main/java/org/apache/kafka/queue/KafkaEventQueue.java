@@ -20,6 +20,7 @@ package org.apache.kafka.queue;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.concurrent.RejectedExecutionException;
@@ -512,5 +513,37 @@ public final class KafkaEventQueue implements EventQueue {
         beginShutdown("KafkaEventQueue#close");
         eventHandlerThread.join();
         log.info("closed event queue.");
+    }
+
+    /**
+     * Returns the deferred event that the queue is waiting for, idling until
+     * its deadline comes, if there is any.
+     * If the queue has immediate work to do, this returns empty.
+     * This is useful for unit tests, where to make progress, we need to
+     * speed the clock up until the next scheduled event is ready to run.
+     */
+    public Optional<Event> firstDeferredIfIdling() {
+        lock.lock();
+        try {
+            if (eventHandler.head.next != eventHandler.head) {
+                // There are events ready to run immediately. The queue is not idling.
+                return Optional.empty();
+            }
+            Map.Entry<Long, EventContext> entry = eventHandler.deadlineMap.firstEntry();
+            if (entry == null) {
+                // The queue is idling, but not waiting for any deadline.
+                return Optional.empty();
+            }
+            EventContext eventContext = entry.getValue();
+            if (eventContext.insertionType != EventInsertionType.DEFERRED) {
+                // Any event with a deadline is put in `deadlineMap`.
+                // But events of type other than DEFERRED will run immediately,
+                // so the queue will not idle waiting for their deadline.
+                return Optional.empty();
+            }
+            return Optional.of(eventContext.event);
+        } finally {
+            lock.unlock();
+        }
     }
 }

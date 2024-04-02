@@ -388,7 +388,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             try {
                 groupMetadataManager.validateDeleteGroup(groupId);
                 numDeletedOffsets += offsetMetadataManager.deleteAllOffsets(groupId, records);
-                groupMetadataManager.deleteGroup(groupId, records);
+                groupMetadataManager.createGroupTombstoneRecords(groupId, records);
                 deletedGroups.add(groupId);
 
                 resultCollection.add(
@@ -639,6 +639,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     public void onUnloaded() {
         timer.cancel(GROUP_EXPIRATION_KEY);
         coordinatorMetrics.deactivateMetricsShard(metricsShard);
+        groupMetadataManager.onUnloaded();
     }
 
     /**

@@ -155,7 +155,7 @@ public final class AssignorConfiguration {
             switch (UpgradeFromValues.getValueFromString(upgradeFrom)) {
                 case UPGRADE_FROM_0100:
                     log.info(
-                        "Downgrading metadata version from {} to 1 for upgrade from 0.10.0.x.",
+                        "Downgrading metadata.version from {} to 1 for upgrade from 0.10.0.x.",
                         LATEST_SUPPORTED_VERSION
                     );
                     return 1;
@@ -165,7 +165,7 @@ public final class AssignorConfiguration {
                 case UPGRADE_FROM_10:
                 case UPGRADE_FROM_11:
                     log.info(
-                        "Downgrading metadata version from {} to 2 for upgrade from {}.x.",
+                        "Downgrading metadata.version from {} to 2 for upgrade from {}.x.",
                         LATEST_SUPPORTED_VERSION,
                         upgradeFrom
                     );

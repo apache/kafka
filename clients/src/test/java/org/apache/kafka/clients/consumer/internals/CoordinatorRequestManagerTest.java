@@ -37,6 +37,7 @@ import java.util.Collections;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -202,7 +203,7 @@ public class CoordinatorRequestManagerTest {
         Errors error
     ) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
-        assertTrue(abstractRequest instanceof FindCoordinatorRequest);
+        assertInstanceOf(FindCoordinatorRequest.class, abstractRequest);
         FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) abstractRequest;
 
         FindCoordinatorResponse findCoordinatorResponse =

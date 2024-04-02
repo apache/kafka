@@ -29,7 +29,6 @@ import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -161,7 +160,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -1634,18 +1632,16 @@ public class StreamThreadTest {
         mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1L);
         consumer.addRecord(new ConsumerRecord<>(topic1, 1, 1, new byte[0], new byte[0]));
 
-        try {
-            if (processingThreadsEnabled) {
-                runUntilTimeoutOrException(this::runOnce);
-            } else {
-                runOnce();
-            }
-            fail("Should have thrown TaskMigratedException");
-        } catch (final KafkaException expected) {
-            assertTrue(String.format("Expected TaskMigratedException but got %s", expected), expected instanceof TaskMigratedException);
-            assertTrue("StreamsThread removed the fenced zombie task already, should wait for rebalance to close all zombies together.",
-                thread.readOnlyActiveTasks().stream().anyMatch(task -> task.id().equals(task1)));
-        }
+        assertThrows(TaskMigratedException.class,
+            () -> {
+                if (processingThreadsEnabled) {
+                    runUntilTimeoutOrException(this::runOnce);
+                } else {
+                    runOnce();
+                }
+            });
+        assertTrue("StreamsThread removed the fenced zombie task already, should wait for rebalance to close all zombies together.",
+            thread.readOnlyActiveTasks().stream().anyMatch(task -> task.id().equals(task1)));
 
         assertThat(producer.commitCount(), equalTo(1L));
     }
@@ -1847,18 +1843,16 @@ public class StreamThreadTest {
         producer.commitTransactionException = new ProducerFencedException("Producer is fenced");
         mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1L);
         consumer.addRecord(new ConsumerRecord<>(topic1, 1, 1, new byte[0], new byte[0]));
-        try {
-            if (processingThreadsEnabled) {
-                runUntilTimeoutOrException(this::runOnce);
-            } else {
-                runOnce();
-            }
-            fail("Should have thrown TaskMigratedException");
-        } catch (final KafkaException expected) {
-            assertTrue(expected instanceof TaskMigratedException);
-            assertTrue("StreamsThread removed the fenced zombie task already, should wait for rebalance to close all zombies together.",
-                thread.readOnlyActiveTasks().stream().anyMatch(task -> task.id().equals(task1)));
-        }
+        assertThrows(TaskMigratedException.class,
+            () -> {
+                if (processingThreadsEnabled) {
+                    runUntilTimeoutOrException(this::runOnce);
+                } else {
+                    runOnce();
+                }
+            });
+        assertTrue("StreamsThread removed the fenced zombie task already, should wait for rebalance to close all zombies together.",
+            thread.readOnlyActiveTasks().stream().anyMatch(task -> task.id().equals(task1)));
 
         assertThat(producer.commitCount(), equalTo(0L));
 
