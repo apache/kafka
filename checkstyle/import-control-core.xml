@@ -115,4 +115,12 @@
       <allow pkg="org.apache.kafka.metadata" />
     </subpackage>
   </subpackage>
+
+  <subpackage name="admin">
+    <allow pkg="kafka.cluster"/>
+    <allow pkg="kafka.server"/>
+    <allow pkg="kafka.zk"/>
+    <allow pkg="org.apache.kafka.security"/>
+    <allow pkg="org.apache.kafka.server"/>
+  </subpackage>
 </import-control>
