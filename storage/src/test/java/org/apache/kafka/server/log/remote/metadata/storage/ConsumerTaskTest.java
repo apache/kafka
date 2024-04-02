@@ -391,10 +391,6 @@ public class ConsumerTaskTest {
         }
 
         @Override
-        public void syncLogMetadataSnapshot(TopicIdPartition topicIdPartition, int metadataPartition, Long metadataPartitionOffset) {
-        }
-
-        @Override
         public void clearTopicPartition(TopicIdPartition topicIdPartition) {
             isPartitionCleared.put(topicIdPartition, true);
         }
