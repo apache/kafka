@@ -18,8 +18,7 @@ package kafka.raft
 
 import java.nio.channels.FileChannel
 import java.nio.channels.OverlappingFileLockException
-import java.nio.file.Path
-import java.nio.file.StandardOpenOption
+import java.nio.file.{Files, Path, StandardOpenOption}
 import java.util.Properties
 import java.util.concurrent.CompletableFuture
 import kafka.log.LogManager
@@ -40,6 +39,30 @@ import org.apache.kafka.server.fault.FaultHandler
 import org.mockito.Mockito._
 
 class RaftManagerTest {
+  private def createZkBrokerConfig(
+    migrationEnabled: Boolean,
+    nodeId: Int,
+    logDir: Option[Path],
+    metadataDir: Option[Path]
+  ): KafkaConfig = {
+    val props = new Properties
+    logDir.foreach { value =>
+      props.setProperty(KafkaConfig.LogDirProp, value.toString)
+    }
+    if (migrationEnabled) {
+      metadataDir.foreach { value =>
+        props.setProperty(KafkaConfig.MetadataLogDirProp, value.toString)
+      }
+      props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
+      props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
+      props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    }
+
+    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(KafkaConfig.BrokerIdProp, nodeId.toString)
+    new KafkaConfig(props)
+  }
+
   private def createConfig(
     processRoles: Set[ProcessRole],
     nodeId: Int,
@@ -175,6 +198,70 @@ class RaftManagerTest {
     raftManager.shutdown()
 
     assertFalse(fileLocked(lockPath))
+  }
+
+  @Test
+  def testMigratingZkBrokerDeletesMetadataLog(): Unit = {
+    val logDir = Some(TestUtils.tempDir().toPath)
+    val metadataDir = Some(TestUtils.tempDir().toPath)
+    val nodeId = 1
+    val config = createZkBrokerConfig(migrationEnabled = true, nodeId, logDir, metadataDir)
+    val raftManager = createRaftManager(
+      new TopicPartition("__cluster_metadata", 0),
+      config
+    )
+    raftManager.shutdown()
+
+    KafkaRaftManager.maybeDeleteMetadataLogDir(config) match {
+      case Some(err) => fail("Failed to delete metadata log", err)
+      case None => assertFalse(Files.exists(metadataDir.get))
+    }
+  }
+
+  @Test
+  def testNonMigratingZkBrokerDeletesMetadataLog(): Unit = {
+    val logDir = Some(TestUtils.tempDir().toPath)
+    val metadataDir = Some(TestUtils.tempDir().toPath)
+    val nodeId = 1
+    // Use this config to create the directory
+    val config1 = createZkBrokerConfig(migrationEnabled = true, nodeId, logDir, metadataDir)
+    val raftManager = createRaftManager(
+      new TopicPartition("__cluster_metadata", 0),
+      config1
+    )
+    raftManager.shutdown()
+
+    val config2 = createZkBrokerConfig(migrationEnabled = false, nodeId, logDir, metadataDir)
+    KafkaRaftManager.maybeDeleteMetadataLogDir(config2) match {
+      case Some(err) => {
+        assertEquals("Not deleting metadata log dir since migrations are not enabled.", err.getMessage)
+        assertTrue(Files.exists(metadataDir.get))
+      }
+      case None => fail("Should have not deleted the metadata log")
+    }
+  }
+
+  @Test
+  def testKRaftBrokerDoesNotDeleteMetadataLog(): Unit = {
+    val logDir = Some(TestUtils.tempDir().toPath)
+    val metadataDir = Some(TestUtils.tempDir().toPath)
+    val nodeId = 1
+    val config = createConfig(
+      Set(ProcessRole.BrokerRole),
+      nodeId,
+      logDir,
+      metadataDir
+    )
+    val raftManager = createRaftManager(
+      new TopicPartition("__cluster_metadata", 0),
+      config
+    )
+    raftManager.shutdown()
+
+    KafkaRaftManager.maybeDeleteMetadataLogDir(config) match {
+      case Some(_) => assertTrue(Files.exists(metadataDir.get))
+      case None => fail("Should not have deleted metadata log")
+    }
   }
 
   private def fileLocked(path: Path): Boolean = {

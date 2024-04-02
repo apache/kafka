@@ -420,6 +420,12 @@ class KafkaServer(
             isZkBroker = true,
             logManager.directoryIdsSet)
 
+          // For ZK brokers in migration mode, always delete the metadata partition on startup.
+          KafkaRaftManager.maybeDeleteMetadataLogDir(config) match {
+            case Some(err) => logger.error("Could not delete local metadata log dir. This is non-fatal, so continuing with startup.", err)
+            case None => logger.info("Deleting local metadata log dir. This is expected.")
+          }
+
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
           val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
             RaftConfig.parseVoterConnections(config.quorumVoters))

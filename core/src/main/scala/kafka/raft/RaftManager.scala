@@ -38,7 +38,7 @@ import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, RaftClient, RaftConfig, ReplicatedLog}
 import org.apache.kafka.server.ProcessRole
@@ -68,6 +68,36 @@ object KafkaRaftManager {
     }
 
     lock
+  }
+
+  /**
+   * Obtain the file lock and delete the metadata log directory completely.
+   *
+   * This is only used by ZK brokers that are in pre-migration or hybrid mode of the ZK to KRaft migration.
+   * The rationale for deleting the metadata log in these cases is that it is safe to do on brokers and it
+   * it makes recovery from a failed migration much easier. See KAFKA-16463.
+   *
+   * @param config  The broker config
+   * @return        An error wrapped as an Option, if an error occurred. None otherwise
+   */
+  def maybeDeleteMetadataLogDir(config: KafkaConfig): Option[Throwable] = {
+    // These constraints are enforced in KafkaServer, but repeating them here to guard against future callers
+    if (config.processRoles.nonEmpty) {
+      Some(new RuntimeException("Not deleting metadata log dir since this node is in KRaft mode."))
+    } else if (!config.migrationEnabled) {
+      Some(new RuntimeException("Not deleting metadata log dir since migrations are not enabled."))
+    } else {
+      val metadataDir = new File(config.metadataLogDir)
+      val deletionLock = KafkaRaftManager.lockDataDir(metadataDir)
+      try {
+        Utils.delete(metadataDir)
+        None
+      } catch {
+        case t: Throwable => Some(t)
+      } finally {
+        deletionLock.destroy()
+      }
+    }
   }
 }
 
