@@ -128,7 +128,7 @@ object ConfigCommand extends Logging {
     }
   }
 
-  private[admin] def alterConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
+  def alterConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configsToBeAdded = parseConfigsToBeAdded(opts)
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
     val entity = parseEntity(opts)
@@ -211,7 +211,7 @@ object ConfigCommand extends Logging {
     }
   }
 
-  private[admin] def createPasswordEncoder(encoderConfigs: Map[String, String]): PasswordEncoder = {
+  def createPasswordEncoder(encoderConfigs: Map[String, String]): PasswordEncoder = {
     encoderConfigs.get(PasswordEncoderConfigs.SECRET)
     val encoderSecret = encoderConfigs.getOrElse(PasswordEncoderConfigs.SECRET,
       throw new IllegalArgumentException("Password encoder secret not specified"))
