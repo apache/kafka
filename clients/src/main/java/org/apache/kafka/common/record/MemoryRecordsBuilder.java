@@ -242,37 +242,51 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
 
     /**
-     * We want to align the shallowOffsetOfMaxTimestamp for all paths (leader append, follower append, and index recovery)
-     * The definition of shallowOffsetOfMaxTimestamp is the last offset of the batch having max timestamp.
-     * If there are many batches having same max timestamp, we pick up the earliest batch.
+     * There are three cases of finding max timestamp to return:
+     * 1) version 0: The max timestamp is NO_TIMESTAMP (-1)
+     * 2) LogAppendTime: All records have same timestamp, and so the max timestamp is equal to logAppendTime
+     * 3) CreateTime: The max timestamp of record
      * <p>
-     * If the log append time is used, the offset will be the last offset unless no compression is used and
-     * the message format version is 0 or 1, in which case, it will be -1.
+     * Let's talk about OffsetOfMaxTimestamp. There are some paths that we don't try to find the OffsetOfMaxTimestamp
+     * to avoid expensive records iteration. Those paths include follower append and index recovery. In order to
+     * avoid inconsistent time index, we let all paths find shallowOffsetOfMaxTimestamp instead of OffsetOfMaxTimestamp.
      * <p>
-     * If create time is used, the offset will be the last offset unless no compression is used and the message
-     * format version is 0 or 1, in which case, it will be the offset of the record with the max timestamp.
-     *
-     * @return The max timestamp and its offset
+     * Let's define the shallowOffsetOfMaxTimestamp: It is last offset of the batch having max timestamp. If there are
+     * many batches having same max timestamp, we pick up the earliest batch.
+     * <p>
+     * There are five cases of finding shallowOffsetOfMaxTimestamp to return:
+     * 1) version 0: It is always the -1
+     * 2) LogAppendTime with single batch: It is the offset of last record
+     * 3) LogAppendTime with many single-record batches: Those single-record batches have same max timestamp, so the
+     *                                                   base offset is equal with the last offset of earliest batch
+     * 4) CreateTime with single batch: We return offset of last record to follow the spec we mentioned above. Of course,
+     *                                  we do have the OffsetOfMaxTimestamp for this case, but we want to make all paths
+     *                                  find the shallowOffsetOfMaxTimestamp rather than offsetOfMaxTimestamp
+     * 5) CreateTime with many single-record batches: Each batch is composed of single record, and hence offsetOfMaxTimestamp
+     *                                                is equal to the last offset of earliest batch with max timestamp
      */
     public RecordsInfo info() {
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
             if (compressionType != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2)
-                // case 0: there is only one batch so use the last offset
+                // maxTimestamp => case 2
+                // shallowOffsetOfMaxTimestamp => case 2
                 return new RecordsInfo(logAppendTime, lastOffset);
             else
-                // case 1: Those single-record batches have same max timestamp, so the base offset is
-                // equal with the last offset of earliest batch
+                // maxTimestamp => case 2
+                // shallowOffsetOfMaxTimestamp => case 3
                 return new RecordsInfo(logAppendTime, baseOffset);
         } else if (maxTimestamp == RecordBatch.NO_TIMESTAMP) {
-            // it's MAGIC_VALUE_V0, the value will be the default value: [-1, -1]
+            // maxTimestamp => case 1
+            // shallowOffsetOfMaxTimestamp => case 1
             return new RecordsInfo(RecordBatch.NO_TIMESTAMP, -1);
         } else {
             if (compressionType != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2)
-                // ditto to case 0
+                // maxTimestamp => case 3
+                // shallowOffsetOfMaxTimestamp => case 4
                 return new RecordsInfo(maxTimestamp, lastOffset);
             else
-                // case 2: Each batch is composed of single record, and offsetOfMaxTimestamp points to the record having
-                // max timestamp. Hence, offsetOfMaxTimestamp is equal to the last offset of earliest batch with max timestamp
+                // maxTimestamp => case 3
+                // shallowOffsetOfMaxTimestamp => case 5
                 return new RecordsInfo(maxTimestamp, offsetOfMaxTimestamp);
         }
     }
