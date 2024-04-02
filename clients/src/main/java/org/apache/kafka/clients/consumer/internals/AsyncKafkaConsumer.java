@@ -1158,6 +1158,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
             if (timeout.isZero()) {
+                // Return an empty results but also send a request to update the highwatermark.
                 applicationEventHandler.add(listOffsetsEvent);
                 return listOffsetsEvent.emptyResults();
             }
