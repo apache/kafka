@@ -64,6 +64,7 @@ public class ConsumerGroupMember {
         private String serverAssignorName = null;
         private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
         private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Collections.emptyMap();
+        private ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols = null;
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);
@@ -86,6 +87,7 @@ public class ConsumerGroupMember {
             this.state = member.state;
             this.assignedPartitions = member.assignedPartitions;
             this.partitionsPendingRevocation = member.partitionsPendingRevocation;
+            this.supportedProtocols = member.supportedProtocols;
         }
 
         public Builder updateMemberEpoch(int memberEpoch) {
@@ -192,6 +194,11 @@ public class ConsumerGroupMember {
             return this;
         }
 
+        public Builder setSupportedProtocols(ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols) {
+            this.supportedProtocols = supportedProtocols;
+            return this;
+        }
+
         public Builder updateWith(ConsumerGroupMemberMetadataValue record) {
             setInstanceId(record.instanceId());
             setRackId(record.rackId());
@@ -201,7 +208,7 @@ public class ConsumerGroupMember {
             setSubscribedTopicRegex(record.subscribedTopicRegex());
             setRebalanceTimeoutMs(record.rebalanceTimeoutMs());
             setServerAssignorName(record.serverAssignor());
-            setUseLegacyProtocol(record.useLegacyProtocol());
+            setSupportedProtocols(record.supportedProtocols());
             return this;
         }
 
@@ -237,7 +244,8 @@ public class ConsumerGroupMember {
                 serverAssignorName,
                 state,
                 assignedPartitions,
-                partitionsPendingRevocation
+                partitionsPendingRevocation,
+                supportedProtocols
             );
         }
     }
@@ -312,6 +320,11 @@ public class ConsumerGroupMember {
      */
     private final Map<Uuid, Set<Integer>> partitionsPendingRevocation;
 
+    /**
+     * The list of supported protocols if the consumer uses the legacy protocol.
+     */
+    private final ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols;
+
     private ConsumerGroupMember(
         String memberId,
         int memberEpoch,
@@ -326,7 +339,8 @@ public class ConsumerGroupMember {
         String serverAssignorName,
         MemberState state,
         Map<Uuid, Set<Integer>> assignedPartitions,
-        Map<Uuid, Set<Integer>> partitionsPendingRevocation
+        Map<Uuid, Set<Integer>> partitionsPendingRevocation,
+        ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols
     ) {
         this.memberId = memberId;
         this.memberEpoch = memberEpoch;
@@ -342,6 +356,7 @@ public class ConsumerGroupMember {
         this.serverAssignorName = serverAssignorName;
         this.assignedPartitions = assignedPartitions;
         this.partitionsPendingRevocation = partitionsPendingRevocation;
+        this.supportedProtocols = supportedProtocols;
     }
 
     /**
@@ -450,6 +465,13 @@ public class ConsumerGroupMember {
     }
 
     /**
+     * @return The list of protocols if the consumer uses the old protocol.
+     */
+    public ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols() {
+        return supportedProtocols;
+    }
+
+    /**
      * @param targetAssignment The target assignment of this member in the corresponding group.
      *
      * @return The ConsumerGroupMember mapped as ConsumerGroupDescribeResponseData.Member.
@@ -505,6 +527,10 @@ public class ConsumerGroupMember {
         }
     }
 
+    public boolean useLegacyProtocol() {
+        return supportedProtocols != null;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -524,7 +550,7 @@ public class ConsumerGroupMember {
             && Objects.equals(serverAssignorName, that.serverAssignorName)
             && Objects.equals(assignedPartitions, that.assignedPartitions)
             && Objects.equals(partitionsPendingRevocation, that.partitionsPendingRevocation)
-            && Objects.equals(useLegacyProtocol, that.useLegacyProtocol);
+            && Objects.equals(supportedProtocols, that.supportedProtocols);
     }
 
     @Override
@@ -543,7 +569,7 @@ public class ConsumerGroupMember {
         result = 31 * result + Objects.hashCode(serverAssignorName);
         result = 31 * result + Objects.hashCode(assignedPartitions);
         result = 31 * result + Objects.hashCode(partitionsPendingRevocation);
-        result = 31 * result + Objects.hashCode(useLegacyProtocol);
+        result = 31 * result + Objects.hashCode(supportedProtocols);
         return result;
     }
 
@@ -564,7 +590,7 @@ public class ConsumerGroupMember {
             ", serverAssignorName='" + serverAssignorName + '\'' +
             ", assignedPartitions=" + assignedPartitions +
             ", partitionsPendingRevocation=" + partitionsPendingRevocation +
-            ", useNewProtocol='" + useLegacyProtocol + '\'' +
+            ", supportedProtocols='" + supportedProtocols + '\'' +
             ')';
     }
 
