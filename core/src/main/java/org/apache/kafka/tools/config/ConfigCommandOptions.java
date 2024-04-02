@@ -20,7 +20,7 @@ import joptsimple.OptionSpec;
 import kafka.server.DynamicConfig;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.config.ConfigType;
-import org.apache.kafka.server.config.ZkConfig;
+import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -143,7 +143,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
                 .ofType(String.class);
         zkTlsConfigFile = parser.accepts("zk-tls-config-file",
                         "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
-                                ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().stream().sorted().collect(Collectors.joining(", ")) + " are ignored.")
+                                ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().stream().sorted().collect(Collectors.joining(", ")) + " are ignored.")
                 .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(String.class);
 
         entityFlags = Arrays.asList(new Tuple2<>(topic, ConfigType.TOPIC),

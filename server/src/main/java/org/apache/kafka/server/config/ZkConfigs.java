@@ -23,7 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class ZkConfig {
+public class ZkConfigs {
     /** ********* Zookeeper Configuration ***********/
     public static final String ZK_CONNECT_PROP = "zookeeper.connect";
     public static final String ZK_SESSION_TIMEOUT_MS_PROP = "zookeeper.session.timeout.ms";
