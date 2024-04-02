@@ -596,6 +596,92 @@ public class SharePartition {
         return CompletableFuture.completedFuture(Optional.ofNullable(throwable));
     }
 
+    /**
+     * Release the acquired records for the share partition. The next fetch offset is updated to the next offset
+     * that should be fetched from the leader.
+     *
+     * @param memberId The member id of the client that is fetching/acknowledging the record.
+     *
+     * @return A future which is completed when the records are released.
+     */
+    public CompletableFuture<Optional<Throwable>> releaseAcquiredRecords(String memberId) {
+        log.trace("Release acquired records request for share partition: {}-{}-{}", groupId, memberId, topicIdPartition);
+
+        Throwable throwable = null;
+        lock.writeLock().lock();
+        List<InFlightState> updatedStates = new ArrayList<>();
+        try {
+            long localNextFetchOffset = nextFetchOffset;
+            // TODO: recordState can be ARCHIVED as well, but that will involve maxDeliveryCount which is not implemented so far
+            RecordState recordState = RecordState.AVAILABLE;
+
+            // Iterate over multiple fetched batches. The state can vary per offset entry
+            for (Map.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
+                InFlightBatch inFlightBatch = entry.getValue();
+
+                if (!inFlightBatch.memberId().equals(memberId)) {
+                    log.info("Member {} is not the owner of batch record {} for share partition: {}-{}",
+                            memberId, inFlightBatch, groupId, topicIdPartition);
+                    continue;
+                }
+
+                if (inFlightBatch.offsetState != null) {
+                    log.trace("Offset tracked batch record found, batch: {} for the share partition: {}-{}", inFlightBatch,
+                            groupId, topicIdPartition);
+                    for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
+                        if (offsetState.getValue().state == RecordState.ACQUIRED) {
+                            InFlightState updateResult = offsetState.getValue().startStateTransition(recordState, false);
+                            if (updateResult == null) {
+                                log.debug("Unable to release records from acquired state for the offset: {} in batch: {}"
+                                                + " for the share partition: {}-{}", offsetState.getKey(),
+                                        inFlightBatch, groupId, topicIdPartition);
+                                throwable = new InvalidRecordStateException("Unable to release acquired records for the batch");
+                                break;
+                            }
+                            // Successfully updated the state of the offset.
+                            updatedStates.add(updateResult);
+                            localNextFetchOffset = Math.min(offsetState.getKey(), localNextFetchOffset);
+                        }
+                    }
+                    if (throwable != null)
+                        break;
+                    continue;
+                }
+
+                // Change the state of complete batch since the same state exists for the entire inFlight batch
+                log.trace("Releasing ACQUIRED records for complete batch {} for the share partition: {}-{}",
+                        inFlightBatch, groupId, topicIdPartition);
+
+                if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
+                    InFlightState updateResult = inFlightBatch.startBatchStateTransition(recordState, false);
+                    if (updateResult == null) {
+                        log.debug("Unable to release records from acquired state for the batch: {}"
+                                        + " for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
+                        throwable = new InvalidRecordStateException("Unable to release acquired records for the batch");
+                        break;
+                    }
+                    // Successfully updated the state of the batch.
+                    updatedStates.add(updateResult);
+                    localNextFetchOffset = Math.min(inFlightBatch.baseOffset, localNextFetchOffset);
+                }
+            }
+
+            if (throwable != null) {
+                log.debug("Release records from acquired state failed for share partition, rollback any changed state"
+                        + " for the share partition: {}-{}", groupId, topicIdPartition);
+                updatedStates.forEach(state -> state.completeStateTransition(false));
+            } else {
+                log.trace("Release records from acquired state successful for share partition: {}-{}",
+                        groupId, topicIdPartition);
+                updatedStates.forEach(state -> state.completeStateTransition(true));
+                nextFetchOffset = localNextFetchOffset;
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+        return CompletableFuture.completedFuture(Optional.ofNullable(throwable));
+    }
+
     private AcquiredRecords acquireNewBatchRecords(String memberId, long baseOffset, long lastOffset, long nextOffset) {
         lock.writeLock().lock();
         try {
