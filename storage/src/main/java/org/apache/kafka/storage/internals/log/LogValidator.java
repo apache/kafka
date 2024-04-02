@@ -275,7 +275,7 @@ public class LogValidator {
 
             if (batch.magic() > RecordBatch.MAGIC_VALUE_V0 && maxBatchTimestamp > maxTimestamp) {
                 maxTimestamp = maxBatchTimestamp;
-                shallowOffsetOfMaxTimestamp = batch.lastOffset();
+                shallowOffsetOfMaxTimestamp = offsetCounter.value - 1;
             }
 
             batch.setLastOffset(offsetCounter.value - 1);
