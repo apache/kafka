@@ -639,6 +639,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     public void onUnloaded() {
         timer.cancel(GROUP_EXPIRATION_KEY);
         coordinatorMetrics.deactivateMetricsShard(metricsShard);
+        groupMetadataManager.onUnloaded();
     }
 
     /**
