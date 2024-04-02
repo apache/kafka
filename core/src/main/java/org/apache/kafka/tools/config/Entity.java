@@ -17,8 +17,8 @@
 package org.apache.kafka.tools.config;
 
 import org.apache.kafka.common.utils.Sanitizer;
-import org.apache.kafka.server.config.ConfigEntityName;
 import org.apache.kafka.server.config.ConfigType;
+import org.apache.kafka.server.config.ZooKeeperInternals;
 
 import java.util.Optional;
 
@@ -53,7 +53,7 @@ public class Entity {
         }
 
         return sanitizedName.map(n -> {
-            if (n.equals(ConfigEntityName.DEFAULT))
+            if (n.equals(ZooKeeperInternals.DEFAULT_STRING))
                 return "default " + typeName;
 
             String desanitized = (entityType.equals(ConfigType.USER) || entityType.equals(ConfigType.CLIENT)) ? Sanitizer.desanitize(n) : n;

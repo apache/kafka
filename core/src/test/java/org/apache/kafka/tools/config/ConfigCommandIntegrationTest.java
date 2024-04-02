@@ -29,7 +29,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.security.PasswordEncoder;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.config.ConfigEntityName;
+import org.apache.kafka.server.config.ZooKeeperInternals;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import scala.collection.JavaConverters;
@@ -119,7 +119,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
     }
 
     void verifyConfig(Map<String, String> configs, Optional<String> brokerId) {
-        Properties entityConfigs = zkClient().getEntityConfigs("brokers", brokerId.orElse(ConfigEntityName.DEFAULT));
+        Properties entityConfigs = zkClient().getEntityConfigs("brokers", brokerId.orElse(ZooKeeperInternals.DEFAULT_STRING));
         assertEquals(configs, entityConfigs);
     }
 

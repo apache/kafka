@@ -57,7 +57,6 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
-import org.apache.kafka.server.config.ZkConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

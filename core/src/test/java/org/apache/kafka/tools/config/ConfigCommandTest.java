@@ -48,8 +48,8 @@ import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
 import org.apache.kafka.common.utils.Sanitizer;
-import org.apache.kafka.server.config.ConfigEntityName;
 import org.apache.kafka.server.config.ConfigType;
+import org.apache.kafka.server.config.ZooKeeperInternals;
 import org.junit.jupiter.api.Test;
 import scala.collection.Seq;
 
@@ -1581,7 +1581,7 @@ public class ConfigCommandTest {
         String clientId = "client-1";
         for (List<String> opts: Arrays.asList(describeOpts, alterOpts)) {
             checkEntity("clients", Optional.of(clientId), clientId, opts);
-            checkEntity("clients", Optional.of(""), ConfigEntityName.DEFAULT, opts);
+            checkEntity("clients", Optional.of(""), ZooKeeperInternals.DEFAULT_STRING, opts);
         }
         checkEntity("clients", Optional.empty(), "", describeOpts);
         checkInvalidArgs("clients", Optional.empty(), alterOpts);
@@ -1593,7 +1593,7 @@ public class ConfigCommandTest {
         assertEquals(principal, Sanitizer.desanitize(sanitizedPrincipal));
         for (List<String> opts: Arrays.asList(describeOpts, alterOpts)) {
             checkEntity("users", Optional.of(principal), sanitizedPrincipal, opts);
-            checkEntity("users", Optional.of(""), ConfigEntityName.DEFAULT, opts);
+            checkEntity("users", Optional.of(""), ZooKeeperInternals.DEFAULT_STRING, opts);
         }
         checkEntity("users", Optional.empty(), "", describeOpts);
         checkInvalidArgs("users", Optional.empty(), alterOpts);
@@ -1603,9 +1603,9 @@ public class ConfigCommandTest {
         Function<String, List<String>> clientIdOpts = name -> Arrays.asList("--entity-type", "clients", "--entity-name", name);
         for (List<String> opts : Arrays.asList(describeOpts, alterOpts)) {
             checkEntity("users", Optional.of(principal), userClient, concat(opts, clientIdOpts.apply(clientId)));
-            checkEntity("users", Optional.of(principal), sanitizedPrincipal + "/clients/" + ConfigEntityName.DEFAULT, concat(opts, clientIdOpts.apply("")));
-            checkEntity("users", Optional.of(""), ConfigEntityName.DEFAULT + "/clients/" + clientId, concat(describeOpts, clientIdOpts.apply(clientId)));
-            checkEntity("users", Optional.of(""), ConfigEntityName.DEFAULT + "/clients/" + ConfigEntityName.DEFAULT, concat(opts, clientIdOpts.apply("")));
+            checkEntity("users", Optional.of(principal), sanitizedPrincipal + "/clients/" + ZooKeeperInternals.DEFAULT_STRING, concat(opts, clientIdOpts.apply("")));
+            checkEntity("users", Optional.of(""), ZooKeeperInternals.DEFAULT_STRING + "/clients/" + clientId, concat(describeOpts, clientIdOpts.apply(clientId)));
+            checkEntity("users", Optional.of(""), ZooKeeperInternals.DEFAULT_STRING + "/clients/" + ZooKeeperInternals.DEFAULT_STRING, concat(opts, clientIdOpts.apply("")));
         }
         checkEntity("users", Optional.of(principal), sanitizedPrincipal + "/clients", concat(describeOpts, Arrays.asList("--entity-type", "clients")));
         // Both user and client-id must be provided for alter

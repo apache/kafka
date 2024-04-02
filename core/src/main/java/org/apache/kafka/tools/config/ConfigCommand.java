@@ -61,8 +61,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.security.PasswordEncoder;
 import org.apache.kafka.security.PasswordEncoderConfigs;
-import org.apache.kafka.server.config.ConfigEntityName;
 import org.apache.kafka.server.config.ConfigType;
+import org.apache.kafka.server.config.ZooKeeperInternals;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.zookeeper.client.ZKClientConfig;
 import org.slf4j.Logger;
@@ -208,7 +208,7 @@ public class ConfigCommand {
             if (!configsToBeAdded.isEmpty() || !configsToBeDeleted.isEmpty()) {
                 validateBrokersNotRunning(entityName, adminZkClient, zkClient, errorMessage);
 
-                boolean perBrokerConfig = !Objects.equals(entityName, ConfigEntityName.DEFAULT);
+                boolean perBrokerConfig = !Objects.equals(entityName, ZooKeeperInternals.DEFAULT_STRING);
                 preProcessBrokerConfigs(configsToBeAdded, perBrokerConfig);
             }
         }
@@ -233,7 +233,7 @@ public class ConfigCommand {
                                                   AdminZkClient adminZkClient,
                                                   KafkaZkClient zkClient,
                                                   String errorMessage) {
-        boolean perBrokerConfig = !Objects.equals(entityName, ConfigEntityName.DEFAULT);
+        boolean perBrokerConfig = !Objects.equals(entityName, ZooKeeperInternals.DEFAULT_STRING);
         String info = "Broker configuration operations using ZooKeeper are only supported if the affected broker(s) are not running.";
         if (perBrokerConfig) {
             adminZkClient.parseBroker(entityName).foreach(brokerId -> {
@@ -952,14 +952,14 @@ public class ConfigCommand {
             // Exactly one entity type and at-most one entity name expected for other entities
             Optional<String> name = entityNames.isEmpty()
                 ? Optional.empty()
-                : Optional.of(entityNames.get(0).isEmpty() ? ConfigEntityName.DEFAULT : entityNames.get(0));
+                : Optional.of(entityNames.get(0).isEmpty() ? ZooKeeperInternals.DEFAULT_STRING : entityNames.get(0));
             return new ConfigEntity(new Entity(entityTypes.get(0), name), Optional.empty());
         }
     }
 
     private static String sanitizeName(String entityType, String name) {
         if (name.isEmpty())
-            return ConfigEntityName.DEFAULT;
+            return ZooKeeperInternals.DEFAULT_STRING;
         else {
             switch (entityType) {
                 case ConfigType.USER:
