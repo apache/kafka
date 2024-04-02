@@ -213,7 +213,7 @@ public class SensorTest {
 
         assertTrue(sensor.add(metrics.metricName("test-metric", "test-group"), new Rate()));
         final CountDownLatch latch = new CountDownLatch(1);
-        ExecutorService service = Executors.newFixedThreadPool(threadCount);
+        ExecutorService service = Executors.newVirtualThreadPerTaskExecutor();
         List<Future<Throwable>> workers = new ArrayList<>(threadCount);
         boolean needShutdown = true;
         try {
