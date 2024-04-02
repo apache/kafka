@@ -334,7 +334,7 @@ public class ConnectorValidationIntegrationTest {
     @Test
     public void testConnectorHasConverterWithNoSuitableConstructor() throws InterruptedException {
         Map<String, String> config = defaultSinkConnectorProps();
-        config.put(KEY_CONVERTER_CLASS_CONFIG, TestPlugins.TestPlugin.ALWAYS_THROW_EXCEPTION.className());
+        config.put(KEY_CONVERTER_CLASS_CONFIG, TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_PRIVATE_CONNECTOR.className());
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -346,7 +346,7 @@ public class ConnectorValidationIntegrationTest {
     @Test
     public void testConnectorHasConverterThatThrowsExceptionOnInstantiation() throws InterruptedException {
         Map<String, String> config = defaultSinkConnectorProps();
-        config.put(KEY_CONVERTER_CLASS_CONFIG, TestPlugins.TestPlugin.ALWAYS_THROW_EXCEPTION.className());
+        config.put(KEY_CONVERTER_CLASS_CONFIG, TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONNECTOR.className());
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -407,7 +407,7 @@ public class ConnectorValidationIntegrationTest {
     @Test
     public void testConnectorHasHeaderConverterThatThrowsExceptionOnInstantiation() throws InterruptedException {
         Map<String, String> config = defaultSinkConnectorProps();
-        config.put(HEADER_CONVERTER_CLASS_CONFIG, TestPlugins.TestPlugin.ALWAYS_THROW_EXCEPTION.className());
+        config.put(HEADER_CONVERTER_CLASS_CONFIG, TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONNECTOR.className());
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
