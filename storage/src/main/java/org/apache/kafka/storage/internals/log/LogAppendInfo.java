@@ -84,27 +84,27 @@ public class LogAppendInfo {
     /**
      * Creates an instance with the given params.
      *
-     * @param firstOffset            The first offset in the message set unless the message format is less than V2 and we are appending
-     *                               to the follower.
-     * @param lastOffset             The last offset in the message set
-     * @param lastLeaderEpoch        The partition leader epoch corresponding to the last offset, if available.
-     * @param maxTimestamp           The maximum timestamp of the message set.
-     * @param offsetOfMaxTimestamp   The offset of the message with the maximum timestamp.
-     * @param logAppendTime          The log append time (if used) of the message set, otherwise Message.NoTimestamp
-     * @param logStartOffset         The start offset of the log at the time of this append.
-     * @param recordValidationStats  Statistics collected during record processing, `null` if `assignOffsets` is `false`
-     * @param sourceCompression      The source codec used in the message set (send by the producer)
-     * @param validBytes             The number of valid bytes
-     * @param lastOffsetOfFirstBatch The last offset of the first batch
-     * @param recordErrors           List of record errors that caused the respective batch to be dropped
-     * @param leaderHwChange         Incremental if the high watermark needs to be increased after appending record
-     *                               Same if high watermark is not changed. None is the default value and it means append failed
+     * @param firstOffset                   The first offset in the message set unless the message format is less than V2 and we are appending
+     *                                      to the follower.
+     * @param lastOffset                    The last offset in the message set
+     * @param lastLeaderEpoch               The partition leader epoch corresponding to the last offset, if available.
+     * @param maxTimestamp                  The maximum timestamp of the message set.
+     * @param shallowOffsetOfMaxTimestamp   The last offset of the batch with the maximum timestamp.
+     * @param logAppendTime                 The log append time (if used) of the message set, otherwise Message.NoTimestamp
+     * @param logStartOffset                The start offset of the log at the time of this append.
+     * @param recordValidationStats         Statistics collected during record processing, `null` if `assignOffsets` is `false`
+     * @param sourceCompression             The source codec used in the message set (send by the producer)
+     * @param validBytes                    The number of valid bytes
+     * @param lastOffsetOfFirstBatch        The last offset of the first batch
+     * @param recordErrors                  List of record errors that caused the respective batch to be dropped
+     * @param leaderHwChange                Incremental if the high watermark needs to be increased after appending record
+     *                                      Same if high watermark is not changed. None is the default value and it means append failed
      */
     public LogAppendInfo(long firstOffset,
                          long lastOffset,
                          OptionalInt lastLeaderEpoch,
                          long maxTimestamp,
-                         long offsetOfMaxTimestamp,
+                         long shallowOffsetOfMaxTimestamp,
                          long logAppendTime,
                          long logStartOffset,
                          RecordValidationStats recordValidationStats,
@@ -117,7 +117,7 @@ public class LogAppendInfo {
         this.lastOffset = lastOffset;
         this.lastLeaderEpoch = lastLeaderEpoch;
         this.maxTimestamp = maxTimestamp;
-        this.shallowOffsetOfMaxTimestamp = offsetOfMaxTimestamp;
+        this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
         this.logAppendTime = logAppendTime;
         this.logStartOffset = logStartOffset;
         this.recordValidationStats = recordValidationStats;
@@ -259,7 +259,7 @@ public class LogAppendInfo {
                 ", lastOffset=" + lastOffset +
                 ", lastLeaderEpoch=" + lastLeaderEpoch +
                 ", maxTimestamp=" + maxTimestamp +
-                ", offsetOfMaxTimestamp=" + shallowOffsetOfMaxTimestamp +
+                ", shallowOffsetOfMaxTimestamp=" + shallowOffsetOfMaxTimestamp +
                 ", logAppendTime=" + logAppendTime +
                 ", logStartOffset=" + logStartOffset +
                 ", recordConversionStats=" + recordValidationStats +
