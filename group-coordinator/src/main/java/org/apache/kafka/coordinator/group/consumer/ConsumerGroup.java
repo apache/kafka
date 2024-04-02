@@ -180,6 +180,11 @@ public class ConsumerGroup implements Group {
      */
     private DeadlineAndEpoch metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
 
+    /**
+     * Map of protocol names to the number of members that use legacy protocol and support them.
+     */
+    private final TimelineHashMap<String, Integer> legacyProtocolMembersSupportedProtocols;
+
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
         String groupId,
@@ -198,6 +203,7 @@ public class ConsumerGroup implements Group {
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
+        this.legacyProtocolMembersSupportedProtocols = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
@@ -1001,5 +1007,9 @@ public class ConsumerGroup implements Group {
 
     public boolean allUseLegacyProtocol() {
         return members().values().stream().allMatch(ConsumerGroupMember::useLegacyProtocol);
+    }
+
+    public Map<String, Integer> legacyMembersSupportedProtocols() {
+        return Collections.unmodifiableMap(legacyProtocolMembersSupportedProtocols);
     }
 }
