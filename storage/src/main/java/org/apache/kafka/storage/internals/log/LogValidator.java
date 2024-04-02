@@ -296,6 +296,7 @@ public class LogValidator {
             // those checks should be equal to MemoryRecordsBuilder#info
             switch (toMagic) {
                 case RecordBatch.MAGIC_VALUE_V0:
+                    maxTimestamp = RecordBatch.NO_TIMESTAMP;
                     // value will be the default value: -1
                     shallowOffsetOfMaxTimestamp = -1;
                     break;
@@ -425,6 +426,7 @@ public class LogValidator {
             // we can update the batch only and write the compressed payload as is;
             // again we assume only one record batch within the compressed set
             offsetCounter.value += validatedRecords.size();
+            // there is only one batch in this path, so last offset can be viewed as shallowOffsetOfMaxTimestamp
             long lastOffset = offsetCounter.value - 1;
             firstBatch.setLastOffset(lastOffset);
 
@@ -442,7 +444,6 @@ public class LogValidator {
                 now,
                 records,
                 maxTimestamp,
-                // there is only one batch in this path, so last offset can be viewed as shallowOffsetOfMaxTimestamp
                 lastOffset,
                 false,
                 recordValidationStats);

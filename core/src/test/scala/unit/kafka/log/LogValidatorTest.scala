@@ -177,7 +177,7 @@ class LogValidatorTest {
     val now = mockTime.milliseconds
     if (magic >= RecordBatch.MAGIC_VALUE_V1)
       validatedRecords.batches.forEach(batch => validateLogAppendTime(now, 1234L, batch))
-    assertEquals(now, validatedResults.maxTimestampMs, s"Max timestamp should be $now")
+    assertEquals(if (magic == RecordBatch.MAGIC_VALUE_V0) RecordBatch.NO_TIMESTAMP else now, validatedResults.maxTimestampMs)
     assertFalse(validatedResults.messageSizeMaybeChanged, "Message size should not have been changed")
 
     // If it's LOG_APPEND_TIME, the offset will be the offset of the first record
