@@ -45,7 +45,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -116,15 +116,6 @@ public class GetOffsetShellTest {
             }
             consumer.subscribe(topics);
             consumer.poll(consumerTimeout);
-            TestUtils.waitForCondition(
-                    () -> {
-                        Set<String> allTopics = consumer.listTopics().keySet();
-                        return allTopics.contains("__consumer_offsets");
-                    },
-                    "internal topic __consumer_offsets was not created in time"
-            );
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
         }
     }
 
@@ -165,12 +156,10 @@ public class GetOffsetShellTest {
     public void testNoFilterOptions() {
         setUp();
 
-        List<Row> output = executeAndParse();
-
         if (!cluster.isKRaftTest()) {
-            retryUntilEqual(expectedOffsetsWithInternal(), output);
+            retryUntilEqual(expectedOffsetsWithInternal(), this::executeAndParse);
         } else {
-            retryUntilEqual(expectedTestTopicOffsets(), output);
+            retryUntilEqual(expectedTestTopicOffsets(), this::executeAndParse);
         }
     }
 
@@ -178,41 +167,34 @@ public class GetOffsetShellTest {
     public void testInternalExcluded() {
         setUp();
 
-        List<Row> output = executeAndParse("--exclude-internal-topics");
-
-        retryUntilEqual(expectedTestTopicOffsets(), output);
+        retryUntilEqual(expectedTestTopicOffsets(), () -> executeAndParse("--exclude-internal-topics"));
     }
 
     @ClusterTest
     public void testTopicNameArg() {
         setUp();
 
-        IntStream.range(1, topicCount + 1).forEach(i -> {
-            List<Row> offsets = executeAndParse("--topic", getTopicName(i));
-
-            retryUntilEqual(expectedOffsetsForTopic(i), offsets);
-        });
+        IntStream.range(1, topicCount + 1).forEach(i -> retryUntilEqual(expectedOffsetsForTopic(i),
+                () -> executeAndParse("--topic", getTopicName(i))));
     }
 
     @ClusterTest
     public void testTopicPatternArg() {
         setUp();
 
-        List<Row> offsets = executeAndParse("--topic", "topic.*");
-
-        retryUntilEqual(expectedTestTopicOffsets(), offsets);
+        retryUntilEqual(expectedTestTopicOffsets(), () -> executeAndParse("--topic", "topic.*"));
     }
 
     @ClusterTest
     public void testPartitionsArg() {
         setUp();
 
-        List<Row> offsets = executeAndParse("--partitions", "0,1");
-
         if (!cluster.isKRaftTest()) {
-            retryUntilEqual(expectedOffsetsWithInternal().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+            retryUntilEqual(expectedOffsetsWithInternal().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()),
+                    () -> executeAndParse("--partitions", "0,1"));
         } else {
-            retryUntilEqual(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+            retryUntilEqual(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()),
+                    () -> executeAndParse("--partitions", "0,1"));
         }
     }
 
@@ -220,9 +202,8 @@ public class GetOffsetShellTest {
     public void testTopicPatternArgWithPartitionsArg() {
         setUp();
 
-        List<Row> offsets = executeAndParse("--topic", "topic.*", "--partitions", "0,1");
-
-        retryUntilEqual(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+        retryUntilEqual(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()),
+                () -> executeAndParse("--topic", "topic.*", "--partitions", "0,1"));
     }
 
     @ClusterTest
@@ -231,7 +212,6 @@ public class GetOffsetShellTest {
 
         createConsumerAndPoll();
 
-        List<Row> offsets = executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3");
         List<Row> expected = Arrays.asList(
                 new Row("__consumer_offsets", 3, 0L),
                 new Row("topic1", 0, 1L),
@@ -240,7 +220,7 @@ public class GetOffsetShellTest {
                 new Row("topic4", 2, 4L)
         );
 
-        retryUntilEqual(expected, offsets);
+        retryUntilEqual(expected, () -> executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3"));
     }
 
     @ClusterTest
@@ -248,7 +228,6 @@ public class GetOffsetShellTest {
         setUp();
 
         for (String time : new String[] {"-1", "latest"}) {
-            List<Row> offsets = executeAndParse("--topic-partitions", "topic.*:0", "--time", time);
             List<Row> expected = Arrays.asList(
                     new Row("topic1", 0, 1L),
                     new Row("topic2", 0, 2L),
@@ -256,7 +235,7 @@ public class GetOffsetShellTest {
                     new Row("topic4", 0, 4L)
             );
 
-            retryUntilEqual(expected, offsets);
+            retryUntilEqual(expected, () -> executeAndParse("--topic-partitions", "topic.*:0", "--time", time));
         }
     }
 
@@ -265,7 +244,6 @@ public class GetOffsetShellTest {
         setUp();
 
         for (String time : new String[] {"-2", "earliest"}) {
-            List<Row> offsets = executeAndParse("--topic-partitions", "topic.*:0", "--time", time);
             List<Row> expected = Arrays.asList(
                     new Row("topic1", 0, 0L),
                     new Row("topic2", 0, 0L),
@@ -273,7 +251,7 @@ public class GetOffsetShellTest {
                     new Row("topic4", 0, 0L)
             );
 
-            retryUntilEqual(expected, offsets);
+            retryUntilEqual(expected, () -> executeAndParse("--topic-partitions", "topic.*:0", "--time", time));
         }
     }
 
@@ -296,7 +274,6 @@ public class GetOffsetShellTest {
 
         String time = String.valueOf(System.currentTimeMillis() / 2);
 
-        List<Row> offsets = executeAndParse("--topic-partitions", "topic.*:0", "--time", time);
         List<Row> expected = Arrays.asList(
                 new Row("topic1", 0, 0L),
                 new Row("topic2", 0, 0L),
@@ -304,7 +281,7 @@ public class GetOffsetShellTest {
                 new Row("topic4", 0, 0L)
         );
 
-        retryUntilEqual(expected, offsets);
+        retryUntilEqual(expected, () -> executeAndParse("--topic-partitions", "topic.*:0", "--time", time));
     }
 
     @ClusterTest
@@ -313,16 +290,13 @@ public class GetOffsetShellTest {
 
         String time = String.valueOf(System.currentTimeMillis() * 2);
 
-        List<Row> offsets = executeAndParse("--topic-partitions", "topic.*", "--time", time);
-
-        retryUntilEqual(new ArrayList<>(), offsets);
+        retryUntilEqual(new ArrayList<>(), () -> executeAndParse("--topic-partitions", "topic.*", "--time", time));
     }
 
     @ClusterTest
     public void testTopicPartitionsArgWithInternalExcluded() {
         setUp();
 
-        List<Row> offsets = executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3", "--exclude-internal-topics");
         List<Row> expected = Arrays.asList(
                 new Row("topic1", 0, 1L),
                 new Row("topic2", 1, 2L),
@@ -330,7 +304,7 @@ public class GetOffsetShellTest {
                 new Row("topic4", 2, 4L)
         );
 
-        retryUntilEqual(expected, offsets);
+        retryUntilEqual(expected, () -> executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3", "--exclude-internal-topics"));
     }
 
     @ClusterTest
@@ -339,9 +313,8 @@ public class GetOffsetShellTest {
 
         createConsumerAndPoll();
 
-        List<Row> offsets = executeAndParse("--topic-partitions", "__.*:0");
-
-        retryUntilEqual(Arrays.asList(new Row("__consumer_offsets", 0, 0L)), offsets);
+        retryUntilEqual(Arrays.asList(new Row("__consumer_offsets", 0, 0L)),
+                () -> executeAndParse("--topic-partitions", "__.*:0"));
     }
 
     @ClusterTest
@@ -448,11 +421,11 @@ public class GetOffsetShellTest {
         return newArgs.toArray(new String[0]);
     }
 
-    private void retryUntilEqual(List<Row> expected, List<Row> output) {
+    private void retryUntilEqual(List<Row> expected, Supplier<List<Row>> outputSupplier) {
         try {
             TestUtils.waitForCondition(
-                    () -> expected.equals(output),
-                    "TopicOffsets did not match. Expected: " + expectedTestTopicOffsets() + ", but was: " + output
+                    () -> expected.equals(outputSupplier.get()),
+                    "TopicOffsets did not match. Expected: " + expectedTestTopicOffsets() + ", but was: " + outputSupplier.get()
             );
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
