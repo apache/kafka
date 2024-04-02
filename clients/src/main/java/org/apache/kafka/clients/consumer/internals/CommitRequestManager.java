@@ -1162,7 +1162,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 .filter(request -> request.canSendRequest(currentTimeMs))
                 .peek(request -> request.onSendAttempt(currentTimeMs))
                 .map(OffsetCommitRequestState::toUnsentRequest)
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(ArrayList::new));
 
             // Partition the unsent offset fetch requests into sendable and non-sendable lists
             Map<Boolean, List<OffsetFetchRequestState>> partitionedBySendability =
@@ -1210,7 +1210,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         private List<NetworkClientDelegate.UnsentRequest> drainPendingCommits() {
-            ArrayList<NetworkClientDelegate.UnsentRequest> res = unsentOffsetCommits.stream()
+            List<NetworkClientDelegate.UnsentRequest> res = unsentOffsetCommits.stream()
                 .map(OffsetCommitRequestState::toUnsentRequest)
                 .collect(Collectors.toCollection(ArrayList::new));
             clearAll();
