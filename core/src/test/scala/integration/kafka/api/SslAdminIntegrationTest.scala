@@ -277,7 +277,6 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   }
 
   override def createAdminClient: Admin = {
-    println("should be passing here")
     val config = new Properties()
     config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000")
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")

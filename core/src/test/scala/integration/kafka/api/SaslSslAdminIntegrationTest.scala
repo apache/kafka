@@ -27,7 +27,6 @@ import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.resource._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
 import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -45,7 +44,7 @@ import scala.util.{Failure, Success, Try}
 class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetup {
   val clusterResourcePattern = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
 
-  val aclAuthorizerClassName = classOf[AclAuthorizer].getName
+  val aclAuthorizerClassName: String = classOf[AclAuthorizer].getName
   def kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaServerPrincipalUnqualifiedName)
 
   var superUserAdmin: Admin = _
@@ -101,7 +100,6 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   @AfterEach
   override def tearDown(): Unit = {
     super.tearDown()
-    if (superUserAdmin != null)  Utils.closeQuietly(superUserAdmin, "superUserAdminClient")
     closeSasl()
   }
 
