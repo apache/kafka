@@ -751,7 +751,7 @@ object KafkaConfig {
       .define(LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, LONG, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_AFTER_MAX_MS, atLeast(0), MEDIUM, LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DOC)
       .define(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, CREATE_TOPIC_POLICY_CLASS_NAME_DOC)
       .define(ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ALTER_CONFIG_POLICY_CLASS_NAME_DOC)
-      .define(LOG_MESSAGE_DOWN_CONVERSION_ENABLE_CONFIG, BOOLEAN, LogConfig.DEFAULT_MESSAGE_DOWNCONVERSION_ENABLE, LOW, LOG_MESSAGE_DOWN_CONVERSION_ENABLE_DOC)
+      .define(LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, LogConfig.DEFAULT_MESSAGE_DOWNCONVERSION_ENABLE, LOW, LOG_MESSAGE_DOWN_CONVERSION_ENABLE_DOC)
 
       /** ********* Replication configuration ***********/
       .define(ControllerSocketTimeoutMsProp, INT, Defaults.CONTROLLER_SOCKET_TIMEOUT_MS, MEDIUM, ControllerSocketTimeoutMsDoc)
@@ -1372,7 +1372,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     }
   }
 
-  def logMessageDownConversionEnable: Boolean = getBoolean(LOG_MESSAGE_DOWN_CONVERSION_ENABLE_CONFIG)
+  def logMessageDownConversionEnable: Boolean = getBoolean(LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG)
 
   /** ********* Replication configuration ***********/
   val controllerSocketTimeoutMs: Int = getInt(KafkaConfig.ControllerSocketTimeoutMsProp)

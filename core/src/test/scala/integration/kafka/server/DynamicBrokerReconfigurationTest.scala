@@ -649,7 +649,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     props.put(LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, "1000")
     props.put(LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, "1000")
     props.put(LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, "1000")
-    props.put(LOG_MESSAGE_DOWN_CONVERSION_ENABLE_CONFIG, "false")
+    props.put(LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, "false")
     reconfigureServers(props, perBrokerConfig = false, (LOG_SEGMENT_BYTES_CONFIG, "4000"))
 
     // Verify that all broker defaults have been updated
