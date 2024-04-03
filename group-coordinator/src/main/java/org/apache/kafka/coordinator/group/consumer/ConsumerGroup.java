@@ -1007,8 +1007,18 @@ public class ConsumerGroup implements Group {
         return describedGroup;
     }
 
-    public boolean allUseLegacyProtocol() {
-        return members().values().stream().allMatch(ConsumerGroupMember::useLegacyProtocol);
+    /**
+     * @param memberId The fenced member id.
+     *
+     * @return A boolean indicating whether the group members all use legacy protocol if the given member leaves the group.
+     */
+    public boolean allUseLegacyProtocol(String memberId) {
+        for (ConsumerGroupMember member : members().values()) {
+            if (!member.memberId().equals(memberId) && !member.useLegacyProtocol()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public Map<String, Integer> legacyMembersSupportedProtocols() {

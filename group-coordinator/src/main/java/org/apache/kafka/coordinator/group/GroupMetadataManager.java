@@ -776,13 +776,13 @@ public class GroupMetadataManager {
         }
     }
 
-    public boolean validateOnlineDowngrade(ConsumerGroup consumerGroup) {
+    public boolean validateOnlineDowngrade(ConsumerGroup consumerGroup, String memberId) {
         return GroupConsumerUpgradePolicy.isDowngradeEnabled(groupConsumerUpgradePolicy) &&
-            consumerGroup.allUseLegacyProtocol() &&
-            consumerGroup.numMembers() <= classicGroupMaxSize;
+            consumerGroup.allUseLegacyProtocol(memberId) &&
+            consumerGroup.numMembers() - 1 <= classicGroupMaxSize;
     }
 
-    ClassicGroup convertToClassicGroup(ConsumerGroup consumerGroup, List<Record> records) {
+    public void convertToClassicGroup(ConsumerGroup consumerGroup, List<Record> records) {
         createGroupTombstoneRecords(consumerGroup, records);
         ClassicGroup classicGroup = new ClassicGroup(
             logContext,
@@ -832,7 +832,6 @@ public class GroupMetadataManager {
         groups.put(consumerGroup.groupId(), classicGroup);
         metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
         prepareRebalance(classicGroup, "Protocol downgrade.");
-        return classicGroup;
     }
 
     public boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
@@ -1439,6 +1438,7 @@ public class GroupMetadataManager {
             ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
             log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
             records = consumerGroupFenceMember(group, member);
+            if (validateOnlineDowngrade(group, memberId)) convertToClassicGroup(group, records);
         } else {
             ConsumerGroupMember member = group.staticMember(instanceId);
             throwIfStaticMemberIsUnknown(member, instanceId);
@@ -1451,6 +1451,7 @@ public class GroupMetadataManager {
                 log.info("[GroupId {}] Static Member {} with instance id {} left the consumer group.",
                     group.groupId(), memberId, instanceId);
                 records = consumerGroupFenceMember(group, member);
+                if (validateOnlineDowngrade(group, memberId)) convertToClassicGroup(group, records);
             }
         }
         return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
@@ -1562,7 +1563,9 @@ public class GroupMetadataManager {
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
                 log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
                     groupId, memberId);
-                return new CoordinatorResult<>(consumerGroupFenceMember(group, member));
+                List<Record> records = consumerGroupFenceMember(group, member);
+                if (validateOnlineDowngrade(group, memberId)) convertToClassicGroup(group, records);
+                return new CoordinatorResult<>(records);
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
@@ -1612,7 +1615,8 @@ public class GroupMetadataManager {
                     log.info("[GroupId {}] Member {} fenced from the group because " +
                             "it failed to transition from epoch {} within {}ms.",
                         groupId, memberId, memberEpoch, rebalanceTimeoutMs);
-                    return new CoordinatorResult<>(consumerGroupFenceMember(group, member));
+                    List<Record> records = consumerGroupFenceMember(group, member);
+                    if (validateOnlineDowngrade(group, memberId)) convertToClassicGroup(group, records);
                 } else {
                     log.debug("[GroupId {}] Ignoring rebalance timeout for {} because the member " +
                         "left the epoch {}.", groupId, memberId, memberEpoch);
