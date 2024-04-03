@@ -249,10 +249,13 @@ public interface RecordBatch extends Iterable<Record> {
 
     /**
      * iterate all records to find the offset of max timestamp.
-     * noted that the earliest offset will return if there are multi records having same (max) timestamp
+     * noted:
+     * 1) that the earliest offset will return if there are multi records having same (max) timestamp
+     * 2) it always return -1 if the {@link RecordBatch#magic()} is equal to {@link RecordBatch#MAGIC_VALUE_V0}
      * @return offset of max timestamp
      */
     default Optional<Long> offsetOfMaxTimestamp() {
+        if (magic() == RecordBatch.MAGIC_VALUE_V0) return Optional.empty();
         long maxTimestamp = maxTimestamp();
         try (CloseableIterator<Record> iter = streamingIterator(BufferSupplier.create())) {
             while (iter.hasNext()) {

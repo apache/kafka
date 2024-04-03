@@ -19,12 +19,13 @@ package kafka.admin
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils.{createProducer, plaintextBootstrapServers, waitForAllReassignmentsToComplete}
+import kafka.utils.TestUtils.{createProducer, plaintextBootstrapServers, tempDir, waitForAllReassignmentsToComplete}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.ListOffsetsResponse
 import org.apache.kafka.common.utils.{MockTime, Time, Utils}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -42,8 +43,9 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   val topicName = "foo"
   val topicNameWithCustomConfigs = "foo2"
   var adminClient: Admin = _
-  var setOldMessageFormat: Boolean = false
   val mockTime: Time = new MockTime(1)
+  var version = RecordBatch.MAGIC_VALUE_V2
+  var dataFolder = Seq.empty[String]
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -58,7 +60,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
   @AfterEach
   override def tearDown(): Unit = {
-    setOldMessageFormat = false
+    version = RecordBatch.MAGIC_VALUE_V2
     Utils.closeQuietly(adminClient, "ListOffsetsAdminClient")
     super.tearDown()
   }
@@ -70,6 +72,25 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     assertEquals(ListOffsetsResponse.UNKNOWN_OFFSET, maxTimestampOffset.offset())
     assertEquals(ListOffsetsResponse.UNKNOWN_TIMESTAMP, maxTimestampOffset.timestamp())
   }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testListVersion0(quorum: String): Unit = {
+    // make sure the data is not deleted after restarting cluster
+    dataFolder = Seq(tempDir().getAbsolutePath, tempDir().getAbsolutePath)
+    try {
+      // create records for version 0
+      createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V0)
+      produceMessagesInSeparateBatch()
+
+      // update version to version 1 to list offset for max timestamp
+      createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V1)
+      // the offset of max timestamp is always -1 if the batch version is 0
+      verifyListOffsets(expectedMaxTimestampOffset = -1)
+
+    } finally dataFolder = Seq.empty
+  }
+
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
@@ -117,7 +138,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
   def testThreeRecordsInOneBatchWithMessageConversion(quorum: String): Unit = {
-    createOldMessageFormatBrokers()
+    createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V1)
     produceMessagesInOneBatch()
     verifyListOffsets()
 
@@ -133,7 +154,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
   def testThreeRecordsInSeparateBatchWithMessageConversion(quorum: String): Unit = {
-    createOldMessageFormatBrokers()
+    createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V1)
     produceMessagesInSeparateBatch()
     verifyListOffsets()
 
@@ -185,8 +206,8 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     createTopicWithConfig(topicNameWithCustomConfigs, props)
   }
 
-  private def createOldMessageFormatBrokers(): Unit = {
-    setOldMessageFormat = true
+  private def createMessageFormatBrokers(recordVersion: Byte): Unit = {
+    version = recordVersion
     recreateBrokers(reconfigure = true, startup = true)
     Utils.closeQuietly(adminClient, "ListOffsetsAdminClient")
     adminClient = Admin.create(Map[String, Object](
@@ -304,11 +325,16 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(2, zkConnectOrNull).map{ props =>
-      if (setOldMessageFormat) {
+    TestUtils.createBrokerConfigs(2, zkConnectOrNull).zipWithIndex.map{ case (props, index) =>
+      if (version == RecordBatch.MAGIC_VALUE_V0) {
+        props.setProperty("log.message.format.version", "0.9.0")
+        props.setProperty("inter.broker.protocol.version", "0.9.0")
+      }
+      if (version == RecordBatch.MAGIC_VALUE_V1) {
         props.setProperty("log.message.format.version", "0.10.0")
         props.setProperty("inter.broker.protocol.version", "0.10.0")
       }
+      if (dataFolder.size > index) props.setProperty(KafkaConfig.LogDirProp, dataFolder(index))
       props
     }.map(KafkaConfig.fromProps)
   }
