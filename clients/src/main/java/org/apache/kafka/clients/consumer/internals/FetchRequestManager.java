@@ -106,7 +106,6 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     private PollResult pollInternal(Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests,
                                     ResponseHandler<ClientResponse> successHandler,
                                     ResponseHandler<Throwable> errorHandler) {
-        Timer timer = time.timer(requestTimeoutMs);
         List<UnsentRequest> requests = fetchRequests.entrySet().stream().map(entry -> {
             final Node fetchTarget = entry.getKey();
             final FetchSessionHandler.FetchRequestData data = entry.getValue();
@@ -118,6 +117,7 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                     successHandler.handle(fetchTarget, data, clientResponse);
             };
 
+            Timer timer = time.timer(requestTimeoutMs);
             return new UnsentRequest(request, Optional.of(fetchTarget), timer).whenComplete(responseHandler);
         }).collect(Collectors.toList());
 

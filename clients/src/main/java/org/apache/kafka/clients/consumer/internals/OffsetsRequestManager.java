@@ -83,9 +83,9 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
     private final Set<ListOffsetsRequestState> requestsToRetry;
     private final List<NetworkClientDelegate.UnsentRequest> requestsToSend;
+    private final int requestTimeoutMs;
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
-    private final int requestTimeoutMs;
     private final Time time;
     private final ApiVersions apiVersions;
     private final NetworkClientDelegate networkClientDelegate;
@@ -120,9 +120,9 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         this.requestsToSend = new ArrayList<>();
         this.subscriptionState = subscriptionState;
         this.time = time;
+        this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
         this.retryBackoffMaxMs = retryBackoffMaxMs;
-        this.requestTimeoutMs = requestTimeoutMs;
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
         this.backgroundEventHandler = backgroundEventHandler;
@@ -361,11 +361,10 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         log.debug("Creating ListOffset request {} for broker {} to reset positions", builder,
                 node);
 
-        Timer timer = time.timer(requestTimeoutMs);
         NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
                 builder,
                 Optional.ofNullable(node),
-                timer);
+                time.timer(requestTimeoutMs));
         unsentRequests.add(unsentRequest);
         CompletableFuture<ListOffsetResult> result = new CompletableFuture<>();
         unsentRequest.whenComplete((response, error) -> {
@@ -541,11 +540,10 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
         log.debug("Creating OffsetsForLeaderEpoch request request {} to broker {}", builder, node);
 
-        Timer timer = time.timer(requestTimeoutMs);
         NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
                 builder,
                 Optional.ofNullable(node),
-                timer
+                time.timer(requestTimeoutMs)
         );
         unsentRequests.add(unsentRequest);
         CompletableFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> result = new CompletableFuture<>();

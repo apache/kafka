@@ -815,11 +815,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * Build request with the given builder, including response handling logic.
          */
         NetworkClientDelegate.UnsentRequest buildRequestWithResponseHandling(final AbstractRequest.Builder<?> builder) {
-            Timer timer = time.timer(requestTimeoutMs);
             NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
                 builder,
                 coordinatorRequestManager.coordinator(),
-                timer
+                time.timer(requestTimeoutMs)
             );
             request.whenComplete(
                 (response, throwable) -> {

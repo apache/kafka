@@ -179,11 +179,10 @@ public class TopicMetadataRequestManager implements RequestManager {
 
         private NetworkClientDelegate.UnsentRequest createUnsentRequest(
                 final MetadataRequest.Builder request) {
-            Timer t = time.timer(requestTimeoutMs);
             NetworkClientDelegate.UnsentRequest unsent = new NetworkClientDelegate.UnsentRequest(
                 request,
                 Optional.empty(),
-                t
+                time.timer(requestTimeoutMs)
             );
 
             return unsent.whenComplete((response, exception) -> {
