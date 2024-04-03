@@ -39,7 +39,6 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -161,8 +160,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      */
     public CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsets(
             final Map<TopicPartition, Long> timestampsToSearch,
-            final boolean requireTimestamps,
-            final Timer timer) {
+            final boolean requireTimestamps) {
         if (timestampsToSearch.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyMap());
         }
@@ -172,7 +170,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                 logContext,
                 retryBackoffMs,
                 retryBackoffMaxMs,
-                timer,
                 timestampsToSearch,
                 requireTimestamps,
                 offsetFetcherUtils,
@@ -569,7 +566,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         return result;
     }
 
-    private static class ListOffsetsRequestState extends TimedRequestState {
+    private static class ListOffsetsRequestState extends RequestState {
 
         private final Map<TopicPartition, Long> timestampsToSearch;
         private final Map<TopicPartition, ListOffsetData> fetchedOffsets;
@@ -582,7 +579,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         private ListOffsetsRequestState(LogContext logContext,
                                         long retryBackoffMs,
                                         long retryBackoffMaxMs,
-                                        Timer timer,
                                         Map<TopicPartition, Long> timestampsToSearch,
                                         boolean requireTimestamps,
                                         OffsetFetcherUtils offsetFetcherUtils,
@@ -591,8 +587,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                 logContext,
                 OffsetsRequestManager.class.getSimpleName(),
                 retryBackoffMs,
-                retryBackoffMaxMs,
-                timer
+                retryBackoffMaxMs
             );
             remainingToSearch = new HashMap<>();
             fetchedOffsets = new HashMap<>();
