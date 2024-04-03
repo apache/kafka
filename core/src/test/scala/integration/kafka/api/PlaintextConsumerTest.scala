@@ -15,7 +15,7 @@ package kafka.api
 import java.time.Duration
 import java.util
 import java.util.Arrays.asList
-import java.util.{Locale, Properties}
+import java.util.{Locale, Optional, Properties}
 import kafka.server.{KafkaBroker, QuotaType}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
+import java.util.regex.Pattern
 import scala.jdk.CollectionConverters._
 
 @Timeout(600)
