@@ -1487,6 +1487,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     val shareFetchData = shareFetchRequest.shareFetchData(topicNames)
     val forgottenTopics = shareFetchRequest.forgottenTopics(topicNames)
 
+    var cachedTopicPartitions : util.List[TopicIdPartition] = new util.ArrayList[TopicIdPartition]
+    try {
+      cachedTopicPartitions = sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, Uuid.fromString(memberId))
+    } catch {
+        // Exception handling is needed when this value is being utilized on receiving FINAL_EPOCH.
+        case _: ShareSessionNotFoundException => cachedTopicPartitions = null
+    }
+
     def isAcknowledgeDataPresentInFetchRequest() : Boolean = {
       var isAcknowledgeDataPresent = false
       shareFetchRequest.data().topics().forEach ( topic => {
@@ -1661,6 +1669,20 @@ class KafkaApis(val requestChannel: RequestChannel,
           topicData.partitions().add(fetchPartitionData)
         }
         shareFetchResponse.data().responses().add(topicData)
+      }
+
+      if (shareSessionEpoch == ShareFetchMetadata.FINAL_EPOCH && cachedTopicPartitions != null) {
+        sharePartitionManager.releaseAcquiredRecords(groupId,
+            memberId, cachedTopicPartitions).
+          whenComplete((releaseAcquiredRecordsData, throwable) => {
+            if (throwable != null) {
+              debug(s"Release acquired records on share session close with correlation from client $clientId  " +
+                s"failed with error ${throwable.getMessage}")
+              requestHelper.handleError(request, throwable)
+            } else {
+              info(s"Release acquired records on share session close $releaseAcquiredRecordsData succeeded")
+            }
+          })
       }
       shareFetchResponse
     }
@@ -4539,6 +4561,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   }
 
+  // TODO: Release acquired record functionality (which is added in share fetch request handling) should be added. Can't add it
+  //  right now since this function's implementation is incomplete
   def handleShareAcknowledgeRequest(request: RequestChannel.Request): Unit = {
     val shareAcknowledgeRequest = request.body[ShareAcknowledgeRequest]
 
