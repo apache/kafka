@@ -1343,11 +1343,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // lookup the position of batch to avoid extra I/O
         val position = latestTimestampSegment.offsetIndex.lookup(maxTimestampSoFar.offset)
         val lpc = latestEpochAsOptional(leaderEpochCache)
-        Some(latestTimestampSegment.log.batchesFrom(position.position).asScala
+        latestTimestampSegment.log.batchesFrom(position.position).asScala
           .find(_.maxTimestamp() == maxTimestampSoFar.timestamp)
           .flatMap(batch => batch.offsetOfMaxTimestamp().asScala.map(new TimestampAndOffset(batch.maxTimestamp(), _, lpc)))
-          // return the base offset for backward compatibility if there is no batches
-          .getOrElse(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, latestTimestampSegment.baseOffset(), lpc)))
       } else {
         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
         if (remoteLogEnabled()) {
