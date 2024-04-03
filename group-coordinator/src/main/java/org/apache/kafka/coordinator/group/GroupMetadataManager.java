@@ -1617,6 +1617,7 @@ public class GroupMetadataManager {
                         groupId, memberId, memberEpoch, rebalanceTimeoutMs);
                     List<Record> records = consumerGroupFenceMember(group, member);
                     if (validateOnlineDowngrade(group, memberId)) convertToClassicGroup(group, records);
+                    return new CoordinatorResult<>(records);
                 } else {
                     log.debug("[GroupId {}] Ignoring rebalance timeout for {} because the member " +
                         "left the epoch {}.", groupId, memberId, memberEpoch);

@@ -18,7 +18,6 @@
 package org.apache.kafka.coordinator.group.classic;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
@@ -28,7 +27,6 @@ import org.apache.kafka.common.utils.Bytes;
 
 import java.nio.ByteBuffer;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
