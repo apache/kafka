@@ -168,7 +168,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * metadata refresh the consumer becomes subscribed to this new topic and all partitions
    * of that topic are assigned to it.
    */
-  // TODO: enable this test for the consumer group protocol when support for pattern subscriptions is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPatternSubscription(quorum: String, groupProtocol: String): Unit = {
@@ -227,7 +226,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * The metadata refresh interval is intentionally increased to a large enough value to guarantee
    * that it is the subscription call that triggers a metadata refresh, and not the timeout.
    */
-  // TODO: enable this test for the consumer group protocol when support for pattern subscriptions is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testSubsequentPatternSubscription(quorum: String, groupProtocol: String): Unit = {
@@ -280,7 +278,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * When consumer unsubscribes from all its subscriptions, it is expected that its
    * assignments are cleared right away.
    */
-  // TODO: enable this test for the consumer group protocol when support for pattern subscriptions is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPatternUnsubscription(quorum: String, groupProtocol: String): Unit = {

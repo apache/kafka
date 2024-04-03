@@ -1667,9 +1667,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
         maybeThrowFencedInstanceException();
         maybeInvokeCommitCallbacks();
-        if (subscriptions.hasPatternSubscription()) {
-            updatePatternSubscription(metadata.fetch());
-        }
+        maybeUpdateSubscriptionMetadata();
         backgroundEventProcessor.process();
 
         // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
@@ -1754,12 +1752,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             log.info("Subscribed to pattern: '{}'", pattern);
             subscriptions.subscribe(pattern, listener);
             metadata.requestUpdateForNewTopics();
-            Cluster cache = metadata.fetch();
 
-            while (cache == metadata.fetch()) {
+            int currentVersion = metadata.updateVersion();
+
+            while (metadata.updateVersion() == currentVersion) {
                 log.info("Waiting for new metadata update");
             }
-            updatePatternSubscription(cache);
+
+            updatePatternSubscription(metadata.fetch());
             applicationEventHandler.add(new SubscriptionChangeEvent());
         } finally {
             release();
@@ -1950,6 +1950,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Visible for testing
     SubscriptionState subscriptions() {
         return subscriptions;
+    }
+
+    private void maybeUpdateSubscriptionMetadata() {
+        if (subscriptions.hasPatternSubscription()) {
+            updatePatternSubscription(metadata.fetch());
+        }
     }
 
 }
