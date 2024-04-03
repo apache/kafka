@@ -105,6 +105,10 @@ import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData.DescribeLogDirsTopic;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData;
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition;
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopic;
 import org.apache.kafka.common.message.DescribeTransactionsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo;
@@ -177,6 +181,7 @@ import org.apache.kafka.common.requests.DescribeProducersRequest;
 import org.apache.kafka.common.requests.DescribeProducersResponse;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
+import org.apache.kafka.common.requests.DescribeTopicPartitionsResponse;
 import org.apache.kafka.common.requests.DescribeTransactionsRequest;
 import org.apache.kafka.common.requests.DescribeTransactionsResponse;
 import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
@@ -228,6 +233,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -278,6 +285,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 /**
  * A unit test for KafkaAdminClient.
@@ -1398,6 +1407,222 @@ public class KafkaAdminClientTest {
                 TestUtils.assertFutureError(createFutures .get(sillyTopicName), InvalidTopicException.class);
             }
             assertEquals(0, env.kafkaClient().inFlightRequestCount());
+        }
+    }
+
+    @SuppressWarnings({"NPathComplexity", "unchecked"})
+    @Test
+    public void testDescribeTopicsWithDescribeTopicPartitionsApiBasic() {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            String topicName0 = "test-0";
+            String topicName1 = "test-1";
+            Map<String, Uuid> topics = new HashMap<>();
+            topics.put(topicName0, Uuid.randomUuid());
+            topics.put(topicName1, Uuid.randomUuid());
+
+            DescribeTopicPartitionsResponseData dataFirstPart = new DescribeTopicPartitionsResponseData();
+            dataFirstPart.topics().add(new DescribeTopicPartitionsResponseTopic()
+                .setErrorCode((short) 0)
+                .setTopicId(topics.get(topicName0))
+                .setName(topicName0)
+                .setIsInternal(false)
+                .setPartitions(Arrays.asList(new DescribeTopicPartitionsResponsePartition()
+                    .setIsrNodes(Arrays.asList(0))
+                    .setErrorCode((short) 0)
+                    .setLeaderEpoch(0)
+                    .setLeaderId(0)
+                    .setEligibleLeaderReplicas(Arrays.asList(1))
+                    .setLastKnownElr(Arrays.asList(2))
+                    .setPartitionIndex(0)
+                    .setReplicaNodes(Arrays.asList(0, 1, 2))))
+            );
+            dataFirstPart.setNextCursor(new DescribeTopicPartitionsResponseData.Cursor()
+                .setTopicName(topicName0)
+                .setPartitionIndex(1));
+            env.kafkaClient().prepareResponse(body -> {
+                DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
+                if (request.topics().size() != 2) return false;
+                if (!request.topics().get(0).name().equals(topicName0)) return false;
+                if (!request.topics().get(1).name().equals(topicName1)) return false;
+                if (request.cursor() != null) return false;
+                return true;
+            }, new DescribeTopicPartitionsResponse(dataFirstPart));
+
+            DescribeTopicPartitionsResponseData dataSecondPart = new DescribeTopicPartitionsResponseData();
+            dataSecondPart.topics().add(new DescribeTopicPartitionsResponseTopic()
+                .setErrorCode((short) 0)
+                .setTopicId(topics.get(topicName0))
+                .setName(topicName0)
+                .setIsInternal(false)
+                .setPartitions(Arrays.asList(new DescribeTopicPartitionsResponsePartition()
+                    .setIsrNodes(Arrays.asList(0))
+                    .setErrorCode((short) 0)
+                    .setLeaderEpoch(0)
+                    .setLeaderId(0)
+                    .setEligibleLeaderReplicas(Arrays.asList(1))
+                    .setLastKnownElr(Arrays.asList(2))
+                    .setPartitionIndex(1)
+                    .setReplicaNodes(Arrays.asList(0, 1, 2)))));
+            dataSecondPart.topics().add(new DescribeTopicPartitionsResponseTopic()
+                .setErrorCode((short) 0)
+                .setTopicId(topics.get(topicName1))
+                .setName(topicName1)
+                .setIsInternal(false)
+                .setPartitions(Arrays.asList(new DescribeTopicPartitionsResponsePartition()
+                    .setIsrNodes(Arrays.asList(3))
+                    .setErrorCode((short) 0)
+                    .setLeaderEpoch(0)
+                    .setLeaderId(3)
+                    .setEligibleLeaderReplicas(Arrays.asList(1))
+                    .setLastKnownElr(Arrays.asList(2))
+                    .setPartitionIndex(0)
+                    .setReplicaNodes(Arrays.asList(3, 1, 2)))));
+            env.kafkaClient().prepareResponse(body -> {
+                DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
+                if (request.topics().size() != 2) return false;
+                if (!request.topics().get(0).name().equals(topicName0)) return false;
+                if (!request.topics().get(1).name().equals(topicName1)) return false;
+
+                DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
+                if (cursor == null || cursor.topicName() != topicName0 || cursor.partitionIndex() != 1) return false;
+
+                return true;
+            }, new DescribeTopicPartitionsResponse(dataSecondPart));
+
+            AdminResultsSubscriber<DescribeTopicPartitionsResult> subscriber = Mockito.mock(AdminResultsSubscriber.class);
+
+            try {
+                env.adminClient().describeTopics(
+                    TopicCollection.ofTopicNames(Arrays.asList(topicName0, topicName1)),
+                    new DescribeTopicsOptions().partitionSizeLimitPerResponse(10),
+                    subscriber
+                );
+                ArgumentCaptor<DescribeTopicPartitionsResult> argument = ArgumentCaptor.forClass(DescribeTopicPartitionsResult.class);
+                verify(subscriber, times(3)).onNext(argument.capture());
+                List<DescribeTopicPartitionsResult> results = argument.getAllValues();
+                assertEquals(3, results.size());
+                DescribeTopicPartitionsResult result = results.get(0);
+                assertEquals(Errors.NONE.exception(), result.exception);
+                TopicDescription topicDescription = result.topicDescription;
+                assertEquals(topicName0, topicDescription.name());
+                assertEquals(1, topicDescription.partitions().size());
+                assertEquals(0, topicDescription.partitions().get(0).partition());
+
+                result = results.get(1);
+                topicDescription = result.topicDescription;
+                assertEquals(topicName0, topicDescription.name());
+                assertEquals(1, topicDescription.partitions().size());
+                assertEquals(1, topicDescription.partitions().get(0).partition());
+
+                result = results.get(2);
+                topicDescription = result.topicDescription;
+                assertEquals(topicName1, topicDescription.name());
+                assertEquals(1, topicDescription.partitions().size());
+                assertEquals(0, topicDescription.partitions().get(0).partition());
+            } catch (Exception e) {
+                fail("describe using DescribeTopics API should not fail", e);
+            }
+        }
+    }
+
+    @SuppressWarnings({"NPathComplexity", "unchecked"})
+    @Test
+    public void testDescribeTopicsWithDescribeTopicPartitionsApiEdgeCase() {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            String topicName0 = "test-0";
+            String topicName1 = "test-1";
+            String topicNonExist = "test-0-non-exist";
+            Map<String, Uuid> topics = new HashMap<>();
+            topics.put(topicName0, Uuid.randomUuid());
+            topics.put(topicName1, Uuid.randomUuid());
+
+            DescribeTopicPartitionsResponseData dataFirstPart = new DescribeTopicPartitionsResponseData();
+            dataFirstPart.topics().add(new DescribeTopicPartitionsResponseTopic()
+                .setErrorCode((short) 0)
+                .setTopicId(topics.get(topicName0))
+                .setName(topicName0)
+                .setIsInternal(false)
+                .setPartitions(Arrays.asList(new DescribeTopicPartitionsResponsePartition()
+                    .setIsrNodes(Arrays.asList(0))
+                    .setErrorCode((short) 0)
+                    .setLeaderEpoch(0)
+                    .setLeaderId(0)
+                    .setEligibleLeaderReplicas(Arrays.asList(1))
+                    .setLastKnownElr(Arrays.asList(2))
+                    .setPartitionIndex(0)
+                    .setReplicaNodes(Arrays.asList(0, 1, 2))))
+            );
+            dataFirstPart.setNextCursor(new DescribeTopicPartitionsResponseData.Cursor()
+                    .setTopicName(topicName1)
+                    .setPartitionIndex(0));
+            env.kafkaClient().prepareResponse(body -> {
+                DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
+                if (request.topics().size() != 3) return false;
+                if (!request.topics().get(0).name().equals(topicName0)) return false;
+                if (!request.topics().get(1).name().equals(topicNonExist)) return false;
+                if (!request.topics().get(2).name().equals(topicName1)) return false;
+                if (request.cursor() != null) return false;
+                return true;
+            }, new DescribeTopicPartitionsResponse(dataFirstPart));
+
+            DescribeTopicPartitionsResponseData dataSecondPart = new DescribeTopicPartitionsResponseData();
+            dataSecondPart.topics().add(new DescribeTopicPartitionsResponseTopic()
+                .setErrorCode((short) 0)
+                .setTopicId(topics.get(topicName1))
+                .setName(topicName1)
+                .setIsInternal(false)
+                .setPartitions(Arrays.asList(new DescribeTopicPartitionsResponsePartition()
+                    .setIsrNodes(Arrays.asList(3))
+                    .setErrorCode((short) 0)
+                    .setLeaderEpoch(0)
+                    .setLeaderId(3)
+                    .setEligibleLeaderReplicas(Arrays.asList(1))
+                    .setLastKnownElr(Arrays.asList(2))
+                    .setPartitionIndex(0)
+                    .setReplicaNodes(Arrays.asList(3, 1, 2)))));
+            env.kafkaClient().prepareResponse(body -> {
+                DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
+                if (request.topics().size() != 1) return false;
+                if (!request.topics().get(0).name().equals(topicName1)) return false;
+
+                DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
+                if (cursor == null || cursor.topicName() != topicName1 || cursor.partitionIndex() != 0) return false;
+
+                return true;
+            }, new DescribeTopicPartitionsResponse(dataSecondPart));
+            try {
+                AdminResultsSubscriber<DescribeTopicPartitionsResult> subscriber = Mockito.mock(AdminResultsSubscriber.class);
+                env.adminClient().describeTopics(
+                    TopicCollection.ofTopicNames(Arrays.asList(topicName1, topicName0, topicNonExist)),
+                    new DescribeTopicsOptions().partitionSizeLimitPerResponse(10),
+                    subscriber
+                );
+                ArgumentCaptor<DescribeTopicPartitionsResult> argument = ArgumentCaptor.forClass(DescribeTopicPartitionsResult.class);
+                verify(subscriber, times(3)).onNext(argument.capture());
+                List<DescribeTopicPartitionsResult> results = argument.getAllValues();
+                assertEquals(3, results.size());
+
+                DescribeTopicPartitionsResult result = results.get(0);
+                assertEquals(Errors.NONE.exception(), result.exception);
+                TopicDescription topicDescription = result.topicDescription;
+                assertEquals(topicName0, topicDescription.name());
+                assertEquals(1, topicDescription.partitions().size());
+                assertEquals(0, topicDescription.partitions().get(0).partition());
+
+                result = results.get(1);
+                assertTrue(result.exception instanceof UnknownTopicOrPartitionException);
+
+                result = results.get(2);
+                assertEquals(Errors.NONE.exception(), result.exception);
+                topicDescription = result.topicDescription;
+                assertEquals(topicName1, topicDescription.name());
+                assertEquals(1, topicDescription.partitions().size());
+                assertEquals(0, topicDescription.partitions().get(0).partition());
+            } catch (Exception e) {
+                fail("describe using DescribeTopics API should not fail", e);
+            }
         }
     }
 
