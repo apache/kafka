@@ -1510,10 +1510,9 @@ project(':clients') {
 
     // dependencies excluded from the final jar, since they are declared as runtime dependencies
     dependencies {
-      exclude(dependency(libs.snappy))
-      exclude(dependency(libs.zstd))
-      exclude(dependency(libs.lz4))
-      exclude(dependency(libs.slf4jApi))
+      project.configurations.shadowed.allDependencies.each {
+        exclude(dependency(it.group + ':' + it.name + ':' + it.version))
+      }
       // exclude proto files from the jar
       exclude "**/opentelemetry/proto/**/*.proto"
       exclude "**/google/protobuf/*.proto"
