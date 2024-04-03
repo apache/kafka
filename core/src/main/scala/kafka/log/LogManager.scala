@@ -326,7 +326,7 @@ class LogManager(logDirs: Seq[File],
                            defaultConfig: LogConfig,
                            topicConfigOverrides: Map[String, LogConfig],
                            numRemainingSegments: ConcurrentMap[String, Int],
-                           isStray: (Option[Uuid], TopicPartition) => Boolean): UnifiedLog = {
+                           isStray: UnifiedLog => Boolean): UnifiedLog = {
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val config = topicConfigOverrides.getOrElse(topicPartition.topic, defaultConfig)
     val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
@@ -355,7 +355,7 @@ class LogManager(logDirs: Seq[File],
     } else if (logDir.getName.endsWith(UnifiedLog.StrayDirSuffix)) {
       addStrayLog(topicPartition, log)
       warn(s"Loaded stray log: $logDir")
-    } else if (isStray(log.topicId, topicPartition)) {
+    } else if (isStray(log)) {
       // Unlike Zookeeper mode, which tracks pending topic deletions under a ZNode, KRaft is unable to prevent a topic from being recreated before every replica has been deleted.
       // A KRaft broker with an offline directory may be unable to detect it still holds a to-be-deleted replica,
       // and can create a conflicting topic partition for a new incarnation of the topic in one of the remaining online directories.
@@ -408,7 +408,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Recover and load all logs in the given data directories
    */
-  private[log] def loadLogs(defaultConfig: LogConfig, topicConfigOverrides: Map[String, LogConfig], isStray: (Option[Uuid], TopicPartition) => Boolean = (_, _) => false): Unit = {
+  private[log] def loadLogs(defaultConfig: LogConfig, topicConfigOverrides: Map[String, LogConfig], isStray: UnifiedLog => Boolean): Unit = {
     info(s"Loading logs from log dirs $liveLogDirs")
     val startMs = time.hiResClockMs()
     val threadPools = ArrayBuffer.empty[ExecutorService]
@@ -573,7 +573,7 @@ class LogManager(logDirs: Seq[File],
   /**
    *  Start the background threads to flush logs and do log cleanup
    */
-  def startup(topicNames: Set[String], isStray: (Option[Uuid], TopicPartition) => Boolean = (_ , _)=> false): Unit = {
+  def startup(topicNames: Set[String], isStray: UnifiedLog => Boolean = _ => false): Unit = {
     // ensure consistency between default config and overrides
     val defaultConfig = currentDefaultConfig
     startupWithConfigOverrides(defaultConfig, fetchTopicConfigOverrides(defaultConfig, topicNames), isStray)
@@ -618,7 +618,7 @@ class LogManager(logDirs: Seq[File],
   private[log] def startupWithConfigOverrides(
     defaultConfig: LogConfig,
     topicConfigOverrides: Map[String, LogConfig],
-    isStray: (Option[Uuid], TopicPartition) => Boolean): Unit = {
+    isStray: UnifiedLog => Boolean): Unit = {
     loadLogs(defaultConfig, topicConfigOverrides, isStray) // this could take a while if shutdown was not clean
 
     /* Schedule the cleanup task to delete old logs */

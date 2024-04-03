@@ -258,7 +258,7 @@ class LogManagerTest {
       invocation.callRealMethod().asInstanceOf[UnifiedLog]
       loadLogCalled = loadLogCalled + 1
     }.when(logManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
-      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]], any[(Option[Uuid], TopicPartition) => Boolean]())
+      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]], any[UnifiedLog => Boolean]())
 
     val t = new Thread() {
       override def run(): Unit = { logManager.startup(Set.empty) }
@@ -516,7 +516,7 @@ class LogManagerTest {
     val remoteIndexCache = new File(logDir, RemoteIndexCache.DIR_NAME)
     remoteIndexCache.mkdir()
     logManager = createLogManager(Seq(logDir))
-    logManager.loadLogs(logConfig, Map.empty)
+    logManager.loadLogs(logConfig, Map.empty, _ => false)
   }
 
   @Test
@@ -528,7 +528,7 @@ class LogManagerTest {
     val testTopic = "test-stray-topic"
     val testTopicPartition = new TopicPartition(testTopic, 0)
     val log = logManager.getOrCreateLog(testTopicPartition, topicId = Some(Uuid.randomUuid()))
-    def providedIsStray(topicId: Option[Uuid], topicPartition: TopicPartition) = {
+    def providedIsStray(log: UnifiedLog) = {
       invokedCount += 1
       true
     }
@@ -971,7 +971,7 @@ class LogManagerTest {
         numRemainingSegments = mockMap)
 
     }.when(spyLogManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
-      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]], any[(Option[Uuid], TopicPartition) => Boolean]())
+      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]], any[UnifiedLog => Boolean]())
 
     // do nothing for removeLogRecoveryMetrics for metrics verification
     doNothing().when(spyLogManager).removeLogRecoveryMetrics()
