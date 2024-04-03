@@ -18,11 +18,10 @@
 package kafka.api
 
 import com.yammer.metrics.core.Gauge
+
 import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
-
 import kafka.security.authorizer.AclAuthorizer
-import kafka.security.authorizer.AclEntry.WildcardHost
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import kafka.server._
 import kafka.utils._
@@ -38,11 +37,13 @@ import org.apache.kafka.common.resource._
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth._
+import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
+import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{ValueSource, CsvSource}
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.jdk.CollectionConverters._
 
@@ -92,11 +93,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def clientPrincipal: KafkaPrincipal
   def kafkaPrincipal: KafkaPrincipal
 
-  def GroupReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, READ, ALLOW))
-  def TopicReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, READ, ALLOW))
-  def TopicWriteAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, WRITE, ALLOW))
-  def TopicDescribeAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, DESCRIBE, ALLOW))
-  def TopicCreateAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, CREATE, ALLOW))
+  def GroupReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WILDCARD_HOST, READ, ALLOW))
+  def TopicReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WILDCARD_HOST, READ, ALLOW))
+  def TopicWriteAcl = Set(new AccessControlEntry(clientPrincipal.toString, WILDCARD_HOST, WRITE, ALLOW))
+  def TopicDescribeAcl = Set(new AccessControlEntry(clientPrincipal.toString, WILDCARD_HOST, DESCRIBE, ALLOW))
+  def TopicCreateAcl = Set(new AccessControlEntry(clientPrincipal.toString, WILDCARD_HOST, CREATE, ALLOW))
 
   def AclTopicWrite(topicResource : ResourcePattern = topicResource) = new AclBinding(topicResource,
     new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.WRITE, AclPermissionType.ALLOW))
@@ -156,7 +157,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     } else {
       // The next two configuration parameters enable ZooKeeper secure ACLs
       // and sets the Kafka authorizer, both necessary to enable security.
-      this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
+      this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
       this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, authorizerClass.getName)
 
       // Set the specific principal that can update ACLs.

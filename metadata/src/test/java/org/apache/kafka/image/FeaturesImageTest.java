@@ -45,23 +45,28 @@ public class FeaturesImageTest {
     public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
     final static FeaturesDelta DELTA1;
     final static FeaturesImage IMAGE2;
+    final static List<ApiMessageAndVersion> DELTA2_RECORDS;
+    final static FeaturesDelta DELTA2;
+    final static FeaturesImage IMAGE3;
 
     static {
         Map<String, Short> map1 = new HashMap<>();
         map1.put("foo", (short) 2);
         map1.put("bar", (short) 1);
-        map1.put("baz", (short) 8);
         IMAGE1 = new FeaturesImage(map1, MetadataVersion.latestTesting(), ZkMigrationState.NONE);
 
         DELTA1_RECORDS = new ArrayList<>();
+        // change feature level
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
             setName("foo").setFeatureLevel((short) 3),
             (short) 0));
+        // remove feature
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
             setName("bar").setFeatureLevel((short) 0),
             (short) 0));
+        // add feature
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName("baz").setFeatureLevel((short) 0),
+            setName("baz").setFeatureLevel((short) 8),
             (short) 0));
 
         DELTA1 = new FeaturesDelta(IMAGE1);
@@ -69,7 +74,27 @@ public class FeaturesImageTest {
 
         Map<String, Short> map2 = new HashMap<>();
         map2.put("foo", (short) 3);
+        map2.put("baz", (short) 8);
         IMAGE2 = new FeaturesImage(map2, MetadataVersion.latestTesting(), ZkMigrationState.NONE);
+
+        DELTA2_RECORDS = new ArrayList<>();
+        // remove all features
+        DELTA2_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("foo").setFeatureLevel((short) 0),
+            (short) 0));
+        DELTA2_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("baz").setFeatureLevel((short) 0),
+            (short) 0));
+        // add feature back with different feature level
+        DELTA2_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("bar").setFeatureLevel((short) 1),
+            (short) 0));
+
+        DELTA2 = new FeaturesDelta(IMAGE2);
+        RecordTestUtils.replayAll(DELTA2, DELTA2_RECORDS);
+
+        Map<String, Short> map3 = Collections.singletonMap("bar", (short) 1);
+        IMAGE3 = new FeaturesImage(map3, MetadataVersion.latestTesting(), ZkMigrationState.NONE);
     }
 
     @Test
@@ -94,6 +119,20 @@ public class FeaturesImageTest {
     @Test
     public void testImage2RoundTrip() {
         testToImage(IMAGE2);
+    }
+
+    @Test
+    public void testImage3RoundTrip() {
+        testToImage(IMAGE3);
+    }
+
+    @Test
+    public void testApplyDelta2() {
+        assertEquals(IMAGE3, DELTA2.apply());
+        // check image2 + delta2 = image3, since records for image2 + delta2 might differ from records from image3
+        List<ApiMessageAndVersion> records = getImageRecords(IMAGE2);
+        records.addAll(DELTA2_RECORDS);
+        testToImage(IMAGE3, records);
     }
 
     private static void testToImage(FeaturesImage image) {

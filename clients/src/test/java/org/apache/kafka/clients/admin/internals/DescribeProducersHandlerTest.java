@@ -52,8 +52,8 @@ import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DescribeProducersHandlerTest {
     private DescribeProducersHandler newHandler(
@@ -137,7 +137,7 @@ public class DescribeProducersHandlerTest {
     public void testAuthorizationFailure() {
         TopicPartition topicPartition = new TopicPartition("foo", 5);
         Throwable exception = assertFatalError(topicPartition, Errors.TOPIC_AUTHORIZATION_FAILED);
-        assertTrue(exception instanceof TopicAuthorizationException);
+        assertInstanceOf(TopicAuthorizationException.class, exception);
         TopicAuthorizationException authException = (TopicAuthorizationException) exception;
         assertEquals(mkSet("foo"), authException.unauthorizedTopics());
     }
@@ -146,7 +146,7 @@ public class DescribeProducersHandlerTest {
     public void testInvalidTopic() {
         TopicPartition topicPartition = new TopicPartition("foo", 5);
         Throwable exception = assertFatalError(topicPartition, Errors.INVALID_TOPIC_EXCEPTION);
-        assertTrue(exception instanceof InvalidTopicException);
+        assertInstanceOf(InvalidTopicException.class, exception);
         InvalidTopicException invalidTopicException = (InvalidTopicException) exception;
         assertEquals(mkSet("foo"), invalidTopicException.invalidTopics());
     }
@@ -155,7 +155,7 @@ public class DescribeProducersHandlerTest {
     public void testUnexpectedError() {
         TopicPartition topicPartition = new TopicPartition("foo", 5);
         Throwable exception = assertFatalError(topicPartition, Errors.UNKNOWN_SERVER_ERROR);
-        assertTrue(exception instanceof UnknownServerException);
+        assertInstanceOf(UnknownServerException.class, exception);
     }
 
     @Test
@@ -185,7 +185,7 @@ public class DescribeProducersHandlerTest {
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(mkSet(topicPartition), result.failedKeys.keySet());
         Throwable exception = result.failedKeys.get(topicPartition);
-        assertTrue(exception instanceof NotLeaderOrFollowerException);
+        assertInstanceOf(NotLeaderOrFollowerException.class, exception);
     }
 
     @Test

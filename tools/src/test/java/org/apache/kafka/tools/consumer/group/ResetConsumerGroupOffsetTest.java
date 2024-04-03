@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumer.group;
 
 import joptsimple.OptionException;
-import kafka.admin.ConsumerGroupCommand;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -25,7 +24,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
-import scala.Option;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -98,10 +96,10 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService consumerGroupCommand = getConsumerGroupService(args);
         // Make sure we got a coordinator
         TestUtils.waitForCondition(
-            () -> Objects.equals(consumerGroupCommand.collectGroupState(group).coordinator().host(), "localhost"),
+            () -> Objects.equals(consumerGroupCommand.collectGroupState(group).coordinator.host(), "localhost"),
             "Can't find a coordinator");
-        Option<scala.collection.Map<TopicPartition, OffsetAndMetadata>> resetOffsets = consumerGroupCommand.resetOffsets().get(group);
-        assertTrue(resetOffsets.isDefined() && resetOffsets.get().isEmpty());
+        Map<TopicPartition, OffsetAndMetadata> resetOffsets = consumerGroupCommand.resetOffsets().get(group);
+        assertTrue(resetOffsets.isEmpty());
         assertTrue(committedOffsets(TOPIC, group).isEmpty());
     }
 
@@ -211,7 +209,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     }
 
     @Test
-    public void testResetOffsetsByDurationFallbackToLatestWhenNoRecords() throws Exception {
+    public void testResetOffsetsByDurationFallbackToLatestWhenNoRecords() {
         String topic = "foo2";
         String[] args = buildArgsForGroup(GROUP, "--topic", topic, "--by-duration", "PT1M", "--execute");
         createTopic(topic, 1, 1, new Properties(), listenerName(), new Properties());
@@ -326,7 +324,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         TopicPartition tp1 = new TopicPartition(topic1, 0);
         TopicPartition tp2 = new TopicPartition(topic2, 0);
 
-        Map<TopicPartition, Long> allResetOffsets = toOffsetMap(consumerGroupCommand.resetOffsets().get(GROUP));
+        Map<TopicPartition, Long> allResetOffsets = toOffsetMap(resetOffsets(consumerGroupCommand).get(GROUP));
         Map<TopicPartition, Long> expMap = new HashMap<>();
         expMap.put(tp1, 0L);
         expMap.put(tp2, 0L);
@@ -357,7 +355,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
         TopicPartition tp1 = new TopicPartition(topic1, 1);
         TopicPartition tp2 = new TopicPartition(topic2, 1);
-        Map<TopicPartition, Long> allResetOffsets = toOffsetMap(consumerGroupCommand.resetOffsets().get(GROUP));
+        Map<TopicPartition, Long> allResetOffsets = toOffsetMap(resetOffsets(consumerGroupCommand).get(GROUP));
         Map<TopicPartition, Long> expMap = new HashMap<>();
         expMap.put(tp1, 0L);
         expMap.put(tp2, 0L);
@@ -386,7 +384,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
         File file = TestUtils.tempFile("reset", ".csv");
 
-        scala.collection.Map<String, scala.collection.Map<TopicPartition, OffsetAndMetadata>> exportedOffsets = consumerGroupCommand.resetOffsets();
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> exportedOffsets = consumerGroupCommand.resetOffsets();
         BufferedWriter bw = new BufferedWriter(new FileWriter(file));
         bw.write(consumerGroupCommand.exportOffsetsToCsv(exportedOffsets));
         bw.close();
@@ -398,7 +396,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
         String[] cgcArgsExec = buildArgsForGroup(GROUP, "--all-topics", "--from-file", file.getCanonicalPath(), "--dry-run");
         ConsumerGroupCommand.ConsumerGroupService consumerGroupCommandExec = getConsumerGroupService(cgcArgsExec);
-        scala.collection.Map<String, scala.collection.Map<TopicPartition, OffsetAndMetadata>> importedOffsets = consumerGroupCommandExec.resetOffsets();
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets = consumerGroupCommandExec.resetOffsets();
         assertEquals(exp1, toOffsetMap(importedOffsets.get(GROUP)));
 
         adminZkClient().deleteTopic(topic);
@@ -430,7 +428,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
         File file = TestUtils.tempFile("reset", ".csv");
 
-        scala.collection.Map<String, scala.collection.Map<TopicPartition, OffsetAndMetadata>> exportedOffsets = consumerGroupCommand.resetOffsets();
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> exportedOffsets = consumerGroupCommand.resetOffsets();
         BufferedWriter bw = new BufferedWriter(new FileWriter(file));
         bw.write(consumerGroupCommand.exportOffsetsToCsv(exportedOffsets));
         bw.close();
@@ -447,14 +445,14 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         // Multiple --group's offset import
         String[] cgcArgsExec = buildArgsForGroups(Arrays.asList(group1, group2), "--all-topics", "--from-file", file.getCanonicalPath(), "--dry-run");
         ConsumerGroupCommand.ConsumerGroupService consumerGroupCommandExec = getConsumerGroupService(cgcArgsExec);
-        scala.collection.Map<String, scala.collection.Map<TopicPartition, OffsetAndMetadata>> importedOffsets = consumerGroupCommandExec.resetOffsets();
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets = consumerGroupCommandExec.resetOffsets();
         assertEquals(exp1, toOffsetMap(importedOffsets.get(group1)));
         assertEquals(exp2, toOffsetMap(importedOffsets.get(group2)));
 
         // Single --group offset import using "group,topic,partition,offset" csv format
         String[] cgcArgsExec2 = buildArgsForGroup(group1, "--all-topics", "--from-file", file.getCanonicalPath(), "--dry-run");
         ConsumerGroupCommand.ConsumerGroupService consumerGroupCommandExec2 = getConsumerGroupService(cgcArgsExec2);
-        scala.collection.Map<String, scala.collection.Map<TopicPartition, OffsetAndMetadata>> importedOffsets2 = consumerGroupCommandExec2.resetOffsets();
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets2 = consumerGroupCommandExec2.resetOffsets();
         assertEquals(exp1, toOffsetMap(importedOffsets2.get(group1)));
 
         adminZkClient().deleteTopic(TOPIC);
@@ -503,9 +501,9 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
     private void awaitConsumerGroupInactive(ConsumerGroupCommand.ConsumerGroupService consumerGroupService, String group) throws Exception {
         TestUtils.waitForCondition(() -> {
-            String state = consumerGroupService.collectGroupState(group).state();
+            String state = consumerGroupService.collectGroupState(group).state;
             return Objects.equals(state, "Empty") || Objects.equals(state, "Dead");
-        }, "Expected that consumer group is inactive. Actual state: " + consumerGroupService.collectGroupState(group).state());
+        }, "Expected that consumer group is inactive. Actual state: " + consumerGroupService.collectGroupState(group).state);
     }
 
     private void resetAndAssertOffsets(String[] args,
@@ -521,25 +519,17 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         Map<String, Map<TopicPartition, Long>> expectedOffsets = topics.stream().collect(Collectors.toMap(
             Function.identity(),
             topic -> Collections.singletonMap(new TopicPartition(topic, 0), expectedOffset)));
-        scala.collection.Map<String, scala.collection.Map<TopicPartition, OffsetAndMetadata>> resetOffsetsResultByGroup = consumerGroupCommand.resetOffsets();
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsetsResultByGroup = resetOffsets(consumerGroupCommand);
 
         try {
             for (final String topic : topics) {
-                resetOffsetsResultByGroup.foreach(entry -> {
-                    String group = entry._1;
-                    scala.collection.Map<TopicPartition, OffsetAndMetadata> partitionInfo = entry._2;
+                resetOffsetsResultByGroup.forEach((group, partitionInfo) -> {
                     Map<TopicPartition, Long> priorOffsets = committedOffsets(topic, group);
-                    Map<TopicPartition, Long> offsets = new HashMap<>();
-                    partitionInfo.foreach(partitionInfoEntry -> {
-                        TopicPartition tp = partitionInfoEntry._1;
-                        OffsetAndMetadata offsetAndMetadata = partitionInfoEntry._2;
-                        if (Objects.equals(tp.topic(), topic))
-                            offsets.put(tp, offsetAndMetadata.offset());
-                        return null;
-                    });
-                    assertEquals(expectedOffsets.get(topic), offsets);
+                    assertEquals(expectedOffsets.get(topic),
+                        partitionInfo.entrySet().stream()
+                            .filter(entry -> Objects.equals(entry.getKey().topic(), topic))
+                            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset())));
                     assertEquals(dryRun ? priorOffsets : expectedOffsets.get(topic), committedOffsets(topic, group));
-                    return null;
                 });
             }
         } finally {
@@ -550,35 +540,22 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     private void resetAndAssertOffsetsCommitted(ConsumerGroupCommand.ConsumerGroupService consumerGroupService,
                                                 Map<TopicPartition, Long> expectedOffsets,
                                                 String topic) {
-        scala.collection.Map<String, scala.collection.Map<TopicPartition, OffsetAndMetadata>> allResetOffsets = consumerGroupService.resetOffsets();
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> allResetOffsets = resetOffsets(consumerGroupService);
 
-        allResetOffsets.foreach(entry -> {
-            String group = entry._1;
-            scala.collection.Map<TopicPartition, OffsetAndMetadata> offsetsInfo = entry._2;
-            offsetsInfo.foreach(offsetInfoEntry -> {
-                TopicPartition tp = offsetInfoEntry._1;
-                OffsetAndMetadata offsetMetadata = offsetInfoEntry._2;
+        allResetOffsets.forEach((group, offsetsInfo) -> {
+            offsetsInfo.forEach((tp, offsetMetadata) -> {
                 assertEquals(offsetMetadata.offset(), expectedOffsets.get(tp));
                 assertEquals(expectedOffsets, committedOffsets(topic, group));
-                return null;
             });
-            return null;
         });
     }
 
-    Map<TopicPartition, Long> toOffsetMap(Option<scala.collection.Map<TopicPartition, OffsetAndMetadata>> map) {
-        assertTrue(map.isDefined());
-        Map<TopicPartition, Long> res = new HashMap<>();
-        map.foreach(m -> {
-            m.foreach(entry -> {
-                TopicPartition tp = entry._1;
-                OffsetAndMetadata offsetAndMetadata = entry._2;
-                res.put(tp, offsetAndMetadata.offset());
-                return null;
-            });
-            return null;
-        });
-        return res;
+    private Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets(ConsumerGroupCommand.ConsumerGroupService consumerGroupService) {
+        return consumerGroupService.resetOffsets();
+    }
+
+    Map<TopicPartition, Long> toOffsetMap(Map<TopicPartition, OffsetAndMetadata> map) {
+        return map.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
     }
 
     private String[] addTo(String[] args, String...extra) {

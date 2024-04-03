@@ -73,6 +73,7 @@ import javax.net.ssl.SSLSession;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -1064,7 +1065,7 @@ public class SslTransportLayerTest {
 
         CertStores newServerCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("localhost").build();
         Map<String, Object> newKeystoreConfigs = newServerCertStores.keyStoreProps();
-        assertTrue(serverChannelBuilder instanceof ListenerReconfigurable, "SslChannelBuilder not reconfigurable");
+        assertInstanceOf(ListenerReconfigurable.class, serverChannelBuilder, "SslChannelBuilder not reconfigurable");
         ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
         assertEquals(listenerName, reconfigurableBuilder.listenerName());
         reconfigurableBuilder.validateReconfiguration(newKeystoreConfigs);
@@ -1192,7 +1193,7 @@ public class SslTransportLayerTest {
         CertStores newClientCertStores = certBuilder(true, "client", args.useInlinePem).addHostName("localhost").build();
         args.sslClientConfigs = args.getTrustingConfig(newClientCertStores, args.serverCertStores);
         Map<String, Object> newTruststoreConfigs = newClientCertStores.trustStoreProps();
-        assertTrue(serverChannelBuilder instanceof ListenerReconfigurable, "SslChannelBuilder not reconfigurable");
+        assertInstanceOf(ListenerReconfigurable.class, serverChannelBuilder, "SslChannelBuilder not reconfigurable");
         ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
         assertEquals(listenerName, reconfigurableBuilder.listenerName());
         reconfigurableBuilder.validateReconfiguration(newTruststoreConfigs);
