@@ -401,6 +401,15 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * Sets protocolName.
+     *
+     * @param protocolName the value to set.
+     */
+    public void setProtocolName(Optional<String> protocolName) {
+        this.protocolName = protocolName;
+    }
+
+    /**
      * @return whether the group is using the consumer protocol.
      */
     public boolean usesConsumerGroupProtocol() {

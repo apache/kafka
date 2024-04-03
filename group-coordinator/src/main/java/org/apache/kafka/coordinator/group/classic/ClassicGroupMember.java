@@ -17,6 +17,8 @@
 
 package org.apache.kafka.coordinator.group.classic;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
@@ -24,7 +26,9 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.utils.Bytes;
 
+import java.nio.ByteBuffer;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -427,6 +431,20 @@ public class ClassicGroupMember {
      */
     public void setIsNew(boolean value) {
         this.isNew = value;
+    }
+
+    /**
+     * @return The consumer protocol version corresponding to the provided protocol.
+     */
+    public short protocolVersion(String protocolName) {
+        for (JoinGroupRequestProtocol protocol : supportedProtocols) {
+            if (protocol.name().equals(protocolName)) {
+                return ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(protocol.metadata()));
+            }
+        }
+
+        throw new IllegalArgumentException("Member does not support protocol " +
+            protocolName);
     }
 
     @Override

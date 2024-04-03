@@ -797,8 +797,6 @@ public class GroupMetadataManager {
             Optional.of(time.milliseconds())
         );
 
-        classicGroup.convertToConsumerGroup(consumerGroup, records, metadataImage.topics());
-
         consumerGroup.members().forEach((memberId, member) ->
             classicGroup.add(
                 new ClassicGroupMember(
@@ -809,13 +807,27 @@ public class GroupMetadataManager {
                     member.rebalanceTimeoutMs(),
                     consumerGroupSessionTimeoutMs,
                     ConsumerProtocol.PROTOCOL_TYPE,
-                    null,
+                    member.supportedJoinGroupRequestProtocols(),
                     null
                 )
             )
         );
+
+        classicGroup.setProtocolName(Optional.of(classicGroup.selectProtocol()));
+        classicGroup.setSubscribedTopics(classicGroup.computeSubscribedTopics());
+
+        Map<String, byte[]> assignments = Collections.emptyMap();
+        classicGroup.allMembers().forEach(classicGroupMember -> {
+            byte[] assignment = consumerGroup.getOrMaybeCreateMember(classicGroupMember.memberId(), false).assignment(
+                classicGroupMember.protocolVersion(classicGroup.protocolName().orElse("")),
+                metadataImage.topics()
+            );
+            classicGroupMember.setAssignment(assignment);
+            assignments.put(classicGroupMember.memberId(), assignment);
+        });
+
         records.add(RecordHelpers.newGroupMetadataRecord(
-            classicGroup, Collections.emptyMap(), metadataImage.features().metadataVersion()));
+            classicGroup, assignments, metadataImage.features().metadataVersion()));
 
         groups.put(consumerGroup.groupId(), classicGroup);
         metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
