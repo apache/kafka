@@ -19,6 +19,10 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Timer;
 
+/**
+ * {@code TimedRequestState} adds to a {@link RequestState} a {@link Timer} with which to keep track
+ * of the request's expiration.
+ */
 public class TimedRequestState extends RequestState {
 
     private final Timer timer;

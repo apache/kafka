@@ -296,10 +296,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     /**
-     * Recreate a {@link Timer} from the event's {@link CompletableApplicationEvent#deadlineMs() deadline/expiration}.
+     * Recreate a {@link Timer} from the event's {@link CompletableApplicationEvent#deadlineMs() deadline}.
      */
     private Timer eventTimer(final CompletableApplicationEvent<?> event) {
-        return time.timer(event.timeoutMs());
+        // Prevent the timer from being negative.
+        long diff = Math.max(0, event.deadlineMs() - time.milliseconds());
+        return time.timer(diff);
     }
 
     /**

@@ -31,7 +31,6 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent impl
 
     private final CompletableFuture<T> future;
     private final long deadlineMs;
-    private final long timeoutMs;
 
     protected CompletableBackgroundEvent(final Type type, final Timer timer) {
         super(type);
@@ -45,8 +44,6 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent impl
             this.deadlineMs = Long.MAX_VALUE;
         else
             this.deadlineMs = currentTimeMs + remainingMs;
-
-        this.timeoutMs = timer.timeoutMs();
     }
 
     @Override
@@ -60,12 +57,7 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent impl
     }
 
     @Override
-    public long timeoutMs() {
-        return timeoutMs;
-    }
-
-    @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", future=" + future + ", deadlineMs=" + deadlineMs + ", timeoutMs=" + timeoutMs;
+        return super.toStringBase() + ", future=" + future + ", deadlineMs=" + deadlineMs;
     }
 }

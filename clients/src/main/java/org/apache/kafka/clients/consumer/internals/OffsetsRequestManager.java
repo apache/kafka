@@ -534,7 +534,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     private CompletableFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> buildOffsetsForLeaderEpochRequestToNode(
             final Node node,
             final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
-            final List<NetworkClientDelegate.UnsentRequest> unsentRequests) {
+            List<NetworkClientDelegate.UnsentRequest> unsentRequests) {
         AbstractRequest.Builder<OffsetsForLeaderEpochRequest> builder =
                 OffsetsForLeaderEpochUtils.prepareRequest(fetchPositions);
 
@@ -579,10 +579,10 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         final OffsetFetcherUtils offsetFetcherUtils;
         final IsolationLevel isolationLevel;
 
-        private ListOffsetsRequestState(final LogContext logContext,
-                                        final long retryBackoffMs,
-                                        final long retryBackoffMaxMs,
-                                        final Timer timer,
+        private ListOffsetsRequestState(LogContext logContext,
+                                        long retryBackoffMs,
+                                        long retryBackoffMaxMs,
+                                        Timer timer,
                                         Map<TopicPartition, Long> timestampsToSearch,
                                         boolean requireTimestamps,
                                         OffsetFetcherUtils offsetFetcherUtils,
