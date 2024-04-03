@@ -100,8 +100,8 @@ class ReplicaAlterLogDirsThread(name: String,
     for (topicPartition <- topicPartitions) {
       // Revert any reassignments for partitions that did not complete the future replica promotion
       val PromotionState(reassignmentState, topicId, originalDir) = this.promotionState(topicPartition)
-      if (reassignmentState.maybeInconsistentMetadata) {
-        directoryEventHandler.handleAssignment(new TopicIdPartition(topicId, topicPartition.partition()), originalDir, () => ())
+      if (originalDir.isDefined && topicId.isDefined && reassignmentState.maybeInconsistentMetadata) {
+        directoryEventHandler.handleAssignment(new TopicIdPartition(topicId.get, topicPartition.partition()), originalDir.get, () => ())
       }
 
       this.promotionStates.remove(topicPartition)
@@ -157,8 +157,8 @@ class ReplicaAlterLogDirsThread(name: String,
       }
       filteredFetchStates.foreach {
         case (topicPartition, state) =>
-          val topicId = state.topicId.get
-          val currentDirectoryId = replicaMgr.getPartitionOrException(topicPartition).logDirectoryId().get
+          val topicId = state.topicId
+          val currentDirectoryId = replicaMgr.getPartitionOrException(topicPartition).logDirectoryId()
           val promotionState = PromotionState(ReassignmentState.None, topicId, currentDirectoryId)
           promotionStates.put(topicPartition, promotionState)
       }
@@ -200,7 +200,7 @@ object ReplicaAlterLogDirsThread {
    * @param topicId           The ID of the topic, which is useful if a reverting the assignment is required
    * @param currentDir        The original directory ID from which the future replica fetches from
    */
-  case class PromotionState(reassignmentState: ReassignmentState, topicId: Uuid, currentDir: Uuid) {
+  case class PromotionState(reassignmentState: ReassignmentState, topicId: Option[Uuid], currentDir: Option[Uuid]) {
     def withAssignment(newDirReassignmentState: ReassignmentState): PromotionState =
       PromotionState(newDirReassignmentState, topicId, currentDir)
   }

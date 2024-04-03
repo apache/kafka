@@ -491,7 +491,7 @@ class ReplicaAlterLogDirsThreadTest {
     val tp = Seq.range(0, 4).map(new TopicPartition("t", _))
     val tips = Seq.range(0, 4).map(new common.TopicIdPartition(topicId, _))
     val dirIds = Seq.range(0, 4).map(i => Uuid.fromString(s"TESTBROKER0000DIR${i}AAAA"))
-    tp.foreach(tp => thread.promotionStates.put(tp, ReplicaAlterLogDirsThread.PromotionState(ReassignmentState.None, topicId, dirIds(tp.partition()))))
+    tp.foreach(tp => thread.promotionStates.put(tp, ReplicaAlterLogDirsThread.PromotionState(ReassignmentState.None, Some(topicId), Some(dirIds(tp.partition())))))
     thread.updateReassignmentState(tp(0), ReassignmentState.None)
     thread.updateReassignmentState(tp(1), ReassignmentState.Queued)
     thread.updateReassignmentState(tp(2), ReassignmentState.Accepted)
