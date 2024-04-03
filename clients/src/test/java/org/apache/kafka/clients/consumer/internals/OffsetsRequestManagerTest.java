@@ -100,7 +100,6 @@ public class OffsetsRequestManagerTest {
     private static final Node LEADER_2 = new Node(0, "host2", 9092);
     private static final IsolationLevel DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_COMMITTED;
     private static final int RETRY_BACKOFF_MS = 500;
-    private static final int RETRY_BACKOFF_MAX_MS = 1000;
     private static final int REQUEST_TIMEOUT_MS = 500;
 
     @BeforeEach
