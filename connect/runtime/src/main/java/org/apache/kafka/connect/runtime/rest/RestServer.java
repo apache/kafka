@@ -159,7 +159,7 @@ public abstract class RestServer {
         ServerConnector connector;
 
         if (PROTOCOL_HTTPS.equals(protocol)) {
-            SslContextFactory ssl;
+            SslContextFactory.Server ssl;
             if (isAdmin) {
                 ssl = SSLUtils.createServerSideSslContextFactory(config, RestServerConfig.ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX);
             } else {

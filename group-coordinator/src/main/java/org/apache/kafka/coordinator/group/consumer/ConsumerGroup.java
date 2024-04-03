@@ -779,7 +779,7 @@ public class ConsumerGroup implements Group {
             newState = ASSIGNING;
         } else {
             for (ConsumerGroupMember member : members.values()) {
-                if (member.targetMemberEpoch() != targetAssignmentEpoch.get() || member.state() != ConsumerGroupMember.MemberState.STABLE) {
+                if (!member.isReconciledTo(targetAssignmentEpoch.get())) {
                     newState = RECONCILING;
                     break;
                 }

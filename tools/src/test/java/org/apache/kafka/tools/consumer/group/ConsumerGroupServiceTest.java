@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.admin.ConsumerGroupCommand;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
@@ -42,12 +41,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatcher;
 import org.mockito.ArgumentMatchers;
-import scala.Option;
-import scala.Some;
-import scala.Tuple2;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
-import scala.collection.immutable.Map$;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,11 +48,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -86,7 +80,7 @@ public class ConsumerGroupServiceTest {
     private final Admin admin = mock(Admin.class);
 
     @Test
-    public void testAdminRequestsForDescribeOffsets() {
+    public void testAdminRequestsForDescribeOffsets() throws Exception {
         String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--group", GROUP, "--describe", "--offsets"};
         ConsumerGroupCommand.ConsumerGroupService groupService = consumerGroupService(args);
 
@@ -97,10 +91,10 @@ public class ConsumerGroupServiceTest {
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
 
-        Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
-        assertEquals(Some.apply("Stable"), statesAndAssignments._1);
-        assertTrue(statesAndAssignments._2.isDefined());
-        assertEquals(TOPIC_PARTITIONS.size(), statesAndAssignments._2.get().size());
+        Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
+        assertEquals(Optional.of("Stable"), statesAndAssignments.getKey());
+        assertTrue(statesAndAssignments.getValue().isPresent());
+        assertEquals(TOPIC_PARTITIONS.size(), statesAndAssignments.getValue().get().size());
 
         verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any());
         verify(admin, times(1)).listConsumerGroupOffsets(ArgumentMatchers.eq(listConsumerGroupOffsetsSpec()), any());
@@ -108,7 +102,7 @@ public class ConsumerGroupServiceTest {
     }
 
     @Test
-    public void testAdminRequestsForDescribeNegativeOffsets() {
+    public void testAdminRequestsForDescribeNegativeOffsets() throws Exception {
         String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--group", GROUP, "--describe", "--offsets"};
         ConsumerGroupCommand.ConsumerGroupService groupService = consumerGroupService(args);
 
@@ -163,27 +157,22 @@ public class ConsumerGroupServiceTest {
                 ArgumentMatchers.argThat(offsetsArgMatcher.apply(assignedTopicPartitions)),
                 any()
         )).thenReturn(new ListOffsetsResult(endOffsets.entrySet().stream().filter(e -> assignedTopicPartitions.contains(e.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
+                .collect(Collectors.toMap(Entry::getKey, Entry::getValue))));
         when(admin.listOffsets(
                 ArgumentMatchers.argThat(offsetsArgMatcher.apply(unassignedTopicPartitions)),
                 any()
         )).thenReturn(new ListOffsetsResult(endOffsets.entrySet().stream().filter(e -> unassignedTopicPartitions.contains(e.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
+                .collect(Collectors.toMap(Entry::getKey, Entry::getValue))));
 
-        Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
-        Option<String> state = statesAndAssignments._1;
-        Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>> assignments = statesAndAssignments._2;
+        Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
+        Optional<String> state = statesAndAssignments.getKey();
+        Optional<Collection<PartitionAssignmentState>> assignments = statesAndAssignments.getValue();
 
-        Map<TopicPartition, Optional<Long>> returnedOffsets = new HashMap<>();
-        assignments.foreach(results -> {
-            results.foreach(assignment -> {
-                returnedOffsets.put(
-                        new TopicPartition(assignment.topic().get(), (Integer) assignment.partition().get()),
-                        assignment.offset().isDefined() ? Optional.of((Long) assignment.offset().get()) : Optional.empty());
-                return null;
-            });
-            return null;
-        });
+        Map<TopicPartition, Optional<Long>> returnedOffsets = assignments.map(results ->
+            results.stream().collect(Collectors.toMap(
+                assignment -> new TopicPartition(assignment.topic.get(), assignment.partition.get()),
+                assignment -> assignment.offset))
+        ).orElse(Collections.emptyMap());
 
         Map<TopicPartition, Optional<Long>> expectedOffsets = new HashMap<>();
 
@@ -194,7 +183,7 @@ public class ConsumerGroupServiceTest {
         expectedOffsets.put(testTopicPartition4, Optional.of(100L));
         expectedOffsets.put(testTopicPartition5, Optional.empty());
 
-        assertEquals(Some.apply("Stable"), state);
+        assertEquals(Optional.of("Stable"), state);
         assertEquals(expectedOffsets, returnedOffsets);
 
         verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any());
@@ -220,9 +209,9 @@ public class ConsumerGroupServiceTest {
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
 
-        scala.collection.Map<String, scala.collection.Map<TopicPartition, OffsetAndMetadata>> resetResult = groupService.resetOffsets();
-        assertEquals(set(Collections.singletonList(GROUP)), resetResult.keySet());
-        assertEquals(set(TOPIC_PARTITIONS), resetResult.get(GROUP).get().keys().toSet());
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> resetResult = groupService.resetOffsets();
+        assertEquals(Collections.singleton(GROUP), resetResult.keySet());
+        assertEquals(new HashSet<>(TOPIC_PARTITIONS), resetResult.get(GROUP).keySet());
 
         verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any());
         verify(admin, times(1)).describeTopics(ArgumentMatchers.eq(topicsWithoutPartitionsSpecified), any());
@@ -230,9 +219,9 @@ public class ConsumerGroupServiceTest {
     }
 
     private ConsumerGroupCommand.ConsumerGroupService consumerGroupService(String[] args) {
-        return new ConsumerGroupCommand.ConsumerGroupService(new kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions(args), Map$.MODULE$.empty()) {
+        return new ConsumerGroupCommand.ConsumerGroupService(ConsumerGroupCommandOptions.fromArgs(args), Collections.emptyMap()) {
             @Override
-            public Admin createAdminClient(scala.collection.Map<String, String> configOverrides) {
+            protected Admin createAdminClient(Map<String, String> configOverrides) {
                 return admin;
             }
         };
@@ -290,10 +279,5 @@ public class ConsumerGroupServiceTest {
 
     private Map<String, ListConsumerGroupOffsetsSpec> listConsumerGroupOffsetsSpec() {
         return Collections.singletonMap(GROUP, new ListConsumerGroupOffsetsSpec());
-    }
-
-    @SuppressWarnings({"deprecation"})
-    private static <T> scala.collection.immutable.Set<T> set(final Collection<T> set) {
-        return JavaConverters.asScalaSet(new HashSet<>(set)).toSet();
     }
 }

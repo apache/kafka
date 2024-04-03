@@ -78,6 +78,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /**
  * Test simple operations on the workers of a Connect cluster.
@@ -860,7 +861,7 @@ public class ConnectWorkerIntegrationTest {
                         return false;
                     } catch (Throwable t) {
                         latestError.set(t);
-                        assertTrue(t instanceof ConnectRestException);
+                        assertInstanceOf(ConnectRestException.class, t);
                         ConnectRestException restException = (ConnectRestException) t;
 
                         assertEquals(INTERNAL_SERVER_ERROR.getStatusCode(), restException.statusCode());

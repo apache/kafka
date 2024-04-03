@@ -159,7 +159,7 @@ versions += [
   // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
   scalafmt: "3.7.14",
   scalaJava8Compat : "1.0.2",
-  scoverage: "1.9.3",
+  scoverage: "2.0.11",
   slf4j: "1.7.36",
   snappy: "1.1.10.5",
   spotbugs: "4.8.0",

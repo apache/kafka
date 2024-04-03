@@ -34,7 +34,7 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class FenceProducersHandlerTest {
     private final LogContext logContext = new LogContext();
@@ -96,7 +96,7 @@ public class FenceProducersHandlerTest {
         assertEquals(mkSet(key), result.failedKeys.keySet());
 
         Throwable throwable = result.failedKeys.get(key);
-        assertTrue(error.exception().getClass().isInstance(throwable));
+        assertInstanceOf(error.exception().getClass(), throwable);
     }
 
     private void assertRetriableError(

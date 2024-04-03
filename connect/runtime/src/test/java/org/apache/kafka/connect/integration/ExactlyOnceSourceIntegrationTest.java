@@ -104,6 +104,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 @Category(IntegrationTest.class)
 public class ExactlyOnceSourceIntegrationTest {
@@ -1078,7 +1079,7 @@ public class ExactlyOnceSourceIntegrationTest {
     @SuppressWarnings("unchecked")
     private static <T> T assertAndCast(Object o, Class<T> klass, String objectDescription) {
         String className = o == null ? "null" : o.getClass().getName();
-        assertTrue(objectDescription + " should be " + klass.getName() + "; was " + className + " instead", klass.isInstance(o));
+        assertInstanceOf(klass, o, objectDescription + " should be " + klass.getName() + "; was " + className + " instead");
         return (T) o;
     }
 

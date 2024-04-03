@@ -27,7 +27,7 @@ import org.junit.Test;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class WindowedSerdesTest {
 
@@ -36,19 +36,19 @@ public class WindowedSerdesTest {
     @Test
     public void shouldWrapForTimeWindowedSerde() {
         final Serde<Windowed<String>> serde = WindowedSerdes.timeWindowedSerdeFrom(String.class, Long.MAX_VALUE);
-        assertTrue(serde.serializer() instanceof TimeWindowedSerializer);
-        assertTrue(serde.deserializer() instanceof TimeWindowedDeserializer);
-        assertTrue(((TimeWindowedSerializer) serde.serializer()).innerSerializer() instanceof StringSerializer);
-        assertTrue(((TimeWindowedDeserializer) serde.deserializer()).innerDeserializer() instanceof StringDeserializer);
+        assertInstanceOf(TimeWindowedSerializer.class, serde.serializer());
+        assertInstanceOf(TimeWindowedDeserializer.class, serde.deserializer());
+        assertInstanceOf(StringSerializer.class, ((TimeWindowedSerializer) serde.serializer()).innerSerializer());
+        assertInstanceOf(StringDeserializer.class, ((TimeWindowedDeserializer) serde.deserializer()).innerDeserializer());
     }
 
     @Test
     public void shouldWrapForSessionWindowedSerde() {
         final Serde<Windowed<String>> serde = WindowedSerdes.sessionWindowedSerdeFrom(String.class);
-        assertTrue(serde.serializer() instanceof SessionWindowedSerializer);
-        assertTrue(serde.deserializer() instanceof SessionWindowedDeserializer);
-        assertTrue(((SessionWindowedSerializer) serde.serializer()).innerSerializer() instanceof StringSerializer);
-        assertTrue(((SessionWindowedDeserializer) serde.deserializer()).innerDeserializer() instanceof StringDeserializer);
+        assertInstanceOf(SessionWindowedSerializer.class, serde.serializer());
+        assertInstanceOf(SessionWindowedDeserializer.class, serde.deserializer());
+        assertInstanceOf(StringSerializer.class, ((SessionWindowedSerializer) serde.serializer()).innerSerializer());
+        assertInstanceOf(StringDeserializer.class, ((SessionWindowedDeserializer) serde.deserializer()).innerDeserializer());
     }
 
     @Test
