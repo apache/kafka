@@ -76,15 +76,12 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     private final ConsumerMetadata metadata;
     private final IsolationLevel isolationLevel;
     private final Logger log;
-    private final LogContext logContext;
     private final OffsetFetcherUtils offsetFetcherUtils;
     private final SubscriptionState subscriptionState;
 
     private final Set<ListOffsetsRequestState> requestsToRetry;
     private final List<NetworkClientDelegate.UnsentRequest> requestsToSend;
     private final int requestTimeoutMs;
-    private final long retryBackoffMs;
-    private final long retryBackoffMaxMs;
     private final Time time;
     private final ApiVersions apiVersions;
     private final NetworkClientDelegate networkClientDelegate;
@@ -96,7 +93,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                                  final IsolationLevel isolationLevel,
                                  final Time time,
                                  final long retryBackoffMs,
-                                 final long retryBackoffMaxMs,
                                  final int requestTimeoutMs,
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
@@ -114,14 +110,11 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         this.metadata = metadata;
         this.isolationLevel = isolationLevel;
         this.log = logContext.logger(getClass());
-        this.logContext = logContext;
         this.requestsToRetry = new HashSet<>();
         this.requestsToSend = new ArrayList<>();
         this.subscriptionState = subscriptionState;
         this.time = time;
         this.requestTimeoutMs = requestTimeoutMs;
-        this.retryBackoffMs = retryBackoffMs;
-        this.retryBackoffMaxMs = retryBackoffMaxMs;
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
         this.backgroundEventHandler = backgroundEventHandler;
@@ -167,9 +160,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         metadata.addTransientTopics(OffsetFetcherUtils.topicsForPartitions(timestampsToSearch.keySet()));
 
         ListOffsetsRequestState listOffsetsRequestState = new ListOffsetsRequestState(
-                logContext,
-                retryBackoffMs,
-                retryBackoffMaxMs,
                 timestampsToSearch,
                 requireTimestamps,
                 offsetFetcherUtils,
@@ -566,7 +556,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         return result;
     }
 
-    private static class ListOffsetsRequestState extends RequestState {
+    private static class ListOffsetsRequestState {
 
         private final Map<TopicPartition, Long> timestampsToSearch;
         private final Map<TopicPartition, ListOffsetData> fetchedOffsets;
@@ -576,19 +566,10 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         final OffsetFetcherUtils offsetFetcherUtils;
         final IsolationLevel isolationLevel;
 
-        private ListOffsetsRequestState(LogContext logContext,
-                                        long retryBackoffMs,
-                                        long retryBackoffMaxMs,
-                                        Map<TopicPartition, Long> timestampsToSearch,
+        private ListOffsetsRequestState(Map<TopicPartition, Long> timestampsToSearch,
                                         boolean requireTimestamps,
                                         OffsetFetcherUtils offsetFetcherUtils,
                                         IsolationLevel isolationLevel) {
-            super(
-                logContext,
-                OffsetsRequestManager.class.getSimpleName(),
-                retryBackoffMs,
-                retryBackoffMaxMs
-            );
             remainingToSearch = new HashMap<>();
             fetchedOffsets = new HashMap<>();
             globalResult = new CompletableFuture<>();
@@ -602,17 +583,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         private void addPartitionsToRetry(Set<TopicPartition> partitionsToRetry) {
             remainingToSearch.putAll(partitionsToRetry.stream()
                     .collect(Collectors.toMap(tp -> tp, timestampsToSearch::get)));
-        }
-
-        @Override
-        public String toStringBase() {
-            return super.toStringBase() +
-                    ", timestampsToSearch=" + timestampsToSearch +
-                    ", fetchedOffsets=" + fetchedOffsets +
-                    ", remainingToSearch=" + remainingToSearch +
-                    ", globalResult=" + globalResult +
-                    ", requireTimestamps=" + requireTimestamps +
-                    ", isolationLevel=" + isolationLevel;
         }
     }
 

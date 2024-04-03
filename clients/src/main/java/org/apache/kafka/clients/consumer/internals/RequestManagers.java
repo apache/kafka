@@ -139,7 +139,6 @@ public class RequestManagers implements Closeable {
                         fetchConfig.isolationLevel,
                         time,
                         retryBackoffMs,
-                        retryBackoffMaxMs,
                         requestTimeoutMs,
                         apiVersions,
                         networkClientDelegate,

@@ -118,7 +118,6 @@ public class OffsetsRequestManagerTest {
                 DEFAULT_ISOLATION_LEVEL,
                 time,
                 RETRY_BACKOFF_MS,
-                RETRY_BACKOFF_MAX_MS,
                 REQUEST_TIMEOUT_MS,
                 apiVersions,
                 mock(NetworkClientDelegate.class),

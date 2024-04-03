@@ -169,7 +169,6 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchConfig.isolationLevel,
                 time,
                 retryBackoffMs,
-                DEFAULT_RETRY_BACKOFF_MAX_MS,
                 requestTimeoutMs,
                 apiVersions,
                 networkClientDelegate,
