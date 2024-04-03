@@ -549,14 +549,16 @@ class AssignmentValidationTest(VerifiableConsumerTest):
     @matrix(
         assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
                              "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-                             "org.apache.kafka.clients.consumer.StickyAssignor"],
+                             "org.apache.kafka.clients.consumer.StickyAssignor",
+                             "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"],
         metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
                              "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-                             "org.apache.kafka.clients.consumer.StickyAssignor"],
+                             "org.apache.kafka.clients.consumer.StickyAssignor",
+                             "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"],
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
         group_protocol=[consumer_group.classic_group_protocol],
@@ -588,3 +590,8 @@ class AssignmentValidationTest(VerifiableConsumerTest):
                 "expected valid assignments of %d partitions when num_started %d: %s" % \
                 (self.NUM_PARTITIONS, num_started, \
                  [(str(node.account), a) for node, a in consumer.current_assignment().items()])
+            wait_until(lambda: self.valid_assignment(self.TOPIC, self.NUM_PARTITIONS, consumer.current_assignment()),
+                timeout_sec=15,
+                err_msg="expected valid assignments of %d partitions when num_started %d: %s" % \
+                        (self.NUM_PARTITIONS, num_started, \
+                         [(str(node.account), a) for node, a in consumer.current_assignment().items()]))
