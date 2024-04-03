@@ -32,6 +32,7 @@ import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClie
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.ApiMessage
@@ -71,6 +72,16 @@ object KafkaRaftManager {
   }
 
   /**
+   * Test if the configured metadata log dir is one of the data log dirs.
+   */
+  def hasDifferentLogDir(config: KafkaConfig): Boolean = {
+    !config
+      .logDirs
+      .map(Paths.get(_).toAbsolutePath)
+      .contains(Paths.get(config.metadataLogDir).toAbsolutePath)
+  }
+
+  /**
    * Obtain the file lock and delete the metadata log directory completely.
    *
    * This is only used by ZK brokers that are in pre-migration or hybrid mode of the ZK to KRaft migration.
@@ -78,24 +89,29 @@ object KafkaRaftManager {
    * it makes recovery from a failed migration much easier. See KAFKA-16463.
    *
    * @param config  The broker config
-   * @return        An error wrapped as an Option, if an error occurred. None otherwise
    */
-  def maybeDeleteMetadataLogDir(config: KafkaConfig): Option[Throwable] = {
+  def maybeDeleteMetadataLogDir(config: KafkaConfig): Unit = {
     // These constraints are enforced in KafkaServer, but repeating them here to guard against future callers
     if (config.processRoles.nonEmpty) {
-      Some(new RuntimeException("Not deleting metadata log dir since this node is in KRaft mode."))
+      throw new RuntimeException("Not deleting metadata log dir since this node is in KRaft mode.")
     } else if (!config.migrationEnabled) {
-      Some(new RuntimeException("Not deleting metadata log dir since migrations are not enabled."))
+      throw new RuntimeException("Not deleting metadata log dir since migrations are not enabled.")
     } else {
       val metadataDir = new File(config.metadataLogDir)
-      val deletionLock = KafkaRaftManager.lockDataDir(metadataDir)
-      try {
-        Utils.delete(metadataDir)
+      val logDirName = UnifiedLog.logDirName(Topic.CLUSTER_METADATA_TOPIC_PARTITION)
+      val metadataPartitionDir = KafkaRaftManager.createLogDirectory(new File(config.metadataLogDir), logDirName)
+      val deletionLock = if (hasDifferentLogDir(config)) {
+        Some(KafkaRaftManager.lockDataDir(metadataDir))
+      } else {
         None
+      }
+
+      try {
+        Utils.delete(metadataPartitionDir)
       } catch {
-        case t: Throwable => Some(t)
+        case t: Throwable => throw new RuntimeException("Failed to delete metadata log", t)
       } finally {
-        deletionLock.destroy()
+        deletionLock.foreach(_.destroy())
       }
     }
   }
@@ -145,10 +161,8 @@ class KafkaRaftManager[T](
 
   private val dataDirLock = {
     // Acquire the log dir lock if the metadata log dir is different from the log dirs
-    val differentMetadataLogDir = !config
-      .logDirs
-      .map(Paths.get(_).toAbsolutePath)
-      .contains(Paths.get(config.metadataLogDir).toAbsolutePath)
+    val differentMetadataLogDir = KafkaRaftManager.hasDifferentLogDir(config)
+
     // Or this node is only a controller
     val isOnlyController = config.processRoles == Set(ProcessRole.ControllerRole)
 

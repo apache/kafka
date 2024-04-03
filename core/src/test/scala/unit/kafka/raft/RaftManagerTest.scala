@@ -31,6 +31,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.ProcessRole
+import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -58,7 +59,7 @@ class RaftManagerTest {
       props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
     }
 
-    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
     props.setProperty(KafkaConfig.BrokerIdProp, nodeId.toString)
     new KafkaConfig(props)
   }
@@ -212,10 +213,13 @@ class RaftManagerTest {
     )
     raftManager.shutdown()
 
-    KafkaRaftManager.maybeDeleteMetadataLogDir(config) match {
-      case Some(err) => fail("Failed to delete metadata log", err)
-      case None => assertFalse(Files.exists(metadataDir.get))
+    try {
+      KafkaRaftManager.maybeDeleteMetadataLogDir(config)
+      assertFalse(Files.exists(metadataDir.get.resolve("__cluster_metadata-0")))
+    } catch {
+      case err: Throwable => fail("Failed to delete metadata log", err)
     }
+    assertTrue(Files.exists(metadataDir.get))
   }
 
   @Test
@@ -232,13 +236,15 @@ class RaftManagerTest {
     raftManager.shutdown()
 
     val config2 = createZkBrokerConfig(migrationEnabled = false, nodeId, logDir, metadataDir)
-    KafkaRaftManager.maybeDeleteMetadataLogDir(config2) match {
-      case Some(err) => {
+    try {
+      KafkaRaftManager.maybeDeleteMetadataLogDir(config2)
+      fail("Should have not deleted the metadata log")
+    } catch {
+      case err: Throwable =>
         assertEquals("Not deleting metadata log dir since migrations are not enabled.", err.getMessage)
-        assertTrue(Files.exists(metadataDir.get))
-      }
-      case None => fail("Should have not deleted the metadata log")
+        assertTrue(Files.exists(metadataDir.get.resolve("__cluster_metadata-0")))
     }
+    assertTrue(Files.exists(metadataDir.get))
   }
 
   @Test
@@ -258,10 +264,13 @@ class RaftManagerTest {
     )
     raftManager.shutdown()
 
-    KafkaRaftManager.maybeDeleteMetadataLogDir(config) match {
-      case Some(_) => assertTrue(Files.exists(metadataDir.get))
-      case None => fail("Should not have deleted metadata log")
+    try {
+      KafkaRaftManager.maybeDeleteMetadataLogDir(config)
+      fail("Should not have deleted metadata log")
+    } catch {
+      case _: Throwable => assertTrue(Files.exists(metadataDir.get.resolve("__cluster_metadata-0")))
     }
+    assertTrue(Files.exists(metadataDir.get))
   }
 
   private def fileLocked(path: Path): Boolean = {
