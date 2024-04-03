@@ -929,7 +929,7 @@ public class AsyncKafkaConsumerTest {
     // with 0 timeout. It should return map with all requested partitions as keys, with null
     // OffsetAndTimestamp as value.
     @Test
-    public void testOffsetsWithZeroTimeout() {
+    public void testBeginningOffsetsWithZeroTimeout() {
         consumer = newConsumer();
         TopicPartition tp = new TopicPartition("topic1", 0);
         Map<TopicPartition, Long> result =
