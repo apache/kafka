@@ -69,9 +69,6 @@ public class ConnectorValidationIntegrationTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(GROUP_ID_CONFIG, WORKER_GROUP_ID);
 
-        // Work around a circular-dependency in TestPlugins.
-        TestPlugins.pluginPath();
-
         // build a Connect cluster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connector-validation-connect-cluster")
