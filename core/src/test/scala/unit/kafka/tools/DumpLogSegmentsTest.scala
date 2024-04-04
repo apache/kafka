@@ -24,15 +24,18 @@ import java.util.Properties
 import kafka.log.{LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.{BrokerTopicStats, KafkaRaftServer}
-import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
+import kafka.tools.DumpLogSegments.{OffsetsMessageParser, TimeIndexDumpErrors}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordVersion, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.group
+import org.apache.kafka.coordinator.group.RecordSerde
+import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue}
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -398,6 +401,120 @@ class DumpLogSegmentsTest {
     assertEquals(partialBatches, partialBatchesCount)
   }
 
+  @Test
+  def testOffsetsMessageParser(): Unit = {
+    val serde = new RecordSerde()
+    val parser = new OffsetsMessageParser()
+
+    def serializedRecord(key: ApiMessageAndVersion, value: ApiMessageAndVersion): Record = {
+      val record = new group.Record(key, value)
+      TestUtils.singletonRecord(key = serde.serializeKey(record), value = serde.serializeValue(record))
+    }
+
+    // The key is mandatory.
+    assertEquals(
+      "Failed to decode message at offset 0 using offset topic decoder (message had a missing key)",
+      assertThrows(
+        classOf[RuntimeException],
+        () => parser.parse(TestUtils.singletonRecord(key = null, value = null))
+      ).getMessage
+    )
+
+    // A valid key and value should work.
+    assertEquals(
+      (
+        Some(
+          new ConsumerGroupMetadataKey()
+            .setGroupId("group")
+            .toString
+        ),
+        Some(
+          new ConsumerGroupMetadataValue()
+            .setEpoch(10)
+            .toString
+        )
+      ),
+      parser.parse(serializedRecord(
+        new ApiMessageAndVersion(
+          new ConsumerGroupMetadataKey()
+            .setGroupId("group"),
+          3.toShort
+        ),
+        new ApiMessageAndVersion(
+          new ConsumerGroupMetadataValue()
+            .setEpoch(10),
+          0.toShort
+        )
+      ))
+    )
+
+    // A valid key with a tombstone should work.
+    assertEquals(
+      (
+        Some(
+          new ConsumerGroupMetadataKey()
+            .setGroupId("group")
+            .toString
+        ),
+        Some(
+          "<DELETE>"
+        )
+      ),
+      parser.parse(serializedRecord(
+        new ApiMessageAndVersion(
+          new ConsumerGroupMetadataKey()
+            .setGroupId("group"),
+          3.toShort
+        ),
+        null
+      ))
+    )
+
+    // An unknown record type should be handled and reported as such.
+    assertEquals(
+      (
+        Some(
+          "Unknown record type 32767 at offset 0, skipping."
+        ),
+        None
+      ),
+      parser.parse(serializedRecord(
+        new ApiMessageAndVersion(
+          new ConsumerGroupMetadataKey()
+            .setGroupId("group"),
+          Short.MaxValue // Invalid record id.
+        ),
+        new ApiMessageAndVersion(
+          new ConsumerGroupMetadataValue()
+            .setEpoch(10),
+          0.toShort
+        )
+      ))
+    )
+
+    // Any parsing error is swallowed and reported.
+    assertEquals(
+      (
+        Some(
+          "Error at offset 0, skipping. Could not read record with version 0 from value's buffer due to: " +
+            "Error reading byte array of 536870911 byte(s): only 1 byte(s) available."
+        ),
+        None
+      ),
+      parser.parse(serializedRecord(
+        new ApiMessageAndVersion(
+          new ConsumerGroupMetadataKey()
+            .setGroupId("group"),
+          3.toShort
+        ),
+        new ApiMessageAndVersion(
+          new ConsumerGroupMemberMetadataValue(), // The value does correspond to the record id.
+          0.toShort
+        )
+      ))
+    )
+  }
+
   private def readBatchMetadata(lines: util.ListIterator[String]): Option[String] = {
     while (lines.hasNext) {
       val line = lines.next()
@@ -531,5 +648,4 @@ class DumpLogSegmentsTest {
       }
     }
   }
-
 }

@@ -19,7 +19,6 @@ package kafka.tools
 
 import java.io._
 import com.fasterxml.jackson.databind.node.{IntNode, JsonNodeFactory, ObjectNode, TextNode}
-import kafka.coordinator.group.GroupMetadataManager
 import kafka.coordinator.transaction.TransactionLog
 import kafka.log._
 import kafka.serializer.Decoder
@@ -30,6 +29,8 @@ import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordT
 import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.group.RecordSerde
+import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.UnknownRecordTypeException
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.snapshot.Snapshots
@@ -398,9 +399,34 @@ object DumpLogSegments {
     }
   }
 
-  private class OffsetsMessageParser extends MessageParser[String, String] {
+  // Package private for testing.
+  class OffsetsMessageParser extends MessageParser[String, String] {
+    private val serde = new RecordSerde()
+
     override def parse(record: Record): (Option[String], Option[String]) = {
-      GroupMetadataManager.formatRecordKeyAndValue(record)
+      if (!record.hasKey)
+        throw new RuntimeException(s"Failed to decode message at offset ${record.offset} using offset " +
+          "topic decoder (message had a missing key)")
+
+      try {
+        val r = serde.deserialize(record.key, record.value)
+        (
+          Some(r.key.message.toString),
+          Option(r.value).map(_.message.toString).orElse(Some("<DELETE>"))
+        )
+      } catch {
+        case e: UnknownRecordTypeException =>
+          (
+            Some(s"Unknown record type ${e.unknownType} at offset ${record.offset}, skipping."),
+            None
+          )
+
+        case e: Throwable =>
+          (
+            Some(s"Error at offset ${record.offset}, skipping. ${e.getMessage}"),
+            None
+          )
+      }
     }
   }
 
