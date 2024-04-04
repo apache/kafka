@@ -2244,7 +2244,7 @@ public class GroupMetadataManager {
                 request.sessionTimeoutMs(),
                 TimeUnit.MILLISECONDS,
                 false,
-                () -> expireClassicGroupMemberHeartbeat(group, newMemberId)
+                () -> expireClassicGroupMemberHeartbeat(group.groupId(), newMemberId)
             );
 
             responseFuture.complete(new JoinGroupResponseData()
@@ -2416,6 +2416,20 @@ public class GroupMetadataManager {
     }
 
     /**
+     * An overload of {@link GroupMetadataManager#completeClassicGroupJoin(ClassicGroup)} used as
+     * timeout operation. It additionally looks up the group by the id and checks the group type.
+     * completeClassicGroupJoin will only be called if the group is CLASSIC.
+     */
+    private CoordinatorResult<Void, Record> completeClassicGroupJoin(String groupId) {
+        if (containsClassicGroup(groupId)) {
+            return completeClassicGroupJoin(getOrMaybeCreateClassicGroup(groupId, false));
+        } else {
+            log.info("Group {} is null or not a classic group, skipping rebalance stage.", groupId);
+            return EMPTY_RESULT;
+        }
+    }
+
+    /**
      * Complete the join group phase. Remove all dynamic members that have not rejoined
      * during this stage and proceed with the next generation for this group. The generation id
      * is incremented and the group transitions to CompletingRebalance state if there is at least
@@ -2451,8 +2465,6 @@ public class GroupMetadataManager {
 
         if (group.isInState(DEAD)) {
             log.info("Group {} is dead, skipping rebalance stage.", groupId);
-        } else if (!containsClassicGroup(group.groupId())) {
-            log.info("Group {} is null or not a classic group, skipping rebalance stage.", groupId);
         } else if (!group.maybeElectNewJoinedLeader() && !group.allMembers().isEmpty()) {
             // If all members are not rejoining, we will postpone the completion
             // of rebalance preparing stage, and send out another delayed operation
@@ -2464,7 +2476,7 @@ public class GroupMetadataManager {
                 group.rebalanceTimeoutMs(),
                 TimeUnit.MILLISECONDS,
                 false,
-                () -> completeClassicGroupJoin(group)
+                () -> completeClassicGroupJoin(group.groupId())
             );
 
             return EMPTY_RESULT;
@@ -2535,49 +2547,52 @@ public class GroupMetadataManager {
             group.rebalanceTimeoutMs(),
             TimeUnit.MILLISECONDS,
             false,
-            () -> expirePendingSync(group, group.generationId()));
+            () -> expirePendingSync(group.groupId(), group.generationId()));
     }
 
     /**
      * Invoked when the heartbeat operation is expired from the timer. Possibly remove the member and
      * try complete the join phase.
      *
-     * @param group     The group.
+     * @param groupId   The group id.
      * @param memberId  The member id.
      *
      * @return The coordinator result that will be appended to the log.
      */
     private CoordinatorResult<Void, Record> expireClassicGroupMemberHeartbeat(
-        ClassicGroup group,
+        String groupId,
         String memberId
     ) {
-        if (group.isInState(DEAD)) {
-            log.info("Received notification of heartbeat expiration for member {} after group {} " +
-                    "had already been unloaded or deleted.",
-                memberId, group.groupId());
-        } else if (!containsClassicGroup(group.groupId())) {
+        if (containsClassicGroup(groupId)) {
+            ClassicGroup group = getOrMaybeCreateClassicGroup(groupId, false);
+            if (group.isInState(DEAD)) {
+                log.info("Received notification of heartbeat expiration for member {} after group {} " +
+                        "had already been unloaded or deleted.",
+                    memberId, group.groupId());
+            } else if (group.isPendingMember(memberId)) {
+                log.info("Pending member {} in group {} has been removed after session timeout expiration.",
+                    memberId, group.groupId());
+
+                return removePendingMemberAndUpdateClassicGroup(group, memberId);
+            } else if (!group.hasMemberId(memberId)) {
+                log.debug("Member {} has already been removed from the group.", memberId);
+            } else {
+                ClassicGroupMember member = group.member(memberId);
+                if (!member.hasSatisfiedHeartbeat()) {
+                    log.info("Member {} in group {} has failed, removing it from the group.",
+                        member.memberId(), group.groupId());
+
+                    return removeMemberAndUpdateClassicGroup(
+                        group,
+                        member,
+                        "removing member " + member.memberId() + " on heartbeat expiration."
+                    );
+                }
+            }
+        } else {
             log.info("Received notification of heartbeat expiration for member {} after group {} " +
                     "had already been deleted or upgraded.",
-                memberId, group.groupId());
-        } else if (group.isPendingMember(memberId)) {
-            log.info("Pending member {} in group {} has been removed after session timeout expiration.",
-                memberId, group.groupId());
-
-            return removePendingMemberAndUpdateClassicGroup(group, memberId);
-        } else if (!group.hasMemberId(memberId)) {
-            log.debug("Member {} has already been removed from the group.", memberId);
-        } else {
-            ClassicGroupMember member = group.member(memberId);
-            if (!member.hasSatisfiedHeartbeat()) {
-                log.info("Member {} in group {} has failed, removing it from the group.",
-                    member.memberId(), group.groupId());
-
-                return removeMemberAndUpdateClassicGroup(
-                    group,
-                    member,
-                    "removing member " + member.memberId() + " on heartbeat expiration."
-                );
-            }
+                memberId, groupId);
         }
         return EMPTY_RESULT;
     }
@@ -2769,7 +2784,7 @@ public class GroupMetadataManager {
                 delayMs,
                 TimeUnit.MILLISECONDS,
                 false,
-                () -> tryCompleteInitialRebalanceElseSchedule(group, delayMs, remainingMs)
+                () -> tryCompleteInitialRebalanceElseSchedule(group.groupId(), delayMs, remainingMs)
             );
         }
 
@@ -2801,7 +2816,7 @@ public class GroupMetadataManager {
                 group.rebalanceTimeoutMs(),
                 TimeUnit.MILLISECONDS,
                 false,
-                () -> completeClassicGroupJoin(group)
+                () -> completeClassicGroupJoin(group.groupId())
             );
             return EMPTY_RESULT;
         }
@@ -2811,33 +2826,36 @@ public class GroupMetadataManager {
      * Try to complete the join phase of the initial rebalance.
      * Otherwise, extend the rebalance.
      *
-     * @param group The group under initial rebalance.
+     * @param groupId The group under initial rebalance.
      *
      * @return The coordinator result that will be appended to the log.
      */
     private CoordinatorResult<Void, Record> tryCompleteInitialRebalanceElseSchedule(
-        ClassicGroup group,
+        String groupId,
         int delayMs,
         int remainingMs
     ) {
-        if (!containsClassicGroup(group.groupId())) {
-            log.info("Group {} is null or not a classic group, skipping the initial rebalance stage.", group.groupId());
-        } else if (group.newMemberAdded() && remainingMs != 0) {
-            // A new member was added. Extend the delay.
-            group.setNewMemberAdded(false);
-            int newDelayMs = Math.min(classicGroupInitialRebalanceDelayMs, remainingMs);
-            int newRemainingMs = Math.max(remainingMs - delayMs, 0);
+        if (containsClassicGroup(groupId)) {
+            ClassicGroup group = getOrMaybeCreateClassicGroup(groupId, false);
+            if (group.newMemberAdded() && remainingMs != 0) {
+                // A new member was added. Extend the delay.
+                group.setNewMemberAdded(false);
+                int newDelayMs = Math.min(classicGroupInitialRebalanceDelayMs, remainingMs);
+                int newRemainingMs = Math.max(remainingMs - delayMs, 0);
 
-            timer.schedule(
-                classicGroupJoinKey(group.groupId()),
-                newDelayMs,
-                TimeUnit.MILLISECONDS,
-                false,
-                () -> tryCompleteInitialRebalanceElseSchedule(group, newDelayMs, newRemainingMs)
-            );
+                timer.schedule(
+                    classicGroupJoinKey(group.groupId()),
+                    newDelayMs,
+                    TimeUnit.MILLISECONDS,
+                    false,
+                    () -> tryCompleteInitialRebalanceElseSchedule(group.groupId(), newDelayMs, newRemainingMs)
+                );
+            } else {
+                // No more time remaining. Complete the join phase.
+                return completeClassicGroupJoin(group);
+            }
         } else {
-            // No more time remaining. Complete the join phase.
-            return completeClassicGroupJoin(group);
+            log.info("Group {} is null or not a classic group, skipping the initial rebalance stage.", groupId);
         }
 
         return EMPTY_RESULT;
@@ -2945,7 +2963,7 @@ public class GroupMetadataManager {
             timeoutMs,
             TimeUnit.MILLISECONDS,
             false,
-            () -> expireClassicGroupMemberHeartbeat(group, member.memberId()));
+            () -> expireClassicGroupMemberHeartbeat(group.groupId(), member.memberId()));
     }
 
     /**
@@ -2962,40 +2980,42 @@ public class GroupMetadataManager {
     /**
      * Expire pending sync.
      *
-     * @param group           The group.
+     * @param groupId         The group id.
      * @param generationId    The generation when the pending sync was originally scheduled.
      *
      * @return The coordinator result that will be appended to the log.
      * */
     private CoordinatorResult<Void, Record> expirePendingSync(
-        ClassicGroup group,
+        String groupId,
         int generationId
     ) {
-        if (!containsClassicGroup(group.groupId())) {
-            log.debug("Received notification of sync expiration for an unknown classic group {}.", group.groupId());
-        } else if (generationId != group.generationId()) {
-            log.error("Received unexpected notification of sync expiration for {} with an old " +
-                "generation {} while the group has {}.", group.groupId(), generationId, group.generationId());
-        } else {
-            if (group.isInState(DEAD) || group.isInState(EMPTY) || group.isInState(PREPARING_REBALANCE)) {
-                log.error("Received unexpected notification of sync expiration after group {} already " +
-                    "transitioned to {} state.", group.groupId(), group.stateAsString());
-            } else if (group.isInState(COMPLETING_REBALANCE) || group.isInState(STABLE)) {
-                if (!group.hasReceivedSyncFromAllMembers()) {
-                    Set<String> pendingSyncMembers = new HashSet<>(group.allPendingSyncMembers());
-                    pendingSyncMembers.forEach(memberId -> {
-                        group.remove(memberId);
-                        timer.cancel(classicGroupHeartbeatKey(group.groupId(), memberId));
-                    });
+        if (containsClassicGroup(groupId)) {
+            ClassicGroup group = getOrMaybeCreateClassicGroup(groupId, false);
+            if (generationId != group.generationId()) {
+                log.error("Received unexpected notification of sync expiration for {} with an old " +
+                    "generation {} while the group has {}.", group.groupId(), generationId, group.generationId());
+            } else {
+                if (group.isInState(DEAD) || group.isInState(EMPTY) || group.isInState(PREPARING_REBALANCE)) {
+                    log.error("Received unexpected notification of sync expiration after group {} already " +
+                        "transitioned to {} state.", group.groupId(), group.stateAsString());
+                } else if (group.isInState(COMPLETING_REBALANCE) || group.isInState(STABLE)) {
+                    if (!group.hasReceivedSyncFromAllMembers()) {
+                        Set<String> pendingSyncMembers = new HashSet<>(group.allPendingSyncMembers());
+                        pendingSyncMembers.forEach(memberId -> {
+                            group.remove(memberId);
+                            timer.cancel(classicGroupHeartbeatKey(group.groupId(), memberId));
+                        });
 
-                    log.debug("Group {} removed members who haven't sent their sync requests: {}",
-                        group.groupId(), pendingSyncMembers);
+                        log.debug("Group {} removed members who haven't sent their sync requests: {}",
+                            group.groupId(), pendingSyncMembers);
 
-                    return prepareRebalance(group, "Removing " + pendingSyncMembers + " on pending sync request expiration");
+                        return prepareRebalance(group, "Removing " + pendingSyncMembers + " on pending sync request expiration");
+                    }
                 }
             }
+        } else {
+            log.debug("Received notification of sync expiration for an unknown classic group {}.", groupId);
         }
-
         return EMPTY_RESULT;
     }
 
