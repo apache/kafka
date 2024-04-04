@@ -109,7 +109,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
         alterConfigWithZk(configs, brokerId, Collections.emptyMap());
     }
 
-    public void alterConfigWithZk(Map<String, String> configs, Optional<String> brokerId, Map<String, String> encoderConfigs) throws Exception {
+    public void alterConfigWithZk(Map<String, String> configs, Optional<String> brokerId, Map<String, String> encoderConfigs) {
         String configStr = Stream.of(configs.entrySet(), encoderConfigs.entrySet())
             .flatMap(Set::stream)
             .map(e -> e.getKey() + "=" + e.getValue())
@@ -128,7 +128,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
         verifyConfig(configs, brokerId);
     }
 
-    void deleteAndVerifyConfig(Set<String> configNames, Optional<String> brokerId) throws Exception {
+    void deleteAndVerifyConfig(Set<String> configNames, Optional<String> brokerId) {
         ConfigCommand.ConfigCommandOptions deleteOpts = new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId), Arrays.asList("--delete-config", String.join(",", configNames))));
         ConfigCommand.alterConfigWithZk(zkClient(), deleteOpts, adminZkClient);
         verifyConfig(Collections.emptyMap(), brokerId);
@@ -177,7 +177,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
         assertFalse(brokerConfigs.contains(KafkaConfig.PasswordEncoderSecretProp()), "Encoder secret stored in ZooKeeper");
         assertEquals("2", brokerConfigs.getProperty("log.cleaner.threads")); // not encoded
         String encodedPassword = brokerConfigs.getProperty("listener.name.external.ssl.keystore.password");
-        PasswordEncoder passwordEncoder = ConfigCommand.createPasswordEncoder(JavaConverters.asScala(encoderConfigs));
+        PasswordEncoder passwordEncoder = ConfigCommand.createPasswordEncoder(JavaConverters.mapAsScalaMap(encoderConfigs));
         assertEquals("secret", passwordEncoder.decode(encodedPassword).value());
         assertEquals(configs.size(), brokerConfigs.size());
 
@@ -192,8 +192,8 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
         alterConfigWithZk(configs2, Optional.of(brokerId), encoderConfigs2);
         Properties brokerConfigs2 = zkClient().getEntityConfigs("brokers", brokerId);
         String encodedPassword2 = brokerConfigs2.getProperty("listener.name.internal.ssl.keystore.password");
-        assertEquals("secret2", ConfigCommand.createPasswordEncoder(JavaConverters.asScala(encoderConfigs)).decode(encodedPassword2).value());
-        assertEquals("secret2", ConfigCommand.createPasswordEncoder(JavaConverters.asScala(encoderConfigs2)).decode(encodedPassword2).value());
+        assertEquals("secret2", ConfigCommand.createPasswordEncoder(JavaConverters.mapAsScalaMap(encoderConfigs)).decode(encodedPassword2).value());
+        assertEquals("secret2", ConfigCommand.createPasswordEncoder(JavaConverters.mapAsScalaMap(encoderConfigs2)).decode(encodedPassword2).value());
 
         // Password config update at default cluster-level should fail
         assertThrows(ConfigException.class, () -> alterConfigWithZk(configs, Optional.empty(), encoderConfigs));
