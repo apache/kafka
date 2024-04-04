@@ -40,12 +40,12 @@ import scala.jdk.CollectionConverters._
 
 class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
-  val topicName = "foo"
-  val topicNameWithCustomConfigs = "foo2"
-  var adminClient: Admin = _
-  val mockTime: Time = new MockTime(1)
-  var version = RecordBatch.MAGIC_VALUE_V2
-  var dataFolder = Seq.empty[String]
+  private val topicName = "foo"
+  private val topicNameWithCustomConfigs = "foo2"
+  private var adminClient: Admin = _
+  private val mockTime: Time = new MockTime(1)
+  private var version = RecordBatch.MAGIC_VALUE_V2
+  private val dataFolder = Seq(tempDir().getAbsolutePath, tempDir().getAbsolutePath)
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -60,7 +60,6 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
   @AfterEach
   override def tearDown(): Unit = {
-    version = RecordBatch.MAGIC_VALUE_V2
     Utils.closeQuietly(adminClient, "ListOffsetsAdminClient")
     super.tearDown()
   }
@@ -76,19 +75,15 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
   def testListVersion0(quorum: String): Unit = {
-    // make sure the data is not deleted after restarting cluster
-    dataFolder = Seq(tempDir().getAbsolutePath, tempDir().getAbsolutePath)
-    try {
-      // create records for version 0
-      createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V0)
-      produceMessagesInSeparateBatch()
+    // create records for version 0
+    createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V0)
+    produceMessagesInSeparateBatch()
 
-      // update version to version 1 to list offset for max timestamp
-      createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V1)
-      // the offset of max timestamp is always -1 if the batch version is 0
-      verifyListOffsets(expectedMaxTimestampOffset = -1)
+    // update version to version 1 to list offset for max timestamp
+    createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V1)
+    // the offset of max timestamp is always -1 if the batch version is 0
+    verifyListOffsets(expectedMaxTimestampOffset = -1)
 
-    } finally dataFolder = Seq.empty
   }
 
 
@@ -236,16 +231,19 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
     // case 1: test the offsets from follower's append path.
     // we make a follower be the new leader to handle the ListOffsetRequest
-    val partitionAssignment = adminClient.describeTopics(java.util.Collections.singletonList(topic))
-      .allTopicNames().get().get(topic).partitions().get(0)
-    val newLeader = brokers.map(_.config.brokerId).find(_ != partitionAssignment.leader().id()).get
+    def leader(): Int = adminClient.describeTopics(java.util.Collections.singletonList(topic))
+      .allTopicNames().get().get(topic).partitions().get(0).leader().id()
+
+    val previousLeader = leader()
+    val newLeader = brokers.map(_.config.brokerId).find(_ != previousLeader).get
+
+    // change the leader to new one
     adminClient.alterPartitionReassignments(java.util.Collections.singletonMap(new TopicPartition(topic, 0),
       Optional.of(new NewPartitionReassignment(java.util.Arrays.asList(newLeader))))).all().get()
+    // wait for all reassignments get completed
     waitForAllReassignmentsToComplete(adminClient)
-    TestUtils.waitUntilTrue(() => newLeader == adminClient.describeTopics(java.util.Collections.singletonList(topic))
-      .allTopicNames().get().get(topic).partitions().get(0).leader().id(), "expected leader: " + newLeader
-      + ", but actual leader: " + adminClient.describeTopics(java.util.Collections.singletonList(topic))
-      .allTopicNames().get().get(topic).partitions().get(0).leader().id())
+    // make sure we are able to see the new leader
+    TestUtils.waitUntilTrue(() => newLeader == leader(), s"expected leader: $newLeader but actual: ${leader()}")
     check()
 
     // case 2: test the offsets from recovery path.
@@ -336,7 +334,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
         props.setProperty("log.message.format.version", "0.10.0")
         props.setProperty("inter.broker.protocol.version", "0.10.0")
       }
-      if (dataFolder.size > index) props.setProperty(KafkaConfig.LogDirProp, dataFolder(index))
+     props.setProperty(KafkaConfig.LogDirProp, dataFolder(index))
       props
     }.map(KafkaConfig.fromProps)
   }

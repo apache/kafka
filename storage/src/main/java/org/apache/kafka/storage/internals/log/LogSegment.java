@@ -484,6 +484,7 @@ public class LogSegment implements Closeable {
                 // The max timestamp is exposed at the batch level, so no need to iterate the records
                 if (batch.maxTimestamp() > maxTimestampSoFar()) {
                     maxTimestampAndOffsetSoFar = new TimestampOffset(batch.maxTimestamp(), batch.lastOffset());
+                    System.out.println("[CHIA] recovery: " + maxTimestampAndOffsetSoFar);
                 }
 
                 // Build offset index
