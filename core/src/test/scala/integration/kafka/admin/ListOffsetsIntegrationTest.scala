@@ -242,7 +242,9 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     adminClient.alterPartitionReassignments(java.util.Collections.singletonMap(new TopicPartition(topic, 0),
       Optional.of(new NewPartitionReassignment(java.util.Arrays.asList(newLeader))))).all().get()
     waitForAllReassignmentsToComplete(adminClient)
-    assertEquals(newLeader, adminClient.describeTopics(java.util.Collections.singletonList(topic))
+    TestUtils.waitUntilTrue(() => newLeader == adminClient.describeTopics(java.util.Collections.singletonList(topic))
+      .allTopicNames().get().get(topic).partitions().get(0).leader().id(), "expected leader: " + newLeader
+      + ", but actual leader: " + adminClient.describeTopics(java.util.Collections.singletonList(topic))
       .allTopicNames().get().get(topic).partitions().get(0).leader().id())
     check()
 
