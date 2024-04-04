@@ -300,6 +300,12 @@ public class ReassignPartitionsUnitTest {
 
             assertEquals(assignments,
                 getReplicaAssignmentForPartitions(adminClient, new HashSet<>(asList(new TopicPartition("foo", 0), new TopicPartition("bar", 0)))));
+
+            assignments.clear();
+
+            UnknownTopicOrPartitionException exception = assertThrows(UnknownTopicOrPartitionException.class,
+                () -> getReplicaAssignmentForPartitions(adminClient, new HashSet<>(asList(new TopicPartition("foo", 0), new TopicPartition("foo", 10)))));
+            assertEquals("Unable to find partition: foo-10", exception.getMessage());
         }
     }
 
