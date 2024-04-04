@@ -9889,6 +9889,8 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(expectedRecords, consumerGroupHeartbeatResult.records());
+        assertTrue(joinResult.joinFuture.isDone());
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), joinResult.joinFuture.get().errorCode());
     }
 
     private static void checkJoinGroupResponse(
