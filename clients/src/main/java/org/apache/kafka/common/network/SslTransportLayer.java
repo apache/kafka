@@ -202,9 +202,9 @@ public class SslTransportLayer implements TransportLayer {
             try {
                 sslEngine.closeInbound();
             } catch (SSLException e) {
-                // This is a debug log because an exception may be raised here frequently due to peers which do not
-                // follow the TLS spec and fail to send a close_notify alert. Even if they do, we currently don't read
-                // data from the socket after close() is invoked.
+                // This log is for debugging purposes as an exception might occur frequently
+                // at this point due to peers not following the TLS specs and failing to send a close_notify alert. 
+                // Even if they do, currently, we do not read data from the socket after invoking close().
                 log.debug("SSLEngine.closeInBound() raised an exception.", e);
             }
             socketChannel.socket().close();
