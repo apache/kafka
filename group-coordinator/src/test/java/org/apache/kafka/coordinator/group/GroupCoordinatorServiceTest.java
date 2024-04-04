@@ -131,7 +131,7 @@ public class GroupCoordinatorServiceTest {
             600000L,
             24 * 60 * 1000L,
             5000,
-            GroupConsumerUpgradePolicy.DISABLED
+            ConsumerGroupMigrationPolicy.DISABLED
         );
     }
 

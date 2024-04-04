@@ -161,7 +161,7 @@ public class GroupMetadataManager {
         private int classicGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
         private int classicGroupMinSessionTimeoutMs;
         private int classicGroupMaxSessionTimeoutMs;
-        private GroupConsumerUpgradePolicy groupConsumerUpgradePolicy;
+        private ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy;
         private GroupCoordinatorMetricsShard metrics;
 
         Builder withLogContext(LogContext logContext) {
@@ -239,8 +239,8 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withGroupProtocolMigrationPolicy(GroupConsumerUpgradePolicy groupConsumerUpgradePolicy) {
-            this.groupConsumerUpgradePolicy = groupConsumerUpgradePolicy;
+        Builder withGroupProtocolMigrationPolicy(ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy) {
+            this.consumerGroupMigrationPolicy = consumerGroupMigrationPolicy;
             return this;
         }
 
@@ -279,7 +279,7 @@ public class GroupMetadataManager {
                 classicGroupNewMemberJoinTimeoutMs,
                 classicGroupMinSessionTimeoutMs,
                 classicGroupMaxSessionTimeoutMs,
-                groupConsumerUpgradePolicy
+                consumerGroupMigrationPolicy
             );
         }
     }
@@ -395,7 +395,7 @@ public class GroupMetadataManager {
     /**
      * The config indicating whether group protocol upgrade/downgrade is allowed.
      */
-    private final GroupConsumerUpgradePolicy groupConsumerUpgradePolicy;
+    private final ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy;
 
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
@@ -414,7 +414,7 @@ public class GroupMetadataManager {
         int classicGroupNewMemberJoinTimeoutMs,
         int classicGroupMinSessionTimeoutMs,
         int classicGroupMaxSessionTimeoutMs,
-        GroupConsumerUpgradePolicy groupConsumerUpgradePolicy
+        ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy
     ) {
         this.logContext = logContext;
         this.log = logContext.logger(GroupMetadataManager.class);
@@ -436,7 +436,7 @@ public class GroupMetadataManager {
         this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
         this.classicGroupMinSessionTimeoutMs = classicGroupMinSessionTimeoutMs;
         this.classicGroupMaxSessionTimeoutMs = classicGroupMaxSessionTimeoutMs;
-        this.groupConsumerUpgradePolicy = groupConsumerUpgradePolicy;
+        this.consumerGroupMigrationPolicy = consumerGroupMigrationPolicy;
     }
 
     /**
@@ -777,7 +777,7 @@ public class GroupMetadataManager {
     }
 
     public boolean validateOnlineDowngrade(ConsumerGroup consumerGroup, String memberId) {
-        return GroupConsumerUpgradePolicy.isDowngradeEnabled(groupConsumerUpgradePolicy) &&
+        return ConsumerGroupMigrationPolicy.isDowngradeEnabled(consumerGroupMigrationPolicy) &&
             consumerGroup.allUseLegacyProtocol(memberId) &&
             consumerGroup.numMembers() > 1 &&
             consumerGroup.numMembers() - 1 <= classicGroupMaxSize;
@@ -846,7 +846,7 @@ public class GroupMetadataManager {
     }
 
     public boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
-        return GroupConsumerUpgradePolicy.isUpgradeEnabled(groupConsumerUpgradePolicy) &&
+        return ConsumerGroupMigrationPolicy.isUpgradeEnabled(consumerGroupMigrationPolicy) &&
             !classicGroup.isInState(DEAD) &&
             ConsumerProtocol.PROTOCOL_TYPE.equals(classicGroup.protocolType().orElse(null)) &&
             classicGroup.size() <= consumerGroupMaxSize;

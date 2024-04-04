@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public enum GroupConsumerUpgradePolicy {
+public enum ConsumerGroupMigrationPolicy {
     /** Both upgrade and downgrade are enabled.*/
     BIDIRECTIONAL("bidirectional"),
 
@@ -38,7 +38,7 @@ public enum GroupConsumerUpgradePolicy {
 
     private final String policy;
 
-    GroupConsumerUpgradePolicy(String config) {
+    ConsumerGroupMigrationPolicy(String config) {
         this.policy = config;
     }
 
@@ -47,25 +47,31 @@ public enum GroupConsumerUpgradePolicy {
         return policy;
     }
 
-    private final static Map<String, GroupConsumerUpgradePolicy> NAME_TO_ENUM = Arrays.stream(values())
+    public static String validValuesDescription =
+        BIDIRECTIONAL   + ": both upgrade from classic group to consumer group and downgrade from consumer group to classic group are enabled" + ", " +
+        UPGRADE         + ": only upgrade is enabled" + ", " +
+        DOWNGRADE       + ": only downgrade is enabled" + ", " +
+        DISABLED        + ": neither upgrade nor downgrade is enabled.";
+
+    private final static Map<String, ConsumerGroupMigrationPolicy> NAME_TO_ENUM = Arrays.stream(values())
         .collect(Collectors.toMap(config -> config.policy.toLowerCase(Locale.ROOT), Function.identity()));
 
     /**
      * Parse a string into the corresponding {@code GroupProtocolMigrationPolicy} enum value, in a case-insensitive manner.
      *
-     * @return The {{@link GroupConsumerUpgradePolicy}} according to the string passed. None is returned if
+     * @return The {{@link ConsumerGroupMigrationPolicy}} according to the string passed. None is returned if
      * the string doesn't correspond to a valid policy.
      */
-    public static GroupConsumerUpgradePolicy parse(String name) {
+    public static ConsumerGroupMigrationPolicy parse(String name) {
         if (name == null) {
             return DISABLED;
         }
-        GroupConsumerUpgradePolicy config = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
+        ConsumerGroupMigrationPolicy config = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
 
         return config == null ? DISABLED : config;
     }
 
-    public static boolean isUpgradeEnabled(GroupConsumerUpgradePolicy policy) {
+    public static boolean isUpgradeEnabled(ConsumerGroupMigrationPolicy policy) {
         switch (policy) {
             case BIDIRECTIONAL:
             case UPGRADE:
@@ -77,7 +83,7 @@ public enum GroupConsumerUpgradePolicy {
         }
     }
 
-    public static boolean isDowngradeEnabled(GroupConsumerUpgradePolicy policy) {
+    public static boolean isDowngradeEnabled(ConsumerGroupMigrationPolicy policy) {
         switch (policy) {
             case BIDIRECTIONAL:
             case DOWNGRADE:
