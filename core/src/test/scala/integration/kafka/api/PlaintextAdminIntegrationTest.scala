@@ -42,6 +42,7 @@ import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{Defaults, ZkConfigs}
@@ -430,8 +431,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFalse(listenerSecurityProtocolMap.isDefault)
     assertFalse(listenerSecurityProtocolMap.isSensitive)
     assertFalse(listenerSecurityProtocolMap.isReadOnly)
-    val truststorePassword = configs.get(brokerResource1).get(KafkaConfig.SslTruststorePasswordProp)
-    assertEquals(KafkaConfig.SslTruststorePasswordProp, truststorePassword.name)
+    val truststorePassword = configs.get(brokerResource1).get(SSL_TRUSTSTORE_PASSWORD_CONFIG)
+    assertEquals(SSL_TRUSTSTORE_PASSWORD_CONFIG, truststorePassword.name)
     assertNull(truststorePassword.value)
     assertFalse(truststorePassword.isDefault)
     assertTrue(truststorePassword.isSensitive)

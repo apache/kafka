@@ -35,6 +35,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.server.config.ConfigType
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -131,7 +132,7 @@ trait SaslSetup {
 
   def kafkaServerSaslProperties(serverSaslMechanisms: Seq[String], interBrokerSaslMechanism: String): Properties = {
     val props = new Properties
-    props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, interBrokerSaslMechanism)
+    props.put(SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, interBrokerSaslMechanism)
     props.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, serverSaslMechanisms.mkString(","))
     props
   }

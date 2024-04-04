@@ -21,6 +21,7 @@ import kafka.utils.TestInfoUtils
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse}
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -39,7 +40,7 @@ class DescribeUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTe
     } else {
       properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[DescribeCredentialsTest.TestAuthorizer].getName)
     }
-    properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
+    properties.put(PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
