@@ -394,7 +394,7 @@ public class TransactionManagerTest {
         transactionManager.beginTransaction();
 
         transactionManager.maybeAddPartition(partition);
-        // In V2, the maybeAddPartition should not add the partition to pending list.
+        // In V2, the maybeAddPartition should not add the partition to the pending list.
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertFalse(transactionManager.isPartitionAdded(partition));
         assertFalse(transactionManager.isPartitionPendingAdd(partition));

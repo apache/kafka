@@ -342,6 +342,7 @@ public enum MetadataVersion {
         }
     }
 
+    // TODO(caliu) use feature version.
     public boolean isTransactionV2Enabled() {
         return this.isAtLeast(IBP_100_1_IV0);
     }

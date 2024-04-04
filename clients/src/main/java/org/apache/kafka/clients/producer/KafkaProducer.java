@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -512,6 +513,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this.sender = sender;
         this.ioThread = ioThread;
         this.clientTelemetryReporter = clientTelemetryReporter;
+    }
+
+    // used in testing
+    public void updateApiVersions(String nodeId, NodeApiVersions nodeApiVersions) {
+        apiVersions.update(nodeId, nodeApiVersions);
     }
 
     // visible for testing

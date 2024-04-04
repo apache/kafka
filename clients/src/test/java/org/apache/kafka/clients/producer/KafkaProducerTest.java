@@ -1535,11 +1535,11 @@ public class KafkaProducerTest {
         client.updateMetadata(initialUpdateResponse);
 
         Node node = metadata.fetch().nodes().get(0);
+        client.setNodeApiVersions(NodeApiVersions.create());
         client.throttle(node, 5000);
 
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
-        client.prepareResponse(addOffsetsToTxnResponse(Errors.NONE));
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
         String groupId = "group";
         client.prepareResponse(request ->
@@ -1550,9 +1550,13 @@ public class KafkaProducerTest {
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
             new StringSerializer(), metadata, client, null, time)) {
+            ((KafkaProducer) producer).updateApiVersions("0", NodeApiVersions.create());
             producer.initTransactions();
             producer.beginTransaction();
-            producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata(groupId));
+            producer.sendOffsetsToTransaction(Collections.singletonMap(
+                new TopicPartition("topic", 0),
+                new OffsetAndMetadata(5L)),
+                new ConsumerGroupMetadata(groupId));
             producer.commitTransaction();
         }
     }
