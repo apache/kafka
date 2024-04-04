@@ -47,6 +47,8 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
+import static kafka.server.SharePartitionManagerTest.RECORD_LOCK_DURATION_MS;
+import static kafka.server.SharePartitionManagerTest.TIMER;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -102,7 +104,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireSingleRecord() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records = memoryRecords(1);
 
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
@@ -125,7 +128,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireMultipleRecords() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records = memoryRecords(5, 10);
 
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
@@ -148,7 +152,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireMultipleRecordsWithOverlapAndNewBatch() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records = memoryRecords(5, 0);
 
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
@@ -176,7 +181,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireSameBatchAgain() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records = memoryRecords(5, 10);
 
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
@@ -214,7 +220,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireWithEmptyFetchRecords() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
             MEMBER_ID,
             new FetchPartitionData(Errors.NONE, 20, 3, MemoryRecords.EMPTY,
@@ -227,7 +234,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeSingleRecordBatch() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records = memoryRecords(1, 0);
 
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
@@ -253,7 +261,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeMultipleRecordBatch() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records = memoryRecords(10, 5);
 
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
@@ -279,7 +288,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeMultipleRecordBatchWithGapOffsets() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(5, 10);
@@ -322,7 +332,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeMultipleSubsetRecordBatchWithGapOffsets() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
@@ -390,7 +401,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeOutOfRangeCachedData() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         // Acknowledge a batch when cache is empty.
         CompletableFuture<Optional<Throwable>> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
@@ -420,7 +432,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeWithAnotherMember() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records = memoryRecords(5, 5);
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
             MEMBER_ID,
@@ -442,7 +455,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeWhenOffsetNotAcquired() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records = memoryRecords(5, 5);
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
             MEMBER_ID,
@@ -493,7 +507,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeRollbackWithFullBatchError() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records1 = memoryRecords(5, 5);
         MemoryRecords records2 = memoryRecords(5, 10);
         MemoryRecords records3 = memoryRecords(5, 15);
@@ -541,7 +556,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeRollbackWithSubsetError() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records1 = memoryRecords(5, 5);
         MemoryRecords records2 = memoryRecords(5, 10);
         MemoryRecords records3 = memoryRecords(5, 15);
@@ -591,7 +607,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireReleasedRecord() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records = memoryRecords(5, 10);
 
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
@@ -637,7 +654,8 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireReleasedRecordMultipleBatches() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         // First fetch request with 5 records starting from offset 10.
         MemoryRecords records1 = memoryRecords(5, 10);
         // Second fetch request with 5 records starting from offset 15.
@@ -794,7 +812,8 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseSingleRecordBatch() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records = memoryRecords(1, 0);
 
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
@@ -818,7 +837,8 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseMultipleRecordBatch() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records = memoryRecords(10, 5);
 
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
@@ -841,7 +861,8 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseMultipleAcknowledgedRecordBatch() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(5, 10);
@@ -897,7 +918,8 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcknowledgedMultipleSubsetRecordBatch() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
@@ -961,7 +983,8 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcquiredRecordsWithAnotherMember() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records1 = memoryRecords(1, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
@@ -1045,7 +1068,8 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcquiredRecordsWithAnotherMemberAndSubsetAcknowledged() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
@@ -1141,7 +1165,8 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcquiredRecordsForEmptyCachedData() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         // Release a batch when cache is empty.
         CompletableFuture<Optional<Throwable>> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertFalse(releaseResult.isCompletedExceptionally());
@@ -1152,7 +1177,8 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcquiredRecordsAfterDifferentAcknowledges() {
-        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5);
+        SharePartition sharePartition = new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 100, 5,
+                RECORD_LOCK_DURATION_MS, TIMER);
         MemoryRecords records = memoryRecords(5, 5);
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
                 MEMBER_ID,

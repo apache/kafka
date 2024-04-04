@@ -180,6 +180,8 @@ public class Defaults {
     public static final int SHARE_GROUP_HEARTBEAT_INTERVAL_MS = 5000;
     public static final int SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS = 5000;
     public static final int SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS = 15000;
+    public static final int SHARE_GROUP_RECORD_LOCK_DURATION_MS = 30000;
+    public static final int SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS = 60000;
 
     /** ********* Offset management configuration *********/
     public static final int OFFSET_METADATA_MAX_SIZE = OffsetConfig.DEFAULT_MAX_METADATA_SIZE;

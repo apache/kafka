@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.storage.internals.log.FetchPartitionData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -173,8 +174,19 @@ public class SharePartition {
      * for the share partition.
      */
     private long nextFetchOffset;
+    /**
+     * The record lock duration is used to limit the duration for which a consumer can acquire a record.
+     * Once this time period is elapsed, the record will be made available or archived depending on the delivery count.
+     */
+    private final int recordLockDurationMs;
+    /**
+     * Timer is used to implement acquisition lock on records that guarantees the movement of records from
+     * acquired to available/archived state upon timeout
+     */
+    private final Timer timer;
 
-    SharePartition(String groupId, TopicIdPartition topicIdPartition, int maxInFlightMessages, int maxDeliveryCount) {
+    SharePartition(String groupId, TopicIdPartition topicIdPartition, int maxInFlightMessages, int maxDeliveryCount,
+                   int recordLockDurationMs, Timer timer) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
         this.maxInFlightMessages = maxInFlightMessages;
@@ -189,6 +201,8 @@ public class SharePartition {
         assert this.maxInFlightMessages > 0;
         assert this.maxDeliveryCount > 0;
         this.fetchLock = new AtomicBoolean(false);
+        this.recordLockDurationMs = recordLockDurationMs;
+        this.timer = timer;
     }
 
     /**
