@@ -400,7 +400,7 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
-        public Builder withGroupProtocolMigrationPolicy(ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy) {
+        public Builder withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy) {
             this.consumerGroupMigrationPolicy = consumerGroupMigrationPolicy;
             return this;
         }

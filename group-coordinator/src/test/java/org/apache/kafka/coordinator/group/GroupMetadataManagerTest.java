@@ -9547,7 +9547,7 @@ public class GroupMetadataManagerTest {
         ));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withGroupProtocolMigrationPolicy(ConsumerGroupMigrationPolicy.UPGRADE)
+            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.UPGRADE)
             .withAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 1)
@@ -9708,7 +9708,7 @@ public class GroupMetadataManagerTest {
         ));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withGroupProtocolMigrationPolicy(ConsumerGroupMigrationPolicy.UPGRADE)
+            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.UPGRADE)
             .withAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
