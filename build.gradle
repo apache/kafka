@@ -305,6 +305,24 @@ subprojects {
           } else {
             apply plugin: 'com.github.johnrengelman.shadow'
             project.shadow.component(mavenJava)
+
+            // Fix for avoiding inclusion of runtime dependencies marked as 'shadow' in MANIFEST Class-Path.
+            // https://github.com/johnrengelman/shadow/issues/324
+            afterEvaluate {
+              pom.withXml { xml ->
+                if (xml.asNode().get('dependencies') == null) {
+                  xml.asNode().appendNode('dependencies')
+                }
+                def dependenciesNode = xml.asNode().get('dependencies').get(0)
+                project.configurations.shadowed.allDependencies.each {
+                  def dependencyNode = dependenciesNode.appendNode('dependency')
+                  dependencyNode.appendNode('groupId', it.group)
+                  dependencyNode.appendNode('artifactId', it.name)
+                  dependencyNode.appendNode('version', it.version)
+                  dependencyNode.appendNode('scope', 'runtime')
+                }
+              }
+            }
           }
 
           afterEvaluate {
@@ -1403,6 +1421,7 @@ project(':clients') {
 
   configurations {
     generator
+    shadowed
   }
 
   dependencies {
@@ -1413,10 +1432,10 @@ project(':clients') {
     implementation libs.opentelemetryProto
 
     // libraries which should be added as runtime dependencies in generated pom.xml should be defined here:
-    shadow libs.zstd
-    shadow libs.lz4
-    shadow libs.snappy
-    shadow libs.slf4jApi
+    shadowed libs.zstd
+    shadowed libs.lz4
+    shadowed libs.snappy
+    shadowed libs.slf4jApi
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
@@ -1469,10 +1488,9 @@ project(':clients') {
 
     // dependencies excluded from the final jar, since they are declared as runtime dependencies
     dependencies {
-      exclude(dependency(libs.snappy))
-      exclude(dependency(libs.zstd))
-      exclude(dependency(libs.lz4))
-      exclude(dependency(libs.slf4jApi))
+      project.configurations.shadowed.allDependencies.each {
+        exclude(dependency(it.group + ':' + it.name + ':' + it.version))
+      }
       // exclude proto files from the jar
       exclude "**/opentelemetry/proto/**/*.proto"
       exclude "**/google/protobuf/*.proto"
