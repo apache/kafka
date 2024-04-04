@@ -9549,7 +9549,7 @@ public class GroupMetadataManagerTest {
         ));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withGroupProtocolMigrationPolicy(GroupConsumerUpgradePolicy.UPGRADE)
+            .withGroupProtocolMigrationPolicy(ConsumerGroupMigrationPolicy.UPGRADE)
             .withAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 1)
@@ -9710,7 +9710,7 @@ public class GroupMetadataManagerTest {
         ));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withGroupProtocolMigrationPolicy(GroupConsumerUpgradePolicy.UPGRADE)
+            .withGroupProtocolMigrationPolicy(ConsumerGroupMigrationPolicy.UPGRADE)
             .withAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)

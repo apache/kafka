@@ -778,7 +778,7 @@ public class GroupMetadataManager {
     }
 
     public boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
-        return GroupConsumerUpgradePolicy.isUpgradeEnabled(groupConsumerUpgradePolicy) &&
+        return ConsumerGroupMigrationPolicy.isUpgradeEnabled(consumerGroupMigrationPolicy) &&
             !classicGroup.isInState(DEAD) &&
             ConsumerProtocol.PROTOCOL_TYPE.equals(classicGroup.protocolType().orElse(null)) &&
             classicGroup.size() <= consumerGroupMaxSize;
