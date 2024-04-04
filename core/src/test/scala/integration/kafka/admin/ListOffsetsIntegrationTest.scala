@@ -243,7 +243,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     // wait for all reassignments get completed
     waitForAllReassignmentsToComplete(adminClient)
     // make sure we are able to see the new leader
-    var lastLeader = leader()
+    var lastLeader = -1
     TestUtils.waitUntilTrue(() => {
       lastLeader = leader()
       lastLeader == newLeader
