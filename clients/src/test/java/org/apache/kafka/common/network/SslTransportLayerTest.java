@@ -69,6 +69,7 @@ import java.util.stream.Stream;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
+import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSession;
 
@@ -79,6 +80,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -1540,6 +1542,7 @@ public class SslTransportLayerTest {
         SelectionKey selectionKey = mock(SelectionKey.class);
         when(socketChannel.socket()).thenReturn(socket);
         when(selectionKey.channel()).thenReturn(socketChannel);
+        doThrow(new SSLException("Mock exception")).when(sslEngine).closeInbound();
         SslTransportLayer sslTransportLayer = new SslTransportLayer(
                 "test-channel",
                 selectionKey,
