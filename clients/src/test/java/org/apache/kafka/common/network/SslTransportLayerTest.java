@@ -48,6 +48,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.SelectionKey;
@@ -81,6 +82,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -1527,5 +1529,30 @@ public class SslTransportLayerTest {
         verify(sslEngine, times(2)).unwrap(netReadBuffer, appReadBuffer);
         assertEquals(SSLEngineResult.Status.OK, result.getStatus());
         assertEquals(SSLEngineResult.HandshakeStatus.NEED_WRAP, result.getHandshakeStatus());
+    }
+
+    @Test
+    public void testSSLEngineCloseInboundInvokedOnClose() throws IOException {
+        // Given
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        Socket socket = mock(Socket.class);
+        SocketChannel socketChannel = mock(SocketChannel.class);
+        SelectionKey selectionKey = mock(SelectionKey.class);
+        when(socketChannel.socket()).thenReturn(socket);
+        when(selectionKey.channel()).thenReturn(socketChannel);
+        SslTransportLayer sslTransportLayer = new SslTransportLayer(
+                "test-channel",
+                selectionKey,
+                sslEngine,
+                mock(ChannelMetadataRegistry.class)
+        );
+
+        // When
+        sslTransportLayer.close();
+
+        // Then
+        verify(sslEngine, times(1)).closeOutbound();
+        verify(sslEngine, times(1)).closeInbound();
+        verifyNoMoreInteractions(sslEngine);
     }
 }
