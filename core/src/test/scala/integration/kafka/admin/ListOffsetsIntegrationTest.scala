@@ -243,7 +243,11 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     // wait for all reassignments get completed
     waitForAllReassignmentsToComplete(adminClient)
     // make sure we are able to see the new leader
-    TestUtils.waitUntilTrue(() => newLeader == leader(), s"expected leader: $newLeader but actual: ${leader()}")
+    var lastLeader = leader()
+    TestUtils.waitUntilTrue(() => {
+      lastLeader = leader()
+      lastLeader == newLeader
+    }, s"expected leader: $newLeader but actual: $lastLeader")
     check()
 
     // case 2: test the offsets from recovery path.
