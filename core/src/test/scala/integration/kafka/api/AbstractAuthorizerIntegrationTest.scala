@@ -13,8 +13,8 @@
 package kafka.api
 
 import kafka.security.authorizer.AclAuthorizer
-import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
+import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
@@ -123,7 +123,7 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
     doSetup(testInfo, createOffsetsTopic = false)
 
     // Allow inter-broker communication
-    addAndVerifyAcls(Set(new AccessControlEntry(brokerPrincipal.toString, WildcardHost, CLUSTER_ACTION, ALLOW)), clusterResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(brokerPrincipal.toString, WILDCARD_HOST, CLUSTER_ACTION, ALLOW)), clusterResource)
 
     createOffsetsTopic(listenerName = interBrokerListenerName)
   }

@@ -97,6 +97,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
@@ -116,6 +117,7 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESU
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupSyncKey;
 import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
@@ -9548,7 +9550,7 @@ public class GroupMetadataManagerTest {
         ));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withGroupProtocolMigrationPolicy(ConsumerGroupMigrationPolicy.UPGRADE)
+            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.UPGRADE)
             .withAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 1)
@@ -9709,7 +9711,7 @@ public class GroupMetadataManagerTest {
         ));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withGroupProtocolMigrationPolicy(ConsumerGroupMigrationPolicy.UPGRADE)
+            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.UPGRADE)
             .withAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
@@ -9823,7 +9825,7 @@ public class GroupMetadataManagerTest {
             .setAssignedPartitions(Collections.emptyMap());
         ConsumerGroupMember expectedMember3 = memberBuilder.build();
         ConsumerGroupMember expectedUpdatedMember3 = memberBuilder
-            .setMemberEpoch(2)
+            .setMemberEpoch(1)
             .setState(MemberState.UNRELEASED_PARTITIONS)
             .build();
 
@@ -9846,9 +9848,6 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember1),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
 
-            // The group epoch is manually bumped. A new rebalance is triggered.
-            RecordHelpers.newGroupEpochRecord(groupId, 1),
-
             // memberId3 joins the new consumer group.
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember3),
 
@@ -9870,7 +9869,7 @@ public class GroupMetadataManagerTest {
             }),
 
             // Newly joining member3 bumps the group epoch. A new target assignment is computed.
-            RecordHelpers.newGroupEpochRecord(groupId, 2),
+            RecordHelpers.newGroupEpochRecord(groupId, 1),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId2, new HashMap<Uuid, Set<Integer>>() {
                 {
                     put(barTopicId, new HashSet<>(Collections.singletonList(0)));
@@ -9886,13 +9885,116 @@ public class GroupMetadataManagerTest {
                     put(fooTopicId, new HashSet<>(Collections.singletonList(1)));
                 }
             }),
-            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 2),
+            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 1),
 
             // member3 has no pending revoking partition. Bump its member epoch and transition to UNRELEASED_PARTITIONS.
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedUpdatedMember3)
         );
 
         assertEquals(expectedRecords, consumerGroupHeartbeatResult.records());
+        assertTrue(joinResult.joinFuture.isDone());
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), joinResult.joinFuture.get().errorCode());
+    }
+  
+    @Test
+    public void testClassicGroupOnUnloadedEmptyAndPreparingRebalance() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        ClassicGroup emptyGroup = context.createClassicGroup("empty-group");
+        assertTrue(emptyGroup.isInState(EMPTY));
+
+        ClassicGroup preparingGroup = context.createClassicGroup("preparing-group");
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("preparing-group")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+
+        // preparing-group should have 2 members.
+        GroupMetadataManagerTestContext.JoinResult joinResult1 = context.sendClassicGroupJoin(request);
+        GroupMetadataManagerTestContext.JoinResult joinResult2 = context.sendClassicGroupJoin(request);
+
+        assertFalse(joinResult1.joinFuture.isDone());
+        assertFalse(joinResult2.joinFuture.isDone());
+        assertTrue(preparingGroup.isInState(PREPARING_REBALANCE));
+        assertEquals(2, preparingGroup.size());
+
+        context.onUnloaded();
+
+        assertTrue(emptyGroup.isInState(DEAD));
+        assertTrue(preparingGroup.isInState(DEAD));
+        assertTrue(joinResult1.joinFuture.isDone());
+        assertTrue(joinResult2.joinFuture.isDone());
+        assertEquals(new JoinGroupResponseData()
+            .setMemberId(joinResult1.joinFuture.get().memberId())
+            .setMembers(Collections.emptyList())
+            .setErrorCode(NOT_COORDINATOR.code()), joinResult1.joinFuture.get());
+
+        assertEquals(new JoinGroupResponseData()
+            .setMemberId(joinResult2.joinFuture.get().memberId())
+            .setMembers(Collections.emptyList())
+            .setErrorCode(NOT_COORDINATOR.code()), joinResult2.joinFuture.get());
+    }
+
+    @Test
+    public void testClassicGroupOnUnloadedCompletingRebalance() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        ClassicGroup group = context.createClassicGroup("group-id");
+
+        // Set up a group in with a leader, follower, and a pending member.
+        // Have the pending member join the group and both the pending member
+        // and the follower sync. We should have 2 members awaiting sync.
+        GroupMetadataManagerTestContext.PendingMemberGroupResult pendingGroupResult = context.setupGroupWithPendingMember(group);
+        String pendingMemberId = pendingGroupResult.pendingMemberResponse.memberId();
+
+        // Compete join group for the pending member
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withMemberId(pendingMemberId)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request);
+
+        assertTrue(joinResult.records.isEmpty());
+        assertTrue(joinResult.joinFuture.isDone());
+        assertEquals(Errors.NONE.code(), joinResult.joinFuture.get().errorCode());
+        assertEquals(3, group.allMembers().size());
+        assertEquals(0, group.numPendingJoinMembers());
+
+        // Follower and pending send SyncGroup request.
+        // Follower and pending member should be awaiting sync while the leader is pending sync.
+        GroupMetadataManagerTestContext.SyncResult followerSyncResult = context.sendClassicGroupSync(
+            new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withMemberId(pendingGroupResult.followerId)
+                .withGenerationId(joinResult.joinFuture.get().generationId())
+                .build());
+
+        GroupMetadataManagerTestContext.SyncResult pendingMemberSyncResult = context.sendClassicGroupSync(
+            new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withMemberId(pendingMemberId)
+                .withGenerationId(joinResult.joinFuture.get().generationId())
+                .build());
+
+        assertFalse(followerSyncResult.syncFuture.isDone());
+        assertFalse(pendingMemberSyncResult.syncFuture.isDone());
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+
+        context.onUnloaded();
+
+        assertTrue(group.isInState(DEAD));
+        assertTrue(followerSyncResult.syncFuture.isDone());
+        assertTrue(pendingMemberSyncResult.syncFuture.isDone());
+        assertEquals(new SyncGroupResponseData()
+            .setAssignment(EMPTY_ASSIGNMENT)
+            .setErrorCode(NOT_COORDINATOR.code()), followerSyncResult.syncFuture.get());
+        assertEquals(new SyncGroupResponseData()
+            .setAssignment(EMPTY_ASSIGNMENT)
+            .setErrorCode(NOT_COORDINATOR.code()), pendingMemberSyncResult.syncFuture.get());
     }
 
     @Test
