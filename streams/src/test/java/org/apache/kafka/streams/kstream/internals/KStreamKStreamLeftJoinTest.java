@@ -58,11 +58,6 @@ public class KStreamKStreamLeftJoinTest {
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final static Properties PROPS = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    @BeforeClass
-    public static void beforeClass() {
-        PROPS.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, 0L);
-    }
-
     @SuppressWarnings("deprecation") // old join semantics; can be removed when `JoinWindows.of()` is removed
     @Test
     public void testLeftJoinWithSpuriousResultFixDisabledOldApi() {
