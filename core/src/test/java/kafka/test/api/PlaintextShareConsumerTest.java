@@ -699,7 +699,6 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"kraft+kip932"})
-    @Disabled // This test remains disabled until the broker releases records automatically when a share session is closed
     public void testConsumerCloseInGroupSequential(String quorum) {
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
         KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
@@ -712,30 +711,33 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
                 props, CollectionConverters.asScala(Collections.<String>emptyList()).toList());
         shareConsumer2.subscribe(Collections.singleton(tp().topic()));
 
-        int totalMessages = 5000;
+        int totalMessages = 3000;
         for (int i = 0; i < totalMessages; i++) {
             producer.send(record);
         }
+        producer.close();
 
         int consumer1MessageCount = 0;
         int consumer2MessageCount = 0;
 
-        for (int i = 0; i < 2; i++) {
-            ConsumerRecords<byte[], byte[]> records1 = shareConsumer1.poll(Duration.ofMillis(5000));
-            consumer1MessageCount += records1.count();
-        }
+        // Poll three times to receive records. The second poll acknowledges the records
+        // from the first poll, and so on. The third poll's records are not acknowledged
+        // because the consumer is closed, which makes the broker release the records fetched.
+        ConsumerRecords<byte[], byte[]> records1 = shareConsumer1.poll(Duration.ofMillis(2000));
+        consumer1MessageCount += records1.count();
+        records1 = shareConsumer1.poll(Duration.ofMillis(2000));
+        consumer1MessageCount += records1.count();
+        shareConsumer1.poll(Duration.ofMillis(2000));
         shareConsumer1.close();
 
-        int maxRetries = 100;
+        int maxRetries = 10;
         int retries = 0;
         while (consumer1MessageCount + consumer2MessageCount < totalMessages && retries < maxRetries) {
-            ConsumerRecords<byte[], byte[]> records2 = shareConsumer2.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records2 = shareConsumer2.poll(Duration.ofMillis(2000));
             consumer2MessageCount += records2.count();
             retries++;
         }
         shareConsumer2.close();
-
-        producer.close();
         assertEquals(totalMessages, consumer1MessageCount + consumer2MessageCount);
     }
 
@@ -804,8 +806,8 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
             for (CompletableFuture<Integer> future : futuresFail) {
                 totalFailResult += future.get();
             }
-            assertEquals(totalMessagesConsumed.get(), producerCount * messagesPerProducer);
-            assertEquals(totalSuccessResult + totalFailResult, producerCount * messagesPerProducer);
+            assertEquals(producerCount * messagesPerProducer, totalMessagesConsumed.get());
+            assertEquals(producerCount * messagesPerProducer, totalSuccessResult + totalFailResult);
         } catch (Exception e) {
             fail("Exception occurred : " + e.getMessage());
         }

@@ -70,6 +70,7 @@ public class ShareCompletedFetch {
     private boolean initialized = false;
     private final List<OffsetAndDeliveryCount> acquiredRecordList;
     private ListIterator<OffsetAndDeliveryCount> acquiredRecordIterator;
+    private OffsetAndDeliveryCount nextAcquired;
 
     ShareCompletedFetch(final LogContext logContext,
                         final BufferSupplier decompressionBufferSupplier,
@@ -83,6 +84,7 @@ public class ShareCompletedFetch {
         this.requestVersion = requestVersion;
         this.batches = ShareFetchResponse.recordsOrFail(partitionData).batches().iterator();
         this.acquiredRecordList = buildAcquiredRecordList(partitionData.acquiredRecords());
+        this.nextAcquired = null;
     }
 
     private List<OffsetAndDeliveryCount> buildAcquiredRecordList(List<ShareFetchResponseData.AcquiredRecords> partitionAcquiredRecords) {
@@ -160,10 +162,11 @@ public class ShareCompletedFetch {
         if (isConsumed)
             return inFlightBatch;
 
-        OffsetAndDeliveryCount nextAcquired = initializeAcquiredRecord();
+        initializeNextAcquired();
 
         try {
-            for (int i = 0; i < maxRecords; i++) {
+            int recordsInBatch = 0;
+            while (recordsInBatch < maxRecords) {
                 lastRecord = nextFetchedRecord(checkCrcs);
                 if (lastRecord == null) {
                     // Any remaining acquired records are gaps
@@ -182,6 +185,7 @@ public class ShareCompletedFetch {
                         ConsumerRecord<K, V> record = parseRecord(deserializers, partition, leaderEpoch,
                                 timestampType, lastRecord, nextAcquired.deliveryCount);
                         inFlightBatch.addRecord(record);
+                        recordsInBatch++;
 
                         nextAcquired = nextAcquiredRecord();
                         break;
@@ -217,16 +221,14 @@ public class ShareCompletedFetch {
         return inFlightBatch;
     }
 
-    private OffsetAndDeliveryCount initializeAcquiredRecord() {
-        if ((acquiredRecordIterator != null) && (acquiredRecordIterator.hasPrevious())) {
-            acquiredRecordIterator.previous();
-            return acquiredRecordIterator.next();
-        } else {
-            acquiredRecordIterator = acquiredRecordList.listIterator();
-            if (acquiredRecordIterator.hasNext()) {
-                return acquiredRecordIterator.next();
+    private void initializeNextAcquired() {
+        if (nextAcquired == null) {
+            if (acquiredRecordIterator == null) {
+                acquiredRecordIterator = acquiredRecordList.listIterator();
             }
-            return null;
+            if (acquiredRecordIterator.hasNext()) {
+                nextAcquired = acquiredRecordIterator.next();
+            }
         }
     }
 
