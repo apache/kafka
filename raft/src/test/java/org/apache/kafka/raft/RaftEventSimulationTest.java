@@ -59,6 +59,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -708,8 +709,8 @@ public class RaftEventSimulationTest {
             nodes.put(nodeId, new PersistentState(nodeId));
         }
 
-        private static RaftConfig.AddressSpec nodeAddress(int id) {
-            return new RaftConfig.InetAddressSpec(new InetSocketAddress("localhost", 9990 + id));
+        private static InetSocketAddress nodeAddress(int id) {
+            return new InetSocketAddress("localhost", 9990 + id);
         }
 
         void start(int nodeId) {
@@ -717,10 +718,18 @@ public class RaftEventSimulationTest {
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter, voters);
             MockMessageQueue messageQueue = new MockMessageQueue();
-            Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
-                .collect(Collectors.toMap(id -> id, Cluster::nodeAddress));
-            RaftConfig raftConfig = new RaftConfig(voterAddressMap, REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
-                    ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS);
+            Map<Integer, InetSocketAddress> voterAddressMap = voters
+                .stream()
+                .collect(Collectors.toMap(Function.identity(), Cluster::nodeAddress));
+
+            RaftConfig raftConfig = new RaftConfig(
+                REQUEST_TIMEOUT_MS,
+                RETRY_BACKOFF_MS,
+                ELECTION_TIMEOUT_MS,
+                ELECTION_JITTER_MS,
+                FETCH_TIMEOUT_MS,
+                LINGER_MS
+            );
             Metrics metrics = new Metrics(time);
 
             persistentState.log.reopen();
@@ -733,14 +742,11 @@ public class RaftEventSimulationTest {
                 channel,
                 messageQueue,
                 persistentState.log,
-                persistentState.store,
                 memoryPool,
                 time,
-                metrics,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
                 clusterId.toString(),
-                OptionalInt.of(nodeId),
                 logContext,
                 random,
                 raftConfig
@@ -757,7 +763,8 @@ public class RaftEventSimulationTest {
                 random,
                 serde
             );
-            node.initialize();
+            node.initialize(voterAddressMap, metrics);
+
             running.put(nodeId, node);
         }
     }
@@ -800,9 +807,14 @@ public class RaftEventSimulationTest {
             this.intSerde = intSerde;
         }
 
-        void initialize() {
-            client.register(this.counter);
-            client.initialize();
+        void initialize(Map<Integer, InetSocketAddress> voterAddresses, Metrics metrics) {
+            client.register(counter);
+            client.initialize(
+                OptionalInt.of(nodeId),
+                voterAddresses,
+                store,
+                metrics
+            );
         }
 
         void poll() {

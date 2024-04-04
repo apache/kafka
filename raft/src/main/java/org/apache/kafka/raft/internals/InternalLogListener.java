@@ -35,7 +35,7 @@ import static org.apache.kafka.raft.KafkaRaftClient.MAX_BATCH_SIZE_BYTES;
 // TODO: File an issue to remove the RecordSerde. The internal listener should just skip data record batches
 // TODO: Document this class and methods
 // TODO: Add unnitest for it
-final class InternalLogListener {
+final public class InternalLogListener {
     private final ReplicatedLog log;
     private final RecordSerde<?> serde;
     private final BufferSupplier bufferSupplier;
@@ -45,7 +45,7 @@ final class InternalLogListener {
 
     private long nextOffset = 0;
 
-    InternalLogListener(
+    public InternalLogListener(
         Optional<VoterSet> staticVoterSet,
         ReplicatedLog log,
         RecordSerde<?> serde,

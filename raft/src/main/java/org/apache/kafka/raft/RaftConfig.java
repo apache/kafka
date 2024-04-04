@@ -29,11 +29,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * RaftConfig encapsulates configuration specific to the Raft quorum voter nodes.
+ * RaftConfig encapsulates configuration specific to the cluster metadata KRaft voter nodes.
  * Specifically, this class parses the voter node endpoints into an AddressSpec
  * for use with the KafkaRaftClient/KafkaNetworkChannel.
  *
@@ -98,7 +97,6 @@ public class RaftConfig {
     private final int electionBackoffMaxMs;
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
-    private final Map<Integer, AddressSpec> voterConnections;
 
     public interface AddressSpec {
     }
@@ -139,17 +137,17 @@ public class RaftConfig {
     }
 
     public RaftConfig(AbstractConfig abstractConfig) {
-        this(parseVoterConnections(abstractConfig.getList(QUORUM_VOTERS_CONFIG)),
+        this(
             abstractConfig.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG),
             abstractConfig.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG),
             abstractConfig.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG),
             abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG),
             abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG));
+            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG)
+        );
     }
 
     public RaftConfig(
-        Map<Integer, AddressSpec> voterConnections,
         int requestTimeoutMs,
         int retryBackoffMs,
         int electionTimeoutMs,
@@ -157,7 +155,6 @@ public class RaftConfig {
         int fetchTimeoutMs,
         int appendLingerMs
     ) {
-        this.voterConnections = voterConnections;
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
         this.electionTimeoutMs = electionTimeoutMs;
@@ -188,14 +185,6 @@ public class RaftConfig {
 
     public int appendLingerMs() {
         return appendLingerMs;
-    }
-
-    public Set<Integer> quorumVoterIds() {
-        return quorumVoterConnections().keySet();
-    }
-
-    public Map<Integer, AddressSpec> quorumVoterConnections() {
-        return voterConnections;
     }
 
     private static Integer parseVoterId(String idString) {

@@ -137,20 +137,7 @@ class KafkaRaftManager[T](
   private val clientDriver = new KafkaRaftClientDriver[T](client, threadNamePrefix, fatalFaultHandler, logContext)
 
   def startup(): Unit = {
-    // Update the voter endpoints (if valid) with what's in RaftConfig
-    val voterAddresses: util.Map[Integer, AddressSpec] = controllerQuorumVotersFuture.get()
-    for (voterAddressEntry <- voterAddresses.entrySet.asScala) {
-      voterAddressEntry.getValue match {
-        case spec: InetAddressSpec =>
-          netChannel.updateEndpoint(voterAddressEntry.getKey, spec)
-        case _: UnknownAddressSpec =>
-          info(s"Skipping channel update for destination ID: ${voterAddressEntry.getKey} " +
-            s"because of non-routable endpoint: ${NON_ROUTABLE_ADDRESS.toString}")
-        case invalid: AddressSpec =>
-          warn(s"Unexpected address spec (type: ${invalid.getClass}) for channel update for " +
-            s"destination ID: ${voterAddressEntry.getKey}")
-      }
-    }
+    client.initialize(controllerQuorumVotersFuture.get())
     netChannel.start()
     clientDriver.start()
   }
@@ -196,7 +183,6 @@ class KafkaRaftManager[T](
       nodeId,
       raftConfig
     )
-    client.initialize()
     client
   }
 

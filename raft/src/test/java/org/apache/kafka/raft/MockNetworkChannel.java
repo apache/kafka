@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -57,7 +58,7 @@ public class MockNetworkChannel implements NetworkChannel {
     }
 
     @Override
-    public void updateEndpoint(int id, RaftConfig.InetAddressSpec address) {
+    public void updateEndpoint(int id, InetSocketAddress address) {
         // empty
     }
 
