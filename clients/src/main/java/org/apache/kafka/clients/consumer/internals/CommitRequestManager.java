@@ -364,8 +364,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             log.debug("Skipping commit of empty offsets");
             return CompletableFuture.completedFuture(null);
         }
-        Timer timer = time.timer(Long.MAX_VALUE);
-        OffsetCommitRequestState commitRequest = createOffsetCommitRequest(offsets, timer);
+        OffsetCommitRequestState commitRequest = createOffsetCommitRequest(offsets, time.timer(Long.MAX_VALUE));
         pendingRequests.addOffsetCommitRequest(commitRequest);
 
         CompletableFuture<Void> asyncCommitResult = new CompletableFuture<>();
@@ -822,8 +821,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             );
             request.whenComplete(
                 (response, throwable) -> {
-                    long requestCompletionTimeMs = request.handler().completionTimeMs();
-                    handleClientResponse(response, throwable, requestCompletionTimeMs);
+                    long currentTimeMs = request.handler().completionTimeMs();
+                    handleClientResponse(response, throwable, currentTimeMs);
                 });
             return request;
         }

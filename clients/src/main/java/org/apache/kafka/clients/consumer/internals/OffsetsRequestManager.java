@@ -530,8 +530,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
                 builder,
                 Optional.ofNullable(node),
-                time.timer(requestTimeoutMs)
-        );
+                time.timer(requestTimeoutMs));
         unsentRequests.add(unsentRequest);
         CompletableFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> result = new CompletableFuture<>();
         unsentRequest.whenComplete((response, error) -> {
