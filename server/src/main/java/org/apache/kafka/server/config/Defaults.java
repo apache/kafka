@@ -18,7 +18,7 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.GroupConsumerUpgradePolicy;
+import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslClientAuth;
@@ -152,7 +152,7 @@ public class Defaults {
         UniformAssignor.class.getName(),
         RangeAssignor.class.getName()
     );
-    public static final String GROUP_CONSUMER_UPGRADE_POLICY = GroupConsumerUpgradePolicy.DISABLED.toString();
+    public static final String CONSUMER_GROUP_MIGRATION_POLICY = ConsumerGroupMigrationPolicy.DISABLED.toString();
 
     /** ********* Offset management configuration *********/
     public static final int OFFSET_METADATA_MAX_SIZE = OffsetConfig.DEFAULT_MAX_METADATA_SIZE;
