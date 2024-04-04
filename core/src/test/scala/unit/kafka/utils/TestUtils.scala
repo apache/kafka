@@ -67,7 +67,7 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, Enve
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
-import org.apache.kafka.common.utils.Utils._
+import org.apache.kafka.common.utils.Utils.formatAddress
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.metadata.properties.MetaProperties
@@ -359,8 +359,8 @@ object TestUtils extends Logging {
       // controllerQuorumVotersFuture instead.
       props.put(KafkaConfig.QuorumVotersProp, "1000@localhost:0")
     } else {
-      props.put(ZkConfigs.ZK_CONNECT_PROP, zkConnect)
-      props.put(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_PROP, "10000")
+      props.put(ZkConfigs.ZK_CONNECT_CONFIG, zkConnect)
+      props.put(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG, "10000")
     }
     props.put(KafkaConfig.ReplicaSocketTimeoutMsProp, "1500")
     props.put(KafkaConfig.ControllerSocketTimeoutMsProp, "1500")
