@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -65,6 +66,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -105,6 +107,7 @@ public class ShareFetchRequestManagerTest {
     private final String topicName = "test";
     private final String groupId = "test-group";
     private final Uuid topicId = Uuid.randomUuid();
+    private final Uuid topicId2 = Uuid.randomUuid();
     private final Map<String, Uuid> topicIds = new HashMap<String, Uuid>() {
         {
             put(topicName, topicId);
@@ -112,6 +115,8 @@ public class ShareFetchRequestManagerTest {
     };
     private final TopicPartition tp0 = new TopicPartition(topicName, 0);
     private final TopicIdPartition tip0 = new TopicIdPartition(topicId, tp0);
+    private final TopicPartition tp1 = new TopicPartition(topicName + "-2", 1);
+    private final TopicIdPartition tip1 = new TopicIdPartition(topicId2, tp1);
     private final int validLeaderEpoch = 0;
     private final MetadataResponse initialUpdateResponse =
             RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 4), topicIds);
@@ -201,8 +206,91 @@ public class ShareFetchRequestManagerTest {
         assertTrue(partitionRecords.containsKey(tp0));
 
         // As only 1 record was acquired, we must fetch only 1 record.
-        List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp0);
-        assertEquals(1, records.size());
+        List<ConsumerRecord<byte[], byte[]>> fetchedRecords = partitionRecords.get(tp0);
+        assertEquals(1, fetchedRecords.size());
+    }
+
+    @Test
+    public void testMultipleFetches() {
+        buildFetcher();
+
+        assignFromSubscribed(Collections.singleton(tp0));
+
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records,
+                ShareCompletedFetchTest.acquiredRecords(1L, 1), Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
+        assertTrue(partitionRecords.containsKey(tp0));
+
+        // As only 1 record was acquired, we must fetch only 1 record.
+        List<ConsumerRecord<byte[], byte[]>> fetchedRecords = partitionRecords.get(tp0);
+        assertEquals(1, fetchedRecords.size());
+
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        fetcher.shareFetchBuffer.acknowledgementsReadyToSend(Collections.singletonMap(tip0, acknowledgements));
+
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records,
+                ShareCompletedFetchTest.acquiredRecords(2L, 1), Errors.NONE, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        partitionRecords = fetchRecords();
+        assertTrue(partitionRecords.containsKey(tp0));
+        assertEquals(Collections.singletonMap(tip0, acknowledgements), fetcher.shareFetchBuffer.getCompletedAcknowledgements());
+
+        Acknowledgements acknowledgements2 = Acknowledgements.empty();
+        acknowledgements2.add(2L, AcknowledgeType.REJECT);
+        fetcher.shareFetchBuffer.acknowledgementsReadyToSend(Collections.singletonMap(tip0, acknowledgements2));
+
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records,
+                Collections.emptyList(), Errors.NONE, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        partitionRecords = fetchRecords();
+        assertTrue(partitionRecords.isEmpty());
+        assertEquals(Collections.singletonMap(tip0, acknowledgements2), fetcher.shareFetchBuffer.getCompletedAcknowledgements());
+    }
+
+    @Test
+    public void testMultipleTopicsFetch() {
+        buildFetcher();
+        Set<TopicPartition> partitions = new HashSet<>();
+        partitions.add(tp0);
+        partitions.add(tp1);
+
+        assignFromSubscribed(partitions);
+
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
+        partitionDataMap.put(tip0, partitionData(tip0, records, acquiredRecords, Errors.NONE, Errors.NONE));
+        partitionDataMap.put(tip1, partitionData(tip1, records, acquiredRecords, Errors.TOPIC_AUTHORIZATION_FAILED, Errors.NONE));
+        client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, partitionDataMap, Collections.emptyList()));
+
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        ShareFetch<Object, Object> shareFetch = collectFetch();
+        assertEquals(1, shareFetch.records().size());
+        // The first topic-partition is fetched successfully and returns all the records.
+        assertEquals(3, shareFetch.records().get(tp0).size());
+        // As the second topic failed authorization, we do not get the records in the ShareFetch.
+        assertThrows(NullPointerException.class, (Executable) shareFetch.records().get(tp1));
     }
 
     @Test
@@ -514,13 +602,30 @@ public class ShareFetchRequestManagerTest {
                                                  MemoryRecords records,
                                                  List<ShareFetchResponseData.AcquiredRecords> acquiredRecords,
                                                  Errors error) {
+        return fullFetchResponse(tp, records, acquiredRecords, error, Errors.NONE);
+    }
+
+    private ShareFetchResponse fullFetchResponse(TopicIdPartition tp,
+                                                                    MemoryRecords records,
+                                                                    List<ShareFetchResponseData.AcquiredRecords> acquiredRecords,
+                                                                    Errors error,
+                                                                    Errors acknowledgeError) {
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitions = Collections.singletonMap(tp,
-                new ShareFetchResponseData.PartitionData()
-                        .setPartitionIndex(tp.topicPartition().partition())
-                        .setErrorCode(error.code())
-                        .setRecords(records)
-                        .setAcquiredRecords(acquiredRecords));
+               partitionData(tp, records, acquiredRecords, error, acknowledgeError));
         return ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
+    }
+
+    private ShareFetchResponseData.PartitionData partitionData(TopicIdPartition tp,
+                                                               MemoryRecords records,
+                                                               List<ShareFetchResponseData.AcquiredRecords> acquiredRecords,
+                                                               Errors error,
+                                                               Errors acknowledgeError) {
+        return new ShareFetchResponseData.PartitionData()
+                    .setPartitionIndex(tp.topicPartition().partition())
+                    .setErrorCode(error.code())
+                    .setAcknowledgeErrorCode(acknowledgeError.code())
+                    .setRecords(records)
+                    .setAcquiredRecords(acquiredRecords);
     }
 
     /**
