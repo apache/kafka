@@ -22,6 +22,7 @@ import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
+import org.apache.commons.io.FileUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
@@ -1405,7 +1406,7 @@ class KRaftClusterTest {
   }
 
   @Test
-  def testAbandonedFutureReplicaRecovered(): Unit = {
+  def testAbandonedFutureReplicaRecovered_mainReplicaInOfflineLogDir(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
@@ -1437,7 +1438,9 @@ class KRaftClusterTest {
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
 
-        // Modify foo-0 so that it refers to a future replica
+        // Modify foo-0 so that it refers to a future replica.
+        // This has the same effect as the main replica being in an offline
+        // log dir and the broker crashing just at the time of promotion
         val log = broker0.logManager.getLog(foo0).get
         log.renameDir(UnifiedLog.logFutureDirName(foo0), shouldReinitialize = false)
 
@@ -1448,6 +1451,76 @@ class KRaftClusterTest {
           assertTrue(info.isDefined)
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
           assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
+        }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testAbandonedFutureReplicaRecovered_mainReplicaInOnlineLogDir(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
+        setNumBrokerNodes(3).
+        setNumControllerNodes(1).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val broker0 = cluster.brokers().get(0)
+        val broker1 = cluster.brokers().get(1)
+        val foo0 = new TopicPartition("foo", 0)
+
+        admin.createTopics(Arrays.asList(
+          new NewTopic("foo", 3, 3.toShort))).all().get()
+
+        // Wait until foo-0 is created on broker0.
+        TestUtils.retry(60000) {
+          assertTrue(broker0.logManager.getLog(foo0).isDefined)
+        }
+
+        // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
+        broker0.shutdown()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          assertTrue(info.isDefined)
+          assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
+        }
+
+        val log = broker0.logManager.getLog(foo0).get
+
+        // Copy foo-0 to another log dir
+        val parentDir = log.parentDir
+        var targetParentDir = parentDir.substring(0, parentDir.length - 1)
+        if (parentDir.endsWith("0")) {
+          targetParentDir += "1"
+        } else {
+          targetParentDir += "0"
+        }
+        val targetDirFile = new File(targetParentDir, log.dir.getName)
+        FileUtils.copyDirectory(log.dir, targetDirFile)
+        assertTrue(targetDirFile.exists())
+
+        // Rename log to a future
+        val originalLogFile = log.dir
+        log.renameDir(UnifiedLog.logFutureDirName(foo0), shouldReinitialize = false)
+        assertFalse(originalLogFile.exists())
+
+        // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
+        broker0.startup()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          assertTrue(info.isDefined)
+          assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
+          assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
+          assertFalse(targetDirFile.exists())
+          assertTrue(originalLogFile.exists())
         }
       } finally {
         admin.close()
