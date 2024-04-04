@@ -507,6 +507,15 @@ public class GroupMetadataManagerTestContext {
     public CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupHeartbeat(
         ConsumerGroupHeartbeatRequestData request
     ) {
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = consumerGroupHeartbeatWithoutReplay(request);
+
+        result.records().forEach(this::replay);
+        return result;
+    }
+
+    public CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupHeartbeatWithoutReplay(
+        ConsumerGroupHeartbeatRequestData request
+    ) {
         RequestContext context = new RequestContext(
             new RequestHeader(
                 ApiKeys.CONSUMER_GROUP_HEARTBEAT,
@@ -523,13 +532,10 @@ public class GroupMetadataManagerTestContext {
             false
         );
 
-        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = groupMetadataManager.consumerGroupHeartbeat(
+        return groupMetadataManager.consumerGroupHeartbeat(
             context,
             request
         );
-
-        result.records().forEach(this::replay);
-        return result;
     }
 
     public List<MockCoordinatorTimer.ExpiredTimeout<Void, Record>> sleep(long ms) {

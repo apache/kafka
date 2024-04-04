@@ -779,10 +779,11 @@ public class GroupMetadataManager {
     public boolean validateOnlineDowngrade(ConsumerGroup consumerGroup, String memberId) {
         return GroupConsumerUpgradePolicy.isDowngradeEnabled(groupConsumerUpgradePolicy) &&
             consumerGroup.allUseLegacyProtocol(memberId) &&
+            consumerGroup.numMembers() > 1 &&
             consumerGroup.numMembers() - 1 <= classicGroupMaxSize;
     }
 
-    public void convertToClassicGroup(ConsumerGroup consumerGroup, List<Record> records) {
+    public CompletableFuture<Void> convertToClassicGroup(ConsumerGroup consumerGroup, String leavingMemberId, List<Record> records) {
         createGroupTombstoneRecords(consumerGroup, records);
         ClassicGroup classicGroup = new ClassicGroup(
             logContext,
@@ -797,26 +798,28 @@ public class GroupMetadataManager {
             Optional.of(time.milliseconds())
         );
 
-        consumerGroup.members().forEach((memberId, member) ->
-            classicGroup.add(
-                new ClassicGroupMember(
-                    memberId,
-                    Optional.ofNullable(member.instanceId()),
-                    member.clientId(),
-                    member.clientHost(),
-                    member.rebalanceTimeoutMs(),
-                    consumerGroupSessionTimeoutMs,
-                    ConsumerProtocol.PROTOCOL_TYPE,
-                    member.supportedJoinGroupRequestProtocols(),
-                    null
-                )
-            )
-        );
+        consumerGroup.members().forEach((memberId, member) -> {
+            if (!memberId.equals(leavingMemberId)) {
+                classicGroup.add(
+                    new ClassicGroupMember(
+                        memberId,
+                        Optional.ofNullable(member.instanceId()),
+                        member.clientId(),
+                        member.clientHost(),
+                        member.rebalanceTimeoutMs(),
+                        consumerGroupSessionTimeoutMs,
+                        ConsumerProtocol.PROTOCOL_TYPE,
+                        member.supportedJoinGroupRequestProtocols(),
+                        null
+                    )
+                );
+            }
+        });
 
         classicGroup.setProtocolName(Optional.of(classicGroup.selectProtocol()));
         classicGroup.setSubscribedTopics(classicGroup.computeSubscribedTopics());
 
-        Map<String, byte[]> assignments = Collections.emptyMap();
+        Map<String, byte[]> assignments = new HashMap<>();
         classicGroup.allMembers().forEach(classicGroupMember -> {
             byte[] assignment = consumerGroup.getOrMaybeCreateMember(classicGroupMember.memberId(), false).assignment(
                 classicGroupMember.protocolVersion(classicGroup.protocolName().orElse("")),
@@ -831,7 +834,15 @@ public class GroupMetadataManager {
 
         groups.put(consumerGroup.groupId(), classicGroup);
         metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
-        prepareRebalance(classicGroup, "Protocol downgrade.");
+
+        CompletableFuture<Void> appendFuture = new CompletableFuture<>();
+        appendFuture.whenComplete((__, t) -> {
+            if (t == null) {
+                classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
+                prepareRebalance(classicGroup, "Protocol downgrade.");
+            }
+        });
+        return appendFuture;
     }
 
     public boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
@@ -1434,11 +1445,12 @@ public class GroupMetadataManager {
     ) throws ApiException {
         ConsumerGroup group = consumerGroup(groupId);
         List<Record> records;
+        CompletableFuture<Void> appendFuture = null;
         if (instanceId == null) {
             ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
             log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
             records = consumerGroupFenceMember(group, member);
-            if (validateOnlineDowngrade(group, memberId)) convertToClassicGroup(group, records);
+            if (validateOnlineDowngrade(group, memberId)) appendFuture = convertToClassicGroup(group, memberId, records);
         } else {
             ConsumerGroupMember member = group.staticMember(instanceId);
             throwIfStaticMemberIsUnknown(member, instanceId);
@@ -1451,12 +1463,16 @@ public class GroupMetadataManager {
                 log.info("[GroupId {}] Static Member {} with instance id {} left the consumer group.",
                     group.groupId(), memberId, instanceId);
                 records = consumerGroupFenceMember(group, member);
-                if (validateOnlineDowngrade(group, memberId)) convertToClassicGroup(group, records);
+                if (validateOnlineDowngrade(group, memberId)) appendFuture = convertToClassicGroup(group, memberId, records);
             }
         }
-        return new CoordinatorResult<>(records, new ConsumerGroupHeartbeatResponseData()
-            .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch));
+        return new CoordinatorResult<>(
+            records,
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(memberEpoch),
+            appendFuture
+        );
     }
 
     /**
@@ -1563,9 +1579,10 @@ public class GroupMetadataManager {
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
                 log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
                     groupId, memberId);
+                CompletableFuture<Void> appendFuture = null;
                 List<Record> records = consumerGroupFenceMember(group, member);
-                if (validateOnlineDowngrade(group, memberId)) convertToClassicGroup(group, records);
-                return new CoordinatorResult<>(records);
+                if (validateOnlineDowngrade(group, memberId)) appendFuture = convertToClassicGroup(group, memberId, records);
+                return new CoordinatorResult<>(records, appendFuture);
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
@@ -1615,9 +1632,10 @@ public class GroupMetadataManager {
                     log.info("[GroupId {}] Member {} fenced from the group because " +
                             "it failed to transition from epoch {} within {}ms.",
                         groupId, memberId, memberEpoch, rebalanceTimeoutMs);
+                    CompletableFuture<Void> appendFuture = null;
                     List<Record> records = consumerGroupFenceMember(group, member);
-                    if (validateOnlineDowngrade(group, memberId)) convertToClassicGroup(group, records);
-                    return new CoordinatorResult<>(records);
+                    if (validateOnlineDowngrade(group, memberId)) appendFuture = convertToClassicGroup(group, memberId, records);
+                    return new CoordinatorResult<>(records, appendFuture);
                 } else {
                     log.debug("[GroupId {}] Ignoring rebalance timeout for {} because the member " +
                         "left the epoch {}.", groupId, memberId, memberEpoch);

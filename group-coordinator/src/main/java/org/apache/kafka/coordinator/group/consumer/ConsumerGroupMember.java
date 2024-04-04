@@ -468,7 +468,7 @@ public class ConsumerGroupMember {
      * @return The assigned partitions converted into the format of client-side assignor assignment.
      */
     public byte[] assignment(short version, TopicsImage topicsImage) {
-        List<TopicPartition> partitions = Collections.emptyList();
+        List<TopicPartition> partitions = new ArrayList<>();
         assignedPartitions.forEach((topicId, partitionSet) -> {
             String topicName = lookupTopicNameById(topicId, topicsImage);
             partitionSet.forEach(partition -> partitions.add(new TopicPartition(topicName, partition)));
