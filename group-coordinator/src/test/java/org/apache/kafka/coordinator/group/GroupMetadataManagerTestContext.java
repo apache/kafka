@@ -431,7 +431,7 @@ public class GroupMetadataManagerTestContext {
                     .withClassicGroupInitialRebalanceDelayMs(classicGroupInitialRebalanceDelayMs)
                     .withClassicGroupNewMemberJoinTimeoutMs(classicGroupNewMemberJoinTimeoutMs)
                     .withGroupCoordinatorMetricsShard(metrics)
-                    .withGroupProtocolMigrationPolicy(consumerGroupMigrationPolicy)
+                    .withConsumerGroupMigrationPolicy(consumerGroupMigrationPolicy)
                     .build(),
                 classicGroupInitialRebalanceDelayMs,
                 classicGroupNewMemberJoinTimeoutMs

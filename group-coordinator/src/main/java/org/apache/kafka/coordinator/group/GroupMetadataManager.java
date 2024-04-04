@@ -239,7 +239,7 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withGroupProtocolMigrationPolicy(ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy) {
+        Builder withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy) {
             this.consumerGroupMigrationPolicy = consumerGroupMigrationPolicy;
             return this;
         }
