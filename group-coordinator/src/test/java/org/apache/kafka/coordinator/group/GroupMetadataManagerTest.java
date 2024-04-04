@@ -9822,7 +9822,7 @@ public class GroupMetadataManagerTest {
             .setAssignedPartitions(Collections.emptyMap());
         ConsumerGroupMember expectedMember3 = memberBuilder.build();
         ConsumerGroupMember expectedUpdatedMember3 = memberBuilder
-            .setMemberEpoch(2)
+            .setMemberEpoch(1)
             .setState(MemberState.UNRELEASED_PARTITIONS)
             .build();
 
@@ -9845,9 +9845,6 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember1),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
 
-            // The group epoch is manually bumped. A new rebalance is triggered.
-            RecordHelpers.newGroupEpochRecord(groupId, 1),
-
             // memberId3 joins the new consumer group.
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember3),
 
@@ -9869,7 +9866,7 @@ public class GroupMetadataManagerTest {
             }),
 
             // Newly joining member3 bumps the group epoch. A new target assignment is computed.
-            RecordHelpers.newGroupEpochRecord(groupId, 2),
+            RecordHelpers.newGroupEpochRecord(groupId, 1),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId2, new HashMap<Uuid, Set<Integer>>() {
                 {
                     put(barTopicId, new HashSet<>(Collections.singletonList(0)));
@@ -9885,7 +9882,7 @@ public class GroupMetadataManagerTest {
                     put(fooTopicId, new HashSet<>(Collections.singletonList(1)));
                 }
             }),
-            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 2),
+            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 1),
 
             // member3 has no pending revoking partition. Bump its member epoch and transition to UNRELEASED_PARTITIONS.
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedUpdatedMember3)

@@ -786,15 +786,18 @@ public class GroupMetadataManager {
     ConsumerGroup convertToConsumerGroup(ClassicGroup classicGroup, List<Record> records) {
         classicGroup.completeAllJoinFutures(Errors.REBALANCE_IN_PROGRESS);
         classicGroup.completeAllSyncFutures(Errors.REBALANCE_IN_PROGRESS);
+
         createGroupTombstoneRecords(classicGroup, records);
         ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, classicGroup.groupId(), metrics);
         classicGroup.convertToConsumerGroup(consumerGroup, records, metadataImage.topics());
 
-        // Manually trigger a rebalance.
-        if (classicGroup.isInState(PREPARING_REBALANCE) || classicGroup.isInState(COMPLETING_REBALANCE)) {
-            consumerGroup.setGroupEpoch(classicGroup.generationId() + 1);
-            records.add(RecordHelpers.newGroupEpochRecord(classicGroup.groupId(), classicGroup.generationId() + 1));
-        }
+        consumerGroup.members().forEach((memberId, __) ->
+            scheduleConsumerGroupSessionTimeout(consumerGroup.groupId(), memberId)
+        );
+
+        // There's no need to trigger a rebalance as the upgrade is always triggered by a new member
+        // joining the classic group, which always results in updatedMember.subscribedTopicNames changing
+        // and group epoch bumped.
         return consumerGroup;
     }
 
