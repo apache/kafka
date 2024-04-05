@@ -275,6 +275,7 @@ public class GroupMetadataManager {
             );
         }
     }
+
     /**
      * The log context.
      */
@@ -1920,6 +1921,47 @@ public class GroupMetadataManager {
         });
     }
 
+    /**
+     * Called when the partition is unloaded.
+     * ClassicGroup: Complete all awaiting join and sync futures. Transition group to Dead.
+     */
+    public void onUnloaded() {
+        groups.values().forEach(group -> {
+            switch (group.type()) {
+                case CONSUMER:
+                    ConsumerGroup consumerGroup = (ConsumerGroup) group;
+                    log.info("[GroupId={}] Unloaded group metadata for group epoch {}.",
+                        consumerGroup.groupId(), consumerGroup.groupEpoch());
+                    break;
+                case CLASSIC:
+                    ClassicGroup classicGroup = (ClassicGroup) group;
+                    log.info("[GroupId={}] Unloading group metadata for generation {}.",
+                        classicGroup.groupId(), classicGroup.generationId());
+
+                    classicGroup.transitionTo(DEAD);
+                    switch (classicGroup.previousState()) {
+                        case EMPTY:
+                        case DEAD:
+                            break;
+                        case PREPARING_REBALANCE:
+                            classicGroup.allMembers().forEach(member -> {
+                                classicGroup.completeJoinFuture(member, new JoinGroupResponseData()
+                                    .setMemberId(member.memberId())
+                                    .setErrorCode(NOT_COORDINATOR.code()));
+                            });
+
+                            break;
+                        case COMPLETING_REBALANCE:
+                        case STABLE:
+                            classicGroup.allMembers().forEach(member -> {
+                                classicGroup.completeSyncFuture(member, new SyncGroupResponseData()
+                                    .setErrorCode(NOT_COORDINATOR.code()));
+                            });
+                    }
+            }
+        });
+    }
+
     public static String consumerGroupSessionTimeoutKey(String groupId, String memberId) {
         return "session-timeout-" + groupId + "-" + memberId;
     }
@@ -3088,7 +3130,6 @@ public class GroupMetadataManager {
 
                         responseFuture.complete(
                             new JoinGroupResponseData()
-                                .setMembers(Collections.emptyList())
                                 .setMemberId(UNKNOWN_MEMBER_ID)
                                 .setGenerationId(group.generationId())
                                 .setProtocolName(group.protocolName().orElse(null))
@@ -3111,7 +3152,6 @@ public class GroupMetadataManager {
                         );
                     } else {
                         group.completeJoinFuture(newMember, new JoinGroupResponseData()
-                            .setMembers(Collections.emptyList())
                             .setMemberId(newMemberId)
                             .setGenerationId(group.generationId())
                             .setProtocolName(group.protocolName().orElse(null))
