@@ -322,7 +322,7 @@ class KafkaServer(
 
         if (config.migrationEnabled) {
           kraftControllerNodes = RaftConfig.voterConnectionsToNodes(
-            RaftConfig.parseVoterConnections(config.quorumVoters, true)
+            RaftConfig.parseVoterConnections(config.quorumVoters)
           ).asScala
         } else {
           kraftControllerNodes = Seq.empty
@@ -422,7 +422,7 @@ class KafkaServer(
             logManager.directoryIdsSet)
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
-          val quorumVoters = RaftConfig.parseVoterConnections(config.quorumVoters, true)
+          val quorumVoters = RaftConfig.parseVoterConnections(config.quorumVoters)
           raftManager = new KafkaRaftManager[ApiMessageAndVersion](
             metaPropsEnsemble.clusterId().get(),
             config,

@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -195,25 +196,15 @@ public class RaftConfig {
         }
     }
 
-    public static Map<Integer, AddressSpec> parseVoterConnections(List<String> voterEntries) {
-        return parseVoterConnections(voterEntries, false)
-            .entrySet()
-            .stream()
-            .collect(
-                Collectors.toMap(
-                    Map.Entry::getKey,
-                    entry -> {
-                        if (entry.getValue().getHostString().equals(NON_ROUTABLE_HOST)) {
-                            return UNKNOWN_ADDRESS_SPEC_INSTANCE;
-                        } else {
-                            return new InetAddressSpec(entry.getValue());
-                        }
-                    }
-                )
-            );
+    public static Map<Integer, InetSocketAddress> parseVoterConnections(List<String> voterEntries) {
+        return parseVoterConnections(voterEntries, true);
     }
 
-    public static Map<Integer, InetSocketAddress> parseVoterConnections(List<String> voterEntries, boolean routableOnly) {
+    public static Set<Integer> parseVoterIds(List<String> voterEntries) {
+        return parseVoterConnections(voterEntries, false).keySet();
+    }
+
+    private static Map<Integer, InetSocketAddress> parseVoterConnections(List<String> voterEntries, boolean routableOnly) {
         Map<Integer, InetSocketAddress> voterMap = new HashMap<>();
         for (String voterMapEntry : voterEntries) {
             String[] idAndAddress = voterMapEntry.split("@");
@@ -251,7 +242,7 @@ public class RaftConfig {
     }
 
     public static List<Node> quorumVoterStringsToNodes(List<String> voters) {
-        return voterConnectionsToNodes(parseVoterConnections(voters, true));
+        return voterConnectionsToNodes(parseVoterConnections(voters));
     }
 
     public static List<Node> voterConnectionsToNodes(Map<Integer, InetSocketAddress> voterConnections) {
@@ -274,7 +265,7 @@ public class RaftConfig {
             List<String> voterStrings = (List) value;
 
             // Attempt to parse the connect strings
-            parseVoterConnections(voterStrings);
+            parseVoterConnections(voterStrings, false);
         }
 
         @Override

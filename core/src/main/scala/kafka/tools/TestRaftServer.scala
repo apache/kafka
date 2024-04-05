@@ -91,7 +91,7 @@ class TestRaftServer(
       time,
       metrics,
       Some(threadNamePrefix),
-      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters, true)),
+      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
       new ProcessTerminatingFaultHandler.Builder().build()
     )
 

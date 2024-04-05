@@ -88,7 +88,7 @@ class RaftManagerTest {
       Time.SYSTEM,
       new Metrics(Time.SYSTEM),
       Option.empty,
-      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters, true)),
+      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
       mock(classOf[FaultHandler])
     )
   }

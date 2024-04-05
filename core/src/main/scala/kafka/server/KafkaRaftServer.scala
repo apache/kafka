@@ -70,7 +70,7 @@ class KafkaRaftServer(
     metaPropsEnsemble,
     time,
     metrics,
-    CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters, true)),
+    CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
     new StandardFaultHandlerFactory(),
   )
 

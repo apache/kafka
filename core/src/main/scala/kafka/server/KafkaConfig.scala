@@ -1993,14 +1993,14 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     val advertisedListenerNames = effectiveAdvertisedListeners.map(_.listenerName).toSet
 
     // validate KRaft-related configs
-    val voterAddressSpecsByNodeId = RaftConfig.parseVoterConnections(quorumVoters)
+    val voterIds = RaftConfig.parseVoterIds(quorumVoters)
     def validateNonEmptyQuorumVotersForKRaft(): Unit = {
-      if (voterAddressSpecsByNodeId.isEmpty) {
+      if (voterIds.isEmpty) {
         throw new ConfigException(s"If using ${KafkaConfig.ProcessRolesProp}, ${KafkaConfig.QuorumVotersProp} must contain a parseable set of voters.")
       }
     }
     def validateNonEmptyQuorumVotersForMigration(): Unit = {
-      if (voterAddressSpecsByNodeId.isEmpty) {
+      if (voterIds.isEmpty) {
         throw new ConfigException(s"If using ${KafkaConfig.MigrationEnabledProp}, ${KafkaConfig.QuorumVotersProp} must contain a parseable set of voters.")
       }
     }
@@ -2013,8 +2013,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         s"The advertised.listeners config must not contain KRaft controller listeners from ${KafkaConfig.ControllerListenerNamesProp} when ${KafkaConfig.ProcessRolesProp} contains the broker role because Kafka clients that send requests via advertised listeners do not send requests to KRaft controllers -- they only send requests to KRaft brokers.")
     }
     def validateControllerQuorumVotersMustContainNodeIdForKRaftController(): Unit = {
-      require(voterAddressSpecsByNodeId.containsKey(nodeId),
-        s"If ${KafkaConfig.ProcessRolesProp} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${voterAddressSpecsByNodeId.asScala.keySet.toSet}")
+      require(voterIds.contains(nodeId),
+        s"If ${KafkaConfig.ProcessRolesProp} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${voterIds.asScala.toSet}")
     }
     def validateControllerListenerExistsForKRaftController(): Unit = {
       require(controllerListeners.nonEmpty,
@@ -2036,8 +2036,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       validateControlPlaneListenerEmptyForKRaft()
       validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker()
       // nodeId must not appear in controller.quorum.voters
-      require(!voterAddressSpecsByNodeId.containsKey(nodeId),
-        s"If ${KafkaConfig.ProcessRolesProp} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${voterAddressSpecsByNodeId.asScala.keySet.toSet}")
+      require(!voterIds.contains(nodeId),
+        s"If ${KafkaConfig.ProcessRolesProp} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${KafkaConfig.QuorumVotersProp}=${voterIds.asScala.toSet}")
       // controller.listener.names must be non-empty...
       require(controllerListenerNames.nonEmpty,
         s"${KafkaConfig.ControllerListenerNamesProp} must contain at least one value when running KRaft with just the broker role")

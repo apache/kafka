@@ -1344,10 +1344,6 @@ class KafkaConfigTest {
     assertValidQuorumVoters("1@127.0.0.1:9092", expected)
 
     expected.clear()
-    expected.put(1, new InetSocketAddress("0.0.0.0", 0))
-    assertValidQuorumVoters("1@0.0.0.0:0", expected)
-
-    expected.clear()
     expected.put(1, new InetSocketAddress("kafka1", 9092))
     expected.put(2, new InetSocketAddress("kafka2", 9092))
     expected.put(3, new InetSocketAddress("kafka3", 9092))
@@ -1357,7 +1353,7 @@ class KafkaConfigTest {
   private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, InetSocketAddress]): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.setProperty(KafkaConfig.QuorumVotersProp, value)
-    val addresses = RaftConfig.parseVoterConnections(KafkaConfig.fromProps(props).quorumVoters, false)
+    val addresses = RaftConfig.parseVoterConnections(KafkaConfig.fromProps(props).quorumVoters)
     assertEquals(expectedVoters, addresses)
   }
 
