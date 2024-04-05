@@ -184,7 +184,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   /**
     * Tests the ability of producing and consuming with the appropriate ACLs set.
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testProduceConsumeViaAssign(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -217,7 +217,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       ._2.asInstanceOf[Gauge[Double]]
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testProduceConsumeViaSubscribe(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -231,7 +231,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testProduceConsumeWithWildcardAcls(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -247,7 +247,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testProduceConsumeWithPrefixedAcls(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -263,7 +263,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testProduceConsumeTopicAutoCreateTopicCreateAcl(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -448,7 +448,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testNoConsumeWithoutDescribeAclViaAssign(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -463,7 +463,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testNoConsumeWithoutDescribeAclViaSubscribe(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -508,7 +508,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testNoConsumeWithDescribeAclViaAssign(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -524,7 +524,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testNoConsumeWithDescribeAclViaSubscribe(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {
@@ -557,7 +557,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testNoGroupAcl(quorum: String): Unit = {
     if (quorum == unimplementedquorum) {

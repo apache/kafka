@@ -22,7 +22,7 @@ import java.util.{Collections, List, Map, Properties}
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.utils.TestUtils.{consumeRecords, createAdminClient}
 import org.apache.kafka.clients.admin.{Admin,AlterConfigOp, ConfigEntry, ProducerState}
 import org.apache.kafka.clients.consumer.Consumer
@@ -77,7 +77,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProducerIdExpirationWithNoTransactions(quorum: String): Unit = {
     producer = TestUtils.createProducer(bootstrapServers(), enableIdempotence = true)
@@ -101,7 +101,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     assertEquals(1, producerState.size)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testTransactionAfterTransactionIdExpiresButProducerIdRemains(quorum: String): Unit = {
     producer = TestUtils.createTransactionalProducer("transactionalProducer", brokers)
@@ -149,7 +149,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDynamicProducerIdExpirationMs(quorum: String): Unit = {
     producer = TestUtils.createProducer(bootstrapServers(), enableIdempotence = true)

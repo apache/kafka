@@ -19,7 +19,7 @@ package kafka.server
 import java.util
 import java.util.{Optional, Properties}
 import kafka.network.RequestMetrics.{MessageConversionsTimeMs, TemporaryMemoryBytes}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.FetchResponseData
