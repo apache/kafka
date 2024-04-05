@@ -348,6 +348,9 @@ The Apache Kafka community is pleased to announce the release for Apache Kafka %
 
 <DETAILS OF THE CHANGES>
 
+An overview of the release and its notable changes can be found in the
+release blog post: <LINK TO THE KAFKA BLOG>
+
 All of the changes in this release can be found in the release notes:
 https://www.apache.org/dist/kafka/%(release_version)s/RELEASE_NOTES.html
 
