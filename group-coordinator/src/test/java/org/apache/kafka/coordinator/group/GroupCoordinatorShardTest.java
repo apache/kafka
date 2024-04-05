@@ -582,7 +582,7 @@ public class GroupCoordinatorShardTest {
         );
         coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, record);
 
-        verify(groupMetadataManager, times(1)).replay(record, GroupType.CONSUMER);
+        verify(groupMetadataManager, times(1)).replay(key, value);
     }
 
     @Test
@@ -610,7 +610,7 @@ public class GroupCoordinatorShardTest {
         );
         coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, record);
 
-        verify(groupMetadataManager, times(1)).replay(record, GroupType.CONSUMER);
+        verify(groupMetadataManager, times(1)).replay(key, null);
     }
 
     @Test

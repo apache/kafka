@@ -66,6 +66,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.share.ShareGroup;
@@ -1286,8 +1288,7 @@ public class GroupMetadataManagerTestContext {
             case ConsumerGroupMemberMetadataKey.HIGHEST_SUPPORTED_VERSION:
                 groupMetadataManager.replay(
                     (ConsumerGroupMemberMetadataKey) key.message(),
-                    (ConsumerGroupMemberMetadataValue) messageOrNull(value),
-                    groupType
+                    (ConsumerGroupMemberMetadataValue) messageOrNull(value)
                 );
                 break;
 
@@ -1327,6 +1328,13 @@ public class GroupMetadataManagerTestContext {
                     (ConsumerGroupCurrentMemberAssignmentKey) key.message(),
                     (ConsumerGroupCurrentMemberAssignmentValue) messageOrNull(value),
                     groupType
+                );
+                break;
+
+            case ShareGroupMemberMetadataKey.HIGHEST_SUPPORTED_VERSION:
+                groupMetadataManager.replay(
+                    (ShareGroupMemberMetadataKey) key.message(),
+                    (ShareGroupMemberMetadataValue) messageOrNull(value)
                 );
                 break;
 

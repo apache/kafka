@@ -9946,7 +9946,15 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        List<Record> expectedRecords = Collections.singletonList(
+        ShareGroupMember expectedMember = new ShareGroupMember.Builder(memberId)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .build();
+
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newShareMemberSubscriptionRecord(groupId, expectedMember),
             RecordHelpers.newGroupEpochRecord(groupId, 1, GroupType.SHARE)
         );
 
@@ -10008,7 +10016,8 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        List<Record> expectedRecords = Collections.singletonList(
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newShareMemberSubscriptionTombstoneRecord(groupId, memberId2),
             RecordHelpers.newGroupEpochRecord(groupId, 103, GroupType.SHARE)
         );
 
@@ -10090,7 +10099,7 @@ public class GroupMetadataManagerTest {
 
         assertEquals(ShareGroup.ShareGroupState.EMPTY, context.shareGroupState(groupId));
 
-        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId, new ShareGroupMember.Builder(memberId1)
+        context.replay(RecordHelpers.newShareMemberSubscriptionRecord(groupId, new ShareGroupMember.Builder(memberId1)
             .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
             .build()), GroupType.SHARE);
         context.replay(RecordHelpers.newGroupEpochRecord(groupId, 11, GroupType.SHARE), GroupType.SHARE);
