@@ -2194,20 +2194,18 @@ public class KafkaAdminClient extends AdminClient {
         DescribeTopicsOptions options,
         long now
     ) {
-        Map<String, TopicRequest> topicsRequests = new LinkedHashMap<>();
+        final Map<String, TopicRequest> topicsRequests = new LinkedHashMap<>();
         topicNamesList.stream().sorted().forEach(topic -> {
             topicsRequests.put(topic, new TopicRequest().setName(topic));
         });
         return new Call("describeTopicPartitions", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
-            Map<String, TopicRequest> pendingTopics = topicsRequests;
-
             TopicDescription partiallyFinishedTopicDescription = null;
 
             @Override
             DescribeTopicPartitionsRequest.Builder createRequest(int timeoutMs) {
                 DescribeTopicPartitionsRequestData request = new DescribeTopicPartitionsRequestData()
-                    .setTopics(new ArrayList<>(pendingTopics.values()))
+                    .setTopics(new ArrayList<>(topicsRequests.values()))
                     .setResponsePartitionLimit(options.partitionSizeLimitPerResponse());
                 if (partiallyFinishedTopicDescription != null) {
                     // If the previous cursor points to partition 0, it will not be set here. Instead, the previous
@@ -2236,7 +2234,7 @@ public class KafkaAdminClient extends AdminClient {
 
                     if (error != Errors.NONE) {
                         future.completeExceptionally(error.exception());
-                        pendingTopics.remove(topicName);
+                        topicsRequests.remove(topicName);
                         if (responseCursor != null && responseCursor.topicName().equals(topicName)) {
                             responseCursor = null;
                         }
@@ -2258,7 +2256,7 @@ public class KafkaAdminClient extends AdminClient {
                         continue;
                     }
 
-                    pendingTopics.remove(topicName);
+                    topicsRequests.remove(topicName);
                     future.complete(currentTopicDescription);
                 }
 
@@ -2268,14 +2266,14 @@ public class KafkaAdminClient extends AdminClient {
                     // Because the responseCursor topic may not show in the response.
                     String topicName = partiallyFinishedTopicDescription.name();
                     topicFutures.get(topicName).complete(partiallyFinishedTopicDescription);
-                    pendingTopics.remove(topicName);
+                    topicsRequests.remove(topicName);
                     partiallyFinishedTopicDescription = null;
                 }
                 if (nextTopicDescription != null) {
                     partiallyFinishedTopicDescription = nextTopicDescription;
                 }
 
-                if (!pendingTopics.isEmpty()) {
+                if (!topicsRequests.isEmpty()) {
                     runnable.call(this, time.milliseconds());
                 }
             }
