@@ -280,6 +280,10 @@ subprojects {
       options.compilerArgs << "-Xlint:-options"
   }
 
+  // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
+  // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
+  compileTestJava.options.compilerArgs.add "-parameters"
+
   // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
   // `-target` incorrectly if this is unset
   sourceCompatibility = minJavaVersion

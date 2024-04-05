@@ -55,7 +55,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGr
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsNonExistingGroup() {
+    public void testDeleteOffsetsNonExistingGroup(String quorum) {
         String group = "missing.group";
         String topic = "foo:1";
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(getArgs(group, topic));
@@ -66,49 +66,49 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGr
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfStableConsumerGroupWithTopicPartition() {
+    public void testDeleteOffsetsOfStableConsumerGroupWithTopicPartition(String quorum) {
         testWithStableConsumerGroup(TOPIC, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfStableConsumerGroupWithTopicOnly() {
+    public void testDeleteOffsetsOfStableConsumerGroupWithTopicOnly(String quorum) {
         testWithStableConsumerGroup(TOPIC, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition() {
+    public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition(String quorum) {
         testWithStableConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicOnly() {
+    public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicOnly(String quorum) {
         testWithStableConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition() {
+    public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition(String quorum) {
         testWithEmptyConsumerGroup(TOPIC, 0, 0, Errors.NONE);
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly() {
+    public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly(String quorum) {
         testWithEmptyConsumerGroup(TOPIC, -1, 0, Errors.NONE);
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition() {
+    public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition(String quorum) {
         testWithEmptyConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly() {
+    public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly(String quorum) {
         testWithEmptyConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
 
