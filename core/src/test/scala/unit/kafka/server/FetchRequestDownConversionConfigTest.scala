@@ -148,7 +148,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
    * Tests that "message.downconversion.enable" can be set at topic level, and its configuration is obeyed for client
    * fetch requests.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testV1FetchFromConsumer(quorum: String): Unit = {
     testV1Fetch(isFollowerFetch = false)
@@ -157,7 +157,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   /**
    * Tests that "message.downconversion.enable" has no effect on fetch requests from replicas.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testV1FetchFromReplica(quorum: String): Unit = {
     testV1Fetch(isFollowerFetch = true)
