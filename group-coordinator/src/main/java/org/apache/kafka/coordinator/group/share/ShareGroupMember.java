@@ -293,7 +293,6 @@ public class ShareGroupMember extends GroupMember {
             .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, topicsImage)))
         .setClientHost(clientHost)
         .setClientId(clientId)
-        .setInstanceId(instanceId)
         .setRackId(rackId)
         .setSubscribedTopicNames(subscribedTopicNames);
   }

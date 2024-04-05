@@ -52,8 +52,6 @@
           "fields": [
             { "name": "MemberId", "type": "string", "versions": "0+",
               "about": "The member ID." },
-            { "name": "InstanceId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
-              "about": "The member instance ID." },
             { "name": "RackId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
               "about": "The member rack ID." },
             { "name": "MemberEpoch", "type": "int32", "versions": "0+",

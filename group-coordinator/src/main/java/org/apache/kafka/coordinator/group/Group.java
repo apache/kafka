@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 
 import java.util.Arrays;
@@ -51,6 +52,21 @@ public interface Group {
 
         private final static Map<String, GroupType> NAME_TO_ENUM = Arrays.stream(values())
             .collect(Collectors.toMap(type -> type.name.toLowerCase(Locale.ROOT), Function.identity()));
+
+        public static GroupType forId(int id) {
+            switch (id) {
+                case 0:
+                    return CONSUMER;
+                case 1:
+                    return CLASSIC;
+                case 2:
+                    return UNKNOWN;
+                case 3:
+                    return SHARE;
+                default:
+                    throw new InvalidRequestException("Unknown group type received: " + id);
+            }
+        }
 
         /**
          * Parse a string into the corresponding {@code GroupType} enum value, in a case-insensitive manner.

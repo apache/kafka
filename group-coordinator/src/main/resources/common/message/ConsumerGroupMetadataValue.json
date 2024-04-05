@@ -23,7 +23,7 @@
   "fields": [
     { "name": "Epoch", "versions": "0+", "type": "int32",
       "about": "The group epoch." },
-    { "name": "Type", "type": "string", "versions": "1+", "nullableVersions": "1+",
-      "about": "The group type - null indicates consumer group." }
+    { "name": "Type", "type": "int8", "versions": "1+", "default": "0",
+      "about": "The group type - 0:consumer, 1:classic, 3:share." }
   ]
 }

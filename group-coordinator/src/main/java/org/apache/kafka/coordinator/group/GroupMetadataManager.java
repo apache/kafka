@@ -2202,7 +2202,7 @@ public class GroupMetadataManager {
         String groupId = key.groupId();
 
         if (value != null) {
-            GroupType groupType = value.type() == null ? CONSUMER : GroupType.parse(value.type());
+            GroupType groupType = GroupType.forId(value.type());
             if (groupType != CONSUMER && groupType != SHARE) {
                 throw new IllegalStateException("Received a ConsumerGroupMetadataValue record with type "
                     + groupType + " but expected consumer or share group type.");

@@ -279,7 +279,7 @@ public class RecordHelpersTest {
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
                     .setEpoch(10)
-                    .setType(GroupType.CONSUMER.name()),
+                    .setType((byte) GroupType.CONSUMER.ordinal()),
                 (short) 1));
 
         assertEquals(expectedRecord, newGroupEpochRecord(
@@ -298,7 +298,7 @@ public class RecordHelpersTest {
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
                     .setEpoch(10)
-                    .setType(GroupType.SHARE.name()),
+                    .setType((byte) GroupType.SHARE.ordinal()),
                 (short) 1));
 
         assertEquals(expectedRecord, newGroupEpochRecord(

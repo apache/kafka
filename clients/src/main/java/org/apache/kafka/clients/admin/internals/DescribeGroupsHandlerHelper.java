@@ -91,7 +91,7 @@ public class DescribeGroupsHandlerHelper {
 
       memberDescriptions.add(new MemberDescription(
           groupMember.memberId(),
-          Optional.ofNullable(groupMember.instanceId()),
+          Optional.empty(),
           groupMember.clientId(),
           groupMember.clientHost(),
           new MemberAssignment(partitions)));

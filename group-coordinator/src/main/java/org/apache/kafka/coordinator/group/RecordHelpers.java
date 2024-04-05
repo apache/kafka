@@ -251,7 +251,7 @@ public class RecordHelpers {
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
                     .setEpoch(newGroupEpoch)
-                    .setType(groupType.name()),
+                    .setType((byte) groupType.ordinal()),
                 (short) 1
             )
         );
