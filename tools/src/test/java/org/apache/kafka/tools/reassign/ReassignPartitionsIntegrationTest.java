@@ -53,6 +53,7 @@ import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
 import java.io.Closeable;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -61,6 +62,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -394,11 +396,11 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         waitForVerifyAssignment(cluster.adminClient, assignment, true,
             new VerifyAssignmentResult(partStates, true, Collections.emptyMap(), false));
         // Cancel the reassignment.
-        assertEquals(new Tuple2<>(new HashSet<>(asList(foo0, baz1)), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, true));
+        assertEquals(new SimpleImmutableEntry<>(new HashSet<>(asList(foo0, baz1)), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, true));
         // Broker throttles are still active because we passed --preserve-throttles
         waitForInterBrokerThrottle(asList(0, 1, 2, 3), interBrokerThrottle);
         // Cancelling the reassignment again should reveal nothing to cancel.
-        assertEquals(new Tuple2<>(Collections.emptySet(), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, false));
+        assertEquals(new SimpleImmutableEntry<>(Collections.emptySet(), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, false));
         // This time, the broker throttles were removed.
         waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
         // Verify that there are no ongoing reassignments.
@@ -445,7 +447,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         );
 
         // Now cancel the assignment and verify that the partition is removed from cancelled replicas
-        assertEquals(new Tuple2<>(Collections.singleton(foo0), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, true));
+        assertEquals(new SimpleImmutableEntry<>(Collections.singleton(foo0), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, true));
         verifyReplicaDeleted(foo0, 3);
         verifyReplicaDeleted(foo0, 4);
     }
@@ -707,7 +709,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         }
     }
 
-    private Tuple2<Set<TopicPartition>, Set<TopicPartitionReplica>> runCancelAssignment(
+    private Entry<Set<TopicPartition>, Set<TopicPartitionReplica>> runCancelAssignment(
         Admin adminClient,
         String jsonString,
         Boolean preserveThrottles

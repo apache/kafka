@@ -29,7 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
-import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -235,7 +235,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             logContext,
             subscriptions,
             time,
-            new RebalanceCallbackMetrics(metrics, metricGrpPrefix)
+            new RebalanceCallbackMetricsManager(metrics, metricGrpPrefix)
         );
         this.metadata.requestUpdate(true);
     }

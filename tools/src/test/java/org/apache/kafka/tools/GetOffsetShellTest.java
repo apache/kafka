@@ -29,7 +29,9 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -52,20 +54,24 @@ public class GetOffsetShellTest {
     private final int topicCount = 4;
     private final int offsetTopicPartitionCount = 4;
     private final ClusterInstance cluster;
+    private final String topicName = "topic";
 
     public GetOffsetShellTest(ClusterInstance cluster) {
         this.cluster = cluster;
     }
 
     private String getTopicName(int i) {
-        return "topic" + i;
+        return topicName + i;
     }
 
-    public void setUp() {
+    @BeforeEach
+    public void before() {
         cluster.config().serverProperties().put("auto.create.topics.enable", false);
         cluster.config().serverProperties().put("offsets.topic.replication.factor", "1");
         cluster.config().serverProperties().put("offsets.topic.num.partitions", String.valueOf(offsetTopicPartitionCount));
+    }
 
+    private void setUp() {
         try (Admin admin = Admin.create(cluster.config().adminClientProperties())) {
             List<NewTopic> topics = new ArrayList<>();
 
@@ -312,6 +318,18 @@ public class GetOffsetShellTest {
         assertExitCodeIsOne("--topic-partitions", "__consumer_offsets", "--partitions", "0");
     }
 
+    @ClusterTest
+    public void testPrintHelp() {
+        String out = ToolsTestUtils.captureStandardErr(() -> GetOffsetShell.mainNoExit("--help"));
+        assertTrue(out.startsWith(GetOffsetShell.USAGE_TEXT));
+    }
+
+    @ClusterTest
+    public void testPrintVersion() {
+        String out = ToolsTestUtils.captureStandardOut(() -> GetOffsetShell.mainNoExit("--version"));
+        assertEquals(AppInfoParser.getVersion(), out);
+    }
+
     private void assertExitCodeIsOne(String... args) {
         final int[] exitStatus = new int[1];
 
@@ -333,7 +351,7 @@ public class GetOffsetShellTest {
     }
 
     private List<Row> expectedOffsetsWithInternal() {
-        List<Row> consOffsets = IntStream.range(0, offsetTopicPartitionCount + 1)
+        List<Row> consOffsets = IntStream.range(0, offsetTopicPartitionCount)
                 .mapToObj(i -> new Row("__consumer_offsets", i, 0L))
                 .collect(Collectors.toList());
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
@@ -224,14 +225,14 @@ public class GroupCoordinatorShardTest {
             List<Record> records = invocation.getArgument(1);
             records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId));
             return null;
-        }).when(groupMetadataManager).deleteGroup(anyString(), anyList());
+        }).when(groupMetadataManager).createGroupTombstoneRecords(anyString(), anyList());
 
         CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> coordinatorResult =
             coordinator.deleteGroups(context, groupIds);
 
         for (String groupId : groupIds) {
             verify(groupMetadataManager, times(1)).validateDeleteGroup(ArgumentMatchers.eq(groupId));
-            verify(groupMetadataManager, times(1)).deleteGroup(ArgumentMatchers.eq(groupId), anyList());
+            verify(groupMetadataManager, times(1)).createGroupTombstoneRecords(ArgumentMatchers.eq(groupId), anyList());
             verify(offsetMetadataManager, times(1)).deleteAllOffsets(ArgumentMatchers.eq(groupId), anyList());
         }
         assertEquals(expectedResult, coordinatorResult);
@@ -290,7 +291,7 @@ public class GroupCoordinatorShardTest {
             List<Record> records = invocation.getArgument(1);
             records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId));
             return null;
-        }).when(groupMetadataManager).deleteGroup(anyString(), anyList());
+        }).when(groupMetadataManager).createGroupTombstoneRecords(anyString(), anyList());
 
         CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> coordinatorResult =
             coordinator.deleteGroups(context, groupIds);
@@ -298,7 +299,7 @@ public class GroupCoordinatorShardTest {
         for (String groupId : groupIds) {
             verify(groupMetadataManager, times(1)).validateDeleteGroup(eq(groupId));
             if (!groupId.equals("group-id-2")) {
-                verify(groupMetadataManager, times(1)).deleteGroup(eq(groupId), anyList());
+                verify(groupMetadataManager, times(1)).createGroupTombstoneRecords(eq(groupId), anyList());
                 verify(offsetMetadataManager, times(1)).deleteAllOffsets(eq(groupId), anyList());
             }
         }
@@ -1019,5 +1020,62 @@ public class GroupCoordinatorShardTest {
             100L,
             result
         );
+    }
+
+    @Test
+    public void testOnPartitionsDeleted() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        List<Record> records = Collections.singletonList(RecordHelpers.newOffsetCommitTombstoneRecord(
+            "group",
+            "foo",
+            0
+        ));
+
+        when(offsetMetadataManager.onPartitionsDeleted(
+            Collections.singletonList(new TopicPartition("foo", 0))
+        )).thenReturn(records);
+
+        CoordinatorResult<Void, Record> result = coordinator.onPartitionsDeleted(
+            Collections.singletonList(new TopicPartition("foo", 0))
+        );
+
+        assertEquals(records, result.records());
+        assertNull(result.response());
+    }
+
+    @Test
+    public void testOnUnloaded() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        Time mockTime = new MockTime();
+        MockCoordinatorTimer<Void, Record> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            mockTime,
+            timer,
+            GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 24 * 60),
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        coordinator.onUnloaded();
+        assertEquals(0, timer.size());
+        verify(groupMetadataManager, times(1)).onUnloaded();
     }
 }

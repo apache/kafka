@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public abstract class SaslAuthenticatorFailureDelayTest {
@@ -227,7 +228,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
                                                            String mechanism, String expectedErrorMessage) throws Exception {
         ChannelState finalState = createAndCheckClientConnectionFailure(securityProtocol, node);
         Exception exception = finalState.exception();
-        assertTrue(exception instanceof SaslAuthenticationException, "Invalid exception class " + exception.getClass());
+        assertInstanceOf(SaslAuthenticationException.class, exception, "Invalid exception class " + exception.getClass());
         if (expectedErrorMessage == null)
             expectedErrorMessage = "Authentication failed during authentication due to invalid credentials with SASL mechanism " + mechanism;
         assertEquals(expectedErrorMessage, exception.getMessage());

@@ -26,7 +26,6 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
-import kafka.security.authorizer.AclEntry
 import kafka.server.DelegationTokenManagerZk
 import kafka.utils.Json
 import kafka.utils.json.JsonObject
@@ -41,6 +40,7 @@ import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.{MetadataVersion, ProducerIdsBlock}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_2_7_IV0}
 import org.apache.kafka.server.config.ConfigType
@@ -185,7 +185,7 @@ object BrokerIdZNode {
       broker.rack, broker.features)
   }
 
-  def featuresAsJavaMap(brokerInfo: JsonObject): util.Map[String, util.Map[String, java.lang.Short]] = {
+  private def featuresAsJavaMap(brokerInfo: JsonObject): util.Map[String, util.Map[String, java.lang.Short]] = {
     FeatureZNode.asJavaMap(brokerInfo
       .get(FeaturesKey)
       .flatMap(_.to[Option[Map[String, Map[String, Int]]]])
@@ -461,7 +461,7 @@ object IsrChangeNotificationSequenceZNode {
       }
     }
   }.map(_.toSet).getOrElse(Set.empty)
-  def sequenceNumber(path: String) = path.substring(path.lastIndexOf(SequenceNumberPrefix) + SequenceNumberPrefix.length)
+  def sequenceNumber(path: String): String = path.substring(path.lastIndexOf(SequenceNumberPrefix) + SequenceNumberPrefix.length)
 }
 
 object LogDirEventNotificationZNode {
@@ -470,15 +470,15 @@ object LogDirEventNotificationZNode {
 
 object LogDirEventNotificationSequenceZNode {
   val SequenceNumberPrefix = "log_dir_event_"
-  val LogDirFailureEvent = 1
+  private val LogDirFailureEvent = 1
   def path(sequenceNumber: String) = s"${LogDirEventNotificationZNode.path}/$SequenceNumberPrefix$sequenceNumber"
-  def encode(brokerId: Int) = {
+  def encode(brokerId: Int): Array[Byte] = {
     Json.encodeAsBytes(Map("version" -> 1, "broker" -> brokerId, "event" -> LogDirFailureEvent).asJava)
   }
   def decode(bytes: Array[Byte]): Option[Int] = Json.parseBytes(bytes).map { js =>
     js.asJsonObject("broker").to[Int]
   }
-  def sequenceNumber(path: String) = path.substring(path.lastIndexOf(SequenceNumberPrefix) + SequenceNumberPrefix.length)
+  def sequenceNumber(path: String): String = path.substring(path.lastIndexOf(SequenceNumberPrefix) + SequenceNumberPrefix.length)
 }
 
 object AdminZNode {
@@ -561,14 +561,14 @@ object ConsumerPathZNode {
 }
 
 object ConsumerOffset {
-  def path(group: String, topic: String, partition: Integer) = s"${ConsumerPathZNode.path}/${group}/offsets/${topic}/${partition}"
+  def path(group: String, topic: String, partition: Integer) = s"${ConsumerPathZNode.path}/$group/offsets/$topic/$partition"
   def encode(offset: Long): Array[Byte] = offset.toString.getBytes(UTF_8)
   def decode(bytes: Array[Byte]): Option[Long] = Option(bytes).map(new String(_, UTF_8).toLong)
 }
 
 object ZkVersion {
-  val MatchAnyVersion = -1 // if used in a conditional set, matches any version (the value should match ZooKeeper codebase)
-  val UnknownVersion = -2  // Version returned from get if node does not exist (internal constant for Kafka codebase, unused value in ZK)
+  val MatchAnyVersion: Int = -1 // if used in a conditional set, matches any version (the value should match ZooKeeper codebase)
+  val UnknownVersion: Int = -2  // Version returned from get if node does not exist (internal constant for Kafka codebase, unused value in ZK)
 }
 
 object ZkStat {
@@ -713,13 +713,13 @@ case object LiteralAclChangeStore extends ZkAclChangeStore {
     if (resource.patternType != PatternType.LITERAL)
       throw new IllegalArgumentException("Only literal resource patterns can be encoded")
 
-    val legacyName = resource.resourceType.toString + AclEntry.ResourceSeparator + resource.name
+    val legacyName = resource.resourceType.toString + AclEntry.RESOURCE_SEPARATOR + resource.name
     legacyName.getBytes(UTF_8)
   }
 
   def decode(bytes: Array[Byte]): ResourcePattern = {
     val string = new String(bytes, UTF_8)
-    string.split(AclEntry.ResourceSeparator, 2) match {
+    string.split(AclEntry.RESOURCE_SEPARATOR, 2) match {
         case Array(resourceType, resourceName, _*) => new ResourcePattern(ResourceType.fromString(resourceType), resourceName, PatternType.LITERAL)
         case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + string)
       }
@@ -757,8 +757,8 @@ case object ExtendedAclChangeStore extends ZkAclChangeStore {
 object ResourceZNode {
   def path(resource: ResourcePattern): String = ZkAclStore(resource.patternType).path(resource.resourceType, resource.name)
 
-  def encode(acls: Set[AclEntry]): Array[Byte] = Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls).asJava)
-  def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(AclEntry.fromBytes(bytes), stat.getVersion)
+  def encode(acls: Set[AclEntry]): Array[Byte] = Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls.asJava))
+  def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(AclEntry.fromBytes(bytes).asScala.toSet, stat.getVersion)
 }
 
 object ExtendedAclChangeEvent {
@@ -794,7 +794,7 @@ object ClusterIdZNode {
 
   def fromJson(clusterIdJson:  Array[Byte]): String = {
     Json.parseBytes(clusterIdJson).map(_.asJsonObject("id").to[String]).getOrElse {
-      throw new KafkaException(s"Failed to parse the cluster id json $clusterIdJson")
+      throw new KafkaException(s"Failed to parse the cluster id json ${clusterIdJson.mkString("Array(", ", ", ")")}")
     }
   }
 }
@@ -844,7 +844,7 @@ object DelegationTokenChangeNotificationZNode {
 object DelegationTokenChangeNotificationSequenceZNode {
   val SequenceNumberPrefix = "token_change_"
   def createPath = s"${DelegationTokenChangeNotificationZNode.path}/$SequenceNumberPrefix"
-  def deletePath(sequenceNode: String) = s"${DelegationTokenChangeNotificationZNode.path}/${sequenceNode}"
+  def deletePath(sequenceNode: String) = s"${DelegationTokenChangeNotificationZNode.path}/$sequenceNode"
   def encode(tokenId : String): Array[Byte] = tokenId.getBytes(UTF_8)
   def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
 }
@@ -1078,7 +1078,7 @@ object MigrationZNode {
 object ZkData {
 
   // Important: it is necessary to add any new top level Zookeeper path to the Seq
-  val SecureRootPaths = Seq(AdminZNode.path,
+  val SecureRootPaths: Seq[String] = Seq(AdminZNode.path,
     BrokersZNode.path,
     ClusterZNode.path,
     ConfigZNode.path,
@@ -1093,7 +1093,7 @@ object ZkData {
     FeatureZNode.path) ++ ZkAclStore.securePaths
 
   // These are persistent ZK paths that should exist on kafka broker startup.
-  val PersistentZkPaths = Seq(
+  val PersistentZkPaths: Seq[String] = Seq(
     ConsumerPathZNode.path, // old consumer path
     BrokerIdsZNode.path,
     TopicsZNode.path,
@@ -1105,7 +1105,7 @@ object ZkData {
     LogDirEventNotificationZNode.path
   ) ++ ConfigType.ALL.asScala.map(ConfigEntityTypeZNode.path)
 
-  val SensitiveRootPaths = Seq(
+  val SensitiveRootPaths: Seq[String] = Seq(
     ConfigEntityTypeZNode.path(ConfigType.USER),
     ConfigEntityTypeZNode.path(ConfigType.BROKER),
     DelegationTokensZNode.path

@@ -16,12 +16,12 @@
  */
 package kafka.coordinator.group
 
-import kafka.server.{ReplicaManager, RequestLocal}
+import kafka.server.ReplicaManager
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{NotLeaderOrFollowerException, RecordTooLargeException}
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
@@ -334,8 +334,8 @@ class CoordinatorPartitionWriterTest {
       VerificationGuard.SENTINEL
     }
 
-    val callbackCapture: ArgumentCaptor[(Errors, RequestLocal, VerificationGuard) => Unit] =
-      ArgumentCaptor.forClass(classOf[(Errors, RequestLocal, VerificationGuard) => Unit])
+    val callbackCapture: ArgumentCaptor[((Errors, VerificationGuard)) => Unit] =
+      ArgumentCaptor.forClass(classOf[((Errors, VerificationGuard)) => Unit])
 
     when(replicaManager.maybeStartTransactionVerificationForPartition(
       ArgumentMatchers.eq(tp),
@@ -343,21 +343,21 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.eq(10L),
       ArgumentMatchers.eq(5.toShort),
       ArgumentMatchers.eq(RecordBatch.NO_SEQUENCE),
-      ArgumentMatchers.eq(RequestLocal.NoCaching),
-      callbackCapture.capture()
+      callbackCapture.capture(),
+      ArgumentMatchers.any()
     )).thenAnswer(_ => {
-      callbackCapture.getValue.apply(
+      callbackCapture.getValue.apply((
         error,
-        RequestLocal.NoCaching,
         verificationGuard
-      )
+      ))
     })
 
     val future = partitionRecordWriter.maybeStartTransactionVerification(
       tp,
       "transactional-id",
       10L,
-      5.toShort
+      5.toShort,
+      ApiKeys.TXN_OFFSET_COMMIT.latestVersion()
     )
 
     if (error == Errors.NONE) {

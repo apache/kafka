@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.mirror;
 
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map.Entry;
 
 import java.util.concurrent.atomic.AtomicReference;
@@ -88,7 +87,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private static final ResourcePatternFilter ANY_TOPIC = new ResourcePatternFilter(ResourceType.TOPIC,
         null, PatternType.ANY);
     private static final AclBindingFilter ANY_TOPIC_ACL = new AclBindingFilter(ANY_TOPIC, AccessControlEntryFilter.ANY);
-    private static final String READ_COMMITTED = IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT);
+    private static final String READ_COMMITTED = IsolationLevel.READ_COMMITTED.toString();
     private static final String EXACTLY_ONCE_SUPPORT_CONFIG = "exactly.once.support";
 
     private final AtomicBoolean noAclAuthorizer = new AtomicBoolean(false);

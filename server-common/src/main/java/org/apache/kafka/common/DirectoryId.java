@@ -153,6 +153,16 @@ public class DirectoryId {
         if (LOST.equals(dir)) {
             return false;
         }
+
+        // The only time we should have a size be 0 is if we were at a MV prior to 3.7-IV2
+        // and the system was upgraded. In this case the original list of directories was purged
+        // during broker registration so we don't know if the directory is online. We assume
+        // that a broker will halt if all its log directories are down. Eventually the broker
+        // will send another registration request with information about all log directories.
+        // Refer KAFKA-16162 for more information
+        if (sortedOnlineDirs.isEmpty()) {
+            return true;
+        }
         return Collections.binarySearch(sortedOnlineDirs, dir) >= 0;
     }
 }

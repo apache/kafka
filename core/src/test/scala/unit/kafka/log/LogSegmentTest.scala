@@ -86,10 +86,10 @@ class LogSegmentTest {
   def testAppendForLogSegmentOffsetOverflowException(baseOffset: Long, largestOffset: Long): Unit = {
     val seg = createSegment(baseOffset)
     val currentTime = Time.SYSTEM.milliseconds()
-    val shallowOffsetOfMaxTimestamp = largestOffset
+    val offsetOfMaxTimestamp = largestOffset
     val memoryRecords = records(0, "hello")
     assertThrows(classOf[LogSegmentOffsetOverflowException], () => {
-      seg.append(largestOffset, currentTime, shallowOffsetOfMaxTimestamp, memoryRecords)
+      seg.append(largestOffset, currentTime, offsetOfMaxTimestamp, memoryRecords)
     })
   }
 
@@ -324,12 +324,12 @@ class LogSegmentTest {
   @Test
   def testRecoveryFixesCorruptIndex(): Unit = {
     val seg = createSegment(0)
-    for(i <- 0 until 100)
+    for (i <- 0 until 100)
       seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, records(i, i.toString))
     val indexFile = seg.offsetIndexFile
     TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(newProducerStateManager(), Optional.empty())
-    for(i <- 0 until 100) {
+    for (i <- 0 until 100) {
       val records = seg.read(i, 1, seg.size(), true).records.records
       assertEquals(i, records.iterator.next().offset)
     }
@@ -450,12 +450,12 @@ class LogSegmentTest {
   @Test
   def testRecoveryFixesCorruptTimeIndex(): Unit = {
     val seg = createSegment(0)
-    for(i <- 0 until 100)
+    for (i <- 0 until 100)
       seg.append(i, i * 10, i, records(i, i.toString))
     val timeIndexFile = seg.timeIndexFile
     TestUtils.writeNonsenseToFile(timeIndexFile, 5, timeIndexFile.length.toInt)
     seg.recover(newProducerStateManager(), Optional.empty())
-    for(i <- 0 until 100) {
+    for (i <- 0 until 100) {
       assertEquals(i, seg.findOffsetByTimestamp(i * 10, 0L).get.offset)
       if (i < 99)
         assertEquals(i + 1, seg.findOffsetByTimestamp(i * 10 + 1, 0L).get.offset)

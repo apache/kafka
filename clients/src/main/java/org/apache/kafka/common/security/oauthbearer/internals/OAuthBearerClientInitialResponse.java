@@ -34,7 +34,7 @@ public class OAuthBearerClientInitialResponse {
     private static final String VALUE = "[\\x21-\\x7E \t\r\n]+";
 
     private static final String KVPAIRS = String.format("(%s=%s%s)*", KEY, VALUE, SEPARATOR);
-    private static final Pattern AUTH_PATTERN = Pattern.compile("(?<scheme>[\\w]+)[ ]+(?<token>[-_\\.a-zA-Z0-9]+)");
+    private static final Pattern AUTH_PATTERN = Pattern.compile("(?<scheme>[\\w]+)[ ]+(?<token>[-_~+/\\.a-zA-Z0-9]+([=]*))");
     private static final Pattern CLIENT_INITIAL_RESPONSE_PATTERN = Pattern.compile(
             String.format("n,(a=(?<authzid>%s))?,%s(?<kvpairs>%s)%s", SASLNAME, SEPARATOR, KVPAIRS, SEPARATOR));
     public static final String AUTH_KEY = "auth";

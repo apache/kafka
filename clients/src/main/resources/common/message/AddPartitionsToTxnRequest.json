@@ -25,9 +25,11 @@
   // Version 3 enables flexible versions.
   //
   // Version 4 adds VerifyOnly field to check if partitions are already in transaction and adds support to batch multiple transactions.
+  //
+  // Version 5 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
   // Versions 3 and below will be exclusively used by clients and versions 4 and above will be used by brokers.
   "latestVersionUnstable": false,
-  "validVersions": "0-4",
+  "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "Transactions", "type": "[]AddPartitionsToTxnTransaction", "versions":  "4+",

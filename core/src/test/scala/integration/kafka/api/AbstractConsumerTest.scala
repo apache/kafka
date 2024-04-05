@@ -82,6 +82,80 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     createTopic(topic, 2, brokerCount, adminClientConfig = this.adminClientConfig)
   }
 
+  def awaitAssignment(consumer: Consumer[_, _], expectedAssignment: Set[TopicPartition])
+  : Unit = {
+    TestUtils.pollUntilTrue(consumer, () => consumer.assignment() == expectedAssignment.asJava,
+      s"Timed out while awaiting expected assignment $expectedAssignment. " +
+        s"The current assignment is ${consumer.assignment()}")
+  }
+
+  def awaitNonEmptyRecords[K, V](consumer: Consumer[K, V], partition: TopicPartition): ConsumerRecords[K, V] = {
+    TestUtils.pollRecordsUntilTrue(consumer, (polledRecords: ConsumerRecords[K, V]) => {
+      if (polledRecords.records(partition).asScala.nonEmpty)
+        return polledRecords
+      false
+    }, s"Consumer did not consume any messages for partition $partition before timeout.")
+    throw new IllegalStateException("Should have timed out before reaching here")
+  }
+
+  /**
+   * Creates 'consumerCount' consumers and consumer pollers, one per consumer; subscribes consumers to
+   * 'topicsToSubscribe' topics, waits until consumers get topics assignment.
+   *
+   * When the function returns, consumer pollers will continue to poll until shutdown is called on every poller.
+   *
+   * @param consumerCount     number of consumers to create
+   * @param topicsToSubscribe topics to which consumers will subscribe to
+   * @param subscriptions     set of all topic partitions
+   * @return collection of created consumers and collection of corresponding consumer pollers
+   */
+  def createConsumerGroupAndWaitForAssignment(consumerCount: Int,
+                                              topicsToSubscribe: List[String],
+                                              subscriptions: Set[TopicPartition]): (Buffer[Consumer[Array[Byte], Array[Byte]]], Buffer[ConsumerAssignmentPoller]) = {
+    assertTrue(consumerCount <= subscriptions.size)
+    val consumerGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
+    for (_ <- 0 until consumerCount)
+      consumerGroup += createConsumer()
+
+    // create consumer pollers, wait for assignment and validate it
+    val consumerPollers = subscribeConsumers(consumerGroup, topicsToSubscribe)
+    (consumerGroup, consumerPollers)
+  }
+
+  /**
+   * Creates consumer pollers corresponding to a given consumer group, one per consumer; subscribes consumers to
+   * 'topicsToSubscribe' topics, waits until consumers get topics assignment.
+   *
+   * When the function returns, consumer pollers will continue to poll until shutdown is called on every poller.
+   *
+   * @param consumerGroup     consumer group
+   * @param topicsToSubscribe topics to which consumers will subscribe to
+   * @return collection of consumer pollers
+   */
+  def subscribeConsumers(consumerGroup: mutable.Buffer[Consumer[Array[Byte], Array[Byte]]],
+                         topicsToSubscribe: List[String]): mutable.Buffer[ConsumerAssignmentPoller] = {
+    val consumerPollers = mutable.Buffer[ConsumerAssignmentPoller]()
+    for (consumer <- consumerGroup)
+      consumerPollers += subscribeConsumerAndStartPolling(consumer, topicsToSubscribe)
+    consumerPollers
+  }
+
+  def changeConsumerGroupSubscriptionAndValidateAssignment(consumerPollers: Buffer[ConsumerAssignmentPoller],
+                                                           topicsToSubscribe: List[String],
+                                                           subscriptions: Set[TopicPartition]): Unit = {
+    for (poller <- consumerPollers)
+      poller.subscribe(topicsToSubscribe)
+
+    // since subscribe call to poller does not actually call consumer subscribe right away, wait
+    // until subscribe is called on all consumers
+    TestUtils.waitUntilTrue(() => {
+      consumerPollers.forall { poller => poller.isSubscribeRequestProcessed }
+    }, s"Failed to call subscribe on all consumers in the group for subscription $subscriptions", 1000L)
+
+    validateGroupAssignment(consumerPollers, subscriptions,
+      Some(s"Did not get valid assignment for partitions ${subscriptions.asJava} after we changed subscription"))
+  }
+
   protected class TestConsumerReassignmentListener extends ConsumerRebalanceListener {
     var callsToAssigned = 0
     var callsToRevoked = 0

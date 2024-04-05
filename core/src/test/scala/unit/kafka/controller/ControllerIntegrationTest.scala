@@ -90,7 +90,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     waitUntilControllerEpoch(firstControllerEpoch, "broker failed to set controller epoch")
     servers.head.shutdown()
     servers.head.awaitShutdown()
-    TestUtils.waitUntilTrue(() => !zkClient.getControllerId.isDefined, "failed to kill controller")
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isEmpty, "failed to kill controller")
     waitUntilControllerEpoch(firstControllerEpoch, "controller epoch was not persisted after broker failure")
   }
 

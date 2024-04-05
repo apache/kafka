@@ -21,10 +21,10 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 import joptsimple._
-import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.{DynamicBrokerConfig, DynamicConfig, KafkaConfig}
-import kafka.utils.{Exit, Logging, PasswordEncoder}
+import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.utils.Implicits._
+import kafka.utils.{Exit, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -35,7 +35,8 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
-import org.apache.kafka.server.config.{ConfigEntityName, ConfigType, Defaults}
+import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals, ZkConfigs}
+import org.apache.kafka.security.{PasswordEncoder, PasswordEncoderConfigs}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.client.ZKClientConfig
@@ -152,7 +153,7 @@ object ConfigCommand extends Logging {
       if (!configsToBeAdded.isEmpty || configsToBeDeleted.nonEmpty) {
         validateBrokersNotRunning(entityName, adminZkClient, zkClient, errorMessage)
 
-        val perBrokerConfig = entityName != ConfigEntityName.DEFAULT
+        val perBrokerConfig = entityName != ZooKeeperInternals.DEFAULT_STRING
         preProcessBrokerConfigs(configsToBeAdded, perBrokerConfig)
       }
     }
@@ -177,7 +178,7 @@ object ConfigCommand extends Logging {
                                         adminZkClient: AdminZkClient,
                                         zkClient: KafkaZkClient,
                                         errorMessage: String): Unit = {
-    val perBrokerConfig = entityName != ConfigEntityName.DEFAULT
+    val perBrokerConfig = entityName != ZooKeeperInternals.DEFAULT_STRING
     val info = "Broker configuration operations using ZooKeeper are only supported if the affected broker(s) are not running."
     if (perBrokerConfig) {
       adminZkClient.parseBroker(entityName).foreach { brokerId =>
@@ -211,19 +212,19 @@ object ConfigCommand extends Logging {
   }
 
   private[admin] def createPasswordEncoder(encoderConfigs: Map[String, String]): PasswordEncoder = {
-    encoderConfigs.get(KafkaConfig.PasswordEncoderSecretProp)
-    val encoderSecret = encoderConfigs.getOrElse(KafkaConfig.PasswordEncoderSecretProp,
+    encoderConfigs.get(PasswordEncoderConfigs.SECRET)
+    val encoderSecret = encoderConfigs.getOrElse(PasswordEncoderConfigs.SECRET,
       throw new IllegalArgumentException("Password encoder secret not specified"))
     PasswordEncoder.encrypting(new Password(encoderSecret),
-      None,
-      encoderConfigs.getOrElse(KafkaConfig.PasswordEncoderCipherAlgorithmProp, Defaults.PASSWORD_ENCODER_CIPHER_ALGORITHM),
-      encoderConfigs.get(KafkaConfig.PasswordEncoderKeyLengthProp).map(_.toInt).getOrElse(Defaults.PASSWORD_ENCODER_KEY_LENGTH),
-      encoderConfigs.get(KafkaConfig.PasswordEncoderIterationsProp).map(_.toInt).getOrElse(Defaults.PASSWORD_ENCODER_ITERATIONS))
+      null,
+      encoderConfigs.getOrElse(PasswordEncoderConfigs.CIPHER_ALGORITHM, PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM),
+      encoderConfigs.get(PasswordEncoderConfigs.KEY_LENGTH).map(_.toInt).getOrElse(PasswordEncoderConfigs.DEFAULT_KEY_LENGTH),
+      encoderConfigs.get(PasswordEncoderConfigs.ITERATIONS).map(_.toInt).getOrElse(PasswordEncoderConfigs.DEFAULT_ITERATIONS))
   }
 
   /**
    * Pre-process broker configs provided to convert them to persistent format.
-   * Password configs are encrypted using the secret `KafkaConfig.PasswordEncoderSecretProp`.
+   * Password configs are encrypted using the secret `PasswordEncoderConfigs.SECRET`.
    * The secret is removed from `configsToBeAdded` and will not be persisted in ZooKeeper.
    */
   private def preProcessBrokerConfigs(configsToBeAdded: Properties, perBrokerConfig: Boolean): Unit = {
@@ -238,8 +239,8 @@ object ConfigCommand extends Logging {
     DynamicBrokerConfig.validateConfigs(configsToBeAdded, perBrokerConfig)
     val passwordConfigs = configsToBeAdded.asScala.keySet.filter(DynamicBrokerConfig.isPasswordConfig)
     if (passwordConfigs.nonEmpty) {
-      require(passwordEncoderConfigs.containsKey(KafkaConfig.PasswordEncoderSecretProp),
-        s"${KafkaConfig.PasswordEncoderSecretProp} must be specified to update $passwordConfigs." +
+      require(passwordEncoderConfigs.containsKey(PasswordEncoderConfigs.SECRET),
+        s"${PasswordEncoderConfigs.SECRET} must be specified to update $passwordConfigs." +
           " Other password encoder configs like cipher algorithm and iterations may also be specified" +
           " to override the default encoding parameters. Password encoder configs will not be persisted" +
           " in ZooKeeper."
@@ -696,7 +697,7 @@ object ConfigCommand extends Logging {
         case t => t
       }
       sanitizedName match {
-        case Some(ConfigEntityName.DEFAULT) => "default " + typeName
+        case Some(ZooKeeperInternals.DEFAULT_STRING) => "default " + typeName
         case Some(n) =>
           val desanitized = if (entityType == ConfigType.USER || entityType == ConfigType.CLIENT) Sanitizer.desanitize(n) else n
           s"$typeName '$desanitized'"
@@ -757,7 +758,7 @@ object ConfigCommand extends Logging {
     else {
       // Exactly one entity type and at-most one entity name expected for other entities
       val name = entityNames.headOption match {
-        case Some("") => Some(ConfigEntityName.DEFAULT)
+        case Some("") => Some(ZooKeeperInternals.DEFAULT_STRING)
         case v => v
       }
       ConfigEntity(Entity(entityTypes.head, name), None)
@@ -774,7 +775,7 @@ object ConfigCommand extends Logging {
 
     def sanitizeName(entityType: String, name: String) = {
       if (name.isEmpty)
-        ConfigEntityName.DEFAULT
+        ZooKeeperInternals.DEFAULT_STRING
       else {
         entityType match {
           case ConfigType.USER | ConfigType.CLIENT => Sanitizer.sanitize(name)
@@ -863,7 +864,7 @@ object ConfigCommand extends Logging {
       .ofType(classOf[String])
     val zkTlsConfigFile: OptionSpec[String] = parser.accepts("zk-tls-config-file",
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
-        KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") + " are ignored.")
+        ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.toList.sorted.mkString(", ") + " are ignored.")
       .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
     options = parser.parse(args : _*)
 
@@ -978,10 +979,10 @@ object ConfigCommand extends Logging {
         val isAddConfigFilePresent = options.has(addConfigFile)
         val isDeleteConfigPresent = options.has(deleteConfig)
 
-        if(isAddConfigPresent && isAddConfigFilePresent)
+        if (isAddConfigPresent && isAddConfigFilePresent)
           throw new IllegalArgumentException("Only one of --add-config or --add-config-file must be specified")
 
-        if(!isAddConfigPresent && !isAddConfigFilePresent && !isDeleteConfigPresent)
+        if (!isAddConfigPresent && !isAddConfigFilePresent && !isDeleteConfigPresent)
           throw new IllegalArgumentException("At least one of --add-config, --add-config-file, or --delete-config must be specified with --alter")
       }
     }

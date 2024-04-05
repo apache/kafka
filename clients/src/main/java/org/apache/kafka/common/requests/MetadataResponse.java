@@ -172,9 +172,9 @@ public class MetadataResponse extends AbstractResponse {
         return new PartitionInfo(metadata.topic(),
                 metadata.partition(),
                 metadata.leaderId.map(nodesById::get).orElse(null),
-                convertToNodeArray(metadata.replicaIds, nodesById),
-                convertToNodeArray(metadata.inSyncReplicaIds, nodesById),
-                convertToNodeArray(metadata.offlineReplicaIds, nodesById));
+                (metadata.replicaIds == null) ? null : convertToNodeArray(metadata.replicaIds, nodesById),
+                (metadata.inSyncReplicaIds == null) ? null : convertToNodeArray(metadata.inSyncReplicaIds, nodesById),
+                (metadata.offlineReplicaIds == null) ? null : convertToNodeArray(metadata.offlineReplicaIds, nodesById));
     }
 
     private static Node[] convertToNodeArray(List<Integer> replicaIds, Map<Integer, Node> nodesById) {

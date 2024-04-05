@@ -46,7 +46,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -179,7 +178,7 @@ public class KafkaBasedLog<K, V> {
         // as it will not take records from currently-open transactions into account. We want to err on the side of caution in that
         // case: when users request a read to the end of the log, we will read up to the point where the latest offsets visible to the
         // consumer are at least as high as the (possibly-part-of-a-transaction) end offsets of the topic.
-        this.requireAdminForOffsets = IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)
+        this.requireAdminForOffsets = IsolationLevel.READ_COMMITTED.toString()
                 .equals(consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG));
     }
 
@@ -252,7 +251,7 @@ public class KafkaBasedLog<K, V> {
             throw new ConnectException(
                     "Must provide a TopicAdmin to KafkaBasedLog when consumer is configured with "
                             + ConsumerConfig.ISOLATION_LEVEL_CONFIG + " set to "
-                            + IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)
+                            + IsolationLevel.READ_COMMITTED.toString()
             );
         }
         initializer.accept(admin);

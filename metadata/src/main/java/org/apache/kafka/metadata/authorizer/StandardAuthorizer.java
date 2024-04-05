@@ -93,8 +93,10 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
 
     @Override
     public void completeInitialLoad(Exception e) {
-        data.log.error("Failed to complete initial ACL load process.", e);
-        initialLoadFuture.completeExceptionally(e);
+        if (!initialLoadFuture.isDone()) {
+            data.log.error("Failed to complete initial ACL load process.", e);
+            initialLoadFuture.completeExceptionally(e);
+        }
     }
 
     @Override

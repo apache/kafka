@@ -67,14 +67,14 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, Enve
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
-import org.apache.kafka.common.utils.Utils._
+import org.apache.kafka.common.utils.Utils.formatAddress
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.server.config.{Defaults, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
@@ -133,12 +133,7 @@ object TestUtils extends Logging {
   /**
    * Create a temporary relative directory
    */
-  def tempRelativeDir(parent: String): File = {
-    val parentFile = new File(parent)
-    parentFile.mkdirs()
-
-    JTestUtils.tempDirectory(parentFile.toPath, null)
-  }
+  def tempRelativeDir(root: String): File = JTestUtils.tempRelativeDir(root)
 
   /**
    * Create a random log directory in the format <string>-<int> used for Kafka partition logs.
@@ -364,8 +359,8 @@ object TestUtils extends Logging {
       // controllerQuorumVotersFuture instead.
       props.put(KafkaConfig.QuorumVotersProp, "1000@localhost:0")
     } else {
-      props.put(KafkaConfig.ZkConnectProp, zkConnect)
-      props.put(KafkaConfig.ZkConnectionTimeoutMsProp, "10000")
+      props.put(ZkConfigs.ZK_CONNECT_CONFIG, zkConnect)
+      props.put(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG, "10000")
     }
     props.put(KafkaConfig.ReplicaSocketTimeoutMsProp, "1500")
     props.put(KafkaConfig.ControllerSocketTimeoutMsProp, "1500")
@@ -373,7 +368,7 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
     props.put(KafkaConfig.LogDeleteDelayMsProp, "1000")
     props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
-    props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "2097152")
+    props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152")
     props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     if (!props.containsKey(KafkaConfig.OffsetsTopicPartitionsProp))
       props.put(KafkaConfig.OffsetsTopicPartitionsProp, "5")
@@ -504,6 +499,33 @@ object TestUtils extends Logging {
       i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
         throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
     }.toMap
+  }
+
+  def increasePartitions[B <: KafkaBroker](admin: Admin,
+                                              topic: String,
+                                              totalPartitionCount: Int,
+                                              brokersToValidate: Seq[B]
+                                            ): Unit = {
+
+    try {
+      val newPartitionSet: Map[String, NewPartitions] = Map.apply(topic -> NewPartitions.increaseTo(totalPartitionCount))
+      admin.createPartitions(newPartitionSet.asJava)
+    } catch {
+      case e: ExecutionException =>
+        throw e
+    }
+
+    if (brokersToValidate.size > 0) {
+      // wait until we've propagated all partitions metadata to all brokers
+      val allPartitionsMetadata = waitForAllPartitionsMetadata(brokersToValidate, topic, totalPartitionCount)
+
+      (0 until totalPartitionCount - 1).map { i =>
+        i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
+          throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
+      }.toMap
+    } else {
+      Map.empty
+    }
   }
 
   def describeTopic(
@@ -725,7 +747,7 @@ object TestUtils extends Logging {
    */
   def checkEquals(b1: ByteBuffer, b2: ByteBuffer): Unit = {
     assertEquals(b1.limit() - b1.position(), b2.limit() - b2.position(), "Buffers should have equal length")
-    for(i <- 0 until b1.limit() - b1.position())
+    for (i <- 0 until b1.limit() - b1.position())
       assertEquals(b1.get(b1.position() + i), b2.get(b1.position() + i), "byte " + i + " byte not equal.")
   }
 
@@ -747,7 +769,7 @@ object TestUtils extends Logging {
    * different messages on their Nth element
    */
   def checkEquals[T](s1: java.util.Iterator[T], s2: java.util.Iterator[T]): Unit = {
-    while(s1.hasNext && s2.hasNext)
+    while (s1.hasNext && s2.hasNext)
       assertEquals(s1.next, s2.next)
     assertFalse(s1.hasNext, "Iterators have uneven length--first has more")
     assertFalse(s2.hasNext, "Iterators have uneven length--second has more")
@@ -788,7 +810,7 @@ object TestUtils extends Logging {
    */
   def hexString(buffer: ByteBuffer): String = {
     val builder = new StringBuilder("0x")
-    for(i <- 0 until buffer.limit())
+    for (i <- 0 until buffer.limit())
       builder.append(String.format("%x", Integer.valueOf(buffer.get(buffer.position() + i))))
     builder.toString
   }
@@ -1059,7 +1081,7 @@ object TestUtils extends Logging {
   def retry(maxWaitMs: Long)(block: => Unit): Unit = {
     var wait = 1L
     val startTime = System.currentTimeMillis()
-    while(true) {
+    while (true) {
       try {
         block
         return
@@ -1314,6 +1336,11 @@ object TestUtils extends Logging {
     controllerId.getOrElse(throw new AssertionError(s"Controller not elected after $timeout ms"))
   }
 
+  def waitUntilQuorumLeaderElected(controllerServer: ControllerServer, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    val (leaderAndEpoch, _) = computeUntilTrue(controllerServer.raftManager.leaderAndEpoch, waitTime = timeout)(_.leaderId().isPresent)
+    leaderAndEpoch.leaderId().orElseThrow(() => new AssertionError(s"Quorum Controller leader not elected after $timeout ms"))
+  }
+
   def awaitLeaderChange[B <: KafkaBroker](
       brokers: Seq[B],
       tp: TopicPartition,
@@ -1330,6 +1357,22 @@ object TestUtils extends Logging {
       s"Did not observe leader change for partition $tp after $timeout ms", waitTimeMs = timeout)
 
     newLeaderExists.get
+  }
+
+  def getLeaderIdForPartition[B <: KafkaBroker](
+      brokers: Seq[B],
+      tp: TopicPartition,
+      timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    def leaderExists: Option[Int] = {
+      brokers.find { broker =>
+          broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+      }.map(_.config.brokerId)
+    }
+
+    waitUntilTrue(() => leaderExists.isDefined,
+      s"Did not find a leader for partition $tp after $timeout ms", waitTimeMs = timeout)
+
+    leaderExists.get
   }
 
   def waitUntilLeaderIsKnown[B <: KafkaBroker](

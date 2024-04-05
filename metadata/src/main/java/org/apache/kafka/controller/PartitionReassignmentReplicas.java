@@ -120,9 +120,7 @@ class PartitionReassignmentReplicas {
             }
             if (newTargetReplicas.isEmpty()) return Optional.empty();
         }
-        for (int replica : adding) {
-            if (!newTargetIsr.contains(replica)) return Optional.empty();
-        }
+        if (!newTargetIsr.containsAll(newTargetReplicas)) return Optional.empty();
 
         return Optional.of(
             new CompletedReassignment(

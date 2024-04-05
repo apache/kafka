@@ -80,7 +80,7 @@ public class KRaftMigrationZkWriterTest {
             .setConfigMigrationClient(configClient)
             .build();
 
-        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient, __ -> { });
 
         MetadataImage image = new MetadataImage(
             MetadataProvenance.EMPTY,
@@ -120,7 +120,7 @@ public class KRaftMigrationZkWriterTest {
             .setAclMigrationClient(aclClient)
             .build();
 
-        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient, __ -> { });
 
         MetadataImage image = new MetadataImage(
             MetadataProvenance.EMPTY,
@@ -179,7 +179,7 @@ public class KRaftMigrationZkWriterTest {
             .setAclMigrationClient(aclClient)
             .build();
 
-        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient);
+        KRaftMigrationZkWriter writer = new KRaftMigrationZkWriter(migrationClient, __ -> { });
 
         MetadataImage image = new MetadataImage(
             MetadataProvenance.EMPTY,

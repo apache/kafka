@@ -15,7 +15,6 @@
 package kafka.server
 
 import kafka.api.LeaderAndIsr
-import kafka.network.RequestChannel.Session
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.common._
@@ -43,6 +42,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResou
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
+import org.apache.kafka.network.Session
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -223,7 +223,7 @@ class RequestQuotaTest extends BaseRequestTest {
     }
   }
 
-  def session(user: String): Session = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), null)
+  def session(user: String): Session = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), null)
 
   private def throttleTimeMetricValue(clientId: String): Double = {
     throttleTimeMetricValueForQuotaType(clientId, QuotaType.Request)

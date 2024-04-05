@@ -25,7 +25,7 @@ import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogManager}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.server.DynamicBrokerConfig._
-import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
+import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
@@ -35,8 +35,9 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
+import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.config.{ConfigEntityName, ConfigType, ServerTopicConfigSynonyms}
+import org.apache.kafka.server.config.{ConfigType, ServerTopicConfigSynonyms, ZooKeeperInternals}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin
 import org.apache.kafka.server.telemetry.ClientTelemetry
@@ -196,7 +197,7 @@ object DynamicBrokerConfig {
 
   private[server] def resolveVariableConfigs(propsOriginal: Properties): Properties = {
     val props = new Properties
-    val config = new AbstractConfig(new ConfigDef(), propsOriginal, false)
+    val config = new AbstractConfig(new ConfigDef(), propsOriginal, Utils.castToStringObjectMap(propsOriginal), false)
     config.originals.forEach { (key, value) =>
       if (!key.startsWith(AbstractConfig.CONFIG_PROVIDERS_CONFIG)) {
         props.put(key, value)
@@ -223,7 +224,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val dynamicConfigPasswordEncoder = if (kafkaConfig.processRoles.isEmpty) {
     maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
   } else {
-    Some(PasswordEncoder.noop())
+    Some(PasswordEncoder.NOOP)
   }
 
   private[server] def initialize(zkClientOpt: Option[KafkaZkClient], clientMetricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin]): Unit = {
@@ -232,7 +233,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
     zkClientOpt.foreach { zkClient =>
       val adminZkClient = new AdminZkClient(zkClient)
-      updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.BROKER, ConfigEntityName.DEFAULT), false)
+      updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.BROKER, ZooKeeperInternals.DEFAULT_STRING), false)
       val props = adminZkClient.fetchEntityConfig(ConfigType.BROKER, kafkaConfig.brokerId.toString)
       val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
       updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)

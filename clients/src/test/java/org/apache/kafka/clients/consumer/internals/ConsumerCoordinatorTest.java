@@ -127,6 +127,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -642,7 +643,7 @@ public abstract class ConsumerCoordinatorTest {
             coordinator.commitOffsetsAsync(offsets, (offsets1, exception) -> {
                 responses.incrementAndGet();
                 Throwable cause = exception.getCause();
-                assertTrue(cause instanceof DisconnectException,
+                assertInstanceOf(DisconnectException.class, cause,
                     "Unexpected exception cause type: " + (cause == null ? null : cause.getClass()));
             });
         }
@@ -689,7 +690,7 @@ public abstract class ConsumerCoordinatorTest {
 
                     @Override
                     public void onFailure(RuntimeException e, RequestFuture<Object> future) {
-                        assertTrue(e instanceof DisconnectException, "Unexpected exception type: " + e.getClass());
+                        assertInstanceOf(DisconnectException.class, e, "Unexpected exception type: " + e.getClass());
                         assertTrue(coordinator.coordinatorUnknown());
                         asyncCallbackInvoked.set(true);
                     }
@@ -952,7 +953,7 @@ public abstract class ConsumerCoordinatorTest {
 
         assertTrue(future.isDone());
         assertTrue(future.failed());
-        assertTrue(future.exception() instanceof DisconnectException);
+        assertInstanceOf(DisconnectException.class, future.exception());
         assertTrue(coordinator.coordinatorUnknown());
     }
 
@@ -2362,8 +2363,8 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.invokeCompletedOffsetCommitCallbacks();
 
         assertTrue(coordinator.coordinatorUnknown());
-        assertTrue(firstCommitCallback.exception instanceof RetriableCommitFailedException);
-        assertTrue(secondCommitCallback.exception instanceof RetriableCommitFailedException);
+        assertInstanceOf(RetriableCommitFailedException.class, firstCommitCallback.exception);
+        assertInstanceOf(RetriableCommitFailedException.class, secondCommitCallback.exception);
         assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
     }
 
@@ -2597,7 +2598,7 @@ public abstract class ConsumerCoordinatorTest {
         assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
         coordinator.invokeCompletedOffsetCommitCallbacks();
         assertEquals(invokedBeforeTest + 1, mockOffsetCommitCallback.invoked);
-        assertTrue(mockOffsetCommitCallback.exception instanceof RetriableCommitFailedException);
+        assertInstanceOf(RetriableCommitFailedException.class, mockOffsetCommitCallback.exception);
     }
 
     @Test
@@ -2614,7 +2615,7 @@ public abstract class ConsumerCoordinatorTest {
 
         assertTrue(coordinator.coordinatorUnknown());
         assertEquals(1, cb.invoked);
-        assertTrue(cb.exception instanceof RetriableCommitFailedException);
+        assertInstanceOf(RetriableCommitFailedException.class, cb.exception);
     }
 
     @Test
@@ -2631,7 +2632,7 @@ public abstract class ConsumerCoordinatorTest {
 
         assertTrue(coordinator.coordinatorUnknown());
         assertEquals(1, cb.invoked);
-        assertTrue(cb.exception instanceof RetriableCommitFailedException);
+        assertInstanceOf(RetriableCommitFailedException.class, cb.exception);
     }
 
     @Test
@@ -2648,7 +2649,7 @@ public abstract class ConsumerCoordinatorTest {
 
         assertTrue(coordinator.coordinatorUnknown());
         assertEquals(1, cb.invoked);
-        assertTrue(cb.exception instanceof RetriableCommitFailedException);
+        assertInstanceOf(RetriableCommitFailedException.class, cb.exception);
     }
 
     @Test
@@ -2794,7 +2795,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.setNewState(AbstractCoordinator.MemberState.PREPARING_REBALANCE);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
-        assertTrue(future.exception().getClass().isInstance(Errors.REBALANCE_IN_PROGRESS.exception()));
+        assertInstanceOf(future.exception().getClass(), Errors.REBALANCE_IN_PROGRESS.exception());
 
         // the generation should not be reset
         assertEquals(newGen, coordinator.generation());
@@ -2842,7 +2843,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.setNewGeneration(AbstractCoordinator.Generation.NO_GENERATION);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
-        assertTrue(future.exception().getClass().isInstance(new CommitFailedException()));
+        assertInstanceOf(future.exception().getClass(), new CommitFailedException());
 
         // the generation should not be reset
         assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
@@ -2872,7 +2873,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.setNewState(AbstractCoordinator.MemberState.PREPARING_REBALANCE);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
-        assertTrue(future.exception().getClass().isInstance(Errors.REBALANCE_IN_PROGRESS.exception()));
+        assertInstanceOf(future.exception().getClass(), Errors.REBALANCE_IN_PROGRESS.exception());
 
         // the generation should not be reset
         assertEquals(newGen, coordinator.generation());
@@ -2897,7 +2898,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.setNewGeneration(AbstractCoordinator.Generation.NO_GENERATION);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
-        assertTrue(future.exception().getClass().isInstance(new CommitFailedException()));
+        assertInstanceOf(future.exception().getClass(), new CommitFailedException());
 
         // the generation should be reset
         assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
@@ -2947,7 +2948,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.setNewGeneration(newGen);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
-        assertTrue(future.exception().getClass().isInstance(Errors.REBALANCE_IN_PROGRESS.exception()));
+        assertInstanceOf(future.exception().getClass(), Errors.REBALANCE_IN_PROGRESS.exception());
 
         // the generation should not be reset
         assertEquals(newGen, coordinator.generation());
@@ -2976,7 +2977,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.setNewGeneration(newGen);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
-        assertTrue(future.exception().getClass().isInstance(new CommitFailedException()));
+        assertInstanceOf(future.exception().getClass(), new CommitFailedException());
 
         // the generation should not be reset
         assertEquals(newGen, coordinator.generation());

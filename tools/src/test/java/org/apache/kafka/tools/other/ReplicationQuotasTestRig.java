@@ -217,7 +217,7 @@ public class ReplicationQuotasTestRig {
 
             System.out.println("Generating Reassignment");
             Map<TopicPartition, List<Integer>> newAssignment = ReassignPartitionsCommand.generateAssignment(adminClient,
-                json(TOPIC_NAME), brokers.stream().map(Object::toString).collect(Collectors.joining(",")), true).v1;
+                json(TOPIC_NAME), brokers.stream().map(Object::toString).collect(Collectors.joining(",")), true).getKey();
 
             System.out.println("Starting Reassignment");
             long start = System.currentTimeMillis();

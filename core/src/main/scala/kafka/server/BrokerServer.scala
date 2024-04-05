@@ -24,12 +24,12 @@ import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
-import kafka.security.CredentialProvider
 import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
@@ -41,6 +41,7 @@ import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorCon
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
@@ -55,7 +56,7 @@ import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import java.util
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
 import scala.compat.java8.OptionConverters.RichOptionForJava8
@@ -68,9 +69,9 @@ import scala.jdk.CollectionConverters._
 class BrokerServer(
   val sharedServer: SharedServer
 ) extends KafkaBroker {
-  val config = sharedServer.brokerConfig
-  val time = sharedServer.time
-  def metrics = sharedServer.metrics
+  val config: KafkaConfig = sharedServer.brokerConfig
+  val time: Time = sharedServer.time
+  def metrics: Metrics = sharedServer.metrics
 
   // Get raftManager from SharedServer. It will be initialized during startup.
   def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager
@@ -86,16 +87,15 @@ class BrokerServer(
 
   @volatile var lifecycleManager: BrokerLifecycleManager = _
 
-  var assignmentsManager: AssignmentsManager = _
+  private var assignmentsManager: AssignmentsManager = _
 
   private val isShuttingDown = new AtomicBoolean(false)
 
-  val lock = new ReentrantLock()
-  val awaitShutdownCond = lock.newCondition()
+  val lock: ReentrantLock = new ReentrantLock()
+  val awaitShutdownCond: Condition = lock.newCondition()
   var status: ProcessStatus = SHUTDOWN
 
   @volatile var dataPlaneRequestProcessor: KafkaApis = _
-  var controlPlaneRequestProcessor: KafkaApis = _
 
   var authorizer: Option[Authorizer] = None
   @volatile var socketServer: SocketServer = _
@@ -235,7 +235,7 @@ class BrokerServer(
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
-      clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time)
+      clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time, metrics)
 
       val apiVersionManager = ApiVersionManager(
         ListenerType.BROKER,
@@ -452,7 +452,9 @@ class BrokerServer(
           authorizer
         ),
         sharedServer.initialBrokerMetadataLoadFaultHandler,
-        sharedServer.metadataPublishingFaultHandler)
+        sharedServer.metadataPublishingFaultHandler,
+        lifecycleManager
+      )
       metadataPublishers.add(brokerMetadataPublisher)
 
       // Register parts of the broker that can be reconfigured via dynamic configs.  This needs to
@@ -605,7 +607,7 @@ class BrokerServer(
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
       if (config.logDirs.size > 1) {
-        throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
+        throw new KafkaException("Tiered storage is not supported with multiple log dirs.")
       }
 
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
@@ -652,8 +654,6 @@ class BrokerServer(
         CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
       if (dataPlaneRequestProcessor != null)
         CoreUtils.swallow(dataPlaneRequestProcessor.close(), this)
-      if (controlPlaneRequestProcessor != null)
-        CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
       CoreUtils.swallow(authorizer.foreach(_.close()), this)
 
       /**

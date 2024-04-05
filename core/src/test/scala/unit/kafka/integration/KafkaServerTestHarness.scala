@@ -283,7 +283,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     }
     if (configs.isEmpty)
       throw new KafkaException("Must supply at least one server config.")
-    for(i <- _brokers.indices if !alive(i)) {
+    for (i <- _brokers.indices if !alive(i)) {
       if (reconfigure) {
         _brokers(i) = createBrokerFromConfig(configs(i))
       }

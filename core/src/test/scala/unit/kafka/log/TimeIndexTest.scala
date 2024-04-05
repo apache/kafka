@@ -39,7 +39,7 @@ class TimeIndexTest {
 
   @AfterEach
   def teardown(): Unit = {
-    if(this.idx != null)
+    if (this.idx != null)
       this.idx.file.delete()
   }
 

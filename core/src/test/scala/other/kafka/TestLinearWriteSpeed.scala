@@ -116,12 +116,12 @@ object TestLinearWriteSpeed {
     val writables = new Array[Writable](numFiles)
     val scheduler = new KafkaScheduler(1)
     scheduler.startup()
-    for(i <- 0 until numFiles) {
-      if(options.has(mmapOpt)) {
+    for (i <- 0 until numFiles) {
+      if (options.has(mmapOpt)) {
         writables(i) = new MmapWritable(new File(dir, "kafka-test-" + i + ".dat"), bytesToWrite / numFiles, buffer)
-      } else if(options.has(channelOpt)) {
+      } else if (options.has(channelOpt)) {
         writables(i) = new ChannelWritable(new File(dir, "kafka-test-" + i + ".dat"), buffer)
-      } else if(options.has(logOpt)) {
+      } else if (options.has(logOpt)) {
         val segmentSize = rand.nextInt(512)*1024*1024 + 64*1024*1024 // vary size to avoid herd effect
         val logProperties = new Properties()
         logProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentSize: java.lang.Integer)
@@ -143,7 +143,7 @@ object TestLinearWriteSpeed {
     var written = 0L
     var totalWritten = 0L
     var lastReport = beginTest
-    while(totalWritten + bufferSize < bytesToWrite) {
+    while (totalWritten + bufferSize < bytesToWrite) {
       val start = System.nanoTime
       val writeSize = writables((count % numFiles).toInt.abs).write()
       val elapsed = System.nanoTime - start
@@ -152,7 +152,7 @@ object TestLinearWriteSpeed {
       written += writeSize
       count += 1
       totalWritten += writeSize
-      if((start - lastReport)/(1000.0*1000.0) > reportingInterval.doubleValue) {
+      if ((start - lastReport)/(1000.0*1000.0) > reportingInterval.doubleValue) {
         val elapsedSecs = (start - lastReport) / (1000.0*1000.0*1000.0)
         val mb = written / (1024.0*1024.0)
         println("%10.3f\t%10.3f\t%10.3f".format(mb / elapsedSecs, totalLatency / count.toDouble / (1000.0*1000.0), maxLatency / (1000.0 * 1000.0)))
@@ -160,12 +160,12 @@ object TestLinearWriteSpeed {
         written = 0
         maxLatency = 0L
         totalLatency = 0L
-      } else if(written > maxThroughputBytes * (reportingInterval / 1000.0)) {
+      } else if (written > maxThroughputBytes * (reportingInterval / 1000.0)) {
         // if we have written enough, just sit out this reporting interval
         val lastReportMs = lastReport / (1000*1000)
         val now = System.nanoTime / (1000*1000)
         val sleepMs = lastReportMs + reportingInterval - now
-        if(sleepMs > 0)
+        if (sleepMs > 0)
           Thread.sleep(sleepMs)
       }
     }

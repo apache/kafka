@@ -24,13 +24,13 @@ import kafka.common.OffsetAndMetadata
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
-import kafka.server.{DelayedOperationPurgatory, KafkaConfig}
+import kafka.server.{DelayedOperationPurgatory, KafkaConfig, KafkaRequestHandler, RequestLocal}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.Time
 import org.junit.jupiter.api.Assertions._
@@ -85,6 +85,10 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, timer.time, metrics)
     groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
       false)
+
+    // Transactional appends attempt to schedule to the request handler thread using
+    // a non request handler thread. Set this to avoid error.
+    KafkaRequestHandler.setBypassThreadCheck(true)
   }
 
   @AfterEach
@@ -315,7 +319,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
         // Since the replica manager is mocked we can use a dummy value for transactionalId.
         groupCoordinator.handleTxnCommitOffsets(member.group.groupId, "dummy-txn-id", producerId, producerEpoch,
           JoinGroupRequest.UNKNOWN_MEMBER_ID, Option.empty, JoinGroupRequest.UNKNOWN_GENERATION_ID,
-          offsets, callbackWithTxnCompletion)
+          offsets, callbackWithTxnCompletion, RequestLocal.NoCaching, ApiKeys.TXN_OFFSET_COMMIT.latestVersion())
         replicaManager.tryCompleteActions()
       } finally lock.foreach(_.unlock())
     }

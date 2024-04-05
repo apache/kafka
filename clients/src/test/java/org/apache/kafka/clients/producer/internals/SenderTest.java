@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -41,6 +42,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -113,6 +115,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -129,9 +132,11 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class SenderTest {
     private static final int MAX_REQUEST_SIZE = 1024 * 1024;
@@ -471,7 +476,7 @@ public class SenderTest {
         final byte[] key = "key".getBytes();
         final byte[] value = "value".getBytes();
         final long maxBlockTimeMs = 1000;
-        Cluster cluster = TestUtils.singletonCluster();
+        MetadataSnapshot metadataCache = TestUtils.metadataSnapshotWith(1);
         RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
             @Override
             public void setPartition(int partition) {
@@ -483,7 +488,7 @@ public class SenderTest {
                     expiryCallbackCount.incrementAndGet();
                     try {
                         accumulator.append(tp1.topic(), tp1.partition(), 0L, key, value,
-                            Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), cluster);
+                            Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), metadataCache.cluster());
                     } catch (InterruptedException e) {
                         throw new RuntimeException("Unexpected interruption", e);
                     }
@@ -494,14 +499,14 @@ public class SenderTest {
 
         final long nowMs = time.milliseconds();
         for (int i = 0; i < messagesPerBatch; i++)
-            accumulator.append(tp1.topic(), tp1.partition(), 0L, key, value, null, callbacks, maxBlockTimeMs, false, nowMs, cluster);
+            accumulator.append(tp1.topic(), tp1.partition(), 0L, key, value, null, callbacks, maxBlockTimeMs, false, nowMs, metadataCache.cluster());
 
         // Advance the clock to expire the first batch.
         time.sleep(10000);
 
         Node clusterNode = metadata.fetch().nodes().get(0);
         Map<Integer, List<ProducerBatch>> drainedBatches =
-            accumulator.drain(metadata, Collections.singleton(clusterNode), Integer.MAX_VALUE, time.milliseconds());
+            accumulator.drain(metadataCache, Collections.singleton(clusterNode), Integer.MAX_VALUE, time.milliseconds());
         sender.addToInflightBatches(drainedBatches);
 
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
@@ -732,7 +737,7 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.CLUSTER_AUTHORIZATION_FAILED);
         assertFalse(transactionManager.hasProducerId());
         assertTrue(transactionManager.hasError());
-        assertTrue(transactionManager.lastError() instanceof ClusterAuthorizationException);
+        assertInstanceOf(ClusterAuthorizationException.class, transactionManager.lastError());
         assertEquals(-1, transactionManager.producerIdAndEpoch().epoch);
 
         assertSendFailure(ClusterAuthorizationException.class);
@@ -767,11 +772,7 @@ public class SenderTest {
         }, produceResponse(tp0, -1L, Errors.TOPIC_AUTHORIZATION_FAILED, 0));
         sender.runOnce();
         assertTrue(future.isDone());
-        try {
-            future.get();
-        } catch (Exception e) {
-            assertTrue(e.getCause() instanceof TopicAuthorizationException);
-        }
+        assertInstanceOf(TopicAuthorizationException.class, assertThrows(Exception.class, future::get).getCause());
     }
 
     @Test
@@ -2538,12 +2539,10 @@ public class SenderTest {
         time.sleep(deliveryTimeoutMs);
         sender.runOnce();  // receive first response
         assertEquals(0, sender.inFlightBatches(tp0).size(), "Expect zero in-flight batch in accumulator");
-        try {
-            request.get();
-            fail("The expired batch should throw a TimeoutException");
-        } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof TimeoutException);
-        }
+        assertInstanceOf(
+            TimeoutException.class,
+            assertThrows(ExecutionException.class, request::get).getCause(),
+            "The expired batch should throw a TimeoutException");
     }
 
     @Test
@@ -2577,10 +2576,10 @@ public class SenderTest {
             KafkaException exception = TestUtils.assertFutureThrows(future, KafkaException.class);
             Integer index = futureEntry.getKey();
             if (index == 0 || index == 2) {
-                assertTrue(exception instanceof InvalidRecordException);
+                assertInstanceOf(InvalidRecordException.class, exception);
                 assertEquals(index.toString(), exception.getMessage());
             } else if (index == 3) {
-                assertTrue(exception instanceof InvalidRecordException);
+                assertInstanceOf(InvalidRecordException.class, exception);
                 assertEquals(Errors.INVALID_RECORD.message(), exception.getMessage());
             } else {
                 assertEquals(KafkaException.class, exception.getClass());
@@ -2721,10 +2720,10 @@ public class SenderTest {
         assertEquals(0, sender.inFlightBatches(tp0).size(), "Expect zero in-flight batch in accumulator");
 
         ExecutionException e = assertThrows(ExecutionException.class, request1::get);
-        assertTrue(e.getCause() instanceof TimeoutException);
+        assertInstanceOf(TimeoutException.class, e.getCause());
 
         e = assertThrows(ExecutionException.class, request2::get);
-        assertTrue(e.getCause() instanceof TimeoutException);
+        assertInstanceOf(TimeoutException.class, e.getCause());
     }
 
     @Test
@@ -3150,6 +3149,45 @@ public class SenderTest {
 
         txnManager.beginTransaction();
     }
+
+    @Test
+    public void testTransactionAbortablenExceptionIsAnAbortableError() throws Exception {
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+        apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
+        TransactionManager txnManager = new TransactionManager(logContext, "textTransactionAbortableException", 60000, 100, apiVersions);
+
+        setupWithTransactionState(txnManager);
+        doInitTransactions(txnManager, producerIdAndEpoch);
+
+        txnManager.beginTransaction();
+        txnManager.maybeAddPartition(tp0);
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
+        sender.runOnce();
+
+        Future<RecordMetadata> request = appendToAccumulator(tp0);
+        sender.runOnce();  // send request
+        sendIdempotentProducerResponse(0, tp0, Errors.TRANSACTION_ABORTABLE, -1);
+
+        // Return TransactionAbortableException error. It should be abortable.
+        sender.runOnce();
+        assertFutureFailure(request, TransactionAbortableException.class);
+        assertTrue(txnManager.hasAbortableError());
+        TransactionalRequestResult result = txnManager.beginAbort();
+        sender.runOnce();
+
+        // Once the transaction is aborted, we should be able to begin a new one.
+        respondToEndTxn(Errors.NONE);
+        sender.runOnce();
+        assertTrue(txnManager::isInitializing);
+        prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
+        sender.runOnce();
+        assertTrue(txnManager::isReady);
+
+        assertTrue(result.isSuccessful());
+        result.await();
+
+        txnManager.beginTransaction();
+    }
     @Test
     public void testProducerBatchRetriesWhenPartitionLeaderChanges() throws Exception {
         Metrics m = new Metrics();
@@ -3236,6 +3274,26 @@ public class SenderTest {
         } finally {
             m.close();
         }
+    }
+
+    // This test is expected to run fast. If timeout, the sender is not able to close properly.
+    @Timeout(5)
+    @Test
+    public void testSenderShouldCloseWhenTransactionManagerInErrorState() throws Exception {
+        metrics.close();
+        Map<String, String> clientTags = Collections.singletonMap("client-id", "clientA");
+        metrics = new Metrics(new MetricConfig().tags(clientTags));
+        TransactionManager transactionManager = mock(TransactionManager.class);
+        SenderMetricsRegistry metricsRegistry = new SenderMetricsRegistry(metrics);
+        Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
+                1, metricsRegistry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
+        when(transactionManager.hasOngoingTransaction()).thenReturn(true);
+        when(transactionManager.beginAbort()).thenThrow(new IllegalStateException());
+        sender.initiateClose();
+
+        // The sender should directly get closed.
+        sender.run();
+        verify(transactionManager, times(1)).close();
     }
 
     /**

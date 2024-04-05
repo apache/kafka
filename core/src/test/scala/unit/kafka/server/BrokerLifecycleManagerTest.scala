@@ -197,11 +197,18 @@ class BrokerLifecycleManagerTest {
     result
   }
 
-  def poll[T](context: RegistrationTestContext, manager: BrokerLifecycleManager, future: Future[T]): T = {
-    while (!future.isDone || context.mockClient.hasInFlightRequests) {
-      context.poll()
+  def poll[T](ctx: RegistrationTestContext, manager: BrokerLifecycleManager, future: Future[T]): T = {
+    while (ctx.mockChannelManager.unsentQueue.isEmpty) {
+      // Cancel a potential timeout event, so it doesn't get activated if we advance the clock too much
+      manager.eventQueue.cancelDeferred("initialRegistrationTimeout")
+
+      // If the manager is idling until scheduled events we need to advance the clock
+      if (manager.eventQueue.firstDeferredIfIdling().isPresent)
+        ctx.time.sleep(5)
       manager.eventQueue.wakeup()
-      context.time.sleep(5)
+    }
+    while (!future.isDone) {
+      ctx.poll()
     }
     future.get
   }
@@ -219,15 +226,16 @@ class BrokerLifecycleManagerTest {
       Collections.emptyMap(), OptionalLong.empty())
     poll(ctx, manager, registration)
 
+    def nextHeartbeatDirs(): Set[String] =
+      poll(ctx, manager, prepareResponse[BrokerHeartbeatRequest](ctx, new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData())))
+        .data().offlineLogDirs().asScala.map(_.toString).toSet
+    assertEquals(Set.empty, nextHeartbeatDirs())
     manager.propagateDirectoryFailure(Uuid.fromString("h3sC4Yk-Q9-fd0ntJTocCA"))
+    assertEquals(Set("h3sC4Yk-Q9-fd0ntJTocCA"), nextHeartbeatDirs())
     manager.propagateDirectoryFailure(Uuid.fromString("ej8Q9_d2Ri6FXNiTxKFiow"))
+    assertEquals(Set("h3sC4Yk-Q9-fd0ntJTocCA", "ej8Q9_d2Ri6FXNiTxKFiow"), nextHeartbeatDirs())
     manager.propagateDirectoryFailure(Uuid.fromString("1iF76HVNRPqC7Y4r6647eg"))
-    val latestHeartbeat = Seq.fill(10)(
-      prepareResponse[BrokerHeartbeatRequest](ctx, new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData()))
-    ).map(poll(ctx, manager, _)).last
-    assertEquals(
-      Set("h3sC4Yk-Q9-fd0ntJTocCA", "ej8Q9_d2Ri6FXNiTxKFiow", "1iF76HVNRPqC7Y4r6647eg").map(Uuid.fromString),
-      latestHeartbeat.data().offlineLogDirs().asScala.toSet)
+    assertEquals(Set("h3sC4Yk-Q9-fd0ntJTocCA", "ej8Q9_d2Ri6FXNiTxKFiow", "1iF76HVNRPqC7Y4r6647eg"), nextHeartbeatDirs())
     manager.close()
   }
 
@@ -248,6 +256,40 @@ class BrokerLifecycleManagerTest {
     val request = poll(ctx, manager, registration).asInstanceOf[BrokerRegistrationRequest]
 
     assertEquals(logDirs, request.data.logDirs().asScala.toSet)
+
+    manager.close()
+  }
+
+  @Test
+  def testKraftJBODMetadataVersionUpdateEvent(): Unit = {
+    val ctx = new RegistrationTestContext(configProperties)
+    val manager = new BrokerLifecycleManager(ctx.config, ctx.time, "jbod-metadata-version-update", isZkBroker = false, Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
+    val controllerNode = new Node(3000, "localhost", 8021)
+    ctx.controllerNodeProvider.node.set(controllerNode)
+
+    manager.start(() => ctx.highestMetadataOffset.get(),
+      ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
+      Collections.emptyMap(), OptionalLong.of(10L))
+
+    def doPoll[T<:AbstractRequest](response: AbstractResponse) = poll(ctx, manager, prepareResponse[T](ctx, response))
+    def nextHeartbeatRequest() = doPoll[AbstractRequest](new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData()))
+    def nextRegistrationRequest(epoch: Long) =
+      doPoll[BrokerRegistrationRequest](new BrokerRegistrationResponse(new BrokerRegistrationResponseData().setBrokerEpoch(epoch)))
+
+    // Broker registers and response sets epoch to 1000L
+    assertEquals(10L, nextRegistrationRequest(1000L).data().previousBrokerEpoch())
+
+    nextHeartbeatRequest() // poll for next request as way to synchronize with the new value into brokerEpoch
+    assertEquals(1000L, manager.brokerEpoch)
+
+    // Trigger JBOD MV update
+    manager.handleKraftJBODMetadataVersionUpdate()
+
+    // Accept new registration, response sets epoch to 1200
+    nextRegistrationRequest(1200L)
+
+    nextHeartbeatRequest()
+    assertEquals(1200L, manager.brokerEpoch)
 
     manager.close()
   }

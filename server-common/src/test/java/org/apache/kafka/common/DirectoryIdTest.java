@@ -19,6 +19,7 @@ package org.apache.kafka.common;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
@@ -67,12 +68,16 @@ public class DirectoryIdTest {
 
     @Test
     void testIsOnline() {
+        // Given
         List<Uuid> sortedDirs = Arrays.asList(
                 Uuid.fromString("imQKg2cXTVe8OUFNa3R9bg"),
                 Uuid.fromString("Mwy5wxTDQxmsZwGzjsaX7w"),
                 Uuid.fromString("s8rHMluuSDCnxt3FmKwiyw")
         );
         sortedDirs.sort(Uuid::compareTo);
+        List<Uuid> emptySortedDirs = Collections.emptyList();
+
+        // When/Then
         assertTrue(DirectoryId.isOnline(Uuid.fromString("imQKg2cXTVe8OUFNa3R9bg"), sortedDirs));
         assertTrue(DirectoryId.isOnline(Uuid.fromString("Mwy5wxTDQxmsZwGzjsaX7w"), sortedDirs));
         assertTrue(DirectoryId.isOnline(Uuid.fromString("s8rHMluuSDCnxt3FmKwiyw"), sortedDirs));
@@ -80,5 +85,6 @@ public class DirectoryIdTest {
         assertTrue(DirectoryId.isOnline(DirectoryId.UNASSIGNED, sortedDirs));
         assertFalse(DirectoryId.isOnline(DirectoryId.LOST, sortedDirs));
         assertFalse(DirectoryId.isOnline(Uuid.fromString("AMYchbMtS6yhtsXbca7DQg"), sortedDirs));
+        assertTrue(DirectoryId.isOnline(Uuid.randomUuid(), emptySortedDirs));
     }
 }

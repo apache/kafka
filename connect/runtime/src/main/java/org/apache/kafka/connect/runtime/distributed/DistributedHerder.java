@@ -50,6 +50,7 @@ import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskStatus;
+import org.apache.kafka.connect.runtime.TooManyTasksException;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
@@ -154,7 +155,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private static final long FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long START_AND_STOP_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
     private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_INITIAL_MS = 250;
-    private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MAX_MS = 60000;
+    static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MAX_MS = 60000;
     private static final long CONFIG_TOPIC_WRITE_PRIVILEGES_BACKOFF_MS = 250;
     private static final int START_STOP_THREAD_POOL_SIZE = 8;
     private static final short BACKOFF_RETRIES = 5;
@@ -2139,6 +2140,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             if (error != null) {
                 if (isPossibleExpiredKeyException(initialRequestTime, error)) {
                     log.debug("Failed to reconfigure connector's tasks ({}), possibly due to expired session key. Retrying after backoff", connName);
+                } else if (error instanceof TooManyTasksException) {
+                    log.debug("Connector {} generated too many tasks; will not retry configuring connector", connName);
+                    return;
                 } else {
                     log.error("Failed to reconfigure connector's tasks ({}), retrying after backoff.", connName, error);
                 }

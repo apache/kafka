@@ -40,6 +40,7 @@ import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.TaskStatus;
+import org.apache.kafka.connect.runtime.TooManyTasksException;
 import org.apache.kafka.connect.runtime.TopicStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -125,6 +126,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.AdditionalMatchers.leq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -867,7 +869,7 @@ public class DistributedHerderTest {
 
         ArgumentCaptor<Throwable> error = ArgumentCaptor.forClass(Throwable.class);
         verify(putConnectorCallback).onCompletion(error.capture(), isNull());
-        assertTrue(error.getValue() instanceof BadRequestException);
+        assertInstanceOf(BadRequestException.class, error.getValue());
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
 
         assertEquals(
@@ -1173,7 +1175,7 @@ public class DistributedHerderTest {
         herder.restartConnectorAndTasks(restartRequest, callback);
         herder.tick();
         ExecutionException ee = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(ee.getCause() instanceof NotFoundException);
+        assertInstanceOf(NotFoundException.class, ee.getCause());
         assertTrue(ee.getMessage().contains("Unknown connector:"));
 
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
@@ -1199,7 +1201,7 @@ public class DistributedHerderTest {
         herder.restartConnectorAndTasks(restartRequest, callback);
         herder.tick();
         ExecutionException ee = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(ee.getCause() instanceof NotLeaderException);
+        assertInstanceOf(NotLeaderException.class, ee.getCause());
 
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
     }
@@ -1227,7 +1229,7 @@ public class DistributedHerderTest {
         herder.restartConnectorAndTasks(restartRequest, callback);
         herder.tick();
         ExecutionException ee = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(ee.getCause() instanceof NotFoundException);
+        assertInstanceOf(NotFoundException.class, ee.getCause());
         assertTrue(ee.getMessage().contains("Status for connector"));
 
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
@@ -1836,7 +1838,7 @@ public class DistributedHerderTest {
                 ExecutionException.class,
                 () -> cb.get(0, TimeUnit.SECONDS)
         );
-        assertTrue(e.getCause() instanceof NotLeaderException);
+        assertInstanceOf(NotLeaderException.class, e.getCause());
 
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
     }
@@ -2469,7 +2471,7 @@ public class DistributedHerderTest {
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
-        assertTrue(errorCapture.getValue() instanceof BadRequestException);
+        assertInstanceOf(BadRequestException.class, errorCapture.getValue());
 
         verifyNoMoreInteractions(member, taskConfigCb);
     }
@@ -2486,7 +2488,7 @@ public class DistributedHerderTest {
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
-        assertTrue(errorCapture.getValue() instanceof BadRequestException);
+        assertInstanceOf(BadRequestException.class, errorCapture.getValue());
 
         verifyNoMoreInteractions(member, taskConfigCb);
     }
@@ -2512,7 +2514,7 @@ public class DistributedHerderTest {
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
-        assertTrue(errorCapture.getValue() instanceof ConnectRestException);
+        assertInstanceOf(ConnectRestException.class, errorCapture.getValue());
         assertEquals(FORBIDDEN.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
 
         verifyNoMoreInteractions(member, taskConfigCb);
@@ -2530,7 +2532,7 @@ public class DistributedHerderTest {
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
-        assertTrue(errorCapture.getValue() instanceof ConnectRestException);
+        assertInstanceOf(ConnectRestException.class, errorCapture.getValue());
         assertEquals(SERVICE_UNAVAILABLE.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
 
         verifyNoMoreInteractions(member, taskConfigCb);
@@ -2666,7 +2668,7 @@ public class DistributedHerderTest {
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
-        assertTrue(errorCapture.getValue() instanceof ConnectRestException);
+        assertInstanceOf(ConnectRestException.class, errorCapture.getValue());
         assertEquals(FORBIDDEN.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
 
         verifyNoMoreInteractions(member);
@@ -2722,7 +2724,7 @@ public class DistributedHerderTest {
         if (!succeed) {
             ExecutionException fencingException =
                     assertThrows(ExecutionException.class, () -> fencing.get(10, TimeUnit.SECONDS));
-            assertTrue(fencingException.getCause() instanceof ConnectException);
+            assertInstanceOf(ConnectException.class, fencingException.getCause());
         } else {
             fencing.get(10, TimeUnit.SECONDS);
         }
@@ -2958,7 +2960,7 @@ public class DistributedHerderTest {
         herderFencingCallbacks.getAllValues().forEach(cb -> cb.accept(null, fencingException));
 
         ExecutionException exception = assertThrows(ExecutionException.class, () -> fencing.get(10, TimeUnit.SECONDS));
-        assertTrue(exception.getCause() instanceof ConnectException);
+        assertInstanceOf(ConnectException.class, exception.getCause());
 
         stopBackgroundHerder();
 
@@ -3265,6 +3267,47 @@ public class DistributedHerderTest {
                 .thenReturn(TASK_CONFIGS);
 
         expectAndVerifyTaskReconfigurationRetries();
+    }
+
+    @Test
+    public void testTaskReconfigurationNoRetryWithTooManyTasks() {
+        // initial tick
+        when(member.memberId()).thenReturn("leader");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        when(worker.isRunning(CONN1)).thenReturn(true);
+        when(worker.getPlugins()).thenReturn(plugins);
+
+        herder.tick();
+        // No requests are queued, so we shouldn't plan on waking up without external action
+        // (i.e., rebalance, user request, or shutdown)
+        // This helps indicate that no retriable operations (such as generating task configs after
+        // a backoff period) are queued up by the worker
+        verify(member, times(1)).poll(eq(Long.MAX_VALUE), any());
+
+        // Process the task reconfiguration request in this tick
+        int numTasks = MAX_TASKS + 5;
+        SinkConnectorConfig sinkConnectorConfig = new SinkConnectorConfig(plugins, CONN1_CONFIG);
+        // Fail to generate tasks because the connector provided too many task configs
+        when(worker.connectorTaskConfigs(CONN1, sinkConnectorConfig))
+                .thenThrow(new TooManyTasksException(CONN1, numTasks, MAX_TASKS));
+
+        herder.requestTaskReconfiguration(CONN1);
+        herder.tick();
+        // We tried to generate task configs for the connector one time during this tick
+        verify(worker, times(1)).connectorTaskConfigs(CONN1, sinkConnectorConfig);
+        // Verifying again that no requests are queued
+        verify(member, times(2)).poll(eq(Long.MAX_VALUE), any());
+        verifyNoMoreInteractions(worker);
+
+        time.sleep(DistributedHerder.RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MAX_MS);
+        herder.tick();
+        // We ticked one more time, and no further attempt was made to generate task configs
+        verifyNoMoreInteractions(worker);
+        // And we don't have any requests queued
+        verify(member, times(3)).poll(eq(Long.MAX_VALUE), any());
     }
 
     @Test
@@ -3615,7 +3658,7 @@ public class DistributedHerderTest {
         herder.modifyConnectorOffsets("connector-does-not-exist", new HashMap<>(), callback);
         herder.tick();
         ExecutionException e = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(e.getCause() instanceof NotFoundException);
+        assertInstanceOf(NotFoundException.class, e.getCause());
     }
 
     @Test
@@ -3633,7 +3676,7 @@ public class DistributedHerderTest {
         herder.modifyConnectorOffsets(CONN1, null, callback);
         herder.tick();
         ExecutionException e = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(e.getCause() instanceof BadRequestException);
+        assertInstanceOf(BadRequestException.class, e.getCause());
     }
 
     @Test
@@ -3651,7 +3694,7 @@ public class DistributedHerderTest {
         herder.modifyConnectorOffsets(CONN1, new HashMap<>(), callback);
         herder.tick();
         ExecutionException e = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(e.getCause() instanceof NotLeaderException);
+        assertInstanceOf(NotLeaderException.class, e.getCause());
     }
 
     @Test

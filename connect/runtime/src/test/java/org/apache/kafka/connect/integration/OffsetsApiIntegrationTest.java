@@ -119,6 +119,8 @@ public class OffsetsApiIntegrationTest {
     public static void close() {
         // stop all Connect, Kafka and Zk threads.
         CONNECT_CLUSTERS.values().forEach(EmbeddedConnectCluster::stop);
+        // wait for all blocked threads created while testing zombie task scenarios to finish
+        BlockingConnectorTest.Block.join();
     }
 
     private static EmbeddedConnectCluster createOrReuseConnectWithWorkerProps(Map<String, String> workerProps) {
@@ -469,6 +471,7 @@ public class OffsetsApiIntegrationTest {
                 () -> connect.alterConnectorOffsets(connectorName, new ConnectorOffsets(offsetsToAlter)));
         assertThat(e.getMessage(), containsString("zombie sink task"));
 
+        // clean up blocked threads created while testing zombie task scenarios
         BlockingConnectorTest.Block.reset();
     }
 
@@ -810,6 +813,7 @@ public class OffsetsApiIntegrationTest {
         ConnectRestException e = assertThrows(ConnectRestException.class, () -> connect.resetConnectorOffsets(connectorName));
         assertThat(e.getMessage(), containsString("zombie sink task"));
 
+        // clean up blocked threads created while testing zombie task scenarios
         BlockingConnectorTest.Block.reset();
     }
 

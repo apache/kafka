@@ -144,7 +144,7 @@ abstract class AbstractLogCleanerIntegrationTest {
 
   def writeDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType,
                 startKey: Int = 0, magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): Seq[(Int, String, Long)] = {
-    for(_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
+    for (_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val value = counter.toString
       val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.getBytes, codec = codec,
         key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0)

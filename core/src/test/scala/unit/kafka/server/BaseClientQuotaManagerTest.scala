@@ -19,9 +19,7 @@ package kafka.server
 import java.net.InetAddress
 import java.util
 import java.util.Collections
-
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel.Session
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics}
@@ -31,6 +29,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.network.Session
 import org.junit.jupiter.api.AfterEach
 import org.mockito.Mockito.mock
 
@@ -69,7 +68,7 @@ class BaseClientQuotaManagerTest {
 
   protected def buildSession(user: String): Session = {
     val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user)
-    Session(principal, null)
+    new Session(principal, null)
   }
 
   protected def maybeRecord(quotaManager: ClientQuotaManager, user: String, clientId: String, value: Double): Int = {

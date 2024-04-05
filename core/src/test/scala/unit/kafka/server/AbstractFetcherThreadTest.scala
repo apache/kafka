@@ -958,7 +958,7 @@ class AbstractFetcherThreadTest {
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcherForTruncation = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, failedPartitions = failedPartitions) {
       override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
-        if(topicPartition == partition1)
+        if (topicPartition == partition1)
           throw new Exception()
         else {
           super.truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState)

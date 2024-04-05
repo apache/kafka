@@ -66,7 +66,7 @@ class MigrationPropagator(
     stateChangeLogger
   )
 
-  val requestBatch = new MigrationPropagatorBatch(
+  private val requestBatch = new MigrationPropagatorBatch(
     config,
     metadataProvider,
     () => _image.features().metadataVersion(),
@@ -103,11 +103,11 @@ class MigrationPropagator(
    * A very expensive function that creates a map with an entry for every partition that exists, from
    * (topic name, partition index) to partition registration.
    */
-  def materializePartitions(topicsImage: TopicsImage): util.Map[TopicPartition, PartitionRegistration] = {
+  private def materializePartitions(topicsImage: TopicsImage): util.Map[TopicPartition, PartitionRegistration] = {
     val result = new util.HashMap[TopicPartition, PartitionRegistration]()
-    topicsImage.topicsById().values().forEach(topic => {
-      topic.partitions().forEach((key, value) => result.put(new TopicPartition(topic.name(), key), value));
-    })
+    topicsImage.topicsById().values().forEach(topic =>
+      topic.partitions().forEach((key, value) => result.put(new TopicPartition(topic.name(), key), value))
+    )
     result
   }
 

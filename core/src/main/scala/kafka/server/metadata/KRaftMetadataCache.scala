@@ -17,7 +17,6 @@
 
 package kafka.server.metadata
 
-import kafka.controller.StateChangeLogger
 import kafka.server.{CachedControllerId, KRaftCachedControllerId, MetadataCache}
 import kafka.utils.Logging
 import org.apache.kafka.admin.BrokerMetadata
@@ -55,8 +54,6 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
   // the duration of their operation. Multiple reads of this value risk getting different
   // image values.
   @volatile private var _currentImage: MetadataImage = MetadataImage.EMPTY
-
-  private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
 
   // This method is the main hotspot when it comes to the performance of metadata requests,
   // we should be careful about adding additional logic here.
@@ -513,14 +510,6 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     // we are duplicating the behavior of ZkMetadataCache, for now.
     new Cluster(clusterId, nodes.values(),
       partitionInfos, Collections.emptySet(), internalTopics, controllerNode)
-  }
-
-  def stateChangeTraceEnabled(): Boolean = {
-    stateChangeLogger.isTraceEnabled
-  }
-
-  def logStateChangeTrace(str: String): Unit = {
-    stateChangeLogger.trace(str)
   }
 
   override def contains(topicName: String): Boolean =

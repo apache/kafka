@@ -16,7 +16,7 @@
  */
 package kafka.zk
 
-import kafka.utils.{Logging, PasswordEncoder, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, TopicRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -28,6 +28,7 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.migration._
 import org.apache.kafka.raft.{LeaderAndEpoch, OffsetAndEpoch}
+import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.zookeeper.client.ZKClientConfig
@@ -144,7 +145,7 @@ class ZkMigrationFailoverTest extends Logging {
     }
 
     // Safe to reuse these since they don't keep any state
-    val zkMigrationClient = ZkMigrationClient(zkClient, PasswordEncoder.noop())
+    val zkMigrationClient = ZkMigrationClient(zkClient, PasswordEncoder.NOOP)
 
     val (driver1, faultHandler1) = buildMigrationDriver(3000, zkMigrationClient)
     val (driver2, faultHandler2) = buildMigrationDriver(3001, zkMigrationClient)

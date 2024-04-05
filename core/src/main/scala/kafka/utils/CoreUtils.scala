@@ -26,7 +26,7 @@ import com.typesafe.scalalogging.Logger
 
 import javax.management._
 import scala.collection._
-import scala.collection.{Seq, mutable}
+import scala.collection.Seq
 import kafka.cluster.EndPoint
 import org.apache.commons.validator.routines.InetAddressValidator
 import org.apache.kafka.common.network.ListenerName
@@ -110,23 +110,6 @@ object CoreUtils {
   }
 
   /**
-   * This method gets comma separated values which contains key,value pairs and returns a map of
-   * key value pairs. the format of allCSVal is key1:val1, key2:val2 ....
-   * Also supports strings with multiple ":" such as IpV6 addresses, taking the last occurrence
-   * of the ":" in the pair as the split, eg a:b:c:val1, d:e:f:val2 => a:b:c -> val1, d:e:f -> val2
-   */
-  def parseCsvMap(str: String): Map[String, String] = {
-    val map = new mutable.HashMap[String, String]
-    if ("".equals(str))
-      return map
-    val keyVals = str.split("\\s*,\\s*").map(s => {
-      val lio = s.lastIndexOf(":")
-      (s.substring(0,lio).trim, s.substring(lio + 1).trim)
-    })
-    keyVals.toMap
-  }
-
-  /**
    * Parse a comma separated string into a sequence of strings.
    * Whitespace surrounding the comma will be removed.
    */
@@ -176,7 +159,7 @@ object CoreUtils {
     listenerListToEndPoints(listeners, securityProtocolMap, requireDistinctPorts = true)
   }
 
-  def checkDuplicateListenerPorts(endpoints: Seq[EndPoint], listeners: String): Unit = {
+  private def checkDuplicateListenerPorts(endpoints: Seq[EndPoint], listeners: String): Unit = {
     val distinctPorts = endpoints.map(_.port).distinct
     require(distinctPorts.size == endpoints.map(_.port).size, s"Each listener must have a different port, listeners: $listeners")
   }

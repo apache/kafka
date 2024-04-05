@@ -394,7 +394,8 @@ public class StoreUpgradeIntegrationTest {
                 }
             },
             60_000L,
-            "Could not get expected result in time.");
+            5_000L,
+            () -> "Could not get expected result in time.");
     }
 
     private <K> void verifyCountWithSurrogateTimestamp(final K key,

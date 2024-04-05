@@ -100,7 +100,7 @@ class ProducerIdsIntegrationTest {
     val deadline = 5.seconds.fromNow
     var shouldRetry = true
     var response: InitProducerIdResponse = null
-    while(shouldRetry && deadline.hasTimeLeft()) {
+    while (shouldRetry && deadline.hasTimeLeft()) {
       val data = new InitProducerIdRequestData()
         .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
         .setProducerId(RecordBatch.NO_PRODUCER_ID)

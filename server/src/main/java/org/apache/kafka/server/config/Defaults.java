@@ -33,6 +33,7 @@ import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.raft.RaftConfig;
+import org.apache.kafka.security.PasswordEncoderConfigs;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Arrays;
@@ -43,16 +44,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class Defaults {
-    /** ********* Zookeeper Configuration *********/
-    public static final int ZK_SESSION_TIMEOUT_MS = 18000;
-    public static final boolean ZK_ENABLE_SECURE_ACLS = false;
-    public static final int ZK_MAX_IN_FLIGHT_REQUESTS = 10;
-    public static final boolean ZK_SSL_CLIENT_ENABLE = false;
-    public static final String ZK_SSL_PROTOCOL = "TLSv1.2";
-    public static final String ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM = "HTTPS";
-    public static final boolean ZK_SSL_CRL_ENABLE = false;
-    public static final boolean ZK_SSL_OCSP_ENABLE = false;
-
     /** ********* General Configuration *********/
     public static final boolean BROKER_ID_GENERATION_ENABLE = true;
     public static final int MAX_RESERVED_BROKER_ID = 1000;
@@ -73,6 +64,7 @@ public class Defaults {
     /** ********* KRaft mode configs *********/
     public static final int EMPTY_NODE_ID = -1;
     public static final long SERVER_MAX_STARTUP_TIME_MS = Long.MAX_VALUE;
+    public static final int MIGRATION_METADATA_MIN_BATCH_SIZE = 200;
 
     /** ********* Authorizer Configuration *********/
     public static final String AUTHORIZER_CLASS_NAME = "";
@@ -104,13 +96,6 @@ public class Defaults {
     public static final int NUM_PARTITIONS = 1;
     public static final String LOG_DIR = "/tmp/kafka-logs";
     public static final long LOG_CLEANUP_INTERVAL_MS = 5 * 60 * 1000L;
-    public static final int LOG_CLEANER_THREADS = 1;
-    public static final double LOG_CLEANER_IO_MAX_BYTES_PER_SECOND = Double.MAX_VALUE;
-    public static final long LOG_CLEANER_DEDUPE_BUFFER_SIZE = 128 * 1024 * 1024L;
-    public static final int LOG_CLEANER_IO_BUFFER_SIZE = 512 * 1024;
-    public static final double LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR = 0.9d;
-    public static final int LOG_CLEANER_BACKOFF_MS = 15 * 1000;
-    public static final boolean LOG_CLEANER_ENABLE = true;
     public static final int LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS = 60000;
     public static final int LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS = 60000;
     public static final int NUM_RECOVERY_THREADS_PER_DATA_DIR = 1;
@@ -270,9 +255,9 @@ public class Defaults {
     public static final long DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS = 1 * 60 * 60 * 1000L;
 
     /**  ********* Password Encryption Configuration for Dynamic Configs *********/
-    public static final String PASSWORD_ENCODER_CIPHER_ALGORITHM = "AES/CBC/PKCS5Padding";
-    public static final int PASSWORD_ENCODER_KEY_LENGTH = 128;
-    public static final int PASSWORD_ENCODER_ITERATIONS = 4096;
+    public static final String PASSWORD_ENCODER_CIPHER_ALGORITHM = PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM;
+    public static final int PASSWORD_ENCODER_KEY_LENGTH = PasswordEncoderConfigs.DEFAULT_KEY_LENGTH;
+    public static final int PASSWORD_ENCODER_ITERATIONS = PasswordEncoderConfigs.DEFAULT_ITERATIONS;
 
     /**  ********* Raft Quorum Configuration *********/
     public static final List<String> QUORUM_VOTERS = RaftConfig.DEFAULT_QUORUM_VOTERS;
