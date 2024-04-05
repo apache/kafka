@@ -33,13 +33,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * RaftConfig encapsulates configuration specific to the cluster metadata KRaft voter nodes.
- * Specifically, this class parses the voter node endpoints into an AddressSpec
- * for use with the KafkaRaftClient/KafkaNetworkChannel.
- *
- * If the voter endpoints are not known at startup, a non-routable address can be provided instead.
- * For example: `1@0.0.0.0:0,2@0.0.0.0:0,3@0.0.0.0:0`
- * This will assign an {@link UnknownAddressSpec} to the voter entries
+ * RaftConfig encapsulates configuration specific to the cluster metadata KRaft replicas.
  *
  * The default raft timeouts are relatively low compared to some other timeouts such as
  * request.timeout.ms. This is part of a general design philosophy where we see changing
@@ -53,7 +47,6 @@ public class RaftConfig {
 
     // Non-routable address represents an endpoint that does not resolve to any particular node
     public static final String NON_ROUTABLE_HOST = "0.0.0.0";
-    public static final UnknownAddressSpec UNKNOWN_ADDRESS_SPEC_INSTANCE = new UnknownAddressSpec();
 
     public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
     public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
@@ -98,44 +91,6 @@ public class RaftConfig {
     private final int electionBackoffMaxMs;
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
-
-    public interface AddressSpec {
-    }
-
-    public static class InetAddressSpec implements AddressSpec {
-        public final InetSocketAddress address;
-
-        public InetAddressSpec(InetSocketAddress address) {
-            if (address == null || address.getHostString().equals(NON_ROUTABLE_HOST)) {
-                throw new IllegalArgumentException("Invalid address: " + address);
-            }
-            this.address = address;
-        }
-
-        @Override
-        public int hashCode() {
-            return address.hashCode();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-
-            if (obj == null || getClass() != obj.getClass()) {
-                return false;
-            }
-
-            final InetAddressSpec that = (InetAddressSpec) obj;
-            return that.address.equals(address);
-        }
-    }
-
-    public static class UnknownAddressSpec implements AddressSpec {
-        private UnknownAddressSpec() {
-        }
-    }
 
     public RaftConfig(AbstractConfig abstractConfig) {
         this(

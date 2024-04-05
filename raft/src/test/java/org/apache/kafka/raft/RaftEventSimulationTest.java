@@ -812,6 +812,7 @@ public class RaftEventSimulationTest {
             client.initialize(
                 OptionalInt.of(nodeId),
                 voterAddresses,
+                "CONTROLLER",
                 store,
                 metrics
             );

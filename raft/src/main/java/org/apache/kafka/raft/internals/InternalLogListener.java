@@ -57,9 +57,13 @@ final public class InternalLogListener {
         this.bufferSupplier = bufferSupplier;
     }
 
-    void updateListerner() {
+    public void updateListener() {
         maybeLoadSnapshot();
         maybeLoadLog();
+    }
+
+    public VoterSet lastVoterSet() {
+        return voterSetHistory.lastValue();
     }
 
     private void maybeLoadLog() {
@@ -98,6 +102,7 @@ final public class InternalLogListener {
                     true // Validate batch CRC
                 )
             ) {
+                // TODO: log a message that we are loading a snapshot
                 OptionalLong currentOffset = OptionalLong.of(reader.lastContainedLogOffset());
                 while (reader.hasNext()) {
                     Batch<?> batch = reader.next();

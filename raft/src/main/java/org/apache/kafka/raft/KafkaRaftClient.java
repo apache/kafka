@@ -352,20 +352,23 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     public void initialize(
         OptionalInt nodeId,
         Map<Integer, InetSocketAddress> voterAddresses,
+        String listenerName,
         QuorumStateStore quorumStateStore,
         Metrics metrics
     ) {
-        // TODO: create the internal log listener
         internalListener = new InternalLogListener(
-            Optional.of(VoterSet.fromAddressSpecs("TODO", voterAddresses)),
+            Optional.of(VoterSet.fromAddressSpecs(listenerName, voterAddresses)),
             log,
             serde,
             BufferSupplier.create()
         );
+        // Read the entire log
+        logger.info("Reading KRaft snapshot and log as part of the initialization");
+        internalListener.updateListener();
 
         // TODO: Fix this to use internal listener
         requestManager = new RequestManager(
-            voterAddresses.keySet(),
+            internalListener.lastVoterSet().voterIds(),
             raftConfig.retryBackoffMs(),
             raftConfig.requestTimeoutMs(),
             random
@@ -374,22 +377,26 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         // TODO: Fix this to use internal listener
         quorum = new QuorumState(
             nodeId,
-            voterAddresses.keySet(),
+            internalListener.lastVoterSet().voterIds(),
             raftConfig.electionTimeoutMs(),
             raftConfig.fetchTimeoutMs(),
             quorumStateStore,
             time,
             logContext,
-            random);
+            random
+        );
 
         kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft", quorum);
         // All Raft voters are statically configured and known at startup
         // so there are no unknown voter connections. Report this metric as 0.
         kafkaRaftMetrics.updateNumUnknownVoterConnections(0);
 
-        // Update the voter endpoints with what's in RaftConfig
-        // TODO: Create issue to fix this. Eventually, this needs to be dynamic based on the internal listener
-        voterAddresses.entrySet().forEach(entry -> channel.updateEndpoint(entry.getKey(), entry.getValue()));
+        // TODO: Create issue to fix this. RaftRequest.Outbound should contain the node not just the id
+        // we need this because the controller.quorum.bootstrap.server doesn't contain an id.
+        VoterSet lastVoterSet = internalListener.lastVoterSet();
+        for (Integer voterId : lastVoterSet.voterIds()) {
+            channel.updateEndpoint(voterId, lastVoterSet.voterAddress(voterId, listenerName).get());
+        }
 
         quorum.initialize(new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch()));
 

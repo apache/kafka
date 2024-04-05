@@ -269,6 +269,7 @@ public final class RaftClientTestContext {
             client.initialize(
                 localId,
                 voterAddressMap,
+                "CONTROLLER",
                 quorumStateStore,
                 metrics
             );

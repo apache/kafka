@@ -19,11 +19,12 @@ package org.apache.kafka.raft.internals;
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.VotersRecord;
@@ -38,9 +39,13 @@ final public class VoterSet {
         this.voters = voters;
     }
 
-    Optional<InetSocketAddress> voterAddress(int voter, String listener) {
+    public Optional<InetSocketAddress> voterAddress(int voter, String listener) {
         return Optional.ofNullable(voters.get(voter))
             .flatMap(voterNode -> voterNode.address(listener));
+    }
+
+    public Set<Integer> voterIds() {
+        return voters.keySet();
     }
 
     VotersRecord toVotersRecord(short version) {

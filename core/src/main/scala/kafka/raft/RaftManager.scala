@@ -140,6 +140,7 @@ class KafkaRaftManager[T](
     client.initialize(
       OptionalInt.of(config.nodeId),
       controllerQuorumVotersFuture.get(),
+      config.controllerListenerNames.head,
       new FileBasedStateStore(new File(dataDir, "quorum-state")),
       metrics
     )
@@ -208,7 +209,10 @@ class KafkaRaftManager[T](
 
   private def buildNetworkClient(): NetworkClient = {
     val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
-    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
+    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(
+      controllerListenerName,
+      SecurityProtocol.forName(controllerListenerName.value())
+    )
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
       controllerSecurityProtocol,
       JaasContext.Type.SERVER,
