@@ -4948,8 +4948,8 @@ class ReplicaManagerTest {
     try {
       val directoryIds = replicaManager.logManager.directoryIdsSet.toList
       assertEquals(directoryIds.size, 2)
-      val leaderTopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = directoryIds)
-      val (partition, isNewWhenCreatedForFirstTime) = replicaManager.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
+      val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = directoryIds)
+      val (partition: Partition, isNewWhenCreatedForFirstTime: Boolean) = replicaManager.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
       partition.makeLeader(leaderAndIsrPartitionState(topicPartition0.topicPartition(), 1, localId, Seq(1, 2)),
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints),
         None)
