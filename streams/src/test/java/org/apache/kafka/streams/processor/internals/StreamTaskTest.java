@@ -352,13 +352,13 @@ public class StreamTaskTest {
         @SuppressWarnings("unchecked")
         final java.util.function.Consumer<Set<TopicPartition>> resetter =
             mock(java.util.function.Consumer.class);
-        doNothing().when(resetter).accept(Collections.emptySet());
 
         task.initializeIfNeeded();
         task.completeRestoration(resetter);
 
         assertThat(consumer.position(partition1), equalTo(5L));
         assertThat(consumer.position(partition2), equalTo(15L));
+        verify(resetter).accept(Collections.emptySet());
     }
 
     @Test
@@ -1721,8 +1721,6 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCloseStateManagerEvenDuringFailureOnUncleanTaskClose() {
-        doNothing().when(stateManager).close();
-
         task = createFaultyStatefulTask(createConfig("100"));
 
         task.initializeIfNeeded();
@@ -1730,6 +1728,7 @@ public class StreamTaskTest {
 
         assertThrows(RuntimeException.class, () -> task.suspend());
         task.closeDirty();
+        verify(stateManager).close();
     }
 
     @Test
