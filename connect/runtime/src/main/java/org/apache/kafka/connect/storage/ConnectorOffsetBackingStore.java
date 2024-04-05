@@ -140,9 +140,6 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
     private final Optional<KafkaOffsetBackingStore> connectorStore;
     private final Optional<TopicAdmin> connectorStoreAdmin;
 
-    private boolean exactlyOnce;
-    private long offsetFlushTimeoutMs;
-
     ConnectorOffsetBackingStore(
             Time time,
             Supplier<LoggingContext> loggingContext,
@@ -312,34 +309,37 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         });
 
         if (secondaryStore != null && !tombstoneOffsets.isEmpty()) {
-            Future<Void> secondaryWriteFuture = secondaryStore.set(tombstoneOffsets, (t, r) -> { });
-            try {
-                if (exactlyOnce) {
-                    secondaryWriteFuture.get();
-                } else {
-                    secondaryWriteFuture.get(offsetFlushTimeoutMs, TimeUnit.MILLISECONDS);
+            return secondaryStore.set(tombstoneOffsets, (tombstoneWriteError, ignored) -> {
+                if (tombstoneWriteError != null) {
+                    log.trace("Skipping offsets write to primary store because secondary tombstone write has failed", tombstoneWriteError);
+                    try (LoggingContext context = loggingContext()) {
+                        callback.onCompletion(tombstoneWriteError, ignored);
+                    }
+                    return;
                 }
-                log.debug("Successfully flushed tombstone offsets to secondary store");
-            } catch (ExecutionException e) {
-                log.error("{} Failed to flush tombstone offsets to secondary store", this, e.getCause());
-                callback.onCompletion(e.getCause(), null);
-                return secondaryWriteFuture;
-            } catch (Throwable e) {
-                log.error("{} Failed to flush tombstone offsets to secondary store", this, e);
-                callback.onCompletion(e, null);
-                return secondaryWriteFuture;
-            }
+                setPrimaryThenSecondary(primaryStore, secondaryStore, values, regularOffsets, callback);
+            });
+        } else {
+            return setPrimaryThenSecondary(primaryStore, secondaryStore, values, regularOffsets, callback);
         }
+    }
 
-        return primaryStore.set(values, (primaryWriteError, ignored) -> {
+    private Future<Void> setPrimaryThenSecondary(
+        OffsetBackingStore primaryStore,
+        OffsetBackingStore secondaryStore,
+        Map<ByteBuffer, ByteBuffer> completeOffsets,
+        Map<ByteBuffer, ByteBuffer> nonTombstoneOffsets,
+        Callback<Void> callback
+    ) {
+        return primaryStore.set(completeOffsets, (primaryWriteError, ignored) -> {
             if (secondaryStore != null) {
                 if (primaryWriteError != null) {
-                    log.info("Skipping offsets write to secondary store because primary write has failed", primaryWriteError);
+                    log.trace("Skipping offsets write to secondary store because primary write has failed", primaryWriteError);
                 } else {
                     try {
                         // Invoke OffsetBackingStore::set but ignore the resulting future; we don't block on writes to this
-                        // backing store for regular non-tombstone offsets.
-                        secondaryStore.set(regularOffsets, (secondaryWriteError, ignored2) -> {
+                        // backing store.
+                        secondaryStore.set(nonTombstoneOffsets, (secondaryWriteError, ignored2) -> {
                             try (LoggingContext context = loggingContext()) {
                                 if (secondaryWriteError != null) {
                                     log.warn("Failed to write offsets to secondary backing store", secondaryWriteError);
@@ -378,8 +378,6 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
     public void configure(WorkerConfig config) {
         // Worker offset store should already be configured
         connectorStore.ifPresent(store -> store.configure(config));
-        exactlyOnce = config.exactlyOnceSourceEnabled();
-        offsetFlushTimeoutMs = config.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
     }
 
     // For testing
