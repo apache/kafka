@@ -228,7 +228,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWhenAlreadyExists(String quorum) throws Exception {
+    public void testCreateWhenAlreadyExists(String quorum) {
         // create the topic
         TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap(
             "--create", "--partitions", Integer.toString(defaultNumPartitions), "--replication-factor", "1",
@@ -321,7 +321,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testListTopics(String quorum) throws Exception {
+    public void testListTopics(String quorum) {
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
                 scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
         );
@@ -332,7 +332,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testListTopicsWithIncludeList(String quorum) throws ExecutionException, InterruptedException {
+    public void testListTopicsWithIncludeList(String quorum) {
         String topic1 = "kafka.testTopic1";
         String topic2 = "kafka.testTopic2";
         String topic3 = "oooof.testTopic1";
@@ -357,7 +357,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testListTopicsWithExcludeInternal(String quorum) throws ExecutionException, InterruptedException {
+    public void testListTopicsWithExcludeInternal(String quorum) {
         String topic1 = "kafka.testTopic1";
         String hiddenConsumerTopic = Topic.GROUP_METADATA_TOPIC_NAME;
         int partition = 2;
@@ -418,7 +418,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterAssignmentWithMoreAssignmentThanPartitions(String quorum) throws ExecutionException, InterruptedException {
+    public void testAlterAssignmentWithMoreAssignmentThanPartitions(String quorum) {
         int partition = 2;
         short replicationFactor = 2;
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
@@ -432,7 +432,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterAssignmentWithMorePartitionsThanAssignment(String quorum) throws ExecutionException, InterruptedException {
+    public void testAlterAssignmentWithMorePartitionsThanAssignment(String quorum) {
         int partition = 2;
         short replicationFactor = 2;
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
@@ -447,7 +447,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterWithInvalidPartitionCount(String quorum) throws Exception {
+    public void testAlterWithInvalidPartitionCount(String quorum) {
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
                 scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
         );
@@ -474,7 +474,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateAlterTopicWithRackAware(String quorum) throws Exception {
-        Map<Integer, String> rackInfo = new HashMap<Integer, String>();
+        Map<Integer, String> rackInfo = new HashMap<>();
         rackInfo.put(0, "rack1");
         rackInfo.put(1, "rack2");
         rackInfo.put(2, "rack2");
@@ -627,7 +627,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribe(String quorum) throws ExecutionException, InterruptedException {
+    public void testDescribe(String quorum) {
         int partition = 2;
         short replicationFactor = 2;
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
@@ -718,7 +718,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeUnderReplicatedPartitions(String quorum) throws ExecutionException, InterruptedException {
+    public void testDescribeUnderReplicatedPartitions(String quorum) {
         int partitions = 1;
         short replicationFactor = 6;
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partitions, replicationFactor,
@@ -741,7 +741,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeUnderMinIsrPartitions(String quorum) throws ExecutionException, InterruptedException {
+    public void testDescribeUnderMinIsrPartitions(String quorum) {
         Properties topicConfig = new Properties();
         topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "6");
         int partitions = 1;
