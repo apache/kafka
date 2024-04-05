@@ -291,7 +291,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldThrowLockExceptionIfFailedToLockStateDirectory() throws IOException {
+    public void shouldThrowLockExceptionIfFailedToLockStateDirectory() {
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
@@ -463,7 +463,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldTransitToRestoringThenRunningAfterCreation() throws IOException {
+    public void shouldTransitToRestoringThenRunningAfterCreation() {
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(true);
         when(stateManager.changelogOffsets()).thenReturn(singletonMap(changelogPartition, 10L));
@@ -1560,7 +1560,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldReadCommittedOffsetAndRethrowTimeoutWhenCompleteRestoration() throws IOException {
+    public void shouldReadCommittedOffsetAndRethrowTimeoutWhenCompleteRestoration() {
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(true);
 
@@ -1572,7 +1572,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldReInitializeTopologyWhenResuming() throws IOException {
+    public void shouldReInitializeTopologyWhenResuming() {
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(true);
 
