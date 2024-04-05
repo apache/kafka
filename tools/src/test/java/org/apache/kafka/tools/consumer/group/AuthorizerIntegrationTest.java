@@ -26,11 +26,10 @@ import java.util.Collections;
 
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
-import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
 
 public class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     @SuppressWarnings({"deprecation"})
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeGroupCliWithGroupDescribe(String quorum) throws Exception {
         addAndVerifyAcls(JavaConverters.asScalaSet(Collections.singleton(new AccessControlEntry(ClientPrincipal().toString(), "*", DESCRIBE, ALLOW))).toSet(), groupResource());
