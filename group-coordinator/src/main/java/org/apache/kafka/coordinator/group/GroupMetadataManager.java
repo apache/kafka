@@ -275,6 +275,7 @@ public class GroupMetadataManager {
             );
         }
     }
+
     /**
      * The log context.
      */
@@ -588,7 +589,9 @@ public class GroupMetadataManager {
      *
      * @param groupId           The group id.
      * @param createIfNotExists A boolean indicating whether the group should be
-     *                          created if it does not exist.
+     *                          created if it does not exist or is an empty classic group.
+     * @param records           The record list to which the group tombstones are written
+     *                          if the group is empty and is a classic group.
      *
      * @return A ConsumerGroup.
      * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
@@ -598,7 +601,8 @@ public class GroupMetadataManager {
      */
     ConsumerGroup getOrMaybeCreateConsumerGroup(
         String groupId,
-        boolean createIfNotExists
+        boolean createIfNotExists,
+        List<Record> records
     ) throws GroupIdNotFoundException {
         Group group = groups.get(groupId);
 
@@ -606,7 +610,7 @@ public class GroupMetadataManager {
             throw new GroupIdNotFoundException(String.format("Consumer group %s not found.", groupId));
         }
 
-        if (group == null) {
+        if (group == null || (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records))) {
             return new ConsumerGroup(snapshotRegistry, groupId, metrics);
         } else {
             if (group.type() == CONSUMER) {
@@ -617,6 +621,40 @@ public class GroupMetadataManager {
                 throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
             }
         }
+    }
+
+    /**
+     * Gets a consumer group by committed offset.
+     *
+     * @param groupId           The group id.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A ConsumerGroup.
+     * @throws GroupIdNotFoundException if the group does not exist or is not a consumer group.
+     */
+    public ConsumerGroup consumerGroup(
+        String groupId,
+        long committedOffset
+    ) throws GroupIdNotFoundException {
+        Group group = group(groupId, committedOffset);
+
+        if (group.type() == CONSUMER) {
+            return (ConsumerGroup) group;
+        } else {
+            // We don't support upgrading/downgrading between protocols at the moment so
+            // we throw an exception if a group exists with the wrong type.
+            throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
+                groupId));
+        }
+    }
+
+    /**
+     * An overloaded method of {@link GroupMetadataManager#consumerGroup(String, long)}
+     */
+    ConsumerGroup consumerGroup(
+        String groupId
+    ) throws GroupIdNotFoundException {
+        return consumerGroup(groupId, Long.MAX_VALUE);
     }
 
     /**
@@ -719,31 +757,6 @@ public class GroupMetadataManager {
             // We don't support upgrading/downgrading between protocols at the moment so
             // we throw an exception if a group exists with the wrong type.
             throw new GroupIdNotFoundException(String.format("Group %s is not a classic group.",
-                groupId));
-        }
-    }
-
-    /**
-     * Gets a consumer group by committed offset.
-     *
-     * @param groupId           The group id.
-     * @param committedOffset   A specified committed offset corresponding to this shard.
-     *
-     * @return A ConsumerGroup.
-     * @throws GroupIdNotFoundException if the group does not exist or is not a consumer group.
-     */
-    public ConsumerGroup consumerGroup(
-        String groupId,
-        long committedOffset
-    ) throws GroupIdNotFoundException {
-        Group group = group(groupId, committedOffset);
-
-        if (group.type() == CONSUMER) {
-            return (ConsumerGroup) group;
-        } else {
-            // We don't support upgrading/downgrading between protocols at the moment so
-            // we throw an exception if a group exists with the wrong type.
-            throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
                 groupId));
         }
     }
@@ -1056,7 +1069,7 @@ public class GroupMetadataManager {
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
-        final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
+        final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, records);
         throwIfConsumerGroupIsFull(group, memberId);
 
         // Get or create the member.
@@ -1227,10 +1240,13 @@ public class GroupMetadataManager {
             .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs);
 
         // The assignment is only provided in the following cases:
-        // 1. The member reported its owned partitions;
-        // 2. The member just joined or rejoined to group (epoch equals to zero);
-        // 3. The member's assignment has been updated.
-        if (ownedTopicPartitions != null || memberEpoch == 0 || hasAssignedPartitionsChanged(member, updatedMember)) {
+        // 1. The member sent a full request. It does so when joining or rejoining the group with zero
+        //    as the member epoch; or on any errors (e.g. timeout). We use all the non-optional fields
+        //    (rebalanceTimeoutMs, subscribedTopicNames and ownedTopicPartitions) to detect a full request
+        //    as those must be set in a full request.
+        // 2. The member's assignment has been updated.
+        boolean isFullRequest = memberEpoch == 0 || (rebalanceTimeoutMs != -1 && subscribedTopicNames != null && ownedTopicPartitions != null);
+        if (isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
             response.setAssignment(createResponseAssignment(updatedMember));
         }
 
@@ -1321,7 +1337,7 @@ public class GroupMetadataManager {
         String memberId,
         int memberEpoch
     ) throws ApiException {
-        ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+        ConsumerGroup group = consumerGroup(groupId);
         List<Record> records;
         if (instanceId == null) {
             ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
@@ -1446,7 +1462,7 @@ public class GroupMetadataManager {
         String key = consumerGroupSessionTimeoutKey(groupId, memberId);
         timer.schedule(key, consumerGroupSessionTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
-                ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+                ConsumerGroup group = consumerGroup(groupId);
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
                 log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
                     groupId, memberId);
@@ -1493,7 +1509,7 @@ public class GroupMetadataManager {
         String key = consumerGroupRebalanceTimeoutKey(groupId, memberId);
         timer.schedule(key, rebalanceTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
-                ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+                ConsumerGroup group = consumerGroup(groupId);
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
 
                 if (member.memberEpoch() == memberEpoch) {
@@ -1905,6 +1921,47 @@ public class GroupMetadataManager {
         });
     }
 
+    /**
+     * Called when the partition is unloaded.
+     * ClassicGroup: Complete all awaiting join and sync futures. Transition group to Dead.
+     */
+    public void onUnloaded() {
+        groups.values().forEach(group -> {
+            switch (group.type()) {
+                case CONSUMER:
+                    ConsumerGroup consumerGroup = (ConsumerGroup) group;
+                    log.info("[GroupId={}] Unloaded group metadata for group epoch {}.",
+                        consumerGroup.groupId(), consumerGroup.groupEpoch());
+                    break;
+                case CLASSIC:
+                    ClassicGroup classicGroup = (ClassicGroup) group;
+                    log.info("[GroupId={}] Unloading group metadata for generation {}.",
+                        classicGroup.groupId(), classicGroup.generationId());
+
+                    classicGroup.transitionTo(DEAD);
+                    switch (classicGroup.previousState()) {
+                        case EMPTY:
+                        case DEAD:
+                            break;
+                        case PREPARING_REBALANCE:
+                            classicGroup.allMembers().forEach(member -> {
+                                classicGroup.completeJoinFuture(member, new JoinGroupResponseData()
+                                    .setMemberId(member.memberId())
+                                    .setErrorCode(NOT_COORDINATOR.code()));
+                            });
+
+                            break;
+                        case COMPLETING_REBALANCE:
+                        case STABLE:
+                            classicGroup.allMembers().forEach(member -> {
+                                classicGroup.completeSyncFuture(member, new SyncGroupResponseData()
+                                    .setErrorCode(NOT_COORDINATOR.code()));
+                            });
+                    }
+            }
+        });
+    }
+
     public static String consumerGroupSessionTimeoutKey(String groupId, String memberId) {
         return "session-timeout-" + groupId + "-" + memberId;
     }
@@ -1997,6 +2054,7 @@ public class GroupMetadataManager {
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
         CoordinatorResult<Void, Record> result = EMPTY_RESULT;
+        List<Record> records = new ArrayList<>();
 
         String groupId = request.groupId();
         String memberId = request.memberId();
@@ -2014,6 +2072,7 @@ public class GroupMetadataManager {
             // Group is created if it does not exist and the member id is UNKNOWN. if member
             // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND
             ClassicGroup group;
+            maybeDeleteEmptyConsumerGroup(groupId, records);
             boolean isNewGroup = !groups.containsKey(groupId);
             try {
                 group = getOrMaybeCreateClassicGroup(groupId, isUnknownMember);
@@ -2062,7 +2121,7 @@ public class GroupMetadataManager {
                     }
                 });
 
-                List<Record> records = Collections.singletonList(
+                records.add(
                     RecordHelpers.newEmptyGroupMetadataRecord(group, metadataImage.features().metadataVersion())
                 );
 
@@ -3071,7 +3130,6 @@ public class GroupMetadataManager {
 
                         responseFuture.complete(
                             new JoinGroupResponseData()
-                                .setMembers(Collections.emptyList())
                                 .setMemberId(UNKNOWN_MEMBER_ID)
                                 .setGenerationId(group.generationId())
                                 .setProtocolName(group.protocolName().orElse(null))
@@ -3094,7 +3152,6 @@ public class GroupMetadataManager {
                         );
                     } else {
                         group.completeJoinFuture(newMember, new JoinGroupResponseData()
-                            .setMembers(Collections.emptyList())
                             .setMemberId(newMemberId)
                             .setGenerationId(group.generationId())
                             .setProtocolName(group.protocolName().orElse(null))
@@ -3544,12 +3601,25 @@ public class GroupMetadataManager {
      * @param groupId The id of the group to be deleted. It has been checked in {@link GroupMetadataManager#validateDeleteGroup}.
      * @param records The record list to populate.
      */
-    public void deleteGroup(
+    public void createGroupTombstoneRecords(
         String groupId,
         List<Record> records
     ) {
         // At this point, we have already validated the group id, so we know that the group exists and that no exception will be thrown.
-        group(groupId).createGroupTombstoneRecords(records);
+        createGroupTombstoneRecords(group(groupId), records);
+    }
+
+    /**
+     * Populates the record list passed in with record to update the state machine.
+     *
+     * @param group The group to be deleted.
+     * @param records The record list to populate.
+     */
+    public void createGroupTombstoneRecords(
+        Group group,
+        List<Record> records
+    ) {
+        group.createGroupTombstoneRecords(records);
     }
 
     /**
@@ -3571,7 +3641,55 @@ public class GroupMetadataManager {
     public void maybeDeleteGroup(String groupId, List<Record> records) {
         Group group = groups.get(groupId);
         if (group != null && group.isEmpty()) {
-            deleteGroup(groupId, records);
+            createGroupTombstoneRecords(groupId, records);
+        }
+    }
+
+    /**
+     * @return true if the group is an empty classic group.
+     */
+    private static boolean isEmptyClassicGroup(Group group) {
+        return group != null && group.type() == CLASSIC && group.isEmpty();
+    }
+
+    /**
+     * @return true if the group is an empty consumer group.
+     */
+    private static boolean isEmptyConsumerGroup(Group group) {
+        return group != null && group.type() == CONSUMER && group.isEmpty();
+    }
+
+    /**
+     * Write tombstones for the group if it's empty and is a classic group.
+     *
+     * @param group     The group to be deleted.
+     * @param records   The list of records to delete the group.
+     *
+     * @return true if the group is empty
+     */
+    private boolean maybeDeleteEmptyClassicGroup(Group group, List<Record> records) {
+        if (isEmptyClassicGroup(group)) {
+            // Delete the classic group by adding tombstones.
+            // There's no need to remove the group as the replay of tombstones removes it.
+            if (group != null) createGroupTombstoneRecords(group, records);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Delete and write tombstones for the group if it's empty and is a consumer group.
+     *
+     * @param groupId The group id to be deleted.
+     * @param records The list of records to delete the group.
+     */
+    private void maybeDeleteEmptyConsumerGroup(String groupId, List<Record> records) {
+        Group group = groups.get(groupId, Long.MAX_VALUE);
+        if (isEmptyConsumerGroup(group)) {
+            // Add tombstones for the previous consumer group. The tombstones won't actually be
+            // replayed because its coordinator result has a non-null appendFuture.
+            createGroupTombstoneRecords(group, records);
+            removeGroup(groupId);
         }
     }
 

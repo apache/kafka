@@ -63,6 +63,26 @@ rc_docker_image: apache/kafka:3.6.0-rc0
 promoted_docker_image: apache/kafka:3.6.0
 ```
 
+Cron job for checking CVEs in supported docker images
+-----------------------------------------------------
+
+- `Docker Image CVE Scanner` Github Action Workflow (present in `.github/workflows/docker_scan.yml`) will run nightly CVE scans and generate reports for docker image tags mentioned in the `supported_image_tag` array.
+- This workflow is branch independent. Only the workflow in trunk, i.e. the default branch will be considered.
+- In case a Critical or High CVE is detected, the workflow will fail.
+- It will generate the scan reports that can be checked by the community.
+- For every new release, this should be updated with the latest supported docker images.
+- For example:-
+```
+For supporting apache/kafka:3.6.0, apache/kafka:latest and apache/kafka:3.7.0-rc0, supported_image_tag array should be
+supported_image_tag: ['3.6.0', 'latest', '3.7.0-rc0']
+```
+- When RC for a version gets changed or when a bug fix release happens, this should be updated as well.
+- For example:-
+```
+For supporting apache/kafka:3.6.1, apache/kafka:latest and apache/kafka:3.7.0-rc1, tag array should be
+supported_image_tag: ['3.6.1', 'latest', '3.7.0-rc1']
+```
+
 Local Setup
 -----------
 

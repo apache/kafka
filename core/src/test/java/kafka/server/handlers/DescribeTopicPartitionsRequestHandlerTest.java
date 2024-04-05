@@ -76,6 +76,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -469,7 +470,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         try {
             handler.handleDescribeTopicPartitionsRequest(buildRequest(describeTopicPartitionsRequest, plaintextListener));
         } catch (Exception e) {
-            assertTrue(e instanceof InvalidRequestException, e.getMessage());
+            assertInstanceOf(InvalidRequestException.class, e, e.getMessage());
         }
     }
 
