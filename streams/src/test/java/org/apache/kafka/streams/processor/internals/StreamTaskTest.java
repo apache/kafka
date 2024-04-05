@@ -102,7 +102,6 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
-import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
 import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
@@ -314,23 +313,14 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldAttemptToDeleteStateDirectoryWhenCloseDirtyAndEosEnabled() throws IOException {
-        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
+    public void shouldAttemptToDeleteStateDirectoryWhenCloseDirtyAndEosEnabled() {
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         stateDirectory = mock(StateDirectory.class);
 
-        doNothing().when(stateManager).registerGlobalStateStores(emptyList());
-
-        when(stateManager.taskId()).thenReturn(taskId);
-
         when(stateDirectory.lock(taskId)).thenReturn(true);
-
-        doNothing().when(stateManager).close();
 
         // The `baseDir` will be accessed when attempting to delete the state store.
         when(stateManager.baseDir()).thenReturn(TestUtils.tempDirectory("state_store"));
-
-        doNothing().when(stateDirectory).unlock(taskId);
 
         final InOrder inOrder = inOrder(stateManager, stateDirectory);
 
@@ -477,7 +467,6 @@ public class StreamTaskTest {
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(true);
         when(stateManager.changelogOffsets()).thenReturn(singletonMap(changelogPartition, 10L));
-        when(recordCollector.offsets()).thenReturn(emptyMap());
 
         task = createStatefulTask(createConfig("100"), true);
 
@@ -700,8 +689,6 @@ public class StreamTaskTest {
                 }
             }
         };
-
-        when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap()); // restoration checkpoint
 
         task = createStatelessTaskWithForwardingTopology(evenKeyForwardingSourceNode);
         task.initializeIfNeeded();
@@ -1551,9 +1538,6 @@ public class StreamTaskTest {
 
     @Test
     public void shouldWrapKafkaExceptionWithStreamsExceptionWhenProcess() {
-        when(stateManager.changelogOffsets()).thenReturn(emptyMap());
-        when(recordCollector.offsets()).thenReturn(emptyMap());
-
         task = createFaultyStatefulTask(createConfig("100"));
 
         task.initializeIfNeeded();
@@ -1591,7 +1575,6 @@ public class StreamTaskTest {
     public void shouldReInitializeTopologyWhenResuming() throws IOException {
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(true);
-        when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap());
 
         task = createStatefulTask(createConfig("100"), true);
 
@@ -1738,9 +1721,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCloseStateManagerEvenDuringFailureOnUncleanTaskClose() {
-        when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap()); // restoration checkpoint
         doNothing().when(stateManager).close();
-        when(recordCollector.offsets()).thenReturn(emptyMap());
 
         task = createFaultyStatefulTask(createConfig("100"));
 
@@ -1762,9 +1743,6 @@ public class StreamTaskTest {
         );
         consumer.assign(asList(partition1, repartition));
         consumer.updateBeginningOffsets(mkMap(mkEntry(repartition, 0L)));
-
-        when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap()); // restoration checkpoint
-        when(recordCollector.offsets()).thenReturn(emptyMap());
 
         final StreamsConfig config = createConfig();
         final InternalProcessorContext context = new ProcessorContextImpl(
@@ -1847,8 +1825,6 @@ public class StreamTaskTest {
 
     @Test
     public void shouldSkipCheckpointingSuspendedCreatedTask() {
-        when(recordCollector.offsets()).thenReturn(emptyMap());
-
         task = createStatefulTask(createConfig("100"), true);
         task.suspend();
         task.postCommit(true);
@@ -1860,7 +1836,6 @@ public class StreamTaskTest {
     public void shouldCheckpointForSuspendedTask() {
         when(stateManager.changelogOffsets())
                 .thenReturn(singletonMap(partition1, 1L));
-        when(recordCollector.offsets()).thenReturn(emptyMap());
 
         task = createStatefulTask(createConfig("100"), true);
         task.initializeIfNeeded();
@@ -1876,7 +1851,6 @@ public class StreamTaskTest {
                 .thenReturn(singletonMap(partition1, 0L)) // restoration checkpoint
                 .thenReturn(singletonMap(partition1, 1L))
                 .thenReturn(singletonMap(partition1, 2L));
-        when(recordCollector.offsets()).thenReturn(Collections.emptyMap());
 
         task = createStatefulTask(createConfig("100"), true);
         task.initializeIfNeeded();
@@ -1893,7 +1867,6 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointForSuspendedRunningTaskWithLargeProgress() {
-        when(recordCollector.offsets()).thenReturn(Collections.emptyMap()); // restoration checkpoint
         when(stateManager.changelogOffsets())
                 .thenReturn(singletonMap(partition1, 0L))
                 .thenReturn(singletonMap(partition1, 12000L))
@@ -1940,7 +1913,6 @@ public class StreamTaskTest {
     public void shouldReturnStateManagerChangelogOffsets() {
         when(stateManager.changelogOffsets()).thenReturn(singletonMap(partition1, 50L));
         when(stateManager.changelogPartitions()).thenReturn(singleton(partition1));
-        when(recordCollector.offsets()).thenReturn(emptyMap());
 
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
@@ -1975,9 +1947,6 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointOnCloseRestoringIfNoProgress() {
-        when(stateManager.changelogOffsets()).thenReturn(emptyMap());
-        when(recordCollector.offsets()).thenReturn(emptyMap());
-
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
         task.initializeIfNeeded();
@@ -1995,9 +1964,6 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAlwaysCheckpointStateIfEnforced() {
-        when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap());
-        when(recordCollector.offsets()).thenReturn(Collections.emptyMap());
-
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
         task.initializeIfNeeded();
@@ -2059,7 +2025,6 @@ public class StreamTaskTest {
     public void shouldThrowExceptionOnCloseCleanError() {
         final long offset = 543L;
 
-        when(recordCollector.offsets()).thenReturn(emptyMap());
         when(stateManager.changelogOffsets()).thenReturn(singletonMap(changelogPartition, offset));
         doThrow(new ProcessorStateException("KABOOM!")).when(stateManager).close();
         final MetricName metricName = setupCloseTaskMetric();
@@ -2090,7 +2055,6 @@ public class StreamTaskTest {
 
         when(recordCollector.offsets()).thenReturn(singletonMap(changelogPartition, offset));
         doThrow(new ProcessorStateException("KABOOM!")).when(stateManager).flushCache();
-        when(stateManager.changelogOffsets()).thenReturn(emptyMap());
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
@@ -2116,7 +2080,6 @@ public class StreamTaskTest {
     @Test
     public void shouldThrowOnCloseCleanCheckpointError() {
         final long offset = 54300L;
-        when(recordCollector.offsets()).thenReturn(emptyMap());
         doThrow(new ProcessorStateException("KABOOM!")).when(stateManager).checkpoint();
         when(stateManager.changelogOffsets())
                 .thenReturn(singletonMap(partition1, offset));
@@ -2268,9 +2231,6 @@ public class StreamTaskTest {
 
     @Test
     public void shouldPrepareRecycleSuspendedTask() {
-        when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap());
-        when(recordCollector.offsets()).thenReturn(Collections.emptyMap());
-
         task = createStatefulTask(createConfig("100"), true);
         assertThrows(IllegalStateException.class, () -> task.prepareRecycle()); // CREATED
 
@@ -2307,8 +2267,6 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAlwaysSuspendRunningTasks() {
-        when(recordCollector.offsets()).thenReturn(Collections.emptyMap()); // restoration checkpoint
-        when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap());
         task = createFaultyStatefulTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
@@ -2674,9 +2632,6 @@ public class StreamTaskTest {
         source1.addChild(processorStreamTime);
         source1.addChild(processorSystemTime);
 
-        when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap());
-        when(recordCollector.offsets()).thenReturn(Collections.emptyMap());
-
         final InternalProcessorContext context = new ProcessorContextImpl(
             taskId,
             config,
@@ -2714,9 +2669,6 @@ public class StreamTaskTest {
         source1.addChild(processorSystemTime);
         source2.addChild(processorSystemTime);
 
-        when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap());
-        when(recordCollector.offsets()).thenReturn(Collections.emptyMap());
-
         final InternalProcessorContext context = new ProcessorContextImpl(
             taskId,
             config,
@@ -2750,8 +2702,6 @@ public class StreamTaskTest {
         );
 
         sourceNode.addChild(processorStreamTime);
-
-        when(recordCollector.offsets()).thenReturn(Collections.emptyMap());
 
         final StreamsConfig config = createConfig();
 
