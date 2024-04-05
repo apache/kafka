@@ -51,7 +51,7 @@ public class RaftConfig {
     private static final String QUORUM_PREFIX = "controller.quorum.";
 
     // Non-routable address represents an endpoint that does not resolve to any particular node
-    public static final InetSocketAddress NON_ROUTABLE_ADDRESS = new InetSocketAddress("0.0.0.0", 0);
+    public static final String NON_ROUTABLE_HOST = "0.0.0.0";
     public static final UnknownAddressSpec UNKNOWN_ADDRESS_SPEC_INSTANCE = new UnknownAddressSpec();
 
     public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
@@ -105,7 +105,7 @@ public class RaftConfig {
         public final InetSocketAddress address;
 
         public InetAddressSpec(InetSocketAddress address) {
-            if (address == null || address.equals(NON_ROUTABLE_ADDRESS)) {
+            if (address == null || address.getHostString().equals(NON_ROUTABLE_HOST)) {
                 throw new IllegalArgumentException("Invalid address: " + address);
             }
             this.address = address;
@@ -196,7 +196,25 @@ public class RaftConfig {
     }
 
     public static Map<Integer, AddressSpec> parseVoterConnections(List<String> voterEntries) {
-        Map<Integer, AddressSpec> voterMap = new HashMap<>();
+        return parseVoterConnections(voterEntries, false)
+            .entrySet()
+            .stream()
+            .collect(
+                Collectors.toMap(
+                    Map.Entry::getKey,
+                    entry -> {
+                        if (entry.getValue().getHostString().equals(NON_ROUTABLE_HOST)) {
+                            return UNKNOWN_ADDRESS_SPEC_INSTANCE;
+                        } else {
+                            return new InetAddressSpec(entry.getValue());
+                        }
+                    }
+                )
+            );
+    }
+
+    public static Map<Integer, InetSocketAddress> parseVoterConnections(List<String> voterEntries, boolean routableOnly) {
+        Map<Integer, InetSocketAddress> voterMap = new HashMap<>();
         for (String voterMapEntry : voterEntries) {
             String[] idAndAddress = voterMapEntry.split("@");
             if (idAndAddress.length != 2) {
@@ -220,10 +238,12 @@ public class RaftConfig {
             }
 
             InetSocketAddress address = new InetSocketAddress(host, port);
-            if (address.equals(NON_ROUTABLE_ADDRESS)) {
-                voterMap.put(voterId, UNKNOWN_ADDRESS_SPEC_INSTANCE);
+            if (address.getHostString().equals(NON_ROUTABLE_HOST) && routableOnly) {
+                throw new ConfigException(
+                    String.format("Host string ({}) is not routeable", address.getHostString())
+                );
             } else {
-                voterMap.put(voterId, new InetAddressSpec(address));
+                voterMap.put(voterId, address);
             }
         }
 
@@ -231,17 +251,15 @@ public class RaftConfig {
     }
 
     public static List<Node> quorumVoterStringsToNodes(List<String> voters) {
-        return voterConnectionsToNodes(parseVoterConnections(voters));
+        return voterConnectionsToNodes(parseVoterConnections(voters, true));
     }
 
-    public static List<Node> voterConnectionsToNodes(Map<Integer, RaftConfig.AddressSpec> voterConnections) {
-        return voterConnections.entrySet().stream()
+    public static List<Node> voterConnectionsToNodes(Map<Integer, InetSocketAddress> voterConnections) {
+        return voterConnections
+            .entrySet()
+            .stream()
             .filter(Objects::nonNull)
-            .filter(connection -> connection.getValue() instanceof InetAddressSpec)
-            .map(connection -> {
-                InetAddressSpec spec = (InetAddressSpec) connection.getValue();
-                return new Node(connection.getKey(), spec.address.getHostString(), spec.address.getPort());
-            })
+            .map(entry -> new Node(entry.getKey(), entry.getValue().getHostString(), entry.getValue().getPort()))
             .collect(Collectors.toList());
     }
 

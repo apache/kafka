@@ -27,7 +27,6 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{CompressionType, Records}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UNKNOWN_ADDRESS_SPEC_INSTANCE}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -1337,29 +1336,29 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testValidQuorumVotersConfig(): Unit = {
-    val expected = new util.HashMap[Integer, AddressSpec]()
+  def testValidQuorumVotersParsing(): Unit = {
+    val expected = new util.HashMap[Integer, InetSocketAddress]()
     assertValidQuorumVoters("", expected)
 
-    expected.put(1, new InetAddressSpec(new InetSocketAddress("127.0.0.1", 9092)))
+    expected.put(1, new InetSocketAddress("127.0.0.1", 9092))
     assertValidQuorumVoters("1@127.0.0.1:9092", expected)
 
     expected.clear()
-    expected.put(1, UNKNOWN_ADDRESS_SPEC_INSTANCE)
+    expected.put(1, new InetSocketAddress("0.0.0.0", 0))
     assertValidQuorumVoters("1@0.0.0.0:0", expected)
 
     expected.clear()
-    expected.put(1, new InetAddressSpec(new InetSocketAddress("kafka1", 9092)))
-    expected.put(2, new InetAddressSpec(new InetSocketAddress("kafka2", 9092)))
-    expected.put(3, new InetAddressSpec(new InetSocketAddress("kafka3", 9092)))
+    expected.put(1, new InetSocketAddress("kafka1", 9092))
+    expected.put(2, new InetSocketAddress("kafka2", 9092))
+    expected.put(3, new InetSocketAddress("kafka3", 9092))
     assertValidQuorumVoters("1@kafka1:9092,2@kafka2:9092,3@kafka3:9092", expected)
   }
 
-  private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, AddressSpec]): Unit = {
+  private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, InetSocketAddress]): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.setProperty(KafkaConfig.QuorumVotersProp, value)
-    val raftConfig = new RaftConfig(KafkaConfig.fromProps(props))
-    assertEquals(expectedVoters, raftConfig.quorumVoterConnections())
+    val addresses = RaftConfig.parseVoterConnections(KafkaConfig.fromProps(props).quorumVoters, false)
+    assertEquals(expectedVoters, addresses)
   }
 
   @Test

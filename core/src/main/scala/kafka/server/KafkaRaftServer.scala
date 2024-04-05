@@ -65,16 +65,12 @@ class KafkaRaftServer(
     metaPropsEnsemble.clusterId().get()
   )
 
-  // TODO: Map the value to InetSocketAddress and throw a configuration error if not possible
-  private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
-    RaftConfig.parseVoterConnections(config.quorumVoters))
-
   private val sharedServer = new SharedServer(
     config,
     metaPropsEnsemble,
     time,
     metrics,
-    controllerQuorumVotersFuture,
+    CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters, true)),
     new StandardFaultHandlerFactory(),
   )
 

@@ -485,11 +485,6 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     private final EventQueue eventQueue;
 
     /**
-     * Whether this LocalLogManager has been initialized.
-     */
-    private boolean initialized = false;
-
-    /**
      * Whether this LocalLogManager has been shut down.
      */
     private boolean shutdown = false;
@@ -633,7 +628,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         @Override
         public void run() throws Exception {
             try {
-                if (initialized && !shutdown) {
+                if (!shutdown) {
                     log.debug("Node {}: beginning shutdown.", nodeId);
                     resign(leader.epoch());
                     for (MetaLogListenerData listenerData : listeners.values()) {
@@ -680,14 +675,6 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public void initialize() {
-        eventQueue.append(() -> {
-            log.debug("initialized local log manager for node " + nodeId);
-            initialized = true;
-        });
-    }
-
-    @Override
     public void register(RaftClient.Listener<ApiMessageAndVersion> listener) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         eventQueue.append(() -> {
@@ -695,7 +682,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 log.info("Node {}: can't register because local log manager has " +
                     "already been shut down.", nodeId);
                 future.complete(null);
-            } else if (initialized) {
+            } else {
                 int id = System.identityHashCode(listener);
                 if (listeners.putIfAbsent(listener, new MetaLogListenerData(listener)) != null) {
                     log.error("Node {}: can't register because listener {} already exists", nodeId, id);
@@ -705,11 +692,6 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                 shared.electLeaderIfNeeded();
                 scheduleLogCheck();
                 future.complete(null);
-            } else {
-                log.info("Node {}: can't register because local log manager has not " +
-                    "been initialized.", nodeId);
-                future.completeExceptionally(new RuntimeException(
-                    "LocalLogManager was not initialized."));
             }
         });
         try {

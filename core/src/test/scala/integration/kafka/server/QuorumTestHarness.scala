@@ -35,7 +35,6 @@ import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
-import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.zookeeper.client.ZKClientConfig
@@ -88,7 +87,7 @@ class KRaftQuorumImplementation(
   val controllerServer: ControllerServer,
   val faultHandlerFactory: FaultHandlerFactory,
   val metadataDir: File,
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, InetSocketAddress]],
   val clusterId: String,
   val log: Logging,
   val faultHandler: FaultHandler
@@ -353,7 +352,7 @@ abstract class QuorumTestHarness extends Logging {
     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
     props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
     val config = new KafkaConfig(props)
-    val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, AddressSpec]]
+    val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, InetSocketAddress]]
     val metaPropertiesEnsemble = new MetaPropertiesEnsemble.Loader().
       addMetadataLogDir(metadataDir.getAbsolutePath).
       load()
@@ -378,8 +377,9 @@ abstract class QuorumTestHarness extends Logging {
           error("Error completing controller socket server future", e)
           controllerQuorumVotersFuture.completeExceptionally(e)
         } else {
-          controllerQuorumVotersFuture.complete(Collections.singletonMap(nodeId,
-            new InetAddressSpec(new InetSocketAddress("localhost", port))))
+          controllerQuorumVotersFuture.complete(
+            Collections.singletonMap(nodeId, new InetSocketAddress("localhost", port))
+          )
         }
       })
       controllerServer.startup()
@@ -389,13 +389,15 @@ abstract class QuorumTestHarness extends Logging {
         CoreUtils.swallow(sharedServer.stopForController(), this)
         throw e
     }
-    new KRaftQuorumImplementation(controllerServer,
+    new KRaftQuorumImplementation(
+      controllerServer,
       faultHandlerFactory,
       metadataDir,
       controllerQuorumVotersFuture,
       metaProperties.clusterId.get(),
       this,
-      faultHandler)
+      faultHandler
+    )
   }
 
   private def newZooKeeperQuorum(): ZooKeeperQuorumImplementation = {

@@ -322,7 +322,8 @@ class KafkaServer(
 
         if (config.migrationEnabled) {
           kraftControllerNodes = RaftConfig.voterConnectionsToNodes(
-            RaftConfig.parseVoterConnections(config.quorumVoters)).asScala
+            RaftConfig.parseVoterConnections(config.quorumVoters, true)
+          ).asScala
         } else {
           kraftControllerNodes = Seq.empty
         }
@@ -330,7 +331,7 @@ class KafkaServer(
           config.brokerId,
           config.interBrokerProtocolVersion,
           brokerFeatures,
-          kraftControllerNodes,
+          kraftControllerNodes, // TODO: This needs to use the raft manager
           config.migrationEnabled)
         val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config)
 
@@ -421,8 +422,7 @@ class KafkaServer(
             logManager.directoryIdsSet)
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
-          val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
-            RaftConfig.parseVoterConnections(config.quorumVoters))
+          val quorumVoters = RaftConfig.parseVoterConnections(config.quorumVoters, true)
           raftManager = new KafkaRaftManager[ApiMessageAndVersion](
             metaPropsEnsemble.clusterId().get(),
             config,
@@ -432,10 +432,11 @@ class KafkaServer(
             time,
             metrics,
             threadNamePrefix,
-            controllerQuorumVotersFuture,
+            CompletableFuture.completedFuture(quorumVoters),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
-          val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
+          val controllerNodes = RaftConfig.voterConnectionsToNodes(quorumVoters).asScala
+          // TODO: This needs to use the raft manager
           val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
           val brokerToQuorumChannelManager = new NodeToControllerChannelManagerImpl(
             controllerNodeProvider = quorumControllerNodeProvider,

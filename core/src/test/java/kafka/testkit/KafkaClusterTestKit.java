@@ -86,7 +86,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
      */
     private static class ControllerQuorumVotersFutureManager implements AutoCloseable {
         private final int expectedControllers;
-        private final CompletableFuture<Map<Integer, RaftConfig.AddressSpec>> future = new CompletableFuture<>();
+        private final CompletableFuture<Map<Integer, InetSocketAddress>> future = new CompletableFuture<>();
         private final Map<Integer, Integer> controllerPorts = new TreeMap<>();
 
         ControllerQuorumVotersFutureManager(int expectedControllers) {
@@ -96,11 +96,17 @@ public class KafkaClusterTestKit implements AutoCloseable {
         synchronized void registerPort(int nodeId, int port) {
             controllerPorts.put(nodeId, port);
             if (controllerPorts.size() >= expectedControllers) {
-                future.complete(controllerPorts.entrySet().stream().
-                    collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        entry -> new RaftConfig.InetAddressSpec(new InetSocketAddress("localhost", entry.getValue()))
-                    )));
+                future.complete(
+                    controllerPorts
+                        .entrySet()
+                        .stream()
+                        .collect(
+                            Collectors.toMap(
+                                Map.Entry::getKey,
+                                entry -> new InetSocketAddress("localhost", entry.getValue())
+                            )
+                        )
+                );
             }
         }
 
@@ -448,7 +454,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public String quorumVotersConfig() throws ExecutionException, InterruptedException {
         Collection<Node> controllerNodes = RaftConfig.voterConnectionsToNodes(
-            controllerQuorumVotersFutureManager.future.get());
+            controllerQuorumVotersFutureManager.future.get()
+        );
         StringBuilder bld = new StringBuilder();
         String prefix = "";
         for (Node node : controllerNodes) {

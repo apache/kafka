@@ -17,11 +17,12 @@
 package kafka.raft
 
 import java.io.File
+import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.util
 import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
+import java.util.{Map => JMap}
 import kafka.log.LogManager
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
@@ -39,7 +40,6 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, RaftClient, RaftConfig, ReplicatedLog}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.serialization.RecordSerde
@@ -98,7 +98,7 @@ class KafkaRaftManager[T](
   time: Time,
   metrics: Metrics,
   threadNamePrefixOpt: Option[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
   fatalFaultHandler: FaultHandler
 ) extends RaftManager[T] with Logging {
 
@@ -137,7 +137,12 @@ class KafkaRaftManager[T](
   private val clientDriver = new KafkaRaftClientDriver[T](client, threadNamePrefix, fatalFaultHandler, logContext)
 
   def startup(): Unit = {
-    client.initialize(controllerQuorumVotersFuture.get())
+    client.initialize(
+      OptionalInt.of(config.nodeId),
+      controllerQuorumVotersFuture.get(),
+      new FileBasedStateStore(new File(dataDir, "quorum-state")),
+      metrics
+    )
     netChannel.start()
     clientDriver.start()
   }
@@ -167,20 +172,14 @@ class KafkaRaftManager[T](
   }
 
   private def buildRaftClient(): KafkaRaftClient[T] = {
-    val quorumStateStore = new FileBasedStateStore(new File(dataDir, "quorum-state"))
-    val nodeId = OptionalInt.of(config.nodeId)
-
     val client = new KafkaRaftClient(
       recordSerde,
       netChannel,
       replicatedLog,
-      quorumStateStore,
       time,
-      metrics,
       expirationService,
       logContext,
       clusterId,
-      nodeId,
       raftConfig
     )
     client
