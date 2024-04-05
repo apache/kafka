@@ -314,7 +314,6 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAttemptToDeleteStateDirectoryWhenCloseDirtyAndEosEnabled() {
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         stateDirectory = mock(StateDirectory.class);
 
         when(stateDirectory.lock(taskId)).thenReturn(true);
