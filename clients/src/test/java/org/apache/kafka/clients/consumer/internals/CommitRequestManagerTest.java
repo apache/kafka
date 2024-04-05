@@ -85,6 +85,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -94,16 +95,16 @@ import static org.mockito.Mockito.when;
 
 public class CommitRequestManagerTest {
 
-    private long retryBackoffMs = 100;
-    private long retryBackoffMaxMs = 1000;
+    private final long retryBackoffMs = 100;
+    private final long retryBackoffMaxMs = 1000;
     private static final String CONSUMER_COORDINATOR_METRICS = "consumer-coordinator-metrics";
-    private Node mockedNode = new Node(1, "host1", 9092);
+    private final Node mockedNode = new Node(1, "host1", 9092);
     private SubscriptionState subscriptionState;
     private LogContext logContext;
     private MockTime time;
     private CoordinatorRequestManager coordinatorRequestManager;
     private OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
-    private Metrics metrics = new Metrics();
+    private final Metrics metrics = new Metrics();
     private Properties props;
 
     private final int defaultApiTimeoutMs = 60000;
@@ -131,6 +132,18 @@ public class CommitRequestManagerTest {
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
         commitRequestManger.commitAsync(offsets);
         assertPoll(false, 0, commitRequestManger);
+    }
+
+    @Test
+    public void testAsyncCommitWhileCoordinatorUnknownIsSentOutWhenCoordinatorDiscovered() {
+        CommitRequestManager commitRequestManger = create(false, 0);
+        assertPoll(false, 0, commitRequestManger);
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
+        commitRequestManger.commitAsync(offsets);
+        assertPoll(false, 0, commitRequestManger);
+        assertPoll(true, 1, commitRequestManger);
     }
 
     @Test
@@ -430,6 +443,34 @@ public class CommitRequestManagerTest {
     }
 
     @Test
+    public void testAutoCommitBeforeRevocationNotBlockedByAutoCommitOnIntervalInflightRequest() {
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+        TopicPartition t1p = new TopicPartition("topic1", 0);
+        subscriptionState.assignFromUser(singleton(t1p));
+        subscriptionState.seek(t1p, 100);
+
+        // Send auto-commit request on the interval.
+        CommitRequestManager commitRequestManger = create(true, 100);
+        time.sleep(100);
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        NetworkClientDelegate.FutureCompletionHandler autoCommitOnInterval =
+            res.unsentRequests.get(0).handler();
+
+        // Another auto-commit request should be sent if a revocation happens, even if an
+        // auto-commit on the interval is in-flight.
+        CompletableFuture<Void> autoCommitBeforeRevocation =
+            commitRequestManger.maybeAutoCommitSyncBeforeRevocation(200);
+        assertEquals(1, commitRequestManger.pendingRequests.unsentOffsetCommits.size());
+
+        // Receive response for initial auto-commit on interval
+        autoCommitOnInterval.onComplete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>())));
+        assertFalse(autoCommitBeforeRevocation.isDone(), "Auto-commit before revocation should " +
+            "not complete until it receives a response");
+    }
+
+    @Test
     public void testAutocommitInterceptorsInvoked() {
         TopicPartition t1p = new TopicPartition("topic1", 0);
         subscriptionState.assignFromUser(singleton(t1p));
@@ -470,7 +511,6 @@ public class CommitRequestManagerTest {
         CommitRequestManager commitRequestManger = create(true, 100);
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        // CompletableFuture<Void> result = commitRequestManger.maybeAutoCommitAllConsumedAsync();
         commitRequestManger.maybeAutoCommitAsync();
         assertTrue(commitRequestManger.pendingRequests.unsentOffsetCommits.isEmpty());
         verify(commitRequestManger).resetAutoCommitTimer();
@@ -496,6 +536,40 @@ public class CommitRequestManagerTest {
         assertEquals(1, commitRequestManger.pendingRequests.unsentOffsetCommits.size());
 
         verify(commitRequestManger, times(2)).resetAutoCommitTimer();
+    }
+
+    @Test
+    public void testAutoCommitOnIntervalSkippedIfPreviousOneInFlight() {
+        TopicPartition t1p = new TopicPartition("topic1", 0);
+        subscriptionState.assignFromUser(singleton(t1p));
+        subscriptionState.seek(t1p, 100);
+
+        CommitRequestManager commitRequestManger = create(true, 100);
+
+        // Send auto-commit request that will remain in-flight without a response
+        time.sleep(100);
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
+        commitRequestManger.maybeAutoCommitAsync();
+        List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManger);
+        assertEquals(1, futures.size());
+        NetworkClientDelegate.FutureCompletionHandler inflightCommitResult = futures.get(0);
+        verify(commitRequestManger, times(1)).resetAutoCommitTimer();
+        clearInvocations(commitRequestManger);
+
+        // After next interval expires, no new auto-commit request should be sent. The interval
+        // should not be reset either, to ensure that the next auto-commit is sent out as soon as
+        // the inflight receives a response.
+        time.sleep(100);
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
+        commitRequestManger.maybeAutoCommitAsync();
+        assertPoll(0, commitRequestManger);
+        verify(commitRequestManger, never()).resetAutoCommitTimer();
+
+        // When a response for the inflight is received, a next auto-commit should be sent when
+        // polling the manager.
+        inflightCommitResult.onComplete(
+            mockOffsetCommitResponse(t1p.topic(), t1p.partition(), (short) 1, Errors.NONE));
+        assertPoll(1, commitRequestManger);
     }
 
     @Test
