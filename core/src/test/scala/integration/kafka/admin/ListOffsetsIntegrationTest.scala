@@ -338,6 +338,9 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
         props.setProperty("log.message.format.version", "0.10.0")
         props.setProperty("inter.broker.protocol.version", "0.10.0")
       }
+     // We use mock timer so the records can get removed if the test env is too busy to complete
+     // tests before kafka-log-retention. Hence, we disable the retention to avoid failed tests
+     props.setProperty(KafkaConfig.LogRetentionTimeMillisProp, "-1")
      props.setProperty(KafkaConfig.LogDirProp, dataFolder(index))
       props
     }.map(KafkaConfig.fromProps)
