@@ -224,6 +224,9 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
       val maxTimestampOffset = runFetchOffsets(adminClient, OffsetSpec.maxTimestamp(), topic)
       assertEquals(expectedMaxTimestampOffset, maxTimestampOffset.offset())
+      // the epoch is related to the returned offset.
+      // Hence, it should be zero (the earliest leader epoch), regardless of new leader election
+      assertEquals(Optional.of(0), maxTimestampOffset.leaderEpoch())
     }
 
     // case 0: test the offsets from leader's append path
