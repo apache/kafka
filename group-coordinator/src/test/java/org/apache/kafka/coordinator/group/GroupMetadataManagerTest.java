@@ -9566,6 +9566,7 @@ public class GroupMetadataManagerTest {
         );
 
         ClassicGroup group = context.createClassicGroup(groupId);
+        group.setProtocolName(Optional.ofNullable("range"));
         group.add(
             new ClassicGroupMember(
                 memberId1,
@@ -9728,6 +9729,7 @@ public class GroupMetadataManagerTest {
 
         // Construct a stable group with two members.
         ClassicGroup group = context.createClassicGroup(groupId);
+        group.setProtocolName(Optional.ofNullable("range"));
         group.add(
             new ClassicGroupMember(
                 memberId1,

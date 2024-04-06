@@ -63,6 +63,7 @@ public class ConsumerGroupTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         return new ConsumerGroup(
             snapshotRegistry,
+            new LogContext(),
             groupId,
             mock(GroupCoordinatorMetricsShard.class)
         );
@@ -818,7 +819,7 @@ public class ConsumerGroupTest {
             Collections.emptyMap(),
             new TopicPartition("__consumer_offsets", 0)
         );
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, new LogContext(), "group-foo", metricsShard);
         snapshotRegistry.getOrCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         group.updateMember(new ConsumerGroupMember.Builder("member1")
@@ -834,6 +835,7 @@ public class ConsumerGroupTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConsumerGroup group = new ConsumerGroup(
             snapshotRegistry,
+            new LogContext(),
             "group-foo",
             mock(GroupCoordinatorMetricsShard.class)
         );
@@ -894,7 +896,7 @@ public class ConsumerGroupTest {
         long commitTimestamp = 20000L;
         long offsetsRetentionMs = 10000L;
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
-        ConsumerGroup group = new ConsumerGroup(new SnapshotRegistry(new LogContext()), "group-id", mock(GroupCoordinatorMetricsShard.class));
+        ConsumerGroup group = new ConsumerGroup(new SnapshotRegistry(new LogContext()), new LogContext(), "group-id", mock(GroupCoordinatorMetricsShard.class));
 
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
         assertTrue(offsetExpirationCondition.isPresent());
@@ -953,7 +955,7 @@ public class ConsumerGroupTest {
     @Test
     public void testAsDescribedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-id-1", mock(GroupCoordinatorMetricsShard.class));
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, new LogContext(), "group-id-1", mock(GroupCoordinatorMetricsShard.class));
         snapshotRegistry.getOrCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
 
@@ -992,6 +994,7 @@ public class ConsumerGroupTest {
         GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
         ConsumerGroup consumerGroup = new ConsumerGroup(
             new SnapshotRegistry(new LogContext()),
+            new LogContext(),
             "group-id",
             metrics
         );
@@ -1033,7 +1036,7 @@ public class ConsumerGroupTest {
             Collections.emptyMap(),
             new TopicPartition("__consumer_offsets", 0)
         );
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, new LogContext(), "group-foo", metricsShard);
         snapshotRegistry.getOrCreateSnapshot(0);
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));
         assertFalse(group.isInStates(Collections.singleton("Empty"), 0));

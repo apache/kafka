@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -24,11 +26,14 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.SchemaException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
@@ -37,7 +42,9 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
 import org.apache.kafka.timeline.TimelineObject;
+import org.slf4j.Logger;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -101,6 +108,11 @@ public class ConsumerGroup implements Group {
      * The snapshot registry.
      */
     private final SnapshotRegistry snapshotRegistry;
+
+    /**
+     * The slf4j logger.
+     */
+    private final Logger log;
 
     /**
      * The group id.
@@ -182,10 +194,12 @@ public class ConsumerGroup implements Group {
 
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
+        LogContext logContext,
         String groupId,
         GroupCoordinatorMetricsShard metrics
     ) {
         this.snapshotRegistry = Objects.requireNonNull(snapshotRegistry);
+        this.log = Objects.requireNonNull(logContext).logger(ConsumerGroup.class);
         this.groupId = Objects.requireNonNull(groupId);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
@@ -998,4 +1012,70 @@ public class ConsumerGroup implements Group {
         );
         return describedGroup;
     }
+
+
+    /**
+     * Set the attributes of the consumer group according to a classic group.
+     * Add the records for creating and updating the consumer group.
+     *
+     * @param classicGroup      The converted classic group.
+     * @param records           The list to which the new records are added.
+     */
+    public void fromClassicGroup(
+        ClassicGroup classicGroup,
+        List<Record> records,
+        TopicsImage topicsImage
+    ) {
+        setGroupEpoch(classicGroup.generationId());
+        records.add(RecordHelpers.newGroupEpochRecord(groupId(), classicGroup.generationId()));
+        // SubscriptionMetadata will be computed in the following consumerGroupHeartbeat.
+        records.add(RecordHelpers.newGroupSubscriptionMetadataRecord(groupId(), Collections.emptyMap()));
+
+        setTargetAssignmentEpoch(classicGroup.generationId());
+        records.add(RecordHelpers.newTargetAssignmentEpochRecord(groupId(), classicGroup.generationId()));
+
+        classicGroup.allMembers().forEach(member -> {
+            try {
+                ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment()));
+                Map<Uuid, Set<Integer>> partitions = topicPartitionMapFromList(assignment.partitions(), topicsImage);
+                ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(member.metadata(classicGroup.protocolName().get())));
+
+                ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(member.memberId())
+                    .setMemberEpoch(classicGroup.generationId())
+                    .setPreviousMemberEpoch(classicGroup.generationId())
+                    .setInstanceId(member.groupInstanceId().orElse(null))
+                    .setRackId(subscription.rackId().orElse(null))
+                    .setRebalanceTimeoutMs(member.rebalanceTimeoutMs())
+                    .setClientId(member.clientId())
+                    .setClientHost(member.clientHost())
+                    .setSubscribedTopicNames(subscription.topics())
+                    .setAssignedPartitions(partitions)
+                    .build();
+                updateMember(newMember);
+
+                records.add(RecordHelpers.newMemberSubscriptionRecord(groupId(), newMember));
+                records.add(RecordHelpers.newCurrentAssignmentRecord(groupId(), newMember));
+                records.add(RecordHelpers.newTargetAssignmentRecord(groupId(), member.memberId(), partitions));
+            } catch (SchemaException e) {
+                log.warn("Failed to parse Consumer Protocol " + ConsumerProtocol.PROTOCOL_TYPE + ":" +
+                    classicGroup.protocolName().get() + " of group " + groupId + ".", e);
+            }
+        });
+    }
+
+    private static Map<Uuid, Set<Integer>> topicPartitionMapFromList(
+        List<TopicPartition> partitions,
+        TopicsImage topicsImage
+    ) {
+        Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
+        partitions.forEach(topicPartition -> {
+            TopicImage topicImage = topicsImage.getTopic(topicPartition.topic());
+            if (topicImage != null) {
+                topicPartitionMap.computeIfAbsent(topicImage.id(), __ -> new HashSet<>())
+                    .add(topicPartition.partition());
+            }
+        });
+        return topicPartitionMap;
+    }
+
 }

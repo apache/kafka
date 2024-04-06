@@ -161,21 +161,25 @@ public class GroupCoordinatorMetricsShardTest {
 
         ConsumerGroup group0 = new ConsumerGroup(
             snapshotRegistry,
+            new LogContext(),
             "group-0",
             shard
         );
         ConsumerGroup group1 = new ConsumerGroup(
             snapshotRegistry,
+            new LogContext(),
             "group-1",
             shard
         );
         ConsumerGroup group2 = new ConsumerGroup(
             snapshotRegistry,
+            new LogContext(),
             "group-2",
             shard
         );
         ConsumerGroup group3 = new ConsumerGroup(
             snapshotRegistry,
+            new LogContext(),
             "group-3",
             shard
         );

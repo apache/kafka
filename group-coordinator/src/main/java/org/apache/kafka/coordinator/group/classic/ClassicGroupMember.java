@@ -200,17 +200,6 @@ public class ClassicGroupMember {
     }
 
     /**
-     * Get the metadata of any supported protocol.
-     */
-    public byte[] metadata() {
-        for (JoinGroupRequestProtocol supportedProtocol : supportedProtocols) {
-            return supportedProtocol.metadata();
-        }
-
-        throw new IllegalArgumentException("Member does not support any protocol.");
-    }
-
-    /**
      * The heartbeat is always considered satisfied when an existing member has made a
      * successful join/sync group request during a rebalance.
      *
