@@ -110,4 +110,9 @@ public class SystemTimer implements Timer {
     public void close() {
         taskExecutor.shutdown();
     }
+
+    // visible for testing
+    boolean isExecutorTerminated() {
+        return taskExecutor.isTerminated();
+    }
 }

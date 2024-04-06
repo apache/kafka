@@ -59,4 +59,11 @@ public class SystemTimerReaperTest {
             timer.close();
         }
     }
+
+    @Test
+    public void testReaperClose() throws Exception {
+        SystemTimerReaper timer = new SystemTimerReaper("reaper", new SystemTimer("timer"));
+        timer.close();
+        TestUtils.waitForCondition(() -> timer.isReaperShutdown() && timer.isTimerShutdown(), "reaper or timer not shutdown");
+    }
 }
