@@ -252,7 +252,7 @@ object KafkaConfig {
   val ConsumerGroupMaxHeartbeatIntervalMsProp = "group.consumer.max.heartbeat.interval.ms"
   val ConsumerGroupMaxSizeProp = "group.consumer.max.size"
   val ConsumerGroupAssignorsProp = "group.consumer.assignors"
-  val ConsumerGroupMigrationPolicyProp = "consumer.group.migration.policy"
+  val ConsumerGroupMigrationPolicyProp = "group.consumer.migration.policy"
 
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeProp = "offset.metadata.max.bytes"
@@ -679,7 +679,12 @@ object KafkaConfig {
   val ConsumerGroupMaxHeartbeatIntervalMsDoc = "The maximum heartbeat interval for registered consumers."
   val ConsumerGroupMaxSizeDoc = "The maximum number of consumers that a single consumer group can accommodate."
   val ConsumerGroupAssignorsDoc = "The server side assignors as a list of full class names. The first one in the list is considered as the default assignor to be used in the case where the consumer does not specify an assignor."
-  val ConsumerGroupMigrationPolicyDoc = "The config that enables converting the classic group using the consumer embedded protocol to the consumer group using the consumer group protocol and vice versa. " + ConsumerGroupMigrationPolicy.validValuesDescription
+  val ConsumerGroupMigrationPolicyDoc = "The config that enables converting the non-empty classic group using the consumer embedded protocol to the non-empty consumer group using the consumer group protocol and vice versa; " +
+    "conversions of empty groups in both directions are always enabled regardless of this policy. " +
+    ConsumerGroupMigrationPolicy.BIDIRECTIONAL + ": both upgrade from classic group to consumer group and downgrade from consumer group to classic group are enabled, " +
+    ConsumerGroupMigrationPolicy.UPGRADE + ": only upgrade is enabled, " +
+    ConsumerGroupMigrationPolicy.DOWNGRADE + ": only downgrade is enabled, " +
+    ConsumerGroupMigrationPolicy.DISABLED + ": neither upgrade nor downgrade is enabled.";
 
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeDoc = "The maximum size for a metadata entry associated with an offset commit."
