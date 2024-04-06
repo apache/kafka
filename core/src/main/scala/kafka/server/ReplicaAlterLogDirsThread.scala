@@ -98,26 +98,25 @@ class ReplicaAlterLogDirsThread(name: String,
 
   override def removePartitions(topicPartitions: Set[TopicPartition]): Map[TopicPartition, PartitionFetchState] = {
     for (topicPartition <- topicPartitions) {
-      // Revert any reassignments for partitions that did not complete the future replica promotion
-      val PromotionState(reassignmentState, topicId, originalDir) = this.promotionState(topicPartition)
-      if (originalDir.isDefined && topicId.isDefined && reassignmentState.maybeInconsistentMetadata) {
-        directoryEventHandler.handleAssignment(new TopicIdPartition(topicId.get, topicPartition.partition()), originalDir.get, () => ())
+      if (this.promotionStates.contains(topicPartition)) {
+        val PromotionState(reassignmentState, topicId, originalDir) = this.promotionStates.get(topicPartition)
+        // Revert any reassignments for partitions that did not complete the future replica promotion
+        if (originalDir.isDefined && topicId.isDefined && reassignmentState.maybeInconsistentMetadata) {
+          directoryEventHandler.handleAssignment(new TopicIdPartition(topicId.get, topicPartition.partition()), originalDir.get, () => ())
+        }
+        this.promotionStates.remove(topicPartition)
       }
-
-      this.promotionStates.remove(topicPartition)
     }
 
     super.removePartitions(topicPartitions)
   }
 
-  private def promotionState(topicPartition: TopicPartition): PromotionState = promotionStates.get(topicPartition)
-
-  private def reassignmentState(topicPartition: TopicPartition): ReassignmentState = promotionState(topicPartition).reassignmentState
+  private def reassignmentState(topicPartition: TopicPartition): ReassignmentState = promotionStates.get(topicPartition).reassignmentState
 
   // Visible for testing
   private[server] def updateReassignmentState(topicPartition: TopicPartition, state: ReassignmentState): Unit = {
     log.debug(s"Updating future replica ${topicPartition} reassignment state to ${state}")
-    promotionStates.put(topicPartition, promotionState(topicPartition).withAssignment(state))
+    promotionStates.put(topicPartition, promotionStates.get(topicPartition).withAssignment(state))
   }
 
   private def maybePromoteFutureReplica(topicPartition: TopicPartition, partition: Partition) = {
