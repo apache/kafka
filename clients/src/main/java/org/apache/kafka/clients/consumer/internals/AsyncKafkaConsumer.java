@@ -1462,8 +1462,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         final Set<String> topicsToSubscribe = cluster.topics().stream()
                 .filter(subscriptions::matchesSubscribedPattern)
                 .collect(Collectors.toSet());
-        if (subscriptions.subscribeFromPattern(topicsToSubscribe))
+        if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
+            applicationEventHandler.add(new SubscriptionChangeEvent());
             metadata.requestUpdateForNewTopics();
+        }
     }
 
     @Override
@@ -1751,16 +1753,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             throwIfNoAssignorsConfigured();
             log.info("Subscribed to pattern: '{}'", pattern);
             subscriptions.subscribe(pattern, listener);
-            metadata.requestUpdateForNewTopics();
-
-            int currentVersion = metadata.updateVersion();
-
-            while (metadata.updateVersion() == currentVersion) {
-                log.info("Waiting for new metadata update");
-            }
-
             updatePatternSubscription(metadata.fetch());
-            applicationEventHandler.add(new SubscriptionChangeEvent());
         } finally {
             release();
         }
