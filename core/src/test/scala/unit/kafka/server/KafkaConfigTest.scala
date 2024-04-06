@@ -1841,7 +1841,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, "foo")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
-    ConsumerGroupMigrationPolicy.values().foreach { policy =>
+    ConsumerGroupMigrationPolicy.values.foreach { policy =>
       props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, policy.toString)
       val config = KafkaConfig.fromProps(props)
       assertEquals(policy, config.consumerGroupMigrationPolicy)
