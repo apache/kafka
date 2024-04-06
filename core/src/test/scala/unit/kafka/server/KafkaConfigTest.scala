@@ -1833,11 +1833,11 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testGroupProtocolMigrationPolicy(): Unit = {
+  def testConsumerGroupMigrationPolicy(): Unit = {
     val props = new Properties()
     props.putAll(kraftProps())
 
-    // Invalid GroupProtocolMigrationPolicy value.
+    // Invalid GroupProtocolMigrationPolicy name.
     props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, "foo")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
