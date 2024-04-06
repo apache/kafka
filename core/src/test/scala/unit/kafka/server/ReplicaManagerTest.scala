@@ -4938,6 +4938,34 @@ class ReplicaManagerTest {
     }
   }
 
+  @Test
+  def testGetOrCreatePartitionShouldNotCreateOfflinePartition(): Unit = {
+    val localId = 1
+    val topicPartition0 = new TopicIdPartition(FOO_UUID, 0, "foo")
+    val directoryEventHandler = mock(classOf[DirectoryEventHandler])
+
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
+    try {
+      val directoryIds = replicaManager.logManager.directoryIdsSet.toList
+      assertEquals(directoryIds.size, 2)
+      val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = directoryIds)
+      val (partition: Partition, isNewWhenCreatedForFirstTime: Boolean) = replicaManager.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
+      partition.makeLeader(leaderAndIsrPartitionState(topicPartition0.topicPartition(), 1, localId, Seq(1, 2)),
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints),
+        None)
+
+      assertTrue(isNewWhenCreatedForFirstTime)
+      // mark topic partition as offline
+      replicaManager.markPartitionOffline(topicPartition0.topicPartition())
+
+      // recreate the partition again shouldn't create new partition
+      val recreateResults = replicaManager.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID)
+      assertTrue(recreateResults.isEmpty)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
   private def verifyRLMOnLeadershipChange(leaderPartitions: util.Set[Partition], followerPartitions: util.Set[Partition]): Unit = {
     val leaderCapture: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
     val followerCapture: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
