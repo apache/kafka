@@ -98,7 +98,7 @@ class ReplicaAlterLogDirsThread(name: String,
 
   override def removePartitions(topicPartitions: Set[TopicPartition]): Map[TopicPartition, PartitionFetchState] = {
     for (topicPartition <- topicPartitions) {
-      if (this.promotionStates.contains(topicPartition)) {
+      if (this.promotionStates.containsKey(topicPartition)) {
         val PromotionState(reassignmentState, topicId, originalDir) = this.promotionStates.get(topicPartition)
         // Revert any reassignments for partitions that did not complete the future replica promotion
         if (originalDir.isDefined && topicId.isDefined && reassignmentState.maybeInconsistentMetadata) {
