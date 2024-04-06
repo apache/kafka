@@ -658,8 +658,8 @@ public class ReassignPartitionsCommand {
         if (!res.keySet().equals(partitions)) {
             Set<TopicPartition> missingPartitions = new HashSet<>(partitions);
             missingPartitions.removeAll(res.keySet());
-            throw new UnknownTopicOrPartitionException("Unable to find partition: " +
-                missingPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+            throw new ExecutionException(new UnknownTopicOrPartitionException("Unable to find partition: " +
+                missingPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))));
         }
         return res;
     }
