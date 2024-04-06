@@ -258,7 +258,7 @@ class LogManagerTest {
       invocation.callRealMethod().asInstanceOf[UnifiedLog]
       loadLogCalled = loadLogCalled + 1
     }.when(logManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
-      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]])
+      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]], any[UnifiedLog => Boolean]())
 
     val t = new Thread() {
       override def run(): Unit = { logManager.startup(Set.empty) }
@@ -516,7 +516,29 @@ class LogManagerTest {
     val remoteIndexCache = new File(logDir, RemoteIndexCache.DIR_NAME)
     remoteIndexCache.mkdir()
     logManager = createLogManager(Seq(logDir))
-    logManager.loadLogs(logConfig, Map.empty)
+    logManager.loadLogs(logConfig, Map.empty, _ => false)
+  }
+
+  @Test
+  def testLoadLogRenameLogThatShouldBeStray(): Unit = {
+    var invokedCount = 0
+    val logDir = TestUtils.tempDir()
+    logManager = createLogManager(Seq(logDir))
+
+    val testTopic = "test-stray-topic"
+    val testTopicPartition = new TopicPartition(testTopic, 0)
+    val log = logManager.getOrCreateLog(testTopicPartition, topicId = Some(Uuid.randomUuid()))
+    def providedIsStray(log: UnifiedLog) = {
+      invokedCount += 1
+      true
+    }
+
+    logManager.loadLog(log.dir, true, Map.empty, Map.empty, logConfig, Map.empty, new ConcurrentHashMap[String, Int](),  providedIsStray)
+    assertEquals(1, invokedCount)
+    assertTrue(
+      logDir.listFiles().toSet
+      .exists(f => f.getName.startsWith(testTopic) && f.getName.endsWith(UnifiedLog.StrayDirSuffix))
+    )
   }
 
   /**
@@ -949,7 +971,7 @@ class LogManagerTest {
         numRemainingSegments = mockMap)
 
     }.when(spyLogManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
-      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]])
+      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]], any[UnifiedLog => Boolean]())
 
     // do nothing for removeLogRecoveryMetrics for metrics verification
     doNothing().when(spyLogManager).removeLogRecoveryMetrics()
@@ -1218,18 +1240,15 @@ class LogManagerTest {
   val recreatedFoo1 = new TopicIdPartition(Uuid.fromString("_dOOzPe3TfiWV21Lh7Vmqg"), new TopicPartition("foo", 1))
 
   @Test
-  def testFindStrayReplicasInEmptyImage(): Unit = {
-    val image: TopicsImage  = topicsImage(Seq())
-    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0)
-    val expected = onDisk.map(_.topicPartition()).toSet
-    assertEquals(expected,
-      LogManager.findStrayReplicas(0,
-        image, onDisk.map(mockLog(_)).toSet))
+  def testIsStrayKraftReplicaWithEmptyImage(): Unit = {
+    val image: TopicsImage = topicsImage(Seq())
+    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog(_))
+    assertTrue(onDisk.forall(log => LogManager.isStrayKraftReplica(0, image, log)))
   }
 
   @Test
-  def testFindSomeStrayReplicasInImage(): Unit = {
-    val image: TopicsImage  = topicsImage(Seq(
+  def testIsStrayKraftReplicaInImage(): Unit = {
+    val image: TopicsImage = topicsImage(Seq(
       topicImage(Map(
         foo0 -> Seq(0, 1, 2),
       )),
@@ -1239,15 +1258,14 @@ class LogManagerTest {
       ))
     ))
     val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog(_))
-    val expected = Set(foo1, quux0).map(_.topicPartition)
-    assertEquals(expected,
-      LogManager.findStrayReplicas(0,
-        image, onDisk).toSet)
+    val expectedStrays = Set(foo1, quux0).map(_.topicPartition())
+
+    onDisk.foreach(log => assertEquals(expectedStrays.contains(log.topicPartition), LogManager.isStrayKraftReplica(0, image, log)))
   }
 
   @Test
-  def testFindSomeStrayReplicasInImageWithRemoteReplicas(): Unit = {
-    val image: TopicsImage  = topicsImage(Seq(
+  def testIsStrayKraftReplicaInImageWithRemoteReplicas(): Unit = {
+    val image: TopicsImage = topicsImage(Seq(
       topicImage(Map(
         foo0 -> Seq(0, 1, 2),
       )),
@@ -1257,10 +1275,9 @@ class LogManagerTest {
       ))
     ))
     val onDisk = Seq(foo0, bar0, bar1).map(mockLog(_))
-    val expected = Set(bar0).map(_.topicPartition)
-    assertEquals(expected,
-      LogManager.findStrayReplicas(0,
-        image, onDisk).toSet)
+    val expectedStrays = Set(bar0).map(_.topicPartition)
+
+    onDisk.foreach(log => assertEquals(expectedStrays.contains(log.topicPartition), LogManager.isStrayKraftReplica(0, image, log)))
   }
 
   @Test
