@@ -337,7 +337,8 @@ def command_release_announcement_email():
     release_announcement_data = {
         'number_of_contributors': number_of_contributors,
         'contributors': ', '.join(str(x) for x in filter(None, contributors.split('\n'))),
-        'release_version': release_version_num
+        'release_version': release_version_num,
+        'release_version_wihtout_dot': release_version_num.replace(".", "")
     }
 
     release_announcement_email = """
@@ -349,7 +350,7 @@ The Apache Kafka community is pleased to announce the release for Apache Kafka %
 <DETAILS OF THE CHANGES>
 
 An overview of the release and its notable changes can be found in the
-release blog post: <LINK TO THE KAFKA BLOG>
+release blog post: https://kafka.apache.org/blog#apache_kafka_%(release_version_wihtout_dot)s_release_announcement
 
 All of the changes in this release can be found in the release notes:
 https://www.apache.org/dist/kafka/%(release_version)s/RELEASE_NOTES.html
