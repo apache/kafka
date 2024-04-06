@@ -191,6 +191,10 @@ public final class EventHandlerExceptionInfo {
             }
         }
         bld.append(".");
+        if (!isFault) {
+            bld.append(" Detailed exception message: ");
+            bld.append(internalException.getMessage());
+        }
         return bld.toString();
     }
 
