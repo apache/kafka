@@ -129,7 +129,7 @@ class ReplicaFetcherThreadTest {
 
     assertEquals(ApiKeys.FETCH.latestVersion, config.interBrokerProtocolVersion.fetchRequestVersion())
     assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, config.interBrokerProtocolVersion.offsetForLeaderEpochRequestVersion)
-    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, config.interBrokerProtocolVersion.listOffsetRequestVersion)
+    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion(false), config.interBrokerProtocolVersion.listOffsetRequestVersion)
   }
 
   @Test

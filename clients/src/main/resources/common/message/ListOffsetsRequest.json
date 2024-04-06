@@ -34,9 +34,12 @@
   // Version 7 enables listing offsets by max timestamp (KIP-734).
   //
   // Version 8 enables listing offsets by local log start offset (KIP-405).
-  "validVersions": "0-8",
+  //
+  // Version 9 enables listing offsets by last tiered offset (KIP-1005).
+  "validVersions": "0-9",
   "deprecatedVersions": "0",
   "flexibleVersions": "6+",
+  "latestVersionUnstable": true,
   "fields": [
     { "name": "ReplicaId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker ID of the requester, or -1 if this request is being made by a normal consumer." },

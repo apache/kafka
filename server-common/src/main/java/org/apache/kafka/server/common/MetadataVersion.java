@@ -205,6 +205,9 @@ public enum MetadataVersion {
     // Add ELR related supports (KIP-966).
     IBP_3_8_IV0(20, "3.8", "IV0", true),
 
+    // Add ListOffsets V9 (KIP-1005)
+    IBP_3_8_IV1(21, "3.8", "IV1", false),
+
     // Introduce version 1 of the GroupVersion feature (KIP-848).
     IBP_4_0_IV0(21, "4.0", "IV0", false);
 
@@ -456,7 +459,9 @@ public enum MetadataVersion {
     }
 
     public short listOffsetRequestVersion() {
-        if (this.isAtLeast(IBP_3_5_IV0)) {
+        if (this.isAtLeast(IBP_3_8_IV1)) {
+            return 9;
+        } else if (this.isAtLeast(IBP_3_5_IV0)) {
             return 8;
         } else if (this.isAtLeast(IBP_3_0_IV1)) {
             return 7;
