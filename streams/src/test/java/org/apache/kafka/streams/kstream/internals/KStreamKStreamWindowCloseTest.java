@@ -16,19 +16,22 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
-import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.test.MockApiProcessor;
-import org.apache.kafka.test.MockApiProcessorSupplier;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.jupiter.api.Assertions;
@@ -36,115 +39,125 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 
 public class KStreamKStreamWindowCloseTest {
 
     private static final String LEFT = "left";
     private static final String RIGHT = "right";
+    private static final String OUT = "out";
     private final static Properties PROPS = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private static final Consumed<Integer, String> CONSUMED = Consumed.with(Serdes.Integer(), Serdes.String());
     private static final JoinWindows WINDOW = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(5));
 
     static List<Arguments> streams() {
-        return Arrays.asList(
-            innerJoin(),
-            leftJoin(),
-            outerJoin()
-        );
+        return asList(innerJoin(), leftJoin(), outerJoin());
     }
 
     private static Arguments innerJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<Integer, String> stream = builder.stream(LEFT, CONSUMED).join(
-            builder.stream(RIGHT, CONSUMED),
-            MockValueJoiner.TOSTRING_JOINER,
-            WINDOW,
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
-        );
-        final MockApiProcessorSupplier<Integer, String, Object, Object> processorSupplier = new MockApiProcessorSupplier<>();
-        stream.process(processorSupplier);
-        return Arguments.of(builder.build(PROPS), processorSupplier);
+        builder.stream(LEFT, CONSUMED)
+            .join(
+                builder.stream(RIGHT, CONSUMED),
+                MockValueJoiner.TOSTRING_JOINER,
+                WINDOW,
+                StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+            )
+            .to(OUT);
+        return Arguments.of(builder.build(PROPS));
     }
 
     private static Arguments leftJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<Integer, String> stream = builder.stream(LEFT, CONSUMED).leftJoin(
-            builder.stream(RIGHT, CONSUMED),
-            MockValueJoiner.TOSTRING_JOINER,
-            WINDOW,
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
-        );
-        final MockApiProcessorSupplier<Integer, String, Object, Object> processorSupplier = new MockApiProcessorSupplier<>();
-        stream.process(processorSupplier);
-        return Arguments.of(builder.build(PROPS), processorSupplier);
+        builder.stream(LEFT, CONSUMED)
+            .leftJoin(
+                builder.stream(RIGHT, CONSUMED),
+                MockValueJoiner.TOSTRING_JOINER,
+                WINDOW,
+                StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+            )
+            .to(OUT);
+        return Arguments.of(builder.build(PROPS));
     }
 
     private static Arguments outerJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<Integer, String> stream = builder.stream(LEFT, CONSUMED).outerJoin(
-            builder.stream(RIGHT, CONSUMED),
-            MockValueJoiner.TOSTRING_JOINER,
-            WINDOW,
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
-        );
-        final MockApiProcessorSupplier<Integer, String, Object, Object> supplier = new MockApiProcessorSupplier<>();
-        stream.process(supplier);
-        return Arguments.of(builder.build(PROPS), supplier);
+        builder.stream(LEFT, CONSUMED)
+            .outerJoin(
+                builder.stream(RIGHT, CONSUMED),
+                MockValueJoiner.TOSTRING_JOINER,
+                WINDOW,
+                StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+            )
+            .to(OUT);
+        return Arguments.of(builder.build(PROPS));
     }
 
     @ParameterizedTest
     @MethodSource("streams")
-    public void recordsArrivingPostWindowCloseShouldBeDropped(
-        final Topology topology,
-        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier) {
+    public void shouldDropRecordsArrivingTooLate(final Topology topology) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, PROPS)) {
-            final TestInputTopic<Integer, String> left =
-                driver.createInputTopic(KStreamKStreamWindowCloseTest.LEFT, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final TestInputTopic<Integer, String> right =
-                driver.createInputTopic(KStreamKStreamWindowCloseTest.RIGHT, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
+            final int key = 0;
+            final TestInputTopic<Integer, String> left = driver.createInputTopic(LEFT, new IntegerSerializer(), new StringSerializer());
+            final TestInputTopic<Integer, String> right = driver.createInputTopic(RIGHT, new IntegerSerializer(), new StringSerializer());
+            final TestOutputTopic<Integer, String> out = driver.createOutputTopic(OUT, new IntegerDeserializer(), new StringDeserializer());
 
-            left.pipeInput(0, "left", 15);
-            right.pipeInput(-1, "bumpTime", 40);
-            assertRecordDropCount(0.0, processor);
+            left.pipeInput(key, "l15", 15); // l15 window {5:25,5} open, closes at 31
+            assertRecordDropCount(0.0, driver.metrics());
 
-            right.pipeInput(0, "closedAt40", 24);
-            assertRecordDropCount(1.0, processor);
+            left.pipeInput(-1, "bump time", 30);
+            right.pipeInput(key, "r4", 4); // gets dropped
+            right.pipeInput(key, "r5", 5);
+            right.pipeInput(key, "r25-0", 25);
+            Assertions.assertEquals(
+                asList(
+                    new TestRecord<>(key, "l15+r5", null, 15L),
+                    new TestRecord<>(key, "l15+r25-0", null, 25L)
+                ),
+                out.readRecordsToList()
+            );
+            assertRecordDropCount(1.0, driver.metrics());
+            left.pipeInput(-1, "bump time", 31); // l15 is now closed
 
-            right.pipeInput(0, "closedAt41", 25);
-            assertRecordDropCount(1.0, processor);
+            right.pipeInput(key, "r5", 5); // gets dropped
+            assertRecordDropCount(2.0, driver.metrics());
+            Assertions.assertEquals(emptyList(), out.readRecordsToList());
 
-            right.pipeInput(-1, "bumpTime", 41);
-            right.pipeInput(0, "closedAt41", 25);
-            assertRecordDropCount(2.0, processor);
+            right.pipeInput(key, "r6", 6); // Doesn't get dropped, but all involved windows are closed.
+            assertRecordDropCount(2.0, driver.metrics());
+            Assertions.assertEquals(emptyList(), out.readRecordsToList());
 
-            right.pipeInput(1, "right", 115);
-            left.pipeInput(-1, "bumpTime", 140);
-            left.pipeInput(1, "closedAt140", 124);
-            assertRecordDropCount(3.0, processor);
-            left.pipeInput(1, "closedAt141", 125);
-            assertRecordDropCount(3.0, processor);
+            right.pipeInput(key, "r25-1", 25);
+            // r25-1 still joins with l15 (despite l15 window closed) because r25-1 window {15:35,5} is open, closes at 41.
+            Assertions.assertEquals(
+                singletonList(new TestRecord<>(key, "l15+r25-1", null, 25L)),
+                out.readRecordsToList()
+            );
 
-            left.pipeInput(-1, "bumpTime", 141);
-            left.pipeInput(1, "closedAt141", 125);
-            assertRecordDropCount(4.0, processor);
+            left.pipeInput(key, "l16", 16);
+            Assertions.assertEquals(
+                asList(
+                    new TestRecord<>(key, "l16+r6", null, 16L),
+                    new TestRecord<>(key, "l16+r25-0", null, 25L),
+                    new TestRecord<>(key, "l16+r25-1", null, 25L)
+                ),
+                out.readRecordsToList()
+            );
+            assertRecordDropCount(2.0, driver.metrics());
         }
     }
 
-    static void assertRecordDropCount(final double expected, final MockApiProcessor<Integer, String, Void, Void> processor) {
+    static void assertRecordDropCount(final double expected, final Map<MetricName, ? extends Metric> metrics) {
         final String metricGroup = "stream-task-metrics";
         final String metricName = "dropped-records-total";
-        Assertions.assertEquals(
-            expected,
-            getMetricByName(processor.context().metrics().metrics(), metricName, metricGroup).metricValue()
-        );
+        Assertions.assertEquals(expected, getMetricByName(metrics, metricName, metricGroup).metricValue());
     }
 }
