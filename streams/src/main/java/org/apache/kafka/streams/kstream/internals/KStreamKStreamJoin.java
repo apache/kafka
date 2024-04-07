@@ -137,7 +137,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                 return;
             }
             if (outer && record.key() == null && record.value() != null) {
-                context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
+                onNullKeyRecord(record, inputRecordTimestamp);
                 return;
             } else if (StreamStreamJoinUtil.skipRecord(record, LOG, droppedRecordsSensor, context())) {
                 return;
@@ -209,6 +209,14 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     }
                 }
             }
+        }
+
+        private void onNullKeyRecord(final Record<K, V1> record, final long inputRecordTimestamp) {
+            if (sharedTimeTracker.streamTime > inputRecordTimestamp + joinAfterMs + joinGraceMs) {
+                StreamStreamJoinUtil.logSkip("Null-Key Record arrived after window close", LOG, droppedRecordsSensor, context());
+                return;
+            }
+            context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
         }
 
         private void emitNonJoinedOuterRecords(
