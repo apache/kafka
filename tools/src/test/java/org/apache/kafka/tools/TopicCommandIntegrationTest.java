@@ -151,7 +151,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             adminClient.close();
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreate(String quorum) throws Exception {
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, 2, 1,
@@ -161,7 +161,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                 "Admin client didn't see the created topic. It saw: " + adminClient.listTopics().names().get());
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithDefaults(String quorum) throws Exception {
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
@@ -177,7 +177,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertEquals(defaultReplicationFactor, (short) partitions.get(0).replicas().size(), "Unequal replication factor: " + partitions.get(0).replicas().size());
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithDefaultReplication(String quorum) throws Exception {
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, 2, defaultReplicationFactor,
@@ -193,7 +193,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertEquals(defaultReplicationFactor, (short) partitions.get(0).replicas().size(), "Unequal replication factor: " + partitions.get(0).replicas().size());
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithDefaultPartitions(String quorum) throws Exception {
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, 2,
@@ -210,7 +210,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertEquals(2, (short) partitions.get(0).replicas().size(), "Partitions not replicated: " + partitions.get(0).replicas().size());
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithConfigs(String quorum) throws Exception {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
@@ -226,9 +226,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                 "Config not set correctly: " + configs.get("delete.retention.ms").value());
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWhenAlreadyExists(String quorum) throws Exception {
+    public void testCreateWhenAlreadyExists(String quorum) {
         // create the topic
         TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap(
             "--create", "--partitions", Integer.toString(defaultNumPartitions), "--replication-factor", "1",
@@ -242,7 +242,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                 "Expected TopicExistsException to throw");
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWhenAlreadyExistsWithIfNotExists(String quorum) throws Exception {
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
@@ -253,7 +253,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         topicService.createTopic(createOpts);
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithReplicaAssignment(String quorum) throws Exception {
         scala.collection.mutable.HashMap<Object, Seq<Object>> replicaAssignmentMap = new scala.collection.mutable.HashMap<>();
@@ -287,7 +287,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         return partitions.get(partitionNumber).replicas().stream().map(Node::id).collect(Collectors.toList());
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithInvalidReplicationFactor(String quorum) {
         TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "2", "--replication-factor", Integer.toString(Short.MAX_VALUE + 1),
@@ -295,7 +295,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithNegativeReplicationFactor(String quorum) {
         TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create",
@@ -303,14 +303,14 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateWithNegativePartitionCount(String quorum) {
         TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName);
         assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testInvalidTopicLevelConfig(String quorum) {
         TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap("--create",
@@ -319,9 +319,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertThrows(ConfigException.class, () -> topicService.createTopic(createOpts), "Expected ConfigException to throw");
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testListTopics(String quorum) throws Exception {
+    public void testListTopics(String quorum) {
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
                 scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
         );
@@ -330,9 +330,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertTrue(output.contains(testTopicName), "Expected topic name to be present in output: " + output);
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testListTopicsWithIncludeList(String quorum) throws ExecutionException, InterruptedException {
+    public void testListTopicsWithIncludeList(String quorum) {
         String topic1 = "kafka.testTopic1";
         String topic2 = "kafka.testTopic2";
         String topic3 = "oooof.testTopic1";
@@ -355,9 +355,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertFalse(output.contains(topic3), "Do not expect topic name " + topic3 + " to be present in output: " + output);
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testListTopicsWithExcludeInternal(String quorum) throws ExecutionException, InterruptedException {
+    public void testListTopicsWithExcludeInternal(String quorum) {
         String topic1 = "kafka.testTopic1";
         String hiddenConsumerTopic = Topic.GROUP_METADATA_TOPIC_NAME;
         int partition = 2;
@@ -375,7 +375,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertFalse(output.contains(hiddenConsumerTopic), "Do not expect topic name " + hiddenConsumerTopic + " to be present in output: " + output);
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testAlterPartitionCount(String quorum) throws ExecutionException, InterruptedException {
         int partition = 2;
@@ -393,7 +393,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertEquals(3, topicDescription.partitions().size(), "Expected partition count to be 3. Got: " + topicDescription.partitions().size());
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testAlterAssignment(String quorum) throws ExecutionException, InterruptedException {
         int partition = 2;
@@ -416,9 +416,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertEquals(Arrays.asList(4, 2), partitionReplicas, "Expected to have replicas 4,2. Got: " + partitionReplicas);
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterAssignmentWithMoreAssignmentThanPartitions(String quorum) throws ExecutionException, InterruptedException {
+    public void testAlterAssignmentWithMoreAssignmentThanPartitions(String quorum) {
         int partition = 2;
         short replicationFactor = 2;
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
@@ -430,9 +430,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                 "Expected to fail with ExecutionException");
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterAssignmentWithMorePartitionsThanAssignment(String quorum) throws ExecutionException, InterruptedException {
+    public void testAlterAssignmentWithMorePartitionsThanAssignment(String quorum) {
         int partition = 2;
         short replicationFactor = 2;
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
@@ -445,9 +445,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                 "Expected to fail with ExecutionException");
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testAlterWithInvalidPartitionCount(String quorum) throws Exception {
+    public void testAlterWithInvalidPartitionCount(String quorum) {
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
                 scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
         );
@@ -456,7 +456,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                 "Expected to fail with ExecutionException");
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testAlterWhenTopicDoesntExist(String quorum) {
         // alter a topic that does not exist without --if-exists
@@ -465,16 +465,16 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertThrows(IllegalArgumentException.class, () -> topicService.alterTopic(alterOpts), "Expected to fail with IllegalArgumentException");
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testAlterWhenTopicDoesntExistWithIfExists(String quorum) throws ExecutionException, InterruptedException {
         topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName, "--partitions", "1", "--if-exists"));
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCreateAlterTopicWithRackAware(String quorum) throws Exception {
-        Map<Integer, String> rackInfo = new HashMap<Integer, String>();
+        Map<Integer, String> rackInfo = new HashMap<>();
         rackInfo.put(0, "rack1");
         rackInfo.put(1, "rack2");
         rackInfo.put(2, "rack2");
@@ -517,7 +517,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             true, true, true);
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testConfigPreservationAcrossPartitionAlteration(String quorum) throws Exception {
         String cleanUpPolicy = "compact";
@@ -550,7 +550,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertEquals(cleanUpPolicy, newProps.get(TopicConfig.CLEANUP_POLICY_CONFIG).value(), "Updated properties have incorrect value");
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testTopicDeletion(String quorum) throws Exception {
         // create the NormalTopic
@@ -568,7 +568,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         TestUtils.verifyTopicDeletion(zkClientOrNull(), testTopicName, 1, brokers());
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testTopicWithCollidingCharDeletionAndCreateAgain(String quorum) throws Exception {
         // create the topic with colliding chars
@@ -590,7 +590,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         ), "Should be able to create a topic with colliding chars after deletion.");
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteInternalTopic(String quorum) throws Exception {
         // create the offset topic
@@ -610,7 +610,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         TestUtils.verifyTopicDeletion(zkClientOrNull(), Topic.GROUP_METADATA_TOPIC_NAME, defaultNumPartitions, brokers());
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteWhenTopicDoesntExist(String quorum) {
         // delete a topic that does not exist
@@ -619,15 +619,15 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                 "Expected an exception when trying to delete a topic that does not exist.");
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteWhenTopicDoesntExistWithIfExists(String quorum) throws ExecutionException, InterruptedException {
         topicService.deleteTopic(buildTopicCommandOptionsWithBootstrap("--delete", "--topic", testTopicName, "--if-exists"));
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribe(String quorum) throws ExecutionException, InterruptedException {
+    public void testDescribe(String quorum) {
         int partition = 2;
         short replicationFactor = 2;
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partition, replicationFactor,
@@ -639,7 +639,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)), "Row does not start with " + testTopicName + ". Row is: " + rows[0]);
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeWhenTopicDoesntExist(String quorum) {
         assertThrows(IllegalArgumentException.class,
@@ -647,13 +647,13 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                 "Expected an exception when trying to describe a topic that does not exist.");
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeWhenTopicDoesntExistWithIfExists(String quorum) throws ExecutionException, InterruptedException {
         topicService.describeTopic(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName, "--if-exists"));
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeUnavailablePartitions(String quorum) throws ExecutionException, InterruptedException {
         int partitions = 6;
@@ -716,9 +716,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         }
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeUnderReplicatedPartitions(String quorum) throws ExecutionException, InterruptedException {
+    public void testDescribeUnderReplicatedPartitions(String quorum) {
         int partitions = 1;
         short replicationFactor = 6;
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, partitions, replicationFactor,
@@ -739,9 +739,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         }
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeUnderMinIsrPartitions(String quorum) throws ExecutionException, InterruptedException {
+    public void testDescribeUnderMinIsrPartitions(String quorum) {
         Properties topicConfig = new Properties();
         topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "6");
         int partitions = 1;
@@ -769,7 +769,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         }
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress(String quorum) throws ExecutionException, InterruptedException {
         TopicPartition tp = new TopicPartition(testTopicName, 0);
@@ -848,9 +848,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         TestUtils.waitForAllReassignmentsToComplete(adminClient, 100L);
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeAtMinIsrPartitions(String quorum) throws ExecutionException, InterruptedException {
+    public void testDescribeAtMinIsrPartitions(String quorum) {
         Properties topicConfig = new Properties();
         topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "4");
 
@@ -892,9 +892,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
      *
      * Output should only display the (1) topic with partition under min ISR count and (3) topic with offline partition
      */
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeUnderMinIsrPartitionsMixed(String quorum) throws ExecutionException, InterruptedException {
+    public void testDescribeUnderMinIsrPartitionsMixed(String quorum) {
         String underMinIsrTopic = "under-min-isr-topic";
         String notUnderMinIsrTopic = "not-under-min-isr-topic";
         String offlineTopic = "offline-topic";
@@ -952,9 +952,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         }
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeReportOverriddenConfigs(String quorum) throws Exception {
+    public void testDescribeReportOverriddenConfigs(String quorum) {
         String config = "file.delete.delay.ms=1000";
         Properties topicConfig = new Properties();
         topicConfig.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, "1000");
@@ -968,9 +968,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertTrue(output.contains(config), String.format("Describe output should have contained %s", config));
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeAndListTopicsWithoutInternalTopics(String quorum) throws Exception {
+    public void testDescribeAndListTopicsWithoutInternalTopics(String quorum) {
         TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, defaultNumPartitions, defaultReplicationFactor,
                 scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
         );
@@ -991,7 +991,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                 "Output should not have contained " + Topic.GROUP_METADATA_TOPIC_NAME);
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(String quorum) throws Exception {
         adminClient = spy(adminClient);
@@ -1015,9 +1015,9 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)), "Unexpected output: " + rows[0]);
     }
 
-    @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testCreateWithTopicNameCollision(String quorum) throws ExecutionException, InterruptedException {
+    public void testCreateWithTopicNameCollision(String quorum) {
         String topic = "foo_bar";
         int partitions = 1;
         short replicationFactor = 6;
