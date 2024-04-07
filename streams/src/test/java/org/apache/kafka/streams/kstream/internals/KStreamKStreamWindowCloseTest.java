@@ -39,6 +39,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -54,47 +55,54 @@ public class KStreamKStreamWindowCloseTest {
     private static final String LEFT = "left";
     private static final String RIGHT = "right";
     private static final String OUT = "out";
-    private final static Properties PROPS = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+    private static final Properties PROPS = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private static final Consumed<Integer, String> CONSUMED = Consumed.with(Serdes.Integer(), Serdes.String());
-    private static final JoinWindows WINDOW = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(5));
+    private static final JoinWindows SYMMETRIC_WINDOW = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(5));
+    private static final JoinWindows ASYMMETRIC_WINDOW = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(0), ofMillis(5))
+        .before(Duration.ofMillis(10))
+        .after(Duration.ofMillis(5));
 
-    static List<Arguments> streams() {
-        return asList(innerJoin(), leftJoin(), outerJoin());
+    static List<Arguments> symmetricWindows() {
+        return asList(innerJoin(SYMMETRIC_WINDOW), leftJoin(SYMMETRIC_WINDOW), outerJoin(SYMMETRIC_WINDOW));
     }
 
-    private static Arguments innerJoin() {
+    static List<Arguments> asymmetricWindows() {
+        return asList(innerJoin(ASYMMETRIC_WINDOW), leftJoin(ASYMMETRIC_WINDOW), outerJoin(ASYMMETRIC_WINDOW));
+    }
+
+    private static Arguments innerJoin(final JoinWindows window) {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(LEFT, CONSUMED)
             .join(
                 builder.stream(RIGHT, CONSUMED),
                 MockValueJoiner.TOSTRING_JOINER,
-                WINDOW,
+                window,
                 StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
             )
             .to(OUT);
         return Arguments.of(builder.build(PROPS));
     }
 
-    private static Arguments leftJoin() {
+    private static Arguments leftJoin(final JoinWindows window) {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(LEFT, CONSUMED)
             .leftJoin(
                 builder.stream(RIGHT, CONSUMED),
                 MockValueJoiner.TOSTRING_JOINER,
-                WINDOW,
+                window,
                 StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
             )
             .to(OUT);
         return Arguments.of(builder.build(PROPS));
     }
 
-    private static Arguments outerJoin() {
+    private static Arguments outerJoin(final JoinWindows window) {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(LEFT, CONSUMED)
             .outerJoin(
                 builder.stream(RIGHT, CONSUMED),
                 MockValueJoiner.TOSTRING_JOINER,
-                WINDOW,
+                window,
                 StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
             )
             .to(OUT);
@@ -102,7 +110,7 @@ public class KStreamKStreamWindowCloseTest {
     }
 
     @ParameterizedTest
-    @MethodSource("streams")
+    @MethodSource("symmetricWindows")
     public void shouldDropRecordsArrivingTooLate(final Topology topology) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, PROPS)) {
             final int key = 0;
@@ -148,6 +156,61 @@ public class KStreamKStreamWindowCloseTest {
                     new TestRecord<>(key, "l16+r6", null, 16L),
                     new TestRecord<>(key, "l16+r25-0", null, 25L),
                     new TestRecord<>(key, "l16+r25-1", null, 25L)
+                ),
+                out.readRecordsToList()
+            );
+            assertRecordDropCount(2.0, driver.metrics());
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("asymmetricWindows")
+    public void shouldDropRecordsArrivingTooLate_Asymmetric(final Topology topology) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, PROPS)) {
+            final int key = 0;
+            final TestInputTopic<Integer, String> left = driver.createInputTopic(LEFT, new IntegerSerializer(), new StringSerializer());
+            final TestInputTopic<Integer, String> right = driver.createInputTopic(RIGHT, new IntegerSerializer(), new StringSerializer());
+            final TestOutputTopic<Integer, String> out = driver.createOutputTopic(OUT, new IntegerDeserializer(), new StringDeserializer());
+
+            left.pipeInput(key, "l15", 15); // l15 window {5:20,5} open, closes at 26
+            assertRecordDropCount(0.0, driver.metrics());
+
+            left.pipeInput(-1, "bump time", 25);
+            right.pipeInput(key, "r4", 4); // gets dropped
+            assertRecordDropCount(1.0, driver.metrics());
+            right.pipeInput(key, "r5", 5);
+            right.pipeInput(key, "r20-0", 20);
+            Assertions.assertEquals(
+                asList(
+                    new TestRecord<>(key, "l15+r5", null, 15L),
+                    new TestRecord<>(key, "l15+r20-0", null, 20L)
+                ),
+                out.readRecordsToList()
+            );
+            assertRecordDropCount(1.0, driver.metrics());
+            left.pipeInput(-1, "bump time", 26); // l15 is now closed
+
+            right.pipeInput(key, "r5", 5); // gets dropped
+            assertRecordDropCount(2.0, driver.metrics());
+            Assertions.assertEquals(emptyList(), out.readRecordsToList());
+
+            right.pipeInput(key, "r6", 6); // Doesn't get dropped, but all involved windows are closed.
+            assertRecordDropCount(2.0, driver.metrics());
+            Assertions.assertEquals(emptyList(), out.readRecordsToList());
+
+            right.pipeInput(key, "r20-1", 20);
+            // r20-1 still joins with l15 (despite l15 window closed) because r20-1 window {10:25,5} is open, closes at 31.
+            Assertions.assertEquals(
+                singletonList(new TestRecord<>(key, "l15+r20-1", null, 20L)),
+                out.readRecordsToList()
+            );
+
+            left.pipeInput(key, "l16", 16);
+            Assertions.assertEquals(
+                asList(
+                    new TestRecord<>(key, "l16+r6", null, 16L),
+                    new TestRecord<>(key, "l16+r20-0", null, 20L),
+                    new TestRecord<>(key, "l16+r20-1", null, 20L)
                 ),
                 out.readRecordsToList()
             );
