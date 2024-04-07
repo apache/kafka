@@ -18,19 +18,24 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordUtils;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
 import org.apache.kafka.raft.internals.BatchAccumulator;
-//import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
-import java.util.Optional;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 
 final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
@@ -59,27 +64,6 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             compressionType,
             serde
         );
-    }
-
-    /**
-     * Adds a {@link SnapshotHeaderRecord} to snapshot
-     *
-     * @throws IllegalStateException if the snapshot is not empty
-     */
-    private void initializeSnapshotWithHeader(long lastContainedLogTimestamp) {
-        if (snapshot.sizeInBytes() != 0) {
-            String message = String.format(
-                "Initializing writer with a non-empty snapshot: id = '%s'.",
-                snapshot.snapshotId()
-            );
-            throw new IllegalStateException(message);
-        }
-
-        SnapshotHeaderRecord headerRecord = new SnapshotHeaderRecord()
-            .setVersion(ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION)
-            .setLastContainedLogTimestamp(lastContainedLogTimestamp);
-        accumulator.appendSnapshotHeaderRecord(headerRecord, time.milliseconds());
-        accumulator.forceDrain();
     }
 
     /**
@@ -157,15 +141,15 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         }
     }
 
+    // TODO: Write test for this builder
     final public static class Builder {
         private long lastContainedLogTimestamp = 0;
         private CompressionType compressionType = CompressionType.NONE;
         private Time time = Time.SYSTEM;
         private int maxBatchSize = 1024;
         MemoryPool memoryPool = MemoryPool.NONE;
-        // TODO: implement this...
-        //private short kraftVersion = 0;
-        //private Optional<VoterSet> voterSet = Optional.empty();
+        private short kraftVersion = 0;
+        private Optional<VoterSet> voterSet = Optional.empty();
         private Optional<RawSnapshotWriter> rawSnapshotWriter = Optional.empty();
 
         public Builder setLastContainedLogTimestamp(long lastContainedLogTimestamp) {
@@ -194,25 +178,31 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         }
 
         public Builder setRawSnapshotWriter(RawSnapshotWriter rawSnapshotWriter) {
-            this.rawSnapshotWriter = Optional.of(rawSnapshotWriter);
+            this.rawSnapshotWriter = Optional.ofNullable(rawSnapshotWriter);
             return this;
         }
 
-        /*
         public Builder setKraftVersion(short kraftVersion) {
             this.kraftVersion = kraftVersion;
             return this;
         }
 
-        public Builder setVoterSet(VoterSet voterSet) {
-            this.voterSet = Optional.of(voterSet);
+        public Builder setVoterSet(Optional<VoterSet> voterSet) {
+            this.voterSet = voterSet;
             return this;
         }
-        */
 
         public <T> RecordsSnapshotWriter<T> build(RecordSerde<T> serde) {
             if (!rawSnapshotWriter.isPresent()) {
                 throw new IllegalStateException("Builder::build called without a RawSnapshotWriter");
+            } else if (rawSnapshotWriter.get().sizeInBytes() != 0) {
+                throw new IllegalStateException(
+                    String.format("Initializing writer with a non-empty snapshot: %s", rawSnapshotWriter.get().snapshotId())
+                );
+            } else if (kraftVersion == 0 && voterSet.isPresent()) {
+                throw new IllegalStateException(
+                    String.format("Voter set (%s) not expected when the kraft.version is 0", voterSet.get())
+                );
             }
 
             RecordsSnapshotWriter<T> writer = new RecordsSnapshotWriter<>(
@@ -224,8 +214,57 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                 serde
             );
 
-            // TODO: implement writing kraft version and voter set to the snaopshot
-            writer.initializeSnapshotWithHeader(lastContainedLogTimestamp);
+            writer.accumulator.appendControlMessages(buffer -> {
+                long now = time.milliseconds();
+                int numberOfRecords = 0;
+                try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
+                        buffer,
+                        RecordBatch.CURRENT_MAGIC_VALUE,
+                        compressionType,
+                        TimestampType.CREATE_TIME,
+                        0, // initialOffset
+                        now,
+                        RecordBatch.NO_PRODUCER_ID,
+                        RecordBatch.NO_PRODUCER_EPOCH,
+                        RecordBatch.NO_SEQUENCE,
+                        false, // isTransactional
+                        true,  // isControlBatch
+                        rawSnapshotWriter.get().snapshotId().epoch(),
+                        buffer.capacity()
+                    )
+                ) {
+                    numberOfRecords++;
+                    builder.appendSnapshotHeaderMessage(
+                        now,
+                        new SnapshotHeaderRecord()
+                            .setVersion(ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION)
+                            .setLastContainedLogTimestamp(lastContainedLogTimestamp)
+                    );
+
+                    if (kraftVersion > 0) {
+                        numberOfRecords++;
+                        builder.appendKRaftVersionMessage(
+                            now,
+                            new KRaftVersionRecord()
+                                .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
+                                .setKRaftVersion(kraftVersion)
+                        );
+
+                        if (voterSet.isPresent()) {
+                            numberOfRecords++;
+                            builder.appendVotersMessage(
+                                now,
+                                voterSet.get().toVotersRecord(ControlRecordUtils.VOTERS_CURRENT_VERSION)
+                            );
+                        }
+                    }
+                }
+
+                buffer.flip();
+                return new BatchAccumulator.CreatedRecords(numberOfRecords, MemoryRecords.readableRecords(buffer));
+            });
+
+            writer.accumulator.forceDrain();
 
             return writer;
         }

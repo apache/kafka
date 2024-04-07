@@ -48,7 +48,7 @@ final public class VoterSet {
         return voters.keySet();
     }
 
-    VotersRecord toVotersRecord(short version) {
+    public VotersRecord toVotersRecord(short version) {
         return new VotersRecord()
             .setVersion(version)
             .setVoters(

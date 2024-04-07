@@ -170,6 +170,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     private final ConcurrentLinkedQueue<Registration<T>> pendingRegistrations = new ConcurrentLinkedQueue<>();
 
     // Components that needs to be initialized because they depend on the voter set
+    // TODO: figure out how to enforce the requirement that the internal log listener must be more up to date then
+    // the external raft listener. This is a requirement for a consistent snapshot.
     private volatile InternalLogListener internalListener;
     private volatile KafkaRaftMetrics kafkaRaftMetrics;
     private volatile QuorumState quorum;
@@ -2470,15 +2472,23 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         OffsetAndEpoch snapshotId,
         long lastContainedLogTimestamp
     ) {
-        return log.createNewSnapshot(snapshotId).map(writer ->
-            new RecordsSnapshotWriter.Builder()
+        if (!isInitialized()) {
+            throw new IllegalStateException("Cannot create snapshot before the kraft client has been initialized");
+        }
+
+        return log.createNewSnapshot(snapshotId).map(writer -> {
+            long lastContainedLogOffset = snapshotId.offset() - 1;
+
+            return new RecordsSnapshotWriter.Builder()
                 .setLastContainedLogTimestamp(lastContainedLogTimestamp)
                 .setTime(time)
                 .setMaxBatchSize(MAX_BATCH_SIZE_BYTES)
                 .setMemoryPool(memoryPool)
                 .setRawSnapshotWriter(writer)
-                .build(serde)
-        );
+                .setKraftVersion(internalListener.kraftVersionAtOffset(lastContainedLogOffset))
+                .setVoterSet(internalListener.voterSetAtOffset(lastContainedLogOffset))
+                .build(serde);
+        });
     }
 
     @Override

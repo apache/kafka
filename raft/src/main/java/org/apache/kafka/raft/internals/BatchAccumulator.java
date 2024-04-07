@@ -213,20 +213,21 @@ public class BatchAccumulator<T> implements Closeable {
      *
      * @param valueCreator a function that uses the passed buffer to create the control
      *        batch that will be appended. The memory records returned must contain one
-     *        control batch and that control batch have one record.
+     *        control batch and that control batch have at least one record.
      */
-    private void appendControlMessages(Function<ByteBuffer, MemoryRecords> valueCreator) {
+    public void appendControlMessages(Function<ByteBuffer, CreatedRecords> valueCreator) {
         appendLock.lock();
         try {
             ByteBuffer buffer = memoryPool.tryAllocate(256);
             if (buffer != null) {
                 try {
                     forceDrain();
+                    CreatedRecords createdRecords = valueCreator.apply(buffer);
                     completed.add(
                         new CompletedBatch<>(
                             nextOffset,
-                            1,
-                            valueCreator.apply(buffer),
+                            createdRecords.numberOfRecords(),
+                            createdRecords.records(),
                             memoryPool,
                             buffer
                         )
@@ -256,13 +257,18 @@ public class BatchAccumulator<T> implements Closeable {
         LeaderChangeMessage leaderChangeMessage,
         long currentTimestamp
     ) {
-        appendControlMessages(buffer -> MemoryRecords.withLeaderChangeMessage(
-            this.nextOffset,
-            currentTimestamp,
-            this.epoch,
-            buffer,
-            leaderChangeMessage
-        ));
+        appendControlMessages(buffer ->
+            new CreatedRecords(
+                1,
+                MemoryRecords.withLeaderChangeMessage(
+                    this.nextOffset,
+                    currentTimestamp,
+                    this.epoch,
+                    buffer,
+                    leaderChangeMessage
+                )
+            )
+        );
     }
 
 
@@ -277,13 +283,18 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotHeaderRecord snapshotHeaderRecord,
         long currentTimestamp
     ) {
-        appendControlMessages(buffer -> MemoryRecords.withSnapshotHeaderRecord(
-            this.nextOffset,
-            currentTimestamp,
-            this.epoch,
-            buffer,
-            snapshotHeaderRecord
-        ));
+        appendControlMessages(buffer ->
+            new CreatedRecords(
+                1,
+                MemoryRecords.withSnapshotHeaderRecord(
+                    this.nextOffset,
+                    currentTimestamp,
+                    this.epoch,
+                    buffer,
+                    snapshotHeaderRecord
+                )
+            )
+        );
     }
 
     /**
@@ -297,13 +308,18 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotFooterRecord snapshotFooterRecord,
         long currentTimestamp
     ) {
-        appendControlMessages(buffer -> MemoryRecords.withSnapshotFooterRecord(
-            this.nextOffset,
-            currentTimestamp,
-            this.epoch,
-            buffer,
-            snapshotFooterRecord
-        ));
+        appendControlMessages(buffer ->
+            new CreatedRecords(
+                1,
+                MemoryRecords.withSnapshotFooterRecord(
+                    this.nextOffset,
+                    currentTimestamp,
+                    this.epoch,
+                    buffer,
+                    snapshotFooterRecord
+                )
+            )
+        );
     }
 
     public void forceDrain() {
@@ -510,6 +526,24 @@ public class BatchAccumulator<T> implements Closeable {
             // 2. maxTimestamp is the append time of the batch. This needs to be changed
             //    to return the LastContainedLogTimestamp of the SnapshotHeaderRecord
             return data.firstBatch().maxTimestamp();
+        }
+    }
+
+    final public static class CreatedRecords {
+        private final int numberOfRecords;
+        private final MemoryRecords records;
+
+        public CreatedRecords(int numberOfRecords, MemoryRecords records) {
+            this.numberOfRecords = numberOfRecords;
+            this.records = records;
+        }
+
+        public int numberOfRecords() {
+            return numberOfRecords;
+        }
+
+        public MemoryRecords records() {
+            return records;
         }
     }
 

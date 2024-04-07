@@ -40,10 +40,18 @@ final public class InternalLogListener {
     private final RecordSerde<?> serde;
     private final BufferSupplier bufferSupplier;
 
+    // These are objects are synchronized using the perspective object monitor. The two actors
+    // are the KRaft driver and the RaftClient callers
     private final VoterSetHistory voterSetHistory;
     private final History<Short> kraftVersion = new TreeMapHistory<>();
 
-    private long nextOffset = 0;
+    // This synchronization is enough because
+    // 1. The write operation updateListener only sets the value without reading and updates to
+    // voterSetHistory or kraftVersion are done before setting the nextOffset
+    //
+    // 2. The read operations lastVoterSet, voterSetAtOffset and kraftVersionAtOffset read
+    // the nextOffset first before reading voterSetHistory or kraftVersion
+    private volatile long nextOffset = 0;
 
     public InternalLogListener(
         Optional<VoterSet> staticVoterSet,
@@ -63,7 +71,43 @@ final public class InternalLogListener {
     }
 
     public VoterSet lastVoterSet() {
-        return voterSetHistory.lastValue();
+        synchronized (voterSetHistory) {
+            return voterSetHistory.lastValue();
+        }
+    }
+
+    public Optional<VoterSet> voterSetAtOffset(long offset) {
+        long fixedNextOffset = nextOffset;
+        if (offset >= fixedNextOffset) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Attempting the read the voter set at an offset (%d) which kraft hasn't seen (%d)",
+                    offset,
+                    fixedNextOffset - 1
+                )
+            );
+        }
+
+        synchronized (voterSetHistory) {
+            return voterSetHistory.valueAt(offset);
+        }
+    }
+
+    public short kraftVersionAtOffset(long offset) {
+        long fixedNextOffset = nextOffset;
+        if (offset >= fixedNextOffset) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Attempting the read the kraft.version at an offset (%d) which kraft hasn't seen (%d)",
+                    offset,
+                    fixedNextOffset - 1
+                )
+            );
+        }
+
+        synchronized (kraftVersion) {
+            return kraftVersion.valueAt(offset).orElse((short) 0);
+        }
     }
 
     private void maybeLoadLog() {
@@ -90,8 +134,12 @@ final public class InternalLogListener {
         Optional<RawSnapshotReader> rawSnapshot = log.latestSnapshot();
         if (rawSnapshot.isPresent() && (nextOffset == 0 || nextOffset < log.startOffset())) {
             // Clear the current state
-            kraftVersion.clear();
-            voterSetHistory.clear();
+            synchronized (kraftVersion) {
+                kraftVersion.clear();
+            }
+            synchronized (voterSetHistory) {
+                voterSetHistory.clear();
+            }
 
             // Load the snapshot since the listener is at the start of the log or the log doesn't have the next entry.
             try (SnapshotReader<?> reader = RecordsSnapshotReader.of(
@@ -120,11 +168,15 @@ final public class InternalLogListener {
             long currentOffset = overrideOffset.orElse(batch.baseOffset() + index);
             switch (record.type()) {
                 case VOTERS:
-                    voterSetHistory.addAt(currentOffset, VoterSet.fromVotersRecord((VotersRecord) record.message()));
+                    synchronized (voterSetHistory) {
+                        voterSetHistory.addAt(currentOffset, VoterSet.fromVotersRecord((VotersRecord) record.message()));
+                    }
                     break;
 
                 case KRAFT_VERSION:
-                    kraftVersion.addAt(currentOffset, ((KRaftVersionRecord) record.message()).kRaftVersion());
+                    synchronized (kraftVersion) {
+                        kraftVersion.addAt(currentOffset, ((KRaftVersionRecord) record.message()).kRaftVersion());
+                    }
                     break;
 
                 default:
