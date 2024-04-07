@@ -9679,6 +9679,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedUpdatedMember2)
         );
 
+        // TODO: only comparing references?
         assertEquals(expectedRecords, result.records());
     }
 
@@ -9892,6 +9893,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedUpdatedMember3)
         );
 
+        // TODO: only comparing references?
         assertEquals(expectedRecords, consumerGroupHeartbeatResult.records());
         assertTrue(joinResult.joinFuture.isDone());
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), joinResult.joinFuture.get().errorCode());
