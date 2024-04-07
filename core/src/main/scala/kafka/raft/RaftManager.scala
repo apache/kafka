@@ -138,7 +138,6 @@ class KafkaRaftManager[T](
 
   def startup(): Unit = {
     client.initialize(
-      OptionalInt.of(config.nodeId),
       controllerQuorumVotersFuture.get(),
       config.controllerListenerNames.head,
       new FileBasedStateStore(new File(dataDir, "quorum-state")),
@@ -174,6 +173,7 @@ class KafkaRaftManager[T](
 
   private def buildRaftClient(): KafkaRaftClient[T] = {
     val client = new KafkaRaftClient(
+      OptionalInt.of(config.nodeId),
       recordSerde,
       netChannel,
       replicatedLog,

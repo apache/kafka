@@ -738,6 +738,7 @@ public class RaftEventSimulationTest {
             MemoryPool memoryPool = new BatchMemoryPool(2, KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
 
             KafkaRaftClient<Integer> client = new KafkaRaftClient<>(
+                OptionalInt.of(nodeId),
                 serde,
                 channel,
                 messageQueue,
@@ -810,7 +811,6 @@ public class RaftEventSimulationTest {
         void initialize(Map<Integer, InetSocketAddress> voterAddresses, Metrics metrics) {
             client.register(counter);
             client.initialize(
-                OptionalInt.of(nodeId),
                 voterAddresses,
                 "CONTROLLER",
                 store,

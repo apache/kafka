@@ -148,6 +148,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
     public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
 
+    private final OptionalInt nodeId;
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
     private final LogContext logContext;
     private final Logger logger;
@@ -181,6 +182,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
      * non-participating observer.
      */
     public KafkaRaftClient(
+        OptionalInt nodeId,
         RecordSerde<T> serde,
         NetworkChannel channel,
         ReplicatedLog log,
@@ -190,7 +192,9 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         String clusterId,
         RaftConfig raftConfig
     ) {
-        this(serde,
+        this(
+            nodeId,
+            serde,
             channel,
             new BlockingMessageQueue(),
             log,
@@ -201,10 +205,12 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             clusterId,
             logContext,
             new Random(),
-            raftConfig);
+            raftConfig
+        );
     }
 
     KafkaRaftClient(
+        OptionalInt nodeId,
         RecordSerde<T> serde,
         NetworkChannel channel,
         RaftMessageQueue messageQueue,
@@ -218,6 +224,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         Random random,
         RaftConfig raftConfig
     ) {
+        this.nodeId = nodeId;
         this.logContext = logContext;
         this.serde = serde;
         this.channel = channel;
@@ -350,7 +357,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     // TODO: need a way to verify that initialize has been called.
 
     public void initialize(
-        OptionalInt nodeId,
         Map<Integer, InetSocketAddress> voterAddresses,
         String listenerName,
         QuorumStateStore quorumStateStore,
@@ -442,7 +448,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public OptionalInt nodeId() {
-        return quorum.localId();
+        return nodeId;
     }
 
     private OffsetAndEpoch endOffset() {
@@ -1230,7 +1236,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             log.flush(false);
         }
 
-        // TODO: Update the internal listener
+        internalListener.updateListener();
 
         OffsetAndEpoch endOffset = endOffset();
         kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
@@ -1243,7 +1249,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         LogAppendInfo info = log.appendAsLeader(records, quorum.epoch());
 
-        // TODO: Notify the internal listener
+        internalListener.updateListener();
 
         OffsetAndEpoch endOffset = endOffset();
         kafkaRaftMetrics.updateAppendRecords(info.lastOffset - info.firstOffset + 1);
@@ -1504,6 +1510,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                     snapshot.snapshotId(),
                     quorum.leaderIdOrSentinel()
                 );
+
+                internalListener.updateListener();
 
                 updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark().offset));
             } else {

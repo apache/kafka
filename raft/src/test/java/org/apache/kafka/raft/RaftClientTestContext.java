@@ -251,6 +251,7 @@ public final class RaftClientTestContext {
             );
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
+                localId,
                 SERDE,
                 channel,
                 messageQueue,
@@ -267,7 +268,6 @@ public final class RaftClientTestContext {
 
             client.register(listener);
             client.initialize(
-                localId,
                 voterAddressMap,
                 "CONTROLLER",
                 quorumStateStore,
