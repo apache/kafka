@@ -2425,7 +2425,7 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
         } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
-            log.debug(exception.getMessage() + " " + "Skipping rebalance stage.");
+            log.debug("Cannot find the group, skipping rebalance stage.", exception);
             return EMPTY_RESULT;
         }
         return completeClassicGroupJoin(group);
@@ -2843,7 +2843,7 @@ public class GroupMetadataManager {
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
         } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
-            log.debug(exception.getMessage() + " " + "Skipping the initial rebalance stage.", groupId);
+            log.debug("Cannot find the group, skipping the initial rebalance stage.", exception);
             return EMPTY_RESULT;
         }
 
