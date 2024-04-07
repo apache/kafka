@@ -78,15 +78,7 @@ public class SystemTimerReaper implements Timer {
     }
 
     // visible for testing
-    boolean isReaperShutdown() {
+    boolean isShutdown() {
         return reaper.isShutdownComplete();
-    }
-
-    // visible for testing
-    boolean isTimerShutdown() {
-        if (timer instanceof SystemTimer) {
-            return ((SystemTimer) timer).isExecutorTerminated();
-        }
-        return true;
     }
 }

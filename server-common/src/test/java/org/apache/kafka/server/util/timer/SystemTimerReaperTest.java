@@ -19,6 +19,7 @@ package org.apache.kafka.server.util.timer;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -62,8 +63,13 @@ public class SystemTimerReaperTest {
 
     @Test
     public void testReaperClose() throws Exception {
-        SystemTimerReaper timer = new SystemTimerReaper("reaper", new SystemTimer("timer"));
-        timer.close();
-        TestUtils.waitForCondition(() -> timer.isReaperShutdown() && timer.isTimerShutdown(), "reaper or timer not shutdown");
+        Timer timer = Mockito.mock(Timer.class);
+        SystemTimerReaper timerReaper2 = new SystemTimerReaper("reaper", timer);
+        timerReaper2.close();
+        Mockito.verify(timer, Mockito.times(1)).close();
+
+        SystemTimerReaper timerReaper = new SystemTimerReaper("reaper", new SystemTimer("timer"));
+        timerReaper.close();
+        TestUtils.waitForCondition(() -> timerReaper.isShutdown(), "reaper not shutdown");
     }
 }
