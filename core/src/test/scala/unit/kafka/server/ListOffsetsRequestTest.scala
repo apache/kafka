@@ -208,7 +208,8 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
     // The latest offset reflects the updated epoch
     assertEquals((10L, secondLeaderEpoch, Errors.NONE.code), fetchOffsetAndEpochWithError(secondLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1))
-    assertEquals((9L, secondLeaderEpoch, Errors.NONE.code), fetchOffsetAndEpochWithError(secondLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, -1))
+    // The offset of max timestamp reflects the epoch of batch
+    assertEquals((9L, firstLeaderId, Errors.NONE.code), fetchOffsetAndEpochWithError(secondLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, -1))
   }
 
   @Test
