@@ -1287,9 +1287,6 @@ public class ClassicGroup implements Group {
         members.forEach((__, member) -> completeSyncFuture(
             member,
             new SyncGroupResponseData()
-                .setProtocolName(protocolName.orElse(null))
-                .setProtocolType(protocolType.orElse(null))
-                .setAssignment(member.assignment())
                 .setErrorCode(error.code())
         ));
     }
