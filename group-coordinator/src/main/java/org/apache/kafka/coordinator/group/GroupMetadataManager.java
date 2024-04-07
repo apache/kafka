@@ -784,16 +784,19 @@ public class GroupMetadataManager {
      */
     private boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
         if (!consumerGroupMigrationPolicy.isUpgradeEnabled()) {
-            log.debug("Online upgrade is invalid because the upgrade is not enabled.");
+            log.debug("Online upgrade is invalid because the consumer group {} migration config is {} so online upgrade is not enabled.",
+                classicGroup.groupId(), consumerGroupMigrationPolicy);
             return false;
         } else if (classicGroup.isInState(DEAD)) {
-            log.debug("Online upgrade is invalid because the classic group is in DEAD state.");
+            log.debug("Online upgrade is invalid because the classic group {} is in DEAD state.", classicGroup.groupId());
             return false;
         } else if (!classicGroup.usesConsumerGroupProtocol()) {
-            log.debug("Online upgrade is invalid because the classic group does not use the consumer group protocol.");
+            log.debug("Online upgrade is invalid because the classic group {} has protocol type {} and doesn't use the consumer group protocol.",
+                classicGroup.groupId(), classicGroup.protocolType().orElse(""));
             return false;
         } else if (classicGroup.size() > consumerGroupMaxSize) {
-            log.debug("Online upgrade is invalid because the classic group size exceeds the consumer group maximum size.");
+            log.debug("Online upgrade is invalid because the classic group {} size {} exceeds the consumer group maximum size {}.",
+                classicGroup.groupId(), classicGroup.size(), consumerGroupMaxSize);
             return false;
         }
         return true;
