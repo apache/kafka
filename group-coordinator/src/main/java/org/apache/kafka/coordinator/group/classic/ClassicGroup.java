@@ -366,6 +366,13 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * @return the current supportedProtocols.
+     */
+    public Map<String, Integer> supportedProtocols() {
+        return supportedProtocols;
+    }
+
+    /**
      * Sets newMemberAdded.
      *
      * @param value the value to set.
@@ -383,6 +390,11 @@ public class ClassicGroup implements Group {
         this.subscribedTopics = subscribedTopics;
     }
 
+    /**
+     * Sets protocolName.
+     *
+     * @param protocolName the value to set.
+     */
     public void setProtocolName(Optional<String> protocolName) {
         this.protocolName = protocolName;
     }

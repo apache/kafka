@@ -375,6 +375,7 @@ public class ConsumerGroup implements Group {
         maybeUpdatePartitionEpoch(oldMember, newMember);
         updateStaticMember(newMember);
         maybeUpdateGroupState();
+        maybeUpdateLegacyProtocolMembersSupportedProtocols(oldMember, newMember);
     }
 
     /**
@@ -429,6 +430,20 @@ public class ConsumerGroup implements Group {
      */
     public int numMembers() {
         return members.size();
+    }
+
+    /**
+     * @return The number of members that use the legacy protocol.
+     */
+    public int numLegacyProtocolMember() {
+        return (int) members.values().stream().filter(member -> member.useLegacyProtocol()).count();
+    }
+
+    /**
+     * @return The map of the protocol name and the number of members using the legacy protocol that support it.
+     */
+    public Map<String, Integer> legacyMembersSupportedProtocols() {
+        return Collections.unmodifiableMap(legacyProtocolMembersSupportedProtocols);
     }
 
     /**
@@ -848,6 +863,32 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Updates the supported protocol count of the members that use the legacy protocol.
+     *
+     * @param oldMember The old member.
+     * @param newMember The new member.
+     */
+    private void maybeUpdateLegacyProtocolMembersSupportedProtocols(
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
+    ) {
+        if (oldMember != null) {
+            oldMember.supportedProtocols().ifPresent(protocols ->
+                protocols.forEach(protocol ->
+                    legacyProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::decValue)
+                )
+            );
+        }
+        if (newMember != null) {
+            newMember.supportedProtocols().ifPresent(protocols ->
+                protocols.forEach(protocol ->
+                    legacyProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::incValue)
+                )
+            );
+        }
+    }
+
+    /**
      * Updates the subscribed topic names count.
      *
      * @param oldMember The old member.
@@ -1056,6 +1097,7 @@ public class ConsumerGroup implements Group {
                     .setClientHost(member.clientHost())
                     .setSubscribedTopicNames(subscription.topics())
                     .setAssignedPartitions(partitions)
+                    .setSupportedProtocols(member.supportedClassicJoinGroupRequestProtocols())
                     .build();
                 updateMember(newMember);
 
@@ -1069,6 +1111,9 @@ public class ConsumerGroup implements Group {
         });
     }
 
+    /**
+     * Converts the list of TopicPartition to a map of topic id and partition set.
+     */
     private static Map<Uuid, Set<Integer>> topicPartitionMapFromList(
         List<TopicPartition> partitions,
         TopicsImage topicsImage
@@ -1084,7 +1129,23 @@ public class ConsumerGroup implements Group {
         return topicPartitionMap;
     }
 
-    public Map<String, Integer> legacyMembersSupportedProtocols() {
-        return Collections.unmodifiableMap(legacyProtocolMembersSupportedProtocols);
+    /**
+     * Checks whether at least one of the given protocols can be supported. A
+     * protocol can be supported if it is supported by all members that use the
+     * legacy protocol.
+     *
+     * @param memberProtocolType  the member protocol type.
+     * @param memberProtocols     the set of protocol names.
+     *
+     * @return a boolean based on the condition mentioned above.
+     */
+    public boolean supportsProtocols(String memberProtocolType, Set<String> memberProtocols) {
+        if (isEmpty()) {
+            return !memberProtocolType.isEmpty() && !memberProtocols.isEmpty();
+        } else {
+            return ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType) &&
+                memberProtocols.stream()
+                    .anyMatch(name -> legacyProtocolMembersSupportedProtocols.getOrDefault(name, 0) == numLegacyProtocolMember());
+        }
     }
 }

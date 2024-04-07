@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
@@ -29,6 +30,7 @@ import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -38,6 +40,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -1048,5 +1051,60 @@ public class ConsumerGroupTest {
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));
         assertTrue(group.isInStates(Collections.singleton("stable"), 1));
         assertFalse(group.isInStates(Collections.singleton("empty"), 1));
+    }
+
+    @Test
+    public void testSupportsProtocols() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection collection1 =
+            new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection();
+        collection1.add(new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
+        ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection collection2 =
+            new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection();
+        collection2.add(new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+        collection2.add(new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member-1")
+            .setSupportedProtocols(collection1)
+            .build();
+        consumerGroup.updateMember(member1);
+
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member-2")
+            .setSupportedProtocols(collection2)
+            .build();
+        consumerGroup.updateMember(member2);
+
+        assertEquals(2, consumerGroup.legacyMembersSupportedProtocols().get("range"));
+        assertEquals(1, consumerGroup.legacyMembersSupportedProtocols().get("roundrobin"));
+        assertTrue(consumerGroup.supportsProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("range", "sticky"))));
+        assertFalse(consumerGroup.supportsProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("sticky", "roundrobin"))));
+
+        member2 = new ConsumerGroupMember.Builder(member2)
+            .setSupportedProtocols(collection1)
+            .build();
+        consumerGroup.updateMember(member2);
+
+        assertEquals(2, consumerGroup.legacyMembersSupportedProtocols().get("range"));
+        assertFalse(consumerGroup.legacyMembersSupportedProtocols().containsKey("roundrobin"));
+
+        member1 = new ConsumerGroupMember.Builder(member1)
+            .setSupportedProtocols(collection2)
+            .build();
+        consumerGroup.updateMember(member1);
+        member2 = new ConsumerGroupMember.Builder(member2)
+            .setSupportedProtocols(collection2)
+            .build();
+        consumerGroup.updateMember(member2);
+
+        assertEquals(2, consumerGroup.legacyMembersSupportedProtocols().get("range"));
+        assertEquals(2, consumerGroup.legacyMembersSupportedProtocols().get("roundrobin"));
+        assertTrue(consumerGroup.supportsProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("sticky", "roundrobin"))));
     }
 }

@@ -467,8 +467,8 @@ public class ConsumerGroupMember {
     /**
      * @return The list of protocols if the consumer uses the old protocol.
      */
-    public ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols() {
-        return supportedProtocols;
+    public Optional<ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection> supportedProtocols() {
+        return Optional.ofNullable(supportedProtocols);
     }
 
     /**
