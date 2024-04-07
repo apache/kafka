@@ -112,7 +112,7 @@ public class SystemTimer implements Timer {
     }
 
     // visible for testing
-    boolean isExecutorTerminated() {
+    boolean isTerminated() {
         return taskExecutor.isTerminated();
     }
 }

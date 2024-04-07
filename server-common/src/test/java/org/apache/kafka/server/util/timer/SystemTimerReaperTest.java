@@ -64,12 +64,9 @@ public class SystemTimerReaperTest {
     @Test
     public void testReaperClose() throws Exception {
         Timer timer = Mockito.mock(Timer.class);
-        SystemTimerReaper timerReaper2 = new SystemTimerReaper("reaper", timer);
-        timerReaper2.close();
-        Mockito.verify(timer, Mockito.times(1)).close();
-
-        SystemTimerReaper timerReaper = new SystemTimerReaper("reaper", new SystemTimer("timer"));
+        SystemTimerReaper timerReaper = new SystemTimerReaper("reaper", timer);
         timerReaper.close();
+        Mockito.verify(timer, Mockito.times(1)).close();
         TestUtils.waitForCondition(() -> timerReaper.isShutdown(), "reaper not shutdown");
     }
 }
