@@ -132,8 +132,10 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
 
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
             if (sharedTimeTracker.streamTime > inputRecordTimestamp + joinBeforeMs + joinAfterMs + joinGraceMs) {
-                // Join window for this record is too old.
-                StreamStreamJoinUtil.logSkip("Record arrived after window close", LOG, droppedRecordsSensor, context());
+                StreamStreamJoinUtil.logSkip(
+                    "Record is too old. It's own window and any matching window on the other input stream are closed.",
+                    LOG, droppedRecordsSensor, context()
+                );
                 return;
             }
             if (outer && record.key() == null && record.value() != null) {
