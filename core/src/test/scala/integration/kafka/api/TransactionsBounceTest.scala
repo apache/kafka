@@ -19,7 +19,7 @@ package kafka.api
 
 import java.util.Properties
 import kafka.server.KafkaConfig
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
@@ -74,14 +74,14 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   override protected def brokerCount: Int = 4
 
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testWithGroupId(quorum: String): Unit = {
     testBrokerFailure((producer, groupId, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testWithGroupMetadata(quorum: String): Unit = {
     testBrokerFailure((producer, _, consumer) =>

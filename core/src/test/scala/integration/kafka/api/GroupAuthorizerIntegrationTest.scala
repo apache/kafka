@@ -17,7 +17,7 @@ import java.util.concurrent.ExecutionException
 import kafka.api.GroupAuthorizerIntegrationTest._
 import kafka.security.authorizer.AclAuthorizer
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
@@ -113,7 +113,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     new AccessControlEntry(principal.toString, WILDCARD_HOST, aclOperation, aclPermissionType)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testUnauthorizedProduceAndConsume(quorum: String): Unit = {
     val topic = "topic"
@@ -134,7 +134,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Set(topic), consumeException.unauthorizedTopics.asScala)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizedProduceAndConsume(quorum: String): Unit = {
     val topic = "topic"

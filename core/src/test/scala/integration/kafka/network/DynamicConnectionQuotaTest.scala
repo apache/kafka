@@ -23,7 +23,7 @@ import java.net.{InetAddress, Socket}
 import java.util.concurrent._
 import java.util.{Collections, Properties}
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.message.ProduceRequestData
@@ -78,7 +78,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDynamicConnectionQuota(quorum: String): Unit = {
     val maxConnectionsPerIP = 5
@@ -106,7 +106,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     verifyMaxConnections(maxConnectionsPerIPOverride, connectAndVerify)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDynamicListenerConnectionQuota(quorum: String): Unit = {
     val initialConnectionCount = connectionCount
@@ -179,7 +179,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDynamicListenerConnectionCreationRateQuota(quorum: String): Unit = {
     // Create another listener. PLAINTEXT is an inter-broker listener
@@ -241,7 +241,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     waitForConnectionCount(initialConnectionCount)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDynamicIpConnectionRateQuota(quorum: String): Unit = {
     val connRateLimit = 10

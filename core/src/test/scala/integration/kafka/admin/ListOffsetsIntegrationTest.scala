@@ -19,8 +19,8 @@ package kafka.admin
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
+import kafka.utils.TestUtils
 import kafka.utils.TestUtils.{createProducer, plaintextBootstrapServers, tempDir, waitForAllReassignmentsToComplete}
-import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
@@ -64,7 +64,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testListMaxTimestampWithEmptyLog(quorum: String): Unit = {
     val maxTimestampOffset = runFetchOffsets(adminClient, OffsetSpec.maxTimestamp(), topicName)
@@ -72,7 +72,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     assertEquals(ListOffsetsResponse.UNKNOWN_TIMESTAMP, maxTimestampOffset.timestamp())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testListVersion0(quorum: String): Unit = {
     // create records for version 0
@@ -87,7 +87,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThreeCompressedRecordsInOneBatch(quorum: String): Unit = {
     produceMessagesInOneBatch("gzip")
@@ -101,7 +101,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets(topic = topicNameWithCustomConfigs, 0)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThreeNonCompressedRecordsInOneBatch(quorum: String): Unit = {
     produceMessagesInOneBatch()
@@ -116,7 +116,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets(topic = topicNameWithCustomConfigs, 0)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThreeNonCompressedRecordsInSeparateBatch(quorum: String): Unit = {
     produceMessagesInSeparateBatch()
@@ -130,7 +130,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   // The message conversion test only run in ZK mode because KRaft mode doesn't support "inter.broker.protocol.version" < 3.0
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testThreeRecordsInOneBatchWithMessageConversion(quorum: String): Unit = {
     createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V1)
@@ -146,7 +146,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   // The message conversion test only run in ZK mode because KRaft mode doesn't support "inter.broker.protocol.version" < 3.0
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testThreeRecordsInSeparateBatchWithMessageConversion(quorum: String): Unit = {
     createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V1)
@@ -161,7 +161,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThreeRecordsInOneBatchHavingDifferentCompressionTypeWithServer(quorum: String): Unit = {
     val props: Properties = new Properties()
@@ -171,7 +171,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets(topic = topicNameWithCustomConfigs)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThreeRecordsInSeparateBatchHavingDifferentCompressionTypeWithServer(quorum: String): Unit = {
     val props: Properties = new Properties()
@@ -181,7 +181,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets(topic = topicNameWithCustomConfigs)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThreeCompressedRecordsInSeparateBatch(quorum: String): Unit = {
     produceMessagesInSeparateBatch("gzip")
