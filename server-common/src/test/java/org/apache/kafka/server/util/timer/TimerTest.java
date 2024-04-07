@@ -77,7 +77,7 @@ public class TimerTest {
     @AfterEach
     public void teardown() throws Exception {
         timer.close();
-        TestUtils.waitForCondition(() -> timer.isTerminated(), "timer executor not terminated");
+        TestUtils.waitForCondition(timer::isTerminated, "timer executor not terminated");
     }
 
     @Test

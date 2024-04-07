@@ -67,6 +67,6 @@ public class SystemTimerReaperTest {
         SystemTimerReaper timerReaper = new SystemTimerReaper("reaper", timer);
         timerReaper.close();
         Mockito.verify(timer, Mockito.times(1)).close();
-        TestUtils.waitForCondition(() -> timerReaper.isShutdown(), "reaper not shutdown");
+        TestUtils.waitForCondition(timerReaper::isShutdown, "reaper not shutdown");
     }
 }
