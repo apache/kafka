@@ -131,7 +131,11 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
 
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
-
+            if (sharedTimeTracker.streamTime > inputRecordTimestamp + joinBeforeMs + joinAfterMs + joinGraceMs) {
+                // Join window for this record is too old.
+                StreamStreamJoinUtil.logSkip("record arrived after window close", LOG, droppedRecordsSensor, context());
+                return;
+            }
             if (outer && record.key() == null && record.value() != null) {
                 context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                 return;
@@ -159,6 +163,10 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                         // is only cleaned up by stream time, so this is okay for at-least-once.
                         store.putIfAbsent(TimestampedKeyAndJoinSide.make(!isLeftSide, record.key(), otherRecordTimestamp), null);
                     });
+
+                    if (Math.max(inputRecordTimestamp, otherRecordTimestamp) + joinAfterMs + joinGraceMs < sharedTimeTracker.streamTime) {
+                        return;
+                    }
 
                     context().forward(
                         record.withValue(joiner.apply(record.key(), record.value(), otherRecord.value))

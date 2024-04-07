@@ -16,15 +16,23 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
@@ -55,6 +63,7 @@ import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -69,7 +78,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -85,6 +93,9 @@ import java.util.stream.StreamSupport;
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMillis;
 
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singletonList;
+import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -130,7 +141,7 @@ public class KStreamKStreamJoinTest {
 
             assertThat(
                 appender.getMessages(),
-                hasItem("Skipping record. reason=[null key or value] topic=[left] partition=[0] offset=[0]")
+                hasItem("Skipping record. Reason=[null key or value] topic=[left] partition=[0] offset=[0]")
             );
         }
     }
@@ -1903,12 +1914,79 @@ public class KStreamKStreamJoinTest {
         }
     }
 
-    static void assertRecordDropCount(final double expected, final MockApiProcessor<Integer, String, Void, Void> processor) {
+
+    @Test
+    public void recordsArrivingPostWindowCloseShouldBeDropped() {
+        final int key = 0;
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+        final Consumed<Integer, String> serde = Consumed.with(Serdes.Integer(), Serdes.String());
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder
+            .stream("left", serde)
+            .join(
+                builder.stream("right", serde),
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(5)),
+                StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+            )
+            .to("out");
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(props), props)) {
+            final TestInputTopic<Integer, String> left = driver.createInputTopic("left", new IntegerSerializer(), new StringSerializer());
+            final TestInputTopic<Integer, String> right = driver.createInputTopic("right", new IntegerSerializer(), new StringSerializer());
+            final TestOutputTopic<Integer, String> out = driver.createOutputTopic("out", new IntegerDeserializer(), new StringDeserializer());
+
+            left.pipeInput(key, "l15", 15); // l15 window {5:25,5} open, closes at 31
+            assertRecordDropCount(0.0, driver.metrics());
+
+            left.pipeInput(-1, "bump time", 30);
+            right.pipeInput(key, "r4", 4); // gets dropped
+            right.pipeInput(key, "r5", 5);
+            right.pipeInput(key, "r25-0", 25);
+            Assertions.assertEquals(
+                asList(
+                    new TestRecord<>(key, "l15+r5", null, 15L),
+                    new TestRecord<>(key, "l15+r25-0", null, 25L)
+                ),
+                out.readRecordsToList()
+            );
+            assertRecordDropCount(1.0, driver.metrics());
+            left.pipeInput(-1, "bump time", 31); // l15 is now closed
+
+            right.pipeInput(key, "r5", 5); // gets dropped
+            assertRecordDropCount(2.0, driver.metrics());
+            Assertions.assertEquals(emptyList(), out.readRecordsToList());
+
+            right.pipeInput(key, "r6", 6); // Doesn't get dropped, but all involved windows are closed.
+            assertRecordDropCount(2.0, driver.metrics());
+            Assertions.assertEquals(emptyList(), out.readRecordsToList());
+
+            right.pipeInput(key, "r25-1", 25);
+            // r25-1 still joins with l15 (despite l15 window closed) because r25-1 window {15:35,5} is open, closes at 41.
+
+            Assertions.assertEquals(
+                singletonList(new TestRecord<>(key, "l15+r25-1", null, 25L)),
+                out.readRecordsToList()
+            );
+
+            left.pipeInput(key, "l16", 16);
+            Assertions.assertEquals(
+                asList(
+                    new TestRecord<>(key, "l16+r6", null, 16L),
+                    new TestRecord<>(key, "l16+r25-0", null, 25L),
+                    new TestRecord<>(key, "l16+r25-1", null, 25L)
+                ),
+                out.readRecordsToList()
+            );
+            assertRecordDropCount(2.0, driver.metrics());
+        }
+    }
+
+    static void assertRecordDropCount(final double expected, final Map<MetricName, ? extends Metric> metrics) {
         final String metricGroup = "stream-task-metrics";
         final String metricName = "dropped-records-total";
         Assertions.assertEquals(
             expected,
-            getMetricByName(processor.context().metrics().metrics(), metricName, metricGroup).metricValue()
+            getMetricByName(metrics, metricName, metricGroup).metricValue()
         );
     }
 
