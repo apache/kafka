@@ -17,9 +17,7 @@
 
 package org.apache.kafka.metalog;
 
-import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -817,22 +815,19 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         OffsetAndEpoch snapshotId,
         long lastContainedLogTimestamp
     ) {
-        return RecordsSnapshotWriter.createWithHeader(
-            () -> createNewSnapshot(snapshotId),
-            1024,
-            MemoryPool.NONE,
-            new MockTime(),
-            lastContainedLogTimestamp,
-            CompressionType.NONE,
-            new MetadataRecordSerde()
+        return Optional.of(
+            new RecordsSnapshotWriter.Builder()
+                .setLastContainedLogTimestamp(lastContainedLogTimestamp)
+                .setTime(new MockTime())
+                .setRawSnapshotWriter(createNewSnapshot(snapshotId))
+                .build(new MetadataRecordSerde())
         );
     }
 
-    private Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId) {
-        return Optional.of(
-            new MockRawSnapshotWriter(snapshotId, buffer -> {
-                shared.addSnapshot(new MockRawSnapshotReader(snapshotId, buffer));
-            })
+    private RawSnapshotWriter createNewSnapshot(OffsetAndEpoch snapshotId) {
+        return new MockRawSnapshotWriter(
+            snapshotId,
+            buffer -> shared.addSnapshot(new MockRawSnapshotReader(snapshotId, buffer))
         );
     }
 

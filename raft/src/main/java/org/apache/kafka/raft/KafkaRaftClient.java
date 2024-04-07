@@ -2468,17 +2468,17 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     @Override
     public Optional<SnapshotWriter<T>> createSnapshot(
         OffsetAndEpoch snapshotId,
-        long lastContainedLogTime
+        long lastContainedLogTimestamp
     ) {
-        return RecordsSnapshotWriter.createWithHeader(
-                () -> log.createNewSnapshot(snapshotId),
-                MAX_BATCH_SIZE_BYTES,
-                memoryPool,
-                time,
-                lastContainedLogTime,
-                CompressionType.NONE,
-                serde
-            );
+        return log.createNewSnapshot(snapshotId).map(writer ->
+            new RecordsSnapshotWriter.Builder()
+                .setLastContainedLogTimestamp(lastContainedLogTimestamp)
+                .setTime(time)
+                .setMaxBatchSize(MAX_BATCH_SIZE_BYTES)
+                .setMemoryPool(memoryPool)
+                .setRawSnapshotWriter(writer)
+                .build(serde)
+        );
     }
 
     @Override

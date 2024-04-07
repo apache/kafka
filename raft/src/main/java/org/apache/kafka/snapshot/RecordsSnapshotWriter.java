@@ -18,39 +18,36 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.SnapshotFooterRecord;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.server.common.serialization.RecordSerde;
-import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
-import org.apache.kafka.common.message.SnapshotHeaderRecord;
-import org.apache.kafka.common.message.SnapshotFooterRecord;
-import org.apache.kafka.common.record.ControlRecordUtils;
+import org.apache.kafka.raft.internals.BatchAccumulator;
+//import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.util.Optional;
 import java.util.List;
 import java.util.OptionalLong;
-import java.util.function.Supplier;
 
 final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
     final private RawSnapshotWriter snapshot;
     final private BatchAccumulator<T> accumulator;
     final private Time time;
-    final private long lastContainedLogTimestamp;
 
     private RecordsSnapshotWriter(
         RawSnapshotWriter snapshot,
         int maxBatchSize,
         MemoryPool memoryPool,
         Time time,
-        long lastContainedLogTimestamp,
         CompressionType compressionType,
         RecordSerde<T> serde
     ) {
         this.snapshot = snapshot;
         this.time = time;
-        this.lastContainedLogTimestamp = lastContainedLogTimestamp;
 
         this.accumulator = new BatchAccumulator<>(
             snapshot.snapshotId().epoch(),
@@ -69,7 +66,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
      *
      * @throws IllegalStateException if the snapshot is not empty
      */
-    private void initializeSnapshotWithHeader() {
+    private void initializeSnapshotWithHeader(long lastContainedLogTimestamp) {
         if (snapshot.sizeInBytes() != 0) {
             String message = String.format(
                 "Initializing writer with a non-empty snapshot: id = '%s'.",
@@ -95,63 +92,6 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             .setVersion(ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION);
         accumulator.appendSnapshotFooterRecord(footerRecord, time.milliseconds());
         accumulator.forceDrain();
-    }
-
-    /**
-     * Create an instance of this class and initialize
-     * the underlying snapshot with {@link SnapshotHeaderRecord}
-     *
-     * @param supplier a lambda to create the low level snapshot writer
-     * @param maxBatchSize the maximum size in byte for a batch
-     * @param memoryPool the memory pool for buffer allocation
-     * @param snapshotTime the clock implementation
-     * @param lastContainedLogTimestamp The append time of the highest record contained in this snapshot
-     * @param compressionType the compression algorithm to use
-     * @param serde the record serialization and deserialization implementation
-     * @return {@link Optional}{@link RecordsSnapshotWriter}
-     */
-    public static <T> Optional<SnapshotWriter<T>> createWithHeader(
-        Supplier<Optional<RawSnapshotWriter>> supplier,
-        int maxBatchSize,
-        MemoryPool memoryPool,
-        Time snapshotTime,
-        long lastContainedLogTimestamp,
-        CompressionType compressionType,
-        RecordSerde<T> serde
-    ) {
-        return supplier.get().map(writer ->
-            createWithHeader(
-                writer,
-                maxBatchSize,
-                memoryPool,
-                snapshotTime,
-                lastContainedLogTimestamp,
-                compressionType,
-                serde
-            )
-        );
-    }
-
-    public static <T> RecordsSnapshotWriter<T> createWithHeader(
-        RawSnapshotWriter rawSnapshotWriter,
-        int maxBatchSize,
-        MemoryPool memoryPool,
-        Time snapshotTime,
-        long lastContainedLogTimestamp,
-        CompressionType compressionType,
-        RecordSerde<T> serde
-    ) {
-        RecordsSnapshotWriter<T> writer = new RecordsSnapshotWriter<>(
-            rawSnapshotWriter,
-            maxBatchSize,
-            memoryPool,
-            snapshotTime,
-            lastContainedLogTimestamp,
-            compressionType,
-            serde
-        );
-        writer.initializeSnapshotWithHeader();
-        return writer;
     }
 
     @Override
@@ -214,6 +154,80 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             }
         } finally {
             batches.forEach(CompletedBatch::release);
+        }
+    }
+
+    final public static class Builder {
+        private long lastContainedLogTimestamp = 0;
+        private CompressionType compressionType = CompressionType.NONE;
+        private Time time = Time.SYSTEM;
+        private int maxBatchSize = 1024;
+        MemoryPool memoryPool = MemoryPool.NONE;
+        // TODO: implement this...
+        //private short kraftVersion = 0;
+        //private Optional<VoterSet> voterSet = Optional.empty();
+        private Optional<RawSnapshotWriter> rawSnapshotWriter = Optional.empty();
+
+        public Builder setLastContainedLogTimestamp(long lastContainedLogTimestamp) {
+            this.lastContainedLogTimestamp = lastContainedLogTimestamp;
+            return this;
+        }
+
+        public Builder setCompressionType(CompressionType compressionType) {
+            this.compressionType = compressionType;
+            return this;
+        }
+
+        public Builder setTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
+        public Builder setMaxBatchSize(int maxBatchSize) {
+            this.maxBatchSize = maxBatchSize;
+            return this;
+        }
+
+        public Builder setMemoryPool(MemoryPool memoryPool) {
+            this.memoryPool = memoryPool;
+            return this;
+        }
+
+        public Builder setRawSnapshotWriter(RawSnapshotWriter rawSnapshotWriter) {
+            this.rawSnapshotWriter = Optional.of(rawSnapshotWriter);
+            return this;
+        }
+
+        /*
+        public Builder setKraftVersion(short kraftVersion) {
+            this.kraftVersion = kraftVersion;
+            return this;
+        }
+
+        public Builder setVoterSet(VoterSet voterSet) {
+            this.voterSet = Optional.of(voterSet);
+            return this;
+        }
+        */
+
+        public <T> RecordsSnapshotWriter<T> build(RecordSerde<T> serde) {
+            if (!rawSnapshotWriter.isPresent()) {
+                throw new IllegalStateException("Builder::build called without a RawSnapshotWriter");
+            }
+
+            RecordsSnapshotWriter<T> writer = new RecordsSnapshotWriter<>(
+                rawSnapshotWriter.get(),
+                maxBatchSize,
+                memoryPool,
+                time,
+                compressionType,
+                serde
+            );
+
+            // TODO: implement writing kraft version and voter set to the snaopshot
+            writer.initializeSnapshotWithHeader(lastContainedLogTimestamp);
+
+            return writer;
         }
     }
 }

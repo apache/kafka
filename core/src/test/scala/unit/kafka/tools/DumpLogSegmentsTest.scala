@@ -28,7 +28,6 @@ import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordVersion, SimpleRecord}
@@ -323,15 +322,11 @@ class DumpLogSegmentsTest {
     val lastContainedLogTimestamp = 10000
 
     TestUtils.resource(
-      RecordsSnapshotWriter.createWithHeader(
-        () => metadataLog.createNewSnapshot(new OffsetAndEpoch(0, 0)),
-        1024,
-        MemoryPool.NONE,
-        new MockTime,
-        lastContainedLogTimestamp,
-        CompressionType.NONE,
-        MetadataRecordSerde.INSTANCE,
-      ).get()
+      new RecordsSnapshotWriter.Builder()
+        .setTime(new MockTime)
+        .setLastContainedLogTimestamp(lastContainedLogTimestamp)
+        .setRawSnapshotWriter(metadataLog.createNewSnapshot(new OffsetAndEpoch(0, 0)).get)
+        .build(MetadataRecordSerde.INSTANCE)
     ) { snapshotWriter =>
       snapshotWriter.append(metadataRecords.asJava)
       snapshotWriter.freeze()

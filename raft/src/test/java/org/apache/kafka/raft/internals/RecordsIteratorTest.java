@@ -33,7 +33,6 @@ import java.util.stream.Stream;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
@@ -154,16 +153,12 @@ public final class RecordsIteratorTest {
     @Test
     public void testControlRecordIteration() {
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
-        try (RecordsSnapshotWriter<String> snapshot = RecordsSnapshotWriter.createWithHeader(
-                new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), snapshotBuf -> buffer.set(snapshotBuf)),
-                4 * 1024,
-                MemoryPool.NONE,
-                new MockTime(),
-                0,
-                CompressionType.NONE,
-                STRING_SERDE
-            )
-        ) {
+        RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
+            .setTime(new MockTime())
+            .setRawSnapshotWriter(
+                new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), snapshotBuf -> buffer.set(snapshotBuf))
+            );
+        try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
             snapshot.append(Arrays.asList("a", "b", "c"));
             snapshot.append(Arrays.asList("d", "e", "f"));
             snapshot.append(Arrays.asList("g", "h", "i"));

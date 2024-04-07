@@ -88,7 +88,7 @@ final public class InternalLogListener {
 
     private void maybeLoadSnapshot() {
         Optional<RawSnapshotReader> rawSnapshot = log.latestSnapshot();
-        if (rawSnapshot.isPresent() && (nextOffset == 0 || nextOffset > log.startOffset())) {
+        if (rawSnapshot.isPresent() && (nextOffset == 0 || nextOffset < log.startOffset())) {
             // Clear the current state
             kraftVersion.clear();
             voterSetHistory.clear();
