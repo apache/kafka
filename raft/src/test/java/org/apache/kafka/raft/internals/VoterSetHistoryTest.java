@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.VotersRecord;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -32,7 +32,7 @@ final public class VoterSetHistoryTest {
     void testStaicVoterSet() {
         VoterSet staticVoterSet = createVoterSet(Arrays.asList(1, 2, 3));
         VoterSetHistory votersHistory = new VoterSetHistory(Optional.of(staticVoterSet));
-        
+
         validateStaticVoterSet(staticVoterSet, votersHistory);
 
         // Should be a no-op
@@ -64,7 +64,7 @@ final public class VoterSetHistoryTest {
                                 "LISTNER",
                                 InetSocketAddress.createUnresolved(String.format("replica-%d", replica), 1234)
                             ),
-                            new VotersRecord.KRaftVersionFeature()
+                            new SupportedVersionRange((short) 0, (short) 0)
                         )
                     )
                 )

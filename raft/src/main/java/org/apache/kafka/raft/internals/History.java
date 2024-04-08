@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+import java.util.Objects;
 import java.util.Optional;
 
 // TODO: document this type
@@ -49,6 +50,27 @@ public interface History<T> {
             return value;
         }
 
-        // TODO: override equals, hashCode and toString
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            Entry that = (Entry) o;
+
+            if (offset != that.offset) return false;
+            if (value != that.value) return false;
+
+            return true;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(offset, value);
+        }
+
+        @Override
+        public String toString() {
+            return String.format("Entry(offset=%d, value=%s)", offset, value);
+        }
     }
 }

@@ -60,10 +60,10 @@ class BaseVersionRange {
      *                                     - minKeyLabel is empty, OR, minKeyLabel is empty.
      */
     protected BaseVersionRange(String minKeyLabel, short minValue, String maxKeyLabel, short maxValue) {
-        if (minValue < 1 || maxValue < 1 || maxValue < minValue) {
+        if (minValue < 0 || maxValue < 0 || maxValue < minValue) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Expected minValue >= 1, maxValue >= 1 and maxValue >= minValue, but received" +
+                    "Expected minValue >= 0, maxValue >= 0 and maxValue >= minValue, but received" +
                     " minValue: %d, maxValue: %d", minValue, maxValue));
         }
         if (minKeyLabel.isEmpty()) {
@@ -86,6 +86,7 @@ class BaseVersionRange {
         return maxValue;
     }
 
+    @Override
     public String toString() {
         return String.format(
             "%s[%s]",

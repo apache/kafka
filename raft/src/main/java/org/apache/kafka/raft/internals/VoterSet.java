@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 
 // TODO: write unittest for VoterSet
 // TODO: Write documentation
@@ -68,11 +69,15 @@ final public class VoterSet {
                             )
                             .iterator();
 
+                        VotersRecord.KRaftVersionFeature kraftVersionFeature = new VotersRecord.KRaftVersionFeature()
+                            .setMinSupportedVersion(voter.supportedKRaftVersion().min())
+                            .setMaxSupportedVersion(voter.supportedKRaftVersion().max());
+
                         return new VotersRecord.Voter()
                             .setVoterId(voter.id())
                             .setVoterUuid(voter.uuid().orElse(Uuid.ZERO_UUID))
                             .setEndpoints(new VotersRecord.EndpointCollection(endpoints))
-                            .setKRaftVersionFeature(voter.feature());
+                            .setKRaftVersionFeature(kraftVersionFeature);
                     })
                     .collect(Collectors.toList())
             );
@@ -109,19 +114,18 @@ final public class VoterSet {
         private final int id;
         private final Optional<Uuid> uuid;
         private final Map<String, InetSocketAddress> listeners;
-        // TODO: is there a better type for this?
-        private final VotersRecord.KRaftVersionFeature feature;
+        private final SupportedVersionRange supportedKRaftVersion;
 
         VoterNode(
             int id,
             Optional<Uuid> uuid,
             Map<String, InetSocketAddress> listeners,
-            VotersRecord.KRaftVersionFeature feature
+            SupportedVersionRange supportedKRaftVersion
         ) {
             this.id = id;
             this.uuid = uuid;
             this.listeners = listeners;
-            this.feature = feature;
+            this.supportedKRaftVersion = supportedKRaftVersion;
         }
 
         int id() {
@@ -136,15 +140,15 @@ final public class VoterSet {
             return listeners;
         }
 
-        VotersRecord.KRaftVersionFeature feature() {
-            return feature;
+        SupportedVersionRange supportedKRaftVersion() {
+            return supportedKRaftVersion;
         }
 
 
         Optional<InetSocketAddress> address(String listener) {
             return Optional.ofNullable(listeners.get(listener));
         }
-        
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -154,7 +158,7 @@ final public class VoterSet {
 
             if (id != that.id) return false;
             if (!Objects.equals(uuid, that.uuid)) return false;
-            if (!Objects.equals(feature, that.feature)) return false;
+            if (!Objects.equals(supportedKRaftVersion, that.supportedKRaftVersion)) return false;
             if (!Objects.equals(listeners, that.listeners)) return false;
 
             return true;
@@ -162,12 +166,18 @@ final public class VoterSet {
 
         @Override
         public int hashCode() {
-            return Objects.hash(id, uuid, listeners, feature);
+            return Objects.hash(id, uuid, listeners, supportedKRaftVersion);
         }
 
         @Override
         public String toString() {
-            return String.format("VoterNode(id=%d, uuid=%s, listeners=%s, feature=%s)", id, uuid, listeners, feature);
+            return String.format(
+                "VoterNode(id=%d, uuid=%s, listeners=%s, supportedKRaftVersion=%s)",
+                id,
+                uuid,
+                listeners,
+                supportedKRaftVersion
+            );
         }
     }
 
@@ -186,7 +196,18 @@ final public class VoterSet {
                 listeners.put(endpoint.name(), InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port()));
             }
 
-            voterNodes.put(voter.voterId(), new VoterNode(voter.voterId(), uuid, listeners, voter.kRaftVersionFeature()));
+            voterNodes.put(
+                voter.voterId(),
+                new VoterNode(
+                    voter.voterId(),
+                    uuid,
+                    listeners,
+                    new SupportedVersionRange(
+                        voter.kRaftVersionFeature().minSupportedVersion(),
+                        voter.kRaftVersionFeature().maxSupportedVersion()
+                    )
+                )
+            );
         }
 
         return new VoterSet(voterNodes);
@@ -203,7 +224,7 @@ final public class VoterSet {
                         entry.getKey(),
                         Optional.empty(),
                         Collections.singletonMap(listener, entry.getValue()),
-                        new VotersRecord.KRaftVersionFeature()
+                        new SupportedVersionRange((short) 0, (short) 0)
                     )
                 )
             );
