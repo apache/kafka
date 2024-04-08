@@ -226,9 +226,6 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
 }
 
 object PlaintextConsumerSubscriptionTest {
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly: Stream[Arguments] =
-    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly()
-
   def getTestQuorumAndGroupProtocolParametersAll: Stream[Arguments] =
     BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
 }
