@@ -32,7 +32,14 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 
 // TODO: write unittest for VoterSet
-// TODO: Write documentation
+/**
+ * A type for representing the set of voters for a topic partition.
+ *
+ * It encapsulates static information like a voter's endpoint and their supported kraft.version.
+ *
+ * It providees functionality for converting to and from {@code VotersRecord} and for converting
+ * from the static configuration.
+ */
 final public class VoterSet {
     private final Map<Integer, VoterNode> voters;
 
@@ -40,15 +47,30 @@ final public class VoterSet {
         this.voters = voters;
     }
 
+    /**
+     * Returns the socket address for a given voter at a given listener.
+     *
+     * @param voter the id of the voter
+     * @param listener the name of the listener
+     * @return the socket address if it exist, otherwise {@code Optional.empty()}
+     */
     public Optional<InetSocketAddress> voterAddress(int voter, String listener) {
         return Optional.ofNullable(voters.get(voter))
             .flatMap(voterNode -> voterNode.address(listener));
     }
 
+    /**
+     * Returns all of the voter ids.
+     */
     public Set<Integer> voterIds() {
         return voters.keySet();
     }
 
+    /**
+     * Converts a voter set to a voters record for a given version.
+     *
+     * @param version the version of the voters record
+     */
     public VotersRecord toVotersRecord(short version) {
         return new VotersRecord()
             .setVersion(version)
@@ -83,7 +105,19 @@ final public class VoterSet {
             );
     }
 
-    boolean hasOverlappingMajority(VoterSet that) {
+    /**
+     * Determines if two sets of voters have an overlapping majority.
+     *
+     * A overlapping majority means that for all majorities in {@code this} set of voters and for
+     * all majority in {@code that} voeter set they have at least one voter in common.
+     *
+     * This can be used to validate a change in the set of voters will get committed by both sets
+     * of voters.
+     *
+     * @param that the other voter set to compare
+     * @return true if they have an overlapping majority, false otherwise
+     */
+    public boolean hasOverlappingMajority(VoterSet that) {
         if (Utils.diff(HashSet::new, voters.keySet(), that.voters.keySet()).size() > 2) return false;
         if (Utils.diff(HashSet::new, that.voters.keySet(), voters.keySet()).size() > 2) return false;
 
@@ -181,6 +215,12 @@ final public class VoterSet {
         }
     }
 
+    /**
+     * Converts a {@code VotersRecord} to a {@code VoterSet}.
+     *
+     * @param voters the set of voters control record
+     * @return the voter set
+     */
     public static VoterSet fromVotersRecord(VotersRecord voters) {
         Map<Integer, VoterNode> voterNodes = new HashMap<>(voters.voters().size());
         for (VotersRecord.Voter voter: voters.voters()) {
@@ -213,6 +253,13 @@ final public class VoterSet {
         return new VoterSet(voterNodes);
     }
 
+    /**
+     * Creates a voter set from a map of socket addresses.
+     *
+     * @param listener the listener name for all of the endpoints
+     * @param voters the socket addresses by voter id
+     * @return the voter set
+     */
     public static VoterSet fromAddressSpecs(String listener, Map<Integer, InetSocketAddress> voters) {
         Map<Integer, VoterNode> voterNodes = voters
             .entrySet()

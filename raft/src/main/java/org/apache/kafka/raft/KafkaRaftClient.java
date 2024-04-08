@@ -175,6 +175,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
      * 1. reading the entire partition (snapshot and log) at start up,
      * 2. updating the internal log listener when a snapshot is replaced, because of FETCH_SNAPSHOT, on the followers
      * 3. updating the internal log listener when the leader (call to append()) or follower (FETCH) appends to the log
+     * 4. truncate the internal log listener when a follower truncates their log
+     * 5. trim the internal listener prefix when a snapshot gets generated
      */
     private volatile InternalLogListener internalListener;
     private volatile KafkaRaftMetrics kafkaRaftMetrics;
@@ -1180,6 +1182,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                     truncationOffset,
                     quorum.leaderIdOrSentinel()
                 );
+                // TODO: we should also truncate the internal listener
             } else if (partitionResponse.snapshotId().epoch() >= 0 ||
                        partitionResponse.snapshotId().endOffset() >= 0) {
                 // The leader is asking us to fetch a snapshot
@@ -1517,6 +1520,9 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                     quorum.leaderIdOrSentinel()
                 );
 
+                // TODO: are we guarantee to always load a snapshot? This always true, if the next offset is always less
+                // than the snapshot id. Is this true? I think this always true because the internal listener is always
+                // at the LEO and we now that the LEO is less that the snapshot id.
                 internalListener.updateListener();
 
                 updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark().offset));
@@ -2480,6 +2486,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             throw new IllegalStateException("Cannot create snapshot before the replica has been initialized");
         }
 
+        // TODO: need to track when a snapshot has been frozen so that we can trim the prefix of the internal log listener
+        // this is currently track only by the KafkaMetadataLog implementation. We need to move this to this implementation.
         return log.createNewSnapshot(snapshotId).map(writer -> {
             long lastContainedLogOffset = snapshotId.offset() - 1;
 

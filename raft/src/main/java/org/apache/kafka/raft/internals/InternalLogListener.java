@@ -34,8 +34,12 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 
 // TODO: File an issue to remove the RecordSerde. The internal listener should just skip data record batches
-// TODO: Document this class and methods
 // TODO: Add unnitest for it
+/**
+ * The KRaft state machine for tracking control records in the topic partition.
+ *
+ * This type keeps track of changes to the finalized kraft.version and the sets of voters.
+ */
 final public class InternalLogListener {
     private final ReplicatedLog log;
     private final RecordSerde<?> serde;
@@ -56,6 +60,16 @@ final public class InternalLogListener {
     // the nextOffset first before reading voterSetHistory or kraftVersion
     private volatile long nextOffset = 0;
 
+    /**
+     * Constructs an internal log listener
+     *
+     * @param staticVoterSet the set of voter statically configured
+     * @param log the on disk topic partition
+     * @param serde the record decoder for data records
+     * @param bufferSupplier the supplier of byte buffers
+     * @param maxBatchSizeBytes the maximum size of record batch
+     * @param logContext the log context
+     */
     public InternalLogListener(
         Optional<VoterSet> staticVoterSet,
         ReplicatedLog log,
@@ -72,17 +86,29 @@ final public class InternalLogListener {
         this.logger = logContext.logger(this.getClass());
     }
 
+    /**
+     * Must be called whenever the {@code log} has changed.
+     */
     public void updateListener() {
         maybeLoadSnapshot();
         maybeLoadLog();
     }
 
+    /**
+     * Returns the last voter set.
+     */
     public VoterSet lastVoterSet() {
         synchronized (voterSetHistory) {
             return voterSetHistory.lastValue();
         }
     }
 
+    /**
+     * Rturns the voter set at a given offset.
+     *
+     * @param offset the offset (inclusive)
+     * @return the voter set if one exist, otherwise {@code Optional.empty()}
+     */
     public Optional<VoterSet> voterSetAtOffset(long offset) {
         long fixedNextOffset = nextOffset;
         if (offset >= fixedNextOffset) {
@@ -100,6 +126,12 @@ final public class InternalLogListener {
         }
     }
 
+    /**
+     * Returns the finalized kraft version at a given offset.
+     *
+     * @param offset the offset (inclusive)
+     * @return the finalized kraft version if one exist, otherwise 0
+     */
     public short kraftVersionAtOffset(long offset) {
         long fixedNextOffset = nextOffset;
         if (offset >= fixedNextOffset) {

@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
@@ -56,7 +57,7 @@ final public class VoterSetHistoryTest {
                 .stream()
                 .collect(
                     Collectors.toMap(
-                        replica -> replica,
+                        Function.identity(),
                         replica -> new VoterSet.VoterNode(
                             replica,
                             Optional.of(Uuid.randomUuid()),

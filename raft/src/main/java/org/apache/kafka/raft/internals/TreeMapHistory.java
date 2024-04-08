@@ -21,8 +21,10 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.Map;
 
-// TODO: document this type
 // TODO: add unittest
+/**
+ * A implementation for {@code History} which uses a red-black tree to store values sorted by offset.
+ */
 final public class TreeMapHistory<T> implements History<T> {
     private final NavigableMap<Long, T> history = new TreeMap<>();
 
