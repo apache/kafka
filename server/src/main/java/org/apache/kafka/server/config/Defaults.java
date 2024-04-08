@@ -159,20 +159,6 @@ public class Defaults {
     public static final int OFFSET_COMMIT_TIMEOUT_MS = OffsetConfig.DEFAULT_OFFSET_COMMIT_TIMEOUT_MS;
     public static final short OFFSET_COMMIT_REQUIRED_ACKS = OffsetConfig.DEFAULT_OFFSET_COMMIT_REQUIRED_ACKS;
 
-    /** ********* Transaction management configuration *********/
-    public static final int TRANSACTIONAL_ID_EXPIRATION_MS = TransactionStateManagerConfig.TRANSACTIONAL_ID_EXPIRATION_MS_DEFAULT;
-    public static final int TRANSACTIONS_MAX_TIMEOUT_MS = TransactionStateManagerConfig.TRANSACTIONS_MAX_TIMEOUT_MS_DEFAULT;
-    public static final int TRANSACTIONS_TOPIC_MIN_ISR = TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_DEFAULT;
-    public static final int TRANSACTIONS_LOAD_BUFFER_SIZE = TransactionLogConfig.TRANSACTIONS_LOAD_BUFFER_SIZE_DEFAULT;
-    public static final short TRANSACTIONS_TOPIC_REPLICATION_FACTOR = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_DEFAULT;
-    public static final int TRANSACTIONS_TOPIC_PARTITIONS = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_DEFAULT;
-    public static final int TRANSACTIONS_TOPIC_SEGMENT_BYTES = TransactionLogConfig.TRANSACTIONS_TOPIC_SEGMENT_BYTES_DEFAULT;
-    public static final int TRANSACTIONS_ABORT_TIMED_OUT_CLEANUP_INTERVAL_MS = TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT;
-    public static final int TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS = TransactionStateManagerConfig.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_DEFAULT;
-    public static final boolean TRANSACTION_PARTITION_VERIFICATION_ENABLE = TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_DEFAULT;
-    public static final int PRODUCER_ID_EXPIRATION_MS = TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT;
-    public static final int PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT;
-
     /** ********* Fetch Configuration *********/
     public static final int MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS = 1000;
     public static final int FETCH_MAX_BYTES = 55 * 1024 * 1024;
