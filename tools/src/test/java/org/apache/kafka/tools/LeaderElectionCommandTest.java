@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
@@ -72,13 +71,13 @@ public class LeaderElectionCommandTest {
     }
 
     @BeforeEach
-    void setup(ClusterConfig clusterConfig) {
+    void setup() {
         TestUtils.verifyNoUnexpectedThreads("@BeforeEach");
-        clusterConfig.serverProperties().put("auto.leader.rebalance.enable", "false");
-        clusterConfig.serverProperties().put("controlled.shutdown.enable", "true");
-        clusterConfig.serverProperties().put("controlled.shutdown.max.retries", "1");
-        clusterConfig.serverProperties().put("controlled.shutdown.retry.backoff.ms", "1000");
-        clusterConfig.serverProperties().put("offsets.topic.replication.factor", "2");
+        cluster.config().serverProperties().put("auto.leader.rebalance.enable", "false");
+        cluster.config().serverProperties().put("controlled.shutdown.enable", "true");
+        cluster.config().serverProperties().put("controlled.shutdown.max.retries", "1");
+        cluster.config().serverProperties().put("controlled.shutdown.retry.backoff.ms", "1000");
+        cluster.config().serverProperties().put("offsets.topic.replication.factor", "2");
     }
 
     @ClusterTest
@@ -244,7 +243,7 @@ public class LeaderElectionCommandTest {
 
     @ClusterTest
     public void testTopicDoesNotExist() {
-        Throwable e =  assertThrows(AdminCommandFailedException.class, () -> LeaderElectionCommand.run(
+        Throwable e = assertThrows(AdminCommandFailedException.class, () -> LeaderElectionCommand.run(
             Duration.ofSeconds(30),
             "--bootstrap-server", cluster.bootstrapServers(),
             "--election-type", "preferred",
@@ -326,6 +325,7 @@ public class LeaderElectionCommandTest {
 
         return file.toPath();
     }
+
     private static Path tempAdminConfig(String defaultApiTimeoutMs, String requestTimeoutMs) throws Exception {
         String content = "default.api.timeout.ms=" + defaultApiTimeoutMs + "\nrequest.timeout.ms=" + requestTimeoutMs;
         java.io.File file = TestUtils.tempFile("admin-config", ".properties");
