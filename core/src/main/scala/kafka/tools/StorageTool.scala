@@ -28,7 +28,7 @@ import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, FeatureVersion, MetadataVersion}
 import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
@@ -37,8 +37,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 
 import java.util
-import java.util.Base64
-import java.util.Optional
+import java.util.{Base64, Collections, Optional}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -59,24 +58,19 @@ object StorageTool extends Logging {
         case "format" =>
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
-          val metadataVersion = getMetadataVersion(namespace,
-            Option(config.get.originals.get(KafkaConfig.InterBrokerProtocolVersionProp)).map(_.toString))
-          if (!metadataVersion.isKRaftSupported) {
-            throw new TerseFailure(s"Must specify a valid KRaft metadata.version of at least ${MetadataVersion.IBP_3_0_IV0}.")
-          }
-          if (!metadataVersion.isProduction) {
-            if (config.get.unstableMetadataVersionsEnabled) {
-              System.out.println(s"WARNING: using pre-production metadata.version $metadataVersion.")
-            } else {
-              throw new TerseFailure(s"The metadata.version $metadataVersion is not ready for production use yet.")
-            }
-          }
           val metaProperties = new MetaProperties.Builder().
             setVersion(MetaPropertiesVersion.V1).
             setClusterId(clusterId).
             setNodeId(config.get.nodeId).
             build()
           val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
+          val specifiedFeatures: util.List[String] = namespace.getList("feature")
+          val featureNamesAndLevelsMap = featureNamesAndLevels(Option(specifiedFeatures).getOrElse(Collections.emptyList).asScala.toList)
+          val metadataVersion = getMetadataVersion(namespace, featureNamesAndLevelsMap,
+            Option(config.get.originals.get(KafkaConfig.InterBrokerProtocolVersionProp)).map(_.toString))
+          metadataVersionValidation(metadataVersion, config)
+          // Get all other features, validate, and create records for them
+          metadataRecords.appendAll(generateFeatureRecords(metadataVersion, featureNamesAndLevelsMap, FeatureVersion.PRODUCTION_FEATURES.asScala.toList))
           getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
             if (!metadataVersion.isScramSupported) {
               throw new TerseFailure(s"SCRAM is only supported in metadata.version ${MetadataVersion.IBP_3_5_IV2} or later.")
@@ -85,6 +79,7 @@ object StorageTool extends Logging {
               metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
             }
           })
+
           val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, Some(metadataRecords), "format command")
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToSelfManagedMode(config.get)) {
@@ -105,6 +100,43 @@ object StorageTool extends Logging {
       case e: TerseFailure =>
         System.err.println(e.getMessage)
         Exit.exit(1, Some(e.getMessage))
+    }
+  }
+
+  def metadataVersionValidation(metadataVersion: MetadataVersion, config: Option[KafkaConfig]): Unit = {
+    if (!metadataVersion.isKRaftSupported) {
+      throw new TerseFailure(s"Must specify a valid KRaft metadata.version of at least ${MetadataVersion.IBP_3_0_IV0}.")
+    }
+    if (!metadataVersion.isProduction) {
+      if (config.get.unstableMetadataVersionsEnabled) {
+        System.out.println(s"WARNING: using pre-production metadata.version $metadataVersion.")
+      } else {
+        throw new TerseFailure(s"The metadata.version $metadataVersion is not ready for production use yet.")
+      }
+    }
+  }
+
+  def generateFeatureRecords(metadataVersion: MetadataVersion,
+                             specifiedFeatures: Map[String, FeatureVersion],
+                             allFeatures: List[String]): List[ApiMessageAndVersion] = {
+    // If we are using --version-default, the default is based on the metadata version.
+    val metadataVersionOpt: Optional[MetadataVersion] = if (specifiedFeatures.isEmpty) Optional.of(metadataVersion) else Optional.empty
+
+    val allFeaturesAndVersions = allFeatures.collect {
+      case featureName if !featureName.equals(MetadataVersion.FEATURE_NAME) =>
+        specifiedFeatures.getOrElse(featureName, FeatureVersion.defaultValue(featureName, metadataVersionOpt))
+      }
+
+    try {
+      // In order to validate, we need all feature versions set.
+      allFeaturesAndVersions.map { case feature =>
+        feature.validateVersion(metadataVersion, allFeaturesAndVersions.asJava)
+        new ApiMessageAndVersion(new FeatureLevelRecord().
+          setName(feature.featureName).
+          setFeatureLevel(feature.featureLevel), 0.toShort)
+      }
+    } catch {
+      case e: Throwable => throw new TerseFailure(e.getMessage)
     }
   }
 
@@ -140,6 +172,9 @@ object StorageTool extends Logging {
     formatParser.addArgument("--release-version", "-r").
       action(store()).
       help(s"A KRaft release version to use for the initial metadata.version. The minimum is ${MetadataVersion.IBP_3_0_IV0}, the default is ${MetadataVersion.LATEST_PRODUCTION}")
+    formatParser.addArgument("--feature").
+      help("A feature upgrade we should perform, in feature=level format. For example: `metadata.version=5`.").
+      action(append());
 
     parser.parseArgsOrFail(args)
   }
@@ -155,6 +190,7 @@ object StorageTool extends Logging {
 
   def getMetadataVersion(
     namespace: Namespace,
+    featureNamesAndLevelsMap: Map[String, FeatureVersion],
     defaultVersionString: Option[String]
   ): MetadataVersion = {
     val defaultValue = defaultVersionString match {
@@ -162,9 +198,19 @@ object StorageTool extends Logging {
       case None => MetadataVersion.LATEST_PRODUCTION
     }
 
-    Option(namespace.getString("release_version"))
-      .map(ver => MetadataVersion.fromVersionString(ver))
-      .getOrElse(defaultValue)
+    val releaseVersionTag = Option(namespace.getString("release_version"))
+    val featureTag = featureNamesAndLevelsMap.get(MetadataVersion.FEATURE_NAME)
+
+    (releaseVersionTag, featureTag) match {
+      case (Some(_), Some(_)) =>
+        throw new IllegalArgumentException("Both --release_version and --feature were set. Only one of the two flags can be set.")
+      case (Some(version), None) =>
+        MetadataVersion.fromVersionString(version)
+      case (None, Some(feature)) =>
+        MetadataVersion.fromFeatureLevel(feature.featureLevel())
+      case (None, None) =>
+        defaultValue
+    }
   }
 
   private def getUserScramCredentialRecord(
@@ -463,5 +509,27 @@ object StorageTool extends Logging {
       })
     }
     0
+  }
+
+  private def parseNameAndLevel(input: String): Array[String] = {
+    val equalsIndex = input.indexOf("=")
+    if (equalsIndex < 0)
+      throw new RuntimeException("Can't parse feature=level string " + input + ": equals sign not found.")
+    val name = input.substring(0, equalsIndex).trim
+    val levelString = input.substring(equalsIndex + 1).trim
+    try {
+      levelString.toShort
+    } catch {
+      case _: Throwable =>
+        throw new RuntimeException("Can't parse feature=level string " + input + ": " + "unable to parse " + levelString + " as a short.")
+    }
+    Array[String](name, levelString)
+  }
+
+  def featureNamesAndLevels(features: List[String]): Map[String, FeatureVersion] = {
+    features.map((feature: String) => {
+      val nameAndLevel = parseNameAndLevel(feature)
+      (nameAndLevel(0), FeatureVersion.createFeature(nameAndLevel(0), java.lang.Short.valueOf(nameAndLevel(1))))
+    }).toMap
   }
 }

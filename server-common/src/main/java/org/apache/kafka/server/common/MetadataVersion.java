@@ -18,6 +18,7 @@ package org.apache.kafka.server.common;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -42,7 +43,7 @@ import org.apache.kafka.common.record.RecordVersion;
  * "0.10.0-IV0" and "0.10.0-IV1" to upgrade one internal version at a time. For most people who just want to use
  * released version, they can use "0.10.0" when upgrading to the 0.10.0 release.
  */
-public enum MetadataVersion {
+public enum MetadataVersion implements FeatureVersion {
 
     IBP_0_8_0(-1, "0.8.0", ""),
     IBP_0_8_1(-1, "0.8.1", ""),
@@ -256,6 +257,13 @@ public enum MetadataVersion {
             this.ibpVersion = String.format("%s-%s", release, subVersion);
         }
         this.didMetadataChange = didMetadataChange;
+    }
+
+    public String featureName() {
+        return FEATURE_NAME;
+    }
+
+    public void validateVersion(MetadataVersion metadataVersion, List<FeatureVersion> features) {
     }
 
     public short featureLevel() {

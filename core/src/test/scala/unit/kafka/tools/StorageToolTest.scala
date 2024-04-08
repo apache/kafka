@@ -21,23 +21,25 @@ import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util
-import java.util.Properties
+import java.util.{Collections, Properties}
 import org.apache.kafka.common.{DirectoryId, KafkaException}
 import kafka.server.KafkaConfig
 import kafka.utils.Exit
 import kafka.utils.TestUtils
+import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.commons.io.output.NullOutputStream
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.common.metadata.UserScramCredentialRecord
+import org.apache.kafka.server.common.{ApiMessageAndVersion, FeatureVersion, MetadataVersion, TestFeatureVersion}
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, UserScramCredentialRecord}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.jdk.CollectionConverters._
 
 @Timeout(value = 40)
 class StorageToolTest {
@@ -51,6 +53,8 @@ class StorageToolTest {
     properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
     properties
   }
+
+  val allFeatures = List(MetadataVersion.FEATURE_NAME, TestFeatureVersion.FEATURE_NAME)
 
   @Test
   def testConfigToLogDirectories(): Unit = {
@@ -204,7 +208,7 @@ Found problem:
   @Test
   def testDefaultMetadataVersion(): Unit = {
     val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
-    val mv = StorageTool.getMetadataVersion(namespace, defaultVersionString = None)
+    val mv = StorageTool.getMetadataVersion(namespace, Map.empty, defaultVersionString = None)
     assertEquals(MetadataVersion.LATEST_PRODUCTION.featureLevel(), mv.featureLevel(),
       "Expected the default metadata.version to be the latest production version")
   }
@@ -212,9 +216,50 @@ Found problem:
   @Test
   def testConfiguredMetadataVersion(): Unit = {
     val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
-    val mv = StorageTool.getMetadataVersion(namespace, defaultVersionString = Some(MetadataVersion.IBP_3_3_IV2.toString))
+    val mv = StorageTool.getMetadataVersion(namespace, Map.empty, defaultVersionString = Some(MetadataVersion.IBP_3_3_IV2.toString))
     assertEquals(MetadataVersion.IBP_3_3_IV2.featureLevel(), mv.featureLevel(),
       "Expected the default metadata.version to be 3.3-IV2")
+  }
+
+  @Test
+  def testSettingFeatureAndReleaseVersionFails(): Unit = {
+    val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ",
+      "--release-version", "3.0-IV1", "--feature", "metadata.version=4"))
+    assertThrows(classOf[IllegalArgumentException], () => StorageTool.getMetadataVersion(namespace, parseFeatures(namespace), defaultVersionString = None))
+  }
+
+  @Test
+  def testParseFeatures(): Unit = {
+    def parseAddFeatures(strings: String*): Map[String, FeatureVersion] = {
+      var args = mutable.Seq("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ")
+      args ++= strings
+      val namespace = StorageTool.parseArguments(args.toArray)
+      parseFeatures(namespace)
+    }
+
+    assertThrows(classOf[RuntimeException], () => parseAddFeatures("--feature", "blah"))
+    assertThrows(classOf[RuntimeException], () => parseAddFeatures("--feature", "blah=blah"))
+    assertThrows(classOf[IllegalArgumentException], () => parseAddFeatures("--feature", "blah=12"))
+
+    // Test with no features
+    assertEquals(Map(), parseAddFeatures())
+
+    // Test with one feature
+    val testFeatureLevel = 1
+    val testArgument = TestFeatureVersion.FEATURE_NAME + "=" + testFeatureLevel.toString
+    val expectedMap = Map(TestFeatureVersion.FEATURE_NAME -> FeatureVersion.createFeature(TestFeatureVersion.FEATURE_NAME, testFeatureLevel.toShort))
+    assertEquals(expectedMap, parseAddFeatures("--feature", testArgument))
+
+    // Test with two features
+    val metadataFeatureLevel = 5
+    val metadataArgument = MetadataVersion.FEATURE_NAME + "=" + metadataFeatureLevel.toString
+    val expectedMap2 = expectedMap ++ Map (MetadataVersion.FEATURE_NAME -> FeatureVersion.createFeature(MetadataVersion.FEATURE_NAME, metadataFeatureLevel.toShort))
+    assertEquals(expectedMap2, parseAddFeatures("--feature", testArgument, "--feature", metadataArgument))
+  }
+
+  def parseFeatures(namespace: Namespace): Map[String, FeatureVersion] = {
+    val specifiedFeatures: util.List[String] = namespace.getList("feature")
+    StorageTool.featureNamesAndLevels(Option(specifiedFeatures).getOrElse(Collections.emptyList).asScala.toList)
   }
 
   @Test
@@ -223,7 +268,7 @@ Found problem:
       var args = mutable.Seq("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ")
       args ++= strings
       val namespace = StorageTool.parseArguments(args.toArray)
-      StorageTool.getMetadataVersion(namespace, defaultVersionString = None)
+      StorageTool.getMetadataVersion(namespace, Map.empty, defaultVersionString = None)
     }
 
     var mv = parseMetadataVersion("--release-version", "3.0")
@@ -233,6 +278,44 @@ Found problem:
     assertEquals(MetadataVersion.IBP_3_0_IV1, mv)
 
     assertThrows(classOf[IllegalArgumentException], () => parseMetadataVersion("--release-version", "0.0"))
+  }
+
+  def generateRecord(featureName: String, level: Short): ApiMessageAndVersion = {
+    new ApiMessageAndVersion(new FeatureLevelRecord().
+      setName(featureName).
+      setFeatureLevel(level), 0.toShort)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[TestFeatureVersion])
+  def testFeatureFlag(testFeatureVersion: TestFeatureVersion): Unit = {
+    val featureLevel = testFeatureVersion.featureLevel
+    val records = StorageTool.generateFeatureRecords(MetadataVersion.LATEST_PRODUCTION,
+      Map(TestFeatureVersion.FEATURE_NAME -> FeatureVersion.createFeature(TestFeatureVersion.FEATURE_NAME, featureLevel)),
+      allFeatures
+    )
+    assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[MetadataVersion])
+  def testVersionDefault(metadataVersion: MetadataVersion): Unit = {
+    val records = StorageTool.generateFeatureRecords(metadataVersion,
+      Map.empty,
+      allFeatures
+    )
+
+    val featureLevel = TestFeatureVersion.metadataVersionMapping(metadataVersion).featureLevel()
+    assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
+  }
+
+  @Test
+  def testFeatureDependency(): Unit = {
+    val featureLevel = 1.toShort
+    assertThrows(classOf[TerseFailure], () => StorageTool.generateFeatureRecords(MetadataVersion.IBP_2_8_IV1,
+      Map(TestFeatureVersion.FEATURE_NAME -> FeatureVersion.createFeature(TestFeatureVersion.FEATURE_NAME, featureLevel)),
+      allFeatures
+    ))
   }
 
   @Test
