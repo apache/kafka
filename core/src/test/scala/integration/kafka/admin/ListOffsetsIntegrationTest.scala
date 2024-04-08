@@ -83,7 +83,6 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     createMessageFormatBrokers(RecordBatch.MAGIC_VALUE_V1)
     // the offset of max timestamp is always -1 if the batch version is 0
     verifyListOffsets(expectedMaxTimestampOffset = -1)
-
   }
 
 
@@ -156,8 +155,8 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     // test LogAppendTime case
     setUpForLogAppendTimeCase()
     produceMessagesInSeparateBatch(topic = topicNameWithCustomConfigs)
-    // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
-    // So in this separate batch test, it'll be the last offset 2
+    // In LogAppendTime's case, the maxTimestampOffset is the message in the last batch since we advance the time
+    // for each batch, So it'll be the last offset 2
     verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
   }
 
@@ -190,8 +189,8 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     // test LogAppendTime case
     setUpForLogAppendTimeCase()
     produceMessagesInSeparateBatch("gzip", topicNameWithCustomConfigs)
-    // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
-    // So in this separate batch test, it'll be the last offset 2
+    // In LogAppendTime's case, the maxTimestampOffset is the message in the last batch since we advance the time
+    // for each batch, So it'll be the last offset 2
     verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
   }
 
