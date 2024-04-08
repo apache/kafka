@@ -194,7 +194,7 @@ public class KStreamKStreamWindowCloseTest {
             assertRecordDropCount(2.0, driver.metrics());
             Assertions.assertEquals(emptyList(), out.readRecordsToList());
 
-            right.pipeInput(key, "r6", 6); // Doesn't get dropped, but all involved windows are closed.
+            right.pipeInput(key, "r6", 6); // Doesn't get dropped, but all involved windows are closed. r6 window {1:16:5} closes at 21
             assertRecordDropCount(2.0, driver.metrics());
             Assertions.assertEquals(emptyList(), out.readRecordsToList());
 
@@ -205,7 +205,7 @@ public class KStreamKStreamWindowCloseTest {
                 out.readRecordsToList()
             );
 
-            left.pipeInput(key, "l16", 16);
+            left.pipeInput(key, "l16", 16); // l15 window {6:21,5} open, closes at 27
             Assertions.assertEquals(
                 asList(
                     new TestRecord<>(key, "l16+r6", null, 16L),
