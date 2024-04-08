@@ -30,7 +30,7 @@ import org.apache.kafka.common.utils.Utils;
 
 public final class ServerTopicConfigSynonyms {
     private static final String LOG_PREFIX = "log.";
-    private static final String LOG_CLEANER_PREFIX = LOG_PREFIX + "cleaner.";
+    public static final String LOG_CLEANER_PREFIX = LOG_PREFIX + "cleaner.";
 
     /**
      * Maps topic configurations to their equivalent broker configurations.

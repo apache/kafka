@@ -75,10 +75,10 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -96,7 +96,6 @@ public class CommitRequestManagerTest {
 
     private long retryBackoffMs = 100;
     private long retryBackoffMaxMs = 1000;
-    private String consumerMetricGroupPrefix = CONSUMER_METRIC_GROUP_PREFIX;
     private static final String CONSUMER_COORDINATOR_METRICS = "consumer-coordinator-metrics";
     private Node mockedNode = new Node(1, "host1", 9092);
     private SubscriptionState subscriptionState;
@@ -913,7 +912,7 @@ public class CommitRequestManagerTest {
         long expirationTimeMs = time.milliseconds() + retryBackoffMs * 2;
 
         // Send commit request expected to be retried on STALE_MEMBER_EPOCH error while it does not expire
-        commitRequestManager.maybeAutoCommitSyncNow(expirationTimeMs);
+        commitRequestManager.maybeAutoCommitSyncBeforeRevocation(expirationTimeMs);
 
         int newEpoch = 8;
         String memberId = "member1";
@@ -924,7 +923,7 @@ public class CommitRequestManagerTest {
 
         completeOffsetCommitRequestWithError(commitRequestManager, error);
 
-        if (error.exception() instanceof RetriableException || error == Errors.STALE_MEMBER_EPOCH) {
+        if ((error.exception() instanceof RetriableException || error == Errors.STALE_MEMBER_EPOCH) && error != Errors.UNKNOWN_TOPIC_OR_PARTITION) {
             assertEquals(1, commitRequestManager.pendingRequests.unsentOffsetCommits.size(),
                 "Request to be retried should be added to the outbound queue");
 
@@ -1317,7 +1316,7 @@ public class CommitRequestManagerTest {
             final Errors error,
             final boolean disconnected) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
-        assertTrue(abstractRequest instanceof OffsetFetchRequest);
+        assertInstanceOf(OffsetFetchRequest.class, abstractRequest);
         OffsetFetchRequest offsetFetchRequest = (OffsetFetchRequest) abstractRequest;
         OffsetFetchResponse response =
                 new OffsetFetchResponse(error, topicPartitionData);

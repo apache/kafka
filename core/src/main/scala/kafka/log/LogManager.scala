@@ -325,7 +325,8 @@ class LogManager(logDirs: Seq[File],
                            logStartOffsets: Map[TopicPartition, Long],
                            defaultConfig: LogConfig,
                            topicConfigOverrides: Map[String, LogConfig],
-                           numRemainingSegments: ConcurrentMap[String, Int]): UnifiedLog = {
+                           numRemainingSegments: ConcurrentMap[String, Int],
+                           isStray: UnifiedLog => Boolean): UnifiedLog = {
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val config = topicConfigOverrides.getOrElse(topicPartition.topic, defaultConfig)
     val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
@@ -354,6 +355,14 @@ class LogManager(logDirs: Seq[File],
     } else if (logDir.getName.endsWith(UnifiedLog.StrayDirSuffix)) {
       addStrayLog(topicPartition, log)
       warn(s"Loaded stray log: $logDir")
+    } else if (isStray(log)) {
+      // Unlike Zookeeper mode, which tracks pending topic deletions under a ZNode, KRaft is unable to prevent a topic from being recreated before every replica has been deleted.
+      // A KRaft broker with an offline directory may be unable to detect it still holds a to-be-deleted replica,
+      // and can create a conflicting topic partition for a new incarnation of the topic in one of the remaining online directories.
+      // So upon a restart in which the offline directory is back online we need to clean up the old replica directory.
+      log.renameDir(UnifiedLog.logStrayDirName(log.topicPartition), shouldReinitialize = false)
+      addStrayLog(log.topicPartition, log)
+      warn(s"Log in ${logDir.getAbsolutePath} marked stray and renamed to ${log.dir.getAbsolutePath}")
     } else {
       val previous = {
         if (log.isFuture)
@@ -399,7 +408,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Recover and load all logs in the given data directories
    */
-  private[log] def loadLogs(defaultConfig: LogConfig, topicConfigOverrides: Map[String, LogConfig]): Unit = {
+  private[log] def loadLogs(defaultConfig: LogConfig, topicConfigOverrides: Map[String, LogConfig], isStray: UnifiedLog => Boolean): Unit = {
     info(s"Loading logs from log dirs $liveLogDirs")
     val startMs = time.hiResClockMs()
     val threadPools = ArrayBuffer.empty[ExecutorService]
@@ -480,7 +489,7 @@ class LogManager(logDirs: Seq[File],
             val logLoadStartMs = time.hiResClockMs()
             try {
               log = Some(loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets,
-                defaultConfig, topicConfigOverrides, numRemainingSegments))
+                defaultConfig, topicConfigOverrides, numRemainingSegments, isStray))
             } catch {
               case e: IOException =>
                 handleIOException(logDirAbsolutePath, e)
@@ -564,20 +573,10 @@ class LogManager(logDirs: Seq[File],
   /**
    *  Start the background threads to flush logs and do log cleanup
    */
-  def startup(topicNames: Set[String]): Unit = {
+  def startup(topicNames: Set[String], isStray: UnifiedLog => Boolean = _ => false): Unit = {
     // ensure consistency between default config and overrides
     val defaultConfig = currentDefaultConfig
-    startupWithConfigOverrides(defaultConfig, fetchTopicConfigOverrides(defaultConfig, topicNames))
-  }
-
-  def deleteStrayKRaftReplicas(
-    brokerId: Int,
-    image: TopicsImage
-  ): Unit = {
-    val strayPartitions = findStrayReplicas(brokerId, image, allLogs)
-    strayPartitions.foreach(topicPartition => {
-      asyncDelete(topicPartition, false, false, true)
-    })
+    startupWithConfigOverrides(defaultConfig, fetchTopicConfigOverrides(defaultConfig, topicNames), isStray)
   }
 
   // visible for testing
@@ -616,8 +615,11 @@ class LogManager(logDirs: Seq[File],
   }
 
   // visible for testing
-  private[log] def startupWithConfigOverrides(defaultConfig: LogConfig, topicConfigOverrides: Map[String, LogConfig]): Unit = {
-    loadLogs(defaultConfig, topicConfigOverrides) // this could take a while if shutdown was not clean
+  private[log] def startupWithConfigOverrides(
+    defaultConfig: LogConfig,
+    topicConfigOverrides: Map[String, LogConfig],
+    isStray: UnifiedLog => Boolean): Unit = {
+    loadLogs(defaultConfig, topicConfigOverrides, isStray) // this could take a while if shutdown was not clean
 
     /* Schedule the cleanup task to delete old logs */
     if (scheduler != null) {
@@ -865,7 +867,8 @@ class LogManager(logDirs: Seq[File],
     try {
       logStartOffsetCheckpoints.get(logDir).foreach { checkpoint =>
         val logStartOffsets = logsToCheckpoint.collect {
-          case (tp, log) if log.logStartOffset > log.logSegments.asScala.head.baseOffset => tp -> log.logStartOffset
+          case (tp, log) if log.remoteLogEnabled() || log.logStartOffset > log.logSegments.asScala.head.baseOffset =>
+            tp -> log.logStartOffset
         }
         checkpoint.write(logStartOffsets)
       }
@@ -1540,40 +1543,38 @@ object LogManager {
   }
 
   /**
-   * Find logs which should not be on the current broker, according to the metadata image.
+   * Returns true if the given log should not be on the current broker
+   * according to the metadata image.
    *
-   * @param brokerId        The ID of the current broker.
-   * @param newTopicsImage  The new topics image after broker has been reloaded
-   * @param logs            A collection of Log objects.
-   *
-   * @return          The topic partitions which are no longer needed on this broker.
+   * @param brokerId       The ID of the current broker.
+   * @param newTopicsImage The new topics image after broker has been reloaded
+   * @param log            The log object to check
+   * @return true if the log should not exist on the broker, false otherwise.
    */
-  def findStrayReplicas(
-    brokerId: Int,
-    newTopicsImage: TopicsImage,
-    logs: Iterable[UnifiedLog]
-  ): Iterable[TopicPartition] = {
-    logs.flatMap { log =>
-      val topicId = log.topicId.getOrElse {
-        throw new RuntimeException(s"The log dir $log does not have a topic ID, " +
-          "which is not allowed when running in KRaft mode.")
-      }
+  def isStrayKraftReplica(
+   brokerId: Int,
+   newTopicsImage: TopicsImage,
+   log: UnifiedLog
+  ): Boolean = {
+    val topicId = log.topicId.getOrElse {
+      throw new RuntimeException(s"The log dir $log does not have a topic ID, " +
+        "which is not allowed when running in KRaft mode.")
+    }
 
-      val partitionId = log.topicPartition.partition()
-      Option(newTopicsImage.getPartition(topicId, partitionId)) match {
-        case Some(partition) =>
-          if (!partition.replicas.contains(brokerId)) {
-            info(s"Found stray log dir $log: the current replica assignment ${partition.replicas} " +
-              s"does not contain the local brokerId $brokerId.")
-            Some(log.topicPartition)
-          } else {
-            None
-          }
+    val partitionId = log.topicPartition.partition()
+    Option(newTopicsImage.getPartition(topicId, partitionId)) match {
+      case Some(partition) =>
+        if (!partition.replicas.contains(brokerId)) {
+          info(s"Found stray log dir $log: the current replica assignment ${partition.replicas.mkString("[", ", ", "]")} " +
+            s"does not contain the local brokerId $brokerId.")
+          true
+        } else {
+          false
+        }
 
-        case None =>
-          info(s"Found stray log dir $log: the topicId $topicId does not exist in the metadata image")
-          Some(log.topicPartition)
-      }
+      case None =>
+        info(s"Found stray log dir $log: the topicId $topicId does not exist in the metadata image")
+        true
     }
   }
 

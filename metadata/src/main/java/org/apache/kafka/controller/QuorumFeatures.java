@@ -108,7 +108,7 @@ public final class QuorumFeatures {
         Map<Integer, ControllerRegistration> controllers
     ) {
         if (!metadataVersion.isMigrationSupported()) {
-            return Optional.of("Metadata version too low at " + metadataVersion);
+            return Optional.of("The metadata.version too low at " + metadataVersion);
         } else if (!metadataVersion.isControllerRegistrationSupported()) {
             return Optional.empty();
         }

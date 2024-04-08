@@ -34,9 +34,9 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
     private final CompletableFuture<Void> future;
     private final Optional<KafkaException> error;
 
-    public ConsumerRebalanceListenerCallbackCompletedEvent(ConsumerRebalanceListenerMethodName methodName,
-                                                           CompletableFuture<Void> future,
-                                                           Optional<KafkaException> error) {
+    public ConsumerRebalanceListenerCallbackCompletedEvent(final ConsumerRebalanceListenerMethodName methodName,
+                                                           final CompletableFuture<Void> future,
+                                                           final Optional<KafkaException> error) {
         super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED);
         this.methodName = Objects.requireNonNull(methodName);
         this.future = Objects.requireNonNull(future);
@@ -56,35 +56,10 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        ConsumerRebalanceListenerCallbackCompletedEvent that = (ConsumerRebalanceListenerCallbackCompletedEvent) o;
-
-        return methodName == that.methodName &&
-                future.equals(that.future) &&
-                error.equals(that.error);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(methodName, future, error);
-    }
-
-    @Override
     protected String toStringBase() {
         return super.toStringBase() +
                 ", methodName=" + methodName +
                 ", future=" + future +
                 ", error=" + error;
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + "{" +
-                toStringBase() +
-                '}';
     }
 }

@@ -47,7 +47,7 @@ import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupBuilder;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.consumer.MemberState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -85,7 +85,7 @@ import java.util.stream.IntStream;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
-import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRevocationTimeoutKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
@@ -483,16 +483,16 @@ public class GroupMetadataManagerTestContext {
         String groupId
     ) {
         return groupMetadataManager
-            .getOrMaybeCreateConsumerGroup(groupId, false)
+            .consumerGroup(groupId)
             .state();
     }
 
-    public ConsumerGroupMember.MemberState consumerGroupMemberState(
+    public MemberState consumerGroupMemberState(
         String groupId,
         String memberId
     ) {
         return groupMetadataManager
-            .getOrMaybeCreateConsumerGroup(groupId, false)
+            .consumerGroup(groupId)
             .getOrMaybeCreateMember(memberId, false)
             .state();
     }
@@ -556,24 +556,24 @@ public class GroupMetadataManagerTestContext {
         assertNull(timeout);
     }
 
-    public MockCoordinatorTimer.ScheduledTimeout<Void, Record> assertRevocationTimeout(
+    public MockCoordinatorTimer.ScheduledTimeout<Void, Record> assertRebalanceTimeout(
         String groupId,
         String memberId,
         long delayMs
     ) {
         MockCoordinatorTimer.ScheduledTimeout<Void, Record> timeout =
-            timer.timeout(consumerGroupRevocationTimeoutKey(groupId, memberId));
+            timer.timeout(consumerGroupRebalanceTimeoutKey(groupId, memberId));
         assertNotNull(timeout);
         assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
         return timeout;
     }
 
-    public void assertNoRevocationTimeout(
+    public void assertNoRebalanceTimeout(
         String groupId,
         String memberId
     ) {
         MockCoordinatorTimer.ScheduledTimeout<Void, Record> timeout =
-            timer.timeout(consumerGroupRevocationTimeoutKey(groupId, memberId));
+            timer.timeout(consumerGroupRebalanceTimeoutKey(groupId, memberId));
         assertNull(timeout);
     }
 
@@ -643,7 +643,7 @@ public class GroupMetadataManagerTestContext {
 
         JoinGroupResponseData leaderJoinResponse =
             joinClassicGroupAsDynamicMemberAndCompleteJoin(new JoinGroupRequestBuilder()
-                .withGroupId("group-id")
+                .withGroupId(groupId)
                 .withMemberId(UNKNOWN_MEMBER_ID)
                 .withDefaultProtocolTypeAndProtocols()
                 .withRebalanceTimeoutMs(10000)
@@ -654,7 +654,7 @@ public class GroupMetadataManagerTestContext {
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
         SyncResult syncResult = sendClassicGroupSync(new SyncGroupRequestBuilder()
-            .withGroupId("group-id")
+            .withGroupId(groupId)
             .withMemberId(leaderJoinResponse.memberId())
             .withGenerationId(leaderJoinResponse.generationId())
             .build());
@@ -804,7 +804,7 @@ public class GroupMetadataManagerTestContext {
         int rebalanceTimeoutMs,
         int sessionTimeoutMs
     ) throws Exception {
-        ClassicGroup group = createClassicGroup("group-id");
+        ClassicGroup group = createClassicGroup(groupId);
 
         JoinGroupRequestData joinRequest = new JoinGroupRequestBuilder()
             .withGroupId(groupId)
@@ -901,7 +901,7 @@ public class GroupMetadataManagerTestContext {
     public PendingMemberGroupResult setupGroupWithPendingMember(ClassicGroup group) throws Exception {
         // Add the first member
         JoinGroupRequestData joinRequest = new JoinGroupRequestBuilder()
-            .withGroupId("group-id")
+            .withGroupId(group.groupId())
             .withMemberId(UNKNOWN_MEMBER_ID)
             .withDefaultProtocolTypeAndProtocols()
             .withRebalanceTimeoutMs(10000)
@@ -914,7 +914,7 @@ public class GroupMetadataManagerTestContext {
         List<SyncGroupRequestData.SyncGroupRequestAssignment> assignment = new ArrayList<>();
         assignment.add(new SyncGroupRequestData.SyncGroupRequestAssignment().setMemberId(leaderJoinResponse.memberId()));
         SyncGroupRequestData syncRequest = new SyncGroupRequestBuilder()
-            .withGroupId("group-id")
+            .withGroupId(group.groupId())
             .withMemberId(leaderJoinResponse.memberId())
             .withGenerationId(leaderJoinResponse.generationId())
             .withAssignment(assignment)
@@ -1191,7 +1191,7 @@ public class GroupMetadataManagerTestContext {
 
         assertEquals(
             Collections.singletonList(new DescribeGroupsResponseData.DescribedGroup()
-                .setGroupId("group-id")
+                .setGroupId(groupId)
                 .setGroupState(DEAD.toString())
             ),
             describedGroups
@@ -1273,5 +1273,9 @@ public class GroupMetadataManagerTestContext {
 
         lastWrittenOffset++;
         snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
+    }
+
+    void onUnloaded() {
+        groupMetadataManager.onUnloaded();
     }
 }

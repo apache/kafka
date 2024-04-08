@@ -178,7 +178,7 @@ class RaftManagerTest {
   }
 
   private def fileLocked(path: Path): Boolean = {
-    TestUtils.resource(FileChannel.open(path, StandardOpenOption.WRITE)) { channel =>
+    TestUtils.resource(FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) { channel =>
       try {
         Option(channel.tryLock()).foreach(_.close())
         false

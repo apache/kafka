@@ -25,7 +25,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.IsolationLevel;
@@ -199,7 +199,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         try {
             offsetResetTimestamps = offsetFetcherUtils.getOffsetResetTimestamp();
         } catch (Exception e) {
-            backgroundEventHandler.add(new ErrorBackgroundEvent(e));
+            backgroundEventHandler.add(new ErrorEvent(e));
             return CompletableFuture.completedFuture(null);
         }
 

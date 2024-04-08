@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 public class ProcessorTopology {
@@ -42,6 +43,7 @@ public class ProcessorTopology {
     // the following contains entries for the entire topology, eg stores that do not belong to this ProcessorTopology
     private final List<StateStore> globalStateStores;
     private final Map<String, String> storeToChangelogTopic;
+    private final Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> storeNameToReprocessOnRestore;
 
     public ProcessorTopology(final List<ProcessorNode<?, ?, ?, ?>> processorNodes,
                              final Map<String, SourceNode<?, ?>> sourceNodesByTopic,
@@ -49,7 +51,8 @@ public class ProcessorTopology {
                              final List<StateStore> stateStores,
                              final List<StateStore> globalStateStores,
                              final Map<String, String> storeToChangelogTopic,
-                             final Set<String> repartitionTopics) {
+                             final Set<String> repartitionTopics,
+                             final Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> storeNameToReprocessOnRestore) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceNodesByTopic = new HashMap<>(sourceNodesByTopic);
         this.sinksByTopic = Collections.unmodifiableMap(sinksByTopic);
@@ -57,6 +60,7 @@ public class ProcessorTopology {
         this.globalStateStores = Collections.unmodifiableList(globalStateStores);
         this.storeToChangelogTopic = Collections.unmodifiableMap(storeToChangelogTopic);
         this.repartitionTopics = Collections.unmodifiableSet(repartitionTopics);
+        this.storeNameToReprocessOnRestore = storeNameToReprocessOnRestore;
 
         this.terminalNodes = new HashSet<>();
         for (final ProcessorNode<?, ?, ?, ?> node : processorNodes) {
@@ -101,6 +105,10 @@ public class ProcessorTopology {
 
     public List<StateStore> stateStores() {
         return stateStores;
+    }
+
+    public Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> storeNameToReprocessOnRestore() {
+        return storeNameToReprocessOnRestore;
     }
 
     public List<StateStore> globalStateStores() {

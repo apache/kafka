@@ -18,7 +18,7 @@ from ducktape.mark.resource import cluster
 
 
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
-from kafkatest.services.kafka import TopicPartition, quorum
+from kafkatest.services.kafka import TopicPartition, quorum, consumer_group
 
 class ConsumerRollingUpgradeTest(VerifiableConsumerTest):
     TOPIC = "test_topic"
@@ -56,7 +56,12 @@ class ConsumerRollingUpgradeTest(VerifiableConsumerTest):
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True, False]
     )
-    def rolling_update_test(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    @matrix(
+        metadata_quorum=quorum.all_kraft,
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def rolling_update_test(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Verify rolling updates of partition assignment strategies works correctly. In this
         test, we use a rolling restart to change the group's assignment strategy from "range" 
@@ -65,7 +70,7 @@ class ConsumerRollingUpgradeTest(VerifiableConsumerTest):
         """
 
         # initialize the consumer using range assignment
-        consumer = self.setup_consumer(self.TOPIC, assignment_strategy=self.RANGE)
+        consumer = self.setup_consumer(self.TOPIC, assignment_strategy=self.RANGE, group_protocol=group_protocol)
 
         consumer.start()
         self.await_all_members(consumer)

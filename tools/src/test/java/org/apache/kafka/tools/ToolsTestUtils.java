@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.utils.TestInfoUtils;
 import kafka.server.DynamicConfig;
+import kafka.utils.TestInfoUtils;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
@@ -31,20 +31,22 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 public class ToolsTestUtils {
-    /** @see TestInfoUtils#TestWithParameterizedQuorumName()  */
-    public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.{argumentsWithNames}";
+    /** @see TestInfoUtils#TestWithParameterizedQuorumAndGroupProtocolNames()  */
+    public static final String TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES = "{displayName}.quorum={0}.groupProtocol={1}";
 
     private static int randomPort = 0;
 
@@ -153,7 +155,7 @@ public class ToolsTestUtils {
     }
 
     public static void assignThrottledPartitionReplicas(Admin adminClient, Map<TopicPartition, List<Integer>> allReplicasByPartition) throws InterruptedException, ExecutionException {
-        Map<ConfigResource, List<Map.Entry<TopicPartition, List<Integer>>>> configResourceToPartitionReplicas =
+        Map<ConfigResource, List<Entry<TopicPartition, List<Integer>>>> configResourceToPartitionReplicas =
             allReplicasByPartition.entrySet().stream()
             .collect(Collectors.groupingBy(
                 topicPartitionListEntry -> new ConfigResource(ConfigResource.Type.TOPIC, topicPartitionListEntry.getKey().topic()))
@@ -161,10 +163,10 @@ public class ToolsTestUtils {
 
         Map<ConfigResource, List<AlterConfigOp>> throttles = configResourceToPartitionReplicas.entrySet().stream()
             .collect(
-                Collectors.toMap(Map.Entry::getKey, entry -> {
+                Collectors.toMap(Entry::getKey, entry -> {
                     List<AlterConfigOp> alterConfigOps = new ArrayList<>();
                     Map<TopicPartition, List<Integer>> replicaThrottle =
-                        entry.getValue().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                        entry.getValue().stream().collect(Collectors.toMap(Entry::getKey, Entry::getValue));
                     alterConfigOps.add(new AlterConfigOp(
                         new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
                         AlterConfigOp.OpType.SET));
@@ -202,10 +204,70 @@ public class ToolsTestUtils {
 
     public static File tempPropertiesFile(Map<String, String> properties) throws IOException {
         StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, String> entry : properties.entrySet()) {
+        for (Entry<String, String> entry : properties.entrySet()) {
             sb.append(entry.getKey() + "=" + entry.getValue() + System.lineSeparator());
         }
         return org.apache.kafka.test.TestUtils.tempFile(sb.toString());
+    }
+
+    /**
+     * Capture the console output during the execution of the provided function.
+     */
+    public static String grabConsoleOutput(Runnable f) {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(buf);
+        PrintStream out0 = System.out;
+
+        System.setOut(out);
+        try {
+            f.run();
+        } finally {
+            System.setOut(out0);
+        }
+        out.flush();
+        return buf.toString();
+    }
+
+    /**
+     * Capture the console error during the execution of the provided function.
+     */
+    public static String grabConsoleError(Runnable f) {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        PrintStream err = new PrintStream(buf);
+        PrintStream err0 = System.err;
+
+        System.setErr(err);
+        try {
+            f.run();
+        } finally {
+            System.setErr(err0);
+        }
+        err.flush();
+        return buf.toString();
+    }
+
+    /**
+     * Capture both the console output and console error during the execution of the provided function.
+     */
+    public static Entry<String, String> grabConsoleOutputAndError(Runnable f) {
+        ByteArrayOutputStream outBuf = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outBuf);
+        PrintStream err = new PrintStream(errBuf);
+        PrintStream out0 = System.out;
+        PrintStream err0 = System.err;
+
+        System.setOut(out);
+        System.setErr(err);
+        try {
+            f.run();
+        } finally {
+            System.setOut(out0);
+            System.setErr(err0);
+        }
+        out.flush();
+        err.flush();
+        return new SimpleImmutableEntry<>(outBuf.toString(), errBuf.toString());
     }
 
     public static class MockExitProcedure implements Exit.Procedure {

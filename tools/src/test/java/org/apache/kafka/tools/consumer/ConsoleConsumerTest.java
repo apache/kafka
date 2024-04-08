@@ -24,21 +24,19 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.util.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.io.PrintStream;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.OptionalLong;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -58,8 +56,7 @@ public class ConsoleConsumerTest {
     }
 
     @Test
-    public void shouldThrowTimeoutExceptionWhenTimeoutIsReached() {
-        String topic = "test";
+    public void shouldThrowTimeoutExceptionWhenTimeoutIsReached() throws IOException {
         final Time time = new MockTime();
         final int timeoutMs = 1000;
 
@@ -71,20 +68,22 @@ public class ConsoleConsumerTest {
             return ConsumerRecords.EMPTY;
         });
 
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--timeout-ms", String.valueOf(timeoutMs)
+        };
+
         ConsoleConsumer.ConsumerWrapper consumer = new ConsoleConsumer.ConsumerWrapper(
-                Optional.of(topic),
-                OptionalInt.empty(),
-                OptionalLong.empty(),
-                Optional.empty(),
-                mockConsumer,
-                timeoutMs
+            new ConsoleConsumerOptions(args),
+            mockConsumer
         );
 
         assertThrows(TimeoutException.class, consumer::receive);
     }
 
     @Test
-    public void shouldResetUnConsumedOffsetsBeforeExit() {
+    public void shouldResetUnConsumedOffsetsBeforeExit() throws IOException {
         String topic = "test";
         int maxMessages = 123;
         int totalMessages = 700;
@@ -94,13 +93,16 @@ public class ConsoleConsumerTest {
         TopicPartition tp1 = new TopicPartition(topic, 0);
         TopicPartition tp2 = new TopicPartition(topic, 1);
 
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", topic,
+            "--timeout-ms", "1000"
+        };
+
         ConsoleConsumer.ConsumerWrapper consumer = new ConsoleConsumer.ConsumerWrapper(
-                Optional.of(topic),
-                OptionalInt.empty(),
-                OptionalLong.empty(),
-                Optional.empty(),
-                mockConsumer,
-                1000L);
+            new ConsoleConsumerOptions(args),
+            mockConsumer
+        );
 
         mockConsumer.rebalance(Arrays.asList(tp1, tp2));
         Map<TopicPartition, Long> offsets = new HashMap<>();
@@ -165,47 +167,75 @@ public class ConsoleConsumerTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldSeekWhenOffsetIsSet() {
+    public void shouldSeekWhenOffsetIsSet() throws IOException {
         Consumer<byte[], byte[]> mockConsumer = mock(Consumer.class);
         TopicPartition tp0 = new TopicPartition("test", 0);
 
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", tp0.topic(),
+            "--partition", String.valueOf(tp0.partition()),
+            "--timeout-ms", "1000"
+        };
+
         ConsoleConsumer.ConsumerWrapper consumer = new ConsoleConsumer.ConsumerWrapper(
-                Optional.of(tp0.topic()),
-                OptionalInt.of(tp0.partition()),
-                OptionalLong.empty(),
-                Optional.empty(),
-                mockConsumer,
-                1000L);
+            new ConsoleConsumerOptions(args),
+            mockConsumer
+        );
 
         verify(mockConsumer).assign(eq(Collections.singletonList(tp0)));
         verify(mockConsumer).seekToEnd(eq(Collections.singletonList(tp0)));
         consumer.cleanup();
         reset(mockConsumer);
 
-        consumer = new ConsoleConsumer.ConsumerWrapper(
-                Optional.of(tp0.topic()),
-                OptionalInt.of(tp0.partition()),
-                OptionalLong.of(123L),
-                Optional.empty(),
-                mockConsumer,
-                1000L);
+        args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", tp0.topic(),
+            "--partition", String.valueOf(tp0.partition()),
+            "--offset", "123",
+            "--timeout-ms", "1000"
+        };
+
+        consumer = new ConsoleConsumer.ConsumerWrapper(new ConsoleConsumerOptions(args), mockConsumer);
 
         verify(mockConsumer).assign(eq(Collections.singletonList(tp0)));
         verify(mockConsumer).seek(eq(tp0), eq(123L));
         consumer.cleanup();
         reset(mockConsumer);
 
-        consumer = new ConsoleConsumer.ConsumerWrapper(
-                Optional.of(tp0.topic()),
-                OptionalInt.of(tp0.partition()),
-                OptionalLong.of(ListOffsetsRequest.EARLIEST_TIMESTAMP),
-                Optional.empty(),
-                mockConsumer,
-                1000L);
+        args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", tp0.topic(),
+            "--partition", String.valueOf(tp0.partition()),
+            "--offset", "earliest",
+            "--timeout-ms", "1000"
+        };
+
+        consumer = new ConsoleConsumer.ConsumerWrapper(new ConsoleConsumerOptions(args), mockConsumer);
 
         verify(mockConsumer).assign(eq(Collections.singletonList(tp0)));
         verify(mockConsumer).seekToBeginning(eq(Collections.singletonList(tp0)));
         consumer.cleanup();
         reset(mockConsumer);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldWorkWithoutTopicOption() throws IOException {
+        Consumer<byte[], byte[]> mockConsumer = mock(Consumer.class);
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--include", "includeTest*",
+            "--from-beginning"
+        };
+
+        ConsoleConsumer.ConsumerWrapper consumer = new ConsoleConsumer.ConsumerWrapper(
+            new ConsoleConsumerOptions(args),
+            mockConsumer
+        );
+
+        verify(mockConsumer).subscribe(any(Pattern.class));
+        consumer.cleanup();
     }
 }

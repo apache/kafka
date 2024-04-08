@@ -19,20 +19,23 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager.HeartbeatRequestState;
+import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager.HeartbeatState;
+import org.apache.kafka.clients.consumer.internals.MembershipManager.LocalAssignment;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.Assignment;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.Builder;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -54,10 +57,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
-import java.util.concurrent.BlockingQueue;
+import java.util.SortedSet;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
@@ -66,25 +70,24 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MAX_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
+import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+
 public class HeartbeatRequestManagerTest {
-    private long retryBackoffMs = DEFAULT_RETRY_BACKOFF_MS;
-    private int heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
-    private int maxPollIntervalMs = DEFAULT_MAX_POLL_INTERVAL_MS;
-    private long retryBackoffMaxMs = DEFAULT_RETRY_BACKOFF_MAX_MS;
     private static final String DEFAULT_GROUP_ID = "groupId";
     private static final String CONSUMER_COORDINATOR_METRICS = "consumer-coordinator-metrics";
 
@@ -101,7 +104,6 @@ public class HeartbeatRequestManagerTest {
     private final String memberId = "member-id";
     private final int memberEpoch = 1;
     private BackgroundEventHandler backgroundEventHandler;
-    private BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private Metrics metrics;
 
     @BeforeEach
@@ -117,7 +119,6 @@ public class HeartbeatRequestManagerTest {
         heartbeatRequestState = testBuilder.heartbeatRequestState.orElseThrow(IllegalStateException::new);
         heartbeatState = testBuilder.heartbeatState.orElseThrow(IllegalStateException::new);
         backgroundEventHandler = testBuilder.backgroundEventHandler;
-        backgroundEventQueue = testBuilder.backgroundEventQueue;
         subscriptions = testBuilder.subscriptions;
         membershipManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
         metadata = testBuilder.metadata;
@@ -176,7 +177,7 @@ public class HeartbeatRequestManagerTest {
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
-        assertTrue(request.requestBuilder() instanceof ConsumerGroupHeartbeatRequest.Builder);
+        assertInstanceOf(Builder.class, request.requestBuilder());
 
         ConsumerGroupHeartbeatRequest heartbeatRequest =
                 (ConsumerGroupHeartbeatRequest) request.requestBuilder().build(version);
@@ -185,7 +186,7 @@ public class HeartbeatRequestManagerTest {
         assertTrue(heartbeatRequest.data().memberId().isEmpty());
         assertEquals(0, heartbeatRequest.data().memberEpoch());
 
-        // Should include subscription and group basic info to start getting assignments.
+        // Should include subscription and group basic info to start getting assignments, as well as rebalanceTimeoutMs
         assertEquals(Collections.singletonList(topic), heartbeatRequest.data().subscribedTopicNames());
         assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, heartbeatRequest.data().rebalanceTimeoutMs());
         assertEquals(DEFAULT_GROUP_ID, heartbeatRequest.data().groupId());
@@ -305,118 +306,79 @@ public class HeartbeatRequestManagerTest {
             new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
             .setMemberId(memberId)
             .setMemberEpoch(memberEpoch));
-        membershipManager.onHeartbeatResponseReceived(result.data());
+        membershipManager.onHeartbeatSuccess(result.data());
 
         // Create a ConsumerHeartbeatRequest and verify the payload
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
-        assertTrue(request.requestBuilder() instanceof ConsumerGroupHeartbeatRequest.Builder);
+        assertInstanceOf(Builder.class, request.requestBuilder());
 
         ConsumerGroupHeartbeatRequest heartbeatRequest =
             (ConsumerGroupHeartbeatRequest) request.requestBuilder().build(version);
         assertEquals(DEFAULT_GROUP_ID, heartbeatRequest.data().groupId());
         assertEquals(memberId, heartbeatRequest.data().memberId());
         assertEquals(memberEpoch, heartbeatRequest.data().memberEpoch());
-        assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, heartbeatRequest.data().rebalanceTimeoutMs());
+        assertEquals(10000, heartbeatRequest.data().rebalanceTimeoutMs());
         assertEquals(subscribedTopics, heartbeatRequest.data().subscribedTopicNames());
         assertEquals(DEFAULT_GROUP_INSTANCE_ID, heartbeatRequest.data().instanceId());
         assertEquals(DEFAULT_REMOTE_ASSIGNOR, heartbeatRequest.data().serverAssignor());
     }
 
-    @Test
-    public void testConsumerGroupMetadataFirstUpdate() {
-        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = makeFirstGroupMetadataUpdate(memberId, memberEpoch);
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
+    public void testValidateConsumerGroupHeartbeatRequestAssignmentSentWhenLocalEpochChanges(final short version) {
+        CoordinatorRequestManager coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        MembershipManager membershipManager = mock(MembershipManager.class);
+        BackgroundEventHandler backgroundEventHandler = mock(BackgroundEventHandler.class);
+        SubscriptionState subscriptionState = mock(SubscriptionState.class);
+        HeartbeatRequestState requestState = mock(HeartbeatRequestState.class);
+        HeartbeatState heartbeatState = new HeartbeatState(subscriptionState, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
 
-        final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            memberEpoch,
-            memberId
+        HeartbeatRequestManager heartbeatRequestManager = createHeartbeatRequestManager(
+            coordinatorRequestManager,
+            membershipManager,
+            heartbeatState,
+            requestState,
+            backgroundEventHandler
         );
-        assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
-    }
 
-    @Test
-    public void testConsumerGroupMetadataUpdateWithSameUpdate() {
-        makeFirstGroupMetadataUpdate(memberId, memberEpoch);
-
-        time.sleep(2000);
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-
-        assertEquals(1, result.unsentRequests.size());
-        NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
-        ClientResponse responseWithSameUpdate = createHeartbeatResponse(request, Errors.NONE);
-        request.handler().onComplete(responseWithSameUpdate);
-        assertEquals(0, backgroundEventQueue.size());
-    }
-
-    @Test
-    public void testConsumerGroupMetadataUpdateWithMemberIdNullButMemberEpochUpdated() {
-        makeFirstGroupMetadataUpdate(memberId, memberEpoch);
-
-        time.sleep(2000);
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-
-        assertEquals(1, result.unsentRequests.size());
-        NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
-        final int updatedMemberEpoch = 2;
-        ClientResponse responseWithMemberEpochUpdate = createHeartbeatResponseWithMemberIdNull(
-            request,
-            Errors.NONE,
-            updatedMemberEpoch
-        );
-        request.handler().onComplete(responseWithMemberEpochUpdate);
-        assertEquals(1, backgroundEventQueue.size());
-        final BackgroundEvent eventWithUpdatedMemberEpoch = backgroundEventQueue.poll();
-        assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, eventWithUpdatedMemberEpoch.type());
-        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) eventWithUpdatedMemberEpoch;
-        final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            updatedMemberEpoch,
-            memberId
-        );
-        assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
-    }
-
-    @Test
-    public void testConsumerGroupMetadataUpdateWithMemberIdUpdatedAndMemberEpochSame() {
-        makeFirstGroupMetadataUpdate(memberId, memberEpoch);
-
-        time.sleep(2000);
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-
-        assertEquals(1, result.unsentRequests.size());
-        NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
-        final String updatedMemberId = "updatedMemberId";
-        ClientResponse responseWithMemberIdUpdate = createHeartbeatResponse(
-            request,
-            Errors.NONE,
-            updatedMemberId,
-            memberEpoch
-        );
-        request.handler().onComplete(responseWithMemberIdUpdate);
-        assertEquals(1, backgroundEventQueue.size());
-        final BackgroundEvent eventWithUpdatedMemberEpoch = backgroundEventQueue.poll();
-        assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, eventWithUpdatedMemberEpoch.type());
-        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) eventWithUpdatedMemberEpoch;
-        final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            memberEpoch,
-            updatedMemberId
-        );
-        assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
-    }
-
-    private GroupMetadataUpdateEvent makeFirstGroupMetadataUpdate(final String memberId, final int memberEpoch) {
-        resetWithZeroHeartbeatInterval(Optional.empty());
-        mockStableMember();
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, result.unsentRequests.size());
-        NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
-        ClientResponse firstResponse = createHeartbeatResponse(request, Errors.NONE, memberId, memberEpoch);
-        request.handler().onComplete(firstResponse);
-        assertEquals(1, backgroundEventQueue.size());
-        final BackgroundEvent event = backgroundEventQueue.poll();
-        assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, event.type());
-        return (GroupMetadataUpdateEvent) event;
+
+        Uuid topicId = Uuid.randomUuid();
+        ConsumerGroupHeartbeatRequestData.TopicPartitions expectedTopicPartitions =
+            new ConsumerGroupHeartbeatRequestData.TopicPartitions();
+        Map<Uuid, SortedSet<Integer>> testAssignment = Collections.singletonMap(
+            topicId, mkSortedSet(0)
+        );
+        expectedTopicPartitions.setTopicId(topicId);
+        expectedTopicPartitions.setPartitions(Collections.singletonList(0));
+
+        // First heartbeat, include assignment
+        when(membershipManager.currentAssignment()).thenReturn(new LocalAssignment(0, testAssignment));
+
+        ConsumerGroupHeartbeatRequest heartbeatRequest1 = getHeartbeatRequest(heartbeatRequestManager, version);
+        assertEquals(Collections.singletonList(expectedTopicPartitions), heartbeatRequest1.data().topicPartitions());
+
+        // Assignment did not change, so no assignment should be sent
+        ConsumerGroupHeartbeatRequest heartbeatRequest2 = getHeartbeatRequest(heartbeatRequestManager, version);
+        assertNull(heartbeatRequest2.data().topicPartitions());
+
+        // Local epoch bumped, so assignment should be sent
+        when(membershipManager.currentAssignment()).thenReturn(new LocalAssignment(1, testAssignment));
+
+        ConsumerGroupHeartbeatRequest heartbeatRequest3 = getHeartbeatRequest(heartbeatRequestManager, version);
+        assertEquals(Collections.singletonList(expectedTopicPartitions), heartbeatRequest3.data().topicPartitions());
+    }
+
+    private ConsumerGroupHeartbeatRequest getHeartbeatRequest(HeartbeatRequestManager heartbeatRequestManager, final short version) {
+        // Create a ConsumerHeartbeatRequest and verify the payload -- no assignment should be sent
+        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
+        assertInstanceOf(Builder.class, request.requestBuilder());
+        return (ConsumerGroupHeartbeatRequest) request.requestBuilder().build(version);
     }
 
     @ParameterizedTest
@@ -439,8 +401,7 @@ public class HeartbeatRequestManagerTest {
 
         switch (error) {
             case NONE:
-                verify(backgroundEventHandler).add(any(GroupMetadataUpdateEvent.class));
-                verify(membershipManager, times(2)).onHeartbeatResponseReceived(mockResponse.data());
+                verify(membershipManager).onHeartbeatSuccess(mockResponse.data());
                 assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestState.nextHeartbeatMs(time.milliseconds()));
                 break;
 
@@ -510,7 +471,7 @@ public class HeartbeatRequestManagerTest {
         assertEquals(-1, data.rebalanceTimeoutMs());
         assertNull(data.subscribedTopicNames());
         assertNull(data.serverAssignor());
-        assertNull(data.topicPartitions());
+        assertEquals(data.topicPartitions(), Collections.emptyList());
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
 
@@ -524,10 +485,23 @@ public class HeartbeatRequestManagerTest {
         assertEquals(memberId, data.memberId());
         assertEquals(0, data.memberEpoch());
         assertNull(data.instanceId());
-        assertEquals(-1, data.rebalanceTimeoutMs());
+        assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, data.rebalanceTimeoutMs());
         assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
-        assertNull(data.serverAssignor());
-        assertNull(data.topicPartitions());
+        assertEquals(ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
+        assertEquals(Collections.emptyList(), data.topicPartitions());
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.JOINING, membershipManager.state());
+
+        membershipManager.transitionToFenced();
+        data = heartbeatState.buildRequestData();
+        assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
+        assertEquals(memberId, data.memberId());
+        assertEquals(0, data.memberEpoch());
+        assertNull(data.instanceId());
+        assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, data.rebalanceTimeoutMs());
+        assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
+        assertEquals(ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
+        assertEquals(Collections.emptyList(), data.topicPartitions());
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.JOINING, membershipManager.state());
 
@@ -546,7 +520,7 @@ public class HeartbeatRequestManagerTest {
                 .setMemberEpoch(1)
                 .setAssignment(assignmentTopic1));
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic1"));
-        membershipManager.onHeartbeatResponseReceived(rs1.data());
+        membershipManager.onHeartbeatSuccess(rs1.data());
 
         // We remain in RECONCILING state, as the assignment will be reconciled on the next poll
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -560,9 +534,9 @@ public class HeartbeatRequestManagerTest {
         heartbeatRequestState = spy(new HeartbeatRequestManager.HeartbeatRequestState(
                 new LogContext(),
                 time,
-                heartbeatIntervalMs,
-                retryBackoffMs,
-                retryBackoffMaxMs,
+                DEFAULT_HEARTBEAT_INTERVAL_MS,
+                DEFAULT_RETRY_BACKOFF_MS,
+                DEFAULT_RETRY_BACKOFF_MAX_MS,
                 0));
         backgroundEventHandler = mock(BackgroundEventHandler.class);
 
@@ -575,22 +549,23 @@ public class HeartbeatRequestManagerTest {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
 
-        // On poll timer expiration, the member should transition to stale and a last heartbeat 
-        // should be sent to leave the group
-        time.sleep(maxPollIntervalMs);
-        assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
+        // On poll timer expiration, the member should send a last heartbeat to leave the group
+        // and notify the membership manager
+        time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS);
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
+        verify(membershipManager).transitionToSendingLeaveGroup(true);
         verify(heartbeatState).reset();
         verify(heartbeatRequestState).reset();
-        verify(membershipManager).transitionToStale();
+        verify(membershipManager).onHeartbeatRequestSent();
 
         when(membershipManager.state()).thenReturn(MemberState.STALE);
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
         assertNoHeartbeat(heartbeatRequestManager);
         heartbeatRequestManager.resetPollTimer(time.milliseconds());
         assertTrue(pollTimer.notExpired());
-        verify(membershipManager).transitionToJoining();
+        verify(membershipManager).maybeRejoinStaleMember();
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
-        assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
     }
 
     /**
@@ -604,13 +579,13 @@ public class HeartbeatRequestManagerTest {
     public void testPollTimerExpirationShouldNotMarkMemberStaleIfMemberAlreadyLeaving() {
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
         when(membershipManager.isLeavingGroup()).thenReturn(true);
-        doNothing().when(membershipManager).transitionToStale();
 
-        time.sleep(maxPollIntervalMs);
+        time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
-        // No transition to STALE should be triggered, because the member is already leaving the group
-        verify(membershipManager, never()).transitionToStale();
+        // No transition to leave due to stale member should be triggered, because the member is
+        // already leaving the group
+        verify(membershipManager, never()).transitionToSendingLeaveGroup(anyBoolean());
 
         assertEquals(1, result.unsentRequests.size(), "A heartbeat request should be generated to" +
             " complete the ongoing leaving operation that was triggered before the poll timer expired.");
@@ -628,8 +603,8 @@ public class HeartbeatRequestManagerTest {
             new LogContext(),
             time,
             0, // This initial interval should be 0 to ensure heartbeat on the clock
-            retryBackoffMs,
-            retryBackoffMaxMs,
+            DEFAULT_RETRY_BACKOFF_MS,
+            DEFAULT_RETRY_BACKOFF_MAX_MS,
             0);
         backgroundEventHandler = mock(BackgroundEventHandler.class);
         heartbeatRequestManager = createHeartbeatRequestManager(
@@ -648,11 +623,11 @@ public class HeartbeatRequestManagerTest {
 
         // test poll
         assertHeartbeat(heartbeatRequestManager, 0);
-        time.sleep(heartbeatIntervalMs);
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         assertEquals(1.0, getMetric("heartbeat-total").metricValue());
-        assertEquals((double) TimeUnit.MILLISECONDS.toSeconds(heartbeatIntervalMs), getMetric("last-heartbeat-seconds-ago").metricValue());
+        assertEquals((double) TimeUnit.MILLISECONDS.toSeconds(DEFAULT_HEARTBEAT_INTERVAL_MS), getMetric("last-heartbeat-seconds-ago").metricValue());
 
-        assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
         assertEquals(0.06d, (double) getMetric("heartbeat-rate").metricValue(), 0.005d);
         assertEquals(2.0, getMetric("heartbeat-total").metricValue());
 
@@ -661,6 +636,33 @@ public class HeartbeatRequestManagerTest {
         int randomSleepS = rand.nextInt(11);
         time.sleep(randomSleepS * 1000);
         assertEquals((double) randomSleepS, getMetric("last-heartbeat-seconds-ago").metricValue());
+    }
+
+    @Test
+    public void testFencedMemberStopHeartbeatUntilItReleasesAssignmentToRejoin() {
+        mockStableMember();
+
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        // Receive HB response fencing member
+        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
+        doNothing().when(membershipManager).transitionToFenced();
+        ClientResponse response = createHeartbeatResponse(result.unsentRequests.get(0), Errors.FENCED_MEMBER_EPOCH);
+        result.unsentRequests.get(0).handler().onComplete(response);
+
+        verify(membershipManager).transitionToFenced();
+        verify(heartbeatRequestState).onFailedAttempt(anyLong());
+        verify(heartbeatRequestState).reset();
+
+        when(membershipManager.state()).thenReturn(MemberState.FENCED);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(), "Member should not send heartbeats while FENCED");
+
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size(), "Fenced member should resume heartbeat after transitioning to JOINING");
     }
 
     private void assertHeartbeat(HeartbeatRequestManager hrm, int nextPollMs) {
@@ -679,11 +681,17 @@ public class HeartbeatRequestManagerTest {
     private void mockStableMember() {
         membershipManager.onSubscriptionUpdated();
         // Heartbeat response without assignment to set the state to STABLE.
+        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptions.rebalanceListener()).thenReturn(Optional.empty());
         ConsumerGroupHeartbeatResponse rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
                 .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
                 .setMemberId(memberId)
-                .setMemberEpoch(memberEpoch));
-        membershipManager.onHeartbeatResponseReceived(rs1.data());
+                .setMemberEpoch(memberEpoch)
+                .setAssignment(new Assignment())
+        );
+        membershipManager.onHeartbeatSuccess(rs1.data());
+        membershipManager.poll(time.milliseconds());
+        membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
     }
 
@@ -721,23 +729,6 @@ public class HeartbeatRequestManagerTest {
         final NetworkClientDelegate.UnsentRequest request,
         final Errors error
     ) {
-        return createHeartbeatResponse(request, error, memberId, memberEpoch);
-    }
-
-    private ClientResponse createHeartbeatResponseWithMemberIdNull(
-        final NetworkClientDelegate.UnsentRequest request,
-        final Errors error,
-        final int memberEpoch
-    ) {
-        return createHeartbeatResponse(request, error, null, memberEpoch);
-    }
-
-    private ClientResponse createHeartbeatResponse(
-        final NetworkClientDelegate.UnsentRequest request,
-        final Errors error,
-        final String memberId,
-        final int memberEpoch
-    ) {
         ConsumerGroupHeartbeatResponseData data = new ConsumerGroupHeartbeatResponseData()
             .setErrorCode(error.code())
             .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
@@ -765,10 +756,10 @@ public class HeartbeatRequestManagerTest {
         prop.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         prop.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
 
-        prop.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(maxPollIntervalMs));
-        prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs));
-        prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, String.valueOf(retryBackoffMaxMs));
-        prop.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(heartbeatIntervalMs));
+        prop.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_MAX_POLL_INTERVAL_MS));
+        prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MS));
+        prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MAX_MS));
+        prop.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_HEARTBEAT_INTERVAL_MS));
         return new ConsumerConfig(prop);
     }
 
@@ -783,7 +774,7 @@ public class HeartbeatRequestManagerTest {
             final HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler) {
         LogContext logContext = new LogContext();
-        pollTimer = time.timer(maxPollIntervalMs);
+        pollTimer = time.timer(DEFAULT_MAX_POLL_INTERVAL_MS);
         return new HeartbeatRequestManager(
                 logContext,
                 pollTimer,

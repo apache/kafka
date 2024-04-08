@@ -939,7 +939,7 @@ public class EosV2UpgradeIntegrationTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.CLIENT_ID_CONFIG, appDir);
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
-        final long commitInterval = Duration.ofMinutes(1L).toMillis();
+        final long commitInterval = Duration.ofMinutes(5L).toMillis();
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitInterval);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), Duration.ofSeconds(1L).toMillis());
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");

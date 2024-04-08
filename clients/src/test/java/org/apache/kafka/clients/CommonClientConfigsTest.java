@@ -35,6 +35,7 @@ import java.util.Map;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -136,7 +137,7 @@ public class CommonClientConfigsTest {
         TestConfig config = new TestConfig(Collections.emptyMap());
         List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters("clientId", config);
         assertEquals(1, reporters.size());
-        assertTrue(reporters.get(0) instanceof JmxReporter);
+        assertInstanceOf(JmxReporter.class, reporters.get(0));
 
         config = new TestConfig(Collections.singletonMap(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false"));
         reporters = CommonClientConfigs.metricsReporters("clientId", config);
@@ -145,7 +146,7 @@ public class CommonClientConfigsTest {
         config = new TestConfig(Collections.singletonMap(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, JmxReporter.class.getName()));
         reporters = CommonClientConfigs.metricsReporters("clientId", config);
         assertEquals(1, reporters.size());
-        assertTrue(reporters.get(0) instanceof JmxReporter);
+        assertInstanceOf(JmxReporter.class, reporters.get(0));
 
         Map<String, String> props = new HashMap<>();
         props.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, JmxReporter.class.getName() + "," + MyJmxReporter.class.getName());

@@ -51,6 +51,7 @@ import org.junit.jupiter.api.Test;
 import static org.apache.kafka.common.security.ssl.SslFactory.CertificateEntries.ensureCompatible;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -474,7 +475,7 @@ public abstract class SslFactoryTest {
         clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
         SslFactory sslFactory = new SslFactory(Mode.CLIENT);
         sslFactory.configure(clientSslConfig);
-        assertTrue(sslFactory.sslEngineFactory() instanceof TestSslUtils.TestSslEngineFactory,
+        assertInstanceOf(TestSslUtils.TestSslEngineFactory.class, sslFactory.sslEngineFactory(),
             "SslEngineFactory must be of expected type");
     }
 
@@ -507,7 +508,7 @@ public abstract class SslFactoryTest {
         serverSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(serverSslConfig);
-        assertTrue(sslFactory.sslEngineFactory() instanceof TestSslUtils.TestSslEngineFactory,
+        assertInstanceOf(TestSslUtils.TestSslEngineFactory.class, sslFactory.sslEngineFactory(),
             "SslEngineFactory must be of expected type");
     }
 

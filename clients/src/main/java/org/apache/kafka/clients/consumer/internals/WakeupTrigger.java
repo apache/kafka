@@ -73,6 +73,8 @@ public class WakeupTrigger {
             } else if (task instanceof WakeupFuture) {
                 currentTask.completeExceptionally(new WakeupException());
                 return null;
+            } else if (task instanceof DisabledWakeups) {
+                return task;
             }
             // last active state is still active
             throw new KafkaException("Last active task is still active");
@@ -88,6 +90,8 @@ public class WakeupTrigger {
             } else if (task instanceof WakeupFuture) {
                 throwWakeupException.set(true);
                 return null;
+            } else if (task instanceof DisabledWakeups) {
+                return task;
             }
             // last active state is still active
             throw new IllegalStateException("Last active task is still active");
@@ -95,6 +99,10 @@ public class WakeupTrigger {
         if (throwWakeupException.get()) {
             throw new WakeupException();
         }
+    }
+
+    public void disableWakeups() {
+        pendingTask.set(new DisabledWakeups());
     }
 
     public void clearTask() {
@@ -130,6 +138,9 @@ public class WakeupTrigger {
     }
 
     interface Wakeupable { }
+
+    // Set to block wakeups from happening and pending actions to be registered.
+    static class DisabledWakeups implements Wakeupable { }
 
     static class ActiveFuture implements Wakeupable {
         private final CompletableFuture<?> future;

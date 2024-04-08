@@ -540,6 +540,14 @@ public class SubscriptionState {
         return assignedState(tp).position;
     }
 
+    public synchronized FetchPosition positionOrNull(TopicPartition tp) {
+        final TopicPartitionState state = assignedStateOrNull(tp);
+        if (state == null) {
+            return null;
+        }
+        return assignedState(tp).position;
+    }
+
     public synchronized Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
         TopicPartitionState topicPartitionState = assignedState(tp);
         if (topicPartitionState.position == null) {
@@ -579,12 +587,35 @@ public class SubscriptionState {
         assignedState(tp).highWatermark(highWatermark);
     }
 
-    synchronized void updateLogStartOffset(TopicPartition tp, long logStartOffset) {
-        assignedState(tp).logStartOffset(logStartOffset);
+    synchronized boolean tryUpdatingHighWatermark(TopicPartition tp, long highWatermark) {
+        final TopicPartitionState state = assignedStateOrNull(tp);
+        if (state != null) {
+            assignedState(tp).highWatermark(highWatermark);
+            return true;
+        }
+        return false;
+    }
+
+    synchronized boolean tryUpdatingLogStartOffset(TopicPartition tp, long highWatermark) {
+        final TopicPartitionState state = assignedStateOrNull(tp);
+        if (state != null) {
+            assignedState(tp).logStartOffset(highWatermark);
+            return true;
+        }
+        return false;
     }
 
     synchronized void updateLastStableOffset(TopicPartition tp, long lastStableOffset) {
         assignedState(tp).lastStableOffset(lastStableOffset);
+    }
+
+    synchronized boolean tryUpdatingLastStableOffset(TopicPartition tp, long lastStableOffset) {
+        final TopicPartitionState state = assignedStateOrNull(tp);
+        if (state != null) {
+            assignedState(tp).lastStableOffset(lastStableOffset);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -597,6 +628,28 @@ public class SubscriptionState {
      */
     public synchronized void updatePreferredReadReplica(TopicPartition tp, int preferredReadReplicaId, LongSupplier timeMs) {
         assignedState(tp).updatePreferredReadReplica(preferredReadReplicaId, timeMs);
+    }
+
+    /**
+     * Tries to set the preferred read replica with a lease timeout. After this time, the replica will no longer be valid and
+     * {@link #preferredReadReplica(TopicPartition, long)} will return an empty result. If the preferred replica of
+     * the partition could not be updated (e.g. because the partition is not assigned) this method will return
+     * {@code false}, otherwise it will return {@code true}.
+     *
+     * @param tp The topic partition
+     * @param preferredReadReplicaId The preferred read replica
+     * @param timeMs The time at which this preferred replica is no longer valid
+     * @return {@code true} if the preferred read replica was updated, {@code false} otherwise.
+     */
+    public synchronized boolean tryUpdatingPreferredReadReplica(TopicPartition tp,
+                                                             int preferredReadReplicaId,
+                                                             LongSupplier timeMs) {
+        final TopicPartitionState state = assignedStateOrNull(tp);
+        if (state != null) {
+            assignedState(tp).updatePreferredReadReplica(preferredReadReplicaId, timeMs);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -619,7 +672,7 @@ public class SubscriptionState {
      * Unset the preferred read replica. This causes the fetcher to go back to the leader for fetches.
      *
      * @param tp The topic partition
-     * @return the removed preferred read replica if set, None otherwise.
+     * @return the removed preferred read replica if set, Empty otherwise.
      */
     public synchronized Optional<Integer> clearPreferredReadReplica(TopicPartition tp) {
         final TopicPartitionState topicPartitionState = assignedStateOrNull(tp);
@@ -654,6 +707,14 @@ public class SubscriptionState {
     public void requestOffsetReset(TopicPartition partition) {
         requestOffsetReset(partition, defaultResetStrategy);
     }
+
+    public synchronized void requestOffsetResetIfPartitionAssigned(TopicPartition partition) {
+        final TopicPartitionState state = assignedStateOrNull(partition);
+        if (state != null) {
+            state.reset(defaultResetStrategy);
+        }
+    }
+
 
     synchronized void setNextAllowedRetry(Set<TopicPartition> partitions, long nextAllowResetTimeMs) {
         for (TopicPartition partition : partitions) {

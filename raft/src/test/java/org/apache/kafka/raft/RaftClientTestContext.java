@@ -83,6 +83,8 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class RaftClientTestContext {
@@ -451,8 +453,9 @@ public final class RaftClientTestContext {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.DESCRIBE_QUORUM);
         assertEquals(1, sentMessages.size());
         RaftResponse.Outbound raftMessage = sentMessages.get(0);
-        assertTrue(
-            raftMessage.data() instanceof DescribeQuorumResponseData,
+        assertInstanceOf(
+            DescribeQuorumResponseData.class,
+            raftMessage.data(),
             "Unexpected request type " + raftMessage.data());
         return (DescribeQuorumResponseData) raftMessage.data();
     }
@@ -492,7 +495,7 @@ public final class RaftClientTestContext {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.VOTE);
         assertEquals(1, sentMessages.size());
         RaftMessage raftMessage = sentMessages.get(0);
-        assertTrue(raftMessage.data() instanceof VoteResponseData);
+        assertInstanceOf(VoteResponseData.class, raftMessage.data());
         VoteResponseData response = (VoteResponseData) raftMessage.data();
 
         assertEquals(error, Errors.forCode(response.errorCode()));
@@ -507,7 +510,7 @@ public final class RaftClientTestContext {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.VOTE);
         assertEquals(1, sentMessages.size());
         RaftMessage raftMessage = sentMessages.get(0);
-        assertTrue(raftMessage.data() instanceof VoteResponseData);
+        assertInstanceOf(VoteResponseData.class, raftMessage.data());
         VoteResponseData response = (VoteResponseData) raftMessage.data();
         assertTrue(hasValidTopicPartition(response, metadataPartition));
 
@@ -584,7 +587,7 @@ public final class RaftClientTestContext {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.BEGIN_QUORUM_EPOCH);
         assertEquals(1, sentMessages.size());
         RaftMessage raftMessage = sentMessages.get(0);
-        assertTrue(raftMessage.data() instanceof BeginQuorumEpochResponseData);
+        assertInstanceOf(BeginQuorumEpochResponseData.class, raftMessage.data());
         BeginQuorumEpochResponseData response = (BeginQuorumEpochResponseData) raftMessage.data();
         assertEquals(responseError, Errors.forCode(response.errorCode()));
     }
@@ -597,7 +600,7 @@ public final class RaftClientTestContext {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.BEGIN_QUORUM_EPOCH);
         assertEquals(1, sentMessages.size());
         RaftMessage raftMessage = sentMessages.get(0);
-        assertTrue(raftMessage.data() instanceof BeginQuorumEpochResponseData);
+        assertInstanceOf(BeginQuorumEpochResponseData.class, raftMessage.data());
         BeginQuorumEpochResponseData response = (BeginQuorumEpochResponseData) raftMessage.data();
         assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
 
@@ -622,7 +625,7 @@ public final class RaftClientTestContext {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.END_QUORUM_EPOCH);
         assertEquals(1, sentMessages.size());
         RaftMessage raftMessage = sentMessages.get(0);
-        assertTrue(raftMessage.data() instanceof EndQuorumEpochResponseData);
+        assertInstanceOf(EndQuorumEpochResponseData.class, raftMessage.data());
         EndQuorumEpochResponseData response = (EndQuorumEpochResponseData) raftMessage.data();
         assertEquals(responseError, Errors.forCode(response.errorCode()));
     }
@@ -635,7 +638,7 @@ public final class RaftClientTestContext {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.END_QUORUM_EPOCH);
         assertEquals(1, sentMessages.size());
         RaftMessage raftMessage = sentMessages.get(0);
-        assertTrue(raftMessage.data() instanceof EndQuorumEpochResponseData);
+        assertInstanceOf(EndQuorumEpochResponseData.class, raftMessage.data());
         EndQuorumEpochResponseData response = (EndQuorumEpochResponseData) raftMessage.data();
         assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
 
@@ -735,7 +738,7 @@ public final class RaftClientTestContext {
         assertEquals(1, sentMessages.size());
 
         RaftMessage message = sentMessages.get(0);
-        assertTrue(message.data() instanceof FetchSnapshotResponseData);
+        assertInstanceOf(FetchSnapshotResponseData.class, message.data());
 
         FetchSnapshotResponseData response = (FetchSnapshotResponseData) message.data();
         assertEquals(responseError, Errors.forCode(response.errorCode()));
@@ -746,7 +749,7 @@ public final class RaftClientTestContext {
         assertEquals(1, sentMessages.size());
 
         RaftMessage message = sentMessages.get(0);
-        assertTrue(message.data() instanceof FetchSnapshotResponseData);
+        assertInstanceOf(FetchSnapshotResponseData.class, message.data());
 
         FetchSnapshotResponseData response = (FetchSnapshotResponseData) message.data();
         assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
@@ -801,7 +804,7 @@ public final class RaftClientTestContext {
     private List<RaftRequest.Outbound> collectBeginEpochRequests(int epoch) {
         List<RaftRequest.Outbound> requests = new ArrayList<>();
         for (RaftRequest.Outbound raftRequest : channel.drainSentRequests(Optional.of(ApiKeys.BEGIN_QUORUM_EPOCH))) {
-            assertTrue(raftRequest.data() instanceof BeginQuorumEpochRequestData);
+            assertInstanceOf(BeginQuorumEpochRequestData.class, raftRequest.data());
             BeginQuorumEpochRequestData request = (BeginQuorumEpochRequestData) raftRequest.data();
 
             BeginQuorumEpochRequestData.PartitionData partitionRequest =
@@ -966,10 +969,10 @@ public final class RaftClientTestContext {
         long fetchOffset,
         int lastFetchedEpoch
     ) {
-        assertTrue(
-            message.data() instanceof FetchRequestData,
-            "unexpected request type " + message.data()
-        );
+        assertInstanceOf(
+            FetchRequestData.class,
+            message.data(),
+            "unexpected request type " + message.data());
         FetchRequestData request = (FetchRequestData) message.data();
         assertEquals(KafkaRaftClient.MAX_FETCH_SIZE_BYTES, request.maxBytes());
         assertEquals(fetchMaxWaitMs, request.maxWaitMs());
@@ -1195,6 +1198,11 @@ public final class RaftClientTestContext {
             // We record the current committed offset as the claimed epoch's start
             // offset. This is useful to verify that the `handleLeaderChange` callback
             // was not received early on the leader.
+            assertTrue(
+                leaderAndEpoch.epoch() >= currentLeaderAndEpoch.epoch(),
+                String.format("new epoch (%d) not >= than old epoch (%d)", leaderAndEpoch.epoch(), currentLeaderAndEpoch.epoch())
+            );
+            assertNotEquals(currentLeaderAndEpoch, leaderAndEpoch);
             this.currentLeaderAndEpoch = leaderAndEpoch;
 
             currentClaimedEpoch().ifPresent(claimedEpoch -> {

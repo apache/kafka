@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.admin.ConsumerGroupCommand;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -34,11 +33,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
-import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -52,62 +52,62 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGr
         };
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsNonExistingGroup() {
+    public void testDeleteOffsetsNonExistingGroup(String quorum) {
         String group = "missing.group";
         String topic = "foo:1";
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(getArgs(group, topic));
 
-        scala.Tuple2<Errors, scala.collection.Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, seq(Collections.singleton(topic)).toList());
-        assertEquals(Errors.GROUP_ID_NOT_FOUND, res._1);
+        Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, Collections.singletonList(topic));
+        assertEquals(Errors.GROUP_ID_NOT_FOUND, res.getKey());
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfStableConsumerGroupWithTopicPartition() {
+    public void testDeleteOffsetsOfStableConsumerGroupWithTopicPartition(String quorum) {
         testWithStableConsumerGroup(TOPIC, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfStableConsumerGroupWithTopicOnly() {
+    public void testDeleteOffsetsOfStableConsumerGroupWithTopicOnly(String quorum) {
         testWithStableConsumerGroup(TOPIC, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition() {
+    public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition(String quorum) {
         testWithStableConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicOnly() {
+    public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicOnly(String quorum) {
         testWithStableConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition() {
+    public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition(String quorum) {
         testWithEmptyConsumerGroup(TOPIC, 0, 0, Errors.NONE);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly() {
+    public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly(String quorum) {
         testWithEmptyConsumerGroup(TOPIC, -1, 0, Errors.NONE);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition() {
+    public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition(String quorum) {
         testWithEmptyConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly() {
+    public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly(String quorum) {
         testWithEmptyConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
 
@@ -144,18 +144,18 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGr
         withConsumerGroup.accept(() -> {
             String topic = inputPartition >= 0 ? inputTopic + ":" + inputPartition : inputTopic;
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(getArgs(GROUP, topic));
-            scala.Tuple2<Errors, scala.collection.Map<TopicPartition, Throwable>> res = service.deleteOffsets(GROUP, seq(Collections.singletonList(topic)).toList());
-            Errors topLevelError = res._1;
-            scala.collection.Map<TopicPartition, Throwable> partitions = res._2;
+            Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(GROUP, Collections.singletonList(topic));
+            Errors topLevelError = res.getKey();
+            Map<TopicPartition, Throwable> partitions = res.getValue();
             TopicPartition tp = new TopicPartition(inputTopic, expectedPartition);
             // Partition level error should propagate to top level, unless this is due to a missed partition attempt.
             if (inputPartition >= 0) {
                 assertEquals(expectedError, topLevelError);
             }
             if (expectedError == Errors.NONE)
-                assertNull(partitions.get(tp).get());
+                assertNull(partitions.get(tp));
             else
-                assertEquals(expectedError.exception(), partitions.get(tp).get().getCause());
+                assertEquals(expectedError.exception(), partitions.get(tp).getCause());
         });
     }
 

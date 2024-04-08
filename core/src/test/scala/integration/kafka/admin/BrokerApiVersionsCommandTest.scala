@@ -19,7 +19,7 @@ package kafka.admin
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType
 import org.apache.kafka.common.protocol.ApiKeys
@@ -59,7 +59,7 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
     }
 
   @Timeout(120)
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def checkBrokerApiVersionCommandOutput(quorum: String): Unit = {
     val byteArrayOutputStream = new ByteArrayOutputStream
