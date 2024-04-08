@@ -31,7 +31,7 @@ import java.util.Objects;
  * A single supported version V is represented as "V".
  * A bounded range from A to B is represented as "A-B".
  * All versions greater than A is represented as "A+".
- * The NONE range is represented as an the string "none".
+ * The NONE range is represented as the string "none".
  */
 public final class Versions {
     private final short lowest;

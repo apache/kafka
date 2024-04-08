@@ -20,9 +20,8 @@ import java.util.Properties
 
 import scala.collection.Seq
 
-import kafka.utils.{TestUtils, TestInfoUtils}
+import kafka.utils.TestUtils
 import TestUtils._
-import kafka.server.QuorumTestHarness
 import java.io.File
 
 import kafka.server.checkpoints.OffsetCheckpointFile
@@ -106,7 +105,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testHWCheckpointNoFailuresSingleLogSegment(quorum: String): Unit = {
     val numMessages = 2L
@@ -124,7 +123,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(numMessages, followerHW)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testHWCheckpointWithFailuresSingleLogSegment(quorum: String): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
@@ -185,7 +184,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(hw, hwFile2.read().getOrElse(topicPartition, 0L))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testHWCheckpointNoFailuresMultipleLogSegments(quorum: String): Unit = {
     sendMessages(20)
@@ -202,7 +201,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(hw, followerHW)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testHWCheckpointWithFailuresMultipleLogSegments(quorum: String): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)

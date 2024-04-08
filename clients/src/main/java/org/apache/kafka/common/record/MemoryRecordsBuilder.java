@@ -717,8 +717,6 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
     private long appendLegacyRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value, byte magic) throws IOException {
         ensureOpenForRecordAppend();
-        if (compressionType == CompressionType.NONE && timestampType == TimestampType.LOG_APPEND_TIME)
-            timestamp = logAppendTime;
 
         int size = LegacyRecord.recordSize(magic, key, value);
         AbstractLegacyRecordBatch.writeHeader(appendStream, toInnerOffset(offset), size);

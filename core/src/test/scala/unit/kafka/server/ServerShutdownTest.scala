@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.utils.{CoreUtils, Exit, TestInfoUtils, TestUtils}
+import kafka.utils.{CoreUtils, Exit, TestUtils}
 
 import java.io.{DataInputStream, File}
 import java.net.ServerSocket
@@ -83,7 +83,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     super.setUp(testInfo)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdown(quorum: String): Unit = {
 
@@ -142,7 +142,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     producer.close()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
     if (isKRaftTest()) {
@@ -157,7 +157,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
     createTopic(topic)
@@ -188,7 +188,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testCleanShutdownWithZkUnavailable(quorum: String): Unit = {
     shutdownZooKeeper()
@@ -198,7 +198,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   }
 
   @Disabled
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testCleanShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
     shutdownKRaftController()
@@ -244,7 +244,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       .count(isNonDaemonKafkaThread))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsecutiveShutdown(quorum: String): Unit = {
     shutdownBroker()
@@ -254,7 +254,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   // Verify that if controller is in the midst of processing a request, shutdown completes
   // without waiting for request timeout. Since this involves LeaderAndIsr request, it is
   // ZK-only for now.
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testControllerShutdownDuringSend(quorum: String): Unit = {
     val securityProtocol = SecurityProtocol.PLAINTEXT

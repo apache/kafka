@@ -199,6 +199,14 @@ public class SslTransportLayer implements TransportLayer {
         } catch (IOException ie) {
             log.debug("Failed to send SSL Close message", ie);
         } finally {
+            try {
+                sslEngine.closeInbound();
+            } catch (SSLException e) {
+                // This log is for debugging purposes as an exception might occur frequently
+                // at this point due to peers not following the TLS specs and failing to send a close_notify alert. 
+                // Even if they do, currently, we do not read data from the socket after invoking close().
+                log.debug("SSLEngine.closeInBound() raised an exception.", e);
+            }
             socketChannel.socket().close();
             socketChannel.close();
             netReadBuffer = null;
