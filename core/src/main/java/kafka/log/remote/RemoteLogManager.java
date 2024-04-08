@@ -1336,7 +1336,7 @@ public class RemoteLogManager implements Closeable {
 
         if (logOptional.isPresent()) {
             Option<LeaderEpochFileCache> leaderEpochCache = logOptional.get().leaderEpochCache();
-            if (leaderEpochCache.isDefined()) {
+            if (leaderEpochCache != null && leaderEpochCache.isDefined()) {
                 epoch = leaderEpochCache.get().epochForOffset(offset);
             }
         }
