@@ -302,8 +302,6 @@ public class ReassignPartitionsUnitTest {
             assertEquals(assignments,
                 getReplicaAssignmentForPartitions(adminClient, new HashSet<>(asList(new TopicPartition("foo", 0), new TopicPartition("bar", 0)))));
 
-            assignments.clear();
-
             UnknownTopicOrPartitionException exception =
                 assertInstanceOf(UnknownTopicOrPartitionException.class,
                     assertThrows(ExecutionException.class,
