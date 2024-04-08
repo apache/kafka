@@ -1124,22 +1124,33 @@ public class RaftEventSimulationTest {
                 assertTrue(snapshotId.offset() <= highWatermark.getAsLong());
                 startOffset.set(snapshotId.offset());
 
-                try (SnapshotReader<Integer> snapshot =
-                        RecordsSnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE, true)) {
+                try (SnapshotReader<Integer> snapshot = RecordsSnapshotReader.of(
+                        log.readSnapshot(snapshotId).get(),
+                        node.intSerde,
+                        BufferSupplier.create(),
+                        Integer.MAX_VALUE,
+                        true
+                    )
+                ) {
+                    // Since the state machine is only on e value we only expect one data record in the snapshot
                     // Expect only one batch with only one record
-                    assertTrue(snapshot.hasNext());
-                    Batch<Integer> batch = snapshot.next();
-                    assertFalse(snapshot.hasNext());
-                    assertEquals(1, batch.records().size());
+                    OptionalInt sequence = OptionalInt.empty();
+                    while (snapshot.hasNext()) {
+                        Batch<Integer> batch = snapshot.next();
+                        if (!batch.records().isEmpty()) {
+                            assertEquals(1, batch.records().size());
+                            assertFalse(sequence.isPresent());
+                            sequence = OptionalInt.of(batch.records().get(0));
+                        }
+                    }
 
                     // The snapshotId offset is an "end offset"
                     long offset = snapshotId.offset() - 1;
-                    int sequence = batch.records().get(0);
-                    committedSequenceNumbers.putIfAbsent(offset, sequence);
+                    committedSequenceNumbers.putIfAbsent(offset, sequence.getAsInt());
 
                     assertEquals(
                         committedSequenceNumbers.get(offset),
-                        sequence,
+                        sequence.getAsInt(),
                         String.format("Committed sequence at offset %s changed on node %s", offset, nodeId)
                     );
                 }
@@ -1159,8 +1170,10 @@ public class RaftEventSimulationTest {
 
                     int committedSequence = committedSequenceNumbers.get(offset);
                     assertEquals(
-                        committedSequence, sequence,
-                        "Committed sequence at offset " + offset + " changed on node " + nodeId);
+                        committedSequence,
+                        sequence,
+                        String.format("Committed sequence at offset %d changed on node %d", offset, nodeId)
+                    );
                 }
             }
         }

@@ -123,8 +123,6 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
      * Returns the next non-control Batch
      */
     private Optional<Batch<T>> nextBatch() {
-        // TODO: Should this return control records? It may need to return control record if I decide to use
-        // this type in the internal KRaft listener. Another option is to use the RecordsIterator directly.
         while (iterator.hasNext()) {
             Batch<T> batch = iterator.next();
 
@@ -149,9 +147,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
                 );
             }
 
-            if (!batch.records().isEmpty()) {
-                return Optional.of(batch);
-            }
+            return Optional.of(batch);
         }
 
         return Optional.empty();
