@@ -60,8 +60,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.security.PasswordEncoder
-import org.apache.kafka.server.config.{ConfigType, ZkConfigs}
-import org.apache.kafka.server.config.KafkaConfig.{SSL_CLIENT_AUTH_CONFIG, SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, SASL_ENABLED_MECHANISMS_CONFIG, SASL_JAAS_CONFIG, SASL_KERBEROS_SERVICE_NAME_CONFIG}
+import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
@@ -131,9 +130,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       props.put(KafkaConfig.ListenersProp, s"$SecureInternal://localhost:0, $SecureExternal://localhost:0")
       props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"PLAINTEXT:PLAINTEXT, $SecureInternal:SSL, $SecureExternal:SASL_SSL, CONTROLLER:$controllerListenerSecurityProtocol")
       props.put(KafkaConfig.InterBrokerListenerNameProp, SecureInternal)
-      props.put(SSL_CLIENT_AUTH_CONFIG, "requested")
-      props.put(SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN")
-      props.put(SASL_ENABLED_MECHANISMS_CONFIG, kafkaServerSaslMechanisms.mkString(","))
+      props.put(KafkaSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "requested")
+      props.put(KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN")
+      props.put(KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, kafkaServerSaslMechanisms.mkString(","))
       props.put(KafkaConfig.LogSegmentBytesProp, "2000") // low value to test log rolling on config update
       props.put(KafkaConfig.NumReplicaFetchersProp, "2") // greater than one to test reducing threads
       props.put(KafkaConfig.PasswordEncoderSecretProp, "dynamic-config-secret")
@@ -1743,12 +1742,12 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private def addListenerPropsSasl(listener: String, mechanisms: Seq[String], props: Properties): Unit = {
     val listenerName = new ListenerName(listener)
     val prefix = listenerName.configPrefix
-    props.put(prefix + SASL_ENABLED_MECHANISMS_CONFIG, mechanisms.mkString(","))
-    props.put(prefix + SASL_KERBEROS_SERVICE_NAME_CONFIG, "kafka")
+    props.put(prefix + KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, mechanisms.mkString(","))
+    props.put(prefix + KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_CONFIG, "kafka")
     mechanisms.foreach { mechanism =>
       val jaasSection = jaasSections(Seq(mechanism), None, KafkaSasl, "").head
       val jaasConfig = jaasSection.modules.head.toString
-      props.put(listenerName.saslMechanismConfigPrefix(mechanism) + SASL_JAAS_CONFIG, jaasConfig)
+      props.put(listenerName.saslMechanismConfigPrefix(mechanism) + KafkaSecurityConfigs.SASL_JAAS_CONFIG, jaasConfig)
     }
   }
 

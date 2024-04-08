@@ -42,10 +42,9 @@ import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
-import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.{Defaults, ZkConfigs}
+import org.apache.kafka.server.config.{Defaults, KafkaSecurityConfigs, ZkConfigs}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
@@ -431,8 +430,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFalse(listenerSecurityProtocolMap.isDefault)
     assertFalse(listenerSecurityProtocolMap.isSensitive)
     assertFalse(listenerSecurityProtocolMap.isReadOnly)
-    val truststorePassword = configs.get(brokerResource1).get(SSL_TRUSTSTORE_PASSWORD_CONFIG)
-    assertEquals(SSL_TRUSTSTORE_PASSWORD_CONFIG, truststorePassword.name)
+    val truststorePassword = configs.get(brokerResource1).get(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)
+    assertEquals(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, truststorePassword.name)
     assertNull(truststorePassword.value)
     assertFalse(truststorePassword.isDefault)
     assertTrue(truststorePassword.isSensitive)

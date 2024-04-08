@@ -29,7 +29,7 @@ import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrParti
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
@@ -208,8 +208,8 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       config.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
       // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
       // set for subclasses with security enabled and we don't want to overwrite it.
-      if (!config.containsKey(SSL_TRUSTSTORE_PASSWORD_CONFIG))
-        config.setProperty(SSL_TRUSTSTORE_PASSWORD_CONFIG, "some.invalid.pass")
+      if (!config.containsKey(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG))
+        config.setProperty(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "some.invalid.pass")
     }
   }
 

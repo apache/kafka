@@ -29,7 +29,6 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, SaslConfigs, TopicConfig}
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList}
-import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{CompressionType, LegacyRecord, Records, TimestampType}
@@ -45,8 +44,7 @@ import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.config.KafkaConfig._
-import org.apache.kafka.server.config.{Defaults, ServerTopicConfigSynonyms, ZkConfigs}
+import org.apache.kafka.server.config.{Defaults, KafkaSecurityConfigs, ServerTopicConfigSynonyms, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Csv
@@ -982,68 +980,68 @@ object KafkaConfig {
       .define(ClientQuotaCallbackClassProp, CLASS, null, LOW, ClientQuotaCallbackClassDoc)
 
       /** ********* General Security Configuration ****************/
-      .define(CONNECTIONS_MAX_REAUTH_MS_CONFIG, LONG, Defaults.CONNECTIONS_MAX_REAUTH_MS, MEDIUM, CONNECTIONS_MAX_REAUTH_MS_DOC)
-      .define(SASL_SERVER_MAX_RECEIVE_SIZE_CONFIG, INT, Defaults.SERVER_MAX_RECEIVE_SIZE, MEDIUM, SASL_SERVER_MAX_RECEIVE_SIZE_DOC)
-      .define(SECURITY_PROVIDER_CLASS_CONFIG, STRING, null, LOW, SECURITY_PROVIDERS_DOC)
+      .define(KafkaSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG, LONG, KafkaSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_DEFAULT, MEDIUM, KafkaSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_DOC)
+      .define(KafkaSecurityConfigs.SASL_SERVER_MAX_RECEIVE_SIZE_CONFIG, INT, KafkaSecurityConfigs.SASL_SERVER_MAX_RECEIVE_SIZE_DEFAULT, MEDIUM, KafkaSecurityConfigs.SASL_SERVER_MAX_RECEIVE_SIZE_DOC)
+      .define(KafkaSecurityConfigs.SECURITY_PROVIDER_CLASS_CONFIG, STRING, null, LOW, KafkaSecurityConfigs.SECURITY_PROVIDERS_DOC)
 
       /** ********* SSL Configuration ****************/
-      .define(PRINCIPAL_BUILDER_CLASS_CONFIG, CLASS, Defaults.PRINCIPAL_BUILDER, MEDIUM, PRINCIPAL_BUILDER_CLASS_DOC)
-      .define(SSL_PROTOCOL_CONFIG, STRING, Defaults.SSL_PROTOCOL, MEDIUM, SSL_PROTOCOL_DOC)
-      .define(SSL_PROVIDER_CONFIG, STRING, null, MEDIUM, SSL_PROVIDER_DOC)
-      .define(SSL_ENABLED_PROTOCOLS_CONFIG, LIST, Defaults.SSL_ENABLED_PROTOCOLS, MEDIUM, SSL_ENABLED_PROTOCOLS_DOC)
-      .define(SSL_KEYSTORE_TYPE_CONFIG, STRING, Defaults.SSL_KEYSTORE_TYPE, MEDIUM, SSL_KEYSTORE_TYPE_DOC)
-      .define(SSL_KEYSTORE_LOCATION_CONFIG, STRING, null, MEDIUM, SSL_KEYSTORE_LOCATION_DOC)
-      .define(SSL_KEYSTORE_PASSWORD_CONFIG, PASSWORD, null, MEDIUM, SSL_KEYSTORE_PASSWORD_DOC)
-      .define(SSL_KEY_PASSWORD_CONFIG, PASSWORD, null, MEDIUM, SSL_KEY_PASSWORD_DOC)
-      .define(SSL_KEYSTORE_KEY_CONFIG, PASSWORD, null, MEDIUM, SSL_KEYSTORE_KEY_DOC)
-      .define(SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, PASSWORD, null, MEDIUM, SSL_KEYSTORE_CERTIFICATE_CHAIN_DOC)
-      .define(SSL_TRUSTSTORE_TYPE_CONFIG, STRING, Defaults.SSL_TRUSTSTORE_TYPE, MEDIUM, SSL_TRUSTSTORE_TYPE_DOC)
-      .define(SSL_TRUSTSTORE_LOCATION_CONFIG, STRING, null, MEDIUM, SSL_TRUSTSTORE_LOCATION_DOC)
-      .define(SSL_TRUSTSTORE_PASSWORD_CONFIG, PASSWORD, null, MEDIUM, SSL_TRUSTSTORE_PASSWORD_DOC)
-      .define(SSL_TRUSTSTORE_CERTIFICATES_CONFIG, PASSWORD, null, MEDIUM, SSL_TRUSTSTORE_CERTIFICATES_DOC)
-      .define(SSL_KEYMANAGER_ALGORITHM_CONFIG, STRING, Defaults.SSL_KEYMANAGER_ALGORITHM, MEDIUM, SSL_KEYMANAGER_ALGORITHM_DOC)
-      .define(SSL_TRUSTMANAGER_ALGORITHM_CONFIG, STRING, Defaults.SSL_TRUSTMANAGER_ALGORITHM, MEDIUM, SSL_TRUSTMANAGER_ALGORITHM_DOC)
-      .define(SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, STRING, Defaults.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM, LOW, SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC)
-      .define(SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, STRING, null, LOW, SSL_SECURE_RANDOM_IMPLEMENTATION_DOC)
-      .define(SSL_CLIENT_AUTH_CONFIG, STRING, Defaults.SSL_CLIENT_AUTHENTICATION, in(Defaults.SSL_CLIENT_AUTHENTICATION_VALID_VALUES:_*), MEDIUM, SSL_CLIENT_AUTH_DOC)
-      .define(SSL_CIPHER_SUITES_CONFIG, LIST, Collections.emptyList(), MEDIUM, SSL_CIPHER_SUITES_DOC)
-      .define(SSL_PRINCIPAL_MAPPING_RULES_CONFIG, STRING, Defaults.SSL_PRINCIPAL_MAPPING_RULES, LOW, SSL_PRINCIPAL_MAPPING_RULES_DOC)
-      .define(SSL_ENGINE_FACTORY_CLASS_CONFIG, CLASS, null, LOW, SSL_ENGINE_FACTORY_CLASS_DOC)
-      .define(SSL_ALLOW_DN_CHANGES_CONFIG, BOOLEAN, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_DN_CHANGES_VALUE, LOW, SSL_ALLOW_DN_CHANGES_DOC)
-      .define(SSL_ALLOW_SAN_CHANGES_CONFIG, BOOLEAN, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_SAN_CHANGES_VALUE, LOW, SSL_ALLOW_SAN_CHANGES_DOC)
+      .define(KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, CLASS, KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DEFAULT, MEDIUM, KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC)
+      .define(KafkaSecurityConfigs.SSL_PROTOCOL_CONFIG, STRING, KafkaSecurityConfigs.SSL_PROTOCOL_DEFAULT, MEDIUM, KafkaSecurityConfigs.SSL_PROTOCOL_DOC)
+      .define(KafkaSecurityConfigs.SSL_PROVIDER_CONFIG, STRING, null, MEDIUM, KafkaSecurityConfigs.SSL_PROVIDER_DOC)
+      .define(KafkaSecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, LIST, KafkaSecurityConfigs.SSL_ENABLED_PROTOCOLS_DEFAULTS, MEDIUM, KafkaSecurityConfigs.SSL_ENABLED_PROTOCOLS_DOC)
+      .define(KafkaSecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG, STRING, KafkaSecurityConfigs.SSL_KEYSTORE_TYPE_DEFAULT, MEDIUM, KafkaSecurityConfigs.SSL_KEYSTORE_TYPE_DOC)
+      .define(KafkaSecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG, STRING, null, MEDIUM, KafkaSecurityConfigs.SSL_KEYSTORE_LOCATION_DOC)
+      .define(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, PASSWORD, null, MEDIUM, KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_DOC)
+      .define(KafkaSecurityConfigs.SSL_KEY_PASSWORD_CONFIG, PASSWORD, null, MEDIUM, KafkaSecurityConfigs.SSL_KEY_PASSWORD_DOC)
+      .define(KafkaSecurityConfigs.SSL_KEYSTORE_KEY_CONFIG, PASSWORD, null, MEDIUM, KafkaSecurityConfigs.SSL_KEYSTORE_KEY_DOC)
+      .define(KafkaSecurityConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, PASSWORD, null, MEDIUM, KafkaSecurityConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_DOC)
+      .define(KafkaSecurityConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, STRING, KafkaSecurityConfigs.SSL_TRUSTSTORE_TYPE_DEFAULT, MEDIUM, KafkaSecurityConfigs.SSL_TRUSTSTORE_TYPE_DOC)
+      .define(KafkaSecurityConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, STRING, null, MEDIUM, KafkaSecurityConfigs.SSL_TRUSTSTORE_LOCATION_DOC)
+      .define(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, PASSWORD, null, MEDIUM, KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_DOC)
+      .define(KafkaSecurityConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, PASSWORD, null, MEDIUM, KafkaSecurityConfigs.SSL_TRUSTSTORE_CERTIFICATES_DOC)
+      .define(KafkaSecurityConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, STRING, KafkaSecurityConfigs.SSL_KEYMANAGER_ALGORITHM_DEFAULT, MEDIUM, KafkaSecurityConfigs.SSL_KEYMANAGER_ALGORITHM_DOC)
+      .define(KafkaSecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, STRING, KafkaSecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_DEFAULT, MEDIUM, KafkaSecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC)
+      .define(KafkaSecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, STRING, KafkaSecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DEFAULT, LOW, KafkaSecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC)
+      .define(KafkaSecurityConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, STRING, null, LOW, KafkaSecurityConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_DOC)
+      .define(KafkaSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, STRING, KafkaSecurityConfigs.SSL_CLIENT_AUTH_DEFAULT, in(KafkaSecurityConfigs.SSL_CLIENT_AUTHENTICATION_VALID_VALUES:_*), MEDIUM, KafkaSecurityConfigs.SSL_CLIENT_AUTH_DOC)
+      .define(KafkaSecurityConfigs.SSL_CIPHER_SUITES_CONFIG, LIST, Collections.emptyList(), MEDIUM, KafkaSecurityConfigs.SSL_CIPHER_SUITES_DOC)
+      .define(KafkaSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG, STRING, KafkaSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_DEFAULT, LOW, KafkaSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_DOC)
+      .define(KafkaSecurityConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, CLASS, null, LOW, KafkaSecurityConfigs.SSL_ENGINE_FACTORY_CLASS_DOC)
+      .define(KafkaSecurityConfigs.SSL_ALLOW_DN_CHANGES_CONFIG, BOOLEAN, KafkaSecurityConfigs.SSL_ALLOW_DN_CHANGES_DEFAULT, LOW, KafkaSecurityConfigs.SSL_ALLOW_DN_CHANGES_DOC)
+      .define(KafkaSecurityConfigs.SSL_ALLOW_SAN_CHANGES_CONFIG, BOOLEAN, KafkaSecurityConfigs.SSL_ALLOW_SAN_CHANGES_DEFAULT, LOW, KafkaSecurityConfigs.SSL_ALLOW_SAN_CHANGES_DOC)
 
       /** ********* Sasl Configuration ****************/
-      .define(SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, STRING, Defaults.SASL_MECHANISM_INTER_BROKER_PROTOCOL, MEDIUM, SASL_MECHANISM_INTER_BROKER_PROTOCOL_DOC)
-      .define(SASL_JAAS_CONFIG, PASSWORD, null, MEDIUM, SASL_JAAS_CONFIG_DOC)
-      .define(SASL_ENABLED_MECHANISMS_CONFIG, LIST, Defaults.SASL_ENABLED_MECHANISMS, MEDIUM, SASL_ENABLED_MECHANISMS_DOC)
-      .define(SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG, CLASS, null, MEDIUM, SASL_SERVER_CALLBACK_HANDLER_CLASS_DOC)
-      .define(SASL_CLIENT_CALLBACK_HANDLER_CLASS_CONFIG, CLASS, null, MEDIUM, SASL_CLIENT_CALLBACK_HANDLER_CLASS_DOC)
-      .define(SASL_LOGIN_CLASS_CONFIG, CLASS, null, MEDIUM, SASL_LOGIN_CLASS_DOC)
-      .define(SASL_LOGIN_CALLBACK_HANDLER_CLASS_CONFIG, CLASS, null, MEDIUM, SASL_LOGIN_CALLBACK_HANDLER_CLASS_DOC)
-      .define(SASL_KERBEROS_SERVICE_NAME_CONFIG, STRING, null, MEDIUM, SASL_KERBEROS_SERVICE_NAME_DOC)
-      .define(SASL_KERBEROS_KINIT_CMD_CONFIG, STRING, Defaults.SASL_KERBEROS_KINIT_CMD, MEDIUM, SASL_KERBEROS_KINIT_CMD_DOC)
-      .define(SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG, DOUBLE, Defaults.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR, MEDIUM, SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC)
-      .define(SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG, DOUBLE, Defaults.SASL_KERBEROS_TICKET_RENEW_JITTER, MEDIUM, SASL_KERBEROS_TICKET_RENEW_JITTER_DOC)
-      .define(SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG, LONG, Defaults.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN, MEDIUM, SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC)
-      .define(SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG, LIST, Defaults.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES, MEDIUM, SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC)
-      .define(SASL_LOGIN_REFRESH_WINDOW_FACTOR_CONFIG, DOUBLE, Defaults.SASL_LOGIN_REFRESH_WINDOW_FACTOR, MEDIUM, SASL_LOGIN_REFRESH_WINDOW_FACTOR_DOC)
-      .define(SASL_LOGIN_REFRESH_WINDOW_JITTER_CONFIG, DOUBLE, Defaults.SASL_LOGIN_REFRESH_WINDOW_JITTER, MEDIUM, SASL_LOGIN_REFRESH_WINDOW_JITTER_DOC)
-      .define(SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_CONFIG, SHORT, Defaults.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS, MEDIUM, SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_DOC)
-      .define(SASL_LOGIN_REFRESH_BUFFER_SECONDS_CONFIG, SHORT, Defaults.SASL_LOGIN_REFRESH_BUFFER_SECONDS, MEDIUM, SASL_LOGIN_REFRESH_BUFFER_SECONDS_DOC)
-      .define(SASL_LOGIN_CONNECT_TIMEOUT_MS_CONFIG, INT, null, LOW, SASL_LOGIN_CONNECT_TIMEOUT_MS_DOC)
-      .define(SASL_LOGIN_READ_TIMEOUT_MS_CONFIG, INT, null, LOW, SASL_LOGIN_READ_TIMEOUT_MS_DOC)
-      .define(SASL_LOGIN_RETRY_BACKOFF_MAX_MS_CONFIG, LONG, Defaults.SASL_LOGIN_RETRY_BACKOFF_MAX_MS, LOW, SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC)
-      .define(SASL_LOGIN_RETRY_BACKOFF_MS_CONFIG, LONG, Defaults.SASL_LOGIN_RETRY_BACKOFF_MS, LOW, SASL_LOGIN_RETRY_BACKOFF_MS_DOC)
-      .define(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_CONFIG, STRING, Defaults.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, LOW, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC)
-      .define(SASL_OAUTHBEARER_SUB_CLAIM_NAME_CONFIG, STRING, Defaults.SASL_OAUTHBEARER_SUB_CLAIM_NAME, LOW, SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC)
-      .define(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_CONFIG, STRING, null, MEDIUM, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC)
-      .define(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_CONFIG, STRING, null, MEDIUM, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC)
-      .define(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_CONFIG, LONG, Defaults.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, LOW, SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DOC)
-      .define(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_CONFIG, LONG, Defaults.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, LOW, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC)
-      .define(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_CONFIG, LONG, Defaults.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, LOW, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC)
-      .define(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_CONFIG, INT, Defaults.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, LOW, SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC)
-      .define(SASL_OAUTHBEARER_EXPECTED_AUDIENCE_CONFIG, LIST, null, LOW, SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
-      .define(SASL_OAUTHBEARER_EXPECTED_ISSUER_CONFIG, STRING, null, LOW, SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC)
+      .define(KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, STRING, KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_DEFAULT, MEDIUM, KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_DOC)
+      .define(KafkaSecurityConfigs.SASL_JAAS_CONFIG, PASSWORD, null, MEDIUM, KafkaSecurityConfigs.SASL_JAAS_CONFIG_DOC)
+      .define(KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, LIST, KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_DEFAULT, MEDIUM, KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_DOC)
+      .define(KafkaSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG, CLASS, null, MEDIUM, KafkaSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_DOC)
+      .define(KafkaSecurityConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS_CONFIG, CLASS, null, MEDIUM, KafkaSecurityConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS_DOC)
+      .define(KafkaSecurityConfigs.SASL_LOGIN_CLASS_CONFIG, CLASS, null, MEDIUM, KafkaSecurityConfigs.SASL_LOGIN_CLASS_DOC)
+      .define(KafkaSecurityConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS_CONFIG, CLASS, null, MEDIUM, KafkaSecurityConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS_DOC)
+      .define(KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_CONFIG, STRING, null, MEDIUM, KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_DOC)
+      .define(KafkaSecurityConfigs.SASL_KERBEROS_KINIT_CMD_CONFIG, STRING, KafkaSecurityConfigs.SASL_KERBEROS_KINIT_CMD_DEFAULT, MEDIUM, KafkaSecurityConfigs.SASL_KERBEROS_KINIT_CMD_DOC)
+      .define(KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG, DOUBLE, KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DEFAULT, MEDIUM, KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC)
+      .define(KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG, DOUBLE, KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_DEFAULT, MEDIUM, KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_DOC)
+      .define(KafkaSecurityConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG, LONG, KafkaSecurityConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DEFAULT, MEDIUM, KafkaSecurityConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC)
+      .define(KafkaSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG, LIST, KafkaSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DEFAULT, MEDIUM, KafkaSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC)
+      .define(KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR_CONFIG, DOUBLE, KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR_DEFAULT, MEDIUM, KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR_DOC)
+      .define(KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER_CONFIG, DOUBLE, KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER_DEFAULT, MEDIUM, KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER_DOC)
+      .define(KafkaSecurityConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_CONFIG, SHORT, KafkaSecurityConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_DEFAULT, MEDIUM, KafkaSecurityConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_DOC)
+      .define(KafkaSecurityConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS_CONFIG, SHORT, KafkaSecurityConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS_DEFAULT, MEDIUM, KafkaSecurityConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS_DOC)
+      .define(KafkaSecurityConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS_CONFIG, INT, null, LOW, KafkaSecurityConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS_DOC)
+      .define(KafkaSecurityConfigs.SASL_LOGIN_READ_TIMEOUT_MS_CONFIG, INT, null, LOW, KafkaSecurityConfigs.SASL_LOGIN_READ_TIMEOUT_MS_DOC)
+      .define(KafkaSecurityConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS_CONFIG, LONG, KafkaSecurityConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DEFAULT, LOW, KafkaSecurityConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC)
+      .define(KafkaSecurityConfigs.SASL_LOGIN_RETRY_BACKOFF_MS_CONFIG, LONG, KafkaSecurityConfigs.SASL_LOGIN_RETRY_BACKOFF_MS_DEFAULT, LOW, KafkaSecurityConfigs.SASL_LOGIN_RETRY_BACKOFF_MS_DOC)
+      .define(KafkaSecurityConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_CONFIG, STRING, KafkaSecurityConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DEFAULT, LOW, KafkaSecurityConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC)
+      .define(KafkaSecurityConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME_CONFIG, STRING, KafkaSecurityConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME_DEFAULT, LOW, KafkaSecurityConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC)
+      .define(KafkaSecurityConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_CONFIG, STRING, null, MEDIUM, KafkaSecurityConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC)
+      .define(KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_CONFIG, STRING, null, MEDIUM, KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC)
+      .define(KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_CONFIG, LONG, KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DEFAULT, LOW, KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DOC)
+      .define(KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_CONFIG, LONG, KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DEFAULT, LOW, KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC)
+      .define(KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_CONFIG, LONG, KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DEFAULT, LOW, KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC)
+      .define(KafkaSecurityConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_CONFIG, INT, KafkaSecurityConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DEFAULT, LOW, KafkaSecurityConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC)
+      .define(KafkaSecurityConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_CONFIG, LIST, null, LOW, KafkaSecurityConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
+      .define(KafkaSecurityConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_CONFIG, STRING, null, LOW, KafkaSecurityConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC)
 
       /** ********* Delegation Token Configuration ****************/
       .define(DelegationTokenSecretKeyAliasProp, PASSWORD, null, MEDIUM, DelegationTokenSecretKeyAliasDoc)
@@ -1611,7 +1609,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   // Hence the base SSL/SASL configs are not fields of KafkaConfig, listener configs should be
   // retrieved using KafkaConfig#valuesWithPrefixOverride
   private def saslEnabledMechanisms(listenerName: ListenerName): Set[String] = {
-    val value = valuesWithPrefixOverride(listenerName.configPrefix).get(SASL_ENABLED_MECHANISMS_CONFIG)
+    val value = valuesWithPrefixOverride(listenerName.configPrefix).get(KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG)
     if (value != null)
       value.asInstanceOf[util.List[String]].asScala.toSet
     else
@@ -1622,7 +1620,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def interBrokerSecurityProtocol = getInterBrokerListenerNameAndSecurityProtocol._2
   def controlPlaneListenerName = getControlPlaneListenerNameAndSecurityProtocol.map { case (listenerName, _) => listenerName }
   def controlPlaneSecurityProtocol = getControlPlaneListenerNameAndSecurityProtocol.map { case (_, securityProtocol) => securityProtocol }
-  def saslMechanismInterBrokerProtocol = getString(SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG)
+  def saslMechanismInterBrokerProtocol = getString(KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG)
   val saslInterBrokerHandshakeRequestEnable = interBrokerProtocolVersion.isSaslInterBrokerHandshakeRequestEnabled
 
   /** ********* DelegationToken Configuration **************/
@@ -2022,7 +2020,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     require(!interBrokerUsesSasl || saslInterBrokerHandshakeRequestEnable || saslMechanismInterBrokerProtocol == SaslConfigs.GSSAPI_MECHANISM,
       s"Only GSSAPI mechanism is supported for inter-broker communication with SASL when inter.broker.protocol.version is set to $interBrokerProtocolVersionString")
     require(!interBrokerUsesSasl || saslEnabledMechanisms(interBrokerListenerName).contains(saslMechanismInterBrokerProtocol),
-      s"${SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG} must be included in ${SASL_ENABLED_MECHANISMS_CONFIG} when SASL is used for inter-broker communication")
+      s"${KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG} must be included in ${KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG} when SASL is used for inter-broker communication")
     require(queuedMaxBytes <= 0 || queuedMaxBytes >= socketRequestMaxBytes,
       s"${KafkaConfig.QueuedMaxBytesProp} must be larger or equal to ${KafkaConfig.SocketRequestMaxBytesProp}")
 
@@ -2040,10 +2038,10 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         s" ${KafkaConfig.ConnectionsMaxIdleMsProp}=$connectionsMaxIdleMs to prevent failed" +
         s" authentication responses from timing out")
 
-    val principalBuilderClass = getClass(PRINCIPAL_BUILDER_CLASS_CONFIG)
-    require(principalBuilderClass != null, s"${PRINCIPAL_BUILDER_CLASS_CONFIG} must be non-null")
+    val principalBuilderClass = getClass(KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG)
+    require(principalBuilderClass != null, s"${KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG} must be non-null")
     require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass),
-      s"${PRINCIPAL_BUILDER_CLASS_CONFIG} must implement KafkaPrincipalSerde")
+      s"${KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG} must implement KafkaPrincipalSerde")
 
     // New group coordinator configs validation.
     require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,

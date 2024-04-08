@@ -21,8 +21,8 @@ import java.util.Properties
 
 import scala.collection.Seq
 import org.apache.kafka.clients.admin.ScramMechanism
-import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.common.utils.Java
+import org.apache.kafka.server.config.KafkaSecurityConfigs
 
 object JaasTestUtils {
 
@@ -161,8 +161,8 @@ object JaasTestUtils {
     val result = saslProperties.getOrElse(new Properties)
     // IBM Kerberos module doesn't support the serviceName JAAS property, hence it needs to be
     // passed as a Kafka property
-    if (isIbmSecurity && !result.contains(KafkaConfig.SASL_KERBEROS_SERVICE_NAME_CONFIG))
-      result.put(KafkaConfig.SASL_KERBEROS_SERVICE_NAME_CONFIG, serviceName)
+    if (isIbmSecurity && !result.contains(KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_CONFIG))
+      result.put(KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_CONFIG, serviceName)
     result
   }
 

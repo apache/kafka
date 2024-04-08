@@ -38,8 +38,7 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
-import org.apache.kafka.server.config.{ServerTopicConfigSynonyms, ZkConfigs}
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerTopicConfigSynonyms, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.function.Executable
@@ -918,65 +917,65 @@ class KafkaConfigTest {
         case KafkaConfig.MetricRecordingLevelProp => // ignore string
         case KafkaConfig.RackProp => // ignore string
         //SSL Configs
-        case PRINCIPAL_BUILDER_CLASS_CONFIG =>
-        case CONNECTIONS_MAX_REAUTH_MS_CONFIG =>
-        case SSL_PROTOCOL_CONFIG => // ignore string
-        case SSL_PROVIDER_CONFIG => // ignore string
-        case SSL_ENABLED_PROTOCOLS_CONFIG =>
-        case SSL_KEYSTORE_TYPE_CONFIG => // ignore string
-        case SSL_KEYSTORE_LOCATION_CONFIG => // ignore string
-        case SSL_KEYSTORE_PASSWORD_CONFIG => // ignore string
-        case SSL_KEY_PASSWORD_CONFIG => // ignore string
-        case SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG => // ignore string
-        case SSL_KEYSTORE_KEY_CONFIG => // ignore string
-        case SSL_TRUSTSTORE_TYPE_CONFIG => // ignore string
-        case SSL_TRUSTSTORE_PASSWORD_CONFIG => // ignore string
-        case SSL_TRUSTSTORE_LOCATION_CONFIG => // ignore string
-        case SSL_TRUSTSTORE_CERTIFICATES_CONFIG => // ignore string
-        case SSL_KEYMANAGER_ALGORITHM_CONFIG =>
-        case SSL_TRUSTMANAGER_ALGORITHM_CONFIG =>
-        case SSL_CLIENT_AUTH_CONFIG => // ignore string
-        case SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG => // ignore string
-        case SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG => // ignore string
-        case SSL_CIPHER_SUITES_CONFIG => // ignore string
-        case SSL_PRINCIPAL_MAPPING_RULES_CONFIG => // ignore string
+        case KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG =>
+        case KafkaSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG =>
+        case KafkaSecurityConfigs.SSL_PROTOCOL_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_PROVIDER_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG =>
+        case KafkaSecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_KEY_PASSWORD_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_KEYSTORE_KEY_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_TRUSTSTORE_TYPE_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG =>
+        case KafkaSecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG =>
+        case KafkaSecurityConfigs.SSL_CLIENT_AUTH_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_CIPHER_SUITES_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG => // ignore string
 
         //Sasl Configs
         case KafkaConfig.SaslMechanismControllerProtocolProp => // ignore
-        case SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG => // ignore
-        case SASL_ENABLED_MECHANISMS_CONFIG =>
-        case SASL_CLIENT_CALLBACK_HANDLER_CLASS_CONFIG =>
-        case SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG =>
-        case SASL_LOGIN_CLASS_CONFIG =>
-        case SASL_LOGIN_CALLBACK_HANDLER_CLASS_CONFIG =>
-        case SASL_KERBEROS_SERVICE_NAME_CONFIG => // ignore string
-        case SASL_KERBEROS_KINIT_CMD_CONFIG =>
-        case SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG =>
-        case SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG =>
-        case SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG =>
-        case SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG => // ignore string
-        case SASL_JAAS_CONFIG =>
-        case SASL_LOGIN_REFRESH_WINDOW_FACTOR_CONFIG =>
-        case SASL_LOGIN_REFRESH_WINDOW_JITTER_CONFIG =>
-        case SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_CONFIG =>
-        case SASL_LOGIN_REFRESH_BUFFER_SECONDS_CONFIG =>
-        case SASL_LOGIN_CONNECT_TIMEOUT_MS_CONFIG =>
-        case SASL_LOGIN_READ_TIMEOUT_MS_CONFIG =>
-        case SASL_LOGIN_RETRY_BACKOFF_MAX_MS_CONFIG =>
-        case SASL_LOGIN_RETRY_BACKOFF_MS_CONFIG =>
-        case SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_CONFIG =>
-        case SASL_OAUTHBEARER_SUB_CLAIM_NAME_CONFIG =>
-        case SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_CONFIG =>
-        case SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_CONFIG =>
-        case SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_CONFIG =>
-        case SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_CONFIG =>
-        case SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_CONFIG =>
-        case SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_CONFIG =>
-        case SASL_OAUTHBEARER_EXPECTED_AUDIENCE_CONFIG =>
-        case SASL_OAUTHBEARER_EXPECTED_ISSUER_CONFIG =>
+        case KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG => // ignore
+        case KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_CLASS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SASL_KERBEROS_KINIT_CMD_CONFIG =>
+        case KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG =>
+        case KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG =>
+        case KafkaSecurityConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG =>
+        case KafkaSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG => // ignore string
+        case KafkaSecurityConfigs.SASL_JAAS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_READ_TIMEOUT_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_LOGIN_RETRY_BACKOFF_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_CONFIG =>
+        case KafkaSecurityConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_CONFIG =>
 
         // Security config
-        case SECURITY_PROVIDER_CLASS_CONFIG =>
+        case KafkaSecurityConfigs.SECURITY_PROVIDER_CLASS_CONFIG =>
 
         // Password encoder configs
         case KafkaConfig.PasswordEncoderSecretProp =>
@@ -997,7 +996,7 @@ class KafkaConfigTest {
         case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
         case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
 
-        case SASL_SERVER_MAX_RECEIVE_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaSecurityConfigs.SASL_SERVER_MAX_RECEIVE_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
         // Raft Quorum Configs
         case RaftConfig.QUORUM_VOTERS_CONFIG => // ignore string
@@ -1604,8 +1603,8 @@ class KafkaConfigTest {
     val props = new Properties()
     props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
     val config = KafkaConfig.fromProps(props)
-    assertNotNull(config.getLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_CONFIG))
-    assertNotNull(config.getLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_CONFIG))
+    assertNotNull(config.getLong(KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_CONFIG))
+    assertNotNull(config.getLong(KafkaSecurityConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_CONFIG))
   }
 
   @Test
