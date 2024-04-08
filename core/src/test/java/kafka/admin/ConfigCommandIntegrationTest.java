@@ -20,7 +20,6 @@ import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
 import kafka.server.KafkaConfig;
 import kafka.server.QuorumTestHarness;
-import kafka.utils.TestInfoUtils;
 import kafka.zk.AdminZkClient;
 import kafka.zk.BrokerInfo;
 import org.apache.kafka.common.config.ConfigException;
@@ -55,13 +54,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 public class ConfigCommandIntegrationTest extends QuorumTestHarness {
-    /** @see TestInfoUtils#TestWithParameterizedQuorumName()  */
-    public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.{argumentsWithNames}";
-
     AdminZkClient adminZkClient;
     List<String> alterOpts;
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk")
     public void shouldExitWithNonZeroStatusOnUpdatingUnallowedConfigViaZk(String quorum) {
         assertNonZeroStatusExit(
@@ -72,7 +68,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
             "--add-config", "security.inter.broker.protocol=PLAINTEXT");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk")
     public void shouldExitWithNonZeroStatusOnZkCommandAlterUserQuota(String quorum) {
         assertNonZeroStatusExit(
@@ -134,7 +130,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
         verifyConfig(Collections.emptyMap(), brokerId);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk")
     public void testDynamicBrokerConfigUpdateUsingZooKeeper(String quorum) throws Exception {
         String brokerId = "1";
