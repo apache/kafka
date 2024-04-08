@@ -557,6 +557,46 @@ public class SubscriptionStateTest {
     }
 
     @Test
+    public void testAwaitUpdateWithTheSameLeaderAndEpoch() {
+        Node broker1 = new Node(1, "localhost", 9092);
+        ApiVersions apiVersions = new ApiVersions();
+        apiVersions.update(broker1.idString(), NodeApiVersions.create());
+
+        state.assignFromUser(singleton(tp0));
+
+        state.seekValidated(tp0, new SubscriptionState.FetchPosition(0L, Optional.of(0),
+                new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(5))));
+        assertTrue(state.isFetchable(tp0));
+
+        state.awaitUpdate(tp0);
+        assertTrue(state.awaitingUpdate(tp0));
+
+        assertTrue(state.maybeValidatePositionForCurrentLeader(apiVersions, tp0,
+                new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(5))));
+        assertTrue(state.awaitingValidation(tp0));
+    }
+
+    @Test
+    public void testAwaitUpdateWithTheSameLeaderAndEpochButNoOffsetEpoch() {
+        Node broker1 = new Node(1, "localhost", 9092);
+        ApiVersions apiVersions = new ApiVersions();
+        apiVersions.update(broker1.idString(), NodeApiVersions.create());
+
+        state.assignFromUser(singleton(tp0));
+
+        state.seekValidated(tp0, new SubscriptionState.FetchPosition(0L, Optional.empty(),
+                new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(5))));
+        assertTrue(state.isFetchable(tp0));
+
+        state.awaitUpdate(tp0);
+        assertTrue(state.awaitingUpdate(tp0));
+
+        assertFalse(state.maybeValidatePositionForCurrentLeader(apiVersions, tp0,
+                new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(5))));
+        assertTrue(state.isFetchable(tp0));
+    }
+
+    @Test
     public void testSeekUnvalidatedWithNoEpochClearsAwaitingValidation() {
         Node broker1 = new Node(1, "localhost", 9092);
         state.assignFromUser(Collections.singleton(tp0));
