@@ -20,7 +20,7 @@ package kafka.admin
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils.{createProducer, plaintextBootstrapServers}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
@@ -61,7 +61,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThreeCompressedRecordsInOneBatch(quorum: String): Unit = {
     produceMessagesInOneBatch("gzip")
@@ -75,7 +75,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets(topic = topicNameWithCustomConfigs, 0)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThreeNonCompressedRecordsInOneBatch(quorum: String): Unit = {
     produceMessagesInOneBatch()
@@ -90,7 +90,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets(topic = topicNameWithCustomConfigs, 0)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThreeNonCompressedRecordsInSeparateBatch(quorum: String): Unit = {
     produceMessagesInSeparateBatch()
@@ -104,7 +104,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   // The message conversion test only run in ZK mode because KRaft mode doesn't support "inter.broker.protocol.version" < 3.0
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testThreeRecordsInOneBatchWithMessageConversion(quorum: String): Unit = {
     createOldMessageFormatBrokers()
@@ -120,7 +120,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   // The message conversion test only run in ZK mode because KRaft mode doesn't support "inter.broker.protocol.version" < 3.0
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testThreeRecordsInSeparateBatchWithMessageConversion(quorum: String): Unit = {
     createOldMessageFormatBrokers()
@@ -135,7 +135,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThreeRecordsInOneBatchHavingDifferentCompressionTypeWithServer(quorum: String): Unit = {
     val props: Properties = new Properties()
@@ -145,7 +145,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets(topic = topicNameWithCustomConfigs)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThreeRecordsInSeparateBatchHavingDifferentCompressionTypeWithServer(quorum: String): Unit = {
     val props: Properties = new Properties()
@@ -155,7 +155,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets(topic = topicNameWithCustomConfigs)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThreeCompressedRecordsInSeparateBatch(quorum: String): Unit = {
     produceMessagesInSeparateBatch("gzip")

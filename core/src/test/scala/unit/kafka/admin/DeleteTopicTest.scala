@@ -58,7 +58,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteTopicWithAllAliveReplicas(quorum: String): Unit = {
     brokers = createTestTopicAndCluster(topic)
@@ -67,7 +67,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 1, brokers)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testResumeDeleteTopicWithRecoveredFollower(quorum: String): Unit = {
     val topicPartition = new TopicPartition("test", 0)
@@ -122,7 +122,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, brokers)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testPartitionReassignmentDuringDeleteTopic(quorum: String): Unit = {
     val topicPartition = new TopicPartition(topic, 0)
@@ -194,7 +194,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     }.toSet
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testIncreasePartitionCountDuringDeleteTopic(quorum: String): Unit = {
     val topicPartition = new TopicPartition(topic, 0)
@@ -280,7 +280,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 2, partitionHostingBrokers)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteTopicDuringAddPartition(quorum: String): Unit = {
     brokers = createTestTopicAndCluster(topic)
@@ -320,7 +320,7 @@ class DeleteTopicTest extends QuorumTestHarness {
       "Replica logs not for new partition [test,1] not deleted after delete topic is complete.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAddPartitionDuringDeleteTopic(quorum: String): Unit = {
     brokers = createTestTopicAndCluster(topic)
@@ -346,7 +346,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     assertTrue(brokers.forall(_.logManager.getLog(newPartition).isEmpty), "Replica logs not deleted after delete topic is complete")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testRecreateTopicAfterDeletion(quorum: String): Unit = {
     val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
@@ -362,7 +362,7 @@ class DeleteTopicTest extends QuorumTestHarness {
       "Replicas for topic test not created.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteNonExistingTopic(quorum: String): Unit = {
     val topicPartition = new TopicPartition("test", 0)
@@ -393,7 +393,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     TestUtils.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, topic, 0, 1000)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteTopicWithCleaner(quorum: String): Unit = {
     val topicName = "test"
@@ -479,7 +479,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDisableDeleteTopic(quorum: String): Unit = {
     val topicPartition = new TopicPartition(topic, 0)

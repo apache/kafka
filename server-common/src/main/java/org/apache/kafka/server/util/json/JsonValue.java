@@ -55,7 +55,7 @@ public interface JsonValue {
     }
 
     /**
-     * If this is a JSON object, return a JsonObject wrapped by a `Some`. Otherwise, return None.
+     * If this is a JSON object, return a JsonObject wrapped by an `Optional`. Otherwise, return Empty.
      */
     default Optional<JsonObject> asJsonObjectOptional() {
         if (this instanceof JsonObject) {
@@ -77,7 +77,7 @@ public interface JsonValue {
     }
 
     /**
-     * If this is a JSON array, return a JsonArray wrapped by a `Some`. Otherwise, return None.
+     * If this is a JSON array, return a JsonArray wrapped by an `Optional`. Otherwise, return Empty.
      */
     default Optional<JsonArray> asJsonArrayOptional() {
         if (this instanceof JsonArray) {

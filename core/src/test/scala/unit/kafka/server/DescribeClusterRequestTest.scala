@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.network.SocketServer
-import kafka.utils.TestInfoUtils
 import org.apache.kafka.common.message.{DescribeClusterRequestData, DescribeClusterResponseData}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeClusterResponse}
@@ -47,13 +46,13 @@ class DescribeClusterRequestTest extends BaseRequestTest {
     doSetup(testInfo, createOffsetsTopic = false)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeClusterRequestIncludingClusterAuthorizedOperations(quorum: String): Unit = {
     testDescribeClusterRequest(true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeClusterRequestExcludingClusterAuthorizedOperations(quorum: String): Unit = {
     testDescribeClusterRequest(false)
