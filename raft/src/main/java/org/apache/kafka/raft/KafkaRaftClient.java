@@ -169,9 +169,13 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     private final Map<Listener<T>, ListenerContext> listenerContexts = new IdentityHashMap<>();
     private final ConcurrentLinkedQueue<Registration<T>> pendingRegistrations = new ConcurrentLinkedQueue<>();
 
-    // Components that needs to be initialized because they depend on the voter set
-    // TODO: figure out how to enforce the requirement that the internal log listener must be more up to date then
-    // the external raft listener. This is a requirement for a consistent snapshot.
+    // These components need to be initialized by the method initialize() because they depend on the voter set
+    /*
+     * The key invariant for the internal listener is that it has always read to the LEO. This is achived by:
+     * 1. reading the entire partition (snapshot and log) at start up,
+     * 2. updating the internal log listener when a snapshot is replaced, because of FETCH_SNAPSHOT, on the followers
+     * 3. updating the internal log listener when the leader (call to append()) or follower (FETCH) appends to the log
+     */
     private volatile InternalLogListener internalListener;
     private volatile KafkaRaftMetrics kafkaRaftMetrics;
     private volatile QuorumState quorum;
@@ -356,8 +360,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    // TODO: need a way to verify that initialize has been called.
-
     public void initialize(
         Map<Integer, InetSocketAddress> voterAddresses,
         String listenerName,
@@ -368,7 +370,9 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             Optional.of(VoterSet.fromAddressSpecs(listenerName, voterAddresses)),
             log,
             serde,
-            BufferSupplier.create()
+            BufferSupplier.create(),
+            MAX_BATCH_SIZE_BYTES,
+            logContext
         );
         // Read the entire log
         logger.info("Reading KRaft snapshot and log as part of the initialization");
@@ -441,10 +445,10 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public LeaderAndEpoch leaderAndEpoch() {
-        if (!isInitialized()) {
-            return LeaderAndEpoch.UNKNOWN;
-        } else {
+        if (isInitialized()) {
             return quorum.leaderAndEpoch();
+        } else {
+            return LeaderAndEpoch.UNKNOWN;
         }
     }
 
@@ -2349,7 +2353,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
      */
     public void poll() {
         if (!isInitialized()) {
-            new IllegalStateException("KafkaRaftClient must be initialized before polling");
+            throw new IllegalStateException("Replica needs to be initialized before polling");
         }
 
         long startPollTimeMs = time.milliseconds();
@@ -2388,11 +2392,11 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private long append(int epoch, List<T> records, OptionalLong requiredBaseOffset, boolean isAtomic) {
         if (!isInitialized()) {
-            new NotLeaderException("Append failed because the replication is not the current leader");
+            throw new NotLeaderException("Append failed because the replica is not the current leader");
         }
 
         LeaderState<T> leaderState = quorum.<T>maybeLeaderState().orElseThrow(
-            () -> new NotLeaderException("Append failed because the replication is not the current leader")
+            () -> new NotLeaderException("Append failed because the replica is not the current leader")
         );
 
         BatchAccumulator<T> accumulator = leaderState.accumulator();
@@ -2423,9 +2427,9 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     public void resign(int epoch) {
         if (epoch < 0) {
             throw new IllegalArgumentException("Attempt to resign from an invalid negative epoch " + epoch);
-        }
-
-        if (!quorum.isVoter()) {
+        } else if (!isInitialized()) {
+            throw new IllegalStateException("Replica needs to be initialized before resigning");
+        } else if (!quorum.isVoter()) {
             throw new IllegalStateException("Attempt to resign by a non-voter");
         }
 
@@ -2473,7 +2477,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         long lastContainedLogTimestamp
     ) {
         if (!isInitialized()) {
-            throw new IllegalStateException("Cannot create snapshot before the kraft client has been initialized");
+            throw new IllegalStateException("Cannot create snapshot before the replica has been initialized");
         }
 
         return log.createNewSnapshot(snapshotId).map(writer -> {
@@ -2524,7 +2528,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
     // Visible only for test
     QuorumState quorum() {
-        // because this is only called by test is it okay to return null
+        // It's okay to return null since this method is only called by tests
         return quorum;
     }
 

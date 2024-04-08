@@ -16,21 +16,22 @@
  */
 package org.apache.kafka.raft.internals;
 
+import java.util.Optional;
+import java.util.OptionalLong;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.LogFetchInfo;
 import org.apache.kafka.raft.ReplicatedLog;
 import org.apache.kafka.server.common.serialization.RecordSerde;
-import java.util.OptionalLong;
-import java.util.Optional;
 import org.apache.kafka.snapshot.RawSnapshotReader;
-import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
-import static org.apache.kafka.raft.KafkaRaftClient.MAX_BATCH_SIZE_BYTES;
+import org.apache.kafka.snapshot.SnapshotReader;
+import org.slf4j.Logger;
 
 // TODO: File an issue to remove the RecordSerde. The internal listener should just skip data record batches
 // TODO: Document this class and methods
@@ -39,6 +40,8 @@ final public class InternalLogListener {
     private final ReplicatedLog log;
     private final RecordSerde<?> serde;
     private final BufferSupplier bufferSupplier;
+    private final Logger logger;
+    private final int maxBatchSizeBytes;
 
     // These are objects are synchronized using the perspective object monitor. The two actors
     // are the KRaft driver and the RaftClient callers
@@ -57,12 +60,16 @@ final public class InternalLogListener {
         Optional<VoterSet> staticVoterSet,
         ReplicatedLog log,
         RecordSerde<?> serde,
-        BufferSupplier bufferSupplier
+        BufferSupplier bufferSupplier,
+        int maxBatchSizeBytes,
+        LogContext logContext
     ) {
         this.log = log;
         this.voterSetHistory = new VoterSetHistory(staticVoterSet);
         this.serde = serde;
         this.bufferSupplier = bufferSupplier;
+        this.maxBatchSizeBytes = maxBatchSizeBytes;
+        this.logger = logContext.logger(this.getClass());
     }
 
     public void updateListener() {
@@ -117,7 +124,7 @@ final public class InternalLogListener {
                     info.records,
                     serde,
                     bufferSupplier,
-                    MAX_BATCH_SIZE_BYTES,
+                    maxBatchSizeBytes,
                     true // Validate batch CRC
                 )
             ) {
@@ -131,8 +138,8 @@ final public class InternalLogListener {
     }
 
     private void maybeLoadSnapshot() {
-        Optional<RawSnapshotReader> rawSnapshot = log.latestSnapshot();
-        if (rawSnapshot.isPresent() && (nextOffset == 0 || nextOffset < log.startOffset())) {
+        if ((nextOffset == 0 || nextOffset < log.startOffset()) && log.latestSnapshot().isPresent()) {
+            RawSnapshotReader rawSnapshot = log.latestSnapshot().get();
             // Clear the current state
             synchronized (kraftVersion) {
                 kraftVersion.clear();
@@ -143,14 +150,19 @@ final public class InternalLogListener {
 
             // Load the snapshot since the listener is at the start of the log or the log doesn't have the next entry.
             try (SnapshotReader<?> reader = RecordsSnapshotReader.of(
-                    rawSnapshot.get(),
+                    rawSnapshot,
                     serde,
                     bufferSupplier,
-                    MAX_BATCH_SIZE_BYTES,
+                    maxBatchSizeBytes,
                     true // Validate batch CRC
                 )
             ) {
-                // TODO: log a message that we are loading a snapshot
+                logger.info(
+                    "Loading snapshot ({}) since log start offset ({}) is greater than the internal listener's next offset ({})",
+                    reader.snapshotId(),
+                    log.startOffset(),
+                    nextOffset
+                );
                 OptionalLong currentOffset = OptionalLong.of(reader.lastContainedLogOffset());
                 while (reader.hasNext()) {
                     Batch<?> batch = reader.next();
