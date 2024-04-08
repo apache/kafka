@@ -79,6 +79,7 @@ import java.util.stream.Stream;
  * Handles client telemetry metrics requests/responses, subscriptions and instance information.
  */
 public class ClientMetricsManager implements AutoCloseable {
+    public static final String CLIENT_METRICS_REAPER_THREAD_NAME = "client-metrics-reaper";
 
     private static final Logger log = LoggerFactory.getLogger(ClientMetricsManager.class);
     private static final List<Byte> SUPPORTED_COMPRESSION_TYPES = Collections.unmodifiableList(
@@ -112,7 +113,7 @@ public class ClientMetricsManager implements AutoCloseable {
         this.subscriptionMap = new ConcurrentHashMap<>();
         this.subscriptionUpdateVersion = new AtomicInteger(0);
         this.clientInstanceCache = new SynchronizedCache<>(new LRUCache<>(CACHE_MAX_SIZE));
-        this.expirationTimer = new SystemTimerReaper("client-metrics-reaper", new SystemTimer("client-metrics"));
+        this.expirationTimer = new SystemTimerReaper(CLIENT_METRICS_REAPER_THREAD_NAME, new SystemTimer("client-metrics"));
         this.clientTelemetryMaxBytes = clientTelemetryMaxBytes;
         this.time = time;
         this.cacheExpiryMs = cacheExpiryMs;

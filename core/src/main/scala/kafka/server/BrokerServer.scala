@@ -708,6 +708,7 @@ class BrokerServer(
 
       CoreUtils.swallow(lifecycleManager.close(), this)
       CoreUtils.swallow(config.dynamicConfig.clear(), this)
+      CoreUtils.swallow(clientMetricsManager.close(), this)
       sharedServer.stopForBroker()
       info("shut down completed")
     } catch {
