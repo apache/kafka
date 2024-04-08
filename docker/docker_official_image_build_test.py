@@ -66,8 +66,15 @@ def build_jvm(image, tag, kafka_url, kafka_version):
               f"{temp_dir_path}/jvm")
     copy_tree(f"{current_dir}/docker_official_images/{kafka_version}/jvm/resources",
               f"{temp_dir_path}/jvm/resources")
-    jvm_image(
-        f"docker build -f $DOCKER_FILE -t {image} $DOCKER_DIR")
+    command = f"docker build -f $DOCKER_FILE -t {image} $DOCKER_DIR"
+    command = command.replace("$DOCKER_FILE", f"{temp_dir_path}/jvm/Dockerfile")
+    command = command.replace("$DOCKER_DIR", f"{temp_dir_path}/jvm")
+    try:
+        execute(command.split())
+    except:
+        raise SystemError("Docker Image Build failed")
+    finally:
+        shutil.rmtree(temp_dir_path)
 
 
 def run_jvm_tests(image, tag, kafka_url):
