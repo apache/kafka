@@ -1372,10 +1372,6 @@ project(':group-coordinator') {
 project(':transaction-coordinator') {
   archivesBaseName = "kafka-transaction-coordinator"
 
-  dependencies {
-    implementation project(':clients')
-  }
-
   sourceSets {
     main {
       java {

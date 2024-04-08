@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.coordinator.transaction;
 
-import org.apache.kafka.common.config.TopicConfig;
-
 public final class TransactionLogConfigs {
     // Log-level config and default values
     public static final String TRANSACTIONS_TOPIC_PARTITIONS_CONFIG = "transaction.state.log.num.partitions";
@@ -35,7 +33,7 @@ public final class TransactionLogConfigs {
 
     public static final String TRANSACTIONS_TOPIC_MIN_ISR_CONFIG = "transaction.state.log.min.isr";
     public static final int TRANSACTIONS_TOPIC_MIN_ISR_DEFAULT = 2;
-    public static final String TRANSACTIONS_TOPIC_MIN_ISR_DOC = "Overridden " + TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG + " config for the transaction topic.";
+    public static final String TRANSACTIONS_TOPIC_MIN_ISR_DOC = "The minimum number of replicas that must acknowledge a write to transaction topic in order to be considered successful.";
 
     public static final String TRANSACTIONS_LOAD_BUFFER_SIZE_CONFIG = "transaction.state.log.load.buffer.size";
     public static final int TRANSACTIONS_LOAD_BUFFER_SIZE_DEFAULT = 5 * 1024 * 1024;

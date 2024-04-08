@@ -261,10 +261,6 @@
         <allow pkg="org.apache.kafka.server.metrics" />
       </subpackage>
     </subpackage>
-    <subpackage name="transaction">
-      <allow pkg="org.apache.kafka.common" />
-      <allow pkg="org.apache.kafka.storage" />
-    </subpackage>
   </subpackage>
 
   <subpackage name="server">
