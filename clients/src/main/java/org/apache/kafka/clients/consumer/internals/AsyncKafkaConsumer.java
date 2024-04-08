@@ -1093,17 +1093,22 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return Collections.emptyMap();
             }
             final Timer timer = time.timer(timeout);
-            final ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
-                timestampsToSearch,
-                true,
-                timer);
+            ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
+                    timestampsToSearch,
+                    timer,
+                    true);
 
             // If timeout is set to zero return empty immediately; otherwise try to get the results
             // and throw timeout exception if it cannot complete in time.
             if (timeout.toMillis() == 0L)
-                return listOffsetsEvent.emptyResult();
+                return listOffsetsEvent.emptyResults();
 
-            return applicationEventHandler.addAndGet(listOffsetsEvent, timer);
+            return applicationEventHandler.addAndGet(listOffsetsEvent, timer)
+                    .entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> entry.getValue().buildOffsetAndTimestamp()));
         } finally {
             release();
         }
@@ -1141,21 +1146,30 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (partitions.isEmpty()) {
                 return Collections.emptyMap();
             }
+
             Map<TopicPartition, Long> timestampToSearch = partitions
-                .stream()
-                .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
+                    .stream()
+                    .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
             Timer timer = time.timer(timeout);
             ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
-                timestampToSearch,
-                false,
-                timer);
-            Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = applicationEventHandler.addAndGet(
-                listOffsetsEvent,
-                timer);
-            return offsetAndTimestampMap
-                .entrySet()
-                .stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
+                    timestampToSearch,
+                    timer,
+                    false);
+
+            Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
+            if (timeout.isZero()) {
+                // Return an empty results but also send a request to update the highwatermark.
+                applicationEventHandler.add(listOffsetsEvent);
+                return listOffsetsEvent.emptyResults();
+            }
+            offsetAndTimestampMap = applicationEventHandler.addAndGet(
+                    listOffsetsEvent,
+                    timer);
+            return offsetAndTimestampMap.entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> entry.getValue().offset()));
         } finally {
             release();
         }
