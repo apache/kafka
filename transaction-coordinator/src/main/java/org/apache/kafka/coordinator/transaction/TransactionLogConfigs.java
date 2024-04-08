@@ -18,8 +18,8 @@ package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.config.TopicConfig;
 
-public class TransactionLogConfig {
-    // Log-level config default values
+public final class TransactionLogConfigs {
+    // Log-level config and default values
     public static final String TRANSACTIONS_TOPIC_PARTITIONS_CONFIG = "transaction.state.log.num.partitions";
     public static final int TRANSACTIONS_TOPIC_PARTITIONS_DEFAULT = 50;
     public static final String TRANSACTIONS_TOPIC_PARTITIONS_DOC = "The number of partitions for the transaction topic (should not change after deployment).";

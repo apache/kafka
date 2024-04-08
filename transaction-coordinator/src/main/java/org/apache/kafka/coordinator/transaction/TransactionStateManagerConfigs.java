@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.transaction;
 
 import java.util.concurrent.TimeUnit;
 
-public class TransactionStateManagerConfig {
+public final class TransactionStateManagerConfigs {
     // Transaction management configs and default values
     public static final String TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG = "transaction.max.timeout.ms";
     public static final int TRANSACTIONS_MAX_TIMEOUT_MS_DEFAULT = (int) TimeUnit.MINUTES.toMillis(15);

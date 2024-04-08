@@ -59,7 +59,7 @@ import org.apache.kafka.common.requests.MetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
-import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -1272,7 +1272,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // Dynamically turn verification off.
     val configPrefix = listenerPrefix(SecureExternal)
     val updatedProps = securityProps(sslProperties1, KEYSTORE_PROPS, configPrefix)
-    updatedProps.put(TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "false")
+    updatedProps.put(TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "false")
     alterConfigsUsingConfigCommand(updatedProps)
     verifyConfiguration(false)
 
@@ -1284,7 +1284,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     verifyConfiguration(false)
 
     // Turn verification back on.
-    updatedProps.put(TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "true")
+    updatedProps.put(TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "true")
     alterConfigsUsingConfigCommand(updatedProps)
     verifyConfiguration(true)
   }
