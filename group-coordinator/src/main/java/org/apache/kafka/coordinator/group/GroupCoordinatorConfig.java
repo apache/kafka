@@ -91,10 +91,10 @@ public class GroupCoordinatorConfig {
 
     public final static String CONSUMER_GROUP_ASSIGNORS_CONFIG = "group.consumer.assignors";
     public final static String CONSUMER_GROUP_ASSIGNORS_DOC = "The server side assignors as a list of full class names. The first one in the list is considered as the default assignor to be used in the case where the consumer does not specify an assignor.";
-    public static final List<String> CONSUMER_GROUP_ASSIGNORS_DEFAULT = Arrays.asList(
+    public static final List<String> CONSUMER_GROUP_ASSIGNORS_DEFAULT = Collections.unmodifiableList(Arrays.asList(
             UniformAssignor.class.getName(),
             RangeAssignor.class.getName()
-    );
+    ));
 
     public final static String CONSUMER_GROUP_MIGRATION_POLICY_CONFIG = "group.consumer.migration.policy";
     public static final String CONSUMER_GROUP_MIGRATION_POLICY_DEFAULT = ConsumerGroupMigrationPolicy.DISABLED.toString();
