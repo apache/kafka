@@ -50,6 +50,6 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v3
       with:
-        name: ${{ github.event.inputs.image_type }}
-        path: docker/docker_official_images/${{ github.event.inputs.image_type }}
+        name: ${{ github.event.inputs.kafka_version }}
+        path: docker/docker_official_images/${{ github.event.inputs.kafka_version }}
 
