@@ -28,28 +28,28 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A callback interface that the user can implement to trigger custom actions when an acknowledge request completes.
+ * A callback interface that the user can implement to trigger custom actions when an acknowledgement completes.
  * The callback may be executed in any thread calling {@link ShareConsumer#poll(java.time.Duration)}.
  */
 @InterfaceStability.Evolving
 public interface AcknowledgementCommitCallback {
 
     /**
-     * A callback method the user can implement to provide asynchronous handling of commit request completion.
-     * This method will be called when the commit request sent to the server has been acknowledged.
+     * A callback method the user can implement to provide asynchronous handling of acknowledgement completion.
+     * This method will be called when the acknowledgement request sent to the server has been completed.
      *
      * @param offsets A map of the offsets that this callback applies to.
      *
      * @param exception The exception thrown during processing of the request, or null if the acknowledgement completed successfully.
-     *
-     * @throws InvalidRecordStateException The record state is invalid. The acknowledgement of delivery
-     *             could not be completed.
-     * @throws WakeupException if {@link KafkaShareConsumer#wakeup()} is called before or while this
+     * <p><ul>
+     * <li> {@link InvalidRecordStateException} if the record state is invalid
+     * <li> {@link AuthorizationException} if not authorized to the topic of group
+     * <li> {@link WakeupException} if {@link KafkaShareConsumer#wakeup()} is called before or while this
      *             function is called
-     * @throws InterruptException if the calling thread is interrupted before or while
+     * <li> {@link InterruptException} if the calling thread is interrupted before or while
      *             this function is called
-     * @throws AuthorizationException if not authorized to the topic of group
-     * @throws KafkaException for any other unrecoverable errors
+     * <li> {@link KafkaException} for any other unrecoverable errors
+     * </ul>
      */
     void onComplete(Map<TopicIdPartition, Set<OffsetAndMetadata>> offsets, Exception exception);
 }
