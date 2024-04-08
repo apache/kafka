@@ -123,12 +123,4 @@ public class OffsetConfig {
         this.offsetCommitTimeoutMs = offsetCommitTimeoutMs;
         this.offsetCommitRequiredAcks = offsetCommitRequiredAcks;
     }
-
-    public OffsetConfig() {
-        this(OFFSET_METADATA_MAX_SIZE_DEFAULT, OFFSETS_LOAD_BUFFER_SIZE_DEFAULT, OFFSET_RETENTION_MS_DEFAULT,
-                OFFSETS_RETENTION_CHECK_INTERVAL_MS_DEFAULT, OFFSETS_TOPIC_PARTITIONS_DEFAULT,
-                OFFSETS_TOPIC_SEGMENT_BYTES_DEFAULT, OFFSETS_TOPIC_REPLICATION_FACTOR_DEFAULT,
-                OFFSETS_TOPIC_COMPRESSION_CODEC_DEFAULT, OFFSET_COMMIT_TIMEOUT_MS_DEFAULT,
-                OFFSET_COMMIT_REQUIRED_ACKS_DEFAULT);
-    }
 }
