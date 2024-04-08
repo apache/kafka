@@ -18,7 +18,7 @@
 package kafka.network
 
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -66,7 +66,7 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
       .count(listener == _.tags().get("listener"))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDynamicNumNetworkThreads(quorum: String): Unit = {
     // Increase the base network thread count

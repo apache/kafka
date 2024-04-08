@@ -15,7 +15,7 @@ package kafka.api
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
@@ -38,7 +38,7 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
     KafkaConfig.fromProps(_, overridingProps)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testGroupCoordinatorPropagatesOffsetsTopicCompressionCodec(quorum: String): Unit = {
     val consumer = TestUtils.createConsumer(bootstrapServers())

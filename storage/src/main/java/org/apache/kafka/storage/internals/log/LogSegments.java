@@ -162,7 +162,7 @@ public class LogSegments {
      *
      * @param offset the segment to be retrieved
      *
-     * @return the segment if it exists, otherwise None.
+     * @return the segment if it exists, otherwise Empty.
      */
     public Optional<LogSegment> get(long offset) {
         return Optional.ofNullable(segments.get(offset));

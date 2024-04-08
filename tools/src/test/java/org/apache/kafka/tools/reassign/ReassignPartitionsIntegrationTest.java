@@ -75,7 +75,6 @@ import java.util.stream.IntStream;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
-import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_FOLLOWER_THROTTLE;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_LEADER_THROTTLE;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_LOG_DIR_THROTTLE;
@@ -109,7 +108,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         });
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testReassignment(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -117,7 +116,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         executeAndVerifyReassignment();
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk") // Note: KRaft requires AlterPartition
     public void testReassignmentWithAlterPartitionDisabled(String quorum) throws Exception {
         // Test reassignment when the IBP is on an older version which does not use
@@ -130,7 +129,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         executeAndVerifyReassignment();
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk") // Note: KRaft requires AlterPartition
     public void testReassignmentCompletionDuringPartialUpgrade(String quorum) throws Exception {
         // Test reassignment during a partial upgrade when some brokers are relying on
@@ -196,7 +195,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         verifyReplicaDeleted(bar0, 1);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testHighWaterMarkAfterPartitionReassignment(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -226,7 +225,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             "Expected broker 3 to have the correct high water mark for the partition.");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testAlterReassignmentThrottle(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -263,7 +262,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     /**
      * Test running a reassignment with the interBrokerThrottle set.
      */
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testThrottledReassignment(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -325,7 +324,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testProduceAndConsumeWithReassignmentInProgress(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -366,7 +365,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     /**
      * Test running a reassignment and then cancelling it.
      */
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCancellation(String quorum) throws Exception {
         TopicPartition foo0 = new TopicPartition("foo", 0);
@@ -410,7 +409,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         verifyReplicaDeleted(baz1, 3);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCancellationWithAddingReplicaInIsr(String quorum) throws Exception {
         TopicPartition foo0 = new TopicPartition("foo", 0);
@@ -536,7 +535,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     /**
      * Test moving partitions between directories.
      */
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk") // JBOD not yet implemented for KRaft
     public void testLogDirReassignment(String quorum) throws Exception {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
@@ -586,7 +585,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         assertEquals(reassignment.targetDir, info1.curLogDirs.getOrDefault(topicPartition, ""));
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk") // JBOD not yet implemented for KRaft
     public void testAlterLogDirReassignmentThrottle(String quorum) throws Exception {
         TopicPartition topicPartition = new TopicPartition("foo", 0);

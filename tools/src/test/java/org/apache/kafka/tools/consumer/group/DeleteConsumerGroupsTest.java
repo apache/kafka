@@ -38,13 +38,12 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteWithTopicOption(String quorum) {
         createOffsetsTopic(listenerName(), new Properties());
@@ -52,7 +51,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteCmdNonExistingGroup(String quorum) {
         createOffsetsTopic(listenerName(), new Properties());
@@ -66,7 +65,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteNonExistingGroup(String quorum) {
         createOffsetsTopic(listenerName(), new Properties());
@@ -81,7 +80,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteCmdNonEmptyGroup(String quorum) throws Exception {
         createOffsetsTopic(listenerName(), new Properties());
@@ -101,7 +100,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Output was: (" + output + ")");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteNonEmptyGroup(String quorum) throws Exception {
         createOffsetsTopic(listenerName(), new Properties());
@@ -123,7 +122,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Result was:(" + result + ")");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteCmdEmptyGroup(String quorum) throws Exception {
         createOffsetsTopic(listenerName(), new Properties());
@@ -150,7 +149,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             "The consumer group could not be deleted as expected");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteCmdAllGroups(String quorum) throws Exception {
         createOffsetsTopic(listenerName(), new Properties());
@@ -198,7 +197,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             "The consumer group(s) could not be deleted as expected");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteEmptyGroup(String quorum) throws Exception {
         createOffsetsTopic(listenerName(), new Properties());
@@ -223,7 +222,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             "The consumer group could not be deleted as expected");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteCmdWithMixOfSuccessAndError(String quorum) throws Exception {
         createOffsetsTopic(listenerName(), new Properties());
@@ -255,7 +254,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             "The consumer group deletion did not work as expected");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteWithMixOfSuccessAndError(String quorum) throws Exception {
         createOffsetsTopic(listenerName(), new Properties());
@@ -287,7 +286,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             "The consumer group deletion did not work as expected");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteWithUnrecognizedNewConsumerOption(String quorum) {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP};
