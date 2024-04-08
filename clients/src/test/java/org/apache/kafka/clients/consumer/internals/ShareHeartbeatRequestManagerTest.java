@@ -377,6 +377,103 @@ public class ShareHeartbeatRequestManagerTest {
         }
     }
 
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.SHARE_GROUP_HEARTBEAT)
+    public void testCoordinatorChange(final short version) {
+        resetWithZeroHeartbeatInterval();
+        mockStableMember();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
+
+        List<String> subscribedTopics = Collections.singletonList("topic");
+        subscriptions.subscribe(new HashSet<>(subscribedTopics), Optional.empty());
+
+        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
+
+        ShareGroupHeartbeatResponseData data =
+                new ShareGroupHeartbeatResponseData()
+                        .setMemberId(memberId)
+                        .setMemberEpoch(memberEpoch);
+        ClientResponse response = createHeartbeatResponse(request, data);
+        request.handler().onComplete(response);
+        assertEquals(memberId, heartbeatRequestManager.membershipManager().memberId());
+
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        request = pollResult.unsentRequests.get(0);
+
+        ShareGroupHeartbeatResponseData errorData =
+                new ShareGroupHeartbeatResponseData()
+                        .setErrorCode(Errors.NOT_COORDINATOR.code());
+        response = createHeartbeatResponse(request, errorData);
+        request.handler().onComplete(response);
+        assertEquals(memberId, heartbeatRequestManager.membershipManager().memberId());
+        verify(coordinatorRequestManager).markCoordinatorUnknown(any(), anyLong());
+
+        // Heartbeat is attempted immediately when NOT_COORDINATOR response received
+        pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        request = pollResult.unsentRequests.get(0);
+
+        response = createHeartbeatResponse(request, data);
+        request.handler().onComplete(response);
+        assertEquals(memberId, heartbeatRequestManager.membershipManager().memberId());
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.SHARE_GROUP_HEARTBEAT)
+    public void testUnknownMemberId(final short version) {
+        resetWithZeroHeartbeatInterval();
+        mockStableMember();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
+
+        List<String> subscribedTopics = Collections.singletonList("topic");
+        subscriptions.subscribe(new HashSet<>(subscribedTopics), Optional.empty());
+
+        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
+
+        ShareGroupHeartbeatResponseData data =
+                new ShareGroupHeartbeatResponseData()
+                        .setMemberId(memberId)
+                        .setMemberEpoch(memberEpoch);
+        ClientResponse response = createHeartbeatResponse(request, data);
+        request.handler().onComplete(response);
+        assertEquals(memberId, heartbeatRequestManager.membershipManager().memberId());
+
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        request = pollResult.unsentRequests.get(0);
+
+        ShareGroupHeartbeatResponseData errorData =
+                new ShareGroupHeartbeatResponseData()
+                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code());
+        response = createHeartbeatResponse(request, errorData);
+        request.handler().onComplete(response);
+        assertEquals(memberId, heartbeatRequestManager.membershipManager().memberId());
+
+        // Heartbeat is attempted immediately when UNKNOWN_MEMBER_ID response received
+        pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        request = pollResult.unsentRequests.get(0);
+
+        // We rejoin the group with the same member ID
+        response = createHeartbeatResponse(request, data);
+        request.handler().onComplete(response);
+        assertEquals(memberId, heartbeatRequestManager.membershipManager().memberId());
+        ShareGroupHeartbeatRequest heartbeatRequest =
+                (ShareGroupHeartbeatRequest) request.requestBuilder().build(version);
+        assertEquals(DEFAULT_GROUP_ID, heartbeatRequest.data().groupId());
+        assertEquals(memberId, heartbeatRequest.data().memberId());
+        assertEquals(ShareGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH, heartbeatRequest.data().memberEpoch());
+        assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, heartbeatRequest.data().rebalanceTimeoutMs());
+        assertEquals(subscribedTopics, heartbeatRequest.data().subscribedTopicNames());
+    }
+
     @Test
     public void testHeartbeatState() {
         // The initial ShareGroupHeartbeatRequest sets most fields to their initial empty values
@@ -607,6 +704,23 @@ public class ShareHeartbeatRequestManagerTest {
         if (error != Errors.NONE) {
             data.setErrorMessage("stubbed error message");
         }
+        ShareGroupHeartbeatResponse response = new ShareGroupHeartbeatResponse(data);
+        return new ClientResponse(
+                new RequestHeader(ApiKeys.SHARE_GROUP_HEARTBEAT, ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion(), "client-id", 1),
+                request.handler(),
+                "0",
+                time.milliseconds(),
+                time.milliseconds(),
+                false,
+                null,
+                null,
+                response);
+    }
+
+    private ClientResponse createHeartbeatResponse(
+            final NetworkClientDelegate.UnsentRequest request,
+            final ShareGroupHeartbeatResponseData data
+    ) {
         ShareGroupHeartbeatResponse response = new ShareGroupHeartbeatResponse(data);
         return new ClientResponse(
                 new RequestHeader(ApiKeys.SHARE_GROUP_HEARTBEAT, ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion(), "client-id", 1),

@@ -334,11 +334,8 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
 
     @Override
     public void onMemberEpochUpdated(Optional<Integer> memberEpochOpt, Optional<String> memberIdOpt) {
-        // Only set the memberID once for now - will handle changes in AKCORE-57
-        if (memberId == null) {
-            if (memberIdOpt.isPresent()) {
-                memberId = Uuid.fromString(memberIdOpt.get());
-            }
+        if (memberIdOpt.isPresent()) {
+            memberId = Uuid.fromString(memberIdOpt.get());
         }
     }
 
