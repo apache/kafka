@@ -77,6 +77,7 @@ import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.config.{Defaults, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.server.util.timer.SystemTimer
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
@@ -2492,6 +2493,7 @@ object TestUtils extends Logging {
       QuorumTestHarness.ZkClientEventThreadSuffix,
       QuorumController.CONTROLLER_THREAD_SUFFIX,
       ClientMetricsManager.CLIENT_METRICS_REAPER_THREAD_NAME,
+      SystemTimer.SYSTEM_TIMER_THREAD_PREFIX,
     )
 
     def unexpectedThreads: Set[String] = {
