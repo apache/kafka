@@ -119,8 +119,8 @@ public class KafkaSecurityConfigs {
     public final static boolean SSL_ALLOW_SAN_CHANGES_DEFAULT = BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_SAN_CHANGES_VALUE;
 
     /** ********* SASL Configuration ****************/
-    public final static String SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG = "sasl.mechanism.inter.broker.protocol";
-    public final static String SASL_MECHANISM_INTER_BROKER_PROTOCOL_DOC = "SASL mechanism used for inter-broker communication. Default is GSSAPI.";
+    public final static String SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG = BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG;
+    public final static String SASL_MECHANISM_INTER_BROKER_PROTOCOL_DOC = BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_DOC;
 
     public static final String SASL_MECHANISM_INTER_BROKER_PROTOCOL_DEFAULT = SaslConfigs.DEFAULT_SASL_MECHANISM;
 
