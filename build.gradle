@@ -1373,7 +1373,6 @@ project(':transaction-coordinator') {
   archivesBaseName = "kafka-transaction-coordinator"
 
   dependencies {
-    implementation project(':server-common')
     implementation project(':clients')
   }
 

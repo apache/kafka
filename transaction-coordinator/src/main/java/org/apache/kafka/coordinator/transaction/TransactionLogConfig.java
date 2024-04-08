@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
 
 public class TransactionLogConfig {
     // Log-level config default values
@@ -36,7 +35,7 @@ public class TransactionLogConfig {
 
     public static final String TRANSACTIONS_TOPIC_MIN_ISR_CONFIG = "transaction.state.log.min.isr";
     public static final int TRANSACTIONS_TOPIC_MIN_ISR_DEFAULT = 2;
-    public static final String TRANSACTIONS_TOPIC_MIN_ISR_DOC = "Overridden " + ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG) + " config for the transaction topic.";
+    public static final String TRANSACTIONS_TOPIC_MIN_ISR_DOC = "Overridden " + TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG + " config for the transaction topic.";
 
     public static final String TRANSACTIONS_LOAD_BUFFER_SIZE_CONFIG = "transaction.state.log.load.buffer.size";
     public static final int TRANSACTIONS_LOAD_BUFFER_SIZE_DEFAULT = 5 * 1024 * 1024;
