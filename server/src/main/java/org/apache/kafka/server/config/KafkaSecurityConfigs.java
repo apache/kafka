@@ -228,7 +228,7 @@ public class KafkaSecurityConfigs {
 
     public final static String CONNECTIONS_MAX_REAUTH_MS_CONFIG = BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS;
     public final static String CONNECTIONS_MAX_REAUTH_MS_DOC = BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_DOC;
-    public static final long CONNECTIONS_MAX_REAUTH_MS_DEFAULT = 0L;
+    public static final long CONNECTIONS_MAX_REAUTH_MS_DEFAULT = BrokerSecurityConfigs.DEFAULT_CONNECTIONS_MAX_REAUTH_MS;
 
     public final static String SASL_SERVER_MAX_RECEIVE_SIZE_CONFIG = BrokerSecurityConfigs.SASL_SERVER_MAX_RECEIVE_SIZE_CONFIG;
     public final static String SASL_SERVER_MAX_RECEIVE_SIZE_DOC = BrokerSecurityConfigs.SASL_SERVER_MAX_RECEIVE_SIZE_DOC;
