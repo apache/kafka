@@ -776,7 +776,7 @@ class GroupMetadataManagerTest {
     )
 
     // create a GroupMetadata record larger then offsets.load.buffer.size (here at least 16 bytes larger)
-    val assignmentSize = OffsetConfig.DEFAULT_LOAD_BUFFER_SIZE + 16
+    val assignmentSize = OffsetConfig.OFFSETS_LOAD_BUFFER_SIZE_DEFAULT + 16
     val memberId = "98098230493"
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)

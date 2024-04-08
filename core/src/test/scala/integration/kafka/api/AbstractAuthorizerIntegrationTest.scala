@@ -28,6 +28,7 @@ import org.apache.kafka.common.resource.{Resource, ResourcePattern}
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC, TRANSACTIONAL_ID}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.coordinator.group.OffsetConfig
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
@@ -109,8 +110,8 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
       properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
     }
 
-    properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
+    properties.put(OffsetConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
+    properties.put(OffsetConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
     properties.put(KafkaConfig.TransactionsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
     properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")

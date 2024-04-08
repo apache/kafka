@@ -413,6 +413,7 @@
       <allow pkg="org.apache.kafka.tools" />
       <allow pkg="org.apache.kafka.server.config" />
       <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
+      <allow pkg="org.apache.kafka.coordinator.group" />
     </subpackage>
 
     <subpackage name="test">
@@ -483,6 +484,8 @@
     <allow pkg="org.apache.kafka.connect.components"/>
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
+    <!-- for testing -->
+    <allow pkg="org.apache.kafka.coordinator.group" />
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />
