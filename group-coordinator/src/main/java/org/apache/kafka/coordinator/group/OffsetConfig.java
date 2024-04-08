@@ -66,8 +66,6 @@ public class OffsetConfig {
     public static final short OFFSET_COMMIT_REQUIRED_ACKS_DEFAULT = -1;
     public static final String OFFSET_COMMIT_REQUIRED_ACKS_DOC = "The required acks before the commit can be accepted. In general, the default (-1) should not be overridden.";
 
-    public static final long OFFSET_RETENTION_MS_DEFAULT = 24 * 60 * 60 * 1000L;
-
     public final int maxMetadataSize;
     public final int loadBufferSize;
     public final long offsetsRetentionMs;
