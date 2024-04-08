@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
-import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
 
 public class TransactionLogConfig {
     // Log-level config default values
@@ -43,11 +42,11 @@ public class TransactionLogConfig {
     public static final int TRANSACTIONS_LOAD_BUFFER_SIZE_DEFAULT = 5 * 1024 * 1024;
     public static final String TRANSACTIONS_LOAD_BUFFER_SIZE_DOC = "Batch size for reading from the transaction log segments when loading producer ids and transactions into the cache (soft-limit, overridden if records are too large).";
 
-    public static final String TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG = ProducerStateManagerConfig.TRANSACTION_VERIFICATION_ENABLED;
+    public static final String TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG = "transaction.partition.verification.enable";
     public static final boolean TRANSACTION_PARTITION_VERIFICATION_ENABLE_DEFAULT = true;
     public static final String TRANSACTION_PARTITION_VERIFICATION_ENABLE_DOC = "Enable verification that checks that the partition has been added to the transaction before writing transactional records to the partition";
 
-    public static final String PRODUCER_ID_EXPIRATION_MS_CONFIG = ProducerStateManagerConfig.PRODUCER_ID_EXPIRATION_MS;
+    public static final String PRODUCER_ID_EXPIRATION_MS_CONFIG = "producer.id.expiration.ms";
     public static final int PRODUCER_ID_EXPIRATION_MS_DEFAULT = 86400000;
     public static final String PRODUCER_ID_EXPIRATION_MS_DOC = "The time in ms that a topic partition leader will wait before expiring producer IDs. Producer IDs will not expire while a transaction associated to them is still ongoing. " +
             "Note that producer IDs may expire sooner if the last write from the producer ID is deleted due to the topic's retention settings. Setting this value the same or higher than " +

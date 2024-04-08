@@ -17,13 +17,12 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 
 import java.util.Set;
 
 public class ProducerStateManagerConfig {
-    public static final String PRODUCER_ID_EXPIRATION_MS = "producer.id.expiration.ms";
-    public static final String TRANSACTION_VERIFICATION_ENABLED = "transaction.partition.verification.enable";
-    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(PRODUCER_ID_EXPIRATION_MS, TRANSACTION_VERIFICATION_ENABLED);
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG, TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
 
     private volatile int producerIdExpirationMs;
     private volatile boolean transactionVerificationEnabled;
