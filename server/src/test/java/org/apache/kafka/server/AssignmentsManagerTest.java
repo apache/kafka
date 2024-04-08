@@ -172,10 +172,11 @@ public class AssignmentsManagerTest {
         manager.onAssignment(new TopicIdPartition(TOPIC_1, 3), DIR_3, () -> { });
         manager.onAssignment(new TopicIdPartition(TOPIC_1, 4), DIR_1, () -> { });
         manager.onAssignment(new TopicIdPartition(TOPIC_2, 5), DIR_2, () -> { });
-        while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
+        TestUtils.waitForCondition(() -> {
             time.sleep(100);
             manager.wakeup();
-        }
+            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
+        }, 1000, "Wait for ready to assert.");
 
         ArgumentCaptor<AssignReplicasToDirsRequest.Builder> captor =
             ArgumentCaptor.forClass(AssignReplicasToDirsRequest.Builder.class);
@@ -244,10 +245,11 @@ public class AssignmentsManagerTest {
             any(ControllerRequestCompletionHandler.class));
 
         manager.onAssignment(new TopicIdPartition(TOPIC_1, 1), DIR_1, () -> { });
-        while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
+        TestUtils.waitForCondition(() -> {
             time.sleep(TimeUnit.SECONDS.toMillis(1));
             manager.wakeup();
-        }
+            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
+        }, 10000, "Wait for ready to assert.");
 
         ArgumentCaptor<AssignReplicasToDirsRequest.Builder> captor =
             ArgumentCaptor.forClass(AssignReplicasToDirsRequest.Builder.class);
@@ -295,10 +297,11 @@ public class AssignmentsManagerTest {
             manager.onAssignment(new TopicIdPartition(TOPIC_1, i % 5), DIR_1, readyToAssert::countDown);
         }
 
-        while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
+        TestUtils.waitForCondition(() -> {
             time.sleep(TimeUnit.SECONDS.toMillis(1));
             manager.wakeup();
-        }
+            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
+        }, 10000, "Wait for ready to assert");
     }
 
     private static ClientResponse buildSuccessfulResponse(AssignReplicasToDirsRequestData request) {
@@ -385,9 +388,10 @@ public class AssignmentsManagerTest {
         for (int i = 0; i < 4; i++) {
             manager.onAssignment(new TopicIdPartition(TOPIC_1, i), DIR_1, () -> { });
         }
-        while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
+        TestUtils.waitForCondition(() -> {
             time.sleep(100);
-        }
+            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
+        }, 1000, "Wait for ready to assert");
         assertEquals(4, queuedReplicaToDirAssignments.value());
 
         for (int i = 4; i < 8; i++) {
