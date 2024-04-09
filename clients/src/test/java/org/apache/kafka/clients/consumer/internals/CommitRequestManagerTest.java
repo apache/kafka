@@ -548,28 +548,28 @@ public class CommitRequestManagerTest {
 
         // Send auto-commit request that will remain in-flight without a response
         time.sleep(100);
-        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManger.maybeAutoCommitAsync();
-        List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManger);
+        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
+        commitRequestManager.maybeAutoCommitAsync();
+        List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManager);
         assertEquals(1, futures.size());
         NetworkClientDelegate.FutureCompletionHandler inflightCommitResult = futures.get(0);
-        verify(commitRequestManger, times(1)).resetAutoCommitTimer();
-        clearInvocations(commitRequestManger);
+        verify(commitRequestManager, times(1)).resetAutoCommitTimer();
+        clearInvocations(commitRequestManager);
 
         // After next interval expires, no new auto-commit request should be sent. The interval
         // should not be reset either, to ensure that the next auto-commit is sent out as soon as
         // the inflight receives a response.
         time.sleep(100);
-        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManger.maybeAutoCommitAsync();
-        assertPoll(0, commitRequestManger);
-        verify(commitRequestManger, never()).resetAutoCommitTimer();
+        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
+        commitRequestManager.maybeAutoCommitAsync();
+        assertPoll(0, commitRequestManager);
+        verify(commitRequestManager, never()).resetAutoCommitTimer();
 
         // When a response for the inflight is received, a next auto-commit should be sent when
         // polling the manager.
         inflightCommitResult.onComplete(
             mockOffsetCommitResponse(t1p.topic(), t1p.partition(), (short) 1, Errors.NONE));
-        assertPoll(1, commitRequestManger);
+        assertPoll(1, commitRequestManager);
     }
 
     @Test
