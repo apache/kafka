@@ -9566,6 +9566,7 @@ public class GroupMetadataManagerTest {
                 Arrays.asList(fooTopicName, barTopicName)))))
         );
 
+        // Create a stable classic group with member 1.
         ClassicGroup group = context.createClassicGroup(groupId);
         group.setProtocolName(Optional.ofNullable("range"));
         group.add(
@@ -9589,6 +9590,7 @@ public class GroupMetadataManagerTest {
         group.transitionTo(COMPLETING_REBALANCE);
         group.transitionTo(STABLE);
 
+        // A new member 2 with new protocol joins the classic group, triggering the upgrade.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
@@ -9605,6 +9607,7 @@ public class GroupMetadataManagerTest {
             .setClientHost("client-host")
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
+            .setSupportedProtocols(protocols)
             .setAssignedPartitions(new HashMap<Uuid, Set<Integer>>() {
                 {
                     put(fooTopicId, new HashSet<>(Collections.singletonList(0)));
@@ -9680,8 +9683,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedUpdatedMember2)
         );
 
-        // TODO: only comparing references?
-        assertEquals(expectedRecords, result.records());
+        assertRecordsEquals(expectedRecords, result.records());
     }
 
     @Test
@@ -9780,6 +9782,7 @@ public class GroupMetadataManagerTest {
         );
         assertTrue(group.isInState(PREPARING_REBALANCE));
 
+        // Another new member 3 joins with new protocol, triggering the upgrade.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupHeartbeatResult = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
@@ -9796,6 +9799,7 @@ public class GroupMetadataManagerTest {
             .setClientHost("client-host")
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
+            .setSupportedProtocols(protocols)
             .setAssignedPartitions(new HashMap<Uuid, Set<Integer>>() {
                 {
                     put(fooTopicId, new HashSet<>(Arrays.asList(0, 1)));
@@ -9810,6 +9814,7 @@ public class GroupMetadataManagerTest {
             .setClientHost("client-host")
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
+            .setSupportedProtocols(protocols)
             .setAssignedPartitions(new HashMap<Uuid, Set<Integer>>() {
                 {
                     put(barTopicId, new HashSet<>(Collections.singletonList(0)));
@@ -9894,8 +9899,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedUpdatedMember3)
         );
 
-        // TODO: only comparing references?
-        assertEquals(expectedRecords, consumerGroupHeartbeatResult.records());
+        assertRecordsEquals(expectedRecords, consumerGroupHeartbeatResult.records());
         assertTrue(joinResult.joinFuture.isDone());
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), joinResult.joinFuture.get().errorCode());
     }
