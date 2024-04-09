@@ -1439,8 +1439,8 @@ class KRaftClusterTest {
         }
 
         // Modify foo-0 so that it refers to a future replica.
-        // This has the same effect as the main replica being in an offline
-        // log dir and the broker crashing just at the time of promotion
+        // This is equivalent to a failure during the promotion of the future replica and a restart with directory for
+        // the main replica being offline
         val log = broker0.logManager.getLog(foo0).get
         log.renameDir(UnifiedLog.logFutureDirName(foo0), shouldReinitialize = false)
 
@@ -1495,19 +1495,17 @@ class KRaftClusterTest {
 
         val log = broker0.logManager.getLog(foo0).get
 
-        // Copy foo-0 to another log dir
+        // Copy foo-0 to targetParentDir
+        // This is so that we can rename the main replica to a future down below
         val parentDir = log.parentDir
-        var targetParentDir = parentDir.substring(0, parentDir.length - 1)
-        if (parentDir.endsWith("0")) {
-          targetParentDir += "1"
-        } else {
-          targetParentDir += "0"
-        }
+        val targetParentDir = broker0.config.logDirs.filter(_ != parentDir).head
         val targetDirFile = new File(targetParentDir, log.dir.getName)
         FileUtils.copyDirectory(log.dir, targetDirFile)
         assertTrue(targetDirFile.exists())
 
-        // Rename log to a future
+        // Rename original log to a future
+        // This is equivalent to a failure during the promotion of the future replica and a restart with directory for
+        // the main replica being online
         val originalLogFile = log.dir
         log.renameDir(UnifiedLog.logFutureDirName(foo0), shouldReinitialize = false)
         assertFalse(originalLogFile.exists())
