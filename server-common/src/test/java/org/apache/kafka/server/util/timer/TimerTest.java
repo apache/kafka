@@ -17,6 +17,7 @@
 package org.apache.kafka.server.util.timer;
 
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,7 +67,7 @@ public class TimerTest {
         }
     }
 
-    private Timer timer = null;
+    private SystemTimer timer = null;
 
     @BeforeEach
     public void setup() {
@@ -76,6 +77,7 @@ public class TimerTest {
     @AfterEach
     public void teardown() throws Exception {
         timer.close();
+        TestUtils.waitForCondition(timer::isTerminated, "timer executor not terminated");
     }
 
     @Test
