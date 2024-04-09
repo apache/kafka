@@ -79,6 +79,7 @@ import java.util.stream.Stream;
  * Handles client telemetry metrics requests/responses, subscriptions and instance information.
  */
 public class ClientMetricsManager implements AutoCloseable {
+    public static final String CLIENT_METRICS_REAPER_THREAD_NAME = "client-metrics-reaper";
 
     private static final Logger log = LoggerFactory.getLogger(ClientMetricsManager.class);
     private static final List<Byte> SUPPORTED_COMPRESSION_TYPES = Collections.unmodifiableList(
@@ -112,7 +113,7 @@ public class ClientMetricsManager implements AutoCloseable {
         this.subscriptionMap = new ConcurrentHashMap<>();
         this.subscriptionUpdateVersion = new AtomicInteger(0);
         this.clientInstanceCache = new SynchronizedCache<>(new LRUCache<>(CACHE_MAX_SIZE));
-        this.expirationTimer = new SystemTimerReaper("client-metrics-reaper", new SystemTimer("client-metrics"));
+        this.expirationTimer = new SystemTimerReaper(CLIENT_METRICS_REAPER_THREAD_NAME, new SystemTimer("client-metrics"));
         this.clientTelemetryMaxBytes = clientTelemetryMaxBytes;
         this.time = time;
         this.cacheExpiryMs = cacheExpiryMs;
@@ -524,15 +525,15 @@ public class ClientMetricsManager implements AutoCloseable {
     // Visible for testing
     final class ClientMetricsStats {
 
-        private static final String GROUP_NAME = "ClientMetrics";
+        private static final String GROUP_NAME = "client-metrics";
 
         // Visible for testing
-        static final String INSTANCE_COUNT = "ClientMetricsInstanceCount";
-        static final String UNKNOWN_SUBSCRIPTION_REQUEST = "ClientMetricsUnknownSubscriptionRequest";
-        static final String THROTTLE = "ClientMetricsThrottle";
-        static final String PLUGIN_EXPORT = "ClientMetricsPluginExport";
-        static final String PLUGIN_ERROR = "ClientMetricsPluginError";
-        static final String PLUGIN_EXPORT_TIME = "ClientMetricsPluginExportTime";
+        static final String INSTANCE_COUNT = "instance-count";
+        static final String UNKNOWN_SUBSCRIPTION_REQUEST = "unknown-subscription-request";
+        static final String THROTTLE = "throttle";
+        static final String PLUGIN_EXPORT = "plugin-export";
+        static final String PLUGIN_ERROR = "plugin-error";
+        static final String PLUGIN_EXPORT_TIME = "plugin-export-time";
 
         // Names of registered sensors either globally or per client instance.
         private final Set<String> sensorsName = ConcurrentHashMap.newKeySet();
@@ -571,9 +572,9 @@ public class ClientMetricsManager implements AutoCloseable {
 
             Sensor pluginExport = metrics.sensor(ClientMetricsStats.PLUGIN_EXPORT + "-" + clientInstanceId);
             pluginExport.add(createMeter(metrics, new WindowedCount(), ClientMetricsStats.PLUGIN_EXPORT, tags));
-            pluginExport.add(metrics.metricName(ClientMetricsStats.PLUGIN_EXPORT_TIME + "Avg",
+            pluginExport.add(metrics.metricName(ClientMetricsStats.PLUGIN_EXPORT_TIME + "-avg",
                 ClientMetricsStats.GROUP_NAME, "Average time broker spent in invoking plugin exportMetrics call", tags), new Avg());
-            pluginExport.add(metrics.metricName(ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max",
+            pluginExport.add(metrics.metricName(ClientMetricsStats.PLUGIN_EXPORT_TIME + "-max",
                 ClientMetricsStats.GROUP_NAME, "Maximum time broker spent in invoking plugin exportMetrics call", tags), new Max());
             sensorsName.add(pluginExport.name());
 
@@ -617,9 +618,9 @@ public class ClientMetricsManager implements AutoCloseable {
         }
 
         private Meter createMeter(Metrics metrics, SampledStat stat, String name, Map<String, String> metricTags) {
-            MetricName rateMetricName = metrics.metricName(name + "Rate", ClientMetricsStats.GROUP_NAME,
+            MetricName rateMetricName = metrics.metricName(name + "-rate", ClientMetricsStats.GROUP_NAME,
                 String.format("The number of %s per second", name), metricTags);
-            MetricName totalMetricName = metrics.metricName(name + "Count", ClientMetricsStats.GROUP_NAME,
+            MetricName totalMetricName = metrics.metricName(name + "-count", ClientMetricsStats.GROUP_NAME,
                 String.format("The total number of %s", name), metricTags);
             return new Meter(stat, rateMetricName, totalMetricName);
         }
