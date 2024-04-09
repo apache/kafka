@@ -127,7 +127,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
             Batch<T> batch = iterator.next();
 
             if (!lastContainedLogTimestamp.isPresent()) {
-                // This must be the first batch which is expected to be a control batch with one record for
+                // This must be the first batch which is expected to be a control batch with at least one record for
                 // the snapshot header.
                 if (batch.controlRecords().isEmpty()) {
                     throw new IllegalStateException(
