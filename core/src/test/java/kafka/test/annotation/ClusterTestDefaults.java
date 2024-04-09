@@ -39,4 +39,6 @@ public @interface ClusterTestDefaults {
     int brokers() default 1;
     int controllers() default 1;
     boolean autoStart() default true;
+    // Set default server properties for all @ClusterTest(s)
+    ClusterConfigProperty[] serverProperties() default {};
 }
