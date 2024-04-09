@@ -122,8 +122,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -387,7 +388,14 @@ public class StreamTaskTest {
         @SuppressWarnings("unchecked")
         final java.util.function.Consumer<Set<TopicPartition>> resetter =
             mock(java.util.function.Consumer.class);
-        doNothing().when(resetter).accept(Collections.singleton(partition1));
+        // We need to keep a separate reference to the arguments of Consumer#accept
+        // because the underlying data-structure is emptied and on verification time
+        // it is reported as empty.
+        final Set<TopicPartition> partitionsAtCall = new HashSet<>();
+        doAnswer(invocation -> {
+            partitionsAtCall.addAll(invocation.getArgument(0));
+            return null;
+        }).when(resetter).accept(Collections.singleton(partition1));
 
         task.initializeIfNeeded();
         task.completeRestoration(resetter);
@@ -395,6 +403,7 @@ public class StreamTaskTest {
         // because we mocked the `resetter` positions don't change
         assertThat(consumer.position(partition1), equalTo(5L));
         assertThat(consumer.position(partition2), equalTo(15L));
+        assertThat(partitionsAtCall, equalTo(Collections.singleton(partition1)));
     }
 
     @Test
@@ -1832,8 +1841,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointForSuspendedTask() {
-        when(stateManager.changelogOffsets())
-                .thenReturn(singletonMap(partition1, 1L));
+        when(stateManager.changelogOffsets()).thenReturn(singletonMap(partition1, 1L));
 
         task = createStatefulTask(createConfig("100"), true);
         task.initializeIfNeeded();
@@ -1860,7 +1868,7 @@ public class StreamTaskTest {
         task.suspend();
         task.postCommit(false);
 
-        verify(stateManager).checkpoint(); // checkpoint should only be called once
+        verify(stateManager).checkpoint();
     }
 
     @Test
@@ -2079,8 +2087,7 @@ public class StreamTaskTest {
     public void shouldThrowOnCloseCleanCheckpointError() {
         final long offset = 54300L;
         doThrow(new ProcessorStateException("KABOOM!")).when(stateManager).checkpoint();
-        when(stateManager.changelogOffsets())
-                .thenReturn(singletonMap(partition1, offset));
+        when(stateManager.changelogOffsets()).thenReturn(singletonMap(partition1, offset));
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
@@ -2110,7 +2117,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
 
         task.suspend();
-        task.closeDirty();
+        assertDoesNotThrow(() -> task.closeDirty());
     }
 
     @Test
