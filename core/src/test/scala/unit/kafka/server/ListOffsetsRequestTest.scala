@@ -55,7 +55,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
       .build()
 
     val debugReplicaRequest = ListOffsetsRequest.Builder
-      .forReplica(ApiKeys.LIST_OFFSETS.latestVersion, ListOffsetsRequest.DEBUGGING_REPLICA_ID)
+      .forReplica(ApiKeys.LIST_OFFSETS.latestVersion(false), ListOffsetsRequest.DEBUGGING_REPLICA_ID)
       .setTargetTimes(targetTimes)
       .build()
 
@@ -229,7 +229,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     TestUtils.generateAndProduceMessages(brokers, topic, 9)
     TestUtils.produceMessage(brokers, topic, "test-10", System.currentTimeMillis() + 10L)
 
-    for (version <- ApiKeys.LIST_OFFSETS.oldestVersion to ApiKeys.LIST_OFFSETS.latestVersion) {
+    for (version <- ApiKeys.LIST_OFFSETS.oldestVersion to ApiKeys.LIST_OFFSETS.latestVersion(false)) {
       if (version == 0) {
         assertEquals((-1L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
         assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, version.toShort))

@@ -21,11 +21,12 @@ import kafka.test.{ClusterConfig, ClusterInstance}
 import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.ApiVersionsRequest
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTemplate, ClusterTest, Type}
+import kafka.test.annotation.{ClusterConfigProperty, ClusterTemplate, ClusterTest, ClusterTests, Type}
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
+
 import scala.jdk.CollectionConverters._
 
 object ApiVersionsRequestTest {

@@ -70,7 +70,7 @@ public class ListOffsetsRequest extends AbstractRequest {
                 minVersion = 2;
             else if (requireTimestamp)
                 minVersion = 1;
-            return new Builder(minVersion, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
+            return new Builder(minVersion, ApiKeys.LIST_OFFSETS.latestVersion(false), CONSUMER_REPLICA_ID, isolationLevel);
         }
 
         private Builder(short oldestAllowedVersion,
