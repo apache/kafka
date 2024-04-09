@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 
 import java.util.HashSet;
 import java.util.Optional;
@@ -417,22 +416,6 @@ public class ClassicGroupMember {
      */
     public void setIsNew(boolean value) {
         this.isNew = value;
-    }
-
-    /**
-     * @return The list of supported protocols in the {@link ConsumerGroupMemberMetadataValue} format
-     */
-    public ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedClassicJoinGroupRequestProtocols() {
-        ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection protocols =
-            new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection(supportedProtocols.size());
-        supportedProtocols.forEach(protocol ->
-            protocols.add(
-                new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocol()
-                    .setName(protocol.name())
-                    .setMetadata(protocol.metadata())
-            )
-        );
-        return protocols;
     }
 
     @Override

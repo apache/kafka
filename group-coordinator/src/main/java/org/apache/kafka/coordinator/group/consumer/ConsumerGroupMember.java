@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.image.TopicImage;
@@ -64,7 +65,9 @@ public class ConsumerGroupMember {
         private String serverAssignorName = null;
         private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
         private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Collections.emptyMap();
-        private ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols = null;
+        // The default value of supportedProtocols cannot be null, or its record will not be able to convert to String.
+        private ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols =
+            new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection();
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);
@@ -196,6 +199,20 @@ public class ConsumerGroupMember {
 
         public Builder setSupportedProtocols(ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols) {
             this.supportedProtocols = supportedProtocols;
+            return this;
+        }
+
+        public Builder setSupportedProtocols(JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols) {
+            ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection newSupportedProtocols =
+                new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection();
+            protocols.forEach(protocol ->
+                newSupportedProtocols.add(
+                    new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocol()
+                        .setName(protocol.name())
+                        .setMetadata(protocol.metadata())
+                )
+            );
+            this.supportedProtocols = newSupportedProtocols;
             return this;
         }
 
@@ -467,8 +484,8 @@ public class ConsumerGroupMember {
     /**
      * @return The list of protocols if the consumer uses the old protocol.
      */
-    public Optional<ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection> supportedProtocols() {
-        return Optional.ofNullable(supportedProtocols);
+    public ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols() {
+        return supportedProtocols;
     }
 
     /**
@@ -528,7 +545,7 @@ public class ConsumerGroupMember {
     }
 
     public boolean useLegacyProtocol() {
-        return supportedProtocols != null;
+        return !supportedProtocols.isEmpty();
     }
 
     @Override

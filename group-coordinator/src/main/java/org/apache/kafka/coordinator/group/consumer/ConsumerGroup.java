@@ -873,17 +873,13 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember newMember
     ) {
         if (oldMember != null) {
-            oldMember.supportedProtocols().ifPresent(protocols ->
-                protocols.forEach(protocol ->
-                    legacyProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::decValue)
-                )
+            oldMember.supportedProtocols().forEach(protocol ->
+                legacyProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::decValue)
             );
         }
         if (newMember != null) {
-            newMember.supportedProtocols().ifPresent(protocols ->
-                protocols.forEach(protocol ->
-                    legacyProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::incValue)
-                )
+            newMember.supportedProtocols().forEach(protocol ->
+                legacyProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::incValue)
             );
         }
     }
@@ -1097,7 +1093,7 @@ public class ConsumerGroup implements Group {
                     .setClientHost(member.clientHost())
                     .setSubscribedTopicNames(subscription.topics())
                     .setAssignedPartitions(partitions)
-                    .setSupportedProtocols(member.supportedClassicJoinGroupRequestProtocols())
+                    .setSupportedProtocols(member.supportedProtocols())
                     .build();
                 updateMember(newMember);
 
