@@ -1846,6 +1846,13 @@ class KafkaConfigTest {
       val config = KafkaConfig.fromProps(props)
       assertEquals(policy, config.consumerGroupMigrationPolicy)
     }
+
+    // The config is case-insensitive.
+    ConsumerGroupMigrationPolicy.values.foreach { policy =>
+      props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, policy.toString.toUpperCase())
+      val config = KafkaConfig.fromProps(props)
+      assertEquals(policy, config.consumerGroupMigrationPolicy)
+    }
   }
 
   @Test

@@ -64,5 +64,4 @@ public enum ConsumerGroupMigrationPolicy {
 
         return policy == null ? DISABLED : policy;
     }
-
 }
