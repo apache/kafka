@@ -952,9 +952,9 @@ class UnifiedLogTest {
     assertEquals(0, lastSeq)
   }
 
-  @ParameterizedTest(name = "testRetentionDeletesProducerStateSnapshots with empty-active-segment: {0}")
+  @ParameterizedTest(name = "testRetentionDeletesProducerStateSnapshots with createEmptyActiveSegment: {0}")
   @ValueSource(booleans = Array(true, false))
-  def testRetentionDeletesProducerStateSnapshots(isEmptyActiveSegment: Boolean): Unit = {
+  def testRetentionDeletesProducerStateSnapshots(createEmptyActiveSegment: Boolean): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5, retentionBytes = 0, retentionMs = 1000 * 60, fileDeleteDelayMs = 0)
     val log = createLog(logDir, logConfig)
     val pid1 = 1L
@@ -968,13 +968,13 @@ class UnifiedLogTest {
     log.roll()
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("c".getBytes)), producerId = pid1,
       producerEpoch = epoch, sequence = 2), leaderEpoch = 0)
-    if (isEmptyActiveSegment) {
+    if (createEmptyActiveSegment) {
       log.roll()
     }
 
     log.updateHighWatermark(log.logEndOffset)
 
-    val numProducerSnapshots = if (isEmptyActiveSegment) 3 else 2
+    val numProducerSnapshots = if (createEmptyActiveSegment) 3 else 2
     assertEquals(numProducerSnapshots, ProducerStateManager.listSnapshotFiles(logDir).size)
     // Sleep to breach the retention period
     mockTime.sleep(1000 * 60 + 1)

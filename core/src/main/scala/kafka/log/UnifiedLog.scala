@@ -1532,7 +1532,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         }
         localLog.checkIfMemoryMappedBufferClosed()
         if (segmentsToDelete.nonEmpty) {
-          // increment the local-log-start-offset before removing the segment for lookups
+          // increment the local-log-start-offset or log-start-offset before removing the segment for lookups
           val newLocalLogStartOffset = localLog.segments.higherSegment(segmentsToDelete.last.baseOffset()).get.baseOffset()
           incrementStartOffset(newLocalLogStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
           // remove the segments for lookups
