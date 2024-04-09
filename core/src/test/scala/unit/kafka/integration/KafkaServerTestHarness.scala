@@ -32,6 +32,7 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import java.io.File
+import java.time.Duration
 import java.util
 import java.util.{Arrays, Collections, Properties}
 import scala.collection.{Seq, mutable}
@@ -259,9 +260,21 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     index
   }
 
+  /**
+   * Kill the broker at the specified index.
+   * A controlled shutdown is attempted, with a timeout of 5 minutes.
+   */
   def killBroker(index: Int): Unit = {
-    if (alive(index)) {
-      _brokers(index).shutdown()
+    killBroker(index, Duration.ofMinutes(5))
+  }
+
+  /**
+   * Kill the broker at the specified index.
+   * A controlled shutdown is attempted, with the specified timeout.
+   */
+  def killBroker(index: Int, timeout: Duration): Unit = {
+    if(alive(index)) {
+      _brokers(index).shutdown(timeout)
       _brokers(index).awaitShutdown()
       alive(index) = false
     }

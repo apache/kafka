@@ -210,11 +210,16 @@ public class ClientMetricsManagerTest {
         assertEquals(12, kafkaMetrics.metrics().size());
         // Metrics should only have one instance.
         assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
-        assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "-count").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "-rate").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "-count").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "-rate").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-count").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-rate").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-count").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-rate").metricValue());
+        assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-avg").metricValue());
+        assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-max").metricValue());
     }
 
     @Test
@@ -315,7 +320,8 @@ public class ClientMetricsManagerTest {
         assertEquals(Errors.THROTTLING_QUOTA_EXCEEDED, response.error());
         assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
         // Should register 1 throttle metric.
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
+        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "-count").metricValue());
+        assertTrue((double) getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "-rate").metricValue() > 0);
     }
 
     @Test
@@ -356,7 +362,8 @@ public class ClientMetricsManagerTest {
 
         assertEquals(Errors.THROTTLING_QUOTA_EXCEEDED, response.error());
         // Should register 1 throttle metric.
-        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
+        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "-count").metricValue());
+        assertTrue((double) getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "-rate").metricValue() > 0);
         newClientMetricsManager.close();
         kafkaMetrics.close();
     }
@@ -448,7 +455,8 @@ public class ClientMetricsManagerTest {
         // 1 request should fail with throttling error.
         assertEquals(1, throttlingErrorCount);
         // Should register 1 throttle metric.
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
+        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "-count").metricValue());
+        assertTrue((double) getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "-rate").metricValue() > 0);
     }
 
     @Test
@@ -512,7 +520,8 @@ public class ClientMetricsManagerTest {
         // 1 request should fail with throttling error.
         assertEquals(1, throttlingErrorCount);
         // Should register 1 throttle metric.
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
+        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "-count").metricValue());
+        assertTrue((double) getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "-rate").metricValue() > 0);
     }
 
     @Test
@@ -546,13 +555,16 @@ public class ClientMetricsManagerTest {
         // registered i.e. 12 metrics.
         assertEquals(12, kafkaMetrics.metrics().size());
         assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "-count").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "-count").metricValue());
         // Should have 1 successful export and 0 error metrics.
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
+        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-count").metricValue());
+        assertTrue((double) getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-rate").metricValue() > 0);
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-count").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-rate").metricValue());
         // Should not have default NaN value, must register actual export time.
-        assertNotEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        assertNotEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-avg").metricValue());
+        assertNotEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-max").metricValue());
     }
 
     @Test
@@ -583,13 +595,14 @@ public class ClientMetricsManagerTest {
         // registered i.e. 12 metrics.
         assertEquals(12, kafkaMetrics.metrics().size());
         assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
-        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "Count").metricValue());
-        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "-count").metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "-count").metricValue());
         // Should have 1 successful export and 0 error metrics.
-        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
-        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
+        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-count").metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-count").metricValue());
         // Should not have default NaN value, must register actual export time metrics.
-        assertNotEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        assertNotEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-avg").metricValue());
+        assertNotEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-max").metricValue());
         newClientMetricsManager.close();
         kafkaMetrics.close();
     }
@@ -675,11 +688,13 @@ public class ClientMetricsManagerTest {
         assertFalse(instance.terminating());
         assertEquals(Errors.THROTTLING_QUOTA_EXCEEDED, instance.lastKnownError());
         // Should have 1 throttle error metrics.
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
+        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "-count").metricValue());
+        assertTrue((double) getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "-rate").metricValue() > 0);
         // Should have 1 successful export metrics as well.
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
-        assertNotEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-count").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-count").metricValue());
+        assertNotEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-avg").metricValue());
+        assertNotEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-max").metricValue());
     }
 
     @Test
@@ -719,9 +734,11 @@ public class ClientMetricsManagerTest {
         assertTrue(instance.terminating());
         assertEquals(Errors.NONE, instance.lastKnownError());
         // Should have 2 successful export metrics.
-        assertEquals((double) 2, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
-        assertNotEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        assertEquals((double) 2, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-count").metricValue());
+        assertTrue((double) getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-rate").metricValue() > 0);
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-count").metricValue());
+        assertNotEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-avg").metricValue());
+        assertNotEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-max").metricValue());
     }
 
     @Test
@@ -786,10 +803,11 @@ public class ClientMetricsManagerTest {
         assertFalse(instance.terminating());
         assertEquals(Errors.UNKNOWN_SUBSCRIPTION_ID, instance.lastKnownError());
         // Should have 1 unknown subscription request metric and no successful export.
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
-        assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "-count").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-count").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-count").metricValue());
+        assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-avg").metricValue());
+        assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-max").metricValue());
 
     }
 
@@ -844,9 +862,10 @@ public class ClientMetricsManagerTest {
         assertEquals(Errors.NONE, instance.lastKnownError());
         // Metrics should not report any export.
         assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
-        assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-count").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-count").metricValue());
+        assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-avg").metricValue());
+        assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-max").metricValue());
     }
 
     @Test
@@ -949,10 +968,12 @@ public class ClientMetricsManagerTest {
         // 1 request should fail with throttling error.
         assertEquals(1, throttlingErrorCount);
         // Metrics should report 1 export and 1 throttle error.
-        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
-        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
-        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
-        assertNotEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "-count").metricValue());
+        assertTrue((double) getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "-rate").metricValue() > 0);
+        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-count").metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-count").metricValue());
+        assertNotEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-avg").metricValue());
+        assertNotEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-max").metricValue());
         newClientMetricsManager.close();
         kafkaMetrics.close();
     }
@@ -1023,11 +1044,14 @@ public class ClientMetricsManagerTest {
         // 1 request should fail with throttling error.
         assertEquals(1, throttlingErrorCount);
         // Metrics should report 1 subscription, 1 throttle error and no successful export.
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "Count").metricValue());
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
-        assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "-count").metricValue());
+        assertTrue((double) getMetric(ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "-rate").metricValue() > 0);
+        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "-count").metricValue());
+        assertTrue((double) getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "-rate").metricValue() > 0);
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-count").metricValue());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-count").metricValue());
+        assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-avg").metricValue());
+        assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-max").metricValue());
     }
 
     @Test
@@ -1064,12 +1088,14 @@ public class ClientMetricsManagerTest {
         assertFalse(instance.terminating());
         assertEquals(Errors.INVALID_RECORD, instance.lastKnownError());
         // Metrics should report 1 plugin export error and 0 successful export.
-        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "Count").metricValue());
-        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
-        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
-        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "-count").metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "-count").metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "-count").metricValue());
+        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-count").metricValue());
+        assertTrue((double) getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-rate").metricValue() > 0);
         // Should have default NaN value, must not register export time.
-        assertEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        assertEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-avg").metricValue());
+        assertEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-max").metricValue());
         clientMetricsManager.close();
         kafkaMetrics.close();
     }
