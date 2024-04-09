@@ -37,6 +37,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.Scheduler
 
+import java.time.Duration
 import java.util
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -92,7 +93,8 @@ trait KafkaBroker extends Logging {
   def boundPort(listenerName: ListenerName): Int
   def startup(): Unit
   def awaitShutdown(): Unit
-  def shutdown(): Unit
+  def shutdown(): Unit = shutdown(Duration.ofMinutes(5))
+  def shutdown(timeout: Duration): Unit
   def brokerTopicStats: BrokerTopicStats
   def credentialProvider: CredentialProvider
   def clientToControllerChannelManager: NodeToControllerChannelManager
