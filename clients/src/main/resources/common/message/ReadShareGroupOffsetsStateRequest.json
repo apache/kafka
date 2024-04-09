@@ -24,9 +24,15 @@
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+",
       "about":"The group identifier." },
-    { "name": "TopicId", "type": "uuid", "versions": "0+",
-      "about": "The topic identifier." },
-    { "name": "Partition", "type": "int32", "versions": "0+",
-      "about": "The partition index." }
+    { "name": "Topics", "type": "[]ReadOffsetsStateData", "versions": "0+",
+      "about": "The data for the topics.", "fields": [
+      { "name": "TopicId", "type": "uuid", "versions": "0+",
+        "about": "The topic identifier." },
+      { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
+        "about":  "The data for the partitions.", "fields": [
+        { "name": "Partition", "type": "int32", "versions": "0+",
+          "about": "The partition index." }
+      ]}
+    ]}
   ]
 }

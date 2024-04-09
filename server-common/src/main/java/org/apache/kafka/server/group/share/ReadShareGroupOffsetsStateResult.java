@@ -19,59 +19,37 @@ package org.apache.kafka.server.group.share;
 
 import org.apache.kafka.common.message.ReadShareGroupOffsetsStateResponseData;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 public class ReadShareGroupOffsetsStateResult implements PersisterResult {
-  private final short errorCode;
-  private final int stateEpoch;
-  private final long startOffset;
+  private final List<TopicData<PartitionStateErrorData>> topicsData;
 
-  private ReadShareGroupOffsetsStateResult(short errorCode, int stateEpoch, long startOffset) {
-    this.errorCode = errorCode;
-    this.stateEpoch = stateEpoch;
-    this.startOffset = startOffset;
-  }
-
-  public short errorCode() {
-    return errorCode;
-  }
-
-  public int stateEpoch() {
-    return stateEpoch;
-  }
-
-  public long startOffset() {
-    return startOffset;
+  private ReadShareGroupOffsetsStateResult(List<TopicData<PartitionStateErrorData>> topicsData) {
+    this.topicsData = topicsData;
   }
 
   public static ReadShareGroupOffsetsStateResult from(ReadShareGroupOffsetsStateResponseData data) {
     return new Builder()
-        .setErrorCode(data.errorCode())
-        .setStateEpoch(data.stateEpoch())
-        .setStartOffset(data.startOffset())
+        .setTopicsData(data.results().stream()
+            .map(readOffsetsStateResult -> new TopicData<>(readOffsetsStateResult.topicId(),
+                readOffsetsStateResult.partitions().stream()
+                    .map(partitionResult -> PartitionFactory.newPartitionStateErrorData(partitionResult.partition(), partitionResult.stateEpoch(), partitionResult.startOffset(), partitionResult.errorCode()))
+                    .collect(Collectors.toList())))
+            .collect(Collectors.toList()))
         .build();
   }
 
   public static class Builder {
-    private short errorCode;
-    private int stateEpoch;
-    private long startOffset;
+    private List<TopicData<PartitionStateErrorData>> topicsData;
 
-    public Builder setErrorCode(short errorCode) {
-      this.errorCode = errorCode;
-      return this;
-    }
-
-    public Builder setStateEpoch(int stateEpoch) {
-      this.stateEpoch = stateEpoch;
-      return this;
-    }
-
-    public Builder setStartOffset(long startOffset) {
-      this.startOffset = startOffset;
+    public Builder setTopicsData(List<TopicData<PartitionStateErrorData>> topicsData) {
+      this.topicsData = topicsData;
       return this;
     }
 
     public ReadShareGroupOffsetsStateResult build() {
-      return new ReadShareGroupOffsetsStateResult(errorCode, stateEpoch, startOffset);
+      return new ReadShareGroupOffsetsStateResult(topicsData);
     }
   }
 }

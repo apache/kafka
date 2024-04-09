@@ -19,33 +19,40 @@ package org.apache.kafka.server.group.share;
 
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 
-public class DeleteShareGroupStateResult implements PersisterResult {
-  private final short errorCode;
+import java.util.List;
+import java.util.stream.Collectors;
 
-  private DeleteShareGroupStateResult(short errorCode) {
-    this.errorCode = errorCode;
+public class DeleteShareGroupStateResult implements PersisterResult {
+  private final List<TopicData<PartitionErrorData>> topicsData;
+
+  private DeleteShareGroupStateResult(List<TopicData<PartitionErrorData>> topicsData) {
+    this.topicsData = topicsData;
   }
 
-  public short errorCode() {
-    return errorCode;
+  public List<TopicData<PartitionErrorData>> topicsData() {
+    return topicsData;
   }
 
   public static DeleteShareGroupStateResult from(DeleteShareGroupStateResponseData data) {
     return new Builder()
-        .setErrorCode(data.errorCode())
+        .setTopicsData(data.results().stream()
+            .map(deleteStateResult -> new TopicData<>(deleteStateResult.topicId(), deleteStateResult.partitions().stream()
+                .map(partitionResult -> PartitionFactory.newPartitionErrorData(partitionResult.partition(), partitionResult.errorCode()))
+                .collect(Collectors.toList())))
+            .collect(Collectors.toList()))
         .build();
   }
 
   public static class Builder {
-    private short errorCode;
+    private List<TopicData<PartitionErrorData>> topicsData;
 
-    public Builder setErrorCode(short errorCode) {
-      this.errorCode = errorCode;
+    public Builder setTopicsData(List<TopicData<PartitionErrorData>> topicsData) {
+      this.topicsData = topicsData;
       return this;
     }
 
     public DeleteShareGroupStateResult build() {
-      return new DeleteShareGroupStateResult(errorCode);
+      return new DeleteShareGroupStateResult(topicsData);
     }
   }
 }

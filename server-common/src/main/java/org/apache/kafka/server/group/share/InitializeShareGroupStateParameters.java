@@ -19,60 +19,41 @@ package org.apache.kafka.server.group.share;
 
 import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
 
+import java.util.stream.Collectors;
+
 public class InitializeShareGroupStateParameters implements PersisterParameters {
 
-  private final GroupTopicPartitionData groupTopicPartitionData;
-  private final int stateEpoch;
-  private final long startOffset;
+  private final GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData;
 
-  private InitializeShareGroupStateParameters(GroupTopicPartitionData groupTopicPartitionData, int stateEpoch, long startOffset) {
+  private InitializeShareGroupStateParameters(GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData) {
     this.groupTopicPartitionData = groupTopicPartitionData;
-    this.stateEpoch = stateEpoch;
-    this.startOffset = startOffset;
   }
 
-  public GroupTopicPartitionData groupTopicPartitionData() {
+  public GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData() {
     return groupTopicPartitionData;
-  }
-
-  public int stateEpoch() {
-    return stateEpoch;
-  }
-
-  public long startOffset() {
-    return startOffset;
   }
 
   public static InitializeShareGroupStateParameters from(InitializeShareGroupStateRequestData data) {
     return new Builder()
-        .setGroupTopicPartitionData(new GroupTopicPartitionData(data.groupId(), data.topicId(), data.partition()))
-        .setStateEpoch(data.stateEpoch())
-        .setStartOffset(data.startOffset())
+        .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
+            .map(readStateData -> new TopicData<>(readStateData.topicId(),
+                readStateData.partitions().stream()
+                    .map(partitionData -> PartitionFactory.newPartitionStateData(partitionData.partition(), partitionData.stateEpoch(), partitionData.startOffset()))
+                    .collect(Collectors.toList())))
+            .collect(Collectors.toList())))
         .build();
   }
 
   public static class Builder {
-    private GroupTopicPartitionData groupTopicPartitionData;
-    private int stateEpoch;
-    private long startOffset;
+    private GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData;
 
-    public Builder setGroupTopicPartitionData(GroupTopicPartitionData groupTopicPartitionData) {
+    public Builder setGroupTopicPartitionData(GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData) {
       this.groupTopicPartitionData = groupTopicPartitionData;
       return this;
     }
 
-    public Builder setStateEpoch(int stateEpoch) {
-      this.stateEpoch = stateEpoch;
-      return this;
-    }
-
-    public Builder setStartOffset(long startOffset) {
-      this.startOffset = startOffset;
-      return this;
-    }
-
     public InitializeShareGroupStateParameters build() {
-      return new InitializeShareGroupStateParameters(this.groupTopicPartitionData, this.stateEpoch, this.startOffset);
+      return new InitializeShareGroupStateParameters(this.groupTopicPartitionData);
     }
   }
 }

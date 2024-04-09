@@ -3826,88 +3826,118 @@ public class RequestResponseTest {
     private InitializeShareGroupStateRequest createInitializeShareGroupStateRequest(short version) {
         InitializeShareGroupStateRequestData data = new InitializeShareGroupStateRequestData()
             .setGroupId("group")
-            .setTopicId(Uuid.randomUuid())
-            .setPartition(0)
-            .setStateEpoch(0)
-            .setStartOffset(0);
+            .setTopics(Collections.singletonList(new InitializeShareGroupStateRequestData.InitializeStateData()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new InitializeShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)
+                    .setStateEpoch(0)
+                    .setStartOffset(0)))));
         return new InitializeShareGroupStateRequest.Builder(data).build(version);
     }
 
     private InitializeShareGroupStateResponse createInitializeShareGroupStateResponse() {
         InitializeShareGroupStateResponseData data = new InitializeShareGroupStateResponseData();
-        data.setErrorCode(Errors.NONE.code());
+        data.setResults(Collections.singletonList(new InitializeShareGroupStateResponseData.InitializeStateResult()
+            .setTopicId(Uuid.randomUuid())
+            .setPartitions(Collections.singletonList(new InitializeShareGroupStateResponseData.PartitionResult()
+                .setPartition(0)
+                .setErrorCode(Errors.NONE.code())))));
         return new InitializeShareGroupStateResponse(data);
     }
 
     private ReadShareGroupStateRequest createReadShareGroupStateRequest(short version) {
         ReadShareGroupStateRequestData data = new ReadShareGroupStateRequestData()
             .setGroupId("group")
-            .setTopicId(Uuid.randomUuid())
-            .setPartition(0);
+            .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)))));
         return new ReadShareGroupStateRequest.Builder(data).build(version);
     }
 
     private ReadShareGroupStateResponse createReadShareGroupStateResponse() {
         ReadShareGroupStateResponseData data = new ReadShareGroupStateResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setStateEpoch(0)
-            .setStartOffset(0)
-            .setStateBatches(singletonList(new ReadShareGroupStateResponseData.StateBatch()
-                .setBaseOffset(0)
-                .setLastOffset(0)
-                .setState((byte) 0x0)
-                .setDeliveryCount((short) 0)));
+            .setResults(Collections.singletonList(new ReadShareGroupStateResponseData.ReadStateResult()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new ReadShareGroupStateResponseData.PartitionResult()
+                    .setPartition(0)
+                    .setErrorCode(Errors.NONE.code())
+                    .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setStateBatches(Collections.singletonList(new ReadShareGroupStateResponseData.StateBatch()
+                        .setBaseOffset(0)
+                        .setLastOffset(0)
+                        .setState((byte) 0x0)
+                        .setDeliveryCount((short) 0)))))));
         return new ReadShareGroupStateResponse(data);
     }
 
     private WriteShareGroupStateRequest createWriteShareGroupStateRequest(short version) {
         WriteShareGroupStateRequestData data = new WriteShareGroupStateRequestData()
             .setGroupId("group")
-            .setTopicId(Uuid.randomUuid())
-            .setPartition(0)
-            .setStateEpoch(0)
-            .setStartOffset(0)
-            .setStateBatches(singletonList(new WriteShareGroupStateRequestData.StateBatch()
-                .setBaseOffset(0)
-                .setLastOffset(0)
-                .setState((byte) 0x0)
-                .setDeliveryCount((short) 0)));
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)
+                    .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setStateBatches(singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                        .setBaseOffset(0)
+                        .setLastOffset(0)
+                        .setState((byte) 0x0)
+                        .setDeliveryCount((short) 0)))))));
         return new WriteShareGroupStateRequest.Builder(data).build(version);
     }
 
     private WriteShareGroupStateResponse createWriteShareGroupStateResponse() {
         WriteShareGroupStateResponseData data = new WriteShareGroupStateResponseData()
-            .setErrorCode(Errors.NONE.code());
+            .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                    .setPartition(0)
+                    .setErrorCode(Errors.NONE.code())))));
         return new WriteShareGroupStateResponse(data);
     }
 
     private DeleteShareGroupStateRequest createDeleteShareGroupStateRequest(short version) {
         DeleteShareGroupStateRequestData data = new DeleteShareGroupStateRequestData()
             .setGroupId("group")
-            .setTopicId(Uuid.randomUuid())
-            .setPartition(0);
+            .setTopics(Collections.singletonList(new DeleteShareGroupStateRequestData.DeleteStateData()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new DeleteShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)))));
         return new DeleteShareGroupStateRequest.Builder(data).build(version);
     }
 
     private DeleteShareGroupStateResponse createDeleteShareGroupStateResponse() {
         DeleteShareGroupStateResponseData data = new DeleteShareGroupStateResponseData()
-            .setErrorCode(Errors.NONE.code());
+            .setResults(Collections.singletonList(new DeleteShareGroupStateResponseData.DeleteStateResult()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new DeleteShareGroupStateResponseData.PartitionResult()
+                    .setPartition(0)
+                    .setErrorCode(Errors.NONE.code())))));
         return new DeleteShareGroupStateResponse(data);
     }
 
     private ReadShareGroupOffsetsStateRequest createReadShareGroupOffsetsStateRequest(short version) {
         ReadShareGroupOffsetsStateRequestData data = new ReadShareGroupOffsetsStateRequestData()
             .setGroupId("group")
-            .setTopicId(Uuid.randomUuid())
-            .setPartition(0);
+            .setTopics(Collections.singletonList(new ReadShareGroupOffsetsStateRequestData.ReadOffsetsStateData()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new ReadShareGroupOffsetsStateRequestData.PartitionData()
+                    .setPartition(0)))));
         return new ReadShareGroupOffsetsStateRequest.Builder(data).build(version);
     }
 
     private ReadShareGroupOffsetsStateResponse createReadShareGroupOffsetsStateResponse() {
         ReadShareGroupOffsetsStateResponseData data = new ReadShareGroupOffsetsStateResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setStateEpoch(0)
-            .setStartOffset(0);
+            .setResults(Collections.singletonList(new ReadShareGroupOffsetsStateResponseData.ReadOffsetsStateResult()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new ReadShareGroupOffsetsStateResponseData.PartitionResult()
+                    .setPartition(0)
+                    .setErrorCode(Errors.NONE.code())
+                    .setStartOffset(0)
+                    .setStateEpoch(0)))));
         return new ReadShareGroupOffsetsStateResponse(data);
     }
 

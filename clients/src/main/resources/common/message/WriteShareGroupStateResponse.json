@@ -27,7 +27,17 @@
   // - FENCED_STATE_EPOCH (version 0+)
   // - INVALID_REQUEST (version 0+)
   "fields": [
-    { "name": "ErrorCode", "type": "int16", "versions": "0+",
-      "about": "The error code, or 0 if there was no error." }
+    { "name": "Results", "type": "[]WriteStateResult", "versions": "0+",
+      "about": "The write results", "fields": [
+      { "name": "TopicId", "type": "uuid", "versions": "0+",
+        "about": "The topic identifier" },
+      { "name": "Partitions", "type": "[]PartitionResult", "versions": "0+",
+        "about" : "The results for the partitions.", "fields": [
+        { "name": "Partition", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "ErrorCode", "type": "int16", "versions": "0+",
+          "about": "The error code, or 0 if there was no error." }
+      ]}
+    ]}
   ]
 }

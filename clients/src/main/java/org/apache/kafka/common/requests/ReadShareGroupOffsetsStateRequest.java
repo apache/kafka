@@ -24,6 +24,9 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class ReadShareGroupOffsetsStateRequest extends AbstractRequest {
   public static class Builder extends AbstractRequest.Builder<ReadShareGroupOffsetsStateRequest> {
@@ -59,10 +62,17 @@ public class ReadShareGroupOffsetsStateRequest extends AbstractRequest {
 
   @Override
   public ReadShareGroupOffsetsStateResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-    return new ReadShareGroupOffsetsStateResponse(
-        new ReadShareGroupOffsetsStateResponseData()
-            .setErrorCode(Errors.forException(e).code())
-    );
+    List<ReadShareGroupOffsetsStateResponseData.ReadOffsetsStateResult> results = new ArrayList<>();
+    data.topics().forEach(
+        topicResult -> results.add(new ReadShareGroupOffsetsStateResponseData.ReadOffsetsStateResult()
+            .setTopicId(topicResult.topicId())
+            .setPartitions(topicResult.partitions().stream()
+                .map(partitionData -> new ReadShareGroupOffsetsStateResponseData.PartitionResult()
+                    .setPartition(partitionData.partition())
+                    .setErrorCode(Errors.forException(e).code()))
+                .collect(Collectors.toList()))));
+    return new ReadShareGroupOffsetsStateResponse(new ReadShareGroupOffsetsStateResponseData()
+        .setResults(results));
   }
 
   @Override

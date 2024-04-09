@@ -19,6 +19,7 @@ package org.apache.kafka.server.group.share;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -35,7 +36,7 @@ public interface Persister {
    * @param request InitializeShareGroupStateParameters
    * @return InitializeShareGroupStateResult
    */
-  CompletableFuture<InitializeShareGroupStateResult> initializeState(InitializeShareGroupStateParameters request);
+  CompletableFuture<List<InitializeShareGroupStateResult>> initializeState(InitializeShareGroupStateParameters request);
 
   /**
    * Read share-partition state from a persistence impl.
@@ -43,15 +44,15 @@ public interface Persister {
    * @param request ReadShareGroupStateParameters
    * @return ReadShareGroupStateResult
    */
-  CompletableFuture<ReadShareGroupStateResult> readState(ReadShareGroupStateParameters request);
+  CompletableFuture<List<ReadShareGroupStateResult>> readState(ReadShareGroupStateParameters request);
 
   /**
    * Write share-partition state to a persistence impl.
    *
-   * @param requestDTO WriteShareGroupStateParameters
+   * @param request WriteShareGroupStateParameters
    * @return WriteShareGroupStateResult
    */
-  CompletableFuture<WriteShareGroupStateResult> writeState(WriteShareGroupStateParameters requestDTO);
+  CompletableFuture<List<WriteShareGroupStateResult>> writeState(WriteShareGroupStateParameters request);
 
   /**
    * Delete share-partition state from a persistence impl.
@@ -59,7 +60,7 @@ public interface Persister {
    * @param request DeleteShareGroupStateParameters
    * @return DeleteShareGroupStateResult
    */
-  CompletableFuture<DeleteShareGroupStateResult> deleteState(DeleteShareGroupStateParameters request);
+  CompletableFuture<List<DeleteShareGroupStateResult>> deleteState(DeleteShareGroupStateParameters request);
 
   /**
    * Read the offset information from share-partition state from a persistence impl.
@@ -67,5 +68,5 @@ public interface Persister {
    * @param request ReadShareGroupOffsetsStateParameters
    * @return ReadShareGroupOffsetsStateResult
    */
-  CompletableFuture<ReadShareGroupOffsetsStateResult> readOffsets(ReadShareGroupOffsetsStateParameters request);
+  CompletableFuture<List<ReadShareGroupOffsetsStateResult>> readOffsets(ReadShareGroupOffsetsStateParameters request);
 }

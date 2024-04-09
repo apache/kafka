@@ -24,6 +24,9 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class DeleteShareGroupStateRequest extends AbstractRequest {
   public static class Builder extends AbstractRequest.Builder<DeleteShareGroupStateRequest> {
@@ -59,10 +62,17 @@ public class DeleteShareGroupStateRequest extends AbstractRequest {
 
   @Override
   public DeleteShareGroupStateResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-    return new DeleteShareGroupStateResponse(
-        new DeleteShareGroupStateResponseData()
-            .setErrorCode(Errors.forException(e).code())
-    );
+    List<DeleteShareGroupStateResponseData.DeleteStateResult> results = new ArrayList<>();
+    data.topics().forEach(
+        topicResult -> results.add(new DeleteShareGroupStateResponseData.DeleteStateResult()
+            .setTopicId(topicResult.topicId())
+            .setPartitions(topicResult.partitions().stream()
+                .map(partitionData -> new DeleteShareGroupStateResponseData.PartitionResult()
+                    .setPartition(partitionData.partition())
+                    .setErrorCode(Errors.forException(e).code()))
+                .collect(Collectors.toList()))));
+    return new DeleteShareGroupStateResponse(new DeleteShareGroupStateResponseData()
+        .setResults(results));
   }
 
   @Override

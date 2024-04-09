@@ -23,7 +23,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 public class ReadShareGroupOffsetsStateResponse extends AbstractResponse {
@@ -41,7 +41,13 @@ public class ReadShareGroupOffsetsStateResponse extends AbstractResponse {
 
   @Override
   public Map<Errors, Integer> errorCounts() {
-    return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+    Map<Errors, Integer> counts = new HashMap<>();
+    data.results().forEach(
+        result -> result.partitions().forEach(
+            partitionResult -> updateErrorCounts(counts, Errors.forCode(partitionResult.errorCode()))
+        )
+    );
+    return counts;
   }
 
   @Override

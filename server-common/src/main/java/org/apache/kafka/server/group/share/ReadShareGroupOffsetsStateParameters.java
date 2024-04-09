@@ -19,27 +19,34 @@ package org.apache.kafka.server.group.share;
 
 import org.apache.kafka.common.message.ReadShareGroupOffsetsStateRequestData;
 
-public class ReadShareGroupOffsetsStateParameters implements PersisterParameters {
-  private final GroupTopicPartitionData groupTopicPartitionData;
+import java.util.stream.Collectors;
 
-  private ReadShareGroupOffsetsStateParameters(GroupTopicPartitionData groupTopicPartitionData) {
+public class ReadShareGroupOffsetsStateParameters implements PersisterParameters {
+  private final GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData;
+
+  private ReadShareGroupOffsetsStateParameters(GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData) {
     this.groupTopicPartitionData = groupTopicPartitionData;
   }
 
-  public GroupTopicPartitionData groupTopicPartitionData() {
+  public GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData() {
     return groupTopicPartitionData;
   }
 
   public static ReadShareGroupOffsetsStateParameters from(ReadShareGroupOffsetsStateRequestData data) {
     return new Builder()
-        .setGroupTopicPartitionData(new GroupTopicPartitionData(data.groupId(), data.topicId(), data.partition()))
+        .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
+            .map(topicData -> new TopicData<>(topicData.topicId(),
+                topicData.partitions().stream()
+                    .map(partitionData -> PartitionFactory.newPartitionIdData(partitionData.partition()))
+                    .collect(Collectors.toList())))
+            .collect(Collectors.toList())))
         .build();
   }
 
   public static class Builder {
-    private GroupTopicPartitionData groupTopicPartitionData;
+    private GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData;
 
-    public Builder setGroupTopicPartitionData(GroupTopicPartitionData groupTopicPartitionData) {
+    public Builder setGroupTopicPartitionData(GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData) {
       this.groupTopicPartitionData = groupTopicPartitionData;
       return this;
     }

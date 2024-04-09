@@ -24,6 +24,9 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class WriteShareGroupStateRequest extends AbstractRequest {
   public static class Builder extends AbstractRequest.Builder<WriteShareGroupStateRequest> {
@@ -59,10 +62,17 @@ public class WriteShareGroupStateRequest extends AbstractRequest {
 
   @Override
   public WriteShareGroupStateResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-    return new WriteShareGroupStateResponse(
-        new WriteShareGroupStateResponseData()
-            .setErrorCode(Errors.forException(e).code())
-    );
+    List<WriteShareGroupStateResponseData.WriteStateResult> results = new ArrayList<>();
+    data.topics().forEach(
+        topicResult -> results.add(new WriteShareGroupStateResponseData.WriteStateResult()
+            .setTopicId(topicResult.topicId())
+            .setPartitions(topicResult.partitions().stream()
+                .map(partitionData -> new WriteShareGroupStateResponseData.PartitionResult()
+                    .setPartition(partitionData.partition())
+                    .setErrorCode(Errors.forException(e).code()))
+                .collect(Collectors.toList()))));
+    return new WriteShareGroupStateResponse(new WriteShareGroupStateResponseData()
+        .setResults(results));
   }
 
   @Override

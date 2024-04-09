@@ -17,75 +17,61 @@
 
 package org.apache.kafka.server.group.share;
 
-import org.apache.kafka.common.Uuid;
-
+import java.util.List;
 import java.util.Objects;
 
-public class GroupTopicPartitionData {
+public class GroupTopicPartitionData<P extends PartitionInfoData> {
   private final String groupId;
-  private final Uuid topicId;
-  private final int partition;
+  private final List<TopicData<P>> topicsData;
 
-  public GroupTopicPartitionData(String groupId, Uuid topicId, int partition) {
+  public GroupTopicPartitionData(String groupId, List<TopicData<P>> topicsData) {
     this.groupId = groupId;
-    this.topicId = topicId;
-    this.partition = partition;
+    this.topicsData = topicsData;
   }
 
   public String groupId() {
     return groupId;
   }
 
-  public Uuid topicId() {
-    return topicId;
-  }
-
-  public int partition() {
-    return partition;
+  public List<TopicData<P>> topicsData() {
+    return topicsData;
   }
 
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    GroupTopicPartitionData that = (GroupTopicPartitionData) o;
-    return partition == that.partition && Objects.equals(groupId, that.groupId) && Objects.equals(topicId, that.topicId);
+    GroupTopicPartitionData<?> that = (GroupTopicPartitionData<?>) o;
+    return Objects.equals(groupId, that.groupId) && Objects.equals(topicsData, that.topicsData);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(groupId, topicId, partition);
+    return Objects.hash(groupId, topicsData);
   }
 
-  public static class Builder {
+  public static class Builder<P extends PartitionInfoData> {
     private String groupId;
-    private Uuid topicId;
-    private int partition;
+    private List<TopicData<P>> topicsData;
 
-    public Builder setGroupId(String groupId) {
+    public Builder<P> setGroupId(String groupId) {
       this.groupId = groupId;
       return this;
     }
 
-    public Builder setTopicId(Uuid topicId) {
-      this.topicId = topicId;
+    public Builder<P> setTopicsData(List<TopicData<P>> topicsData) {
+      this.topicsData = topicsData;
       return this;
     }
 
-    public Builder setPartition(int partition) {
-      this.partition = partition;
-      return this;
-    }
-
-    public Builder setGroupTopicPartition(GroupTopicPartitionData groupTopicPartitionData) {
+    public Builder<P> setGroupTopicPartition(GroupTopicPartitionData<P> groupTopicPartitionData) {
       this.groupId = groupTopicPartitionData.groupId();
-      this.topicId = groupTopicPartitionData.topicId();
-      this.partition = groupTopicPartitionData.partition();
+      this.topicsData = groupTopicPartitionData.topicsData();
       return this;
     }
 
-    public GroupTopicPartitionData build() {
-      return new GroupTopicPartitionData(this.groupId, this.topicId, this.partition);
+    public GroupTopicPartitionData<P> build() {
+      return new GroupTopicPartitionData<P>(this.groupId, this.topicsData);
     }
   }
 }

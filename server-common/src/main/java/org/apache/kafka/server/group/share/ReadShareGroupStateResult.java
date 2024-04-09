@@ -23,74 +23,40 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class ReadShareGroupStateResult implements PersisterResult {
-  private final short errorCode;
-  private final int stateEpoch;
-  private final long startOffset;
-  private final List<PersisterStateBatch> stateBatches;
+  private final List<TopicData<PartitionAllData>> topicsData;
 
-  private ReadShareGroupStateResult(short errorCode, int stateEpoch, long startOffset, List<PersisterStateBatch> stateBatches) {
-    this.errorCode = errorCode;
-    this.stateEpoch = stateEpoch;
-    this.startOffset = startOffset;
-    this.stateBatches = stateBatches;
+  private ReadShareGroupStateResult(List<TopicData<PartitionAllData>> topicsData) {
+    this.topicsData = topicsData;
   }
 
-  public short errorCode() {
-    return errorCode;
-  }
-
-  public int stateEpoch() {
-    return stateEpoch;
-  }
-
-  public long startOffset() {
-    return startOffset;
-  }
-
-  public List<PersisterStateBatch> stateBatches() {
-    return stateBatches;
+  public List<TopicData<PartitionAllData>> topicsData() {
+    return topicsData;
   }
 
   public static ReadShareGroupStateResult from(ReadShareGroupStateResponseData data) {
     return new Builder()
-        .setErrorCode(data.errorCode())
-        .setStateEpoch(data.stateEpoch())
-        .setStartOffset(data.startOffset())
-        .setStateBatches(data.stateBatches().stream()
-            .map(PersisterStateBatch::from)
+        .setTopicsData(data.results().stream()
+            .map(topicData -> new TopicData<>(topicData.topicId(),
+                topicData.partitions().stream()
+                    .map(partitionResult -> PartitionFactory.newPartitionAllData(partitionResult.partition(), partitionResult.stateEpoch(), partitionResult.startOffset(), partitionResult.errorCode(), partitionResult.stateBatches().stream()
+                        .map(PersisterStateBatch::from)
+                        .collect(Collectors.toList())))
+                    .collect(Collectors.toList())))
             .collect(Collectors.toList()))
         .build();
   }
 
   public static class Builder {
 
-    private short errorCode;
-    private int stateEpoch;
-    private long startOffset;
-    private List<PersisterStateBatch> stateBatches;
+    private List<TopicData<PartitionAllData>> topicsData;
 
-    public Builder setErrorCode(short errorCode) {
-      this.errorCode = errorCode;
-      return this;
-    }
-
-    public Builder setStateEpoch(int stateEpoch) {
-      this.stateEpoch = stateEpoch;
-      return this;
-    }
-
-    public Builder setStartOffset(long startOffset) {
-      this.startOffset = startOffset;
-      return this;
-    }
-
-    public Builder setStateBatches(List<PersisterStateBatch> stateBatches) {
-      this.stateBatches = stateBatches;
+    public Builder setTopicsData(List<TopicData<PartitionAllData>> topicsData) {
+      this.topicsData = topicsData;
       return this;
     }
 
     public ReadShareGroupStateResult build() {
-      return new ReadShareGroupStateResult(errorCode, stateEpoch, startOffset, stateBatches);
+      return new ReadShareGroupStateResult(topicsData);
     }
   }
 }
