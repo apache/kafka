@@ -108,6 +108,7 @@ class BrokerServer(
 
   var authorizer: Option[Authorizer] = None
   var observer: Observer = null
+  var quotaV2Handler: QuotaV2Handler = null
   var socketServer: SocketServer = null
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
 
@@ -237,6 +238,7 @@ class BrokerServer(
       )
 
       observer = Observer(config)
+      quotaV2Handler = QuotaV2Handler(config)
 
       // Create and start the socket server acceptor threads so that the bound port is known.
       // Delay starting processors until the end of the initialization sequence to ensure
@@ -389,7 +391,7 @@ class BrokerServer(
       val raftSupport = RaftSupport(forwardingManager, metadataCache)
       dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, raftSupport,
         replicaManager, groupCoordinator, transactionCoordinator, autoTopicCreationManager,
-        config.nodeId, config, metadataCache, metadataCache, metrics, authorizer, observer, quotaManagers,
+        config.nodeId, config, metadataCache, metadataCache, metrics, authorizer, observer, quotaV2Handler, quotaManagers,
         fetchManager, brokerTopicStats, clusterId, time, tokenManager, apiVersionManager)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,

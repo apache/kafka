@@ -33,6 +33,7 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.MetadataCache;
 import kafka.server.Observer;
+import kafka.server.QuotaV2Handler;
 import kafka.server.ZkMetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -100,6 +101,7 @@ public class MetadataRequestBenchmark {
     private RequestChannel.Metrics requestChannelMetrics = Mockito.mock(RequestChannel.Metrics.class);
     private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
     private Observer observer = Mockito.mock(Observer.class);
+    private QuotaV2Handler quotaV2Handler = Mockito.mock(QuotaV2Handler.class);
     private GroupCoordinator groupCoordinator = Mockito.mock(GroupCoordinator.class);
     private ZkAdminManager adminManager = Mockito.mock(ZkAdminManager.class);
     private TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
@@ -188,6 +190,7 @@ public class MetadataRequestBenchmark {
             metrics,
             Option.empty(),
             observer,
+            quotaV2Handler,
             quotaManagers,
             fetchManager,
             brokerTopicStats,
