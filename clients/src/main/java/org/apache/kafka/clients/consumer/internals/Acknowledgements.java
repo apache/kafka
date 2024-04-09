@@ -144,6 +144,13 @@ public class Acknowledgements {
         return this;
     }
 
+    /**
+     * Returns the Map of Acknowledgements for the offsets.
+     */
+    public Map<Long, AcknowledgeType> getAcknowledgementsTypeMap() {
+        return acknowledgements;
+    }
+
     public List<ShareFetchRequestData.AcknowledgementBatch> getAcknowledgmentBatches() {
         List<ShareFetchRequestData.AcknowledgementBatch> batches = new ArrayList<>();
         if (acknowledgements.isEmpty()) return batches;
