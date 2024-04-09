@@ -1947,11 +1947,6 @@ KStream&lt;String, String&gt; joined = left.outerJoin(right,
                                         </li>
                                         <li><p class="first">The join will be triggered under the conditions listed below whenever new input is received.  When it is triggered, the user-supplied <code class="docutils literal"><span class="pre">ValueJoiner</span></code> will be called to produce
                                             join output records.</p>
-                                            <blockquote>
-                                                <div><ul class="simple">
-                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> value are ignored and do not trigger the join.</li>
-                                                </ul>
-                                                </div></blockquote>
                                         </li>
                                         <li><p class="first">For each input record on one side that does not have any match on the other side, the <code class="docutils literal"><span class="pre">ValueJoiner</span></code> will be called with <code class="docutils literal"><span class="pre">ValueJoiner#apply(leftRecord.value,</span> <span class="pre">null)</span></code> or
                                             <code class="docutils literal"><span class="pre">ValueJoiner#apply(null,</span> <span class="pre">rightRecord.value)</span></code>, respectively; this explains the row with timestamp=60, timestamp=80, and timestamp=100 in the table below, which lists <code class="docutils literal"><span class="pre">[E,</span> <span class="pre">null]</span></code>,
