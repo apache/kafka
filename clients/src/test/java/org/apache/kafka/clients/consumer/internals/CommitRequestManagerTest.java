@@ -544,7 +544,7 @@ public class CommitRequestManagerTest {
         subscriptionState.assignFromUser(singleton(t1p));
         subscriptionState.seek(t1p, 100);
 
-        CommitRequestManager commitRequestManger = create(true, 100);
+        CommitRequestManager commitRequestManager = create(true, 100);
 
         // Send auto-commit request that will remain in-flight without a response
         time.sleep(100);
