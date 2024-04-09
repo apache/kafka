@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
@@ -29,6 +30,7 @@ import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -38,6 +40,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -63,6 +66,7 @@ public class ConsumerGroupTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         return new ConsumerGroup(
             snapshotRegistry,
+            new LogContext(),
             groupId,
             mock(GroupCoordinatorMetricsShard.class)
         );
@@ -818,7 +822,7 @@ public class ConsumerGroupTest {
             Collections.emptyMap(),
             new TopicPartition("__consumer_offsets", 0)
         );
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, new LogContext(), "group-foo", metricsShard);
         snapshotRegistry.getOrCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         group.updateMember(new ConsumerGroupMember.Builder("member1")
@@ -834,6 +838,7 @@ public class ConsumerGroupTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConsumerGroup group = new ConsumerGroup(
             snapshotRegistry,
+            new LogContext(),
             "group-foo",
             mock(GroupCoordinatorMetricsShard.class)
         );
@@ -894,7 +899,7 @@ public class ConsumerGroupTest {
         long commitTimestamp = 20000L;
         long offsetsRetentionMs = 10000L;
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
-        ConsumerGroup group = new ConsumerGroup(new SnapshotRegistry(new LogContext()), "group-id", mock(GroupCoordinatorMetricsShard.class));
+        ConsumerGroup group = new ConsumerGroup(new SnapshotRegistry(new LogContext()), new LogContext(), "group-id", mock(GroupCoordinatorMetricsShard.class));
 
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
         assertTrue(offsetExpirationCondition.isPresent());
@@ -953,7 +958,7 @@ public class ConsumerGroupTest {
     @Test
     public void testAsDescribedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-id-1", mock(GroupCoordinatorMetricsShard.class));
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, new LogContext(), "group-id-1", mock(GroupCoordinatorMetricsShard.class));
         snapshotRegistry.getOrCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
 
@@ -992,6 +997,7 @@ public class ConsumerGroupTest {
         GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
         ConsumerGroup consumerGroup = new ConsumerGroup(
             new SnapshotRegistry(new LogContext()),
+            new LogContext(),
             "group-id",
             metrics
         );
@@ -1033,7 +1039,7 @@ public class ConsumerGroupTest {
             Collections.emptyMap(),
             new TopicPartition("__consumer_offsets", 0)
         );
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, new LogContext(), "group-foo", metricsShard);
         snapshotRegistry.getOrCreateSnapshot(0);
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));
         assertFalse(group.isInStates(Collections.singleton("Empty"), 0));
@@ -1045,5 +1051,60 @@ public class ConsumerGroupTest {
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));
         assertTrue(group.isInStates(Collections.singleton("stable"), 1));
         assertFalse(group.isInStates(Collections.singleton("empty"), 1));
+    }
+
+    @Test
+    public void testSupportsProtocols() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection collection1 =
+            new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection();
+        collection1.add(new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
+        ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection collection2 =
+            new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection();
+        collection2.add(new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+        collection2.add(new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member-1")
+            .setSupportedProtocols(collection1)
+            .build();
+        consumerGroup.updateMember(member1);
+
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member-2")
+            .setSupportedProtocols(collection2)
+            .build();
+        consumerGroup.updateMember(member2);
+
+        assertEquals(2, consumerGroup.legacyMembersSupportedProtocols().get("range"));
+        assertEquals(1, consumerGroup.legacyMembersSupportedProtocols().get("roundrobin"));
+        assertTrue(consumerGroup.supportsProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("range", "sticky"))));
+        assertFalse(consumerGroup.supportsProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("sticky", "roundrobin"))));
+
+        member2 = new ConsumerGroupMember.Builder(member2)
+            .setSupportedProtocols(collection1)
+            .build();
+        consumerGroup.updateMember(member2);
+
+        assertEquals(2, consumerGroup.legacyMembersSupportedProtocols().get("range"));
+        assertFalse(consumerGroup.legacyMembersSupportedProtocols().containsKey("roundrobin"));
+
+        member1 = new ConsumerGroupMember.Builder(member1)
+            .setSupportedProtocols(collection2)
+            .build();
+        consumerGroup.updateMember(member1);
+        member2 = new ConsumerGroupMember.Builder(member2)
+            .setSupportedProtocols(collection2)
+            .build();
+        consumerGroup.updateMember(member2);
+
+        assertEquals(2, consumerGroup.legacyMembersSupportedProtocols().get("range"));
+        assertEquals(2, consumerGroup.legacyMembersSupportedProtocols().get("roundrobin"));
+        assertTrue(consumerGroup.supportsProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("sticky", "roundrobin"))));
     }
 }

@@ -9567,6 +9567,7 @@ public class GroupMetadataManagerTest {
         );
 
         ClassicGroup group = context.createClassicGroup(groupId);
+        group.setProtocolName(Optional.ofNullable("range"));
         group.add(
             new ClassicGroupMember(
                 memberId1,
@@ -9679,6 +9680,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedUpdatedMember2)
         );
 
+        // TODO: only comparing references?
         assertEquals(expectedRecords, result.records());
     }
 
@@ -9729,6 +9731,7 @@ public class GroupMetadataManagerTest {
 
         // Construct a stable group with two members.
         ClassicGroup group = context.createClassicGroup(groupId);
+        group.setProtocolName(Optional.ofNullable("range"));
         group.add(
             new ClassicGroupMember(
                 memberId1,
@@ -9891,6 +9894,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedUpdatedMember3)
         );
 
+        // TODO: only comparing references?
         assertEquals(expectedRecords, consumerGroupHeartbeatResult.records());
         assertTrue(joinResult.joinFuture.isDone());
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), joinResult.joinFuture.get().errorCode());

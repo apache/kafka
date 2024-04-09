@@ -16,10 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.classic;
 
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -40,11 +37,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -370,6 +363,13 @@ public class ClassicGroup implements Group {
      */
     public long currentStateTimestampOrDefault() {
         return currentStateTimestamp.orElse(-1L);
+    }
+
+    /**
+     * @return the current supportedProtocols.
+     */
+    public Map<String, Integer> supportedProtocols() {
+        return supportedProtocols;
     }
 
     /**
@@ -1287,9 +1287,6 @@ public class ClassicGroup implements Group {
         members.forEach((__, member) -> completeSyncFuture(
             member,
             new SyncGroupResponseData()
-                .setProtocolName(protocolName.orElse(null))
-                .setProtocolType(protocolType.orElse(null))
-                .setAssignment(member.assignment())
                 .setErrorCode(error.code())
         ));
     }
@@ -1300,11 +1297,11 @@ public class ClassicGroup implements Group {
     public void initNextGeneration() {
         generationId++;
         if (!members.isEmpty()) {
-            protocolName = Optional.of(selectProtocol());
+            setProtocolName(Optional.of(selectProtocol()));
             subscribedTopics = computeSubscribedTopics();
             transitionTo(COMPLETING_REBALANCE);
         } else {
-            protocolName = Optional.empty();
+            setProtocolName(Optional.empty());
             subscribedTopics = computeSubscribedTopics();
             transitionTo(EMPTY);
         }
@@ -1348,68 +1345,6 @@ public class ClassicGroup implements Group {
         return allMembers().stream().collect(Collectors.toMap(
             ClassicGroupMember::memberId, ClassicGroupMember::assignment
         ));
-    }
-
-    /**
-     * Convert the current classic group to a consumer group.
-     * Add the records for the conversion.
-     *
-     * @param consumerGroup     The converted consumer group.
-     * @param records           The list to which the new records are added.
-     *
-     * @throws GroupIdNotFoundException if any of the group's member doesn't support the consumer protocol.
-     */
-    public void convertToConsumerGroup(
-        ConsumerGroup consumerGroup,
-        List<Record> records,
-        TopicsImage topicsImage
-    ) throws GroupIdNotFoundException {
-        consumerGroup.setGroupEpoch(generationId);
-        consumerGroup.setTargetAssignmentEpoch(generationId);
-
-        records.add(RecordHelpers.newGroupEpochRecord(groupId(), generationId));
-        // SubscriptionMetadata will be computed in the following consumerGroupHeartbeat
-        records.add(RecordHelpers.newGroupSubscriptionMetadataRecord(groupId(), Collections.emptyMap()));
-        records.add(RecordHelpers.newTargetAssignmentEpochRecord(groupId(), generationId));
-        
-        members.forEach((memberId, member) -> {
-            ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment()));
-            Map<Uuid, Set<Integer>> partitions = topicPartitionMapFromList(assignment.partitions(), topicsImage);
-            ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(member.metadata()));
-
-            ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(memberId)
-                .setMemberEpoch(generationId)
-                .setPreviousMemberEpoch(generationId)
-                .setInstanceId(member.groupInstanceId().orElse(null))
-                .setRackId(subscription.rackId().orElse(null))
-                .setRebalanceTimeoutMs(member.rebalanceTimeoutMs())
-                .setClientId(member.clientId())
-                .setClientHost(member.clientHost())
-                .setSubscribedTopicNames(subscription.topics())
-                .setAssignedPartitions(partitions)
-                .build();
-            consumerGroup.updateMember(newMember);
-
-            records.add(RecordHelpers.newMemberSubscriptionRecord(groupId(), newMember));
-            records.add(RecordHelpers.newCurrentAssignmentRecord(groupId(), newMember));
-            records.add(RecordHelpers.newTargetAssignmentRecord(groupId(), memberId, partitions));
-        });
-    }
-
-    private static Map<Uuid, Set<Integer>> topicPartitionMapFromList(
-        List<TopicPartition> partitions,
-        TopicsImage topicsImage
-    ) {
-        Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
-        partitions.forEach(topicPartition -> {
-            TopicImage topicImage = topicsImage.getTopic(topicPartition.topic());
-            // TODO: add a log if topic image is null?
-            if (topicImage != null) {
-                topicPartitionMap.computeIfAbsent(topicImage.id(), __ -> new HashSet<>())
-                    .add(topicPartition.partition());
-            }
-        });
-        return topicPartitionMap;
     }
 
     /**

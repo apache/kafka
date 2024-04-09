@@ -25,36 +25,42 @@ import java.util.stream.Collectors;
 
 public enum ConsumerGroupMigrationPolicy {
     /** Both upgrade and downgrade are enabled.*/
-    BIDIRECTIONAL("bidirectional"),
+    BIDIRECTIONAL("bidirectional", true, true),
 
     /** Only upgrade is enabled.*/
-    UPGRADE("upgrade"),
+    UPGRADE("upgrade", true, false),
 
     /** Only downgrade is enabled.*/
-    DOWNGRADE("downgrade"),
+    DOWNGRADE("downgrade", false, true),
 
     /** Neither upgrade nor downgrade is enabled.*/
-    DISABLED("disabled");
+    DISABLED("disabled", false, false);
 
-    private final String policy;
+    private final String name;
+    private final boolean isUpgradeEnabled;
+    private final boolean isDowngradeEnabled;
 
-    ConsumerGroupMigrationPolicy(String config) {
-        this.policy = config;
+    ConsumerGroupMigrationPolicy(String config, boolean isUpgradeEnabled, boolean isDowngradeEnabled) {
+        this.name = config;
+        this.isUpgradeEnabled = isUpgradeEnabled;
+        this.isDowngradeEnabled = isDowngradeEnabled;
+    }
+
+    public boolean isUpgradeEnabled() {
+        return isUpgradeEnabled;
+    }
+
+    public boolean isDowngradeEnabled() {
+        return isDowngradeEnabled;
     }
 
     @Override
     public String toString() {
-        return policy;
+        return name;
     }
 
-    public static String validValuesDescription =
-        BIDIRECTIONAL   + ": both upgrade from classic group to consumer group and downgrade from consumer group to classic group are enabled" + ", " +
-        UPGRADE         + ": only upgrade is enabled" + ", " +
-        DOWNGRADE       + ": only downgrade is enabled" + ", " +
-        DISABLED        + ": neither upgrade nor downgrade is enabled.";
-
     private final static Map<String, ConsumerGroupMigrationPolicy> NAME_TO_ENUM = Arrays.stream(values())
-        .collect(Collectors.toMap(config -> config.policy.toLowerCase(Locale.ROOT), Function.identity()));
+        .collect(Collectors.toMap(policy -> policy.name.toLowerCase(Locale.ROOT), Function.identity()));
 
     /**
      * Parse a string into the corresponding {@code GroupProtocolMigrationPolicy} enum value, in a case-insensitive manner.
@@ -66,33 +72,8 @@ public enum ConsumerGroupMigrationPolicy {
         if (name == null) {
             return DISABLED;
         }
-        ConsumerGroupMigrationPolicy config = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
+        ConsumerGroupMigrationPolicy policy = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
 
-        return config == null ? DISABLED : config;
+        return policy == null ? DISABLED : policy;
     }
-
-    public static boolean isUpgradeEnabled(ConsumerGroupMigrationPolicy policy) {
-        switch (policy) {
-            case BIDIRECTIONAL:
-            case UPGRADE:
-                return true;
-            case DOWNGRADE:
-            case DISABLED:
-            default:
-                return false;
-        }
-    }
-
-    public static boolean isDowngradeEnabled(ConsumerGroupMigrationPolicy policy) {
-        switch (policy) {
-            case BIDIRECTIONAL:
-            case DOWNGRADE:
-                return true;
-            case UPGRADE:
-            case DISABLED:
-            default:
-                return false;
-        }
-    }
-
 }

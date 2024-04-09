@@ -487,13 +487,6 @@ public class ConsumerGroupMember {
     /**
      * @return The list of protocols if the consumer uses the old protocol.
      */
-    public ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols() {
-        return supportedProtocols;
-    }
-
-    /**
-     * @return The list of protocols if the consumer uses the old protocol.
-     */
     public JoinGroupRequestData.JoinGroupRequestProtocolCollection supportedJoinGroupRequestProtocols() {
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
             new JoinGroupRequestData.JoinGroupRequestProtocolCollection(supportedProtocols.size());
@@ -505,6 +498,13 @@ public class ConsumerGroupMember {
             )
         );
         return protocols;
+    }
+
+    /**
+     * @return The list of protocols if the consumer uses the old protocol.
+     */
+    public Optional<ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection> supportedProtocols() {
+        return Optional.ofNullable(supportedProtocols);
     }
 
     /**

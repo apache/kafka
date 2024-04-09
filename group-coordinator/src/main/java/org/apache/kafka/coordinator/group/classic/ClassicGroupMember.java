@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 
 import java.nio.ByteBuffer;
 import java.util.HashSet;
@@ -199,17 +200,6 @@ public class ClassicGroupMember {
 
         throw new IllegalArgumentException("Member does not support protocol " +
             protocolName);
-    }
-
-    /**
-     * Get the metadata of any supported protocol.
-     */
-    public byte[] metadata() {
-        for (JoinGroupRequestProtocol supportedProtocol : supportedProtocols) {
-            return supportedProtocol.metadata();
-        }
-
-        throw new IllegalArgumentException("Member does not support any protocol.");
     }
 
     /**
@@ -443,6 +433,22 @@ public class ClassicGroupMember {
 
         throw new IllegalArgumentException("Member does not support protocol " +
             protocolName);
+    }
+
+    /**
+     * @return The list of supported protocols in the {@link ConsumerGroupMemberMetadataValue} format
+     */
+    public ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedClassicJoinGroupRequestProtocols() {
+        ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection protocols =
+            new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection(supportedProtocols.size());
+        supportedProtocols.forEach(protocol ->
+            protocols.add(
+                new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocol()
+                    .setName(protocol.name())
+                    .setMetadata(protocol.metadata())
+            )
+        );
+        return protocols;
     }
 
     @Override

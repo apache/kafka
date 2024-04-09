@@ -626,7 +626,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null || (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records))) {
-            return new ConsumerGroup(snapshotRegistry, groupId, metrics);
+            return new ConsumerGroup(snapshotRegistry, logContext, groupId, metrics);
         } else {
             if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
@@ -697,7 +697,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, logContext, groupId, metrics);
             groups.put(groupId, consumerGroup);
             metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
             return consumerGroup;
@@ -778,7 +778,7 @@ public class GroupMetadataManager {
     }
 
     public boolean validateOnlineDowngrade(ConsumerGroup consumerGroup, String memberId) {
-        return ConsumerGroupMigrationPolicy.isDowngradeEnabled(consumerGroupMigrationPolicy) &&
+        return consumerGroupMigrationPolicy.isDowngradeEnabled() &&
             consumerGroup.allUseLegacyProtocol(memberId) &&
             consumerGroup.numMembers() > 1 &&
             consumerGroup.numMembers() - 1 <= classicGroupMaxSize;
@@ -846,28 +846,55 @@ public class GroupMetadataManager {
         return appendFuture;
     }
 
-    public boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
-        return ConsumerGroupMigrationPolicy.isUpgradeEnabled(consumerGroupMigrationPolicy) &&
-            !classicGroup.isInState(DEAD) &&
-            ConsumerProtocol.PROTOCOL_TYPE.equals(classicGroup.protocolType().orElse(null)) &&
-            classicGroup.size() <= consumerGroupMaxSize;
+    /**
+     * Validates the online upgrade if the Classic Group receives a ConsumerGroupHeartbeat request.
+     *
+     * @param classicGroup A ClassicGroup.
+     * @return the boolean indicating whether it's valid to online upgrade the classic group.
+     */
+    private boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
+        if (!consumerGroupMigrationPolicy.isUpgradeEnabled()) {
+            log.debug("Online upgrade is invalid because the consumer group {} migration config is {} so online upgrade is not enabled.",
+                classicGroup.groupId(), consumerGroupMigrationPolicy);
+            return false;
+        } else if (classicGroup.isInState(DEAD)) {
+            log.debug("Online upgrade is invalid because the classic group {} is in DEAD state.", classicGroup.groupId());
+            return false;
+        } else if (!classicGroup.usesConsumerGroupProtocol()) {
+            log.debug("Online upgrade is invalid because the classic group {} has protocol type {} and doesn't use the consumer group protocol.",
+                classicGroup.groupId(), classicGroup.protocolType().orElse(""));
+            return false;
+        } else if (classicGroup.size() > consumerGroupMaxSize) {
+            log.debug("Online upgrade is invalid because the classic group {} size {} exceeds the consumer group maximum size {}.",
+                classicGroup.groupId(), classicGroup.size(), consumerGroupMaxSize);
+            return false;
+        }
+        return true;
     }
 
+    /**
+     * Creates a ConsumerGroup corresponding to the given classic group.
+     *
+     * @param classicGroup  The ClassicGroup to convert.
+     * @param records       The list of Records.
+     * @return  The created ConsumerGroup.
+     */
     ConsumerGroup convertToConsumerGroup(ClassicGroup classicGroup, List<Record> records) {
+        // The upgrade is always triggered by a new member joining the classic group, which always results in
+        // updatedMember.subscribedTopicNames changing, the group epoch being bumped, and triggering a new rebalance.
+        // If the ClassicGroup is rebalancing, inform the awaiting consumers of another ongoing rebalance
+        // so that they will rejoin for the new rebalance.
         classicGroup.completeAllJoinFutures(Errors.REBALANCE_IN_PROGRESS);
         classicGroup.completeAllSyncFutures(Errors.REBALANCE_IN_PROGRESS);
 
-        createGroupTombstoneRecords(classicGroup, records);
-        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, classicGroup.groupId(), metrics);
-        classicGroup.convertToConsumerGroup(consumerGroup, records, metadataImage.topics());
+        classicGroup.createGroupTombstoneRecords(records);
+        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, logContext, classicGroup.groupId(), metrics);
+        consumerGroup.fromClassicGroup(classicGroup, records, metadataImage.topics());
 
         consumerGroup.members().forEach((memberId, __) ->
             scheduleConsumerGroupSessionTimeout(consumerGroup.groupId(), memberId)
         );
 
-        // There's no need to trigger a rebalance as the upgrade is always triggered by a new member
-        // joining the classic group, which always results in updatedMember.subscribedTopicNames changing
-        // and group epoch bumped.
         return consumerGroup;
     }
 

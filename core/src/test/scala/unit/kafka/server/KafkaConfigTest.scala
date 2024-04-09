@@ -1833,16 +1833,23 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testGroupProtocolMigrationPolicy(): Unit = {
+  def testConsumerGroupMigrationPolicy(): Unit = {
     val props = new Properties()
     props.putAll(kraftProps())
 
-    // Invalid GroupProtocolMigrationPolicy value.
+    // Invalid GroupProtocolMigrationPolicy name.
     props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, "foo")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
-    ConsumerGroupMigrationPolicy.values().foreach { policy =>
+    ConsumerGroupMigrationPolicy.values.foreach { policy =>
       props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, policy.toString)
+      val config = KafkaConfig.fromProps(props)
+      assertEquals(policy, config.consumerGroupMigrationPolicy)
+    }
+
+    // The config is case-insensitive.
+    ConsumerGroupMigrationPolicy.values.foreach { policy =>
+      props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, policy.toString.toUpperCase())
       val config = KafkaConfig.fromProps(props)
       assertEquals(policy, config.consumerGroupMigrationPolicy)
     }
