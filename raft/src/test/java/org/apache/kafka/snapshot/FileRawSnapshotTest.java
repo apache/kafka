@@ -37,7 +37,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.Optional;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -353,6 +352,6 @@ public final class FileRawSnapshotTest {
         Path dir,
         OffsetAndEpoch snapshotId
     ) {
-        return FileRawSnapshotWriter.create(dir, snapshotId, Optional.empty());
+        return FileRawSnapshotWriter.create(dir, snapshotId);
     }
 }

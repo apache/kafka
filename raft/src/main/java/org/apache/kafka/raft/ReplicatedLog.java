@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.Optional;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
-
-import java.util.Optional;
 
 public interface ReplicatedLog extends AutoCloseable {
 
@@ -261,7 +260,7 @@ public interface ReplicatedLog extends AutoCloseable {
      * @param snapshotId the end offset and epoch that identifies the snapshot
      * @return a writable snapshot if it doesn't already exist
      */
-    Optional<RawSnapshotWriter> storeSnapshot(OffsetAndEpoch snapshotId);
+    Optional<RawSnapshotWriter> createNewSnapshotUnchecked(OffsetAndEpoch snapshotId);
 
     /**
      * Opens a readable snapshot for the given snapshot id.

@@ -50,14 +50,14 @@ final public class InternalLogListener {
     // These are objects are synchronized using the perspective object monitor. The two actors
     // are the KRaft driver and the RaftClient callers
     private final VoterSetHistory voterSetHistory;
-    private final History<Short> kraftVersion = new TreeMapHistory<>();
+    private final History<Short> kraftVersionHistory = new TreeMapHistory<>();
 
     // This synchronization is enough because
     // 1. The write operation updateListener only sets the value without reading and updates to
-    // voterSetHistory or kraftVersion are done before setting the nextOffset
+    // voterSetHistory or kraftVersionHistory are done before setting the nextOffset
     //
     // 2. The read operations lastVoterSet, voterSetAtOffset and kraftVersionAtOffset read
-    // the nextOffset first before reading voterSetHistory or kraftVersion
+    // the nextOffset first before reading voterSetHistory or kraftVersionHistory
     private volatile long nextOffset = 0;
 
     /**
@@ -92,6 +92,34 @@ final public class InternalLogListener {
     public void updateListener() {
         maybeLoadSnapshot();
         maybeLoadLog();
+    }
+
+    /**
+     * Remove the head of the log until the given offset.
+     *
+     * @param endOffset the end offset (exclusive)
+     */
+    public void truncateTo(long endOffset) {
+        synchronized (voterSetHistory) {
+            voterSetHistory.truncateTo(endOffset);
+        }
+        synchronized (kraftVersionHistory) {
+            kraftVersionHistory.truncateTo(endOffset);
+        }
+    }
+
+    /**
+     * Remove the tail of the log until the given offset.
+     *
+     * @param @startOffset the start offset (inclusive)
+     */
+    public void trimPrefixTo(long startOffset) {
+        synchronized (voterSetHistory) {
+            voterSetHistory.trimPrefixTo(startOffset);
+        }
+        synchronized (kraftVersionHistory) {
+            kraftVersionHistory.trimPrefixTo(startOffset);
+        }
     }
 
     /**
@@ -144,8 +172,8 @@ final public class InternalLogListener {
             );
         }
 
-        synchronized (kraftVersion) {
-            return kraftVersion.valueAt(offset).orElse((short) 0);
+        synchronized (kraftVersionHistory) {
+            return kraftVersionHistory.valueAt(offset).orElse((short) 0);
         }
     }
 
@@ -173,8 +201,8 @@ final public class InternalLogListener {
         if ((nextOffset == 0 || nextOffset < log.startOffset()) && log.latestSnapshot().isPresent()) {
             RawSnapshotReader rawSnapshot = log.latestSnapshot().get();
             // Clear the current state
-            synchronized (kraftVersion) {
-                kraftVersion.clear();
+            synchronized (kraftVersionHistory) {
+                kraftVersionHistory.clear();
             }
             synchronized (voterSetHistory) {
                 voterSetHistory.clear();
@@ -218,8 +246,8 @@ final public class InternalLogListener {
                     break;
 
                 case KRAFT_VERSION:
-                    synchronized (kraftVersion) {
-                        kraftVersion.addAt(currentOffset, ((KRaftVersionRecord) record.message()).kRaftVersion());
+                    synchronized (kraftVersionHistory) {
+                        kraftVersionHistory.addAt(currentOffset, ((KRaftVersionRecord) record.message()).kRaftVersion());
                     }
                     break;
 

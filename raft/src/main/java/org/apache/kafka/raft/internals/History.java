@@ -27,8 +27,10 @@ public interface History<T> {
 
     public Optional<Entry<T>> lastEntry();
 
+    // TODO: the delete is inclusive, meaning that the entries removed include the endOffset.
     public void truncateTo(long endOffset);
 
+    // TODO: the delete is exclusive, meaning that the entries removed don't include the startOffset.
     public void trimPrefixTo(long startOffset);
 
     public void clear();

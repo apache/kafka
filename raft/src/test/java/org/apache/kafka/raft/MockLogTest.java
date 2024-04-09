@@ -222,7 +222,7 @@ public class MockLogTest {
         final int epoch = 3;
         SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
 
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(new OffsetAndEpoch(initialOffset, 0)).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(new OffsetAndEpoch(initialOffset, 0)).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -386,7 +386,7 @@ public class MockLogTest {
         final int epoch = 3;
         SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
 
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(new OffsetAndEpoch(initialOffset, 0)).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(new OffsetAndEpoch(initialOffset, 0)).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -642,7 +642,7 @@ public class MockLogTest {
         appendBatch(3 * offset, epoch);
         log.updateHighWatermark(new LogOffsetMetadata(offset));
 
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(snapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(snapshotId).get()) {
             snapshot.freeze();
         }
 
@@ -660,7 +660,7 @@ public class MockLogTest {
 
         appendBatch(numberOfRecords, epoch);
 
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(sameEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(sameEpochSnapshotId).get()) {
             snapshot.freeze();
         }
 
@@ -674,7 +674,7 @@ public class MockLogTest {
 
         appendBatch(numberOfRecords, epoch);
 
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(greaterEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(greaterEpochSnapshotId).get()) {
             snapshot.freeze();
         }
 
@@ -693,7 +693,7 @@ public class MockLogTest {
         appendBatch(numberOfRecords, epoch);
 
         OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch - 1);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderEpochSnapshotId).get()) {
             snapshot.freeze();
         }
 
@@ -702,7 +702,7 @@ public class MockLogTest {
         appendBatch(numberOfRecords, epoch);
 
         OffsetAndEpoch olderOffsetSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderOffsetSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderOffsetSnapshotId).get()) {
             snapshot.freeze();
         }
 
@@ -725,7 +725,7 @@ public class MockLogTest {
         OffsetAndEpoch greaterEpochSnapshotId = new OffsetAndEpoch(2 * numberOfRecords, epoch + 1);
         appendBatch(numberOfRecords, epoch);
 
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(greaterEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(greaterEpochSnapshotId).get()) {
             snapshot.freeze();
         }
 
@@ -776,7 +776,7 @@ public class MockLogTest {
         int epoch = 1;
 
         OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, epoch);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderEpochSnapshotId).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -791,7 +791,7 @@ public class MockLogTest {
         int epoch = 1;
 
         OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, epoch);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderEpochSnapshotId).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -806,7 +806,7 @@ public class MockLogTest {
         int epoch = 1;
 
         OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, epoch);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderEpochSnapshotId).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -821,7 +821,7 @@ public class MockLogTest {
         int offset = 10;
 
         OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, 1);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderEpochSnapshotId).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -841,7 +841,7 @@ public class MockLogTest {
         int offset = 10;
 
         OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, 1);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderEpochSnapshotId).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();

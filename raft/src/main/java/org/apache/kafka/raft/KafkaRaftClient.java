@@ -72,12 +72,13 @@ import org.apache.kafka.raft.internals.RecordsBatchReader;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.serialization.RecordSerde;
+import org.apache.kafka.snapshot.NotifyingRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
@@ -1182,7 +1183,9 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                     truncationOffset,
                     quorum.leaderIdOrSentinel()
                 );
-                // TODO: we should also truncate the internal listener
+
+                // Update the internal listener to the new end offset
+                internalListener.truncateTo(truncationOffset);
             } else if (partitionResponse.snapshotId().epoch() >= 0 ||
                        partitionResponse.snapshotId().endOffset() >= 0) {
                 // The leader is asking us to fetch a snapshot
@@ -1207,10 +1210,10 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                         partitionResponse.snapshotId().epoch()
                     );
 
-                    // Do not validate the snapshot id against the local replicated log
-                    // since this snapshot is expected to reference offsets and epochs
-                    // greater than the log end offset and high-watermark
-                    state.setFetchingSnapshot(log.storeSnapshot(snapshotId));
+                    // Do not validate the snapshot id against the local replicated log since this
+                    // snapshot is expected to reference offsets and epochs greater than the log
+                    // end offset and high-watermark.
+                    state.setFetchingSnapshot(log.createNewSnapshotUnchecked(snapshotId));
                     logger.info(
                         "Fetching snapshot {} from Fetch response from leader {}",
                         snapshotId,
@@ -2486,17 +2489,20 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             throw new IllegalStateException("Cannot create snapshot before the replica has been initialized");
         }
 
-        // TODO: need to track when a snapshot has been frozen so that we can trim the prefix of the internal log listener
-        // this is currently track only by the KafkaMetadataLog implementation. We need to move this to this implementation.
         return log.createNewSnapshot(snapshotId).map(writer -> {
             long lastContainedLogOffset = snapshotId.offset() - 1;
+
+            RawSnapshotWriter wrappedWriter = new NotifyingRawSnapshotWriter(writer, offsetAndEpoch -> {
+                // Trim the state in the internal starting with the new starting offset
+                internalListener.trimPrefixTo(offsetAndEpoch.offset());
+            });
 
             return new RecordsSnapshotWriter.Builder()
                 .setLastContainedLogTimestamp(lastContainedLogTimestamp)
                 .setTime(time)
                 .setMaxBatchSize(MAX_BATCH_SIZE_BYTES)
                 .setMemoryPool(memoryPool)
-                .setRawSnapshotWriter(writer)
+                .setRawSnapshotWriter(wrappedWriter)
                 .setKraftVersion(internalListener.kraftVersionAtOffset(lastContainedLogOffset))
                 .setVoterSet(internalListener.voterSetAtOffset(lastContainedLogOffset))
                 .build(serde);
