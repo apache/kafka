@@ -1834,6 +1834,11 @@ KStream&lt;String, String&gt; joined = left.join(right,
                                         </li>
                                         <li><p class="first">The join will be triggered under the conditions listed below whenever new input is received.  When it is triggered, the user-supplied <code class="docutils literal"><span class="pre">ValueJoiner</span></code> will be called to produce
                                             join output records.</p>
+                                            <blockquote>
+                                                <div><ul class="simple">
+                                                    <li>Input records with a <code class="docutils literal"><span class="pre">null</span></code> key or a <code class="docutils literal"><span class="pre">null</span></code> value are ignored and do not trigger the join.</li>
+                                                </ul>
+                                                </div></blockquote>
                                         </li>
                                     </ul>
                                     <p class="last">See the semantics overview at the bottom of this section for a detailed description.</p>
