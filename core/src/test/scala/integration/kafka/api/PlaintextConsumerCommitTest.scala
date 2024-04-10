@@ -372,6 +372,8 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
 }
 
 object PlaintextConsumerCommitTest {
+  def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly: Stream[Arguments] =
+    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly()
 
   def getTestQuorumAndGroupProtocolParametersAll: Stream[Arguments] =
     BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
