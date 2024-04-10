@@ -35,6 +35,7 @@ import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Properties}
 import org.apache.kafka.common.Node
+import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
@@ -1829,6 +1830,29 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
     assertTrue(config.isNewGroupCoordinatorEnabled)
+  }
+
+  @Test
+  def testConsumerGroupMigrationPolicy(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    // Invalid GroupProtocolMigrationPolicy name.
+    props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, "foo")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+
+    ConsumerGroupMigrationPolicy.values.foreach { policy =>
+      props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, policy.toString)
+      val config = KafkaConfig.fromProps(props)
+      assertEquals(policy, config.consumerGroupMigrationPolicy)
+    }
+
+    // The config is case-insensitive.
+    ConsumerGroupMigrationPolicy.values.foreach { policy =>
+      props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, policy.toString.toUpperCase())
+      val config = KafkaConfig.fromProps(props)
+      assertEquals(policy, config.consumerGroupMigrationPolicy)
+    }
   }
 
   @Test

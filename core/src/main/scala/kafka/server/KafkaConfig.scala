@@ -35,6 +35,7 @@ import org.apache.kafka.common.record.{CompressionType, LegacyRecord, Records, T
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor
 import org.apache.kafka.raft.RaftConfig
@@ -247,9 +248,10 @@ object KafkaConfig {
   val ConsumerGroupMaxSessionTimeoutMsProp = "group.consumer.max.session.timeout.ms"
   val ConsumerGroupHeartbeatIntervalMsProp = "group.consumer.heartbeat.interval.ms"
   val ConsumerGroupMinHeartbeatIntervalMsProp = "group.consumer.min.heartbeat.interval.ms"
-  val ConsumerGroupMaxHeartbeatIntervalMsProp ="group.consumer.max.heartbeat.interval.ms"
+  val ConsumerGroupMaxHeartbeatIntervalMsProp = "group.consumer.max.heartbeat.interval.ms"
   val ConsumerGroupMaxSizeProp = "group.consumer.max.size"
   val ConsumerGroupAssignorsProp = "group.consumer.assignors"
+  val ConsumerGroupMigrationPolicyProp = "group.consumer.migration.policy"
 
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeProp = "offset.metadata.max.bytes"
@@ -611,6 +613,12 @@ object KafkaConfig {
   val ConsumerGroupMaxHeartbeatIntervalMsDoc = "The maximum heartbeat interval for registered consumers."
   val ConsumerGroupMaxSizeDoc = "The maximum number of consumers that a single consumer group can accommodate."
   val ConsumerGroupAssignorsDoc = "The server side assignors as a list of full class names. The first one in the list is considered as the default assignor to be used in the case where the consumer does not specify an assignor."
+  val ConsumerGroupMigrationPolicyDoc = "The config that enables converting the non-empty classic group using the consumer embedded protocol to the non-empty consumer group using the consumer group protocol and vice versa; " +
+    "conversions of empty groups in both directions are always enabled regardless of this policy. " +
+    ConsumerGroupMigrationPolicy.BIDIRECTIONAL + ": both upgrade from classic group to consumer group and downgrade from consumer group to classic group are enabled, " +
+    ConsumerGroupMigrationPolicy.UPGRADE + ": only upgrade from classic group to consumer group is enabled, " +
+    ConsumerGroupMigrationPolicy.DOWNGRADE + ": only downgrade from consumer group to classic group is enabled, " +
+    ConsumerGroupMigrationPolicy.DISABLED + ": neither upgrade nor downgrade is enabled.";
 
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeDoc = "The maximum size for a metadata entry associated with an offset commit."
@@ -915,6 +923,7 @@ object KafkaConfig {
       .define(ConsumerGroupMaxHeartbeatIntervalMsProp, INT, Defaults.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS, atLeast(1), MEDIUM, ConsumerGroupMaxHeartbeatIntervalMsDoc)
       .define(ConsumerGroupMaxSizeProp, INT, Defaults.CONSUMER_GROUP_MAX_SIZE, atLeast(1), MEDIUM, ConsumerGroupMaxSizeDoc)
       .define(ConsumerGroupAssignorsProp, LIST, Defaults.CONSUMER_GROUP_ASSIGNORS, null, MEDIUM, ConsumerGroupAssignorsDoc)
+      .defineInternal(ConsumerGroupMigrationPolicyProp, STRING, Defaults.CONSUMER_GROUP_MIGRATION_POLICY, ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(classOf[ConsumerGroupMigrationPolicy]): _*), MEDIUM, ConsumerGroupMigrationPolicyDoc)
 
       /** ********* Offset management configuration ***********/
       .define(OffsetMetadataMaxSizeProp, INT, Defaults.OFFSET_METADATA_MAX_SIZE, HIGH, OffsetMetadataMaxSizeDoc)
@@ -1569,6 +1578,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val consumerGroupMaxHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp)
   val consumerGroupMaxSize = getInt(KafkaConfig.ConsumerGroupMaxSizeProp)
   val consumerGroupAssignors = getConfiguredInstances(KafkaConfig.ConsumerGroupAssignorsProp, classOf[PartitionAssignor])
+  val consumerGroupMigrationPolicy = ConsumerGroupMigrationPolicy.parse(getString(KafkaConfig.ConsumerGroupMigrationPolicyProp))
 
   /** ********* Offset management configuration ***********/
   val offsetMetadataMaxSize = getInt(KafkaConfig.OffsetMetadataMaxSizeProp)
