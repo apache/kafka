@@ -1201,7 +1201,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private final AtomicLong lastHighWatermark = new AtomicLong(NO_OFFSET);
 
         /**
-         * @return The last high watermark received or NO_OFFSET is none is pending.
+         * @return The last high watermark received or NO_OFFSET if none is pending.
          */
         public long lastHighWatermark() {
             return lastHighWatermark.get();

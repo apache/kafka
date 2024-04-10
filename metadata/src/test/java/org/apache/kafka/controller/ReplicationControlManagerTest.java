@@ -2951,15 +2951,17 @@ public class ReplicationControlManagerTest {
         Uuid dir1b1 = Uuid.fromString("hO2YI5bgRUmByNPHiHxjNQ");
         Uuid dir2b1 = Uuid.fromString("R3Gb1HLoTzuKMgAkH5Vtpw");
         Uuid dir1b2 = Uuid.fromString("TBGa8UayQi6KguqF5nC0sw");
+        Uuid offlineDir = Uuid.fromString("zvAf9BKZRyyrEWz4FX2nLA");
         ctx.registerBrokersWithDirs(1, asList(dir1b1, dir2b1), 2, singletonList(dir1b2));
         ctx.unfenceBrokers(1, 2);
-        Uuid topicA = ctx.createTestTopic("a", new int[][]{new int[]{1, 2}, new int[]{1, 2}}).topicId();
+        Uuid topicA = ctx.createTestTopic("a", new int[][]{new int[]{1, 2}, new int[]{1, 2}, new int[]{1, 2}}).topicId();
         Uuid topicB = ctx.createTestTopic("b", new int[][]{new int[]{1, 2}, new int[]{1, 2}}).topicId();
         Uuid topicC = ctx.createTestTopic("c", new int[][]{new int[]{2}}).topicId();
 
         ControllerResult<AssignReplicasToDirsResponseData> controllerResult = ctx.assignReplicasToDirs(1, new HashMap<TopicIdPartition, Uuid>() {{
                 put(new TopicIdPartition(topicA, 0), dir1b1);
                 put(new TopicIdPartition(topicA, 1), dir2b1);
+                put(new TopicIdPartition(topicA, 2), offlineDir); // unknown/offline dir
                 put(new TopicIdPartition(topicB, 0), dir1b1);
                 put(new TopicIdPartition(topicB, 1), DirectoryId.LOST);
                 put(new TopicIdPartition(Uuid.fromString("nLU9hKNXSZuMe5PO2A4dVQ"), 1), dir2b1); // expect UNKNOWN_TOPIC_ID
@@ -2978,6 +2980,9 @@ public class ReplicationControlManagerTest {
                         put(new TopicIdPartition(topicA, 1), NONE);
                         put(new TopicIdPartition(Uuid.fromString("nLU9hKNXSZuMe5PO2A4dVQ"), 1), UNKNOWN_TOPIC_ID);
                     }});
+                put(offlineDir, new HashMap<TopicIdPartition, Errors>() {{
+                        put(new TopicIdPartition(topicA, 2), NONE);
+                    }});
                 put(DirectoryId.LOST, new HashMap<TopicIdPartition, Errors>() {{
                         put(new TopicIdPartition(topicB, 1), NONE);
                     }});
@@ -2991,14 +2996,22 @@ public class ReplicationControlManagerTest {
                         new PartitionChangeRecord().setTopicId(topicA).setPartitionId(1).
                                 setDirectories(asList(dir2b1, dir1b2)), recordVersion),
                 new ApiMessageAndVersion(
+                        new PartitionChangeRecord().setTopicId(topicA).setPartitionId(2).
+                                setDirectories(asList(offlineDir, dir1b2)), recordVersion),
+                new ApiMessageAndVersion(
                         new PartitionChangeRecord().setTopicId(topicB).setPartitionId(0).
                                 setDirectories(asList(dir1b1, dir1b2)), recordVersion),
                 new ApiMessageAndVersion(
                         new PartitionChangeRecord().setTopicId(topicB).setPartitionId(1).
                                 setDirectories(asList(DirectoryId.LOST, dir1b2)), recordVersion),
 
-                // In addition to the directory assignment changes we expect an additional record,
-                // which elects a new leader for bar-1 which has been assigned to an offline directory.
+                // In addition to the directory assignment changes we expect two additional records,
+                // which elect new leaders for:
+                //   - a-2 which has been assigned to a directory which is not an online directory (unknown/offline)
+                //   - b-1 which has been assigned to an offline directory.
+                new ApiMessageAndVersion(
+                        new PartitionChangeRecord().setTopicId(topicA).setPartitionId(2).
+                                setIsr(singletonList(2)).setLeader(2), recordVersion),
                 new ApiMessageAndVersion(
                         new PartitionChangeRecord().setTopicId(topicB).setPartitionId(1).
                                 setIsr(singletonList(2)).setLeader(2), recordVersion)
@@ -3011,6 +3024,7 @@ public class ReplicationControlManagerTest {
                 add(new TopicIdPartition(topicB, 0));
             }}, RecordTestUtils.iteratorToSet(ctx.replicationControl.brokersToIsrs().iterator(1, true)));
         assertEquals(new HashSet<TopicIdPartition>() {{
+                add(new TopicIdPartition(topicA, 2));
                 add(new TopicIdPartition(topicB, 1));
                 add(new TopicIdPartition(topicC, 0));
             }},

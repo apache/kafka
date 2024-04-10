@@ -15,7 +15,7 @@ package kafka.api
 import java.time.Duration
 import java.util
 import java.util.Arrays.asList
-import java.util.{Locale, Properties}
+import java.util.{Collections, Locale, Optional, Properties}
 import kafka.server.{KafkaBroker, QuotaType}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
@@ -804,5 +804,59 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer2, Set(foo0, foo1))
 
     consumer2.close()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testEndOffsets(quorum: String, groupProtocol: String): Unit = {
+    val producer = createProducer()
+    val startingTimestamp = System.currentTimeMillis()
+    val numRecords = 10000
+    (0 until numRecords).map { i =>
+      val timestamp = startingTimestamp + i.toLong
+      val record = new ProducerRecord(tp.topic(), tp.partition(), timestamp, s"key $i".getBytes, s"value $i".getBytes)
+      producer.send(record)
+      record
+    }
+    producer.flush()
+
+    val consumer = createConsumer()
+    consumer.subscribe(List(topic).asJava)
+    awaitAssignment(consumer, Set(tp, tp2))
+
+    val endOffsets = consumer.endOffsets(Set(tp).asJava)
+    assertEquals(numRecords, endOffsets.get(tp))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFetchOffsetsForTime(quorum: String, groupProtocol: String): Unit = {
+    val numPartitions = 2
+    val producer = createProducer()
+    val timestampsToSearch = new util.HashMap[TopicPartition, java.lang.Long]()
+    var i = 0
+    for (part <- 0 until numPartitions) {
+      val tp = new TopicPartition(topic, part)
+      // key, val, and timestamp equal to the sequence number.
+      sendRecords(producer, numRecords = 100, tp, startingTimestamp = 0)
+      timestampsToSearch.put(tp, (i * 20).toLong)
+      i += 1
+    }
+
+    val consumer = createConsumer()
+    // Test negative target time
+    assertThrows(classOf[IllegalArgumentException],
+      () => consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(topic, 0), -1)))
+    val timestampOffsets = consumer.offsetsForTimes(timestampsToSearch)
+
+    val timestampTp0 = timestampOffsets.get(new TopicPartition(topic, 0))
+    assertEquals(0, timestampTp0.offset)
+    assertEquals(0, timestampTp0.timestamp)
+    assertEquals(Optional.of(0), timestampTp0.leaderEpoch)
+
+    val timestampTp1 = timestampOffsets.get(new TopicPartition(topic, 1))
+    assertEquals(20, timestampTp1.offset)
+    assertEquals(20, timestampTp1.timestamp)
+    assertEquals(Optional.of(0), timestampTp1.leaderEpoch)
   }
 }

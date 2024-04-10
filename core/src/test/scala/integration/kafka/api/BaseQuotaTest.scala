@@ -20,7 +20,7 @@ import java.util.{Collections, HashMap, Properties}
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
 import kafka.server.{ClientQuotaManager, KafkaBroker, KafkaConfig, QuotaType}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer._
@@ -87,7 +87,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients = createQuotaTestClients(topic1, leaderNode)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThrottledProducerConsumer(quorum: String): Unit = {
     val numRecords = 1000
@@ -99,7 +99,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProducerConsumerOverrideUnthrottled(quorum: String): Unit = {
     // Give effectively unlimited quota for producer and consumer
@@ -119,7 +119,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = false)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProducerConsumerOverrideLowerQuota(quorum: String): Unit = {
     // consumer quota is set such that consumer quota * default quota window (10 seconds) is less than
@@ -137,7 +137,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testQuotaOverrideDelete(quorum: String): Unit = {
     // Override producer and consumer quotas to unlimited
@@ -164,7 +164,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThrottledRequest(quorum: String): Unit = {
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, 0.1)

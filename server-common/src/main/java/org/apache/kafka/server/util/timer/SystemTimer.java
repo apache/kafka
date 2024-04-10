@@ -27,6 +27,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class SystemTimer implements Timer {
+    public static final String SYSTEM_TIMER_THREAD_PREFIX = "executor-";
+
     // timeout timer
     private final ExecutorService taskExecutor;
     private final DelayQueue<TimerTaskList> delayQueue;
@@ -49,7 +51,7 @@ public class SystemTimer implements Timer {
         long startMs
     ) {
         this.taskExecutor = Executors.newFixedThreadPool(1,
-            runnable -> KafkaThread.nonDaemon("executor-" + executorName, runnable));
+            runnable -> KafkaThread.nonDaemon(SYSTEM_TIMER_THREAD_PREFIX + executorName, runnable));
         this.delayQueue = new DelayQueue<>();
         this.taskCounter = new AtomicInteger(0);
         this.timingWheel = new TimingWheel(
@@ -109,5 +111,10 @@ public class SystemTimer implements Timer {
     @Override
     public void close() {
         taskExecutor.shutdown();
+    }
+
+    // visible for testing
+    boolean isTerminated() {
+        return taskExecutor.isTerminated();
     }
 }
