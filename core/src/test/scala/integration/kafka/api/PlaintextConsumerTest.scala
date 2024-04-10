@@ -656,9 +656,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCommitAsyncCompletedConsumerCloses(quorum: String, groupProtocol: String): Unit = {
+  def testCommitAsyncCompletedBeforeConsumerCloses(quorum: String, groupProtocol: String): Unit = {
     // This is testing the contract that asynchronous offset commit are completed before the consumer
-    // is closed.
+    // is closed, even when no commit sync is performed as part of the close (due to auto-commit
+    // disabled, or simply because there no consumed offsets).
     val producer = createProducer()
     sendRecords(producer, numRecords = 3, tp)
     sendRecords(producer, numRecords = 3, tp2)
@@ -671,7 +672,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(1L))).asJava, cb)
     consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(1L))).asJava, cb)
     consumer.close()
-    assertEquals(2, cb.successCount);
+    assertEquals(2, cb.successCount)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
@@ -692,24 +693,21 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(1L))).asJava, cb)
     consumer.commitSync(Map.empty[TopicPartition, OffsetAndMetadata].asJava)
     assertEquals(1, consumer.committed(Set(tp).asJava).get(tp).offset)
-    assertEquals(1, cb.successCount);
-
-    // Enforce looking up the coordinator
-    consumer.committed(Set(tp, tp2).asJava)
+    assertEquals(1, cb.successCount)
 
     // Try with coordinator known
     consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(2L))).asJava, cb)
     consumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(2L))).asJava)
     assertEquals(2, consumer.committed(Set(tp).asJava).get(tp).offset)
     assertEquals(2, consumer.committed(Set(tp2).asJava).get(tp2).offset)
-    assertEquals(2, cb.successCount);
+    assertEquals(2, cb.successCount)
 
     // Try with empty sync commit
     consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava, cb)
     consumer.commitSync(Map.empty[TopicPartition, OffsetAndMetadata].asJava)
     assertEquals(3, consumer.committed(Set(tp).asJava).get(tp).offset)
     assertEquals(2, consumer.committed(Set(tp2).asJava).get(tp2).offset)
-    assertEquals(3, cb.successCount);
+    assertEquals(3, cb.successCount)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)

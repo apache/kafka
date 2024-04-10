@@ -1248,7 +1248,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         prepareShutdown(closeTimer, firstException);
         closeTimer.update();
         swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.",
-            () -> awaitPendingAsyncCommits(closeTimer, true), firstException);
+            () -> awaitPendingAsyncCommitsAndExecuteCommitCallbacks(closeTimer, true), firstException);
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
         closeTimer.update();
@@ -1363,7 +1363,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             SyncCommitEvent syncCommitEvent = new SyncCommitEvent(offsets, requestTimer);
             CompletableFuture<Void> commitFuture = commit(syncCommitEvent);
 
-            awaitPendingAsyncCommits(requestTimer, false);
+            awaitPendingAsyncCommitsAndExecuteCommitCallbacks(requestTimer, false);
 
             wakeupTrigger.setActiveTask(commitFuture);
             ConsumerUtils.getResult(commitFuture, requestTimer);
@@ -1375,7 +1375,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    private void awaitPendingAsyncCommits(Timer timer, boolean disableWakeup) {
+    private void awaitPendingAsyncCommitsAndExecuteCommitCallbacks(Timer timer, boolean disableWakeup) {
         if (lastPendingAsyncCommit == null) {
             return;
         }
