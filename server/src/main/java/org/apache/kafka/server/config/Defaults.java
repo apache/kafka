@@ -20,8 +20,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
-import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.raft.RaftConfig;
