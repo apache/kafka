@@ -68,17 +68,20 @@ public class LogValidator {
         public final long logAppendTimeMs;
         public final MemoryRecords validatedRecords;
         public final long maxTimestampMs;
-        public final long offsetOfMaxTimestampMs;
+        // we only maintain batch level offset for max timestamp since we want to align the behavior of updating time
+        // indexing entries. The paths of follower append and replica recovery do not iterate all records, so they have no
+        // idea about record level offset for max timestamp.
+        public final long shallowOffsetOfMaxTimestamp;
         public final boolean messageSizeMaybeChanged;
         public final RecordValidationStats recordValidationStats;
 
         public ValidationResult(long logAppendTimeMs, MemoryRecords validatedRecords, long maxTimestampMs,
-                                long offsetOfMaxTimestampMs, boolean messageSizeMaybeChanged,
+                                long shallowOffsetOfMaxTimestamp, boolean messageSizeMaybeChanged,
                                 RecordValidationStats recordValidationStats) {
             this.logAppendTimeMs = logAppendTimeMs;
             this.validatedRecords = validatedRecords;
             this.maxTimestampMs = maxTimestampMs;
-            this.offsetOfMaxTimestampMs = offsetOfMaxTimestampMs;
+            this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
             this.messageSizeMaybeChanged = messageSizeMaybeChanged;
             this.recordValidationStats = recordValidationStats;
         }
@@ -149,7 +152,7 @@ public class LogValidator {
      * avoid expensive re-compression.
      *
      * Returns a ValidationAndOffsetAssignResult containing the validated message set, maximum timestamp, the offset
-     * of the message with the max timestamp and a boolean indicating whether the message sizes may have changed.
+     * of the shallow message with the max timestamp and a boolean indicating whether the message sizes may have changed.
      */
     public ValidationResult validateMessagesAndAssignOffsets(PrimitiveRef.LongRef offsetCounter,
                                                              MetricsRecorder metricsRecorder,
@@ -232,7 +235,7 @@ public class LogValidator {
             now,
             convertedRecords,
             info.maxTimestamp,
-            info.offsetOfMaxTimestamp,
+            info.shallowOffsetOfMaxTimestamp,
             true,
             recordValidationStats);
     }
@@ -242,7 +245,7 @@ public class LogValidator {
                                                        MetricsRecorder metricsRecorder) {
         long now = time.milliseconds();
         long maxTimestamp = RecordBatch.NO_TIMESTAMP;
-        long offsetOfMaxTimestamp = -1L;
+        long shallowOffsetOfMaxTimestamp = -1L;
         long initialOffset = offsetCounter.value;
 
         RecordBatch firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, CompressionType.NONE);
@@ -251,7 +254,6 @@ public class LogValidator {
             validateBatch(topicPartition, firstBatch, batch, origin, toMagic, metricsRecorder);
 
             long maxBatchTimestamp = RecordBatch.NO_TIMESTAMP;
-            long offsetOfMaxBatchTimestamp = -1L;
 
             List<ApiRecordError> recordErrors = new ArrayList<>(0);
             // This is a hot path and we want to avoid any unnecessary allocations.
@@ -263,11 +265,9 @@ public class LogValidator {
                     recordIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic, metricsRecorder);
                 recordError.ifPresent(recordErrors::add);
 
-                long offset = offsetCounter.value++;
-                if (batch.magic() > RecordBatch.MAGIC_VALUE_V0 && record.timestamp() > maxBatchTimestamp) {
+                offsetCounter.value++;
+                if (batch.magic() > RecordBatch.MAGIC_VALUE_V0 && record.timestamp() > maxBatchTimestamp)
                     maxBatchTimestamp = record.timestamp();
-                    offsetOfMaxBatchTimestamp = offset;
-                }
                 ++recordIndex;
             }
 
@@ -275,7 +275,7 @@ public class LogValidator {
 
             if (batch.magic() > RecordBatch.MAGIC_VALUE_V0 && maxBatchTimestamp > maxTimestamp) {
                 maxTimestamp = maxBatchTimestamp;
-                offsetOfMaxTimestamp = offsetOfMaxBatchTimestamp;
+                shallowOffsetOfMaxTimestamp = offsetCounter.value - 1;
             }
 
             batch.setLastOffset(offsetCounter.value - 1);
@@ -293,14 +293,30 @@ public class LogValidator {
 
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
             maxTimestamp = now;
-            offsetOfMaxTimestamp = initialOffset;
+            // those checks should be equal to MemoryRecordsBuilder#info
+            switch (toMagic) {
+                case RecordBatch.MAGIC_VALUE_V0:
+                    maxTimestamp = RecordBatch.NO_TIMESTAMP;
+                    // value will be the default value: -1
+                    shallowOffsetOfMaxTimestamp = -1;
+                    break;
+                case RecordBatch.MAGIC_VALUE_V1:
+                    // Those single-record batches have same max timestamp, so the initial offset is equal with
+                    // the last offset of earliest batch
+                    shallowOffsetOfMaxTimestamp = initialOffset;
+                    break;
+                default:
+                    // there is only one batch so use the last offset
+                    shallowOffsetOfMaxTimestamp = offsetCounter.value - 1;
+                    break;
+            }
         }
 
         return new ValidationResult(
             now,
             records,
             maxTimestamp,
-            offsetOfMaxTimestamp,
+            shallowOffsetOfMaxTimestamp,
             false,
             RecordValidationStats.EMPTY);
     }
@@ -326,8 +342,6 @@ public class LogValidator {
         long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         LongRef expectedInnerOffset = PrimitiveRef.ofLong(0);
         List<Record> validatedRecords = new ArrayList<>();
-        long offsetOfMaxTimestamp = -1;
-        long initialOffset = offsetCounter.value;
 
         int uncompressedSizeInBytes = 0;
 
@@ -377,11 +391,8 @@ public class LogValidator {
                             && batch.magic() > RecordBatch.MAGIC_VALUE_V0
                             && toMagic > RecordBatch.MAGIC_VALUE_V0) {
 
-                        if (record.timestamp() > maxTimestamp) {
+                        if (record.timestamp() > maxTimestamp)
                             maxTimestamp = record.timestamp();
-                            // The offset is only increased when it is a valid record
-                            offsetOfMaxTimestamp = initialOffset + validatedRecords.size();
-                        }
 
                         // Some older clients do not implement the V1 internal offsets correctly.
                         // Historically the broker handled this by rewriting the batches rather
@@ -415,13 +426,12 @@ public class LogValidator {
             // we can update the batch only and write the compressed payload as is;
             // again we assume only one record batch within the compressed set
             offsetCounter.value += validatedRecords.size();
+            // there is only one batch in this path, so last offset can be viewed as shallowOffsetOfMaxTimestamp
             long lastOffset = offsetCounter.value - 1;
             firstBatch.setLastOffset(lastOffset);
 
-            if (timestampType == TimestampType.LOG_APPEND_TIME) {
+            if (timestampType == TimestampType.LOG_APPEND_TIME)
                 maxTimestamp = now;
-                offsetOfMaxTimestamp = initialOffset;
-            }
 
             if (toMagic >= RecordBatch.MAGIC_VALUE_V1)
                 firstBatch.setMaxTimestamp(timestampType, maxTimestamp);
@@ -434,7 +444,7 @@ public class LogValidator {
                 now,
                 records,
                 maxTimestamp,
-                offsetOfMaxTimestamp,
+                lastOffset,
                 false,
                 recordValidationStats);
         }
@@ -476,7 +486,7 @@ public class LogValidator {
             logAppendTime,
             records,
             info.maxTimestamp,
-            info.offsetOfMaxTimestamp,
+            info.shallowOffsetOfMaxTimestamp,
             true,
             recordValidationStats);
     }

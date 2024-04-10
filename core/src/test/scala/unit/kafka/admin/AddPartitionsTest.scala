@@ -20,7 +20,7 @@ package kafka.admin
 import java.util.{Collections, Optional}
 import kafka.controller.ReplicaAssignment
 import kafka.server.{BaseRequestTest, BrokerServer}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin.{Admin, NewPartitions, NewTopic}
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
@@ -70,7 +70,7 @@ class AddPartitionsTest extends BaseRequestTest {
     admin = createAdminClient()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testWrongReplicaCount(quorum: String): Unit = {
     assertEquals(classOf[InvalidReplicaAssignmentException], assertThrows(classOf[ExecutionException], () => {
@@ -83,7 +83,7 @@ class AddPartitionsTest extends BaseRequestTest {
    * Test that when we supply a manual partition assignment to createTopics, it must be 0-based
    * and consecutive.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testMissingPartitionsInCreateTopics(quorum: String): Unit = {
     val topic6Placements = new util.HashMap[Integer, util.List[Integer]]
@@ -109,7 +109,7 @@ class AddPartitionsTest extends BaseRequestTest {
    * Test that when we supply a manual partition assignment to createPartitions, it must contain
    * enough partitions.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testMissingPartitionsInCreatePartitions(quorum: String): Unit = {
     val cause = assertThrows(classOf[ExecutionException], () =>
@@ -133,7 +133,7 @@ class AddPartitionsTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testIncrementPartitions(quorum: String): Unit = {
     admin.createPartitions(Collections.singletonMap(topic1, NewPartitions.increaseTo(3))).all().get()
@@ -162,7 +162,7 @@ class AddPartitionsTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testManualAssignmentOfReplicas(quorum: String): Unit = {
     // Add 2 partitions
@@ -191,7 +191,7 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(Set(0, 1), replicas.asScala.toSet)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk")) // TODO: add kraft support
   def testReplicaPlacementAllServers(quorum: String): Unit = {
     admin.createPartitions(Collections.singletonMap(topic3, NewPartitions.increaseTo(7))).all().get()
@@ -217,7 +217,7 @@ class AddPartitionsTest extends BaseRequestTest {
     validateLeaderAndReplicas(topicMetadata, 6, 0, Set(0, 1, 2, 3))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk")) // TODO: add kraft support
   def testReplicaPlacementPartialServers(quorum: String): Unit = {
     admin.createPartitions(Collections.singletonMap(topic2, NewPartitions.increaseTo(3))).all().get()

@@ -68,6 +68,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
 import java.nio.file.{Files, Paths}
+import java.time.Duration
 import java.util
 import java.util.{Optional, OptionalInt, OptionalLong}
 import java.util.concurrent._
@@ -947,7 +948,7 @@ class KafkaServer(
    * Shutdown API for shutting down a single instance of the Kafka server.
    * Shuts down the LogManager, the SocketServer and the log cleaner scheduler thread
    */
-  override def shutdown(): Unit = {
+  override def shutdown(timeout: Duration): Unit = {
     try {
       info("shutting down")
 
