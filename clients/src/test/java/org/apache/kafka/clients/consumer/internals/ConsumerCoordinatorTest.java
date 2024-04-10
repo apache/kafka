@@ -229,11 +229,7 @@ public abstract class ConsumerCoordinatorTest {
     @AfterEach
     public void teardown() {
         this.metrics.close();
-        try {
-            this.coordinator.close(time.timer(0));
-        } catch (Exception e) {
-            // ignore
-        }
+        this.coordinator.close(time.timer(0));
     }
 
     @Test
