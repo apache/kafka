@@ -22,6 +22,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupRequest;
@@ -54,7 +56,6 @@ import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -547,14 +548,15 @@ public class WorkerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, "member", "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.emptyList(),
             Collections.singletonList(taskId1x0), Errors.NONE));
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
-        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
 
-        client.prepareResponse(joinGroupFollowerResponse(1, "member", "leader", Errors.NONE));
-        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.emptyList(),
-            Collections.singletonList(taskId1x0), Errors.NONE));
+        // prepare 3 heartBeatResponses because we will trigger 3 heartBeat requests until rebalanceTimeout,
+        // that is (sessionTimeoutMs - 1) * 3 > rebalanceTimeoutMs
+        client.prepareResponse(new HeartbeatResponse(new HeartbeatResponseData()));
+        client.prepareResponse(new HeartbeatResponse(new HeartbeatResponseData()));
+        client.prepareResponse(new HeartbeatResponse(new HeartbeatResponseData()));
 
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(WorkerCoordinator.class)) {
             coordinator.ensureActiveGroup();
@@ -562,18 +564,15 @@ public class WorkerCoordinatorTest {
                 return null;
             });
 
-            long now = time.milliseconds();
             // We keep the heartbeat thread running behind the scenes and poll frequently so that eventually
             // the time goes past now + rebalanceTimeoutMs which triggers poll timeout expiry.
             TestUtils.waitForCondition(() -> {
-                time.sleep(heartbeatIntervalMs - 1);
-                return time.milliseconds() > now + rebalanceTimeoutMs;
-            }, Duration.ofMinutes(1).toMillis(), "Coordinator did not poll for rebalance.timeout.ms");
-            coordinator.poll(0, () -> {
-                return null;
-            });
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")));
-            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getMessage().startsWith("worker poll timeout has expired")));
+                // sleep until sessionTimeoutMs to trigger a heartBeat request to avoid session timeout.
+                // Not sure if this will be flaky in CI because the heartbeat thread might not send out the heartBeat request in time.
+                time.sleep(sessionTimeoutMs - 1);
+                return logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
+                    logCaptureAppender.getEvents().stream().anyMatch(e -> e.getMessage().startsWith("worker poll timeout has expired"));
+            }, "Coordinator did not poll for rebalance.timeout.ms");
         }
     }
 
