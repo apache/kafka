@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import kafka.test.ClusterInstance;
+import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.Type;
@@ -29,7 +30,6 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.server.common.AdminCommandFailedException;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import scala.collection.JavaConverters;
@@ -59,7 +59,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("deprecation")
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.ALL, brokers = 3)
+@ClusterTestDefaults(clusterType = Type.ALL, brokers = 3, serverProperties = {
+    @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+    @ClusterConfigProperty(key = "auto.leader.rebalance.enable", value = "false"),
+    @ClusterConfigProperty(key = "controlled.shutdown.enable", value = "true"),
+    @ClusterConfigProperty(key = "controlled.shutdown.max.retries", value = "1"),
+    @ClusterConfigProperty(key = "controlled.shutdown.retry.backoff.ms", value = "1000"),
+    @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "2")
+})
 @Tag("integration")
 public class LeaderElectionCommandTest {
     private final ClusterInstance cluster;
@@ -68,16 +75,6 @@ public class LeaderElectionCommandTest {
 
     public LeaderElectionCommandTest(ClusterInstance cluster) {
         this.cluster = cluster;
-    }
-
-    @BeforeEach
-    void setup() {
-        TestUtils.verifyNoUnexpectedThreads("@BeforeEach");
-        cluster.config().serverProperties().put("auto.leader.rebalance.enable", "false");
-        cluster.config().serverProperties().put("controlled.shutdown.enable", "true");
-        cluster.config().serverProperties().put("controlled.shutdown.max.retries", "1");
-        cluster.config().serverProperties().put("controlled.shutdown.retry.backoff.ms", "1000");
-        cluster.config().serverProperties().put("offsets.topic.replication.factor", "2");
     }
 
     @ClusterTest
