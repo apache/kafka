@@ -1100,8 +1100,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             // If timeout is set to zero return empty immediately; otherwise try to get the results
             // and throw timeout exception if it cannot complete in time.
-            if (timeout.toMillis() == 0L)
+            if (timeout.toMillis() == 0L) {
+                applicationEventHandler.add(listOffsetsEvent);
                 return listOffsetsEvent.emptyResults();
+            }
 
             return applicationEventHandler.addAndGet(listOffsetsEvent, timer)
                     .entrySet()
@@ -1156,12 +1158,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     timer,
                     false);
 
-            Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
+            // If timeout is set to zero return empty immediately; otherwise try to get the results
+            // and throw timeout exception if it cannot complete in time.
             if (timeout.isZero()) {
-                // Return an empty results but also send a request to update the highwatermark.
                 applicationEventHandler.add(listOffsetsEvent);
                 return listOffsetsEvent.emptyResults();
             }
+
+            Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
             offsetAndTimestampMap = applicationEventHandler.addAndGet(
                     listOffsetsEvent,
                     timer);

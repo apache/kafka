@@ -126,6 +126,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
@@ -147,7 +148,7 @@ public class AsyncKafkaConsumerTest {
 
     private AsyncKafkaConsumer<String, String> consumer = null;
 
-    private final Time time = new MockTime(1);
+    private Time time = new MockTime(0);
     private final FetchCollector<String, String> fetchCollector = mock(FetchCollector.class);
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
@@ -323,6 +324,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testCommitted() {
+        time = new MockTime(1);
         consumer = newConsumer();
         Map<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = mockTopicPartitionOffset();
         completeFetchedCommittedOffsetApplicationEventSuccessfully(topicPartitionOffsets);
@@ -842,7 +844,13 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
         Map<TopicPartition, OffsetAndTimestampInternal> expectedOffsets = mockOffsetAndTimestamp();
 
-        doReturn(expectedOffsets).when(applicationEventHandler).addAndGet(any(), any());
+        when(applicationEventHandler.addAndGet(any(ListOffsetsEvent.class), any())).thenAnswer(invocation -> {
+            Timer timer = invocation.getArgument(1);
+            if (timer.remainingMs() == 0) {
+                fail("Timer duration should not be zero.");
+            }
+            return expectedOffsets;
+        });
 
         Map<TopicPartition, Long> result = assertDoesNotThrow(() -> consumer.beginningOffsets(expectedOffsets.keySet(), Duration.ofMillis(1)));
 
@@ -1581,7 +1589,6 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testProcessBackgroundEventsWithInitialDelay() throws Exception {
         consumer = newConsumer();
-        Time time = new MockTime();
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
         CountDownLatch latch = new CountDownLatch(3);
@@ -1617,7 +1624,6 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testProcessBackgroundEventsWithoutDelay() {
         consumer = newConsumer();
-        Time time = new MockTime();
         Timer timer = time.timer(1000);
 
         // Create a future that is already completed.
@@ -1639,7 +1645,6 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testProcessBackgroundEventsTimesOut() throws Exception {
         consumer = newConsumer();
-        Time time = new MockTime();
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
 
