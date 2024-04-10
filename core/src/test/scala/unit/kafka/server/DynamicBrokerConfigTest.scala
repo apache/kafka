@@ -211,7 +211,7 @@ class DynamicBrokerConfigTest {
 
     val securityPropsWithoutListenerPrefix = Map(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG -> "PKCS12")
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, securityPropsWithoutListenerPrefix)
-    val nonDynamicProps = Map(ZkConfigs.ZK_CONNECT_PROP -> "somehost:2181")
+    val nonDynamicProps = Map(ZkConfigs.ZK_CONNECT_CONFIG -> "somehost:2181")
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, nonDynamicProps)
 
     // Test update of configs with invalid type
@@ -709,7 +709,7 @@ class DynamicBrokerConfigTest {
   @Test
   def testNonInternalValuesDoesNotExposeInternalConfigs(): Unit = {
     val props = new Properties()
-    props.put(ZkConfigs.ZK_CONNECT_PROP, "localhost:2181")
+    props.put(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
     props.put(KafkaConfig.MetadataLogSegmentMinBytesProp, "1024")
     val config = new KafkaConfig(props)
     assertFalse(config.nonInternalValues.containsKey(KafkaConfig.MetadataLogSegmentMinBytesProp))

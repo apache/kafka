@@ -244,7 +244,7 @@ class ZkConfigMigrationClient(
         state
       } else if (responses.head.resultCode.equals(Code.OK)) {
         // Write the notification znode if our update was successful
-        zkClient.createConfigChangeNotification(s"$configType/$configName")
+        zkClient.createConfigChangeNotification(s"${configType.get}/$configName")
         state.withMigrationZkVersion(migrationZkVersion)
       } else {
         throw KeeperException.create(responses.head.resultCode, path)

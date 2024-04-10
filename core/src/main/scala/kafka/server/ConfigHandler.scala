@@ -23,7 +23,6 @@ import DynamicConfig.Broker._
 import kafka.controller.KafkaController
 import kafka.log.UnifiedLog
 import kafka.network.ConnectionQuotas
-import kafka.security.CredentialProvider
 import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Implicits._
@@ -33,6 +32,7 @@ import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.config.ZooKeeperInternals
 import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}

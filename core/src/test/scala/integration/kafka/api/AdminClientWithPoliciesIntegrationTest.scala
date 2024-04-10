@@ -18,7 +18,7 @@ import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils.assertFutureExceptionTypeEquals
-import kafka.utils.{Logging, TestInfoUtils, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsOptions, Config, ConfigEntry}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -78,7 +78,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     props.put(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[Policy])
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testValidAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
@@ -97,7 +97,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     PlaintextAdminIntegrationTest.checkValidAlterConfigs(client, this, topicResource1, topicResource2)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
@@ -105,7 +105,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   }
 
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidAlterConfigsDueToPolicy(quorum: String): Unit = {
     client = Admin.create(createConfig)

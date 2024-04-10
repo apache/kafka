@@ -16,9 +16,8 @@ import java.util.Properties
 import java.util.concurrent.ExecutionException
 import kafka.api.GroupAuthorizerIntegrationTest._
 import kafka.security.authorizer.AclAuthorizer
-import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
@@ -30,6 +29,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
+import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -110,10 +110,10 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
   private def createAcl(aclOperation: AclOperation,
                         aclPermissionType: AclPermissionType,
                         principal: KafkaPrincipal = ClientPrincipal): AccessControlEntry = {
-    new AccessControlEntry(principal.toString, WildcardHost, aclOperation, aclPermissionType)
+    new AccessControlEntry(principal.toString, WILDCARD_HOST, aclOperation, aclPermissionType)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testUnauthorizedProduceAndConsume(quorum: String): Unit = {
     val topic = "topic"
@@ -134,7 +134,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Set(topic), consumeException.unauthorizedTopics.asScala)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizedProduceAndConsume(quorum: String): Unit = {
     val topic = "topic"

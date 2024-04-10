@@ -17,7 +17,6 @@
 package kafka.api
 
 import kafka.server.KafkaConfig
-import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
@@ -40,7 +39,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
   }
 
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetsForTimes(quorum: String): Unit = {
     val numParts = 2
@@ -117,7 +116,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
   }
 
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testEarliestOrLatestOffsets(quorum: String): Unit = {
     val topic0 = "topicWithNewMessageFormat"

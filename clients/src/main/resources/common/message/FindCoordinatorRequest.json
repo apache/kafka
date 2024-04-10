@@ -26,7 +26,7 @@
   //
   // Version 4 adds support for batching via CoordinatorKeys (KIP-699)
   //
-  // Version 5 adds support for new error code ABORTABLE_TRANSACTION (KIP-890).
+  // Version 5 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
   "validVersions": "0-5",
   "deprecatedVersions": "0",
   "flexibleVersions": "3+",

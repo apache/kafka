@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.utils.{CoreUtils, Exit, TestInfoUtils, TestUtils}
+import kafka.utils.{CoreUtils, Exit, TestUtils}
 
 import java.io.{DataInputStream, File}
 import java.net.ServerSocket
@@ -39,12 +39,13 @@ import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerial
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.config.ZkConfigs
-import org.junit.jupiter.api.{BeforeEach, Disabled, TestInfo, Timeout}
+import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.time.Duration
 import java.util.Properties
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -83,7 +84,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     super.setUp(testInfo)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdown(quorum: String): Unit = {
 
@@ -142,7 +143,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     producer.close()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
     if (isKRaftTest()) {
@@ -151,13 +152,13 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       shutdownKRaftController()
       verifyCleanShutdownAfterFailedStartup[CancellationException]
     } else {
-      propsToChangeUponRestart.setProperty(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_PROP, "50")
-      propsToChangeUponRestart.setProperty(ZkConfigs.ZK_CONNECT_PROP, "some.invalid.hostname.foo.bar.local:65535")
+      propsToChangeUponRestart.setProperty(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG, "50")
+      propsToChangeUponRestart.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "some.invalid.hostname.foo.bar.local:65535")
       verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException]
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
     createTopic(topic)
@@ -188,7 +189,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testCleanShutdownWithZkUnavailable(quorum: String): Unit = {
     shutdownZooKeeper()
@@ -197,12 +198,11 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     verifyNonDaemonThreadsStatus()
   }
 
-  @Disabled
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
-  def testCleanShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
+  def testShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
     shutdownKRaftController()
-    shutdownBroker()
+    killBroker(0, Duration.ofSeconds(1))
     CoreUtils.delete(broker.config.logDirs)
     verifyNonDaemonThreadsStatus()
   }
@@ -244,7 +244,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       .count(isNonDaemonKafkaThread))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsecutiveShutdown(quorum: String): Unit = {
     shutdownBroker()
@@ -254,7 +254,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   // Verify that if controller is in the midst of processing a request, shutdown completes
   // without waiting for request timeout. Since this involves LeaderAndIsr request, it is
   // ZK-only for now.
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testControllerShutdownDuringSend(quorum: String): Unit = {
     val securityProtocol = SecurityProtocol.PLAINTEXT

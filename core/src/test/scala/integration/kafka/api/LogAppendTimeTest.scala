@@ -19,7 +19,7 @@ package kafka.api
 import java.util.Collections
 import java.util.concurrent.TimeUnit
 import kafka.server.KafkaConfig
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.record.TimestampType
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
@@ -48,7 +48,7 @@ class LogAppendTimeTest extends IntegrationTestHarness {
     createTopic(topic)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceConsume(quorum: String): Unit = {
     val producer = createProducer()
