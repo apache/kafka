@@ -182,6 +182,10 @@ abstract class QuorumTestHarness extends Logging {
 
   val bootstrapRecords: ListBuffer[ApiMessageAndVersion] = ListBuffer()
 
+  def getTestInfo(): TestInfo = {
+    testInfo
+  }
+
   def isKRaftTest(): Boolean = {
     TestInfoUtils.isKRaft(testInfo)
   }
