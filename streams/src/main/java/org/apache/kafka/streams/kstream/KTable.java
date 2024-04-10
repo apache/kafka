@@ -790,7 +790,7 @@ public interface KTable<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * Setting a new value preserves data co-location with respect to the key.
      *
-     * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     * @param transformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a
      *                            {@link ValueTransformerWithKey}.
      *                            At least one transformer instance will be created per streaming task.
      *                            Transformers do not need to be thread-safe.
@@ -863,7 +863,7 @@ public interface KTable<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * Setting a new value preserves data co-location with respect to the key.
      *
-     * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     * @param transformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a
      *                            {@link ValueTransformerWithKey}.
      *                            At least one transformer instance will be created per streaming task.
      *                            Transformers do not need to be thread-safe.
@@ -940,7 +940,7 @@ public interface KTable<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * Setting a new value preserves data co-location with respect to the key.
      *
-     * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     * @param transformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a
      *                            {@link ValueTransformerWithKey}.
      *                            At least one transformer instance will be created per streaming task.
      *                            Transformers do not need to be thread-safe.
@@ -1019,7 +1019,7 @@ public interface KTable<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * Setting a new value preserves data co-location with respect to the key.
      *
-     * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     * @param transformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a
      *                            {@link ValueTransformerWithKey}.
      *                            At least one transformer instance will be created per streaming task.
      *                            Transformers do not need to be thread-safe.
