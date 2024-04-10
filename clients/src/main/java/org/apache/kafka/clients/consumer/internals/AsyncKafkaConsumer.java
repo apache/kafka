@@ -1100,8 +1100,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             // If timeout is set to zero return empty immediately; otherwise try to get the results
             // and throw timeout exception if it cannot complete in time.
-            if (timeout.toMillis() == 0L)
+            if (timeout.toMillis() == 0L) {
+                applicationEventHandler.add(listOffsetsEvent);
                 return listOffsetsEvent.emptyResults();
+            }
 
             return applicationEventHandler.addAndGet(listOffsetsEvent, timer)
                     .entrySet()
@@ -1156,12 +1158,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     timer,
                     false);
 
-            Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
+            // If timeout is set to zero return empty immediately; otherwise try to get the results
+            // and throw timeout exception if it cannot complete in time.
             if (timeout.isZero()) {
-                // Return an empty results but also send a request to update the highwatermark.
                 applicationEventHandler.add(listOffsetsEvent);
                 return listOffsetsEvent.emptyResults();
             }
+
+            Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
             offsetAndTimestampMap = applicationEventHandler.addAndGet(
                     listOffsetsEvent,
                     timer);
@@ -1476,8 +1480,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         final Set<String> topicsToSubscribe = cluster.topics().stream()
                 .filter(subscriptions::matchesSubscribedPattern)
                 .collect(Collectors.toSet());
-        if (subscriptions.subscribeFromPattern(topicsToSubscribe))
+        if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
+            applicationEventHandler.add(new SubscriptionChangeEvent());
             metadata.requestUpdateForNewTopics();
+        }
     }
 
     @Override
@@ -1681,11 +1687,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
         maybeThrowFencedInstanceException();
         maybeInvokeCommitCallbacks();
+        maybeUpdateSubscriptionMetadata();
         backgroundEventProcessor.process();
 
-        // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
-        // in the previous implementation, because it will eventually involve group coordination
-        // logic
         return updateFetchPositions(timer);
     }
 
@@ -1764,8 +1768,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             throwIfNoAssignorsConfigured();
             log.info("Subscribed to pattern: '{}'", pattern);
             subscriptions.subscribe(pattern, listener);
-            updatePatternSubscription(metadata.fetch());
             metadata.requestUpdateForNewTopics();
+            updatePatternSubscription(metadata.fetch());
         } finally {
             release();
         }
@@ -1955,6 +1959,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Visible for testing
     SubscriptionState subscriptions() {
         return subscriptions;
+    }
+
+    private void maybeUpdateSubscriptionMetadata() {
+        if (subscriptions.hasPatternSubscription()) {
+            updatePatternSubscription(metadata.fetch());
+        }
     }
 
 }
