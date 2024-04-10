@@ -1476,8 +1476,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         final Set<String> topicsToSubscribe = cluster.topics().stream()
                 .filter(subscriptions::matchesSubscribedPattern)
                 .collect(Collectors.toSet());
-        if (subscriptions.subscribeFromPattern(topicsToSubscribe))
+        if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
+            applicationEventHandler.add(new SubscriptionChangeEvent());
             metadata.requestUpdateForNewTopics();
+        }
     }
 
     @Override
@@ -1681,11 +1683,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
         maybeThrowFencedInstanceException();
         maybeInvokeCommitCallbacks();
+        maybeUpdateSubscriptionMetadata();
         backgroundEventProcessor.process();
 
-        // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
-        // in the previous implementation, because it will eventually involve group coordination
-        // logic
         return updateFetchPositions(timer);
     }
 
@@ -1764,8 +1764,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             throwIfNoAssignorsConfigured();
             log.info("Subscribed to pattern: '{}'", pattern);
             subscriptions.subscribe(pattern, listener);
-            updatePatternSubscription(metadata.fetch());
             metadata.requestUpdateForNewTopics();
+            updatePatternSubscription(metadata.fetch());
         } finally {
             release();
         }
@@ -1955,6 +1955,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Visible for testing
     SubscriptionState subscriptions() {
         return subscriptions;
+    }
+
+    private void maybeUpdateSubscriptionMetadata() {
+        if (subscriptions.hasPatternSubscription()) {
+            updatePatternSubscription(metadata.fetch());
+        }
     }
 
 }
