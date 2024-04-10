@@ -595,11 +595,6 @@ object LocalLog extends Logging {
    */
   private[log] def logDeleteDirName(topicPartition: TopicPartition): String = {
     println("!!! logDeleteDir:" + topicPartition)
-    val elements = Thread.currentThread.getStackTrace
-    for (i <- 1 until elements.length) {
-      val s = elements(i)
-      System.out.println("\tat " + s.getClassName + "." + s.getMethodName + "(" + s.getFileName + ":" + s.getLineNumber + ")")
-    }
     logDirNameWithSuffixCappedLength(topicPartition, DeleteDirSuffix)
   }
 

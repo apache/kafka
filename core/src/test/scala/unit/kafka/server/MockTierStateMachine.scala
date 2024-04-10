@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.FetchResponseData
 
 import java.util.Optional
 
-class MockTierStateMachine(leader: LeaderEndPoint) extends ReplicaFetcherTierStateMachine(leader, null) {
+class MockTierStateMachine(leader: LeaderEndPoint, useFutureLog: Boolean = false) extends TierStateMachine(leader, null, useFutureLog) {
 
   var fetcher: MockFetcherThread = null
 

@@ -313,7 +313,7 @@ class AbstractFetcherManagerTest {
     override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(1L, 0)
   }
 
-  private class MockResizeFetcherTierStateMachine extends TierStateMachine {
+  private class MockResizeFetcherTierStateMachine extends TierStateMachine(null, null, false) {
     override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: PartitionData): PartitionFetchState = {
       throw new UnsupportedOperationException("Materializing tier state is not supported in this test.")
     }
