@@ -150,7 +150,7 @@ final public class InternalLogListener {
         }
 
         synchronized (voterSetHistory) {
-            return voterSetHistory.valueAt(offset);
+            return voterSetHistory.valueAtOrBefore(offset);
         }
     }
 
@@ -173,7 +173,7 @@ final public class InternalLogListener {
         }
 
         synchronized (kraftVersionHistory) {
-            return kraftVersionHistory.valueAt(offset).orElse((short) 0);
+            return kraftVersionHistory.valueAtOrBefore(offset).orElse((short) 0);
         }
     }
 

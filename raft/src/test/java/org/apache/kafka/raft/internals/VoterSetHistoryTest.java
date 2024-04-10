@@ -46,8 +46,8 @@ final public class VoterSetHistoryTest {
     }
 
     private void validateStaticVoterSet(VoterSet expected, VoterSetHistory votersHistory) {
-        assertEquals(Optional.empty(), votersHistory.valueAt(0));
-        assertEquals(Optional.empty(), votersHistory.valueAt(100));
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(0));
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(100));
         assertEquals(expected, votersHistory.lastValue());
     }
 

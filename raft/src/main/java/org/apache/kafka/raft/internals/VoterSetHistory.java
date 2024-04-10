@@ -67,8 +67,8 @@ final public class VoterSetHistory implements History<VoterSet> {
      * @return the voter set if one exist, otherwise {@code Optional.empty()}
      */
     @Override
-    public Optional<VoterSet> valueAt(long offset) {
-        return votersHistory.valueAt(offset);
+    public Optional<VoterSet> valueAtOrBefore(long offset) {
+        return votersHistory.valueAtOrBefore(offset);
     }
 
     @Override

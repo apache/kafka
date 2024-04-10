@@ -29,7 +29,13 @@ final public class TreeMapHistory<T> implements History<T> {
     private final NavigableMap<Long, T> history = new TreeMap<>();
 
     @Override
-    public void addAt(long offset, T newValue) {
+    public void addAt(long offset, T value) {
+        if (offset < 0) {
+            throw new IllegalArgumentException(
+                String.format("Next offset %d must be greater than or equal to 0", offset)
+            );
+        }
+
         Map.Entry<Long, ?> lastEntry = history.lastEntry();
         if (lastEntry != null && offset <= lastEntry.getKey()) {
             throw new IllegalArgumentException(
@@ -37,22 +43,11 @@ final public class TreeMapHistory<T> implements History<T> {
             );
         }
 
-        history.compute(
-            offset,
-            (key, oldValue) -> {
-                if (oldValue != null) {
-                    throw new IllegalArgumentException(
-                        String.format("Rejected %s since a value already exist at %d: %s", newValue, offset, oldValue)
-                    );
-                }
-
-                return newValue;
-            }
-        );
+        history.put(offset, value);
     }
 
     @Override
-    public Optional<T> valueAt(long offset) {
+    public Optional<T> valueAtOrBefore(long offset) {
         return Optional.ofNullable(history.floorEntry(offset)).map(Map.Entry::getValue);
     }
 
@@ -68,7 +63,7 @@ final public class TreeMapHistory<T> implements History<T> {
 
     @Override
     public void trimPrefixTo(long startOffset) {
-        NavigableMap<Long, T> lesserValues = history.headMap(startOffset, false);
+        NavigableMap<Long, T> lesserValues = history.headMap(startOffset, true);
         while (lesserValues.size() > 1) {
             // Poll and ignore the entry to remove the first entry
             lesserValues.pollFirstEntry();

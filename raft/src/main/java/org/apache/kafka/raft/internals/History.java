@@ -19,20 +19,61 @@ package org.apache.kafka.raft.internals;
 import java.util.Objects;
 import java.util.Optional;
 
-// TODO: document this type
+/**
+ * A object tracks values of {@code T} at different offsets.
+ */
 public interface History<T> {
-    public void addAt(long offset, T newValue);
+    /**
+     * Add a new value at a given offset.
+     *
+     * The provided {@code offset} must be greater than or equal to 0 and must be greater than the
+     * offset of all previous calls to this method.
+     *
+     * @param offset the offset
+     * @param value the value to store
+     * @throws IllegalArgumentException if the offset is not greater that all previous offsets
+     */
+    public void addAt(long offset, T value);
 
-    public Optional<T> valueAt(long offset);
+    /**
+     * Returns the value that has the largest offset that is less than or equals to the provided
+     * offset.
+     *
+     * @param offset the offset
+     * @return the value if it exist, otherwise {@code Optional.empty()}
+     */
+    public Optional<T> valueAtOrBefore(long offset);
 
+    /**
+     * Returns the value with the largest offset.
+     *
+     * @return the value if it exist, otherwise {@code Optional.empty()}
+     */
     public Optional<Entry<T>> lastEntry();
 
-    // TODO: the delete is inclusive, meaning that the entries removed include the endOffset.
+    /**
+     * Removes all entries with an offset greater than or equal to {@code endOffset}.
+     *
+     * @param endOffset the ending offset
+     */
     public void truncateTo(long endOffset);
 
-    // TODO: the delete is exclusive, meaning that the entries removed don't include the startOffset.
+    /**
+     * Removes all entries but the largest entry that has an offset that is less than or equal to
+     * {@code startOffset}.
+     *
+     * This operation does not remove the entry with the largest offset that is less than or equal
+     * to {@code startOffset}. This is needed so that calls to {@code valueAtOrBefore} and
+     * {@code lastEntry} always return a non-empty value if a value was previously added to this
+     * object.
+     *
+     * @param startOffset the starting offset
+     */
     public void trimPrefixTo(long startOffset);
 
+    /**
+     * Removes all of the values from this object.
+     */
     public void clear();
 
     final public static class Entry<T> {
@@ -57,10 +98,10 @@ public interface History<T> {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
 
-            Entry that = (Entry) o;
+            Entry<?> that = (Entry<?>) o;
 
             if (offset != that.offset) return false;
-            if (value != that.value) return false;
+            if (!Objects.equals(value, that.value)) return false;
 
             return true;
         }

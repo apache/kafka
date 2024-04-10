@@ -21,13 +21,20 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
-// TODO: documen this
 // TODO: write tests
+/**
+ * A thin facade for a {@code RawSnapshotWriter} that notifies a callback when freeze completes successfully.
+ */
 public final class NotifyingRawSnapshotWriter implements RawSnapshotWriter {
     private final RawSnapshotWriter writer;
     private final Consumer<OffsetAndEpoch> callback;
 
-    // TODO: document that this type owns the write and will close it.
+    /**
+     * Constructs a {@code RawSnapshotWriter}.
+     *
+     * @param writer the raw snapshot writer
+     * @param callback the consumer to call when freeze succeeds
+     */
     public NotifyingRawSnapshotWriter(RawSnapshotWriter writer, Consumer<OffsetAndEpoch> callback) {
         this.writer = writer;
         this.callback = callback;
@@ -58,6 +65,9 @@ public final class NotifyingRawSnapshotWriter implements RawSnapshotWriter {
         return writer.isFrozen();
     }
 
+    /**
+     * Delegates the call to the internal writer and invokes the callback on success.
+     */
     @Override
     public void freeze() {
         writer.freeze();
