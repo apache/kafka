@@ -84,7 +84,6 @@ public class ConnectorOffsetBackingStoreTest {
                 "offsets-topic",
                 mock(TopicAdmin.class));
 
-
         try {
             offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null), (error, result) -> {
                 assertEquals(PRODUCE_EXCEPTION, error);
