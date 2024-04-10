@@ -22,7 +22,7 @@ import java.util.Locale;
 
 @InterfaceStability.Evolving
 public enum AcknowledgeType {
-    ACCEPT((byte) 0), RELEASE((byte) 1), REJECT((byte) 2);
+    ACCEPT((byte) 1), RELEASE((byte) 2), REJECT((byte) 3);
 
     public final byte id;
 
@@ -38,11 +38,11 @@ public enum AcknowledgeType {
 
     public static AcknowledgeType forId(byte id) {
         switch (id) {
-            case 0:
-                return ACCEPT;
             case 1:
-                return RELEASE;
+                return ACCEPT;
             case 2:
+                return RELEASE;
+            case 3:
                 return REJECT;
             default:
                 throw new IllegalArgumentException("Unknown acknowledge type id: " + id);

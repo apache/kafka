@@ -55,9 +55,9 @@
           { "name": "AcknowledgeTypes", "type": "[]int8", "versions": "0+",
             "about": "Array of acknowledge types - 0:Gap,1:Accept,2:Release,3:Reject."},
           { "name": "GapOffsets", "type": "[]int64", "versions": "0+",
-            "about": "Array of offsets in this range which do not correspond to records."},
-          { "name": "AcknowledgeType", "type": "int8", "versions": "0+", "default": "0",
-            "about": "The type of acknowledgement - 0:Accept,1:Release,2:Reject."}
+            "about": "[TO BE REMOVED] Array of offsets in this range which do not correspond to records."},
+          { "name": "AcknowledgeType", "type": "int8", "versions": "0+", "default": "1",
+            "about": "[TO BE REMOVED] The type of acknowledgement - 1:Accept,2:Release,3:Reject."}
         ]}
       ]}
     ]},

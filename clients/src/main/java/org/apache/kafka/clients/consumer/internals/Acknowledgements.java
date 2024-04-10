@@ -31,6 +31,8 @@ import java.util.TreeMap;
  * topic-partition being delivered to a consumer in a share group.
  */
 public class Acknowledgements {
+    public static final byte ACKNOWLEDGE_TYPE_GAP = (byte) 0;
+
     // The acknowledgements keyed by offset. If the record is a gap, the AcknowledgeType will be null.
     private final Map<Long, AcknowledgeType> acknowledgements;
 
@@ -154,8 +156,8 @@ public class Acknowledgements {
     public List<ShareFetchRequestData.AcknowledgementBatch> getAcknowledgmentBatches() {
         List<ShareFetchRequestData.AcknowledgementBatch> batches = new ArrayList<>();
         if (acknowledgements.isEmpty()) return batches;
-        Iterator<Map.Entry<Long, AcknowledgeType>> iterator = acknowledgements.entrySet().iterator();
         ShareFetchRequestData.AcknowledgementBatch currentBatch = null;
+        Iterator<Map.Entry<Long, AcknowledgeType>> iterator = acknowledgements.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<Long, AcknowledgeType> entry = iterator.next();
             if (currentBatch == null) {
@@ -164,19 +166,23 @@ public class Acknowledgements {
                 currentBatch.setLastOffset(entry.getKey());
                 if (entry.getValue() != null) {
                     currentBatch.setAcknowledgeType(entry.getValue().id);
+                    currentBatch.acknowledgeTypes().add(entry.getValue().id);
                 } else {
                     // Put a marker value of -1 while this batch only has gaps
                     currentBatch.setAcknowledgeType((byte) -1);
                     currentBatch.gapOffsets().add(entry.getKey());
+                    currentBatch.acknowledgeTypes().add(ACKNOWLEDGE_TYPE_GAP);
                 }
             } else {
                 if (entry.getValue() != null) {
                     if (entry.getKey() == currentBatch.lastOffset() + 1) {
                         if (entry.getValue().id == currentBatch.acknowledgeType()) {
                             currentBatch.setLastOffset(entry.getKey());
+                            currentBatch.acknowledgeTypes().add(entry.getValue().id);
                         } else if (currentBatch.acknowledgeType() == (byte) -1) {
                             currentBatch.setAcknowledgeType(entry.getValue().id);
                             currentBatch.setLastOffset(entry.getKey());
+                            currentBatch.acknowledgeTypes().add(entry.getValue().id);
                         } else {
                             if (currentBatch.acknowledgeType() == -1) {
                                 // Even though this batch is just gaps, we mark it as ACCEPT.
@@ -188,6 +194,7 @@ public class Acknowledgements {
                             currentBatch.setBaseOffset(entry.getKey());
                             currentBatch.setLastOffset(entry.getKey());
                             currentBatch.setAcknowledgeType(entry.getValue().id);
+                            currentBatch.acknowledgeTypes().add(entry.getValue().id);
                         }
                     } else {
                         if (currentBatch.acknowledgeType() == -1) {
@@ -200,11 +207,13 @@ public class Acknowledgements {
                         currentBatch.setBaseOffset(entry.getKey());
                         currentBatch.setLastOffset(entry.getKey());
                         currentBatch.setAcknowledgeType(entry.getValue().id);
+                        currentBatch.acknowledgeTypes().add(entry.getValue().id);
                     }
                 } else {
                     if (entry.getKey() == currentBatch.lastOffset() + 1) {
                         currentBatch.setLastOffset(entry.getKey());
                         currentBatch.gapOffsets().add(entry.getKey());
+                        currentBatch.acknowledgeTypes().add(ACKNOWLEDGE_TYPE_GAP);
                     } else {
                         if (currentBatch.acknowledgeType() == -1) {
                             // Even though this batch is just gaps, we mark it as ACCEPT.
@@ -218,6 +227,7 @@ public class Acknowledgements {
                         // Put a marker value of -1 while this batch only has gaps
                         currentBatch.setAcknowledgeType((byte) -1);
                         currentBatch.gapOffsets().add(entry.getKey());
+                        currentBatch.acknowledgeTypes().add(ACKNOWLEDGE_TYPE_GAP);
                     }
                 }
             }

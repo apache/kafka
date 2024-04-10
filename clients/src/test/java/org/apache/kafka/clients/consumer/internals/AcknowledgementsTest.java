@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AcknowledgementsTest {
@@ -45,6 +46,8 @@ public class AcknowledgementsTest {
         assertEquals(0L, ackList.get(0).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeType());
         assertTrue(ackList.get(0).gapOffsets().isEmpty());
+        assertEquals(1, ackList.get(0).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(0));
     }
 
     @Test
@@ -61,6 +64,8 @@ public class AcknowledgementsTest {
         assertEquals(4L, ackList.get(0).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeType());
         assertTrue(ackList.get(0).gapOffsets().isEmpty());
+        assertNotEquals(0, ackList.get(0).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(0));
     }
 
     @Test
@@ -77,10 +82,17 @@ public class AcknowledgementsTest {
         assertEquals(2L, ackList.get(0).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeType());
         assertTrue(ackList.get(0).gapOffsets().isEmpty());
+        assertEquals(3, ackList.get(0).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(0));
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(1));
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(2));
         assertEquals(3L, ackList.get(1).baseOffset());
         assertEquals(4L, ackList.get(1).lastOffset());
         assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeType());
         assertTrue(ackList.get(1).gapOffsets().isEmpty());
+        assertEquals(2, ackList.get(1).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeTypes().get(0));
+        assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeTypes().get(1));
     }
 
     @Test
@@ -97,10 +109,17 @@ public class AcknowledgementsTest {
         assertEquals(0L, ackList.get(0).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeType());
         assertTrue(ackList.get(0).gapOffsets().isEmpty());
+        assertEquals(1, ackList.get(0).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(0));
         assertEquals(1L, ackList.get(1).baseOffset());
         assertEquals(4L, ackList.get(1).lastOffset());
         assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeType());
         assertTrue(ackList.get(1).gapOffsets().isEmpty());
+        assertEquals(4, ackList.get(1).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeTypes().get(0));
+        assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeTypes().get(1));
+        assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeTypes().get(2));
+        assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeTypes().get(3));
     }
 
     @Test
@@ -117,10 +136,17 @@ public class AcknowledgementsTest {
         assertEquals(3L, ackList.get(0).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeType());
         assertTrue(ackList.get(0).gapOffsets().isEmpty());
+        assertEquals(4, ackList.get(0).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(0));
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(1));
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(2));
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(3));
         assertEquals(4L, ackList.get(1).baseOffset());
         assertEquals(4L, ackList.get(1).lastOffset());
         assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeType());
         assertTrue(ackList.get(1).gapOffsets().isEmpty());
+        assertEquals(1, ackList.get(1).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeTypes().get(0));
     }
 
     @Test
@@ -133,6 +159,8 @@ public class AcknowledgementsTest {
         assertEquals(0L, ackList.get(0).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeType());
         assertEquals(1, ackList.get(0).gapOffsets().size());
+        assertEquals(1, ackList.get(0).acknowledgeTypes().size());
+        assertEquals(Acknowledgements.ACKNOWLEDGE_TYPE_GAP, ackList.get(0).acknowledgeTypes().get(0));
     }
 
     @Test
@@ -146,6 +174,9 @@ public class AcknowledgementsTest {
         assertEquals(1L, ackList.get(0).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeType());
         assertEquals(2, ackList.get(0).gapOffsets().size());
+        assertEquals(2, ackList.get(0).acknowledgeTypes().size());
+        assertEquals(Acknowledgements.ACKNOWLEDGE_TYPE_GAP, ackList.get(0).acknowledgeTypes().get(0));
+        assertEquals(Acknowledgements.ACKNOWLEDGE_TYPE_GAP, ackList.get(0).acknowledgeTypes().get(1));
     }
 
     @Test
@@ -159,6 +190,9 @@ public class AcknowledgementsTest {
         assertEquals(1L, ackList.get(0).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeType());
         assertEquals(1, ackList.get(0).gapOffsets().size());
+        assertEquals(2, ackList.get(0).acknowledgeTypes().size());
+        assertEquals(Acknowledgements.ACKNOWLEDGE_TYPE_GAP, ackList.get(0).acknowledgeTypes().get(0));
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(1));
     }
 
     @Test
@@ -172,6 +206,9 @@ public class AcknowledgementsTest {
         assertEquals(1L, ackList.get(0).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeType());
         assertEquals(1, ackList.get(0).gapOffsets().size());
+        assertEquals(2, ackList.get(0).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(0));
+        assertEquals(Acknowledgements.ACKNOWLEDGE_TYPE_GAP, ackList.get(0).acknowledgeTypes().get(1));
     }
 
     @Test
@@ -188,10 +225,17 @@ public class AcknowledgementsTest {
         assertEquals(2L, ackList.get(0).lastOffset());
         assertEquals(AcknowledgeType.RELEASE.id, ackList.get(0).acknowledgeType());
         assertEquals(2, ackList.get(0).gapOffsets().size());
+        assertEquals(3, ackList.get(0).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.RELEASE.id, ackList.get(0).acknowledgeTypes().get(0));
+        assertEquals(Acknowledgements.ACKNOWLEDGE_TYPE_GAP, ackList.get(0).acknowledgeTypes().get(1));
+        assertEquals(Acknowledgements.ACKNOWLEDGE_TYPE_GAP, ackList.get(0).acknowledgeTypes().get(2));
         assertEquals(3L, ackList.get(1).baseOffset());
         assertEquals(4L, ackList.get(1).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(1).acknowledgeType());
         assertTrue(ackList.get(1).gapOffsets().isEmpty());
+        assertEquals(2, ackList.get(1).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(1).acknowledgeTypes().get(0));
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(1).acknowledgeTypes().get(1));
     }
 
     @Test
@@ -208,10 +252,17 @@ public class AcknowledgementsTest {
         assertEquals(0L, ackList.get(0).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeType());
         assertTrue(ackList.get(0).gapOffsets().isEmpty());
+        assertEquals(1, ackList.get(0).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(0));
         assertEquals(1L, ackList.get(1).baseOffset());
         assertEquals(4L, ackList.get(1).lastOffset());
         assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeType());
         assertEquals(2, ackList.get(1).gapOffsets().size());
+        assertEquals(4, ackList.get(1).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeTypes().get(0));
+        assertEquals(Acknowledgements.ACKNOWLEDGE_TYPE_GAP, ackList.get(1).acknowledgeTypes().get(1));
+        assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeTypes().get(2));
+        assertEquals(Acknowledgements.ACKNOWLEDGE_TYPE_GAP, ackList.get(1).acknowledgeTypes().get(3));
     }
 
     @Test
@@ -228,18 +279,27 @@ public class AcknowledgementsTest {
         assertEquals(0L, ackList.get(0).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeType());
         assertTrue(ackList.get(0).gapOffsets().isEmpty());
+        assertEquals(1, ackList.get(0).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeTypes().get(0));
         assertEquals(1L, ackList.get(1).baseOffset());
         assertEquals(1L, ackList.get(1).lastOffset());
         assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeType());
         assertTrue(ackList.get(1).gapOffsets().isEmpty());
+        assertEquals(1, ackList.get(1).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.RELEASE.id, ackList.get(1).acknowledgeTypes().get(0));
         assertEquals(3L, ackList.get(2).baseOffset());
         assertEquals(4L, ackList.get(2).lastOffset());
         assertEquals(AcknowledgeType.REJECT.id, ackList.get(2).acknowledgeType());
         assertTrue(ackList.get(2).gapOffsets().isEmpty());
+        assertEquals(2, ackList.get(2).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.REJECT.id, ackList.get(2).acknowledgeTypes().get(0));
+        assertEquals(AcknowledgeType.REJECT.id, ackList.get(2).acknowledgeTypes().get(1));
         assertEquals(6L, ackList.get(3).baseOffset());
         assertEquals(6L, ackList.get(3).lastOffset());
         assertEquals(AcknowledgeType.REJECT.id, ackList.get(3).acknowledgeType());
         assertTrue(ackList.get(3).gapOffsets().isEmpty());
+        assertEquals(1, ackList.get(3).acknowledgeTypes().size());
+        assertEquals(AcknowledgeType.REJECT.id, ackList.get(3).acknowledgeTypes().get(0));
     }
 
 
@@ -254,9 +314,13 @@ public class AcknowledgementsTest {
         assertEquals(2L, ackList.get(0).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(0).acknowledgeType());
         assertEquals(1, ackList.get(0).gapOffsets().size());
+        assertEquals(1, ackList.get(0).acknowledgeTypes().size());
+        assertEquals(Acknowledgements.ACKNOWLEDGE_TYPE_GAP, ackList.get(0).acknowledgeTypes().get(0));
         assertEquals(4L, ackList.get(1).baseOffset());
         assertEquals(4L, ackList.get(1).lastOffset());
         assertEquals(AcknowledgeType.ACCEPT.id, ackList.get(1).acknowledgeType());
         assertEquals(1, ackList.get(1).gapOffsets().size());
+        assertEquals(1, ackList.get(1).acknowledgeTypes().size());
+        assertEquals(Acknowledgements.ACKNOWLEDGE_TYPE_GAP, ackList.get(1).acknowledgeTypes().get(0));
     }
 }
