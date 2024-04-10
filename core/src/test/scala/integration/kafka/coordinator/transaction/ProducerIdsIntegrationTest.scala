@@ -42,7 +42,7 @@ import scala.jdk.CollectionConverters._
   new ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "3")
 ))
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-class ProducerIdsIntegrationTest(private val cluster: ClusterInstance) {
+class ProducerIdsIntegrationTest {
 
   @ClusterTests(Array(
     new ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_2_8_IV1),
