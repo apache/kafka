@@ -26,13 +26,13 @@ import scala.jdk.CollectionConverters._
 import java.util.Properties
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.CompressionType
-import org.apache.kafka.coordinator.group.OffsetConfig
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 
 class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
   val offsetsTopicCompressionCodec = CompressionType.GZIP
   val overridingProps = new Properties()
-  overridingProps.put(OffsetConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
-  overridingProps.put(OffsetConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, offsetsTopicCompressionCodec.id.toString)
+  overridingProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
+  overridingProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, offsetsTopicCompressionCodec.id.toString)
 
   override def generateConfigs = TestUtils.createBrokerConfigs(1, zkConnectOrNull, enableControlledShutdown = false).map {
     KafkaConfig.fromProps(_, overridingProps)

@@ -27,7 +27,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
-import org.apache.kafka.coordinator.group.OffsetConfig
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -48,7 +48,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   overridingProps.put(KafkaConfig.ReplicaFetchResponseMaxBytesDoc, replicaFetchMaxResponseBytes.toString)
   // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
   // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
-  overridingProps.put(OffsetConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 1.toString)
+  overridingProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 1.toString)
 
   def generateConfigs =
     TestUtils.createBrokerConfigs(numServers, zkConnectOrNull, false).map(KafkaConfig.fromProps(_, overridingProps))

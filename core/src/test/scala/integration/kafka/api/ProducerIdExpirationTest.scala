@@ -29,7 +29,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidPidMappingException, TransactionalIdNotFoundException}
-import org.apache.kafka.coordinator.group.{GroupCoordinatorConfig, OffsetConfig}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -227,7 +227,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
     // Set a smaller value for the number of partitions for the __consumer_offsets topic
     // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long.
-    serverProps.put(OffsetConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 1.toString)
+    serverProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 1.toString)
     serverProps.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
     serverProps.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
     serverProps.put(KafkaConfig.TransactionsTopicMinISRProp, 2.toString)

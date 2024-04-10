@@ -36,7 +36,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.coordinator.group.{GroupCoordinatorConfig, OffsetConfig}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, VerificationGuard}
@@ -199,7 +199,7 @@ class GroupCoordinatorTest {
   @Test
   def testOffsetsRetentionMsIntegerOverflow(): Unit = {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
-    props.setProperty(OffsetConfig.OFFSETS_RETENTION_MINUTES_CONFIG, Integer.MAX_VALUE.toString)
+    props.setProperty(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG, Integer.MAX_VALUE.toString)
     val config = KafkaConfig.fromProps(props)
     val offsetConfig = GroupCoordinator.offsetConfig(config)
     assertEquals(offsetConfig.offsetsRetentionMs, Integer.MAX_VALUE * 60L * 1000L)
@@ -3858,7 +3858,7 @@ class GroupCoordinatorTest {
     val producerEpoch: Short = 3
 
     val offsets = Map(
-      tip -> OffsetAndMetadata(offset, "s" * (OffsetConfig.OFFSET_METADATA_MAX_SIZE_DEFAULT + 1), 0)
+      tip -> OffsetAndMetadata(offset, "s" * (GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_DEFAULT + 1), 0)
     )
 
     val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, offsets)

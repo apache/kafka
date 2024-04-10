@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.coordinator.group.{GroupCoordinatorConfig, OffsetConfig}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -50,8 +50,8 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   overridingProps.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
   overridingProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
   overridingProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
-  overridingProps.put(OffsetConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 1.toString)
-  overridingProps.put(OffsetConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, 3.toString)
+  overridingProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 1.toString)
+  overridingProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, 3.toString)
   overridingProps.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
   overridingProps.put(KafkaConfig.TransactionsTopicPartitionsProp, 1.toString)
   overridingProps.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 3.toString)

@@ -37,7 +37,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
-import org.apache.kafka.coordinator.group.{GroupCoordinatorConfig, OffsetConfig}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.security.authorizer.AuthorizerUtils
@@ -848,16 +848,16 @@ object KafkaConfig {
       .defineInternal(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, STRING, GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_DEFAULT, ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(classOf[ConsumerGroupMigrationPolicy]): _*), MEDIUM, GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_DOC)
 
       /** ********* Offset management configuration ***********/
-      .define(OffsetConfig.OFFSET_METADATA_MAX_SIZE_CONFIG, INT, OffsetConfig.OFFSET_METADATA_MAX_SIZE_DEFAULT, HIGH, OffsetConfig.OFFSET_METADATA_MAX_SIZE_DOC)
-      .define(OffsetConfig.OFFSETS_LOAD_BUFFER_SIZE_CONFIG, INT, OffsetConfig.OFFSETS_LOAD_BUFFER_SIZE_DEFAULT, atLeast(1), HIGH, OffsetConfig.OFFSETS_LOAD_BUFFER_SIZE_DOC)
-      .define(OffsetConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, SHORT, OffsetConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_DEFAULT, atLeast(1), HIGH, OffsetConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_DOC)
-      .define(OffsetConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, INT, OffsetConfig.OFFSETS_TOPIC_PARTITIONS_DEFAULT, atLeast(1), HIGH, OffsetConfig.OFFSETS_TOPIC_PARTITIONS_DOC)
-      .define(OffsetConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG, INT, OffsetConfig.OFFSETS_TOPIC_SEGMENT_BYTES_DEFAULT, atLeast(1), HIGH, OffsetConfig.OFFSETS_TOPIC_SEGMENT_BYTES_DOC)
-      .define(OffsetConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, INT, OffsetConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_DEFAULT, HIGH, OffsetConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_DOC)
-      .define(OffsetConfig.OFFSETS_RETENTION_MINUTES_CONFIG, INT, OffsetConfig.OFFSETS_RETENTION_MINUTES_DEFAULT, atLeast(1), HIGH, OffsetConfig.OFFSETS_RETENTION_MINUTES_DOC)
-      .define(OffsetConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG, LONG, OffsetConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_DEFAULT, atLeast(1), HIGH, OffsetConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_DOC)
-      .define(OffsetConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, INT, OffsetConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, OffsetConfig.OFFSET_COMMIT_TIMEOUT_MS_DOC)
-      .define(OffsetConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG, SHORT, OffsetConfig.OFFSET_COMMIT_REQUIRED_ACKS_DEFAULT, HIGH, OffsetConfig.OFFSET_COMMIT_REQUIRED_ACKS_DOC)
+      .define(GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_CONFIG, INT, GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_DEFAULT, HIGH, GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_DOC)
+      .define(GroupCoordinatorConfig.OFFSETS_LOAD_BUFFER_SIZE_CONFIG, INT, GroupCoordinatorConfig.OFFSETS_LOAD_BUFFER_SIZE_DEFAULT, atLeast(1), HIGH, GroupCoordinatorConfig.OFFSETS_LOAD_BUFFER_SIZE_DOC)
+      .define(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, SHORT, GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_DEFAULT, atLeast(1), HIGH, GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_DOC)
+      .define(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, INT, GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_DEFAULT, atLeast(1), HIGH, GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_DOC)
+      .define(GroupCoordinatorConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG, INT, GroupCoordinatorConfig.OFFSETS_TOPIC_SEGMENT_BYTES_DEFAULT, atLeast(1), HIGH, GroupCoordinatorConfig.OFFSETS_TOPIC_SEGMENT_BYTES_DOC)
+      .define(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, INT, GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_DEFAULT, HIGH, GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_DOC)
+      .define(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG, INT, GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_DEFAULT, atLeast(1), HIGH, GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_DOC)
+      .define(GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG, LONG, GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_DEFAULT, atLeast(1), HIGH, GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_DOC)
+      .define(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, INT, GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_DOC)
+      .define(GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG, SHORT, GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_DEFAULT, HIGH, GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_DOC)
       .define(DeleteTopicEnableProp, BOOLEAN, Defaults.DELETE_TOPIC_ENABLE, HIGH, DeleteTopicEnableDoc)
       .define(CompressionTypeProp, STRING, LogConfig.DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names.asScala.toSeq:_*), HIGH, CompressionTypeDoc)
 
@@ -1346,8 +1346,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val logFlushStartOffsetCheckpointIntervalMs = getInt(KafkaConfig.LogFlushStartOffsetCheckpointIntervalMsProp).toLong
   val logCleanupIntervalMs = getLong(KafkaConfig.LogCleanupIntervalMsProp)
   def logCleanupPolicy = getList(KafkaConfig.LogCleanupPolicyProp)
-  val offsetsRetentionMinutes = getInt(OffsetConfig.OFFSETS_RETENTION_MINUTES_CONFIG)
-  val offsetsRetentionCheckIntervalMs = getLong(OffsetConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG)
+  val offsetsRetentionMinutes = getInt(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG)
+  val offsetsRetentionCheckIntervalMs = getLong(GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG)
   def logRetentionBytes = getLong(KafkaConfig.LogRetentionBytesProp)
   val logCleanerDedupeBufferSize = getLong(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP)
   val logCleanerDedupeBufferLoadFactor = getDouble(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP)
@@ -1503,14 +1503,14 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val consumerGroupMigrationPolicy = ConsumerGroupMigrationPolicy.parse(getString(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG))
 
   /** ********* Offset management configuration ***********/
-  val offsetMetadataMaxSize = getInt(OffsetConfig.OFFSET_METADATA_MAX_SIZE_CONFIG)
-  val offsetsLoadBufferSize = getInt(OffsetConfig.OFFSETS_LOAD_BUFFER_SIZE_CONFIG)
-  val offsetsTopicReplicationFactor = getShort(OffsetConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG)
-  val offsetsTopicPartitions = getInt(OffsetConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG)
-  val offsetCommitTimeoutMs = getInt(OffsetConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG)
-  val offsetCommitRequiredAcks = getShort(OffsetConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG)
-  val offsetsTopicSegmentBytes = getInt(OffsetConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG)
-  val offsetsTopicCompressionType = Option(getInt(OffsetConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG)).map(value => CompressionType.forId(value)).orNull
+  val offsetMetadataMaxSize = getInt(GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_CONFIG)
+  val offsetsLoadBufferSize = getInt(GroupCoordinatorConfig.OFFSETS_LOAD_BUFFER_SIZE_CONFIG)
+  val offsetsTopicReplicationFactor = getShort(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG)
+  val offsetsTopicPartitions = getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG)
+  val offsetCommitTimeoutMs = getInt(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG)
+  val offsetCommitRequiredAcks = getShort(GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG)
+  val offsetsTopicSegmentBytes = getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG)
+  val offsetsTopicCompressionType = Option(getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG)).map(value => CompressionType.forId(value)).orNull
 
   /** ********* Transaction management configuration ***********/
   val transactionalIdExpirationMs = getInt(KafkaConfig.TransactionalIdExpirationMsProp)

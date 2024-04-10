@@ -37,7 +37,7 @@ import java.util.{Collections, Properties}
 import org.apache.kafka.common.Node
 import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
-import org.apache.kafka.coordinator.group.{GroupCoordinatorConfig, OffsetConfig}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
 import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerTopicConfigSynonyms, ZkConfigs}
@@ -892,16 +892,16 @@ class KafkaConfigTest {
         case GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-1")
-        case OffsetConfig.OFFSET_METADATA_MAX_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case OffsetConfig.OFFSETS_LOAD_BUFFER_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case OffsetConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case OffsetConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case OffsetConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case OffsetConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
-        case OffsetConfig.OFFSETS_RETENTION_MINUTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case OffsetConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case OffsetConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case OffsetConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-2")
+        case GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case GroupCoordinatorConfig.OFFSETS_LOAD_BUFFER_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-2")
         case KafkaConfig.TransactionalIdExpirationMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
         case KafkaConfig.TransactionsMaxTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
         case KafkaConfig.TransactionsTopicMinISRProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
@@ -1156,7 +1156,7 @@ class KafkaConfigTest {
     defaults.setProperty(KafkaConfig.LogRetentionTimeHoursProp, "10")
     //For LogFlushIntervalMsProp
     defaults.setProperty(KafkaConfig.LogFlushSchedulerIntervalMsProp, "123")
-    defaults.setProperty(OffsetConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, CompressionType.SNAPPY.id.toString)
+    defaults.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, CompressionType.SNAPPY.id.toString)
     // For MetricRecordingLevelProp
     defaults.setProperty(KafkaConfig.MetricRecordingLevelProp, Sensor.RecordingLevel.DEBUG.toString)
 
