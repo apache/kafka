@@ -65,8 +65,10 @@ public class ConnectorOffsetBackingStoreTest {
 
     private static final Exception PRODUCE_EXCEPTION = new KafkaException();
 
-    private final Converter keyConverter = mock(Converter.class);
-    private final Converter valueConverter = mock(Converter.class);
+    @Mock
+    private Converter keyConverter;
+    @Mock
+    private Converter valueConverter;
 
 
     @Test
