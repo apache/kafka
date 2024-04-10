@@ -299,16 +299,11 @@ class BrokerServer(
         () => lifecycleManager.brokerEpoch
       )
       val directoryEventHandler = new DirectoryEventHandler {
-        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, callback: Runnable): Unit = {
-          println("!!! handleAssignment:" + partition)
+        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, callback: Runnable): Unit =
           assignmentsManager.onAssignment(partition, directoryId, callback)
-        }
 
-        override def handleFailure(directoryId: Uuid): Unit = {
-          println("!!! handleFailure:" + directoryId)
+        override def handleFailure(directoryId: Uuid): Unit =
           lifecycleManager.propagateDirectoryFailure(directoryId)
-        }
-
       }
 
       this._replicaManager = new ReplicaManager(
@@ -612,7 +607,6 @@ class BrokerServer(
 
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
-
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).asJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {

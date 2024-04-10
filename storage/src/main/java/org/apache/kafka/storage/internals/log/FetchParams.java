@@ -22,6 +22,8 @@ import org.apache.kafka.common.requests.FetchRequest;
 import java.util.Objects;
 import java.util.Optional;
 
+import static org.apache.kafka.common.requests.FetchRequest.FUTURE_LOCAL_REPLICA_ID;
+
 public class FetchParams {
     public final short requestVersion;
     public final int replicaId;
@@ -57,7 +59,7 @@ public class FetchParams {
     }
 
     public boolean isFromFuture() {
-        return replicaId == -3;
+        return replicaId == FUTURE_LOCAL_REPLICA_ID;
     }
 
     public boolean isFromConsumer() {

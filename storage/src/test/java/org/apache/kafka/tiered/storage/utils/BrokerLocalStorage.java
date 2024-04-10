@@ -26,7 +26,6 @@ import org.apache.kafka.storage.internals.log.LogFileUtils;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -147,7 +146,6 @@ public final class BrokerLocalStorage {
         if (offsetToSearch.equals(firstLogFileBaseOffset)) {
             return true;
         }
-//        File partitionDir = new File(brokerStorageDirectory.getAbsolutePath(), topicPartition.toString());
         File partitionDir = brokerStorageDirectory.stream()
                 .filter(dir -> isTopicPartitionFileExistInDir(topicPartition, dir))
                 .findFirst()

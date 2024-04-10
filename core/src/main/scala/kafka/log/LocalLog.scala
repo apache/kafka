@@ -358,6 +358,8 @@ class LocalLog(@volatile private var _dir: File,
            maxOffsetMetadata: LogOffsetMetadata,
            includeAbortedTxns: Boolean): FetchDataInfo = {
     maybeHandleIOException(s"Exception while reading from $topicPartition in dir ${dir.getParent}") {
+      trace(s"Reading maximum $maxLength bytes at offset $startOffset from log with " +
+        s"total length ${segments.sizeInBytes} bytes")
 
       val endOffsetMetadata = nextOffsetMetadata
       val endOffset = endOffsetMetadata.messageOffset
@@ -594,7 +596,6 @@ object LocalLog extends Logging {
    * from exceeding 255 characters.
    */
   private[log] def logDeleteDirName(topicPartition: TopicPartition): String = {
-    println("!!! logDeleteDir:" + topicPartition)
     logDirNameWithSuffixCappedLength(topicPartition, DeleteDirSuffix)
   }
 
@@ -912,7 +913,7 @@ object LocalLog extends Logging {
     }
 
     def deleteSegments(): Unit = {
-      info(s"!!! ${logPrefix}Deleting segment files ${segmentsToDelete.mkString(",")}")
+      info(s"${logPrefix}Deleting segment files ${segmentsToDelete.mkString(",")}")
       val parentDir = dir.getParent
       maybeHandleIOException(logDirFailureChannel, parentDir, s"Error while deleting segments for $topicPartition in dir $parentDir") {
         segmentsToDelete.foreach { segment =>
@@ -921,7 +922,6 @@ object LocalLog extends Logging {
       }
     }
 
-    info("!!! delete files:" + config.fileDeleteDelayMs + ";;" + segmentsToDelete)
     if (asyncDelete)
       scheduler.scheduleOnce("delete-file", () => deleteSegments(), config.fileDeleteDelayMs)
     else

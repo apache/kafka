@@ -461,7 +461,7 @@ public class FetchRequest extends AbstractRequest {
     }
 
     public boolean isFromFollower() {
-        return replicaId() >= 0 || replicaId() == -3;
+        return replicaId() >= 0;
     }
 
     public IsolationLevel isolationLevel() {

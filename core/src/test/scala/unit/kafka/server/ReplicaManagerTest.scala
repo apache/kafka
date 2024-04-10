@@ -121,7 +121,7 @@ class ReplicaManagerTest {
   private val brokerEpoch = 0L
 
   // These metrics are static and once we remove them after each test, they won't be created and verified anymore
-//  private val metricsToBeDeletedInTheEnd = Set("kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec")
+  private val metricsToBeDeletedInTheEnd = Set("kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec")
 
   @BeforeEach
   def setUp(): Unit = {
@@ -141,8 +141,7 @@ class ReplicaManagerTest {
 
   @AfterEach
   def tearDown(): Unit = {
-//    TestUtils.clearYammerMetricsExcept(metricsToBeDeletedInTheEnd)
-    TestUtils.clearYammerMetrics()
+    TestUtils.clearYammerMetricsExcept(metricsToBeDeletedInTheEnd)
     Option(quotaManager).foreach(_.shutdown())
     metrics.close()
     // validate that the shutdown is working correctly by ensuring no lingering threads.
@@ -4105,10 +4104,11 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testRemoteFetchExpiresPerSecMetric2(): Unit = {
+  def testRemoteFetchExpiresPerSecMetric(): Unit = {
     val replicaId = -1
     val tp0 = new TopicPartition(topic, 0)
     val tidp0 = new TopicIdPartition(topicId, tp0)
+
     val props = new Properties()
     props.put("zookeeper.connect", "test")
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
