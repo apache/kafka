@@ -18,6 +18,7 @@ package kafka.test.api;
 
 import kafka.api.AbstractShareConsumerTest;
 import kafka.api.BaseConsumerTest;
+import kafka.utils.TestUtils;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -56,6 +57,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -450,24 +452,35 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
         producer.send(record);
         producer.send(record);
         producer.send(record);
-        ConsumerRecords<byte[], byte[]> records1 = shareConsumer1.poll(Duration.ofMillis(5000));
-        ConsumerRecords<byte[], byte[]> records2 = shareConsumer2.poll(Duration.ofMillis(5000));
         // Both the consumers should read all the messages, because they are part of different share groups (both have different group IDs)
-        assertEquals(3, records1.count());
-        assertEquals(3, records2.count());
+        AtomicInteger shareConsumer1Records = new AtomicInteger();
+        AtomicInteger shareConsumer2Records = new AtomicInteger();
+        TestUtils.waitUntilTrue(() -> {
+            int records1 = shareConsumer1Records.addAndGet(shareConsumer1.poll(Duration.ofMillis(2000)).count());
+            int records2 = shareConsumer2Records.addAndGet(shareConsumer2.poll(Duration.ofMillis(2000)).count());
+            return records1 == 3 && records2 == 3;
+        }, () -> "Failed to consume records for both consumers", DEFAULT_MAX_WAIT_MS, 100L);
 
         producer.send(record);
         producer.send(record);
-        records1 = shareConsumer1.poll(Duration.ofMillis(5000));
-        assertEquals(2, records1.count());
+
+        shareConsumer1Records.set(0);
+        TestUtils.waitUntilTrue(() -> {
+            int records1 = shareConsumer1Records.addAndGet(shareConsumer1.poll(Duration.ofMillis(2000)).count());
+            return records1 == 2;
+        }, () -> "Failed to consume records for share consumer 1", DEFAULT_MAX_WAIT_MS, 100L);
 
         producer.send(record);
         producer.send(record);
         producer.send(record);
-        records1 = shareConsumer1.poll(Duration.ofMillis(5000));
-        records2 = shareConsumer2.poll(Duration.ofMillis(5000));
-        assertEquals(3, records1.count());
-        assertEquals(5, records2.count());
+
+        shareConsumer1Records.set(0);
+        shareConsumer2Records.set(0);
+        TestUtils.waitUntilTrue(() -> {
+            int records1 = shareConsumer1Records.addAndGet(shareConsumer1.poll(Duration.ofMillis(2000)).count());
+            int records2 = shareConsumer2Records.addAndGet(shareConsumer2.poll(Duration.ofMillis(2000)).count());
+            return records1 == 3 && records2 == 5;
+        }, () -> "Failed to consume records for both consumers for the last batch", DEFAULT_MAX_WAIT_MS, 100L);
 
         shareConsumer1.close();
         shareConsumer2.close();
