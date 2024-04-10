@@ -1319,13 +1319,13 @@ public class SharePartitionManagerTest {
 
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp0),
-                k -> new SharePartition(groupId, tp0, 100, 5, RECORD_LOCK_DURATION_MS, TIMER));
+                k -> new SharePartition(groupId, tp0, 100, 5, RECORD_LOCK_DURATION_MS, TIMER, time));
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp1),
-                k -> new SharePartition(groupId, tp1, 100, 5, RECORD_LOCK_DURATION_MS, TIMER));
+                k -> new SharePartition(groupId, tp1, 100, 5, RECORD_LOCK_DURATION_MS, TIMER, time));
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp2),
-                k -> new SharePartition(groupId, tp2, 100, 5, RECORD_LOCK_DURATION_MS, TIMER));
+                k -> new SharePartition(groupId, tp2, 100, 5, RECORD_LOCK_DURATION_MS, TIMER, time));
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp3),
-                k -> new SharePartition(groupId, tp3, 100, 5, RECORD_LOCK_DURATION_MS, TIMER));
+                k -> new SharePartition(groupId, tp3, 100, 5, RECORD_LOCK_DURATION_MS, TIMER, time));
 
         SharePartitionManager sharePartitionManager = new SharePartitionManager(replicaManager, time,
                 new SharePartitionManager.ShareSessionCache(10, 1000), partitionCacheMap, RECORD_LOCK_DURATION_MS);

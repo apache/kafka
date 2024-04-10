@@ -22,7 +22,9 @@ import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.FetchPartitionData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -184,9 +186,13 @@ public class SharePartition {
      * acquired to available/archived state upon timeout
      */
     private final Timer timer;
+    /**
+     * Time is used to get the currentTime.
+     */
+    private final Time time;
 
     SharePartition(String groupId, TopicIdPartition topicIdPartition, int maxInFlightMessages, int maxDeliveryCount,
-                   int recordLockDurationMs, Timer timer) {
+                   int recordLockDurationMs, Timer timer, Time time) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
         this.maxInFlightMessages = maxInFlightMessages;
@@ -203,6 +209,7 @@ public class SharePartition {
         this.fetchLock = new AtomicBoolean(false);
         this.recordLockDurationMs = recordLockDurationMs;
         this.timer = timer;
+        this.time = time;
     }
 
     /**
@@ -361,7 +368,7 @@ public class SharePartition {
                         // the offsets state in the in-flight batch.
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
-                    acquireSubsetBatchRecords(firstBatch.baseOffset(), lastBatch.lastOffset(), inFlightBatch, result);
+                    acquireSubsetBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset(), inFlightBatch, result);
                     continue;
                 }
 
@@ -378,6 +385,10 @@ public class SharePartition {
                         inFlightBatch, groupId, topicIdPartition);
                     continue;
                 }
+                // Schedule acquisition lock timeout for the batch.
+                TimerTask acquisitionLockTimeoutTask = scheduleAcquisitionLockTimeout(memberId, inFlightBatch.baseOffset(), inFlightBatch.lastOffset());
+                // Set the acquisition lock timeout task for the batch.
+                inFlightBatch.updateAcquisitionLockTimeout(acquisitionLockTimeoutTask);
 
                 findNextFetchOffset.set(true);
                 result.add(new AcquiredRecords()
@@ -524,6 +535,8 @@ public class SharePartition {
                                 // Force the state of the offset to Archived for the gap offset
                                 // irrespectively.
                                 offsetState.getValue().state = RecordState.ARCHIVED;
+                                // Cancel and clear the acquisition lock timeout task for the state since it is moved to ARCHIVED state.
+                                offsetState.getValue().cancelAndClearAcquisitionLockTimeoutTask();
                                 continue;
                             }
 
@@ -600,7 +613,12 @@ public class SharePartition {
             } else {
                 log.trace("Acknowledgement batch request successful for share partition: {}-{}",
                     groupId, topicIdPartition);
-                updatedStates.forEach(state -> state.completeStateTransition(true));
+                updatedStates.forEach(state -> {
+                    state.completeStateTransition(true);
+                    // Cancel the acquisition lock timeout task for the state since it is acknowledged successfully.
+                    state.cancelAndClearAcquisitionLockTimeoutTask();
+                });
+
                 nextFetchOffset = localNextFetchOffset;
             }
         } finally {
@@ -687,7 +705,11 @@ public class SharePartition {
             } else {
                 log.trace("Release records from acquired state successful for share partition: {}-{}",
                         groupId, topicIdPartition);
-                updatedStates.forEach(state -> state.completeStateTransition(true));
+                updatedStates.forEach(state -> {
+                    state.completeStateTransition(true);
+                    // Cancel the acquisition lock timeout task for the state since it is released successfully.
+                    state.cancelAndClearAcquisitionLockTimeoutTask();
+                });
                 nextFetchOffset = localNextFetchOffset;
             }
         } finally {
@@ -699,12 +721,16 @@ public class SharePartition {
     private AcquiredRecords acquireNewBatchRecords(String memberId, long baseOffset, long lastOffset, long nextOffset) {
         lock.writeLock().lock();
         try {
+            // Schedule acquisition lock timeout for the batch.
+            TimerTask timerTask = scheduleAcquisitionLockTimeout(memberId, baseOffset, lastOffset);
+            // Add the new batch to the in-flight records along with the acquisition lock timeout task for the batch.
             cachedState.put(baseOffset, new InFlightBatch(
                 memberId,
                 baseOffset,
                 lastOffset,
                 RecordState.ACQUIRED,
-                1));
+                1,
+                timerTask));
             endOffset = lastOffset;
             nextFetchOffset = nextOffset;
             return new AcquiredRecords()
@@ -716,7 +742,7 @@ public class SharePartition {
         }
     }
 
-    private void acquireSubsetBatchRecords(long requestBaseOffset, long requestLastOffset,
+    private void acquireSubsetBatchRecords(String memberId, long requestBaseOffset, long requestLastOffset,
         InFlightBatch inFlightBatch, List<AcquiredRecords> result) {
         lock.writeLock().lock();
         try {
@@ -746,6 +772,10 @@ public class SharePartition {
                         groupId, topicIdPartition);
                     continue;
                 }
+                // Schedule acquisition lock timeout for the offset.
+                TimerTask acquisitionLockTimeoutTask = scheduleAcquisitionLockTimeout(memberId, offsetState.getKey(), offsetState.getKey());
+                // Update acquisition lock timeout task for the offset.
+                offsetState.getValue().updateAcquisitionLockTimeoutTask(acquisitionLockTimeoutTask);
 
                 findNextFetchOffset.set(true);
                 // TODO: Maybe we can club the continuous offsets here.
@@ -777,10 +807,128 @@ public class SharePartition {
         return new ConcurrentSkipListMap<>(cachedState);
     }
 
+    // Visible for testing.
+    Timer timer() {
+        return timer;
+    }
+
+    private TimerTask scheduleAcquisitionLockTimeout(String memberId, long baseOffset, long lastOffset) {
+        return scheduleAcquisitionLockTimeout(memberId, baseOffset, lastOffset, recordLockDurationMs);
+    }
+
+    // TODO: maxDeliveryCount should be utilized here once it is implemented
+    /**
+     * Apply acquisition lock to acquired records.
+     * @param memberId The member id of the client that is putting the acquisition lock.
+     * @param baseOffset The base offset of the acquired records.
+     * @param lastOffset The last offset of the acquired records.
+     */
+    private TimerTask scheduleAcquisitionLockTimeout(String memberId, long baseOffset, long lastOffset, long delayMs) {
+        TimerTask acquistionLockTimerTask = acquisitionLockTimerTask(memberId, baseOffset, lastOffset, delayMs);
+        timer.add(acquistionLockTimerTask);
+        return acquistionLockTimerTask;
+    }
+
+    private TimerTask acquisitionLockTimerTask(String memberId, long baseOffset, long lastOffset, long delayMs) {
+        return new AcquisitionLockTimerTask(delayMs, memberId, baseOffset, lastOffset);
+    }
+
+    private final class AcquisitionLockTimerTask extends TimerTask {
+        private final long expirationMs;
+        private final String memberId;
+        private final long baseOffset, lastOffset;
+
+        AcquisitionLockTimerTask(long delayMs, String memberId, long baseOffset, long lastOffset) {
+            super(delayMs);
+            this.expirationMs = time.hiResClockMs() + delayMs;
+            this.memberId = memberId;
+            this.baseOffset = baseOffset;
+            this.lastOffset = lastOffset;
+        }
+
+        long expirationMs() {
+            return expirationMs;
+        }
+
+        /**
+         * The task is executed when the acquisition lock timeout is reached. The task releases the acquired records.
+         */
+        @Override
+        public void run() {
+            releaseAcquisitionLockOnTimeout(memberId, baseOffset, lastOffset);
+        }
+    }
+
+    private void releaseAcquisitionLockOnTimeout(String memberId, long baseOffset, long lastOffset) {
+        lock.writeLock().lock();
+        try {
+            Map.Entry<Long, InFlightBatch> floorOffset = cachedState.floorEntry(baseOffset);
+            if (floorOffset == null) {
+                log.debug("Base Offset {} not found for share partition: {}-{}", baseOffset, groupId, topicIdPartition);
+            } else {
+                NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(floorOffset.getKey(), true, lastOffset, true);
+                long localNextFetchOffset = nextFetchOffset;
+                for (Map.Entry<Long, InFlightBatch> entry : subMap.entrySet()) {
+                    InFlightBatch inFlightBatch = entry.getValue();
+                    // Case when the state of complete batch is valid
+                    if (inFlightBatch.offsetState == null) {
+                        if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
+                            InFlightState updateResult = inFlightBatch.tryUpdateBatchState(RecordState.AVAILABLE, false);
+                            if (updateResult == null) {
+                                log.debug("Unable to release acquisition lock on timeout for the batch: {}"
+                                        + " for the share partition: {}-{}-{}", inFlightBatch, groupId, memberId, topicIdPartition);
+                            } else {
+                                // Update acquisition lock timeout task for the batch to null since it is completed now.
+                                updateResult.updateAcquisitionLockTimeoutTask(null);
+                                localNextFetchOffset = Math.min(entry.getKey(), localNextFetchOffset);
+                            }
+                        } else {
+                            log.debug("The batch is not in acquired state while release of acquisition lock on timeout, skipping, batch: {}"
+                                    + " for the share group: {}-{}-{}", inFlightBatch, groupId, memberId, topicIdPartition);
+                        }
+                    } else { // Case when batch has a valid offset state map.
+                        for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
+                            // For the first batch which might have offsets prior to the request base
+                            // offset i.e. cached batch of 10-14 offsets and request batch of 12-13.
+                            if (offsetState.getKey() < baseOffset) {
+                                continue;
+                            }
+
+                            if (offsetState.getKey() > lastOffset) {
+                                // No further offsets to process.
+                                break;
+                            }
+
+                            if (offsetState.getValue().state != RecordState.ACQUIRED) {
+                                log.debug("The offset is not in acquired state while release of acquisition lock on timeout, skipping, offset: {} batch: {}"
+                                                + " for the share group: {}-{}-{}", offsetState.getKey(), inFlightBatch,
+                                        groupId, memberId, topicIdPartition);
+                                continue;
+                            }
+                            InFlightState updateResult = offsetState.getValue().tryUpdateState(RecordState.AVAILABLE, false);
+                            if (updateResult == null) {
+                                log.debug("Unable to release acquisition lock on timeout for the offset: {} in batch: {}"
+                                                + " for the share group: {}-{}-{}", offsetState.getKey(), inFlightBatch,
+                                        groupId, memberId, topicIdPartition);
+                                continue;
+                            }
+                            // Update acquisition lock timeout task for the offset to null since it is completed now.
+                            updateResult.updateAcquisitionLockTimeoutTask(null);
+                            localNextFetchOffset = Math.min(offsetState.getKey(), localNextFetchOffset);
+                        }
+                    }
+                }
+                nextFetchOffset = localNextFetchOffset;
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
     /**
      * The InFlightBatch maintains the in-memory state of the fetched records i.e. in-flight records.
      */
-    static class InFlightBatch {
+    class InFlightBatch {
 
         // The member id of the client that is fetching the record.
         private final String memberId;
@@ -802,15 +950,11 @@ public class SharePartition {
         // can be deep and the state of the records can be different per offset, not always though.
         private NavigableMap<Long, InFlightState> offsetState;
 
-        InFlightBatch(String memberId, long baseOffset, long lastOffset, RecordState state) {
-            this(memberId, baseOffset, lastOffset, state, 0);
-        }
-
-        InFlightBatch(String memberId, long baseOffset, long lastOffset, RecordState state, int deliveryCount) {
+        InFlightBatch(String memberId, long baseOffset, long lastOffset, RecordState state, int deliveryCount, TimerTask acquisitionLockTimeoutTask) {
             this.memberId = memberId;
             this.baseOffset = baseOffset;
             this.lastOffset = lastOffset;
-            this.inFlightState = new InFlightState(state, deliveryCount);
+            this.inFlightState = new InFlightState(state, deliveryCount, acquisitionLockTimeoutTask);
         }
 
         // Visible for testing.
@@ -901,10 +1045,38 @@ public class SharePartition {
                         offsetState.put(offset, new InFlightState(RecordState.ARCHIVED, 0));
                         continue;
                     }
-                    offsetState.put(offset, new InFlightState(inFlightState.state, inFlightState.deliveryCount));
+                    if (inFlightState.acquisitionLockTimeoutTask != null) {
+                        // The acquisition lock timeout task is already scheduled for the batch, hence we need to schedule
+                        // the acquisition lock timeout task for the offset as well.
+                        long delayMs = ((AcquisitionLockTimerTask) inFlightState.acquisitionLockTimeoutTask).expirationMs() - time.hiResClockMs();
+                        TimerTask timerTask = scheduleAcquisitionLockTimeout(memberId, offset, offset, delayMs);
+                        offsetState.put(offset, new InFlightState(inFlightState.state, inFlightState.deliveryCount, timerTask));
+                        timer.add(timerTask);
+                    } else {
+                        offsetState.put(offset, new InFlightState(inFlightState.state, inFlightState.deliveryCount));
+                    }
+                }
+                // Cancel the acquisition lock timeout task for the batch as the offset state is maintained.
+                if (inFlightState.acquisitionLockTimeoutTask != null) {
+                    inFlightState.cancelAndClearAcquisitionLockTimeoutTask();
                 }
                 inFlightState = null;
             }
+        }
+
+        // Visible for testing.
+        TimerTask acquisitionLockTimeoutTask() {
+            if (inFlightState == null) {
+                throw new IllegalStateException("The batch state is not available as the offset state is maintained");
+            }
+            return inFlightState.acquisitionLockTimeoutTask;
+        }
+
+        private void updateAcquisitionLockTimeout(TimerTask acquisitionLockTimeoutTask) {
+            if (inFlightState == null) {
+                throw new IllegalStateException("The batch state is not available as the offset state is maintained");
+            }
+            inFlightState.acquisitionLockTimeoutTask = acquisitionLockTimeoutTask;
         }
 
         @Override
@@ -933,10 +1105,17 @@ public class SharePartition {
         private int deliveryCount;
         // The state of the records before the transition.
         private InFlightState rollbackState;
+        // The timer task for the acquisition lock timeout.
+        private TimerTask acquisitionLockTimeoutTask;
 
         InFlightState(RecordState state, int deliveryCount) {
+            this(state, deliveryCount, null);
+        }
+
+        InFlightState(RecordState state, int deliveryCount, TimerTask acquisitionLockTimeoutTask) {
           this.state = state;
           this.deliveryCount = deliveryCount;
+          this.acquisitionLockTimeoutTask = acquisitionLockTimeoutTask;
         }
 
         // Visible for testing.
@@ -947,6 +1126,20 @@ public class SharePartition {
         // Visible for testing.
         int deliveryCount() {
             return deliveryCount;
+        }
+
+        // Visible for testing.
+        TimerTask acquisitionLockTimeoutTask() {
+            return acquisitionLockTimeoutTask;
+        }
+
+        void updateAcquisitionLockTimeoutTask(TimerTask acquisitionLockTimeoutTask) {
+            this.acquisitionLockTimeoutTask = acquisitionLockTimeoutTask;
+        }
+
+        void cancelAndClearAcquisitionLockTimeoutTask() {
+            acquisitionLockTimeoutTask.cancel();
+            acquisitionLockTimeoutTask = null;
         }
 
         /**
@@ -975,7 +1168,7 @@ public class SharePartition {
 
         private InFlightState startStateTransition(RecordState newState, boolean incrementDeliveryCount) {
             try {
-                rollbackState = new InFlightState(state, deliveryCount);
+                rollbackState = new InFlightState(state, deliveryCount, acquisitionLockTimeoutTask);
                 state = state.validateTransition(newState);
                 if (incrementDeliveryCount) {
                     deliveryCount++;

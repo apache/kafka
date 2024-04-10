@@ -132,7 +132,7 @@ public class SharePartitionManager {
                 SharePartition sharePartition = partitionCacheMap.computeIfAbsent(sharePartitionKey(
                     shareFetchPartitionData.groupId, topicIdPartition),
                     k -> new SharePartition(shareFetchPartitionData.groupId, topicIdPartition, 100, 5,
-                            recordLockDurationMs, timer));
+                            recordLockDurationMs, timer, time));
                 int partitionMaxBytes = shareFetchPartitionData.partitionMaxBytes.getOrDefault(topicIdPartition, 0);
                 // Add the share partition to the list of partitions to be fetched only if we can
                 // acquire the fetch lock on it.

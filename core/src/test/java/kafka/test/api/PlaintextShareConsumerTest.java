@@ -812,4 +812,52 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
             fail("Exception occurred : " + e.getMessage());
         }
     }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testAcquisitionLockTimeoutOnConsumer(String quorum) throws InterruptedException {
+        ProducerRecord<byte[], byte[]> producerRecord1 = new ProducerRecord<>(tp().topic(), tp().partition(), null,
+                "key_1".getBytes(), "value_1".getBytes());
+        ProducerRecord<byte[], byte[]> producerRecord2 = new ProducerRecord<>(tp().topic(), tp().partition(), null,
+                "key_2".getBytes(), "value_2".getBytes());
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        Properties props = new Properties();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group1");
+        KafkaShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                props, CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer1.subscribe(Collections.singleton(tp().topic()));
+
+        producer.send(producerRecord1);
+
+        // Poll two times to receive records. The first poll puts the acquisition lock and fetches the record.
+        // Since, we are only sending one record and acquisition lock hasn't timed out, the second poll only acknowledges the
+        // record from the first poll and no more fetch.
+        ConsumerRecords<byte[], byte[]> records1 = shareConsumer1.poll(Duration.ofMillis(2000));
+        assertEquals(1, records1.count());
+        assertEquals("key_1", new String(records1.iterator().next().key()));
+        assertEquals("value_1", new String(records1.iterator().next().value()));
+        ConsumerRecords<byte[], byte[]> records2 = shareConsumer1.poll(Duration.ofMillis(2000));
+        assertEquals(0, records2.count());
+
+        producer.send(producerRecord2);
+
+        // Poll three times. The first poll puts the acquisition lock and fetches the record. Before the second poll,
+        // acquisition lock times out and hence the consumer needs to fetch the record again. Since, the acquisition lock
+        // hasn't timed out before the third poll, the third poll only acknowledges the record from the second poll and no more fetch.
+        records1 = shareConsumer1.poll(Duration.ofMillis(2000));
+        assertEquals(1, records1.count());
+        assertEquals("key_2", new String(records1.iterator().next().key()));
+        assertEquals("value_2", new String(records1.iterator().next().value()));
+        // Allowing acquisition lock to expire.
+        Thread.sleep(12000);
+        records2 = shareConsumer1.poll(Duration.ofMillis(2000));
+        assertEquals(1, records2.count());
+        assertEquals("key_2", new String(records2.iterator().next().key()));
+        assertEquals("value_2", new String(records2.iterator().next().value()));
+        ConsumerRecords<byte[], byte[]> records3 = shareConsumer1.poll(Duration.ofMillis(2000));
+        assertEquals(0, records3.count());
+
+        producer.close();
+        shareConsumer1.close();
+    }
 }
