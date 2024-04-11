@@ -92,6 +92,12 @@ public class RecordHelpersTest {
 
     @Test
     public void testNewMemberSubscriptionRecord() {
+        ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection collection =
+            new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection();
+        collection.add(new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
             .setInstanceId("instance-id")
             .setRackId("rack-id")
@@ -101,6 +107,9 @@ public class RecordHelpersTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "zar", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(collection)
+            )
             .build();
 
         Record expectedRecord = new Record(
@@ -118,7 +127,10 @@ public class RecordHelpersTest {
                     .setClientHost("client-host")
                     .setSubscribedTopicNames(Arrays.asList("bar", "foo", "zar"))
                     .setSubscribedTopicRegex("regex")
-                    .setServerAssignor("range"),
+                    .setServerAssignor("range")
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(collection)
+                    ),
                 (short) 0));
 
         assertEquals(expectedRecord, newMemberSubscriptionRecord(

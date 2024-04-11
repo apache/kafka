@@ -70,8 +70,7 @@ public class ConsumerGroupMember {
         private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
         private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Collections.emptyMap();
         // The default value of supportedProtocols cannot be null, or its record will not be able to convert to String.
-        private ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols =
-            new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection();
+        private ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata = null;
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);
@@ -94,7 +93,7 @@ public class ConsumerGroupMember {
             this.state = member.state;
             this.assignedPartitions = member.assignedPartitions;
             this.partitionsPendingRevocation = member.partitionsPendingRevocation;
-            this.supportedProtocols = member.supportedProtocols;
+            this.classicMemberMetadata = member.classicMemberMetadata;
         }
 
         public Builder updateMemberEpoch(int memberEpoch) {
@@ -201,22 +200,23 @@ public class ConsumerGroupMember {
             return this;
         }
 
-        public Builder setSupportedProtocols(ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols) {
-            this.supportedProtocols = supportedProtocols;
+        public Builder setClassicMemberMetadata(ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata) {
+            this.classicMemberMetadata = classicMemberMetadata;
             return this;
         }
 
-        public Builder setSupportedProtocols(JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols) {
-            ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection newSupportedProtocols =
-                new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection();
+        public Builder setSupportedClassicProtocols(JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols) {
+            ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection newSupportedProtocols =
+                new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection();
             protocols.forEach(protocol ->
                 newSupportedProtocols.add(
-                    new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocol()
+                    new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocol()
                         .setName(protocol.name())
                         .setMetadata(protocol.metadata())
                 )
             );
-            this.supportedProtocols = newSupportedProtocols;
+            this.classicMemberMetadata = new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(newSupportedProtocols);
             return this;
         }
 
@@ -229,7 +229,7 @@ public class ConsumerGroupMember {
             setSubscribedTopicRegex(record.subscribedTopicRegex());
             setRebalanceTimeoutMs(record.rebalanceTimeoutMs());
             setServerAssignorName(record.serverAssignor());
-            setSupportedProtocols(record.supportedProtocols());
+            setClassicMemberMetadata(record.classicMemberMetadata());
             return this;
         }
 
@@ -266,7 +266,7 @@ public class ConsumerGroupMember {
                 state,
                 assignedPartitions,
                 partitionsPendingRevocation,
-                supportedProtocols
+                classicMemberMetadata
             );
         }
     }
@@ -342,9 +342,9 @@ public class ConsumerGroupMember {
     private final Map<Uuid, Set<Integer>> partitionsPendingRevocation;
 
     /**
-     * The list of supported protocols if the consumer uses the legacy protocol.
+     * The classic member metadata if the consumer uses the classic protocol.
      */
-    private final ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols;
+    private final ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata;
 
     private ConsumerGroupMember(
         String memberId,
@@ -361,7 +361,7 @@ public class ConsumerGroupMember {
         MemberState state,
         Map<Uuid, Set<Integer>> assignedPartitions,
         Map<Uuid, Set<Integer>> partitionsPendingRevocation,
-        ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols
+        ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata
     ) {
         this.memberId = memberId;
         this.memberEpoch = memberEpoch;
@@ -377,7 +377,7 @@ public class ConsumerGroupMember {
         this.serverAssignorName = serverAssignorName;
         this.assignedPartitions = assignedPartitions;
         this.partitionsPendingRevocation = partitionsPendingRevocation;
-        this.supportedProtocols = supportedProtocols;
+        this.classicMemberMetadata = classicMemberMetadata;
     }
 
     /**
@@ -500,13 +500,10 @@ public class ConsumerGroupMember {
         return partitionsPendingRevocation;
     }
 
-    /**
-     * @return The list of protocols if the consumer uses the old protocol.
-     */
     public JoinGroupRequestData.JoinGroupRequestProtocolCollection supportedJoinGroupRequestProtocols() {
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
-            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(supportedProtocols.size());
-        supportedProtocols.forEach(protocol ->
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(supportedClassicProtocols().size());
+        supportedClassicProtocols().forEach(protocol ->
             protocols.add(
                 new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName(protocol.name())
@@ -517,10 +514,21 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * @return The list of protocols if the consumer uses the old protocol.
+     * @return The classicMemberMetadata if the consumer uses the classic protocol.
      */
-    public ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection supportedProtocols() {
-        return supportedProtocols;
+    public Optional<ConsumerGroupMemberMetadataValue.ClassicMemberMetadata> classicMemberMetadata() {
+        return Optional.ofNullable(classicMemberMetadata);
+    }
+
+    /**
+     * @return The list of protocols if the consumer uses the classic protocol.
+     */
+    public ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection supportedClassicProtocols() {
+        if (useClassicProtocol()) {
+            return classicMemberMetadata.supportedProtocols();
+        } else {
+            return null;
+        }
     }
 
     /**
@@ -579,8 +587,8 @@ public class ConsumerGroupMember {
         }
     }
 
-    public boolean useLegacyProtocol() {
-        return !supportedProtocols.isEmpty();
+    public boolean useClassicProtocol() {
+        return classicMemberMetadata != null;
     }
 
     @Override
@@ -602,7 +610,7 @@ public class ConsumerGroupMember {
             && Objects.equals(serverAssignorName, that.serverAssignorName)
             && Objects.equals(assignedPartitions, that.assignedPartitions)
             && Objects.equals(partitionsPendingRevocation, that.partitionsPendingRevocation)
-            && Objects.equals(supportedProtocols, that.supportedProtocols);
+            && Objects.equals(classicMemberMetadata, that.classicMemberMetadata);
     }
 
     @Override
@@ -621,7 +629,7 @@ public class ConsumerGroupMember {
         result = 31 * result + Objects.hashCode(serverAssignorName);
         result = 31 * result + Objects.hashCode(assignedPartitions);
         result = 31 * result + Objects.hashCode(partitionsPendingRevocation);
-        result = 31 * result + Objects.hashCode(supportedProtocols);
+        result = 31 * result + Objects.hashCode(classicMemberMetadata);
         return result;
     }
 
@@ -642,7 +650,7 @@ public class ConsumerGroupMember {
             ", serverAssignorName='" + serverAssignorName + '\'' +
             ", assignedPartitions=" + assignedPartitions +
             ", partitionsPendingRevocation=" + partitionsPendingRevocation +
-            ", supportedProtocols='" + supportedProtocols + '\'' +
+            ", classicMemberMetadata='" + classicMemberMetadata + '\'' +
             ')';
     }
 

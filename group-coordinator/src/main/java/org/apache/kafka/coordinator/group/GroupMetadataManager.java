@@ -854,19 +854,16 @@ public class GroupMetadataManager {
      */
     private boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
         if (!consumerGroupMigrationPolicy.isUpgradeEnabled()) {
-            log.debug("Online upgrade is invalid because the consumer group {} migration config is {} so online upgrade is not enabled.",
-                classicGroup.groupId(), consumerGroupMigrationPolicy);
-            return false;
-        } else if (classicGroup.isInState(DEAD)) {
-            log.debug("Online upgrade is invalid because the classic group {} is in DEAD state.", classicGroup.groupId());
+            log.info("Cannot upgrade classic group {} to consumer group because the online upgrade is disabled",
+                classicGroup.groupId());
             return false;
         } else if (!classicGroup.usesConsumerGroupProtocol()) {
-            log.debug("Online upgrade is invalid because the classic group {} has protocol type {} and doesn't use the consumer group protocol.",
-                classicGroup.groupId(), classicGroup.protocolType().orElse(""));
+            log.info("Cannot upgrade classic group {} to consumer group because the group does not use the consumer embedded protocol.",
+                classicGroup.groupId());
             return false;
         } else if (classicGroup.size() > consumerGroupMaxSize) {
-            log.debug("Online upgrade is invalid because the classic group {} size {} exceeds the consumer group maximum size {}.",
-                classicGroup.groupId(), classicGroup.size(), consumerGroupMaxSize);
+            log.info("Cannot upgrade classic group {} to consumer group because the group size exceeds the consumer group maximum size.",
+                classicGroup.groupId());
             return false;
         }
         return true;
@@ -888,9 +885,11 @@ public class GroupMetadataManager {
         classicGroup.completeAllSyncFutures(Errors.REBALANCE_IN_PROGRESS);
 
         classicGroup.createGroupTombstoneRecords(records);
-        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, logContext, classicGroup.groupId(), metrics);
-        consumerGroup.fromClassicGroup(classicGroup, records, metadataImage.topics());
+        ConsumerGroup consumerGroup =
+            ConsumerGroup.fromClassicGroup(snapshotRegistry, logContext, metrics, classicGroup, records, metadataImage.topics());
 
+        // Create the session timeouts for the new members. If the conversion fails, the group will remain a
+        // classic group, thus these timers will fail the group type check and do nothing.
         consumerGroup.members().forEach((memberId, __) ->
             scheduleConsumerGroupSessionTimeout(consumerGroup.groupId(), memberId)
         );

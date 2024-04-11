@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
@@ -193,9 +194,14 @@ public class ConsumerGroup implements Group {
     private DeadlineAndEpoch metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
 
     /**
-     * Map of protocol names to the number of members that use legacy protocol and support them.
+     * The number of members that use the classic protocol.
      */
-    private final TimelineHashMap<String, Integer> legacyProtocolMembersSupportedProtocols;
+    private final TimelineInteger numClassicProtocolMember;
+
+    /**
+     * Map of protocol names to the number of members that use classic protocol and support them.
+     */
+    private final TimelineHashMap<String, Integer> classicProtocolMembersSupportedProtocols;
 
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
@@ -217,7 +223,8 @@ public class ConsumerGroup implements Group {
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
-        this.legacyProtocolMembersSupportedProtocols = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.numClassicProtocolMember = new TimelineInteger(snapshotRegistry);
+        this.classicProtocolMembersSupportedProtocols = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
@@ -311,6 +318,15 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Sets the number of members using the classic protocol.
+     *
+     * @param numClassicProtocolMember The new NumClassicProtocolMember.
+     */
+    public void setNumClassicProtocolMember(int numClassicProtocolMember) {
+        this.numClassicProtocolMember.set(numClassicProtocolMember);
+    }
+
+    /**
      * Get member id of a static member that matches the given group
      * instance id.
      *
@@ -375,7 +391,8 @@ public class ConsumerGroup implements Group {
         maybeUpdatePartitionEpoch(oldMember, newMember);
         updateStaticMember(newMember);
         maybeUpdateGroupState();
-        maybeUpdateLegacyProtocolMembersSupportedProtocols(oldMember, newMember);
+        maybeUpdateNumClassicProtocolMember(oldMember, newMember);
+        maybeUpdateClassicProtocolMembersSupportedProtocols(oldMember, newMember);
     }
 
     /**
@@ -401,6 +418,8 @@ public class ConsumerGroup implements Group {
         maybeRemovePartitionEpoch(oldMember);
         removeStaticMember(oldMember);
         maybeUpdateGroupState();
+        maybeUpdateNumClassicProtocolMember(oldMember, null);
+        maybeUpdateClassicProtocolMembersSupportedProtocols(oldMember, null);
     }
 
     /**
@@ -433,17 +452,17 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return The number of members that use the legacy protocol.
+     * @return The number of members that use the classic protocol.
      */
-    public int numLegacyProtocolMember() {
-        return (int) members.values().stream().filter(member -> member.useLegacyProtocol()).count();
+    public int numClassicProtocolMember() {
+        return numClassicProtocolMember.get();
     }
 
     /**
-     * @return The map of the protocol name and the number of members using the legacy protocol that support it.
+     * @return The map of the protocol name and the number of members using the classic protocol that support it.
      */
-    public Map<String, Integer> legacyMembersSupportedProtocols() {
-        return Collections.unmodifiableMap(legacyProtocolMembersSupportedProtocols);
+    public Map<String, Integer> classicMembersSupportedProtocols() {
+        return Collections.unmodifiableMap(classicProtocolMembersSupportedProtocols);
     }
 
     /**
@@ -863,23 +882,43 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Updates the supported protocol count of the members that use the legacy protocol.
+     * Updates the number of the members that use the classic protocol.
      *
      * @param oldMember The old member.
      * @param newMember The new member.
      */
-    private void maybeUpdateLegacyProtocolMembersSupportedProtocols(
+    private void maybeUpdateNumClassicProtocolMember(
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
-        if (oldMember != null) {
-            oldMember.supportedProtocols().forEach(protocol ->
-                legacyProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::decValue)
+        int delta = 0;
+        if (oldMember != null && oldMember.useClassicProtocol()) {
+            delta--;
+        }
+        if (newMember != null && newMember.useClassicProtocol()) {
+            delta++;
+        }
+        setNumClassicProtocolMember(numClassicProtocolMember() + delta);
+    }
+
+    /**
+     * Updates the supported protocol count of the members that use the classic protocol.
+     *
+     * @param oldMember The old member.
+     * @param newMember The new member.
+     */
+    private void maybeUpdateClassicProtocolMembersSupportedProtocols(
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
+    ) {
+        if (oldMember != null && oldMember.useClassicProtocol()) {
+            oldMember.supportedClassicProtocols().forEach(protocol ->
+                classicProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::decValue)
             );
         }
-        if (newMember != null) {
-            newMember.supportedProtocols().forEach(protocol ->
-                legacyProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::incValue)
+        if (newMember != null && newMember.useClassicProtocol()) {
+            newMember.supportedClassicProtocols().forEach(protocol ->
+                classicProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::incValue)
             );
         }
     }
@@ -1057,67 +1096,74 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @param memberId The fenced member id.
+     * Create a new consumer group according to the given classic group.
+     * Add the records for the creation.
      *
-     * @return A boolean indicating whether the group members all use legacy protocol if the given member leaves the group.
-     */
-    public boolean allUseLegacyProtocol(String memberId) {
-        for (ConsumerGroupMember member : members().values()) {
-            if (!member.memberId().equals(memberId) && !member.useLegacyProtocol()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Set the attributes of the consumer group according to a classic group.
-     * Add the records for creating and updating the consumer group.
-     *
+     * @param snapshotRegistry  The SnapshotRegistry.
+     * @param logContext        The LogContext.
+     * @param metrics           The GroupCoordinatorMetricsShard.
      * @param classicGroup      The converted classic group.
      * @param records           The list to which the new records are added.
+     * @param topicsImage       The TopicsImage for topic id and topic name conversion.
+     * @return  The created ConsumerGruop.
      */
-    public void fromClassicGroup(
+    public static ConsumerGroup fromClassicGroup(
+        SnapshotRegistry snapshotRegistry,
+        LogContext logContext,
+        GroupCoordinatorMetricsShard metrics,
         ClassicGroup classicGroup,
         List<Record> records,
         TopicsImage topicsImage
     ) {
-        setGroupEpoch(classicGroup.generationId());
-        records.add(RecordHelpers.newGroupEpochRecord(groupId(), classicGroup.generationId()));
-        // SubscriptionMetadata will be computed in the following consumerGroupHeartbeat.
-        records.add(RecordHelpers.newGroupSubscriptionMetadataRecord(groupId(), Collections.emptyMap()));
+        String groupId = classicGroup.groupId();
+        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, logContext, groupId, metrics);
 
-        setTargetAssignmentEpoch(classicGroup.generationId());
-        records.add(RecordHelpers.newTargetAssignmentEpochRecord(groupId(), classicGroup.generationId()));
-
-        classicGroup.allMembers().forEach(member -> {
+        classicGroup.allMembers().forEach(classicGroupMember -> {
             try {
-                ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment()));
+                ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(classicGroupMember.assignment()));
                 Map<Uuid, Set<Integer>> partitions = topicPartitionMapFromList(assignment.partitions(), topicsImage);
-                ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(member.metadata(classicGroup.protocolName().get())));
+                ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().get())));
 
-                ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(member.memberId())
+                ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(classicGroupMember.memberId())
                     .setMemberEpoch(classicGroup.generationId())
                     .setPreviousMemberEpoch(classicGroup.generationId())
-                    .setInstanceId(member.groupInstanceId().orElse(null))
+                    .setInstanceId(classicGroupMember.groupInstanceId().orElse(null))
                     .setRackId(subscription.rackId().orElse(null))
-                    .setRebalanceTimeoutMs(member.rebalanceTimeoutMs())
-                    .setClientId(member.clientId())
-                    .setClientHost(member.clientHost())
+                    .setRebalanceTimeoutMs(classicGroupMember.rebalanceTimeoutMs())
+                    .setClientId(classicGroupMember.clientId())
+                    .setClientHost(classicGroupMember.clientHost())
                     .setSubscribedTopicNames(subscription.topics())
                     .setAssignedPartitions(partitions)
-                    .setSupportedProtocols(member.supportedProtocols())
+                    .setSupportedClassicProtocols(classicGroupMember.supportedProtocols())
                     .build();
-                updateMember(newMember);
-
-                records.add(RecordHelpers.newMemberSubscriptionRecord(groupId(), newMember));
-                records.add(RecordHelpers.newCurrentAssignmentRecord(groupId(), newMember));
-                records.add(RecordHelpers.newTargetAssignmentRecord(groupId(), member.memberId(), partitions));
+                consumerGroup.updateMember(newMember);
             } catch (SchemaException e) {
-                log.warn("Failed to parse Consumer Protocol " + ConsumerProtocol.PROTOCOL_TYPE + ":" +
-                    classicGroup.protocolName().get() + " of group " + groupId + ".", e);
+                consumerGroup.log.warn("Cannot upgrade the classic group " + groupId + " to a consumer group because of the failure" +
+                    "to parse the Consumer Protocol " + ConsumerProtocol.PROTOCOL_TYPE + ":" + classicGroup.protocolName().get() + ".", e);
+
+                throw new GroupIdNotFoundException(String.format("Fail to upgrade the classic group %s.", groupId));
             }
         });
+
+        consumerGroup.members().forEach((__, consumerGroupMember) ->
+            records.add(RecordHelpers.newMemberSubscriptionRecord(groupId, consumerGroupMember))
+        );
+
+        consumerGroup.setGroupEpoch(classicGroup.generationId());
+        records.add(RecordHelpers.newGroupEpochRecord(groupId, classicGroup.generationId()));
+
+        consumerGroup.members().forEach((consumerGroupMemberId, consumerGroupMember) ->
+            records.add(RecordHelpers.newTargetAssignmentRecord(groupId, consumerGroupMemberId, consumerGroupMember.assignedPartitions()))
+        );
+
+        consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
+        records.add(RecordHelpers.newTargetAssignmentEpochRecord(groupId, classicGroup.generationId()));
+
+        consumerGroup.members().forEach((__, consumerGroupMember) ->
+            records.add(RecordHelpers.newCurrentAssignmentRecord(groupId, consumerGroupMember))
+        );
+
+        return consumerGroup;
     }
 
     /**
@@ -1131,7 +1177,8 @@ public class ConsumerGroup implements Group {
         partitions.forEach(topicPartition -> {
             TopicImage topicImage = topicsImage.getTopic(topicPartition.topic());
             if (topicImage != null) {
-                topicPartitionMap.computeIfAbsent(topicImage.id(), __ -> new HashSet<>())
+                topicPartitionMap
+                    .computeIfAbsent(topicImage.id(), __ -> new HashSet<>())
                     .add(topicPartition.partition());
             }
         });
@@ -1141,20 +1188,27 @@ public class ConsumerGroup implements Group {
     /**
      * Checks whether at least one of the given protocols can be supported. A
      * protocol can be supported if it is supported by all members that use the
-     * legacy protocol.
+     * classic protocol.
      *
      * @param memberProtocolType  the member protocol type.
      * @param memberProtocols     the set of protocol names.
      *
      * @return a boolean based on the condition mentioned above.
      */
-    public boolean supportsProtocols(String memberProtocolType, Set<String> memberProtocols) {
+    public boolean supportsClassicProtocols(String memberProtocolType, Set<String> memberProtocols) {
         if (isEmpty()) {
             return !memberProtocolType.isEmpty() && !memberProtocols.isEmpty();
         } else {
             return ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType) &&
                 memberProtocols.stream()
-                    .anyMatch(name -> legacyProtocolMembersSupportedProtocols.getOrDefault(name, 0) == numLegacyProtocolMember());
+                    .anyMatch(name -> classicProtocolMembersSupportedProtocols.getOrDefault(name, 0) == numClassicProtocolMember());
         }
+    }
+
+    /**
+     * @return The boolean indicating whether all the members use the classic protocol.
+     */
+    public boolean allUseClassicProtocol() {
+        return numClassicProtocolMember() == members().size();
     }
 }

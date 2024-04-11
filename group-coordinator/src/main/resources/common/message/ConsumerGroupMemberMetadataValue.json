@@ -36,12 +36,19 @@
       "about": "The rebalance timeout" },
     { "name": "ServerAssignor", "versions": "0+", "nullableVersions": "0+", "type": "string",
       "about": "The server assignor to use; or null if not used." },
-    { "name": "SupportedProtocols", "type": "[]ClassicJoinGroupRequestProtocol", "versions": "0+",
-      "about": "The list of protocols that the member supports if the consumer uses the legacy protocol.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
-        "about": "The protocol name." },
-      { "name": "Metadata", "type": "bytes", "versions": "0+",
-        "about": "The protocol metadata." }
-    ]}
+    { "name": "ClassicMemberMetadata", "versions": "0+", "nullableVersions": "0+", "type": "ClassicMemberMetadata",
+      "about": "The classic member metadata.",
+      "fields": [
+        { "name": "SupportedProtocols", "type": "[]JoinGroupRequestProtocol", "versions": "0+",
+          "about": "The list of protocols that the member supports if the consumer uses the classic protocol.",
+          "fields": [
+            { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
+              "about": "The protocol name."},
+            { "name": "Metadata", "type": "bytes", "versions": "0+",
+              "about": "The protocol metadata."}
+          ]
+        }
+      ]
+    }
   ]
 }
