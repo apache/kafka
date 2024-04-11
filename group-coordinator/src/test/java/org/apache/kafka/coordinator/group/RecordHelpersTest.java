@@ -92,9 +92,9 @@ public class RecordHelpersTest {
 
     @Test
     public void testNewMemberSubscriptionRecord() {
-        ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection collection =
-            new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection();
-        collection.add(new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocol()
+        ConsumerGroupMemberMetadataValue.ClassicProtocolCollection collection =
+            new ConsumerGroupMemberMetadataValue.ClassicProtocolCollection();
+        collection.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("range")
             .setMetadata(new byte[0]));
 

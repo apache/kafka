@@ -1056,18 +1056,18 @@ public class ConsumerGroupTest {
     @Test
     public void testSupportsProtocols() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
-        ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection collection1 =
-            new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection();
-        collection1.add(new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocol()
+        ConsumerGroupMemberMetadataValue.ClassicProtocolCollection collection1 =
+            new ConsumerGroupMemberMetadataValue.ClassicProtocolCollection();
+        collection1.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("range")
             .setMetadata(new byte[0]));
 
-        ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection collection2 =
-            new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection();
-        collection2.add(new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocol()
+        ConsumerGroupMemberMetadataValue.ClassicProtocolCollection collection2 =
+            new ConsumerGroupMemberMetadataValue.ClassicProtocolCollection();
+        collection2.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("roundrobin")
             .setMetadata(new byte[0]));
-        collection2.add(new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocol()
+        collection2.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("range")
             .setMetadata(new byte[0]));
 
@@ -1121,9 +1121,9 @@ public class ConsumerGroupTest {
     @Test
     public void testAllUseClassicProtocol() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
-        ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection collection =
-            new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection();
-        collection.add(new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocol()
+        ConsumerGroupMemberMetadataValue.ClassicProtocolCollection collection =
+            new ConsumerGroupMemberMetadataValue.ClassicProtocolCollection();
+        collection.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("range")
             .setMetadata(new byte[0]));
 
