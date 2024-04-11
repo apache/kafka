@@ -32,7 +32,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.KafkaLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -49,7 +49,7 @@ class RaftManagerTest {
   ): KafkaConfig = {
     val props = new Properties
     logDir.foreach { value =>
-      props.setProperty(LOG_DIR_CONFIG, value.toString)
+      props.setProperty(KafkaLogConfigs.LOG_DIR_CONFIG, value.toString)
     }
     metadataDir.foreach { value =>
       props.setProperty(KafkaConfig.MetadataLogDirProp, value.toString)

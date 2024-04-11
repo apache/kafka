@@ -91,8 +91,8 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.server.config.KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
-import static org.apache.kafka.server.config.KafkaConfig.LOG_DIR_CONFIG;
+import static org.apache.kafka.server.config.KafkaLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
+import static org.apache.kafka.server.config.KafkaLogConfigs.LOG_DIR_CONFIG;
 
 /**
  * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for

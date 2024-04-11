@@ -58,7 +58,7 @@ import org.apache.kafka.image._
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationState
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.KafkaLogConfigs
 import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
@@ -4793,7 +4793,7 @@ class ReplicaManagerTest {
     val topicPartition = new TopicPartition(topic, 0)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
-      propsModifier = props => props.put(LOG_DIRS_CONFIG, dataDir.getAbsolutePath)
+      propsModifier = props => props.put(KafkaLogConfigs.LOG_DIRS_CONFIG, dataDir.getAbsolutePath)
     )
 
     try {
@@ -5603,7 +5603,7 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
       brokerId = localId,
-      propsModifier = props => props.put(LOG_DIRS_CONFIG, dataDir.getAbsolutePath),
+      propsModifier = props => props.put(KafkaLogConfigs.LOG_DIRS_CONFIG, dataDir.getAbsolutePath),
       enableRemoteStorage = true
     )
 

@@ -24,7 +24,7 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.KafkaLogConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -56,7 +56,7 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     val topicConfig = new Properties()
-    topicConfig.put(MIN_IN_SYNC_REPLICAS_CONFIG, 1.toString)
+    topicConfig.put(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, 1.toString)
     createTopic(topic1, numPartitions, numBrokers, topicConfig)
     createTopic(topic2, numPartitions, numBrokers, topicConfig)
 
@@ -103,7 +103,7 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
 
   private def serverProps() = {
     val serverProps = new Properties()
-    serverProps.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
+    serverProps.put(KafkaLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
     serverProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
     serverProps.put(KafkaConfig.OffsetsTopicReplicationFactorProp, 1.toString)
     serverProps.put(KafkaConfig.TransactionsTopicPartitionsProp, 1.toString)

@@ -25,7 +25,7 @@ import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicCon
 import org.apache.kafka.common.errors.{InvalidConfigurationException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentState}
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.KafkaLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{BeforeEach, Tag, TestInfo}
@@ -388,9 +388,9 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, sysRemoteStorageEnabled.toString)
     props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, storageManagerClassName)
     props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, metadataManagerClassName)
-    props.put(LOG_RETENTION_TIME_MILLIS_CONFIG, "2000")
+    props.put(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "2000")
     props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "1000")
-    props.put(LOG_RETENTION_BYTES_CONFIG, "2048")
+    props.put(KafkaLogConfigs.LOG_RETENTION_BYTES_CONFIG, "2048")
     props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "1024")
     props
   }

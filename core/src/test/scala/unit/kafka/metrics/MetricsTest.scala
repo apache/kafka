@@ -21,7 +21,7 @@ import java.lang.management.ManagementFactory
 import java.util.Properties
 import javax.management.ObjectName
 import com.yammer.metrics.core.{Gauge, MetricPredicate}
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.KafkaLogConfigs
 import org.junit.jupiter.api.Assertions._
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
@@ -47,7 +47,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
   val requiredKafkaServerPrefix = "kafka.server:type=KafkaServer,name"
   val overridingProps = new Properties
-  overridingProps.put(NUM_PARTITIONS_CONFIG, numParts.toString)
+  overridingProps.put(KafkaLogConfigs.NUM_PARTITIONS_CONFIG, numParts.toString)
   overridingProps.put(JmxReporter.EXCLUDE_CONFIG, s"$requiredKafkaServerPrefix=ClusterId")
 
   def generateConfigs: Seq[KafkaConfig] =

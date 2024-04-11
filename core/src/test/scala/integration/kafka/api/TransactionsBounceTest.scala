@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.KafkaLogConfigs
 import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -43,7 +43,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   private val inputTopic = "input-topic"
 
   val overridingProps = new Properties()
-  overridingProps.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
+  overridingProps.put(KafkaLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
   overridingProps.put(KafkaConfig.MessageMaxBytesProp, serverMessageMaxBytes.toString)
   // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
   // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
@@ -52,7 +52,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   overridingProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
   overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
   overridingProps.put(KafkaConfig.OffsetsTopicReplicationFactorProp, 3.toString)
-  overridingProps.put(MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
+  overridingProps.put(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
   overridingProps.put(KafkaConfig.TransactionsTopicPartitionsProp, 1.toString)
   overridingProps.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 3.toString)
   overridingProps.put(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
@@ -185,7 +185,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
 
   private def createTopics() =  {
     val topicConfig = new Properties()
-    topicConfig.put(MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
+    topicConfig.put(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
     createTopic(inputTopic, numPartitions, 3, topicConfig)
     createTopic(outputTopic, numPartitions, 3, topicConfig)
   }

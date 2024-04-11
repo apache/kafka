@@ -27,7 +27,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.KafkaLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -42,7 +42,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   val numServers = 2
 
   val overridingProps = new Properties()
-  overridingProps.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
+  overridingProps.put(KafkaLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
   overridingProps.put(KafkaConfig.MessageMaxBytesProp, serverMessageMaxBytes.toString)
   overridingProps.put(KafkaConfig.ReplicaFetchMaxBytesProp, replicaFetchMaxPartitionBytes.toString)
   overridingProps.put(KafkaConfig.ReplicaFetchResponseMaxBytesDoc, replicaFetchMaxResponseBytes.toString)

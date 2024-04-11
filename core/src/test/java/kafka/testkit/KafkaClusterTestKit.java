@@ -73,7 +73,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.apache.kafka.server.config.KafkaConfig.LOG_DIRS_CONFIG;
+import static org.apache.kafka.server.config.KafkaLogConfigs.LOG_DIRS_CONFIG;
 
 
 @SuppressWarnings("deprecation") // Needed for Scala 2.12 compatibility

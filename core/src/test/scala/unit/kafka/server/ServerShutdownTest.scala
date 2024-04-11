@@ -37,7 +37,7 @@ import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.KafkaLogConfigs
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}
@@ -65,11 +65,11 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     priorConfig.foreach { config =>
       // keep the same log directory
       val originals = config.originals
-      val logDirsValue = originals.get(LOG_DIRS_CONFIG)
+      val logDirsValue = originals.get(KafkaLogConfigs.LOG_DIRS_CONFIG)
       if (logDirsValue != null) {
-        propsToChangeUponRestart.put(LOG_DIRS_CONFIG, logDirsValue)
+        propsToChangeUponRestart.put(KafkaLogConfigs.LOG_DIRS_CONFIG, logDirsValue)
       } else {
-        propsToChangeUponRestart.put(LOG_DIR_CONFIG, originals.get(LOG_DIR_CONFIG))
+        propsToChangeUponRestart.put(KafkaLogConfigs.LOG_DIR_CONFIG, originals.get(KafkaLogConfigs.LOG_DIR_CONFIG))
       }
     }
     priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnectOrNull).head, propsToChangeUponRestart))

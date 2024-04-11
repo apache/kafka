@@ -46,7 +46,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.config.{Defaults, KafkaSecurityConfigs, ServerTopicConfigSynonyms, ZkConfigs}
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.KafkaLogConfigs
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Csv
@@ -524,7 +524,7 @@ object KafkaConfig {
     "for the current transaction before expiring its transactional id. Transactional IDs will not expire while a the transaction is still ongoing."
   val TransactionsMaxTimeoutMsDoc = "The maximum allowed timeout for transactions. " +
     "If a client’s requested transaction time exceed this, then the broker will return an error in InitProducerIdRequest. This prevents a client from too large of a timeout, which can stall consumers reading from topics included in the transaction."
-  val TransactionsTopicMinISRDoc = "Overridden " + MIN_IN_SYNC_REPLICAS_CONFIG + " config for the transaction topic."
+  val TransactionsTopicMinISRDoc = "Overridden " + KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG + " config for the transaction topic."
   val TransactionsLoadBufferSizeDoc = "Batch size for reading from the transaction log segments when loading producer ids and transactions into the cache (soft-limit, overridden if records are too large)."
   val TransactionsTopicReplicationFactorDoc = "The replication factor for the transaction topic (set higher to ensure availability). " +
     "Internal topic creation will fail until the cluster size meets this replication factor requirement."
@@ -703,24 +703,24 @@ object KafkaConfig {
       .define(RackProp, STRING, null, MEDIUM, RackDoc)
 
       /** ********* Log Configuration ***********/
-      .define(NUM_PARTITIONS_CONFIG, INT, Defaults.NUM_PARTITIONS, atLeast(1), MEDIUM, NUM_PARTITIONS_DOC)
-      .define(LOG_DIR_CONFIG, STRING, Defaults.LOG_DIR, HIGH, LOG_DIR_DOC)
-      .define(LOG_DIRS_CONFIG, STRING, null, HIGH, LOG_DIRS_DOC)
-      .define(LOG_SEGMENT_BYTES_CONFIG, INT, LogConfig.DEFAULT_SEGMENT_BYTES, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), HIGH, LOG_SEGMENT_BYTES_DOC)
+      .define(KafkaLogConfigs.NUM_PARTITIONS_CONFIG, INT, KafkaLogConfigs.NUM_PARTITIONS_DEFAULT, atLeast(1), MEDIUM, KafkaLogConfigs.NUM_PARTITIONS_DOC)
+      .define(KafkaLogConfigs.LOG_DIR_CONFIG, STRING, KafkaLogConfigs.LOG_DIR_DEFAULT, HIGH, KafkaLogConfigs.LOG_DIR_DOC)
+      .define(KafkaLogConfigs.LOG_DIRS_CONFIG, STRING, null, HIGH, KafkaLogConfigs.LOG_DIRS_DOC)
+      .define(KafkaLogConfigs.LOG_SEGMENT_BYTES_CONFIG, INT, LogConfig.DEFAULT_SEGMENT_BYTES, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), HIGH, KafkaLogConfigs.LOG_SEGMENT_BYTES_DOC)
 
-      .define(LOG_ROLL_TIME_MILLIS_CONFIG, LONG, null, HIGH, LOG_ROLL_TIME_MILLIS_DOC)
-      .define(LOG_ROLL_TIME_HOURS_CONFIG, INT, TimeUnit.MILLISECONDS.toHours(LogConfig.DEFAULT_SEGMENT_MS).toInt, atLeast(1), HIGH, LOG_ROLL_TIME_HOURS_DOC)
+      .define(KafkaLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, LONG, null, HIGH, KafkaLogConfigs.LOG_ROLL_TIME_MILLIS_DOC)
+      .define(KafkaLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, INT, TimeUnit.MILLISECONDS.toHours(LogConfig.DEFAULT_SEGMENT_MS).toInt, atLeast(1), HIGH, KafkaLogConfigs.LOG_ROLL_TIME_HOURS_DOC)
 
-      .define(LOG_ROLL_TIME_JITTER_MILLIS_CONFIG, LONG, null, HIGH, LOG_ROLL_TIME_JITTER_MILLIS_DOC)
-      .define(LOG_ROLL_TIME_JITTER_HOURS_CONFIG, INT, TimeUnit.MILLISECONDS.toHours(LogConfig.DEFAULT_SEGMENT_JITTER_MS).toInt, atLeast(0), HIGH, LOG_ROLL_TIME_JITTER_HOURS_DOC)
+      .define(KafkaLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG, LONG, null, HIGH, KafkaLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_DOC)
+      .define(KafkaLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG, INT, TimeUnit.MILLISECONDS.toHours(LogConfig.DEFAULT_SEGMENT_JITTER_MS).toInt, atLeast(0), HIGH, KafkaLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_DOC)
 
-      .define(LOG_RETENTION_TIME_MILLIS_CONFIG, LONG, null, HIGH, LOG_RETENTION_TIME_MILLIS_DOC)
-      .define(LOG_RETENTION_TIME_MINUTES_CONFIG, INT, null, HIGH, LOG_RETENTION_TIME_MINUTES_DOC)
-      .define(LOG_RETENTION_TIME_HOURS_CONFIG, INT, TimeUnit.MILLISECONDS.toHours(LogConfig.DEFAULT_RETENTION_MS).toInt, HIGH, LOG_RETENTION_TIME_HOURS_DOC)
+      .define(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, LONG, null, HIGH, KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_DOC)
+      .define(KafkaLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG, INT, null, HIGH, KafkaLogConfigs.LOG_RETENTION_TIME_MINUTES_DOC)
+      .define(KafkaLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, INT, TimeUnit.MILLISECONDS.toHours(LogConfig.DEFAULT_RETENTION_MS).toInt, HIGH, KafkaLogConfigs.LOG_RETENTION_TIME_HOURS_DOC)
 
-      .define(LOG_RETENTION_BYTES_CONFIG, LONG, LogConfig.DEFAULT_RETENTION_BYTES, HIGH, LOG_RETENTION_BYTES_DOC)
-      .define(LOG_CLEANUP_INTERVAL_MS_CONFIG, LONG, Defaults.LOG_CLEANUP_INTERVAL_MS, atLeast(1), MEDIUM, LOG_CLEANUP_INTERVAL_MS_DOC)
-      .define(LOG_CLEANUP_POLICY_CONFIG, LIST, LogConfig.DEFAULT_CLEANUP_POLICY, ValidList.in(TopicConfig.CLEANUP_POLICY_COMPACT, TopicConfig.CLEANUP_POLICY_DELETE), MEDIUM, LOG_CLEANUP_POLICY_DOC)
+      .define(KafkaLogConfigs.LOG_RETENTION_BYTES_CONFIG, LONG, LogConfig.DEFAULT_RETENTION_BYTES, HIGH, KafkaLogConfigs.LOG_RETENTION_BYTES_DOC)
+      .define(KafkaLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG, LONG, KafkaLogConfigs.LOG_CLEANUP_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, KafkaLogConfigs.LOG_CLEANUP_INTERVAL_MS_DOC)
+      .define(KafkaLogConfigs.LOG_CLEANUP_POLICY_CONFIG, LIST, LogConfig.DEFAULT_CLEANUP_POLICY, ValidList.in(TopicConfig.CLEANUP_POLICY_COMPACT, TopicConfig.CLEANUP_POLICY_DELETE), MEDIUM, KafkaLogConfigs.LOG_CLEANUP_POLICY_DOC)
       .define(CleanerConfig.LOG_CLEANER_THREADS_PROP, INT, CleanerConfig.LOG_CLEANER_THREADS, atLeast(0), MEDIUM, CleanerConfig.LOG_CLEANER_THREADS_DOC)
       .define(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, DOUBLE, CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND, MEDIUM, CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_DOC)
       .define(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, LONG, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE, MEDIUM, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_DOC)
@@ -732,26 +732,26 @@ object KafkaConfig {
       .define(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP, LONG, LogConfig.DEFAULT_DELETE_RETENTION_MS, atLeast(0), MEDIUM, CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_DOC)
       .define(CleanerConfig.LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP, LONG, LogConfig.DEFAULT_MIN_COMPACTION_LAG_MS, atLeast(0), MEDIUM, CleanerConfig.LOG_CLEANER_MIN_COMPACTION_LAG_MS_DOC)
       .define(CleanerConfig.LOG_CLEANER_MAX_COMPACTION_LAG_MS_PROP, LONG, LogConfig.DEFAULT_MAX_COMPACTION_LAG_MS, atLeast(1), MEDIUM, CleanerConfig.LOG_CLEANER_MAX_COMPACTION_LAG_MS_DOC)
-      .define(LOG_INDEX_SIZE_MAX_BYTES_CONFIG, INT, LogConfig.DEFAULT_SEGMENT_INDEX_BYTES, atLeast(4), MEDIUM, LOG_INDEX_SIZE_MAX_BYTES_DOC)
-      .define(LOG_INDEX_INTERVAL_BYTES_CONFIG, INT, LogConfig.DEFAULT_INDEX_INTERVAL_BYTES, atLeast(0), MEDIUM, LOG_INDEX_INTERVAL_BYTES_DOC)
-      .define(LOG_FLUSH_INTERVAL_MESSAGES_CONFIG, LONG, LogConfig.DEFAULT_FLUSH_MESSAGES_INTERVAL, atLeast(1), HIGH, LOG_FLUSH_INTERVAL_MESSAGES_DOC)
-      .define(LOG_DELETE_DELAY_MS_CONFIG, LONG, LogConfig.DEFAULT_FILE_DELETE_DELAY_MS, atLeast(0), HIGH, LOG_DELETE_DELAY_MS_DOC)
-      .define(LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG, LONG, LogConfig.DEFAULT_FLUSH_MS, HIGH, LOG_FLUSH_SCHEDULER_INTERVAL_MS_DOC)
-      .define(LOG_FLUSH_INTERVAL_MS_CONFIG, LONG, null, HIGH, LOG_FLUSH_INTERVAL_MS_DOC)
-      .define(LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG, INT, Defaults.LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS, atLeast(0), HIGH, LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_DOC)
-      .define(LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG, INT, Defaults.LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS, atLeast(0), HIGH, LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_DOC)
-      .define(LOG_PRE_ALLOCATE_CONFIG, BOOLEAN, LogConfig.DEFAULT_PREALLOCATE, MEDIUM, LOG_PRE_ALLOCATE_ENABLE_DOC)
-      .define(NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, INT, Defaults.NUM_RECOVERY_THREADS_PER_DATA_DIR, atLeast(1), HIGH, NUM_RECOVERY_THREADS_PER_DATA_DIR_DOC)
-      .define(AUTO_CREATE_TOPICS_ENABLE_CONFIG, BOOLEAN, Defaults.AUTO_CREATE_TOPICS_ENABLE, HIGH, AUTO_CREATE_TOPICS_ENABLE_DOC)
-      .define(MIN_IN_SYNC_REPLICAS_CONFIG, INT, LogConfig.DEFAULT_MIN_IN_SYNC_REPLICAS, atLeast(1), HIGH, MIN_IN_SYNC_REPLICAS_DOC)
-      .define(LOG_MESSAGE_FORMAT_VERSION_CONFIG, STRING, LogConfig.DEFAULT_MESSAGE_FORMAT_VERSION, new MetadataVersionValidator(), MEDIUM, LOG_MESSAGE_FORMAT_VERSION_DOC)
-      .define(LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG, STRING, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_TYPE, ConfigDef.ValidString.in("CreateTime", "LogAppendTime"), MEDIUM, LOG_MESSAGE_TIMESTAMP_TYPE_DOC)
-      .define(LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, LONG, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS, atLeast(0), MEDIUM, LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC)
-      .define(LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, LONG, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_BEFORE_MAX_MS, atLeast(0), MEDIUM, LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC)
-      .define(LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, LONG, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_AFTER_MAX_MS, atLeast(0), MEDIUM, LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DOC)
-      .define(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, CREATE_TOPIC_POLICY_CLASS_NAME_DOC)
-      .define(ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ALTER_CONFIG_POLICY_CLASS_NAME_DOC)
-      .define(LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, LogConfig.DEFAULT_MESSAGE_DOWNCONVERSION_ENABLE, LOW, LOG_MESSAGE_DOWN_CONVERSION_ENABLE_DOC)
+      .define(KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG, INT, LogConfig.DEFAULT_SEGMENT_INDEX_BYTES, atLeast(4), MEDIUM, KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DOC)
+      .define(KafkaLogConfigs.LOG_INDEX_INTERVAL_BYTES_CONFIG, INT, LogConfig.DEFAULT_INDEX_INTERVAL_BYTES, atLeast(0), MEDIUM, KafkaLogConfigs.LOG_INDEX_INTERVAL_BYTES_DOC)
+      .define(KafkaLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_CONFIG, LONG, LogConfig.DEFAULT_FLUSH_MESSAGES_INTERVAL, atLeast(1), HIGH, KafkaLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_DOC)
+      .define(KafkaLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, LONG, LogConfig.DEFAULT_FILE_DELETE_DELAY_MS, atLeast(0), HIGH, KafkaLogConfigs.LOG_DELETE_DELAY_MS_DOC)
+      .define(KafkaLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG, LONG, LogConfig.DEFAULT_FLUSH_MS, HIGH, KafkaLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_DOC)
+      .define(KafkaLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG, LONG, null, HIGH, KafkaLogConfigs.LOG_FLUSH_INTERVAL_MS_DOC)
+      .define(KafkaLogConfigs.LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG, INT, KafkaLogConfigs.LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_DEFAULT, atLeast(0), HIGH, KafkaLogConfigs.LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_DOC)
+      .define(KafkaLogConfigs.LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG, INT, KafkaLogConfigs.LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_DEFAULT, atLeast(0), HIGH, KafkaLogConfigs.LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_DOC)
+      .define(KafkaLogConfigs.LOG_PRE_ALLOCATE_CONFIG, BOOLEAN, LogConfig.DEFAULT_PREALLOCATE, MEDIUM, KafkaLogConfigs.LOG_PRE_ALLOCATE_ENABLE_DOC)
+      .define(KafkaLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, INT, KafkaLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_DEFAULT, atLeast(1), HIGH, KafkaLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_DOC)
+      .define(KafkaLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, BOOLEAN, KafkaLogConfigs.AUTO_CREATE_TOPICS_ENABLE_DEFAULT, HIGH, KafkaLogConfigs.AUTO_CREATE_TOPICS_ENABLE_DOC)
+      .define(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, INT, LogConfig.DEFAULT_MIN_IN_SYNC_REPLICAS, atLeast(1), HIGH, KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_DOC)
+      .define(KafkaLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG, STRING, LogConfig.DEFAULT_MESSAGE_FORMAT_VERSION, new MetadataVersionValidator(), MEDIUM, KafkaLogConfigs.LOG_MESSAGE_FORMAT_VERSION_DOC)
+      .define(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG, STRING, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_TYPE, ConfigDef.ValidString.in("CreateTime", "LogAppendTime"), MEDIUM, KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_DOC)
+      .define(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, LONG, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS, atLeast(0), MEDIUM, KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC)
+      .define(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, LONG, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_BEFORE_MAX_MS, atLeast(0), MEDIUM, KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC)
+      .define(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, LONG, LogConfig.DEFAULT_MESSAGE_TIMESTAMP_AFTER_MAX_MS, atLeast(0), MEDIUM, KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DOC)
+      .define(KafkaLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, KafkaLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_DOC)
+      .define(KafkaLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, KafkaLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_DOC)
+      .define(KafkaLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, LogConfig.DEFAULT_MESSAGE_DOWNCONVERSION_ENABLE, LOW, KafkaLogConfigs.LOG_MESSAGE_DOWN_CONVERSION_ENABLE_DOC)
 
       /** ********* Replication configuration ***********/
       .define(ControllerSocketTimeoutMsProp, INT, Defaults.CONTROLLER_SOCKET_TIMEOUT_MS, MEDIUM, ControllerSocketTimeoutMsDoc)
@@ -1294,21 +1294,21 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val replicaSelectorClassName = Option(getString(KafkaConfig.ReplicaSelectorClassProp))
 
   /** ********* Log Configuration ***********/
-  val autoCreateTopicsEnable = getBoolean(AUTO_CREATE_TOPICS_ENABLE_CONFIG)
-  val numPartitions = getInt(NUM_PARTITIONS_CONFIG)
-  val logDirs = CoreUtils.parseCsvList(Option(getString(LOG_DIRS_CONFIG)).getOrElse(getString(LOG_DIR_CONFIG)))
-  def logSegmentBytes = getInt(LOG_SEGMENT_BYTES_CONFIG)
-  def logFlushIntervalMessages = getLong(LOG_FLUSH_INTERVAL_MESSAGES_CONFIG)
+  val autoCreateTopicsEnable = getBoolean(KafkaLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG)
+  val numPartitions = getInt(KafkaLogConfigs.NUM_PARTITIONS_CONFIG)
+  val logDirs = CoreUtils.parseCsvList(Option(getString(KafkaLogConfigs.LOG_DIRS_CONFIG)).getOrElse(getString(KafkaLogConfigs.LOG_DIR_CONFIG)))
+  def logSegmentBytes = getInt(KafkaLogConfigs.LOG_SEGMENT_BYTES_CONFIG)
+  def logFlushIntervalMessages = getLong(KafkaLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_CONFIG)
   val logCleanerThreads = getInt(CleanerConfig.LOG_CLEANER_THREADS_PROP)
-  def numRecoveryThreadsPerDataDir = getInt(NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG)
-  val logFlushSchedulerIntervalMs = getLong(LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG)
-  val logFlushOffsetCheckpointIntervalMs = getInt(LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG).toLong
-  val logFlushStartOffsetCheckpointIntervalMs = getInt(LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG).toLong
-  val logCleanupIntervalMs = getLong(LOG_CLEANUP_INTERVAL_MS_CONFIG)
-  def logCleanupPolicy = getList(LOG_CLEANUP_POLICY_CONFIG)
+  def numRecoveryThreadsPerDataDir = getInt(KafkaLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG)
+  val logFlushSchedulerIntervalMs = getLong(KafkaLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG)
+  val logFlushOffsetCheckpointIntervalMs = getInt(KafkaLogConfigs.LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG).toLong
+  val logFlushStartOffsetCheckpointIntervalMs = getInt(KafkaLogConfigs.LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG).toLong
+  val logCleanupIntervalMs = getLong(KafkaLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG)
+  def logCleanupPolicy = getList(KafkaLogConfigs.LOG_CLEANUP_POLICY_CONFIG)
   val offsetsRetentionMinutes = getInt(KafkaConfig.OffsetsRetentionMinutesProp)
   val offsetsRetentionCheckIntervalMs = getLong(KafkaConfig.OffsetsRetentionCheckIntervalMsProp)
-  def logRetentionBytes = getLong(LOG_RETENTION_BYTES_CONFIG)
+  def logRetentionBytes = getLong(KafkaLogConfigs.LOG_RETENTION_BYTES_CONFIG)
   val logCleanerDedupeBufferSize = getLong(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP)
   val logCleanerDedupeBufferLoadFactor = getDouble(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP)
   val logCleanerIoBufferSize = getInt(CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP)
@@ -1319,19 +1319,19 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val logCleanerBackoffMs = getLong(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP)
   def logCleanerMinCleanRatio = getDouble(CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP)
   val logCleanerEnable = getBoolean(CleanerConfig.LOG_CLEANER_ENABLE_PROP)
-  def logIndexSizeMaxBytes = getInt(LOG_INDEX_SIZE_MAX_BYTES_CONFIG)
-  def logIndexIntervalBytes = getInt(LOG_INDEX_INTERVAL_BYTES_CONFIG)
-  def logDeleteDelayMs = getLong(LOG_DELETE_DELAY_MS_CONFIG)
-  def logRollTimeMillis: java.lang.Long = Option(getLong(LOG_ROLL_TIME_MILLIS_CONFIG)).getOrElse(60 * 60 * 1000L * getInt(LOG_ROLL_TIME_HOURS_CONFIG))
-  def logRollTimeJitterMillis: java.lang.Long = Option(getLong(LOG_ROLL_TIME_JITTER_MILLIS_CONFIG)).getOrElse(60 * 60 * 1000L * getInt(LOG_ROLL_TIME_JITTER_HOURS_CONFIG))
-  def logFlushIntervalMs: java.lang.Long = Option(getLong(LOG_FLUSH_INTERVAL_MS_CONFIG)).getOrElse(getLong(LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG))
-  def minInSyncReplicas = getInt(MIN_IN_SYNC_REPLICAS_CONFIG)
-  def logPreAllocateEnable: java.lang.Boolean = getBoolean(LOG_PRE_ALLOCATE_CONFIG)
+  def logIndexSizeMaxBytes = getInt(KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG)
+  def logIndexIntervalBytes = getInt(KafkaLogConfigs.LOG_INDEX_INTERVAL_BYTES_CONFIG)
+  def logDeleteDelayMs = getLong(KafkaLogConfigs.LOG_DELETE_DELAY_MS_CONFIG)
+  def logRollTimeMillis: java.lang.Long = Option(getLong(KafkaLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG)).getOrElse(60 * 60 * 1000L * getInt(KafkaLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG))
+  def logRollTimeJitterMillis: java.lang.Long = Option(getLong(KafkaLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG)).getOrElse(60 * 60 * 1000L * getInt(KafkaLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG))
+  def logFlushIntervalMs: java.lang.Long = Option(getLong(KafkaLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG)).getOrElse(getLong(KafkaLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG))
+  def minInSyncReplicas = getInt(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG)
+  def logPreAllocateEnable: java.lang.Boolean = getBoolean(KafkaLogConfigs.LOG_PRE_ALLOCATE_CONFIG)
 
   // We keep the user-provided String as `MetadataVersion.fromVersionString` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
   @nowarn("cat=deprecation")
-  private val logMessageFormatVersionString = getString(LOG_MESSAGE_FORMAT_VERSION_CONFIG)
+  private val logMessageFormatVersionString = getString(KafkaLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG)
 
   /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
   @deprecated("3.0")
@@ -1340,18 +1340,18 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       MetadataVersion.fromVersionString(LogConfig.DEFAULT_MESSAGE_FORMAT_VERSION)
     else MetadataVersion.fromVersionString(logMessageFormatVersionString)
 
-  def logMessageTimestampType = TimestampType.forName(getString(LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG))
+  def logMessageTimestampType = TimestampType.forName(getString(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG))
 
   /* See `TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG` for details */
   @deprecated("3.6")
-  def logMessageTimestampDifferenceMaxMs: Long = getLong(LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG)
+  def logMessageTimestampDifferenceMaxMs: Long = getLong(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG)
 
   // In the transition period before logMessageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
   // we are using its value if logMessageTimestampBeforeMaxMs default value hasn't changed.
   // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
   @nowarn("cat=deprecation")
   def logMessageTimestampBeforeMaxMs: Long = {
-    val messageTimestampBeforeMaxMs: Long = getLong(LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG)
+    val messageTimestampBeforeMaxMs: Long = getLong(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG)
     if (messageTimestampBeforeMaxMs != LogConfig.DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS) {
       messageTimestampBeforeMaxMs
     } else {
@@ -1364,7 +1364,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
   @nowarn("cat=deprecation")
   def logMessageTimestampAfterMaxMs: Long = {
-    val messageTimestampAfterMaxMs: Long = getLong(LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG)
+    val messageTimestampAfterMaxMs: Long = getLong(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG)
     if (messageTimestampAfterMaxMs != Long.MaxValue) {
       messageTimestampAfterMaxMs
     } else {
@@ -1372,7 +1372,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     }
   }
 
-  def logMessageDownConversionEnable: Boolean = getBoolean(LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG)
+  def logMessageDownConversionEnable: Boolean = getBoolean(KafkaLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG)
 
   /** ********* Replication configuration ***********/
   val controllerSocketTimeoutMs: Int = getInt(KafkaConfig.ControllerSocketTimeoutMsProp)
@@ -1577,10 +1577,10 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     val millisInHour = 60L * millisInMinute
 
     val millis: java.lang.Long =
-      Option(getLong(LOG_RETENTION_TIME_MILLIS_CONFIG)).getOrElse(
-        Option(getInt(LOG_RETENTION_TIME_MINUTES_CONFIG)) match {
+      Option(getLong(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG)).getOrElse(
+        Option(getInt(KafkaLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG)) match {
           case Some(mins) => millisInMinute * mins
-          case None => getInt(LOG_RETENTION_TIME_HOURS_CONFIG) * millisInHour
+          case None => getInt(KafkaLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG) * millisInHour
         })
 
     if (millis < 0) return -1
@@ -1997,7 +1997,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   @nowarn("cat=deprecation")
   private def createBrokerWarningMessage: String = {
-    s"Broker configuration ${LOG_MESSAGE_FORMAT_VERSION_CONFIG} with value $logMessageFormatVersionString is ignored " +
+    s"Broker configuration ${KafkaLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG} with value $logMessageFormatVersionString is ignored " +
       s"because the inter-broker protocol version `$interBrokerProtocolVersionString` is greater or equal than 3.0. " +
       "This configuration is deprecated and it will be removed in Apache Kafka 4.0."
   }

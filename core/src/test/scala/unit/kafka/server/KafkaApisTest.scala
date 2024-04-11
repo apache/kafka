@@ -75,7 +75,7 @@ import org.apache.kafka.common._
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.KafkaLogConfigs
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.config.{ConfigType, Defaults}
@@ -1306,7 +1306,7 @@ class KafkaApisTest extends Logging {
           when(txnCoordinator.transactionTopicConfigs).thenReturn(new Properties)
           true
         case _ =>
-          topicConfigOverride.put(NUM_PARTITIONS_CONFIG, numBrokersNeeded.toString)
+          topicConfigOverride.put(KafkaLogConfigs.NUM_PARTITIONS_CONFIG, numBrokersNeeded.toString)
           topicConfigOverride.put(KafkaConfig.DefaultReplicationFactorProp, numBrokersNeeded.toString)
           false
       }

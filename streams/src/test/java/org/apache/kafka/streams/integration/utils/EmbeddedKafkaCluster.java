@@ -42,7 +42,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
-import static org.apache.kafka.server.config.KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
+import static org.apache.kafka.server.config.KafkaLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
 
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and supplied number of Kafka brokers.

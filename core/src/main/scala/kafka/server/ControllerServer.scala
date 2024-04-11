@@ -45,7 +45,7 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.security.{CredentialProvider, PasswordEncoder}
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.config.KafkaConfig.{ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG}
+import org.apache.kafka.server.config.KafkaLogConfigs.{ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
