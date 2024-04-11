@@ -106,11 +106,9 @@ public class ServerSideAssignorBenchmark {
         if (isReassignment) {
             GroupAssignment initialAssignment = partitionAssignor.assign(assignmentSpec, subscribedTopicDescriber);
             Map<String, MemberAssignment> members;
-            if (!isRangeAssignor && isSubscriptionUniform) {
-                members = initialAssignment.convertNewClientTypeAssignment(initialAssignment.getNewClientTypeAssignment());
-            } else {
-                members = initialAssignment.members();
-            }
+
+            members = initialAssignment.members();
+
             // Update the AssignmentSpec with the results from the initial assignment.
             Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
 
@@ -120,8 +118,7 @@ public class ServerSideAssignorBenchmark {
                     memberSpec.instanceId(),
                     memberSpec.rackId(),
                     memberSpec.subscribedTopicIds(),
-                    memberAssignment.targetPartitions(),
-                    initialAssignment.getNewClientTypeAssignment().get(memberId)
+                    memberAssignment.targetPartitions()
                 ));
             });
 
@@ -132,16 +129,14 @@ public class ServerSideAssignorBenchmark {
                     Optional.empty(),
                     Optional.of(rackId),
                     topicMetadata.keySet(),
-                    Collections.emptyMap(),
-                    Collections.emptyList()
+                    Collections.emptyMap()
                 ));
             } else {
                 updatedMembers.put("newMember", new AssignmentMemberSpec(
                     Optional.empty(),
                     Optional.empty(),
                     topicMetadata.keySet(),
-                    Collections.emptyMap(),
-                    Collections.emptyList()
+                    Collections.emptyMap()
                 ));
             }
             this.assignmentSpec = new AssignmentSpec(updatedMembers);

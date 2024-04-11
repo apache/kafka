@@ -4,6 +4,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
@@ -13,7 +14,6 @@ import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.VersionedMetadata;
-import org.apache.kafka.server.common.TopicIdPartition;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -56,14 +56,13 @@ public class TargetAssignmentBuilderBenchmark {
     @Param({"1000"})
     private int topicCount;
 
-
     @Param({"true"})
     private boolean isSubscriptionUniform;
 
     @Param({"false"})
     private boolean isRangeAssignor;
 
-    @Param({"true"})
+    @Param({"false"})
     private boolean isRackAware;
 
     @Param({"true"})
@@ -186,15 +185,12 @@ public class TargetAssignmentBuilderBenchmark {
 
         Map<String, Assignment> initialTargetAssignment = new HashMap<>(memberCount);
 
-        // Convert the structure from newClientTypeAssignment to the expected structure in Assignment
-        for (Map.Entry<String, List<TopicIdPartition>> entry : groupAssignment.getNewClientTypeAssignment().entrySet()) {
+        for (Map.Entry<String, MemberAssignment> entry : groupAssignment.members().entrySet()) {
             String memberId = entry.getKey();
-            List<TopicIdPartition> topicIdPartitions = entry.getValue();
+            Map<Uuid, Set<Integer>> topicPartitions = entry.getValue().targetPartitions();
 
-            // Create an Assignment object for the member
-            Assignment assignment = new Assignment((byte) 0, topicIdPartitions, VersionedMetadata.EMPTY);
+            Assignment assignment = new Assignment((byte) 0, topicPartitions, VersionedMetadata.EMPTY);
 
-            // Put the created Assignment object into the initialTargetAssignment map
             initialTargetAssignment.put(memberId, assignment);
         }
 
@@ -225,7 +221,8 @@ public class TargetAssignmentBuilderBenchmark {
                 Optional.empty(),
                 rackId,
                 assignedTopics,
-                Collections.emptyMap()));
+                Collections.emptyMap()
+            ));
         }
 
         this.assignmentSpec = new AssignmentSpec(members);
