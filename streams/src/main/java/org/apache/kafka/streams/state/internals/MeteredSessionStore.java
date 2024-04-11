@@ -47,6 +47,7 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -432,10 +433,11 @@ public class MeteredSessionStore<K, V>
                                              final QueryConfig config) {
         final QueryResult<R> result;
         final WindowRangeQuery<K, V> typedQuery = (WindowRangeQuery<K, V>) query;
-        if (typedQuery.getKey().isPresent()) {
+        final Optional<K> key = typedQuery.key();
+        if (key.isPresent()) {
             final WindowRangeQuery<Bytes, byte[]> rawKeyQuery =
                 WindowRangeQuery.withKey(
-                    Bytes.wrap(serdes.rawKey(typedQuery.getKey().get()))
+                    Bytes.wrap(serdes.rawKey(key.get()))
                 );
             final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
                 wrapped().query(rawKeyQuery, positionBound, config);

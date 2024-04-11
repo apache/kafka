@@ -1221,6 +1221,8 @@ public class IQv2StoreIntegrationTest {
 
         // miss the window start
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart - 1),
             Instant.ofEpochMilli(windowStart - 1),
             extractor,
@@ -1229,6 +1231,8 @@ public class IQv2StoreIntegrationTest {
 
         // do the query at the first window
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart),
             Instant.ofEpochMilli(windowStart),
             extractor,
@@ -1237,6 +1241,8 @@ public class IQv2StoreIntegrationTest {
 
         // do the query at the first and the second windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(5).toMillis()),
             extractor,
@@ -1245,6 +1251,8 @@ public class IQv2StoreIntegrationTest {
 
         // do the query at the second and the third windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(5).toMillis()),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(10).toMillis()),
             extractor,
@@ -1253,6 +1261,8 @@ public class IQv2StoreIntegrationTest {
 
         // do the query at the third and the fourth windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(10).toMillis()),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
             extractor,
@@ -1261,6 +1271,8 @@ public class IQv2StoreIntegrationTest {
 
         // do the query at the fourth and the fifth windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(20).toMillis()),
             extractor,
@@ -1269,6 +1281,8 @@ public class IQv2StoreIntegrationTest {
 
         //do the query at the fifth and the sixth windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(20).toMillis()),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(25).toMillis()),
             extractor,
@@ -1277,6 +1291,8 @@ public class IQv2StoreIntegrationTest {
 
         // do the query from the second to the fourth windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(5).toMillis()),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
             extractor,
@@ -1285,10 +1301,192 @@ public class IQv2StoreIntegrationTest {
 
         // do the query from the first to the fourth windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
             extractor,
             mkSet(1, 17, 2, 3, 4, 5, 13)
+        );
+
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart - 1),
+            Instant.ofEpochMilli(windowStart - 1),
+            extractor,
+            mkSet()
+        );
+
+        // do the query at the first window
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart),
+            Instant.ofEpochMilli(windowStart),
+            extractor,
+            mkSet(1, 2)
+        );
+
+        // do the query at the first and the second windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(5).toMillis()),
+            extractor,
+            mkSet(1, 2, 3, 4)
+        );
+
+        // do the query at the second and the third windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(5).toMillis()),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(10).toMillis()),
+            extractor,
+            mkSet(3, 4, 5, 13)
+        );
+
+        // do the query at the third and the fourth windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(10).toMillis()),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
+            extractor,
+            mkSet(17, 5, 13)
+        );
+
+        // do the query at the fourth and the fifth windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(20).toMillis()),
+            extractor,
+            mkSet(17)
+        );
+
+        //do the query at the fifth and the sixth windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(20).toMillis()),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(25).toMillis()),
+            extractor,
+            mkSet()
+        );
+
+        // do the query from the second to the fourth windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(5).toMillis()),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
+            extractor,
+            mkSet(17, 3, 4, 5, 13)
+        );
+
+        // do the query from the first to the fourth windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
+            extractor,
+            mkSet(1, 17, 2, 3, 4, 5, 13)
+        );
+
+        shouldHandleWindowRangeQuery(
+            0,
+            0,
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START),
+            extractor,
+            mkSet(1)
+        );
+
+        // miss the window start range
+        shouldHandleWindowRangeQuery(
+            0,
+            0,
+            Instant.ofEpochMilli(WINDOW_START - 1),
+            Instant.ofEpochMilli(WINDOW_START - 1),
+            extractor,
+            mkSet()
+        );
+
+        // do the window key query at the first window and the key of record which we want to query is 2
+        shouldHandleWindowRangeQuery(
+            2,
+            2,
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START),
+            extractor,
+            mkSet()
+        );
+
+        // miss the key
+        shouldHandleWindowRangeQuery(
+            999,
+            999,
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START),
+            extractor,
+            mkSet()
+        );
+
+        // miss both
+        shouldHandleWindowRangeQuery(
+            999,
+            999,
+            Instant.ofEpochMilli(WINDOW_START - 1),
+            Instant.ofEpochMilli(WINDOW_START - 1),
+            extractor,
+            mkSet()
+        );
+
+        // do the window key query at the first and the second windows and the key of record which we want to query is 0
+        shouldHandleWindowRangeQuery(
+            0,
+            0,
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(5).toMillis()),
+            extractor,
+            mkSet(1)
+        );
+
+        // do the window key query at the first window and the key of record which we want to query is 1
+        shouldHandleWindowRangeQuery(
+            1,
+            1,
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START),
+            extractor,
+            mkSet(2)
+        );
+
+        // do the window key query at the second and the third windows and the key of record which we want to query is 2
+        shouldHandleWindowRangeQuery(
+            2,
+            2,
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(5).toMillis()),
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(10).toMillis()),
+            extractor,
+            mkSet(4, 5)
+        );
+
+        // do the window key query at the second and the third windows and the key of record which we want to query is 3
+        shouldHandleWindowRangeQuery(
+            3,
+            3,
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(5).toMillis()),
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(10).toMillis()),
+            extractor,
+            mkSet(13)
+        );
+
+        // do the window key query at the fourth and the fifth windows and the key of record which we want to query is 4
+        shouldHandleWindowRangeQuery(
+            4,
+            4,
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(15).toMillis()),
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(20).toMillis()),
+            extractor,
+            mkSet(17)
+        );
+
+        // do the window key query at the fifth window and the key of record which we want to query is 4
+        shouldHandleWindowRangeQuery(
+            4,
+            4,
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(20).toMillis()),
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(24).toMillis()),
+            extractor,
+            mkSet()
         );
 
         // Should fail to execute this query on a WindowStore.
@@ -1320,7 +1518,7 @@ public class IQv2StoreIntegrationTest {
                     "This store"
                         + " \\(class org.apache.kafka.streams.state.internals.Metered.*WindowStore\\)"
                         + " doesn't know how to execute the given query"
-                        + " \\(WindowRangeQuery\\{key=Optional\\[2], timeFrom=Optional.empty, timeTo=Optional.empty}\\)"
+                        + " \\(WindowRangeQuery\\{lower=Optional.empty, upper=Optional.empty, oldTimeFrom=Optional.empty, oldTimeTo=Optional.empty, key=Optional\\[2], timeFrom=Optional.empty, timeTo=Optional.empty}\\)"
                         + " because WindowStores only supports WindowRangeQuery.withWindowStartRange\\."
                         + " Contact the store maintainer if you need support for a new query type\\."
                 ));
@@ -1334,6 +1532,8 @@ public class IQv2StoreIntegrationTest {
 
         // miss the window start
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart - 1),
             Instant.ofEpochMilli(windowStart - 1),
             extractor,
@@ -1342,6 +1542,8 @@ public class IQv2StoreIntegrationTest {
 
         // do the query at the first window
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart),
             Instant.ofEpochMilli(windowStart),
             extractor,
@@ -1350,6 +1552,8 @@ public class IQv2StoreIntegrationTest {
 
         // do the query at the first and the second windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(5).toMillis()),
             extractor,
@@ -1358,6 +1562,8 @@ public class IQv2StoreIntegrationTest {
 
         // do the query at the second and the third windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(5).toMillis()),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(10).toMillis()),
             extractor,
@@ -1366,6 +1572,8 @@ public class IQv2StoreIntegrationTest {
 
         // do the query at the third and the fourth windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(10).toMillis()),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
             extractor,
@@ -1374,6 +1582,8 @@ public class IQv2StoreIntegrationTest {
 
         // do the query at the fourth and the fifth windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(20).toMillis()),
             extractor,
@@ -1382,6 +1592,8 @@ public class IQv2StoreIntegrationTest {
 
         //do the query at the fifth and the sixth windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(20).toMillis()),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(25).toMillis()),
             extractor,
@@ -1390,6 +1602,8 @@ public class IQv2StoreIntegrationTest {
 
         // do the query from the second to the fourth windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(5).toMillis()),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
             extractor,
@@ -1398,10 +1612,194 @@ public class IQv2StoreIntegrationTest {
 
         // do the query from the first to the fourth windows
         shouldHandleWindowRangeQuery(
+            null,
+            null,
             Instant.ofEpochMilli(windowStart),
             Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
             extractor,
             mkSet(1, 2, 3, 4, 5, 7, 9)
+        );
+
+        // miss the window start
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart - 1),
+            Instant.ofEpochMilli(windowStart - 1),
+            extractor,
+            mkSet()
+        );
+
+        // do the query at the first window
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart),
+            Instant.ofEpochMilli(windowStart),
+            extractor,
+            mkSet(1, 2)
+        );
+
+        // do the query at the first and the second windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(5).toMillis()),
+            extractor,
+            mkSet(1, 2, 3, 4)
+        );
+
+        // do the query at the second and the third windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(5).toMillis()),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(10).toMillis()),
+            extractor,
+            mkSet(3, 4, 5, 7)
+        );
+
+        // do the query at the third and the fourth windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(10).toMillis()),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
+            extractor,
+            mkSet(5, 7, 9)
+        );
+
+        // do the query at the fourth and the fifth windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(20).toMillis()),
+            extractor,
+            mkSet(9)
+        );
+
+        //do the query at the fifth and the sixth windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(20).toMillis()),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(25).toMillis()),
+            extractor,
+            mkSet()
+        );
+
+        // do the query from the second to the fourth windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(5).toMillis()),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
+            extractor,
+            mkSet(3, 4, 5, 7, 9)
+        );
+
+        // do the query from the first to the fourth windows
+        shouldHandleWindowRangeQuery2(
+            Instant.ofEpochMilli(windowStart),
+            Instant.ofEpochMilli(windowStart + Duration.ofMinutes(15).toMillis()),
+            extractor,
+            mkSet(1, 2, 3, 4, 5, 7, 9)
+        );
+
+        // tightest possible start range
+        shouldHandleWindowRangeQuery(
+            0,
+            0,
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START),
+            extractor,
+            mkSet(1)
+        );
+
+        // miss the window start range
+        shouldHandleWindowRangeQuery(
+            0,
+            0,
+            Instant.ofEpochMilli(WINDOW_START - 1),
+            Instant.ofEpochMilli(WINDOW_START - 1),
+            extractor,
+            mkSet()
+        );
+
+        // do the window key query at the first window and the key of record which we want to query is 2
+        shouldHandleWindowRangeQuery(
+            2,
+            2,
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START),
+            extractor,
+            mkSet()
+        );
+
+        // miss the key
+        shouldHandleWindowRangeQuery(
+            999,
+            999,
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START),
+            extractor,
+            mkSet()
+        );
+
+        // miss both
+        shouldHandleWindowRangeQuery(
+            999,
+            999,
+            Instant.ofEpochMilli(WINDOW_START - 1),
+            Instant.ofEpochMilli(WINDOW_START - 1),
+            extractor,
+            mkSet()
+        );
+
+        // do the window key query at the first and the second windows and the key of record which we want to query is 0
+        shouldHandleWindowRangeQuery(
+            0,
+            0,
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(5).toMillis()),
+            extractor,
+            mkSet(1)
+        );
+
+        // do the window key query at the first window and the key of record which we want to query is 1
+        shouldHandleWindowRangeQuery(
+            1,
+            1,
+            Instant.ofEpochMilli(WINDOW_START),
+            Instant.ofEpochMilli(WINDOW_START),
+            extractor,
+            mkSet(2)
+        );
+
+        // do the window key query at the second and the third windows and the key of record which we want to query is 2
+        shouldHandleWindowRangeQuery(
+            2,
+            2,
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(5).toMillis()),
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(10).toMillis()),
+            extractor,
+            mkSet(4, 5)
+        );
+
+        // do the window key query at the second and the third windows and the key of record which we want to query is 3
+        shouldHandleWindowRangeQuery(
+            3,
+            3,
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(5).toMillis()),
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(10).toMillis()),
+            extractor,
+            mkSet(7)
+        );
+
+        // do the window key query at the fourth and the fifth windows and the key of record which we want to query is 4
+        shouldHandleWindowRangeQuery(
+            4,
+            4,
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(15).toMillis()),
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(20).toMillis()),
+            extractor,
+            mkSet(9)
+        );
+
+        // do the window key query at the fifth window and the key of record which we want to query is 4
+        shouldHandleWindowRangeQuery(
+            4,
+            4,
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(20).toMillis()),
+            Instant.ofEpochMilli(WINDOW_START + Duration.ofMinutes(24).toMillis()),
+            extractor,
+            mkSet()
         );
 
         // Should fail to execute this query on a WindowStore.
@@ -1433,7 +1831,7 @@ public class IQv2StoreIntegrationTest {
                     "This store"
                         + " \\(class org.apache.kafka.streams.state.internals.Metered.*WindowStore\\)"
                         + " doesn't know how to execute the given query"
-                        + " \\(WindowRangeQuery\\{key=Optional\\[2], timeFrom=Optional.empty, timeTo=Optional.empty}\\)"
+                        + " \\(WindowRangeQuery\\{lower=Optional.empty, upper=Optional.empty, oldTimeFrom=Optional.empty, oldTimeTo=Optional.empty, key=Optional\\[2], timeFrom=Optional.empty, timeTo=Optional.empty}\\)"
                         + " because WindowStores only supports WindowRangeQuery.withWindowStartRange\\."
                         + " Contact the store maintainer if you need support for a new query type\\."
                 ));
@@ -1506,7 +1904,7 @@ public class IQv2StoreIntegrationTest {
                     "This store"
                         + " (class org.apache.kafka.streams.state.internals.MeteredSessionStore)"
                         + " doesn't know how to execute the given query"
-                        + " (WindowRangeQuery{key=Optional.empty, timeFrom=Optional[1970-01-01T00:00:00Z], timeTo=Optional[1970-01-01T00:00:00Z]})"
+                        + " (WindowRangeQuery{lower=Optional.empty, upper=Optional.empty, oldTimeFrom=Optional[1970-01-01T00:00:00Z], oldTimeTo=Optional[1970-01-01T00:00:00Z], key=Optional.empty, timeFrom=Optional.empty, timeTo=Optional.empty})"
                         + " because SessionStores only support WindowRangeQuery.withKey."
                         + " Contact the store maintainer if you need support for a new query type."
                 ));
@@ -1579,7 +1977,7 @@ public class IQv2StoreIntegrationTest {
                     "This store"
                         + " (class org.apache.kafka.streams.state.internals.MeteredSessionStore)"
                         + " doesn't know how to execute the given query"
-                        + " (WindowRangeQuery{key=Optional.empty, timeFrom=Optional[1970-01-01T00:00:00Z], timeTo=Optional[1970-01-01T00:00:00Z]})"
+                        + " (WindowRangeQuery{lower=Optional.empty, upper=Optional.empty, oldTimeFrom=Optional[1970-01-01T00:00:00Z], oldTimeTo=Optional[1970-01-01T00:00:00Z], key=Optional.empty, timeFrom=Optional.empty, timeTo=Optional.empty})"
                         + " because SessionStores only support WindowRangeQuery.withKey."
                         + " Contact the store maintainer if you need support for a new query type."
                 ));
@@ -1877,6 +2275,58 @@ public class IQv2StoreIntegrationTest {
     }
 
     public <V> void shouldHandleWindowRangeQuery(
+        final Integer keyFrom,
+        final Integer keyTo,
+        final Instant timeFrom,
+        final Instant timeTo,
+        final Function<V, Integer> valueExtactor,
+        final Set<Integer> expectedValues) {
+
+        final WindowRangeQuery<Integer, V> query = WindowRangeQuery.<Integer, V>withKeyRange(keyFrom, keyTo).fromTime(timeFrom).toTime(timeTo);
+
+        final StateQueryRequest<KeyValueIterator<Windowed<Integer>, V>> request =
+            inStore(STORE_NAME)
+                .withQuery(query)
+                .withPartitions(mkSet(0, 1))
+                .withPositionBound(PositionBound.at(INPUT_POSITION));
+
+        final StateQueryResult<KeyValueIterator<Windowed<Integer>, V>> result =
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+
+        if (result.getGlobalResult() != null) {
+            fail("global tables aren't implemented");
+        } else {
+            final Set<Integer> actualValues = new HashSet<>();
+            final Map<Integer, QueryResult<KeyValueIterator<Windowed<Integer>, V>>> queryResult = result.getPartitionResults();
+            for (final int partition : queryResult.keySet()) {
+                final boolean failure = queryResult.get(partition).isFailure();
+                if (failure) {
+                    throw new AssertionError(queryResult.toString());
+                }
+                assertThat(queryResult.get(partition).isSuccess(), is(true));
+
+                assertThrows(
+                    IllegalArgumentException.class,
+                    queryResult.get(partition)::getFailureReason
+                );
+                assertThrows(
+                    IllegalArgumentException.class,
+                    queryResult.get(partition)::getFailureMessage
+                );
+
+                try (final KeyValueIterator<Windowed<Integer>, V> iterator = queryResult.get(partition).getResult()) {
+                    while (iterator.hasNext()) {
+                        actualValues.add(valueExtactor.apply(iterator.next().value));
+                    }
+                }
+                assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
+            }
+            assertThat("Result:" + result, actualValues, is(expectedValues));
+            assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
+        }
+    }
+
+    public <V> void shouldHandleWindowRangeQuery2(
         final Instant timeFrom,
         final Instant timeTo,
         final Function<V, Integer> valueExtactor,
