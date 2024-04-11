@@ -269,6 +269,9 @@ public class HeartbeatRequestManager implements RequestManager {
         heartbeatRequestState.onSendAttempt(currentTimeMs);
         membershipManager.onHeartbeatRequestSent();
         metricsManager.recordHeartbeatSentMs(currentTimeMs);
+        // Reset timer when sending the request, to make sure that, if waiting for the interval,
+        // we don't include the response time (which may introduce delay)
+        heartbeatRequestState.resetTimer();
         return request;
     }
 
@@ -325,7 +328,6 @@ public class HeartbeatRequestManager implements RequestManager {
         if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
             heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
-            heartbeatRequestState.resetTimer();
             membershipManager.onHeartbeatSuccess(response.data());
             return;
         }
@@ -480,6 +482,14 @@ public class HeartbeatRequestManager implements RequestManager {
                 return this.remainingBackoffMs(currentTimeMs);
             }
             return heartbeatTimer.remainingMs();
+        }
+
+        public void onFailedAttempt(final long currentTimeMs) {
+            // Expire timer to allow sending HB after a failure. After a failure, a next HB may be
+            // needed with backoff (ex. errors that lead to retries, like coordinator load error),
+            // or immediately (ex. errors that lead to rejoining, like fencing errors).
+            heartbeatTimer.update(heartbeatTimer.currentTimeMs() + heartbeatTimer.remainingMs());
+            super.onFailedAttempt(currentTimeMs);
         }
 
         private void updateHeartbeatIntervalMs(final long heartbeatIntervalMs) {
