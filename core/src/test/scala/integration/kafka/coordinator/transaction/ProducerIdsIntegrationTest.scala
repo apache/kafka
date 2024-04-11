@@ -38,8 +38,7 @@ import scala.jdk.CollectionConverters._
 
 
 @ClusterTestDefaults(serverProperties = Array(
-  new ClusterConfigProperty(key = "transaction.state.log.num.partitions", value = "1"),
-  new ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "3")
+  new ClusterConfigProperty(key = "transaction.state.log.num.partitions", value = "1")
 ))
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ProducerIdsIntegrationTest {
