@@ -32,7 +32,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.kafka.server.config.KafkaConfig.INTER_BROKER_LISTENER_NAME_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
 
 /**
  * Tests command line SSL setup for reset tool.

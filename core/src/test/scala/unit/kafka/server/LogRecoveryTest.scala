@@ -31,7 +31,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -45,9 +45,9 @@ class LogRecoveryTest extends QuorumTestHarness {
   val replicaFetchMinBytes = 20
 
   val overridingProps = new Properties()
-  overridingProps.put(REPLICA_LAG_TIME_MAX_MS_CONFIG, replicaLagTimeMaxMs.toString)
-  overridingProps.put(REPLICA_FETCH_WAIT_MAX_MS_CONFIG, replicaFetchWaitMaxMs.toString)
-  overridingProps.put(REPLICA_FETCH_MIN_BYTES_CONFIG, replicaFetchMinBytes.toString)
+  overridingProps.put(ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG, replicaLagTimeMaxMs.toString)
+  overridingProps.put(ReplicationConfigs.REPLICA_FETCH_WAIT_MAX_MS_CONFIG, replicaFetchWaitMaxMs.toString)
+  overridingProps.put(ReplicationConfigs.REPLICA_FETCH_MIN_BYTES_CONFIG, replicaFetchMinBytes.toString)
 
   var configs: Seq[KafkaConfig] = _
   val topic = "new-topic"

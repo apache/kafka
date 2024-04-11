@@ -29,7 +29,7 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerGrou
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -66,8 +66,8 @@ class TransactionsTest extends IntegrationTestHarness {
     props.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
     props.put(KafkaConfig.TransactionsTopicMinISRProp, 2.toString)
     props.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-    props.put(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, false.toString)
-    props.put(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)
+    props.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, false.toString)
+    props.put(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)
     props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     props.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
 

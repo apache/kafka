@@ -73,10 +73,10 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.server.config.KafkaConfig.AUTO_LEADER_REBALANCE_ENABLE_CONFIG;
-import static org.apache.kafka.server.config.KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_CONFIG;
-import static org.apache.kafka.server.config.KafkaConfig.REPLICA_FETCH_BACKOFF_MS_CONFIG;
-import static org.apache.kafka.server.config.KafkaConfig.REPLICA_LAG_TIME_MAX_MS_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_BACKOFF_MS_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_FOLLOWER_THROTTLE;

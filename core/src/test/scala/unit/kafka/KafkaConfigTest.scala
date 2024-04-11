@@ -26,7 +26,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.server.config.{KafkaSecurityConfigs, ZkConfigs}
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 
@@ -181,7 +181,7 @@ class KafkaTest {
        props.setProperty(KafkaConfig.ListenersProp, brokerListener)
     }
     if (!(hasControllerRole & !hasBrokerRole)) { // not controller-only
-      props.setProperty(INTER_BROKER_LISTENER_NAME_CONFIG, "PLAINTEXT")
+      props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "PLAINTEXT")
       props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092") 
     }
   }

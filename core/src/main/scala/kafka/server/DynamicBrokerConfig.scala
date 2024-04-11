@@ -38,7 +38,7 @@ import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ServerTopicConfigSynonyms, ZooKeeperInternals}
-import org.apache.kafka.server.config.KafkaConfig._
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin
 import org.apache.kafka.server.telemetry.ClientTelemetry
@@ -768,7 +768,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
 object DynamicThreadPool {
   val ReconfigurableConfigs = Set(
     KafkaConfig.NumIoThreadsProp,
-    NUM_REPLICA_FETCHERS_CONFIG,
+    ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG,
     KafkaConfig.NumRecoveryThreadsPerDataDirProp,
     KafkaConfig.BackgroundThreadsProp)
 
@@ -793,7 +793,7 @@ object DynamicThreadPool {
   def getValue(config: KafkaConfig, name: String): Int = {
     name match {
       case KafkaConfig.NumIoThreadsProp => config.numIoThreads
-      case NUM_REPLICA_FETCHERS_CONFIG => config.numReplicaFetchers
+      case ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG => config.numReplicaFetchers
       case KafkaConfig.NumRecoveryThreadsPerDataDirProp => config.numRecoveryThreadsPerDataDir
       case KafkaConfig.BackgroundThreadsProp => config.backgroundThreads
       case n => throw new IllegalStateException(s"Unexpected config $n")
