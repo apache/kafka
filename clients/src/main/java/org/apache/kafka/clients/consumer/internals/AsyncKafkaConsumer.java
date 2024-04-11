@@ -175,6 +175,40 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.rebalanceListenerInvoker = rebalanceListenerInvoker;
         }
 
+        /**
+         * Process the events—if any—that were produced by the {@link ConsumerNetworkThread network thread}.
+         * It is possible that {@link ErrorEvent an error}
+         * could occur when processing the events. In such cases, the processor will take a reference to the first
+         * error, continue to process the remaining events, and then throw the first error that occurred.
+         */
+        public boolean process() {
+            AtomicReference<KafkaException> firstError = new AtomicReference<>();
+
+            LinkedList<BackgroundEvent> events = new LinkedList<>();
+            backgroundEventQueue.drainTo(events);
+
+            for (BackgroundEvent event : events) {
+                try {
+                    if (event instanceof CompletableBackgroundEvent)
+                        backgroundEventReaper.add((CompletableBackgroundEvent<?>) event);
+
+                    backgroundEventProcessor.process(event);
+                } catch (Throwable t) {
+                    KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
+
+                    if (!firstError.compareAndSet(null, e))
+                        log.warn("An error occurred when processing the background event: {}", e.getMessage(), e);
+                }
+            }
+
+            backgroundEventReaper.reapExpiredAndCompleted(time.milliseconds());
+
+            if (firstError.get() != null)
+                throw firstError.get();
+
+            return !events.isEmpty();
+        }
+
         @Override
         public void process(final BackgroundEvent event) {
             switch (event.type()) {
@@ -1662,7 +1696,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         maybeThrowFencedInstanceException();
         maybeInvokeCommitCallbacks();
         maybeUpdateSubscriptionMetadata();
-        processBackgroundEvents();
+        backgroundEventProcessor.process();
 
         return updateFetchPositions(timer);
     }
@@ -1789,40 +1823,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     /**
-     * Process the events—if any—that were produced by the {@link ConsumerNetworkThread network thread}.
-     * It is possible that {@link ErrorEvent an error}
-     * could occur when processing the events. In such cases, the processor will take a reference to the first
-     * error, continue to process the remaining events, and then throw the first error that occurred.
-     */
-    private boolean processBackgroundEvents() {
-        AtomicReference<KafkaException> firstError = new AtomicReference<>();
-
-        LinkedList<BackgroundEvent> events = new LinkedList<>();
-        backgroundEventQueue.drainTo(events);
-
-        for (BackgroundEvent event : events) {
-            try {
-                if (event instanceof CompletableBackgroundEvent)
-                    backgroundEventReaper.add((CompletableBackgroundEvent<?>) event);
-
-                backgroundEventProcessor.process(event);
-            } catch (Throwable t) {
-                KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
-
-                if (!firstError.compareAndSet(null, e))
-                    log.warn("An error occurred when processing the background event: {}", e.getMessage(), e);
-            }
-        }
-
-        backgroundEventReaper.reapExpiredAndCompleted(time.milliseconds());
-
-        if (firstError.get() != null)
-            throw firstError.get();
-
-        return !events.isEmpty();
-    }
-
-    /**
      * This method can be used by cases where the caller has an event that needs to both block for completion but
      * also process background events. For some events, in order to fully process the associated logic, the
      * {@link ConsumerNetworkThread background thread} needs assistance from the application thread to complete.
@@ -1854,6 +1854,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the
      * {@link ConsumerRebalanceListener} callback is performed.
      *
+     * @param eventProcessor Event processor that contains the queue of events to process
      * @param future         Event that contains a {@link CompletableFuture}; it is on this future that the
      *                       application thread will wait for completion
      * @param timer          Overall timer that bounds how long to wait for the event to complete
@@ -1866,7 +1867,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         log.trace("Will wait up to {} ms for future {} to complete", timer.remainingMs(), future);
 
         do {
-            boolean hadEvents = processBackgroundEvents();
+            boolean hadEvents = backgroundEventProcessor.process();
 
             try {
                 if (future.isDone()) {
