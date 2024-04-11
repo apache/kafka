@@ -1211,4 +1211,14 @@ public class ConsumerGroup implements Group {
     public boolean allUseClassicProtocol() {
         return numClassicProtocolMember() == members().size();
     }
+
+    /**
+     * @param memberId The member to remove.
+     *
+     * @return The boolean indicating whether all the members use the classic protocol if the given member is removed.
+     */
+    public boolean allUseClassicProtocolExcept(String memberId) { // TODO: need a unit test
+        return numClassicProtocolMember() == members().size() - 1 &&
+            !getOrMaybeCreateMember(memberId, false).useClassicProtocol();
+    }
 }

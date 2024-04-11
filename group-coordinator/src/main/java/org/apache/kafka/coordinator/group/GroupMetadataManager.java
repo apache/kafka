@@ -779,7 +779,7 @@ public class GroupMetadataManager {
 
     public boolean validateOnlineDowngrade(ConsumerGroup consumerGroup, String memberId) {
         return consumerGroupMigrationPolicy.isDowngradeEnabled() &&
-            consumerGroup.allUseLegacyProtocol(memberId) &&
+            consumerGroup.allUseClassicProtocolExcept(memberId) &&
             consumerGroup.numMembers() > 1 &&
             consumerGroup.numMembers() - 1 <= classicGroupMaxSize;
     }
@@ -795,7 +795,7 @@ public class GroupMetadataManager {
             consumerGroup.groupEpoch(),
             Optional.ofNullable(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.empty(),
-            consumerGroup.members().keySet().stream().findAny(),
+            consumerGroup.members().keySet().stream().findAny(), // TODO: need to find any except the leaving member id
             Optional.of(time.milliseconds())
         );
 

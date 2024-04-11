@@ -10015,9 +10015,9 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
 
-        ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection protocols =
-            new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocolCollection(1);
-        protocols.add(new ConsumerGroupMemberMetadataValue.ClassicJoinGroupRequestProtocol()
+        ConsumerGroupMemberMetadataValue.ClassicProtocolCollection protocols =
+            new ConsumerGroupMemberMetadataValue.ClassicProtocolCollection(1);
+        protocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("range")
             .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
                 Arrays.asList(fooTopicName, barTopicName)))))
@@ -10031,7 +10031,9 @@ public class GroupMetadataManagerTest {
             .setClientHost("localhost/127.0.0.1")
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
-            .setSupportedProtocols(protocols)
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(protocols)
+            )
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2),
                 mkTopicAssignment(barTopicId, 0, 1)))
@@ -10051,6 +10053,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         // Consumer group with two members.
+        // Member 1 uses the classic protocol and member 2 uses the consumer protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
             .withAssignors(Collections.singletonList(assignor))
