@@ -207,8 +207,7 @@ public class AsyncKafkaConsumerTest {
         SubscriptionState subscriptions,
         List<ConsumerPartitionAssignor> assignors,
         String groupId,
-        String clientId,
-        boolean autoCommitEnabled) {
+        String clientId) {
         return new AsyncKafkaConsumer<>(
             new LogContext(),
             clientId,
@@ -565,8 +564,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             singletonList(new RoundRobinAssignor()),
             "group-id",
-            "client-id",
-            autoCommitEnabled);
+            "client-id");
         completeCommitSyncApplicationEventSuccessfully();
         final TopicPartition t0 = new TopicPartition("t0", 2);
         final TopicPartition t1 = new TopicPartition("t0", 3);
@@ -703,8 +701,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             singletonList(new RoundRobinAssignor()),
             "group-id",
-            "client-id",
-            autoCommitEnabled);
+            "client-id");
 
         consumer.subscribe(singleton("topic"), listener);
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
@@ -726,8 +723,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             singletonList(new RoundRobinAssignor()),
             "group-id",
-            "client-id",
-            autoCommitEnabled);
+            "client-id");
         subscriptions.subscribe(singleton("topic"), Optional.of(listener));
         TopicPartition tp = new TopicPartition("topic", 0);
         subscriptions.assignFromSubscribed(singleton(tp));
@@ -765,8 +761,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             singletonList(new RoundRobinAssignor()),
             "group-id",
-            "client-id",
-            autoCommitEnabled);
+            "client-id");
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
@@ -776,6 +771,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testAutoCommitSyncDisabled() {
+        autoCommitEnabled = false;
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         consumer = newConsumer(
             mock(FetchBuffer.class),
@@ -784,8 +780,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             singletonList(new RoundRobinAssignor()),
             "group-id",
-            "client-id",
-            false);
+            "client-id");
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
@@ -1493,8 +1488,7 @@ public class AsyncKafkaConsumerTest {
                 subscriptions,
                 singletonList(new RoundRobinAssignor()),
                 "group-id",
-                "client-id",
-                autoCommitEnabled);
+                "client-id");
         final TopicPartition tp = new TopicPartition("topic", 0);
         final List<ConsumerRecord<String, String>> records = singletonList(
                 new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
