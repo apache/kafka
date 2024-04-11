@@ -232,6 +232,34 @@ public class HeartbeatRequestManagerTest {
     }
 
     @Test
+    public void testHeartbeatNotSentIfAnotherOnInFlight() {
+        mockStableMember();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+
+        // Heartbeat sent (no response received)
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest inflightReq = result.unsentRequests.get(0);
+
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a " +
+            "previous on in-flight");
+        
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent when the " +
+            "interval expires if there is a previous HB request in-flight");
+
+        // Receive response for the inflight. The next HB should be sent on the next poll after
+        // the interval expires.
+        inflightReq.handler().onComplete(createHeartbeatResponse(inflightReq, Errors.NONE));
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+    }
+
+    @Test
     public void testHeartbeatOutsideInterval() {
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
