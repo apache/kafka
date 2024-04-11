@@ -46,7 +46,6 @@ import java.util.HashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -74,7 +73,6 @@ public class ConnectorOffsetBackingStoreTest {
     private static final byte[] OFFSET_VALUE_SERIALIZED = "value-serialized".getBytes();
 
     private static final Exception PRODUCE_EXCEPTION = new KafkaException();
-    private static final Exception TIMEOUT_EXCEPTION = new TimeoutException();
 
     @Mock
     private Converter keyConverter;
