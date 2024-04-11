@@ -253,7 +253,7 @@ public class HeartbeatRequestManagerTest {
         // Receive response for the inflight. The next HB should be sent on the next poll after
         // the interval expires.
         inflightReq.handler().onComplete(createHeartbeatResponse(inflightReq, Errors.NONE));
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        time.sleep(DEFAULT_RETRY_BACKOFF_MS);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
 
