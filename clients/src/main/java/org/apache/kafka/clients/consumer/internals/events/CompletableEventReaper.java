@@ -25,10 +25,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 
 /**
  * The {@code CompletableEventReaper} is responsible for tracking any {@link CompletableEvent}s that were processed,
@@ -43,11 +43,6 @@ public class CompletableEventReaper<T extends CompletableEvent<?>> {
      * List of tracked events that we are candidates to expire or cancel when reviewed.
      */
     private final List<T> tracked;
-
-    /**
-     * {@link Predicate} to check if a {@link Future} is {@link Future#isDone() done}.
-     */
-    private final Predicate<T> doneFilter = e -> e.future().isDone();
 
     public CompletableEventReaper(LogContext logContext) {
         this.log = logContext.logger(CompletableEventReaper.class);
@@ -89,7 +84,7 @@ public class CompletableEventReaper<T extends CompletableEvent<?>> {
     public void reapExpiredAndCompleted(long currentTimeMs) {
         log.trace("Reaping expired events");
 
-        Consumer<CompletableEvent<?>> completeEvent = e -> {
+        Consumer<CompletableEvent<?>> timeoutEvent = e -> {
             TimeoutException error = new TimeoutException(String.format("%s could not be completed within its timeout", e.getClass().getSimpleName()));
             long pastDueMs = currentTimeMs - e.deadlineMs();
             log.debug("Completing event {} exceptionally since it expired {} ms ago", e, pastDueMs);
@@ -100,13 +95,13 @@ public class CompletableEventReaper<T extends CompletableEvent<?>> {
         // First, complete (exceptionally) any events that have passed their deadline AND aren't already complete.
         tracked
                 .stream()
-                .filter(not(doneFilter))
+                .filter(e -> !e.future().isDone())
                 .filter(e -> currentTimeMs > e.deadlineMs())
-                .forEach(completeEvent);
+                .forEach(timeoutEvent);
 
         // Second, remove any events that are already complete, just to make sure we don't hold references. This will
         // include any events that finished successfully as well as any events we just completed exceptionally above.
-        tracked.removeIf(doneFilter);
+        tracked.removeIf(e -> e.future().isDone());
 
         log.trace("Finished reaping expired events");
     }
@@ -133,31 +128,27 @@ public class CompletableEventReaper<T extends CompletableEvent<?>> {
 
         Objects.requireNonNull(events, "Event queue to reap must be non-null");
 
-        Consumer<CompletableEvent<?>> completeEvent = e -> {
+        Consumer<CompletableEvent<?>> cancelEvent = e -> {
             log.debug("Canceling event {} since the consumer is closing", e);
             CompletableFuture<?> f = e.future();
-            f.cancel(true);
+            f.completeExceptionally(new CancellationException("Canceling event since the consumer is closing"));
         };
 
         tracked
                 .stream()
-                .filter(not(doneFilter))
-                .forEach(completeEvent);
+                .filter(e -> !e.future().isDone())
+                .forEach(cancelEvent);
         tracked.clear();
 
         events
                 .stream()
-                .filter(not(doneFilter))
-                .forEach(completeEvent);
+                .filter(e -> !e.future().isDone())
+                .forEach(cancelEvent);
 
         log.trace("Finished reaping incomplete events");
     }
 
     int size() {
         return tracked.size();
-    }
-
-    private Predicate<T> not(Predicate<T> p) {
-        return p.negate();
     }
 }

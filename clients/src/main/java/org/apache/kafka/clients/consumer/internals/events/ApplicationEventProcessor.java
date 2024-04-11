@@ -282,12 +282,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         future.whenComplete(complete(event.future()));
     }
 
-    private <T> BiConsumer<? super T, ? super Throwable> complete(final CompletableFuture<T> f) {
+    private <T> BiConsumer<? super T, ? super Throwable> complete(final CompletableFuture<T> b) {
         return (value, exception) -> {
             if (exception != null)
-                f.completeExceptionally(exception);
+                b.completeExceptionally(exception);
             else
-                f.complete(value);
+                b.complete(value);
         };
     }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.Metadata.LeaderAndEpoch;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -198,25 +199,33 @@ public class AsyncKafkaConsumerTest {
         );
     }
 
-    private AsyncKafkaConsumer<String, String> newConsumer(SubscriptionState subscriptions, boolean autoCommitEnabled) {
+    private AsyncKafkaConsumer<String, String> newConsumer(
+        FetchBuffer fetchBuffer,
+        ConsumerInterceptors<String, String> interceptors,
+        ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
+        SubscriptionState subscriptions,
+        List<ConsumerPartitionAssignor> assignors,
+        String groupId,
+        String clientId,
+        boolean autoCommitEnabled) {
         return new AsyncKafkaConsumer<String, String>(
             new LogContext(),
-            "client-id",
+            clientId,
             new Deserializers<>(new StringDeserializer(), new StringDeserializer()),
-            mock(FetchBuffer.class),
+            fetchBuffer,
             fetchCollector,
-            mock(ConsumerInterceptors.class),
+            interceptors,
             time,
             applicationEventHandler,
             backgroundEventQueue,
-            mock(ConsumerRebalanceListenerInvoker.class),
+            rebalanceListenerInvoker,
             new Metrics(),
             subscriptions,
             metadata,
             100L,
             1000,
-            singletonList(new RoundRobinAssignor()),
-            "group-id",
+            assignors,
+            groupId,
             autoCommitEnabled);
     }
 
@@ -547,7 +556,15 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCommitAsyncLeaderEpochUpdate() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(subscriptions, true);
+        consumer = newConsumer(
+            mock(FetchBuffer.class),
+            new ConsumerInterceptors<>(Collections.emptyList()),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions,
+            singletonList(new RoundRobinAssignor()),
+            "group-id",
+            "client-id",
+            autoCommitEnabled);
         completeCommitSyncApplicationEventSuccessfully();
         final TopicPartition t0 = new TopicPartition("t0", 2);
         final TopicPartition t1 = new TopicPartition("t0", 3);
@@ -677,7 +694,15 @@ public class AsyncKafkaConsumerTest {
     public void testPartitionRevocationOnClose() {
         MockRebalanceListener listener = new MockRebalanceListener();
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(subscriptions, true);
+        consumer = newConsumer(
+            mock(FetchBuffer.class),
+            mock(ConsumerInterceptors.class),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions,
+            singletonList(new RoundRobinAssignor()),
+            "group-id",
+            "client-id",
+            autoCommitEnabled);
 
         consumer.subscribe(singleton("topic"), listener);
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
@@ -692,7 +717,15 @@ public class AsyncKafkaConsumerTest {
         // closing the consumer.
         ConsumerRebalanceListener listener = mock(ConsumerRebalanceListener.class);
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(subscriptions, true);
+        consumer = newConsumer(
+            mock(FetchBuffer.class),
+            new ConsumerInterceptors<>(Collections.emptyList()),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions,
+            singletonList(new RoundRobinAssignor()),
+            "group-id",
+            "client-id",
+            autoCommitEnabled);
         subscriptions.subscribe(singleton("topic"), Optional.of(listener));
         TopicPartition tp = new TopicPartition("topic", 0);
         subscriptions.assignFromSubscribed(singleton(tp));
@@ -723,7 +756,15 @@ public class AsyncKafkaConsumerTest {
     public void testAutoCommitSyncEnabled() {
         completeCommitSyncApplicationEventSuccessfully();
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(subscriptions, true);
+        consumer = newConsumer(
+            mock(FetchBuffer.class),
+            new ConsumerInterceptors<>(Collections.emptyList()),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions,
+            singletonList(new RoundRobinAssignor()),
+            "group-id",
+            "client-id",
+            autoCommitEnabled);
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
@@ -734,7 +775,15 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testAutoCommitSyncDisabled() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(subscriptions, false);
+        consumer = newConsumer(
+            mock(FetchBuffer.class),
+            new ConsumerInterceptors<>(Collections.emptyList()),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions,
+            singletonList(new RoundRobinAssignor()),
+            "group-id",
+            "client-id",
+            false);
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
@@ -1428,7 +1477,15 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testEnsurePollEventSentOnConsumerPoll() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(subscriptions, true);
+        consumer = newConsumer(
+            mock(FetchBuffer.class),
+            new ConsumerInterceptors<>(Collections.emptyList()),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions,
+            singletonList(new RoundRobinAssignor()),
+            "group-id",
+            "client-id",
+            autoCommitEnabled);
         final TopicPartition tp = new TopicPartition("topic", 0);
         final List<ConsumerRecord<String, String>> records = singletonList(
                 new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
