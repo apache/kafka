@@ -70,13 +70,13 @@ object ZkMigrationIntegrationTest {
 
   def zkClustersForAllMigrationVersions(clusterGenerator: ClusterGenerator): Unit = {
     Seq(
-      //MetadataVersion.IBP_3_4_IV0,
-      //MetadataVersion.IBP_3_5_IV2,
-      //MetadataVersion.IBP_3_6_IV2,
-      //MetadataVersion.IBP_3_7_IV0,
-      //MetadataVersion.IBP_3_7_IV1,
-      //MetadataVersion.IBP_3_7_IV2,
-      //MetadataVersion.IBP_3_7_IV4,
+      MetadataVersion.IBP_3_4_IV0,
+      MetadataVersion.IBP_3_5_IV2,
+      MetadataVersion.IBP_3_6_IV2,
+      MetadataVersion.IBP_3_7_IV0,
+      MetadataVersion.IBP_3_7_IV1,
+      MetadataVersion.IBP_3_7_IV2,
+      MetadataVersion.IBP_3_7_IV4,
       MetadataVersion.IBP_3_8_IV0
     ).foreach { mv =>
       val clusterConfig = ClusterConfig.defaultClusterBuilder()
