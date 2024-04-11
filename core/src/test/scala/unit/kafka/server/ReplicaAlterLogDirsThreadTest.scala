@@ -501,9 +501,9 @@ class ReplicaAlterLogDirsThreadTest {
     thread.removePartitions(tp.toSet)
 
     verify(directoryEventHandler).handleAssignment(ArgumentMatchers.eq(tips(1)), ArgumentMatchers.eq(dirIds(1)),
-      "shouldRevertReassignmentsForIncompleteFutureReplicaPromotions[Queued]", any())
+      ArgumentMatchers.eq("Reverting reassignment for canceled future replica"), any())
     verify(directoryEventHandler).handleAssignment(ArgumentMatchers.eq(tips(2)), ArgumentMatchers.eq(dirIds(2)),
-      "shouldRevertReassignmentsForIncompleteFutureReplicaPromotions[Accepted]", any())
+      ArgumentMatchers.eq("Reverting reassignment for canceled future replica"), any())
     verifyNoMoreInteractions(directoryEventHandler)
   }
 
