@@ -39,7 +39,7 @@
     { "name": "ClassicMemberMetadata", "versions": "0+", "nullableVersions": "0+", "type": "ClassicMemberMetadata",
       "about": "The classic member metadata.",
       "fields": [
-        { "name": "SupportedProtocols", "type": "[]JoinGroupRequestProtocol", "versions": "0+",
+        { "name": "SupportedProtocols", "type": "[]ClassicProtocol", "versions": "0+",
           "about": "The list of protocols that the member supports if the consumer uses the classic protocol.",
           "fields": [
             { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,

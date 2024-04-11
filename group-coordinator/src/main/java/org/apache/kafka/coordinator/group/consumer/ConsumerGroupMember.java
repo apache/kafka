@@ -206,11 +206,11 @@ public class ConsumerGroupMember {
         }
 
         public Builder setSupportedClassicProtocols(JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols) {
-            ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection newSupportedProtocols =
-                new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection();
+            ConsumerGroupMemberMetadataValue.ClassicProtocolCollection newSupportedProtocols =
+                new ConsumerGroupMemberMetadataValue.ClassicProtocolCollection();
             protocols.forEach(protocol ->
                 newSupportedProtocols.add(
-                    new ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocol()
+                    new ConsumerGroupMemberMetadataValue.ClassicProtocol()
                         .setName(protocol.name())
                         .setMetadata(protocol.metadata())
                 )
@@ -523,7 +523,7 @@ public class ConsumerGroupMember {
     /**
      * @return The list of protocols if the consumer uses the classic protocol.
      */
-    public ConsumerGroupMemberMetadataValue.JoinGroupRequestProtocolCollection supportedClassicProtocols() {
+    public ConsumerGroupMemberMetadataValue.ClassicProtocolCollection supportedClassicProtocols() {
         if (useClassicProtocol()) {
             return classicMemberMetadata.supportedProtocols();
         } else {
