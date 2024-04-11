@@ -382,7 +382,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 break;
 
             case UNRELEASED_INSTANCE_ID:
-                logger.error("GroupHeartbeatRequest failed due to the instance id {} was not released: {}",
+                logger.error("GroupHeartbeatRequest failed due to unreleased instance id {}: {}",
                         membershipManager.groupInstanceId().orElse("null"), errorMessage);
                 handleFatalFailure(Errors.UNRELEASED_INSTANCE_ID.exception(errorMessage));
                 break;
@@ -391,7 +391,7 @@ public class HeartbeatRequestManager implements RequestManager {
             case GROUP_MAX_SIZE_REACHED:
             case UNSUPPORTED_ASSIGNOR:
             case UNSUPPORTED_VERSION:
-                logger.error("GroupHeartbeatRequest failed due to error: {}", error);
+                logger.error("GroupHeartbeatRequest failed due to {}: {}", error, errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
                 break;
 
@@ -415,7 +415,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
             default:
                 // If the manager receives an unknown error - there could be a bug in the code or a new error code
-                logger.error("GroupHeartbeatRequest failed due to unexpected error: {}", error);
+                logger.error("GroupHeartbeatRequest failed due to unexpected error {}: {}", error, errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
                 break;
         }
