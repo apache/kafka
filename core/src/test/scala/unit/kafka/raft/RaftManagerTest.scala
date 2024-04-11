@@ -39,11 +39,12 @@ import org.junit.jupiter.params.provider.ValueSource
 import org.apache.kafka.server.fault.FaultHandler
 import org.mockito.Mockito._
 
+
 class RaftManagerTest {
   private def createZkBrokerConfig(
     migrationEnabled: Boolean,
     nodeId: Int,
-    logDir: Option[Path],
+    logDir: Seq[Path],
     metadataDir: Option[Path]
   ): KafkaConfig = {
     val props = new Properties
@@ -67,7 +68,7 @@ class RaftManagerTest {
   private def createConfig(
     processRoles: Set[ProcessRole],
     nodeId: Int,
-    logDir: Option[Path],
+    logDir: Seq[Path],
     metadataDir: Option[Path]
   ): KafkaConfig = {
     val props = new Properties
@@ -135,7 +136,7 @@ class RaftManagerTest {
       createConfig(
         processRolesSet,
         nodeId,
-        Some(logDir.toPath),
+        Seq(logDir.toPath),
         None
       )
     )
@@ -147,9 +148,9 @@ class RaftManagerTest {
   @ValueSource(strings = Array("metadata-only", "log-only", "both"))
   def testLogDirLockWhenControllerOnly(dirType: String): Unit = {
     val logDir = if (dirType.equals("metadata-only")) {
-      None
+      Seq.empty
     } else {
-      Some(TestUtils.tempDir().toPath)
+      Seq(TestUtils.tempDir().toPath)
     }
 
     val metadataDir = if (dirType.equals("log-only")) {
@@ -169,7 +170,7 @@ class RaftManagerTest {
       )
     )
 
-    val lockPath = metadataDir.getOrElse(logDir.get).resolve(LogManager.LockFileName)
+    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LockFileName)
     assertTrue(fileLocked(lockPath))
 
     raftManager.shutdown()
@@ -179,7 +180,7 @@ class RaftManagerTest {
 
   @Test
   def testLogDirLockWhenBrokerOnlyWithSeparateMetadataDir(): Unit = {
-    val logDir = Some(TestUtils.tempDir().toPath)
+    val logDir = Seq(TestUtils.tempDir().toPath)
     val metadataDir = Some(TestUtils.tempDir().toPath)
 
     val nodeId = 1
@@ -193,7 +194,7 @@ class RaftManagerTest {
       )
     )
 
-    val lockPath = metadataDir.getOrElse(logDir.get).resolve(LogManager.LockFileName)
+    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LockFileName)
     assertTrue(fileLocked(lockPath))
 
     raftManager.shutdown()
@@ -201,76 +202,104 @@ class RaftManagerTest {
     assertFalse(fileLocked(lockPath))
   }
 
-  @Test
-  def testMigratingZkBrokerDeletesMetadataLog(): Unit = {
-    val logDir = Some(TestUtils.tempDir().toPath)
-    val metadataDir = Some(TestUtils.tempDir().toPath)
-    val nodeId = 1
-    val config = createZkBrokerConfig(migrationEnabled = true, nodeId, logDir, metadataDir)
+  def createMetadataLog(config: KafkaConfig): Unit = {
     val raftManager = createRaftManager(
       new TopicPartition("__cluster_metadata", 0),
       config
     )
     raftManager.shutdown()
+  }
 
-    try {
-      KafkaRaftManager.maybeDeleteMetadataLogDir(config)
-      assertFalse(Files.exists(metadataDir.get.resolve("__cluster_metadata-0")))
-    } catch {
-      case err: Throwable => fail("Failed to delete metadata log", err)
+  def assertLogDirsExist(
+    logDirs: Seq[Path],
+    metadataLogDir: Option[Path],
+    expectMetadataLog: Boolean
+  ): Unit = {
+    // In all cases, the log dir and metadata log dir themselves should be untouched
+    assertTrue(Files.exists(metadataLogDir.get))
+    logDirs.foreach { logDir =>
+      assertTrue(Files.exists(logDir), "Should not delete log dir")
     }
-    assertTrue(Files.exists(metadataDir.get))
+
+    if (expectMetadataLog) {
+      assertTrue(Files.exists(metadataLogDir.get.resolve("__cluster_metadata-0")))
+    } else {
+      assertFalse(Files.exists(metadataLogDir.get.resolve("__cluster_metadata-0")))
+    }
   }
 
   @Test
-  def testNonMigratingZkBrokerDeletesMetadataLog(): Unit = {
-    val logDir = Some(TestUtils.tempDir().toPath)
-    val metadataDir = Some(TestUtils.tempDir().toPath)
+  def testMigratingZkBrokerDeletesMetadataLog(): Unit = {
+    val logDirs = Seq(TestUtils.tempDir().toPath)
+    val metadataLogDir = Some(TestUtils.tempDir().toPath)
     val nodeId = 1
-    // Use this config to create the directory
-    val config1 = createZkBrokerConfig(migrationEnabled = true, nodeId, logDir, metadataDir)
-    val raftManager = createRaftManager(
-      new TopicPartition("__cluster_metadata", 0),
-      config1
-    )
-    raftManager.shutdown()
+    val config = createZkBrokerConfig(migrationEnabled = true, nodeId, logDirs, metadataLogDir)
+    createMetadataLog(config)
 
-    val config2 = createZkBrokerConfig(migrationEnabled = false, nodeId, logDir, metadataDir)
-    try {
-      KafkaRaftManager.maybeDeleteMetadataLogDir(config2)
-      fail("Should have not deleted the metadata log")
-    } catch {
-      case err: Throwable =>
-        assertEquals("Not deleting metadata log dir since migrations are not enabled.", err.getMessage)
-        assertTrue(Files.exists(metadataDir.get.resolve("__cluster_metadata-0")))
-    }
-    assertTrue(Files.exists(metadataDir.get))
+    KafkaRaftManager.maybeDeleteMetadataLogDir(config)
+    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = false)
+  }
+
+  @Test
+  def testNonMigratingZkBrokerDoesNotDeleteMetadataLog(): Unit = {
+    val logDirs = Seq(TestUtils.tempDir().toPath)
+    val metadataLogDir = Some(TestUtils.tempDir().toPath)
+    val nodeId = 1
+
+    val config = createZkBrokerConfig(migrationEnabled = false, nodeId, logDirs, metadataLogDir)
+
+    // Create the metadata log dir directly as if the broker was previously in migration mode.
+    // This simulates a misconfiguration after downgrade
+    Files.createDirectory(metadataLogDir.get.resolve("__cluster_metadata-0"))
+
+    val err = assertThrows(classOf[RuntimeException], () => KafkaRaftManager.maybeDeleteMetadataLogDir(config),
+      "Should have not deleted the metadata log")
+    assertEquals("Not deleting metadata log dir since migrations are not enabled.", err.getMessage)
+
+    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = true)
+  }
+
+  @Test
+  def testZkBrokerDoesNotDeleteSeparateLogDirs(): Unit = {
+    val logDirs = Seq(TestUtils.tempDir().toPath, TestUtils.tempDir().toPath)
+    val metadataLogDir = Some(TestUtils.tempDir().toPath)
+    val nodeId = 1
+    val config = createZkBrokerConfig(migrationEnabled = true, nodeId, logDirs, metadataLogDir)
+    createMetadataLog(config)
+
+    KafkaRaftManager.maybeDeleteMetadataLogDir(config)
+    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = false)
+  }
+
+  @Test
+  def testZkBrokerDoesNotDeleteSameLogDir(): Unit = {
+    val logDirs = Seq(TestUtils.tempDir().toPath, TestUtils.tempDir().toPath)
+    val metadataLogDir = logDirs.headOption
+    val nodeId = 1
+    val config = createZkBrokerConfig(migrationEnabled = true, nodeId, logDirs, metadataLogDir)
+    createMetadataLog(config)
+
+    KafkaRaftManager.maybeDeleteMetadataLogDir(config)
+    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = false)
   }
 
   @Test
   def testKRaftBrokerDoesNotDeleteMetadataLog(): Unit = {
-    val logDir = Some(TestUtils.tempDir().toPath)
-    val metadataDir = Some(TestUtils.tempDir().toPath)
+    val logDirs = Seq(TestUtils.tempDir().toPath)
+    val metadataLogDir = Some(TestUtils.tempDir().toPath)
     val nodeId = 1
     val config = createConfig(
       Set(ProcessRole.BrokerRole),
       nodeId,
-      logDir,
-      metadataDir
+      logDirs,
+      metadataLogDir
     )
-    val raftManager = createRaftManager(
-      new TopicPartition("__cluster_metadata", 0),
-      config
-    )
-    raftManager.shutdown()
+    createMetadataLog(config)
 
-    try {
-      KafkaRaftManager.maybeDeleteMetadataLogDir(config)
-      fail("Should not have deleted metadata log")
-    } catch {
-      case _: Throwable => assertTrue(Files.exists(metadataDir.get.resolve("__cluster_metadata-0")))
-    }
-    assertTrue(Files.exists(metadataDir.get))
+    assertThrows(classOf[RuntimeException], () => KafkaRaftManager.maybeDeleteMetadataLogDir(config),
+      "Should not have deleted metadata log")
+    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = true)
+
   }
 
   private def fileLocked(path: Path): Boolean = {
@@ -283,5 +312,4 @@ class RaftManagerTest {
       }
     }
   }
-
 }

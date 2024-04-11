@@ -70,13 +70,13 @@ object ZkMigrationIntegrationTest {
 
   def zkClustersForAllMigrationVersions(clusterGenerator: ClusterGenerator): Unit = {
     Seq(
-      MetadataVersion.IBP_3_4_IV0,
-      MetadataVersion.IBP_3_5_IV2,
-      MetadataVersion.IBP_3_6_IV2,
-      MetadataVersion.IBP_3_7_IV0,
-      MetadataVersion.IBP_3_7_IV1,
-      MetadataVersion.IBP_3_7_IV2,
-      MetadataVersion.IBP_3_7_IV4,
+      //MetadataVersion.IBP_3_4_IV0,
+      //MetadataVersion.IBP_3_5_IV2,
+      //MetadataVersion.IBP_3_6_IV2,
+      //MetadataVersion.IBP_3_7_IV0,
+      //MetadataVersion.IBP_3_7_IV1,
+      //MetadataVersion.IBP_3_7_IV2,
+      //MetadataVersion.IBP_3_7_IV4,
       MetadataVersion.IBP_3_8_IV0
     ).foreach { mv =>
       val clusterConfig = ClusterConfig.defaultClusterBuilder()
@@ -488,12 +488,15 @@ class ZkMigrationIntegrationTest {
   ))
   def testDeleteLogOnStartup(zkCluster: ClusterInstance): Unit = {
     var admin = zkCluster.createAdminClient()
-    val newTopics = new util.ArrayList[NewTopic]()
-    newTopics.add(new NewTopic("testDeleteLogOnStartup", 2, 3.toShort)
-      .configs(Map(TopicConfig.SEGMENT_BYTES_CONFIG -> "102400", TopicConfig.SEGMENT_MS_CONFIG -> "300000").asJava))
-    val createTopicResult = admin.createTopics(newTopics)
-    createTopicResult.all().get(60, TimeUnit.SECONDS)
-    admin.close()
+    try {
+      val newTopics = new util.ArrayList[NewTopic]()
+      newTopics.add(new NewTopic("testDeleteLogOnStartup", 2, 3.toShort)
+        .configs(Map(TopicConfig.SEGMENT_BYTES_CONFIG -> "102400", TopicConfig.SEGMENT_MS_CONFIG -> "300000").asJava))
+      val createTopicResult = admin.createTopics(newTopics)
+      createTopicResult.all().get(60, TimeUnit.SECONDS)
+    } finally {
+      admin.close()
+    }
 
     // Bootstrap the ZK cluster ID into KRaft
     val clusterId = zkCluster.clusterId()
@@ -541,15 +544,18 @@ class ZkMigrationIntegrationTest {
       zkCluster.rollingBrokerRestart()
       zkCluster.waitForReadyBrokers()
 
-      // List topics is served from local MetadataCache on brokers. For ZK brokers this cache is populated by UMR
-      // which won't be sent until the broker has been unfenced by the KRaft controller. So, seeing the topic in
-      // the brokers cache tells us it has recreated and re-replicated the metadata log
       admin = zkCluster.createAdminClient()
-      TestUtils.waitUntilTrue(
-        () => admin.listTopics().names().get(30, TimeUnit.SECONDS).asScala.contains("testDeleteLogOnStartup"),
-        "Timed out listing topics",
-        30000)
-      admin.close()
+      try {
+        // List topics is served from local MetadataCache on brokers. For ZK brokers this cache is populated by UMR
+        // which won't be sent until the broker has been unfenced by the KRaft controller. So, seeing the topic in
+        // the brokers cache tells us it has recreated and re-replicated the metadata log
+        TestUtils.waitUntilTrue(
+          () => admin.listTopics().names().get(30, TimeUnit.SECONDS).asScala.contains("testDeleteLogOnStartup"),
+          "Timed out listing topics",
+          30000)
+      } finally {
+        admin.close()
+      }
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
     }

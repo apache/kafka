@@ -99,7 +99,7 @@ object KafkaRaftManager {
     } else {
       val metadataDir = new File(config.metadataLogDir)
       val logDirName = UnifiedLog.logDirName(Topic.CLUSTER_METADATA_TOPIC_PARTITION)
-      val metadataPartitionDir = KafkaRaftManager.createLogDirectory(new File(config.metadataLogDir), logDirName)
+      val metadataPartitionDir = KafkaRaftManager.createLogDirectory(metadataDir, logDirName)
       val deletionLock = if (hasDifferentLogDir(config)) {
         Some(KafkaRaftManager.lockDataDir(metadataDir))
       } else {
