@@ -36,6 +36,8 @@
           "about": "The partition index." },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The error code, or 0 if there was no error." },
+        { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+          "about": "The error message, or null if there was no error." },
         { "name": "StateEpoch", "type": "int32", "versions": "0+",
           "about": "The state epoch for this share-partition." },
         { "name": "StartOffset", "type": "int64", "versions": "0+",

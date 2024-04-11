@@ -114,7 +114,7 @@ public class Assertions {
         if (expected == null) return false;
         if (actual == null) return false;
 
-        return Objects.equals(fromShareGroupAssignment(expected.assignedTopicPartitions()), fromShareGroupAssignment(actual.assignedTopicPartitions()));
+        return Objects.equals(fromShareGroupAssignment(expected.topicPartitions()), fromShareGroupAssignment(actual.topicPartitions()));
     }
 
     private static Map<Uuid, Set<Integer>> fromAssignment(

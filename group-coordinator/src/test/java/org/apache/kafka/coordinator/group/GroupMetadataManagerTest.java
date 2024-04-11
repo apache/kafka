@@ -9711,7 +9711,7 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(1)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
-                    .setAssignedTopicPartitions(Arrays.asList(
+                    .setTopicPartitions(Arrays.asList(
                         new ShareGroupHeartbeatResponseData.TopicPartitions()
                             .setTopicId(fooTopicId)
                             .setPartitions(Arrays.asList(0, 1, 2, 3, 4, 5)),

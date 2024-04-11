@@ -158,9 +158,9 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
         if (extraConsumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG)) {
             groupIdsProvided.add(extraConsumerProps.getProperty(ConsumerConfig.GROUP_ID_CONFIG));
         }
-        // The default value for group.id is "share"
+        // The default value for group.id is "console-share-consumer"
         if (groupIdsProvided.isEmpty()) {
-            groupIdsProvided.add("share");
+            groupIdsProvided.add("console-share-consumer");
         } else if (groupIdsProvided.size() > 1) {
             CommandLineUtils.printUsageAndExit(parser, "The group ids provided in different places (directly using '--group', "
                     + "via '--consumer-property', or via '--consumer.config') do not match. "

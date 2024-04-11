@@ -42,9 +42,7 @@
       "about": "The heartbeat interval in milliseconds." },
     { "name": "Assignment", "type": "Assignment", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "null if not provided; the assignment otherwise.", "fields": [
-      { "name": "Error", "type": "int8", "versions": "0+",
-        "about": "The assigned error." },
-      { "name": "AssignedTopicPartitions", "type": "[]TopicPartitions", "versions": "0+",
+      { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+",
         "about": "The partitions assigned to the member.", "fields": [
         { "name": "TopicId", "type": "uuid", "versions": "0+",
           "about": "The topic ID." },

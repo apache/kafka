@@ -51,5 +51,5 @@ public interface AcknowledgementCommitCallback {
      * <li> {@link KafkaException} for any other unrecoverable errors
      * </ul>
      */
-    void onComplete(Map<TopicIdPartition, Set<OffsetAndMetadata>> offsets, Exception exception);
+    void onComplete(Map<TopicIdPartition, Set<Long>> offsets, Exception exception);
 }

@@ -106,7 +106,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
     // This is the expected assignment.
     val expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-      .setAssignedTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
+      .setTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(topicId)
         .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
 
@@ -201,7 +201,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
     // This is the expected assignment.
     val expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-      .setAssignedTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
+      .setTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(topicId)
         .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
 
@@ -315,7 +315,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
     // This is the expected assignment.
     val expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-      .setAssignedTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
+      .setTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(topicId)
         .setPartitions(List[Integer](0, 1).asJava)).asJava)
 
@@ -423,7 +423,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     )
 
     var expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-      .setAssignedTopicPartitions(List(
+      .setTopicPartitions(List(
         new ShareGroupHeartbeatResponseData.TopicPartitions()
           .setTopicId(fooTopicId)
           .setPartitions(List[Integer](0, 1).asJava),
@@ -442,8 +442,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
       shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
       shareGroupHeartbeatResponse.data.assignment != null &&
-      expectedAssignment.assignedTopicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions) &&
-      shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions.containsAll(expectedAssignment.assignedTopicPartitions)
+      expectedAssignment.topicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.topicPartitions) &&
+      shareGroupHeartbeatResponse.data.assignment.topicPartitions.containsAll(expectedAssignment.topicPartitions)
     }, msg = s"Could not get partitions for topic foo and bar assigned. Last response $shareGroupHeartbeatResponse.")
     // Verify the response.
     assertEquals(3, shareGroupHeartbeatResponse.data.memberEpoch)
@@ -455,7 +455,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     )
 
     expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-      .setAssignedTopicPartitions(List(
+      .setTopicPartitions(List(
         new ShareGroupHeartbeatResponseData.TopicPartitions()
           .setTopicId(fooTopicId)
           .setPartitions(List[Integer](0, 1).asJava),
@@ -477,8 +477,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
       shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
         shareGroupHeartbeatResponse.data.assignment != null &&
-        expectedAssignment.assignedTopicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions) &&
-        shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions.containsAll(expectedAssignment.assignedTopicPartitions)
+        expectedAssignment.topicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.topicPartitions) &&
+        shareGroupHeartbeatResponse.data.assignment.topicPartitions.containsAll(expectedAssignment.topicPartitions)
     }, msg = s"Could not get partitions for topic baz assigned. Last response $shareGroupHeartbeatResponse.")
     // Verify the response.
     assertEquals(4, shareGroupHeartbeatResponse.data.memberEpoch)
@@ -486,7 +486,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     TestUtils.increasePartitions(admin, "bar", 6, Seq.empty)
 
     expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-      .setAssignedTopicPartitions(List(
+      .setTopicPartitions(List(
         new ShareGroupHeartbeatResponseData.TopicPartitions()
           .setTopicId(fooTopicId)
           .setPartitions(List[Integer](0, 1).asJava),
@@ -508,8 +508,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
       shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
         shareGroupHeartbeatResponse.data.assignment != null &&
-        expectedAssignment.assignedTopicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions) &&
-        shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions.containsAll(expectedAssignment.assignedTopicPartitions)
+        expectedAssignment.topicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.topicPartitions) &&
+        shareGroupHeartbeatResponse.data.assignment.topicPartitions.containsAll(expectedAssignment.topicPartitions)
     }, msg = s"Could not update partitions assignment for topic bar. Last response $shareGroupHeartbeatResponse.")
     // Verify the response.
     assertEquals(5, shareGroupHeartbeatResponse.data.memberEpoch)
@@ -522,7 +522,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     )
 
     expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-      .setAssignedTopicPartitions(List(
+      .setTopicPartitions(List(
         new ShareGroupHeartbeatResponseData.TopicPartitions()
           .setTopicId(barTopicId)
           .setPartitions(List[Integer](0, 1, 2, 3, 4, 5).asJava),
@@ -541,8 +541,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
       shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
         shareGroupHeartbeatResponse.data.assignment != null &&
-        expectedAssignment.assignedTopicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions) &&
-        shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions.containsAll(expectedAssignment.assignedTopicPartitions)
+        expectedAssignment.topicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.topicPartitions) &&
+        shareGroupHeartbeatResponse.data.assignment.topicPartitions.containsAll(expectedAssignment.topicPartitions)
     }, msg = s"Could not update partitions assignment for topic foo. Last response $shareGroupHeartbeatResponse.")
     // Verify the response.
     assertEquals(6, shareGroupHeartbeatResponse.data.memberEpoch)
@@ -603,7 +603,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
     // This is the expected assignment.
     var expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-      .setAssignedTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
+      .setTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(fooId)
         .setPartitions(List[Integer](0, 1).asJava)).asJava)
 
@@ -639,7 +639,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     )
 
     expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-      .setAssignedTopicPartitions(List(
+      .setTopicPartitions(List(
         new ShareGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(fooId)
         .setPartitions(List[Integer](0, 1).asJava),
@@ -651,8 +651,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
       shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
       shareGroupHeartbeatResponse.data.assignment != null &&
-      expectedAssignment.assignedTopicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions) &&
-      shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions.containsAll(expectedAssignment.assignedTopicPartitions)
+      expectedAssignment.topicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.topicPartitions) &&
+      shareGroupHeartbeatResponse.data.assignment.topicPartitions.containsAll(expectedAssignment.topicPartitions)
     }, msg = s"Could not get bar partitions assigned. Last response $shareGroupHeartbeatResponse.")
 
     // Verify the response.
@@ -703,8 +703,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
       shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
         shareGroupHeartbeatResponse.data.assignment != null &&
-        expectedAssignment.assignedTopicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions) &&
-        shareGroupHeartbeatResponse.data.assignment.assignedTopicPartitions.containsAll(expectedAssignment.assignedTopicPartitions)
+        expectedAssignment.topicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.topicPartitions) &&
+        shareGroupHeartbeatResponse.data.assignment.topicPartitions.containsAll(expectedAssignment.topicPartitions)
     }, msg = s"Could not get bar partitions assigned upon rejoining. Last response $shareGroupHeartbeatResponse.")
 
     // Epoch should have been bumped when a member is removed and again when it joins back.
@@ -756,7 +756,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     )
     // This is the expected assignment.
     val expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-      .setAssignedTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
+      .setTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(fooId)
         .setPartitions(List[Integer](0, 1).asJava)).asJava)
     // Prepare the next heartbeat for member.

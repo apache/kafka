@@ -17,13 +17,11 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicIdPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -36,16 +34,15 @@ public class AcknowledgementCommitCallbackHandler {
     }
 
     void onComplete(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
-        Set<OffsetAndMetadata> offsetAndMetadata = new HashSet<>();
         acknowledgementsMap.forEach((partition, acknowledgements) -> {
             Exception exception = null;
             if (acknowledgements.getAcknowledgeErrorCode() != null) {
                 exception = acknowledgements.getAcknowledgeErrorCode().exception();
             }
             Set<Long> offsets = acknowledgements.getAcknowledgementsTypeMap().keySet();
-            offsets.forEach(offset -> offsetAndMetadata.add(new OffsetAndMetadata(offset)));
+            Set<Long> offsetsCopy = Collections.unmodifiableSet(offsets);
             try {
-                acknowledgementCommitCallback.onComplete(Collections.singletonMap(partition, offsetAndMetadata), exception);
+                acknowledgementCommitCallback.onComplete(Collections.singletonMap(partition, offsetsCopy), exception);
             } catch (Throwable e) {
                 LOG.error("Exception thrown by acknowledgement commit callback", e);
             }

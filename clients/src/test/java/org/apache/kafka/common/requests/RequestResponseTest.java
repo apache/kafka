@@ -1388,8 +1388,7 @@ public class RequestResponseTest {
                 .setMemberId("memberid")
                 .setMemberEpoch(11)
                 .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
-                        .setError((byte) 0)
-                        .setAssignedTopicPartitions(Arrays.asList(
+                        .setTopicPartitions(Arrays.asList(
                                 new ShareGroupHeartbeatResponseData.TopicPartitions()
                                         .setTopicId(Uuid.randomUuid())
                                         .setPartitions(Arrays.asList(0, 1, 2)),

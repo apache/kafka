@@ -362,7 +362,7 @@ public class ShareMembershipManager implements RequestManager {
     private void replaceTargetAssignmentWithNewAssignment(
             ShareGroupHeartbeatResponseData.Assignment assignment) {
         currentTargetAssignment.clear();
-        assignment.assignedTopicPartitions().forEach(topicPartitions ->
+        assignment.topicPartitions().forEach(topicPartitions ->
                 currentTargetAssignment.put(topicPartitions.topicId(), new TreeSet<>(topicPartitions.partitions())));
     }
 

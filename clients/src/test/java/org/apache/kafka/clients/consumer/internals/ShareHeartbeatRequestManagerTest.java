@@ -519,7 +519,7 @@ public class ShareHeartbeatRequestManagerTest {
         tpTopic1.setPartitions(Collections.singletonList(0));
         ShareGroupHeartbeatResponseData.Assignment assignmentTopic1 =
                 new ShareGroupHeartbeatResponseData.Assignment();
-        assignmentTopic1.setAssignedTopicPartitions(Collections.singletonList(tpTopic1));
+        assignmentTopic1.setTopicPartitions(Collections.singletonList(tpTopic1));
         ShareGroupHeartbeatResponse rs1 = new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData()
                 .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
                 .setMemberId(memberId)

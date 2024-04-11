@@ -1247,7 +1247,7 @@ public class GroupMetadataManager {
         ShareGroupMember member
     ) {
         return new ShareGroupHeartbeatResponseData.Assignment()
-                .setAssignedTopicPartitions(fromShareGroupAssignmentMap(member.assignedPartitions()));
+                .setTopicPartitions(fromShareGroupAssignmentMap(member.assignedPartitions()));
     }
 
     private List<ShareGroupHeartbeatResponseData.TopicPartitions> fromShareGroupAssignmentMap(

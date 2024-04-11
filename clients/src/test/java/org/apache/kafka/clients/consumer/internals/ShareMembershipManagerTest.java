@@ -672,7 +672,7 @@ public class ShareMembershipManagerTest {
         String topic1Name = "topic1";
         Uuid topic2 = Uuid.randomUuid();
         ShareGroupHeartbeatResponseData.Assignment assignment = new ShareGroupHeartbeatResponseData.Assignment()
-                .setAssignedTopicPartitions(Arrays.asList(
+                .setTopicPartitions(Arrays.asList(
                         new ShareGroupHeartbeatResponseData.TopicPartitions()
                                 .setTopicId(topic1)
                                 .setPartitions(Collections.singletonList(0)),
@@ -804,7 +804,7 @@ public class ShareMembershipManagerTest {
 
         // Assignment not in metadata
         ShareGroupHeartbeatResponseData.Assignment targetAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-                .setAssignedTopicPartitions(Collections.singletonList(
+                .setTopicPartitions(Collections.singletonList(
                         new ShareGroupHeartbeatResponseData.TopicPartitions()
                                 .setTopicId(topicId)
                                 .setPartitions(Arrays.asList(0, 1))));
@@ -833,7 +833,7 @@ public class ShareMembershipManagerTest {
 
         // Assignment not in metadata
         ShareGroupHeartbeatResponseData.Assignment targetAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-                .setAssignedTopicPartitions(Collections.singletonList(
+                .setTopicPartitions(Collections.singletonList(
                         new ShareGroupHeartbeatResponseData.TopicPartitions()
                                 .setTopicId(topicId)
                                 .setPartitions(Arrays.asList(0, 1))));
@@ -1113,7 +1113,7 @@ public class ShareMembershipManagerTest {
 
     private void receiveAssignment(Map<Uuid, SortedSet<Integer>> topicIdPartitionList, ShareMembershipManager membershipManager) {
         ShareGroupHeartbeatResponseData.Assignment targetAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-                .setAssignedTopicPartitions(topicIdPartitionList.entrySet().stream().map(tp ->
+                .setTopicPartitions(topicIdPartitionList.entrySet().stream().map(tp ->
                         new ShareGroupHeartbeatResponseData.TopicPartitions()
                                 .setTopicId(tp.getKey())
                                 .setPartitions(new ArrayList<>(tp.getValue()))).collect(Collectors.toList()));
@@ -1123,7 +1123,7 @@ public class ShareMembershipManagerTest {
 
     private void receiveAssignment(Uuid topicId, List<Integer> partitions, ShareMembershipManager membershipManager) {
         ShareGroupHeartbeatResponseData.Assignment targetAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-                .setAssignedTopicPartitions(Collections.singletonList(
+                .setTopicPartitions(Collections.singletonList(
                         new ShareGroupHeartbeatResponseData.TopicPartitions()
                                 .setTopicId(topicId)
                                 .setPartitions(partitions)));
@@ -1134,7 +1134,7 @@ public class ShareMembershipManagerTest {
     private void receiveEmptyAssignment(ShareMembershipManager membershipManager) {
         // New empty assignment received, revoking owned partition.
         ShareGroupHeartbeatResponseData.Assignment targetAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-                .setAssignedTopicPartitions(Collections.emptyList());
+                .setTopicPartitions(Collections.emptyList());
         ShareGroupHeartbeatResponse heartbeatResponse = createShareGroupHeartbeatResponse(targetAssignment);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
     }
@@ -1287,7 +1287,7 @@ public class ShareMembershipManagerTest {
             when(metadata.topicNames()).thenReturn(topicNames);
         }
         return new ShareGroupHeartbeatResponseData.Assignment()
-                .setAssignedTopicPartitions(Arrays.asList(
+                .setTopicPartitions(Arrays.asList(
                         new ShareGroupHeartbeatResponseData.TopicPartitions()
                                 .setTopicId(topic1)
                                 .setPartitions(Arrays.asList(0, 1, 2)),
