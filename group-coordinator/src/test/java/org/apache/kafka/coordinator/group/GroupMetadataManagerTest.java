@@ -9606,7 +9606,7 @@ public class GroupMetadataManagerTest {
             .setClientHost("client-host")
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
-            .setSupportedProtocols(protocols)
+            .setSupportedClassicProtocols(protocols)
             .setAssignedPartitions(new HashMap<Uuid, Set<Integer>>() {
                 {
                     put(fooTopicId, new HashSet<>(Collections.singletonList(0)));
@@ -9635,17 +9635,14 @@ public class GroupMetadataManagerTest {
             // The existing classic group tombstone.
             RecordHelpers.newGroupMetadataTombstoneRecord(groupId),
 
-            // Create the new consumer group.
-            RecordHelpers.newGroupEpochRecord(groupId, 0),
-            RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, Collections.emptyMap()),
-            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 0),
-
-            // Convert memberId1.
+            // Create the new consumer group with member 1.
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember1),
-            RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember1),
+            RecordHelpers.newGroupEpochRecord(groupId, 0),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
+            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 0),
+            RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember1),
 
-            // memberId2 joins the new consumer group.
+            // member 2 joins the new consumer group.
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember2),
 
             // The subscription metadata hasn't been updated during the conversion, so a new one is computed.
@@ -9664,7 +9661,7 @@ public class GroupMetadataManagerTest {
                 }
             }),
 
-            // Newly joining member2 bumps the group epoch. A new target assignment is computed.
+            // Newly joining member 2 bumps the group epoch. A new target assignment is computed.
             RecordHelpers.newGroupEpochRecord(groupId, 1),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId2, new HashMap<Uuid, Set<Integer>>() {
                 {
@@ -9678,7 +9675,7 @@ public class GroupMetadataManagerTest {
             }),
             RecordHelpers.newTargetAssignmentEpochRecord(groupId, 1),
 
-            // member2 has no pending revoking partition. Bump its member epoch and transition to UNRELEASED_PARTITIONS.
+            // member 2 has no pending revoking partition. Bump its member epoch and transition to UNRELEASED_PARTITIONS.
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedUpdatedMember2)
         );
 
@@ -9798,7 +9795,7 @@ public class GroupMetadataManagerTest {
             .setClientHost("client-host")
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
-            .setSupportedProtocols(protocols)
+            .setSupportedClassicProtocols(protocols)
             .setAssignedPartitions(new HashMap<Uuid, Set<Integer>>() {
                 {
                     put(fooTopicId, new HashSet<>(Arrays.asList(0, 1)));
@@ -9813,7 +9810,7 @@ public class GroupMetadataManagerTest {
             .setClientHost("client-host")
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
-            .setSupportedProtocols(protocols)
+            .setSupportedClassicProtocols(protocols)
             .setAssignedPartitions(new HashMap<Uuid, Set<Integer>>() {
                 {
                     put(barTopicId, new HashSet<>(Collections.singletonList(0)));
@@ -9840,20 +9837,18 @@ public class GroupMetadataManagerTest {
             // The existing classic group tombstone.
             RecordHelpers.newGroupMetadataTombstoneRecord(groupId),
 
-            // Create the new consumer group.
-            RecordHelpers.newGroupEpochRecord(groupId, 0),
-            RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, Collections.emptyMap()),
-            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 0),
-
-            // Convert memberId2.
+            // Create the new consumer group with member 1 and member 2.
+            RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember1),
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember2),
-            RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember2),
+
+            RecordHelpers.newGroupEpochRecord(groupId, 0),
+            RecordHelpers.newTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId2, expectedMember2.assignedPartitions()),
 
-            // Convert memberId1.
-            RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember1),
+            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 0),
+
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember1),
-            RecordHelpers.newTargetAssignmentRecord(groupId, memberId1, expectedMember1.assignedPartitions()),
+            RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember2),
 
             // memberId3 joins the new consumer group.
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember3),
