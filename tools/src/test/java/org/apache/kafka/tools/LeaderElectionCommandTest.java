@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
+import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.Type;
@@ -30,7 +30,6 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.server.common.AdminCommandFailedException;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import scala.collection.JavaConverters;
@@ -60,7 +59,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("deprecation")
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.ALL, brokers = 3)
+@ClusterTestDefaults(clusterType = Type.ALL, brokers = 3, serverProperties = {
+    @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+    @ClusterConfigProperty(key = "auto.leader.rebalance.enable", value = "false"),
+    @ClusterConfigProperty(key = "controlled.shutdown.enable", value = "true"),
+    @ClusterConfigProperty(key = "controlled.shutdown.max.retries", value = "1"),
+    @ClusterConfigProperty(key = "controlled.shutdown.retry.backoff.ms", value = "1000"),
+    @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "2")
+})
 @Tag("integration")
 public class LeaderElectionCommandTest {
     private final ClusterInstance cluster;
@@ -69,16 +75,6 @@ public class LeaderElectionCommandTest {
 
     public LeaderElectionCommandTest(ClusterInstance cluster) {
         this.cluster = cluster;
-    }
-
-    @BeforeEach
-    void setup(ClusterConfig clusterConfig) {
-        TestUtils.verifyNoUnexpectedThreads("@BeforeEach");
-        clusterConfig.serverProperties().put("auto.leader.rebalance.enable", "false");
-        clusterConfig.serverProperties().put("controlled.shutdown.enable", "true");
-        clusterConfig.serverProperties().put("controlled.shutdown.max.retries", "1");
-        clusterConfig.serverProperties().put("controlled.shutdown.retry.backoff.ms", "1000");
-        clusterConfig.serverProperties().put("offsets.topic.replication.factor", "2");
     }
 
     @ClusterTest
@@ -244,7 +240,7 @@ public class LeaderElectionCommandTest {
 
     @ClusterTest
     public void testTopicDoesNotExist() {
-        Throwable e =  assertThrows(AdminCommandFailedException.class, () -> LeaderElectionCommand.run(
+        Throwable e = assertThrows(AdminCommandFailedException.class, () -> LeaderElectionCommand.run(
             Duration.ofSeconds(30),
             "--bootstrap-server", cluster.bootstrapServers(),
             "--election-type", "preferred",
@@ -326,6 +322,7 @@ public class LeaderElectionCommandTest {
 
         return file.toPath();
     }
+
     private static Path tempAdminConfig(String defaultApiTimeoutMs, String requestTimeoutMs) throws Exception {
         String content = "default.api.timeout.ms=" + defaultApiTimeoutMs + "\nrequest.timeout.ms=" + requestTimeoutMs;
         java.io.File file = TestUtils.tempFile("admin-config", ".properties");
