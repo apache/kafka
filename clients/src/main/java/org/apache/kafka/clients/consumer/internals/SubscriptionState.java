@@ -672,7 +672,7 @@ public class SubscriptionState {
      * Unset the preferred read replica. This causes the fetcher to go back to the leader for fetches.
      *
      * @param tp The topic partition
-     * @return the removed preferred read replica if set, None otherwise.
+     * @return the removed preferred read replica if set, Empty otherwise.
      */
     public synchronized Optional<Integer> clearPreferredReadReplica(TopicPartition tp) {
         final TopicPartitionState topicPartitionState = assignedStateOrNull(tp);

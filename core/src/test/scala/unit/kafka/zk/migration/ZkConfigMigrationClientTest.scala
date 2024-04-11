@@ -38,7 +38,7 @@ import org.apache.kafka.metadata.RecordTestUtils
 import org.apache.kafka.metadata.migration.KRaftMigrationZkWriter
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs}
 import org.apache.kafka.server.util.MockRandom
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.Test
@@ -64,7 +64,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     // Create some configs and persist in Zk.
     val props = new Properties()
     props.put(KafkaConfig.DefaultReplicationFactorProp, "1") // normal config
-    props.put(KafkaConfig.SslKeystorePasswordProp, encoder.encode(new Password(SECRET))) // sensitive config
+    props.put(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, encoder.encode(new Password(SECRET))) // sensitive config
     zkClient.setOrCreateEntityConfigs(ConfigType.BROKER, "1", props)
 
     val defaultProps = new Properties()
@@ -84,7 +84,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
       assertTrue(props.containsKey(name))
       // If the config is sensitive, compare it to the decoded value.
-      if (name == KafkaConfig.SslKeystorePasswordProp) {
+      if (name == KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) {
         assertEquals(SECRET, value)
       } else {
         assertEquals(props.getProperty(name), value)
@@ -101,13 +101,13 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     // persisted in Zookeeper is encrypted.
     val newProps = new util.HashMap[String, String]()
     newProps.put(KafkaConfig.DefaultReplicationFactorProp, "2") // normal config
-    newProps.put(KafkaConfig.SslKeystorePasswordProp, NEW_SECRET) // sensitive config
+    newProps.put(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, NEW_SECRET) // sensitive config
     migrationState = migrationClient.configClient().writeConfigs(
       new ConfigResource(ConfigResource.Type.BROKER, "1"), newProps, migrationState)
     val actualPropsInZk = zkClient.getEntityConfigs(ConfigType.BROKER, "1")
     assertEquals(2, actualPropsInZk.size())
     actualPropsInZk.forEach { case (key, value) =>
-      if (key == KafkaConfig.SslKeystorePasswordProp) {
+      if (key == KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) {
         assertEquals(NEW_SECRET, encoder.decode(value.toString).value)
       } else {
         assertEquals(newProps.get(key), value)

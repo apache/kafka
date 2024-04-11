@@ -1132,12 +1132,12 @@ public class ClassicGroup implements Group {
 
     /**
      * Collects the set of topics that the members are subscribed to when the Protocol Type is equal
-     * to 'consumer'. None is returned if
+     * to 'consumer'. Empty is returned if
      * - the protocol type is not equal to 'consumer';
      * - the protocol is not defined yet; or
      * - the protocol metadata does not comply with the schema.
      *
-     * @return the subscribed topics or None based on the condition above.
+     * @return the subscribed topics or Empty based on the condition above.
      */
     public Optional<Set<String>> computeSubscribedTopics() {
         if (!protocolType.isPresent()) {

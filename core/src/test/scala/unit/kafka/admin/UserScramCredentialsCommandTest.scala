@@ -22,7 +22,6 @@ import java.nio.charset.StandardCharsets
 import kafka.server.BaseRequestTest
 import kafka.utils.Exit
 import kafka.utils.TestUtils
-import kafka.utils.TestInfoUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -60,7 +59,7 @@ class UserScramCredentialsCommandTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testUserScramCredentialsRequests(quorum: String): Unit = {
     val user1 = "user1"
@@ -123,7 +122,7 @@ class UserScramCredentialsCommandTest extends BaseRequestTest {
       s"Failed to describe All users deleted")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testAlterWithEmptyPassword(quorum: String): Unit = {
     val user1 = "user1"
@@ -132,7 +131,7 @@ class UserScramCredentialsCommandTest extends BaseRequestTest {
     assertEquals(1, result.exitStatus.get, "Expected empty password to cause failure with exit status=1")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testDescribeUnknownUser(quorum: String): Unit = {
     val unknownUser = "unknownUser"
