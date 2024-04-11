@@ -311,7 +311,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         });
 
         if (secondaryStore != null && !tombstoneOffsets.isEmpty()) {
-            AtomicReference<Throwable> writeError = new AtomicReference<>();
+            AtomicReference<Throwable> primaryWriteError = new AtomicReference<>();
             FutureCallback<Void> secondaryWriteCallback = new FutureCallback<Void>() {
                 @Override
                 public void onCompletion(Throwable tombstoneWriteError, Void ignored) {
@@ -323,14 +323,14 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                         }
                         return;
                     }
-                    setPrimaryThenSecondary(primaryStore, secondaryStore, values, regularOffsets, callback, writeError);
+                    setPrimaryThenSecondary(primaryStore, secondaryStore, values, regularOffsets, callback, primaryWriteError);
                 }
 
                 @Override
                 public Void get() throws InterruptedException, ExecutionException {
                     super.get();
-                    if (writeError.get() != null) {
-                        throw new ExecutionException(writeError.get());
+                    if (primaryWriteError.get() != null) {
+                        throw new ExecutionException(primaryWriteError.get());
                     }
                     return null;
                 }
@@ -338,11 +338,11 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                 @Override
                 public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
                     super.get(timeout, unit);
-                    if (writeError.get() != null) {
-                        if (writeError.get() instanceof TimeoutException) {
-                            throw (TimeoutException) writeError.get();
+                    if (primaryWriteError.get() != null) {
+                        if (primaryWriteError.get() instanceof TimeoutException) {
+                            throw (TimeoutException) primaryWriteError.get();
                         }
-                        throw new ExecutionException(writeError.get());
+                        throw new ExecutionException(primaryWriteError.get());
                     }
                     return null;
                 }
