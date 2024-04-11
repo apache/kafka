@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -73,12 +74,12 @@ public class ConnectorOffsetBackingStoreTest {
     private static final byte[] OFFSET_VALUE_SERIALIZED = "value-serialized".getBytes();
 
     private static final Exception PRODUCE_EXCEPTION = new KafkaException();
+    private static final Exception TIMEOUT_EXCEPTION = new TimeoutException();
 
     @Mock
     private Converter keyConverter;
     @Mock
     private Converter valueConverter;
-
 
     @Test
     public void testFlushFailureWhenWriteToSecondaryStoreFailsForTombstoneOffsets() {
@@ -102,12 +103,32 @@ public class ConnectorOffsetBackingStoreTest {
             callbackError.set(error);
         });
 
-        ExecutionException e = assertThrows(ExecutionException.class, () -> setFuture.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(callbackInvoked.get());
-        assertNull(callbackResult.get());
-        assertEquals(PRODUCE_EXCEPTION, callbackError.get());
-        assertNotNull(e.getCause());
-        assertEquals(PRODUCE_EXCEPTION, e.getCause());
+        assertFlushFailure(callbackInvoked, callbackResult, callbackError, setFuture);
+    }
+
+    @Test
+    public void testFlushFailureWhenWriteToSecondaryStoreTimesoutForTombstoneOffsets() {
+        KafkaOffsetBackingStore connectorStore = createStore("topic1", false);
+        KafkaOffsetBackingStore workerStore = createStore("topic2", true);
+
+        ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
+            () -> LoggingContext.forConnector("source-connector"),
+            workerStore,
+            connectorStore,
+            "offsets-topic",
+            mock(TopicAdmin.class));
+
+        AtomicBoolean callbackInvoked = new AtomicBoolean();
+        AtomicReference<Object> callbackResult = new AtomicReference<>();
+        AtomicReference<Throwable> callbackError = new AtomicReference<>();
+
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null), (error, result) -> {
+            callbackInvoked.set(true);
+            callbackResult.set(result);
+            callbackError.set(error);
+        });
+
+        assertFlushFailure(callbackInvoked, callbackResult, callbackError, setFuture);
     }
 
     @Test
@@ -132,10 +153,7 @@ public class ConnectorOffsetBackingStoreTest {
             callbackError.set(error);
         });
 
-        assertDoesNotThrow(() -> setFuture.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(callbackInvoked.get());
-        assertNull(callbackResult.get());
-        assertNull(callbackError.get());
+        assertFlushSuccess(callbackInvoked, callbackResult, callbackError, setFuture);
     }
 
     @Test
@@ -160,10 +178,7 @@ public class ConnectorOffsetBackingStoreTest {
             callbackError.set(error);
         });
 
-        assertDoesNotThrow(() -> setFuture.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(callbackInvoked.get());
-        assertNull(callbackResult.get());
-        assertNull(callbackError.get());
+        assertFlushSuccess(callbackInvoked, callbackResult, callbackError, setFuture);
     }
 
     @Test
@@ -188,10 +203,7 @@ public class ConnectorOffsetBackingStoreTest {
             callbackError.set(error);
         });
 
-        assertDoesNotThrow(() -> setFuture.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(callbackInvoked.get());
-        assertNull(callbackResult.get());
-        assertNull(callbackError.get());
+        assertFlushSuccess(callbackInvoked, callbackResult, callbackError, setFuture);
     }
 
     @Test
@@ -216,12 +228,7 @@ public class ConnectorOffsetBackingStoreTest {
             callbackError.set(error);
         });
 
-        ExecutionException e = assertThrows(ExecutionException.class, () -> setFuture.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(callbackInvoked.get());
-        assertNull(callbackResult.get());
-        assertEquals(PRODUCE_EXCEPTION, callbackError.get());
-        assertNotNull(e.getCause());
-        assertEquals(PRODUCE_EXCEPTION, e.getCause());
+        assertFlushFailure(callbackInvoked, callbackResult, callbackError, setFuture);
     }
 
     @Test
@@ -246,12 +253,7 @@ public class ConnectorOffsetBackingStoreTest {
             callbackError.set(error);
         });
 
-        ExecutionException e = assertThrows(ExecutionException.class, () -> setFuture.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(callbackInvoked.get());
-        assertNull(callbackResult.get());
-        assertEquals(PRODUCE_EXCEPTION, callbackError.get());
-        assertNotNull(e.getCause());
-        assertEquals(PRODUCE_EXCEPTION, e.getCause());
+        assertFlushFailure(callbackInvoked, callbackResult, callbackError, setFuture);
     }
 
     @Test
@@ -264,11 +266,17 @@ public class ConnectorOffsetBackingStoreTest {
                 "offsets-topic",
                 mock(TopicAdmin.class));
 
-        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
-            assertNull(error);
-            assertNull(result);
-        }).get(1000L, TimeUnit.MILLISECONDS);
+        AtomicBoolean callbackInvoked = new AtomicBoolean();
+        AtomicReference<Object> callbackResult = new AtomicReference<>();
+        AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
+            callbackInvoked.set(true);
+            callbackResult.set(result);
+            callbackError.set(error);
+        });
+
+        assertFlushSuccess(callbackInvoked, callbackResult, callbackError, setFuture);
     }
 
     @Test
@@ -281,14 +289,33 @@ public class ConnectorOffsetBackingStoreTest {
                 "offsets-topic",
                 mock(TopicAdmin.class));
 
-        try {
-            offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
-                assertEquals(PRODUCE_EXCEPTION, error);
-                assertNull(result);
-            }).get(1000L, TimeUnit.MILLISECONDS);
-        } catch (ExecutionException e) {
-            assertEquals(PRODUCE_EXCEPTION, e.getCause());
-        }
+        AtomicBoolean callbackInvoked = new AtomicBoolean();
+        AtomicReference<Object> callbackResult = new AtomicReference<>();
+        AtomicReference<Throwable> callbackError = new AtomicReference<>();
+
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
+            callbackInvoked.set(true);
+            callbackResult.set(result);
+            callbackError.set(error);
+        });
+
+        assertFlushFailure(callbackInvoked, callbackResult, callbackError, setFuture);
+    }
+
+    private void assertFlushFailure(AtomicBoolean callbackInvoked, AtomicReference<Object> callbackResult, AtomicReference<Throwable> callbackError, Future<Void> setFuture) {
+        ExecutionException e = assertThrows(ExecutionException.class, () -> setFuture.get(1000L, TimeUnit.MILLISECONDS));
+        assertTrue(callbackInvoked.get());
+        assertNull(callbackResult.get());
+        assertEquals(PRODUCE_EXCEPTION, callbackError.get());
+        assertNotNull(e.getCause());
+        assertEquals(PRODUCE_EXCEPTION, e.getCause());
+    }
+
+    private void assertFlushSuccess(AtomicBoolean callbackInvoked, AtomicReference<Object> callbackResult, AtomicReference<Throwable> callbackError, Future<Void> setFuture) {
+        assertDoesNotThrow(() -> setFuture.get(1000L, TimeUnit.MILLISECONDS));
+        assertTrue(callbackInvoked.get());
+        assertNull(callbackResult.get());
+        assertNull(callbackError.get());
     }
 
     @SuppressWarnings("unchecked")

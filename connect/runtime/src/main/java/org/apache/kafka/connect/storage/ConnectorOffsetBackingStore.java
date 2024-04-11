@@ -19,6 +19,7 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
@@ -39,6 +40,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -309,18 +311,46 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         });
 
         if (secondaryStore != null && !tombstoneOffsets.isEmpty()) {
-            return secondaryStore.set(tombstoneOffsets, (tombstoneWriteError, ignored) -> {
-                if (tombstoneWriteError != null) {
-                    log.trace("Skipping offsets write to primary store because secondary tombstone write has failed", tombstoneWriteError);
-                    try (LoggingContext context = loggingContext()) {
-                        callback.onCompletion(tombstoneWriteError, ignored);
+            AtomicReference<Throwable> writeError = new AtomicReference<>();
+            FutureCallback<Void> secondaryWriteCallback = new FutureCallback<Void>() {
+                @Override
+                public void onCompletion(Throwable tombstoneWriteError, Void ignored) {
+                    super.onCompletion(tombstoneWriteError, ignored);
+                    if (tombstoneWriteError != null) {
+                        log.trace("Skipping offsets write to primary store because secondary tombstone write has failed", tombstoneWriteError);
+                        try (LoggingContext context = loggingContext()) {
+                            callback.onCompletion(tombstoneWriteError, ignored);
+                        }
+                        return;
                     }
-                    return;
+                    setPrimaryThenSecondary(primaryStore, secondaryStore, values, regularOffsets, callback, writeError);
                 }
-                setPrimaryThenSecondary(primaryStore, secondaryStore, values, regularOffsets, callback);
-            });
+
+                @Override
+                public Void get() throws InterruptedException, ExecutionException {
+                    super.get();
+                    if (writeError.get() != null) {
+                        throw new ExecutionException(writeError.get());
+                    }
+                    return null;
+                }
+
+                @Override
+                public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+                    super.get(timeout, unit);
+                    if (writeError.get() != null) {
+                        if (writeError.get() instanceof TimeoutException) {
+                            throw (TimeoutException) writeError.get();
+                        }
+                        throw new ExecutionException(writeError.get());
+                    }
+                    return null;
+                }
+            };
+            secondaryStore.set(tombstoneOffsets, secondaryWriteCallback);
+            return secondaryWriteCallback;
         } else {
-            return setPrimaryThenSecondary(primaryStore, secondaryStore, values, regularOffsets, callback);
+            return setPrimaryThenSecondary(primaryStore, secondaryStore, values, regularOffsets, callback, null);
         }
     }
 
@@ -329,7 +359,8 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         OffsetBackingStore secondaryStore,
         Map<ByteBuffer, ByteBuffer> completeOffsets,
         Map<ByteBuffer, ByteBuffer> nonTombstoneOffsets,
-        Callback<Void> callback
+        Callback<Void> callback,
+        AtomicReference<Throwable> writeError
     ) {
         return primaryStore.set(completeOffsets, (primaryWriteError, ignored) -> {
             if (secondaryStore != null) {
@@ -354,6 +385,9 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                 }
             }
             try (LoggingContext context = loggingContext()) {
+                if (writeError != null) {
+                    writeError.set(primaryWriteError);
+                }
                 callback.onCompletion(primaryWriteError, ignored);
             }
         });
