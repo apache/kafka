@@ -25,7 +25,7 @@ import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.server.config.ZkConfigs
+import org.apache.kafka.server.config.{KafkaSecurityConfigs, ZkConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 
@@ -194,19 +194,19 @@ class KafkaTest {
                                                                                     "--override", "ssl.keystore.certificate.chain=certificate_chain",
                                                                                     "--override", "ssl.keystore.key=private_key",
                                                                                     "--override", "ssl.truststore.certificates=truststore_certificates")))
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeyPasswordProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystorePasswordProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslTruststorePasswordProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystoreKeyProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystoreCertificateChainProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslTruststoreCertificatesProp).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaSecurityConfigs.SSL_KEY_PASSWORD_CONFIG).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaSecurityConfigs.SSL_KEYSTORE_KEY_CONFIG).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaSecurityConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaSecurityConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG).toString)
 
-    assertEquals("key_password", config.getPassword(KafkaConfig.SslKeyPasswordProp).value)
-    assertEquals("keystore_password", config.getPassword(KafkaConfig.SslKeystorePasswordProp).value)
-    assertEquals("truststore_password", config.getPassword(KafkaConfig.SslTruststorePasswordProp).value)
-    assertEquals("private_key", config.getPassword(KafkaConfig.SslKeystoreKeyProp).value)
-    assertEquals("certificate_chain", config.getPassword(KafkaConfig.SslKeystoreCertificateChainProp).value)
-    assertEquals("truststore_certificates", config.getPassword(KafkaConfig.SslTruststoreCertificatesProp).value)
+    assertEquals("key_password", config.getPassword(KafkaSecurityConfigs.SSL_KEY_PASSWORD_CONFIG).value)
+    assertEquals("keystore_password", config.getPassword(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG).value)
+    assertEquals("truststore_password", config.getPassword(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value)
+    assertEquals("private_key", config.getPassword(KafkaSecurityConfigs.SSL_KEYSTORE_KEY_CONFIG).value)
+    assertEquals("certificate_chain", config.getPassword(KafkaSecurityConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG).value)
+    assertEquals("truststore_certificates", config.getPassword(KafkaSecurityConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG).value)
   }
 
   @Test
@@ -217,13 +217,13 @@ class KafkaTest {
       "--override", "ssl.keystore.password=" + password,
       "--override", "ssl.key.password=" + password,
       "--override", "ssl.truststore.password=" + password)))
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeyPasswordProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystorePasswordProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslTruststorePasswordProp).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaSecurityConfigs.SSL_KEY_PASSWORD_CONFIG).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).toString)
 
-    assertEquals(password, config.getPassword(KafkaConfig.SslKeystorePasswordProp).value)
-    assertEquals(password, config.getPassword(KafkaConfig.SslKeyPasswordProp).value)
-    assertEquals(password, config.getPassword(KafkaConfig.SslTruststorePasswordProp).value)
+    assertEquals(password, config.getPassword(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG).value)
+    assertEquals(password, config.getPassword(KafkaSecurityConfigs.SSL_KEY_PASSWORD_CONFIG).value)
+    assertEquals(password, config.getPassword(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value)
   }
 
   private val booleanPropValueToSet = true

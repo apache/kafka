@@ -60,7 +60,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.security.PasswordEncoder
-import org.apache.kafka.server.config.{ConfigType, ZkConfigs}
+import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
@@ -130,9 +130,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       props.put(KafkaConfig.ListenersProp, s"$SecureInternal://localhost:0, $SecureExternal://localhost:0")
       props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"PLAINTEXT:PLAINTEXT, $SecureInternal:SSL, $SecureExternal:SASL_SSL, CONTROLLER:$controllerListenerSecurityProtocol")
       props.put(KafkaConfig.InterBrokerListenerNameProp, SecureInternal)
-      props.put(KafkaConfig.SslClientAuthProp, "requested")
-      props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, "PLAIN")
-      props.put(KafkaConfig.SaslEnabledMechanismsProp, kafkaServerSaslMechanisms.mkString(","))
+      props.put(KafkaSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "requested")
+      props.put(KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN")
+      props.put(KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, kafkaServerSaslMechanisms.mkString(","))
       props.put(KafkaConfig.LogSegmentBytesProp, "2000") // low value to test log rolling on config update
       props.put(KafkaConfig.NumReplicaFetchersProp, "2") // greater than one to test reducing threads
       props.put(KafkaConfig.PasswordEncoderSecretProp, "dynamic-config-secret")
@@ -293,8 +293,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val brokerConfigs = describeConfig(adminClients.head, servers).entries.asScala
     // the following are values before updated
     assertFalse(brokerConfigs.exists(_.name == TestMetricsReporter.PollingIntervalProp), "Initial value of polling interval")
-    assertFalse(brokerConfigs.exists(_.name == configPrefix + KafkaConfig.SslTruststoreTypeProp), "Initial value of ssl truststore type")
-    assertNull(brokerConfigs.find(_.name == configPrefix+KafkaConfig.SslKeystorePasswordProp).get.value, "Initial value of ssl keystore password")
+    assertFalse(brokerConfigs.exists(_.name == configPrefix + SSL_TRUSTSTORE_TYPE_CONFIG), "Initial value of ssl truststore type")
+    assertNull(brokerConfigs.find(_.name == configPrefix + SSL_KEYSTORE_PASSWORD_CONFIG).get.value, "Initial value of ssl keystore password")
 
     // setup ssl properties
     val secProps = securityProps(sslProperties1, KEYSTORE_PROPS, configPrefix)
@@ -309,18 +309,18 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     updatedProps.put(TestMetricsReporter.PollingIntervalProp, PollingIntervalVal)
 
     // 2. update String property using config provider
-    updatedProps.put(configPrefix+KafkaConfig.SslTruststoreTypeProp, SslTruststoreTypeVal)
+    updatedProps.put(configPrefix + SSL_TRUSTSTORE_TYPE_CONFIG, SslTruststoreTypeVal)
 
     // merge two properties
     updatedProps ++= secProps
 
     // 3. update password property using config provider
-    updatedProps.put(configPrefix+KafkaConfig.SslKeystorePasswordProp, SslKeystorePasswordVal)
+    updatedProps.put(configPrefix + SSL_KEYSTORE_PASSWORD_CONFIG, SslKeystorePasswordVal)
 
     alterConfigsUsingConfigCommand(updatedProps)
     waitForConfig(TestMetricsReporter.PollingIntervalProp, "1000")
-    waitForConfig(configPrefix+KafkaConfig.SslTruststoreTypeProp, "JKS")
-    waitForConfig(configPrefix+KafkaConfig.SslKeystorePasswordProp, "ServerPassword")
+    waitForConfig(configPrefix + SSL_TRUSTSTORE_TYPE_CONFIG, "JKS")
+    waitForConfig(configPrefix + SSL_KEYSTORE_PASSWORD_CONFIG, "ServerPassword")
 
     // wait for MetricsReporter
     val reporters = TestMetricsReporter.waitForReporters(servers.size)
@@ -333,8 +333,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       // fetch from ZK, values should be unresolved
       val props = fetchBrokerConfigsFromZooKeeper(servers.head)
       assertTrue(props.getProperty(TestMetricsReporter.PollingIntervalProp) == PollingIntervalVal, "polling interval is not updated in ZK")
-      assertTrue(props.getProperty(configPrefix + KafkaConfig.SslTruststoreTypeProp) == SslTruststoreTypeVal, "store type is not updated in ZK")
-      assertTrue(props.getProperty(configPrefix + KafkaConfig.SslKeystorePasswordProp) == SslKeystorePasswordVal, "keystore password is not updated in ZK")
+      assertTrue(props.getProperty(configPrefix + SSL_TRUSTSTORE_TYPE_CONFIG) == SslTruststoreTypeVal, "store type is not updated in ZK")
+      assertTrue(props.getProperty(configPrefix + SSL_KEYSTORE_PASSWORD_CONFIG) == SslKeystorePasswordVal, "keystore password is not updated in ZK")
     }
 
     // verify the update
@@ -1742,12 +1742,12 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private def addListenerPropsSasl(listener: String, mechanisms: Seq[String], props: Properties): Unit = {
     val listenerName = new ListenerName(listener)
     val prefix = listenerName.configPrefix
-    props.put(prefix + KafkaConfig.SaslEnabledMechanismsProp, mechanisms.mkString(","))
-    props.put(prefix + KafkaConfig.SaslKerberosServiceNameProp, "kafka")
+    props.put(prefix + KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, mechanisms.mkString(","))
+    props.put(prefix + KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_CONFIG, "kafka")
     mechanisms.foreach { mechanism =>
       val jaasSection = jaasSections(Seq(mechanism), None, KafkaSasl, "").head
       val jaasConfig = jaasSection.modules.head.toString
-      props.put(listenerName.saslMechanismConfigPrefix(mechanism) + KafkaConfig.SaslJaasConfigProp, jaasConfig)
+      props.put(listenerName.saslMechanismConfigPrefix(mechanism) + KafkaSecurityConfigs.SASL_JAAS_CONFIG, jaasConfig)
     }
   }
 
