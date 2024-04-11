@@ -164,6 +164,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         'role' => 'ce-kafka',
         'Owner' => 'ce-kafka',
         'JenkinsBuildUrl' => ENV['BUILD_URL'],
+        'SemaphoreWorkflowUrl' => ENV['SEMAPHORE_WORKFLOW_URL'],
+        'SemaphoreJobId' => ENV['SEMAPHORE_JOB_ID'],
         'cflt_environment' => 'devel',
         'cflt_partition' => 'onprem',
         'cflt_managed_by' => 'iac',

@@ -40,7 +40,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -359,7 +358,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
 
             rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(configs);
             rlmTopicPartitioner = new RemoteLogMetadataTopicPartitioner(rlmmConfig.metadataTopicPartitionsCount());
-            remotePartitionMetadataStore = new RemotePartitionMetadataStore(new File(rlmmConfig.logDir()).toPath());
+            remotePartitionMetadataStore = new RemotePartitionMetadataStore();
             configured = true;
             log.info("Successfully configured topic-based RLMM with config: {}", rlmmConfig);
 

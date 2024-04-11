@@ -100,7 +100,7 @@ class LocalLogTest {
                             initialOffset: Long = 0L): Unit = {
     log.append(lastOffset = initialOffset + records.size - 1,
       largestTimestamp = records.head.timestamp,
-      shallowOffsetOfMaxTimestamp = initialOffset,
+      offsetOfMaxTimestamp = initialOffset,
       records = MemoryRecords.withRecords(initialOffset, CompressionType.NONE, 0, records.toList : _*))
   }
 

@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollRes
 import org.apache.kafka.clients.consumer.internals.Utils.TopicIdPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -208,7 +208,7 @@ public class ShareMembershipManager implements RequestManager {
 
     /**
      * Serves as the conduit by which we can report events to the application thread. This is needed as we send
-     * {@link ErrorBackgroundEvent errors} to the application thread.
+     * {@link ErrorEvent errors} to the application thread.
      */
     private final BackgroundEventHandler backgroundEventHandler;
 

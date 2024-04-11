@@ -22,8 +22,11 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
+import java.util.Iterator;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.Set;
 
 public class Utils {
     private Utils() {}
@@ -68,5 +71,32 @@ public class Utils {
         } else {
             return apiMessageAndVersion.message();
         }
+    }
+
+    /**
+     * @return The provided assignment as a String.
+     *
+     * Example:
+     * [topicid1-0, topicid1-1, topicid2-0, topicid2-1]
+     */
+    public static String assignmentToString(
+        Map<Uuid, Set<Integer>> assignment
+    ) {
+        StringBuilder builder = new StringBuilder("[");
+        Iterator<Map.Entry<Uuid, Set<Integer>>> topicsIterator = assignment.entrySet().iterator();
+        while (topicsIterator.hasNext()) {
+            Map.Entry<Uuid, Set<Integer>> entry = topicsIterator.next();
+            Iterator<Integer> partitionsIterator = entry.getValue().iterator();
+            while (partitionsIterator.hasNext()) {
+                builder.append(entry.getKey());
+                builder.append("-");
+                builder.append(partitionsIterator.next());
+                if (partitionsIterator.hasNext() || topicsIterator.hasNext()) {
+                    builder.append(", ");
+                }
+            }
+        }
+        builder.append("]");
+        return builder.toString();
     }
 }

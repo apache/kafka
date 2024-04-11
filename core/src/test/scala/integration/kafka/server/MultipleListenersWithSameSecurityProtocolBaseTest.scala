@@ -30,6 +30,7 @@ import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.coordinator.group.OffsetConfig
+import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -79,7 +80,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$Internal:PLAINTEXT, $SecureInternal:SASL_SSL," +
         s"$External:PLAINTEXT, $SecureExternal:SASL_SSL")
       props.put(KafkaConfig.InterBrokerListenerNameProp, Internal)
-      props.put(KafkaConfig.ZkEnableSecureAclsProp, "true")
+      props.put(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
       props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, kafkaClientSaslMechanism)
       props.put(s"${new ListenerName(SecureInternal).configPrefix}${KafkaConfig.SaslEnabledMechanismsProp}",
         kafkaServerSaslMechanisms(SecureInternal).mkString(","))

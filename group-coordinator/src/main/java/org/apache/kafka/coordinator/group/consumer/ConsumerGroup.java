@@ -347,7 +347,7 @@ public class ConsumerGroup extends AbstractGroup {
             newState = ASSIGNING;
         } else {
             for (GroupMember member : members.values()) {
-                if (member.targetMemberEpoch() != targetAssignmentEpoch.get() || member.state() != ConsumerGroupMember.MemberState.STABLE) {
+                if (!member.isReconciledTo(targetAssignmentEpoch.get())) {
                     newState = RECONCILING;
                     break;
                 }

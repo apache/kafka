@@ -814,9 +814,9 @@ public class SharePartitionManagerTest {
         List<TopicIdPartition> actualErroneousPartitions = new ArrayList<>();
         List<TopicIdPartition> actualValidPartitions = new ArrayList<>();
         erroneousAndValidPartitionData.erroneous().forEach(topicIdPartitionPartitionDataTuple2 ->
-                actualErroneousPartitions.add(topicIdPartitionPartitionDataTuple2._1));
+            actualErroneousPartitions.add(topicIdPartitionPartitionDataTuple2._1));
         erroneousAndValidPartitionData.validTopicIdPartitions().forEach(topicIdPartitionPartitionDataTuple2 ->
-                actualValidPartitions.add(topicIdPartitionPartitionDataTuple2._1));
+            actualValidPartitions.add(topicIdPartitionPartitionDataTuple2._1));
         assertEquals(expectedErroneous, actualErroneousPartitions);
         assertEquals(expectedValid, actualValidPartitions);
     }

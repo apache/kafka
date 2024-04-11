@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.common.CurrentAssignmentBuilder;
+import org.apache.kafka.coordinator.group.common.MemberState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 
 import java.util.Collections;
@@ -33,27 +33,6 @@ import java.util.stream.Collectors;
 public abstract class GroupMember {
 
     /**
-     * The various states that a member can be in. For their definition,
-     * refer to the documentation of {{@link CurrentAssignmentBuilder}}.
-     */
-    public enum MemberState {
-        REVOKING("revoking"),
-        ASSIGNING("assigning"),
-        STABLE("stable");
-
-        private final String name;
-
-        MemberState(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-    }
-
-    /**
      * The member id.
      */
     protected String memberId;
@@ -67,13 +46,6 @@ public abstract class GroupMember {
      * The previous member epoch.
      */
     protected int previousMemberEpoch;
-
-    /**
-     * The next member epoch. This corresponds to the target
-     * assignment epoch used to compute the current assigned,
-     * revoking and assigning partitions.
-     */
-    protected int targetMemberEpoch;
 
     /**
      * The instance id provided by the member.
@@ -134,13 +106,6 @@ public abstract class GroupMember {
      */
     public int previousMemberEpoch() {
         return previousMemberEpoch;
-    }
-
-    /**
-     * @return The target member epoch.
-     */
-    public int targetMemberEpoch() {
-        return targetMemberEpoch;
     }
 
     /**
@@ -205,5 +170,12 @@ public abstract class GroupMember {
         return topicPartitionsList.stream().collect(Collectors.toMap(
             ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
             topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
+    }
+
+    /**
+     * @return True if the member is in the Stable state and at the desired epoch.
+     */
+    public boolean isReconciledTo(int targetAssignmentEpoch) {
+        return state == MemberState.STABLE && memberEpoch == targetAssignmentEpoch;
     }
 }

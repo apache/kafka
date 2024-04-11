@@ -107,7 +107,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -855,7 +854,7 @@ public class Worker {
                 connName, defaultClientId, config, connConfig, connectorClass,
                 connectorClientConfigOverridePolicy, clusterId, ConnectorType.SOURCE);
         ConnectUtils.ensureProperty(
-                result, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                result, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString(),
                 "for source connectors' offset consumers when exactly-once source support is enabled",
                 false
         );
@@ -875,7 +874,7 @@ public class Worker {
         // Users can disable this if they want to since the task isn't exactly-once anyways
         result.putIfAbsent(
                 ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT));
+                IsolationLevel.READ_COMMITTED.toString());
         return result;
     }
 

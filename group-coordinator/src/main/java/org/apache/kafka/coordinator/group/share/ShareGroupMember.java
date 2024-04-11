@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.GroupMember;
 import org.apache.kafka.coordinator.group.Utils;
+import org.apache.kafka.coordinator.group.common.MemberState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.image.TopicsImage;
@@ -42,7 +43,7 @@ public class ShareGroupMember extends GroupMember {
   /**
    * A builder that facilitates the creation of a new member or the update of
    * an existing one.
-   *
+   * <p>
    * Please refer to the javadoc of {{@link ShareGroupMember}} for the
    * definition of the fields.
    */
@@ -50,7 +51,7 @@ public class ShareGroupMember extends GroupMember {
     private final String memberId;
     private int memberEpoch = 0;
     private int previousMemberEpoch = -1;
-    private int targetMemberEpoch = 0;
+    private MemberState state = MemberState.STABLE;
     private String rackId = null;
     private int rebalanceTimeoutMs = -1;
     private String clientId = "";
@@ -68,7 +69,6 @@ public class ShareGroupMember extends GroupMember {
       this.memberId = member.memberId();
       this.memberEpoch = member.memberEpoch;
       this.previousMemberEpoch = member.previousMemberEpoch;
-      this.targetMemberEpoch = member.targetMemberEpoch;
       this.rackId = member.rackId;
       this.rebalanceTimeoutMs = member.rebalanceTimeoutMs;
       this.clientId = member.clientId;
@@ -84,11 +84,6 @@ public class ShareGroupMember extends GroupMember {
 
     public Builder setPreviousMemberEpoch(int previousMemberEpoch) {
       this.previousMemberEpoch = previousMemberEpoch;
-      return this;
-    }
-
-    public Builder setTargetMemberEpoch(int targetMemberEpoch) {
-      this.targetMemberEpoch = targetMemberEpoch;
       return this;
     }
 
@@ -134,6 +129,11 @@ public class ShareGroupMember extends GroupMember {
       return this;
     }
 
+    public Builder setState(MemberState state) {
+      this.state = state;
+      return this;
+    }
+
     public Builder setAssignedPartitions(Map<Uuid, Set<Integer>> assignedPartitions) {
       this.assignedPartitions = assignedPartitions;
       return this;
@@ -152,7 +152,7 @@ public class ShareGroupMember extends GroupMember {
         ConsumerGroupCurrentMemberAssignmentValue record) {
       setMemberEpoch(record.memberEpoch());
       setPreviousMemberEpoch(record.previousMemberEpoch());
-      setTargetMemberEpoch(record.targetMemberEpoch());
+      setState(MemberState.fromValue(record.state()));
       setAssignedPartitions(assignmentFromTopicPartitions(record.assignedPartitions()));
       return this;
     }
@@ -162,13 +162,12 @@ public class ShareGroupMember extends GroupMember {
               memberId,
               memberEpoch,
               previousMemberEpoch,
-              targetMemberEpoch,
               rackId,
               rebalanceTimeoutMs,
               clientId,
               clientHost,
               subscribedTopicNames,
-              MemberState.STABLE,
+              state,
               assignedPartitions
       );
     }
@@ -178,7 +177,6 @@ public class ShareGroupMember extends GroupMember {
           String memberId,
           int memberEpoch,
           int previousMemberEpoch,
-          int targetMemberEpoch,
           String rackId,
           int rebalanceTimeoutMs,
           String clientId,
@@ -190,7 +188,6 @@ public class ShareGroupMember extends GroupMember {
     this.memberId = memberId;
     this.memberEpoch = memberEpoch;
     this.previousMemberEpoch = previousMemberEpoch;
-    this.targetMemberEpoch = targetMemberEpoch;
     this.rackId = rackId;
     this.rebalanceTimeoutMs = rebalanceTimeoutMs;
     this.clientId = clientId;
@@ -206,7 +203,6 @@ public class ShareGroupMember extends GroupMember {
   public String currentAssignmentSummary() {
     return "CurrentAssignment(memberEpoch=" + memberEpoch +
             ", previousMemberEpoch=" + previousMemberEpoch +
-            ", targetMemberEpoch=" + targetMemberEpoch +
             ", state=" + state +
             ", assignedPartitions=" + assignedPartitions +
             ')';
@@ -219,7 +215,6 @@ public class ShareGroupMember extends GroupMember {
     ShareGroupMember that = (ShareGroupMember) o;
     return memberEpoch == that.memberEpoch
             && previousMemberEpoch == that.previousMemberEpoch
-            && targetMemberEpoch == that.targetMemberEpoch
             && rebalanceTimeoutMs == that.rebalanceTimeoutMs
             && Objects.equals(memberId, that.memberId)
             && Objects.equals(rackId, that.rackId)
@@ -234,7 +229,6 @@ public class ShareGroupMember extends GroupMember {
     int result = memberId != null ? memberId.hashCode() : 0;
     result = 31 * result + memberEpoch;
     result = 31 * result + previousMemberEpoch;
-    result = 31 * result + targetMemberEpoch;
     result = 31 * result + Objects.hashCode(rackId);
     result = 31 * result + rebalanceTimeoutMs;
     result = 31 * result + Objects.hashCode(clientId);
@@ -250,7 +244,6 @@ public class ShareGroupMember extends GroupMember {
             "memberId='" + memberId + '\'' +
             ", memberEpoch=" + memberEpoch +
             ", previousMemberEpoch=" + previousMemberEpoch +
-            ", targetMemberEpoch=" + targetMemberEpoch +
             ", rackId='" + rackId + '\'' +
             ", rebalanceTimeoutMs=" + rebalanceTimeoutMs +
             ", clientId='" + clientId + '\'' +

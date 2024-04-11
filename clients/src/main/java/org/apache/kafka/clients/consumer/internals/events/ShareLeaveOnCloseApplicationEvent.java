@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.utils.Timer;
+
 public class ShareLeaveOnCloseApplicationEvent extends CompletableApplicationEvent<Void> {
-    public ShareLeaveOnCloseApplicationEvent() {
-        super(Type.SHARE_LEAVE_ON_CLOSE);
+    public ShareLeaveOnCloseApplicationEvent(Timer timer) {
+        super(Type.SHARE_LEAVE_ON_CLOSE, timer);
     }
 
     @Override

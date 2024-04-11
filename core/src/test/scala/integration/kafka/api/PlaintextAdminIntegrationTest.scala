@@ -26,7 +26,6 @@ import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
-import kafka.security.authorizer.AclEntry
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.{DynamicConfig, KafkaConfig}
 import kafka.utils.TestUtils._
@@ -44,8 +43,9 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
-import org.apache.kafka.server.config.Defaults
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.server.config.{Defaults, ZkConfigs}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -447,7 +447,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       configs.get(brokerResource2).entries.size)
     assertEquals(brokers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BrokerIdProp).value)
     assertEquals(brokers(2).config.logCleanerThreads.toString,
-      configs.get(brokerResource2).get(KafkaConfig.LogCleanerThreadsProp).value)
+      configs.get(brokerResource2).get(CleanerConfig.LOG_CLEANER_THREADS_PROP).value)
 
     checkValidAlterConfigs(client, this, topicResource1, topicResource2)
   }
@@ -1226,7 +1226,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
             assertEquals(testNumPartitions, topicPartitions.size)
           }
 
-          val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP).asJava
+          val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
           assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
           // Test that the fake group is listed as dead.
@@ -2532,7 +2532,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       .all().get(15, TimeUnit.SECONDS)
 
     val newLogCleanerDeleteRetention = new Properties
-    newLogCleanerDeleteRetention.put(KafkaConfig.LogCleanerDeleteRetentionMsProp, "34")
+    newLogCleanerDeleteRetention.put(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP, "34")
     TestUtils.incrementalAlterConfigs(brokers, client, newLogCleanerDeleteRetention, perBrokerConfig = true)
       .all().get(15, TimeUnit.SECONDS)
 
@@ -2543,14 +2543,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         controllerServer.config.nodeId.toString)
       controllerServer.controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT,
         Collections.singletonMap(controllerNodeResource,
-          Collections.singletonMap(KafkaConfig.LogCleanerDeleteRetentionMsProp,
+          Collections.singletonMap(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP,
             new SimpleImmutableEntry(AlterConfigOp.OpType.SET, "34"))), false).get()
       ensureConsistentKRaftMetadata()
     }
 
     waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
-      KafkaConfig.LogCleanerDeleteRetentionMsProp, "").toString.equals("34")),
-      s"Timed out waiting for change to ${KafkaConfig.LogCleanerDeleteRetentionMsProp}",
+      CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP, "").toString.equals("34")),
+      s"Timed out waiting for change to ${CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP}",
       waitTimeMs = 60000L)
 
     waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
@@ -2707,7 +2707,7 @@ object PlaintextAdminIntegrationTest {
     var topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")).asJava
 
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, test.brokers.head.config.brokerId.toString)
-    val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.ZkConnectProp, "localhost:2181")).asJava
+    val brokerConfigEntries = Seq(new ConfigEntry(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")).asJava
 
     // Alter configs: first and third are invalid, second is valid
     var alterResult = admin.alterConfigs(Map(

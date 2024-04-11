@@ -93,11 +93,7 @@ public class TargetAssignmentBuilderTest {
                 staticMembers.put(instanceId, memberId);
             }
             members.put(memberId, memberBuilder.build());
-            targetAssignment.put(memberId, new Assignment(
-                (byte) 0,
-                targetPartitions,
-                VersionedMetadata.EMPTY
-            ));
+            targetAssignment.put(memberId, new Assignment(targetPartitions));
         }
 
         public Uuid addTopicMetadata(

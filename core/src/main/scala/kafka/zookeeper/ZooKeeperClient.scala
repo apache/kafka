@@ -179,7 +179,7 @@ class ZooKeeperClient(connectString: String,
     // Safe to cast as we always create a response of the right type
     def callback(response: AsyncResponse): Unit = processResponse(response.asInstanceOf[Req#Response])
 
-    def responseMetadata(sendTimeMs: Long) = new ResponseMetadata(sendTimeMs, receivedTimeMs = time.hiResClockMs())
+    def responseMetadata(sendTimeMs: Long) = ResponseMetadata(sendTimeMs, receivedTimeMs = time.hiResClockMs())
 
     val sendTimeMs = time.hiResClockMs()
 
@@ -348,7 +348,7 @@ class ZooKeeperClient(connectString: String,
       zNodeChildChangeHandlers.clear()
       stateChangeHandlers.clear()
       zooKeeper.close()
-      metricNames.foreach(metricsGroup.removeMetric(_))
+      metricNames.foreach(metricsGroup.removeMetric)
     }
     info("Closed.")
   }
@@ -365,7 +365,7 @@ class ZooKeeperClient(connectString: String,
   private def reinitialize(): Unit = {
     // Initialization callbacks are invoked outside of the lock to avoid deadlock potential since their completion
     // may require additional Zookeeper requests, which will block to acquire the initialization lock
-    stateChangeHandlers.values.foreach(callBeforeInitializingSession _)
+    stateChangeHandlers.values.foreach(callBeforeInitializingSession)
 
     inWriteLock(initializationLock) {
       if (!connectionState.isAlive) {
@@ -386,7 +386,7 @@ class ZooKeeperClient(connectString: String,
       }
     }
 
-    stateChangeHandlers.values.foreach(callAfterInitializingSession _)
+    stateChangeHandlers.values.foreach(callAfterInitializingSession)
   }
 
   /**

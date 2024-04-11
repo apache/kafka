@@ -94,9 +94,15 @@ public class TopicsImageTest {
 
     public static final Uuid FOO_UUID = Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA");
 
+    private static final Uuid FOO_UUID2 = Uuid.fromString("9d3lha5qv8DoIl93jf8pbX");
+
     private static final Uuid BAR_UUID = Uuid.fromString("f62ptyETTjet8SL5ZeREiw");
 
     private static final Uuid BAZ_UUID = Uuid.fromString("tgHBnRglT5W_RlENnuG5vg");
+
+    private static final Uuid BAM_UUID = Uuid.fromString("b66ybsWIQoygs01vdjH07A");
+
+    private static final Uuid BAM_UUID2 = Uuid.fromString("yd6Sq3a9aK1G8snlKv7ag5");
 
     static {
         TOPIC_IMAGES1 = Arrays.asList(
@@ -118,16 +124,20 @@ public class TopicsImageTest {
         IMAGE1 = new TopicsImage(newTopicsByIdMap(TOPIC_IMAGES1), newTopicsByNameMap(TOPIC_IMAGES1));
 
         DELTA1_RECORDS = new ArrayList<>();
+        // remove topic
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveTopicRecord().
             setTopicId(FOO_UUID),
             REMOVE_TOPIC_RECORD.highestSupportedVersion()));
+        // change topic
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new PartitionChangeRecord().
             setTopicId(BAR_UUID).
             setPartitionId(0).setLeader(1),
             PARTITION_CHANGE_RECORD.highestSupportedVersion()));
+        // add topic
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new TopicRecord().
             setName("baz").setTopicId(BAZ_UUID),
             TOPIC_RECORD.highestSupportedVersion()));
+        // add partition record for new topic
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new PartitionRecord().
             setPartitionId(0).
             setTopicId(BAZ_UUID).
@@ -138,11 +148,23 @@ public class TopicsImageTest {
             setLeader(3).
             setLeaderEpoch(2).
             setPartitionEpoch(1), PARTITION_RECORD.highestSupportedVersion()));
+        // re-add topic with different topic id
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new TopicRecord().
+            setName("foo").setTopicId(FOO_UUID2),
+            TOPIC_RECORD.highestSupportedVersion()));
+        // add then remove topic
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new TopicRecord().
+            setName("bam").setTopicId(BAM_UUID),
+            TOPIC_RECORD.highestSupportedVersion()));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveTopicRecord().
+            setTopicId(BAM_UUID),
+            REMOVE_TOPIC_RECORD.highestSupportedVersion()));
 
         DELTA1 = new TopicsDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
         List<TopicImage> topics2 = Arrays.asList(
+            newTopicImage("foo", FOO_UUID2),
             newTopicImage("bar", BAR_UUID,
                 new PartitionRegistration.Builder().setReplicas(new int[] {0, 1, 2, 3, 4}).
                     setDirectories(DirectoryId.migratingArray(5)).
@@ -188,22 +210,22 @@ public class TopicsImageTest {
     public void testBasicLocalChanges() {
         int localId = 3;
         /* Changes already include in DELTA1_RECORDS and IMAGE1:
-         * foo - topic id deleted
+         * foo - topic id deleted then recreated with different topic id
          * bar-0 - stay as follower with different partition epoch
          * baz-0 - new topic to leader
+         * bam - topic id created then deleted
          */
         List<ApiMessageAndVersion> topicRecords = new ArrayList<>(DELTA1_RECORDS);
 
-        // Create a new foo topic with a different id
-        Uuid newFooId = Uuid.fromString("b66ybsWIQoygs01vdjH07A");
+        // Create a new bam topic with a different id
         topicRecords.add(
             new ApiMessageAndVersion(
-                new TopicRecord().setName("foo") .setTopicId(newFooId),
+                new TopicRecord().setName("bam").setTopicId(BAM_UUID2),
                 TOPIC_RECORD.highestSupportedVersion()
             )
         );
-        topicRecords.add(newPartitionRecord(newFooId, 0, Arrays.asList(0, 1, 2)));
-        topicRecords.add(newPartitionRecord(newFooId, 1, Arrays.asList(0, 1, localId)));
+        topicRecords.add(newPartitionRecord(BAM_UUID2, 0, Arrays.asList(0, 1, 2)));
+        topicRecords.add(newPartitionRecord(BAM_UUID2, 1, Arrays.asList(0, 1, localId)));
 
         // baz-1 - new partition to follower
         topicRecords.add(
@@ -225,10 +247,6 @@ public class TopicsImageTest {
 
         LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(
-            new HashSet<>(Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("foo", 1))),
-            changes.deletes()
-        );
-        assertEquals(
             new HashSet<>(Arrays.asList(new TopicPartition("baz", 0))),
             changes.electedLeaders().keySet()
         );
@@ -238,7 +256,8 @@ public class TopicsImageTest {
         );
         assertEquals(
             new HashSet<>(
-                Arrays.asList(new TopicPartition("baz", 1), new TopicPartition("bar", 0), new TopicPartition("foo", 1))
+                Arrays.asList(new TopicPartition("baz", 1), new TopicPartition("bar", 0),
+                    new TopicPartition("bam", 1))
             ),
             changes.followers().keySet()
         );

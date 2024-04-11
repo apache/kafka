@@ -87,6 +87,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class StreamsConfigTest {
     @Rule
@@ -674,18 +675,18 @@ public class StreamsConfigTest {
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(
             consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
-            equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+            equalTo(READ_COMMITTED.toString())
         );
     }
 
     @Test
     public void shouldAllowSettingConsumerIsolationLevelIfEosDisabled() {
-        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_UNCOMMITTED.toString());
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(
             consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
-            equalTo(READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT))
+            equalTo(READ_UNCOMMITTED.toString())
         );
     }
 
@@ -752,7 +753,7 @@ public class StreamsConfigTest {
 
         assertThat(
             consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
-            equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+            equalTo(READ_COMMITTED.toString())
         );
         assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
         assertThat(producerConfigs.get(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG), equalTo(Integer.MAX_VALUE));
@@ -870,16 +871,16 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
 
         final StreamsConfig config = new StreamsConfig(props);
-        assertTrue(config.defaultKeySerde() instanceof Serdes.LongSerde);
-        assertTrue(config.defaultValueSerde() instanceof Serdes.LongSerde);
-        assertTrue(config.defaultTimestampExtractor() instanceof MockTimestampExtractor);
+        assertInstanceOf(Serdes.LongSerde.class, config.defaultKeySerde());
+        assertInstanceOf(Serdes.LongSerde.class, config.defaultValueSerde());
+        assertInstanceOf(MockTimestampExtractor.class, config.defaultTimestampExtractor());
     }
 
     @Test
     public void shouldUseCorrectDefaultsWhenNoneSpecified() {
         final StreamsConfig config = new StreamsConfig(getStreamsConfig());
 
-        assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
+        assertInstanceOf(FailOnInvalidTimestamp.class, config.defaultTimestampExtractor());
         assertThrows(ConfigException.class, config::defaultKeySerde);
         assertThrows(ConfigException.class, config::defaultValueSerde);
     }
@@ -1460,7 +1461,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldReturnDefaultClientSupplier() {
         final KafkaClientSupplier supplier = streamsConfig.getKafkaClientSupplier();
-        assertTrue(supplier instanceof DefaultKafkaClientSupplier);
+        assertInstanceOf(DefaultKafkaClientSupplier.class, supplier);
     }
 
     @Test

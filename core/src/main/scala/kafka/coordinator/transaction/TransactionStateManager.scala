@@ -301,7 +301,8 @@ class TransactionStateManager(brokerId: Int,
 
   def listTransactionStates(
     filterProducerIds: Set[Long],
-    filterStateNames: Set[String]
+    filterStateNames: Set[String],
+    filterDurationMs: Long
   ): ListTransactionsResponseData = {
     inReadLock(stateLock) {
       val response = new ListTransactionsResponseData()
@@ -316,6 +317,7 @@ class TransactionStateManager(brokerId: Int,
           }
         }
 
+        val now : Long = time.milliseconds()
         def shouldInclude(txnMetadata: TransactionMetadata): Boolean = {
           if (txnMetadata.state == Dead) {
             // We filter the `Dead` state since it is a transient state which
@@ -325,6 +327,8 @@ class TransactionStateManager(brokerId: Int,
           } else if (filterProducerIds.nonEmpty && !filterProducerIds.contains(txnMetadata.producerId)) {
             false
           } else if (filterStateNames.nonEmpty && !filterStates.contains(txnMetadata.state)) {
+            false
+          } else if (filterDurationMs >= 0 && (now - txnMetadata.txnStartTimestamp) <= filterDurationMs) {
             false
           } else {
             true
@@ -553,6 +557,7 @@ class TransactionStateManager(brokerId: Int,
           loadingPartitions.remove(partitionAndLeaderEpoch)
 
           transactionsPendingForCompletion.foreach { txnTransitMetadata =>
+            info(s"Sending txn markers for $txnTransitMetadata after loading partition $partitionId")
             sendTxnMarkers(txnTransitMetadata.coordinatorEpoch, txnTransitMetadata.result,
               txnTransitMetadata.txnMetadata, txnTransitMetadata.transitMetadata)
           }

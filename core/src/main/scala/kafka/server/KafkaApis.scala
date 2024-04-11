@@ -729,7 +729,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(Map.empty)
     else {
       val internalTopicsAllowed = request.header.clientId == AdminUtils.ADMIN_CLIENT_ID
-
+      val supportedOperation = if (request.header.apiVersion > 10) genericError else defaultError
       // call the replica manager to append messages to the replicas
       replicaManager.handleProduceAppend(
         timeout = produceRequest.timeout.toLong,
@@ -739,7 +739,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         entriesPerPartition = authorizedRequestInfo,
         responseCallback = sendResponseCallback,
         recordValidationStatsCallback = processingStatsCallback,
-        requestLocal = requestLocal)
+        requestLocal = requestLocal,
+        supportedOperation = supportedOperation)
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log
@@ -1290,6 +1291,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // Regular Kafka consumers need READ permission on each partition they are fetching.
     val partitionDatas = new mutable.ArrayBuffer[(TopicIdPartition, ShareFetchRequest.SharePartitionData)]
     val erroneousAndValidPartitionData : ErroneousAndValidPartitionData = shareFetchContext.getErroneousAndValidTopicIdPartitions
+
     erroneousAndValidPartitionData.erroneous.forEach {
       erroneousData => erroneous += erroneousData
     }
@@ -3153,7 +3155,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def ensureInterBrokerVersion(version: MetadataVersion): Unit = {
     if (config.interBrokerProtocolVersion.isLessThan(version))
-      throw new UnsupportedVersionException(s"inter.broker.protocol.version: ${config.interBrokerProtocolVersion.version} is less than the required version: ${version.version}")
+      throw new UnsupportedVersionException(s"inter.broker.protocol.version: ${config.interBrokerProtocolVersion} is less than the required version: ${version}")
   }
 
   def handleAddPartitionsToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
@@ -4385,7 +4387,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val listTransactionsRequest = request.body[ListTransactionsRequest]
     val filteredProducerIds = listTransactionsRequest.data.producerIdFilters.asScala.map(Long.unbox).toSet
     val filteredStates = listTransactionsRequest.data.stateFilters.asScala.toSet
-    val response = txnCoordinator.handleListTransactions(filteredProducerIds, filteredStates)
+    val durationFilter = listTransactionsRequest.data.durationFilter()
+    val response = txnCoordinator.handleListTransactions(filteredProducerIds, filteredStates, durationFilter)
 
     // The response should contain only transactionalIds that the principal
     // has `Describe` permission to access.

@@ -21,7 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -402,7 +402,7 @@ public class ShareHeartbeatRequestManager implements RequestManager {
     }
 
     private void handleFatalFailure(Throwable error) {
-        backgroundEventHandler.add(new ErrorBackgroundEvent(error));
+        backgroundEventHandler.add(new ErrorEvent(error));
         shareMembershipManager.transitionToFatal();
     }
 

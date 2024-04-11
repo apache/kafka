@@ -102,7 +102,7 @@ class RequestState {
     }
 
     public void onSendAttempt(final long currentTimeMs) {
-        // Here we update the timer everytime we try to send a request. Also increment number of attempts.
+        // Here we update the timer everytime we try to send a request.
         this.lastSentMs = currentTimeMs;
     }
 

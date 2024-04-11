@@ -20,18 +20,18 @@ import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.common.header.Headers
-import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, PartitionInfo}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
+import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, PartitionInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
-import java.util.Map
-import java.util.Properties
+import java.util
+import java.util.{Map, Properties}
 import java.util.concurrent.atomic.AtomicInteger
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.collection.Seq
 
 /**
  * Integration tests for the consumer that cover basic usage as well as coordinator failure
@@ -97,7 +97,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertEquals(1, listener.callsToAssigned)
 
     // get metadata for the topic
-    var parts: Seq[PartitionInfo] = null
+    var parts: mutable.Buffer[PartitionInfo] = null
     while (parts == null)
       parts = consumer.partitionsFor(Topic.GROUP_METADATA_TOPIC_NAME).asScala
     assertEquals(1, parts.size)
@@ -119,11 +119,12 @@ object BaseConsumerTest {
   // * KRaft with the new group coordinator enabled and the classic group protocol
   // * KRaft with the new group coordinator enabled and the consumer group protocol
   def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
-    java.util.stream.Stream.of(
+    util.Arrays.stream(Array(
         Arguments.of("zk", "classic"),
         Arguments.of("kraft", "classic"),
         Arguments.of("kraft+kip848", "classic"),
-        Arguments.of("kraft+kip848", "consumer"))
+        Arguments.of("kraft+kip848", "consumer")
+    ))
   }
 
   // In Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method call
@@ -140,10 +141,19 @@ object BaseConsumerTest {
   // * KRaft and the classic group protocol
   // * KRaft with the new group coordinator enabled and the classic group protocol
   def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
-    java.util.stream.Stream.of(
+    util.Arrays.stream(Array(
         Arguments.of("zk", "classic"),
         Arguments.of("kraft", "classic"),
-        Arguments.of("kraft+kip848", "classic"))
+        Arguments.of("kraft+kip848", "classic")
+    ))
+  }
+
+  // For tests that only work with the consumer group protocol, we want to test the following combination:
+  // * KRaft with the new group coordinator enabled and the consumer group protocol
+  def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly(): java.util.stream.Stream[Arguments] = {
+    util.Arrays.stream(Array(
+        Arguments.of("kraft+kip848", "consumer")
+    ))
   }
 
   val updateProducerCount = new AtomicInteger()

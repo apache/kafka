@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.ShareLeaveOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeApplicationEvent;
@@ -225,7 +225,7 @@ public class ShareConsumerImplTest {
         consumer = newConsumer(config);
 
         final KafkaException expectedException = new KafkaException("Nobody expects the Spanish Inquisition");
-        final ErrorBackgroundEvent errorBackgroundEvent = new ErrorBackgroundEvent(expectedException);
+        final ErrorEvent errorBackgroundEvent = new ErrorEvent(expectedException);
         backgroundEventQueue.add(errorBackgroundEvent);
         consumer.subscribe(Collections.singletonList("t1"));
         final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
@@ -240,10 +240,10 @@ public class ShareConsumerImplTest {
         consumer = newConsumer(config);
 
         final KafkaException expectedException1 = new KafkaException("Nobody expects the Spanish Inquisition");
-        final ErrorBackgroundEvent errorBackgroundEvent1 = new ErrorBackgroundEvent(expectedException1);
+        final ErrorEvent errorBackgroundEvent1 = new ErrorEvent(expectedException1);
         backgroundEventQueue.add(errorBackgroundEvent1);
         final KafkaException expectedException2 = new KafkaException("Spam, Spam, Spam");
-        final ErrorBackgroundEvent errorBackgroundEvent2 = new ErrorBackgroundEvent(expectedException2);
+        final ErrorEvent errorBackgroundEvent2 = new ErrorEvent(expectedException2);
         backgroundEventQueue.add(errorBackgroundEvent2);
         consumer.subscribe(Collections.singletonList("t1"));
         final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));

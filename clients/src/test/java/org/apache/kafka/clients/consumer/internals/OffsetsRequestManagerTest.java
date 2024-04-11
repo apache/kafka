@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.IsolationLevel;
@@ -553,8 +553,8 @@ public class OffsetsRequestManagerTest {
         assertNotNull(event);
 
         // Check that the event itself is of the expected type
-        assertInstanceOf(ErrorBackgroundEvent.class, event);
-        ErrorBackgroundEvent errorEvent = (ErrorBackgroundEvent) event;
+        assertInstanceOf(ErrorEvent.class, event);
+        ErrorEvent errorEvent = (ErrorEvent) event;
         assertNotNull(errorEvent.error());
 
         // Check that the error held in the event is of the expected type
@@ -835,7 +835,7 @@ public class OffsetsRequestManagerTest {
             final int endOffset) {
 
         AbstractRequest abstractRequest = request.requestBuilder().build();
-        assertTrue(abstractRequest instanceof OffsetsForLeaderEpochRequest);
+        assertInstanceOf(OffsetsForLeaderEpochRequest.class, abstractRequest);
         OffsetsForLeaderEpochRequest offsetsForLeaderEpochRequest = (OffsetsForLeaderEpochRequest) abstractRequest;
         OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
         partitions.forEach(tp -> {
@@ -870,7 +870,7 @@ public class OffsetsRequestManagerTest {
             final Map<TopicPartition, Errors> partitionErrors) {
 
         AbstractRequest abstractRequest = request.requestBuilder().build();
-        assertTrue(abstractRequest instanceof OffsetsForLeaderEpochRequest);
+        assertInstanceOf(OffsetsForLeaderEpochRequest.class, abstractRequest);
         OffsetsForLeaderEpochRequest offsetsForLeaderEpochRequest = (OffsetsForLeaderEpochRequest) abstractRequest;
         OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
         partitionErrors.keySet().forEach(tp -> {
@@ -931,7 +931,7 @@ public class OffsetsRequestManagerTest {
             final boolean disconnected,
             final AuthenticationException authenticationException) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
-        assertTrue(abstractRequest instanceof ListOffsetsRequest);
+        assertInstanceOf(ListOffsetsRequest.class, abstractRequest);
         ListOffsetsRequest offsetFetchRequest = (ListOffsetsRequest) abstractRequest;
         ListOffsetsResponse response = buildListOffsetsResponse(topicResponses);
         return new ClientResponse(

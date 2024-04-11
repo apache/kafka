@@ -216,17 +216,17 @@ commons-lang3-3.12.0
 commons-logging-1.2
 commons-validator-1.7
 error_prone_annotations-2.10.0
-jackson-annotations-2.16.0
-jackson-core-2.16.0
-jackson-databind-2.16.0
-jackson-dataformat-csv-2.16.0
-jackson-datatype-jdk8-2.16.0
-jackson-jaxrs-base-2.16.0
-jackson-jaxrs-json-provider-2.16.0
-jackson-module-afterburner-2.16.0
-jackson-module-jaxb-annotations-2.16.0
-jackson-module-scala_2.13-2.16.0
-jackson-module-scala_2.12-2.16.0
+jackson-annotations-2.16.1
+jackson-core-2.16.1
+jackson-databind-2.16.1
+jackson-dataformat-csv-2.16.1
+jackson-datatype-jdk8-2.16.1
+jackson-jaxrs-base-2.16.1
+jackson-jaxrs-json-provider-2.16.1
+jackson-module-afterburner-2.16.1
+jackson-module-jaxb-annotations-2.16.1
+jackson-module-scala_2.13-2.16.1
+jackson-module-scala_2.12-2.16.1
 jakarta.validation-api-2.0.2
 javassist-3.29.2-GA
 jetty-client-9.4.53.v20231009
@@ -258,15 +258,20 @@ plexus-utils-3.5.1
 reflections-0.10.2
 reload4j-1.2.25
 rocksdbjni-7.9.2
+scala-collection-compat_2.12-2.10.0
 scala-collection-compat_2.13-2.10.0
+scala-library-2.12.18
 scala-library-2.13.12
+scala-logging_2.12-3.9.4
 scala-logging_2.13-3.9.4
+scala-reflect-2.12.18
 scala-reflect-2.13.12
+scala-java8-compat_2.12-1.0.2
 scala-java8-compat_2.13-1.0.2
 snappy-java-1.1.10.5
 swagger-annotations-2.2.8
-zookeeper-3.8.3
-zookeeper-jute-3.8.3
+zookeeper-3.8.4
+zookeeper-jute-3.8.4
 
 ===============================================================================
 This product bundles various third-party components under other open source
@@ -328,7 +333,7 @@ zstd-jni-1.5.5-11 see: licenses/zstd-jni-BSD-2-clause
 ---------------------------------------
 BSD 3-Clause
 
-jline-3.22.0, see: licenses/jline-BSD-3-clause
+jline-3.25.1, see: licenses/jline-BSD-3-clause
 jsr305-3.0.2, see: licenses/jsr305-BSD-3-clause
 paranamer-2.8, see: licenses/paranamer-BSD-3-clause
 protobuf-java-3.23.4, see: licenses/protobuf-java-BSD-3-clause

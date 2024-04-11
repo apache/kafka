@@ -29,6 +29,7 @@ import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.common.MemberState;
 import org.apache.kafka.coordinator.group.common.TopicMetadata;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataImage;
@@ -178,8 +179,6 @@ public class ConsumerGroupTest {
                 mkTopicAssignment(fooTopicId, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(barTopicId, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(zarTopicId, 7, 8, 9)))
             .build();
 
         consumerGroup.updateMember(member);
@@ -200,8 +199,6 @@ public class ConsumerGroupTest {
                 mkTopicAssignment(barTopicId, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(zarTopicId, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(fooTopicId, 7, 8, 9)))
             .build();
 
         consumerGroup.updateMember(member);
@@ -338,8 +335,6 @@ public class ConsumerGroupTest {
                 mkTopicAssignment(fooTopicId, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(barTopicId, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(zarTopicId, 7, 8, 9)))
             .build();
 
         consumerGroup.updateMember(member);
@@ -374,27 +369,27 @@ public class ConsumerGroupTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setState(MemberState.STABLE)
             .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
-            .setTargetMemberEpoch(1)
             .build();
 
         consumerGroup.updateMember(member1);
         consumerGroup.setGroupEpoch(1);
 
-        assertEquals(ConsumerGroupMember.MemberState.STABLE, member1.state());
+        assertEquals(MemberState.STABLE, member1.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
 
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+            .setState(MemberState.STABLE)
             .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
-            .setTargetMemberEpoch(1)
             .build();
 
         consumerGroup.updateMember(member2);
         consumerGroup.setGroupEpoch(2);
 
-        assertEquals(ConsumerGroupMember.MemberState.STABLE, member2.state());
+        assertEquals(MemberState.STABLE, member2.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
 
         consumerGroup.setTargetAssignmentEpoch(2);
@@ -402,42 +397,37 @@ public class ConsumerGroupTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
 
         member1 = new ConsumerGroupMember.Builder(member1)
+            .setState(MemberState.STABLE)
             .setMemberEpoch(2)
             .setPreviousMemberEpoch(1)
-            .setTargetMemberEpoch(2)
             .build();
 
         consumerGroup.updateMember(member1);
 
-        assertEquals(ConsumerGroupMember.MemberState.STABLE, member1.state());
+        assertEquals(MemberState.STABLE, member1.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
 
         // Member 2 is not stable so the group stays in reconciling state.
         member2 = new ConsumerGroupMember.Builder(member2)
+            .setState(MemberState.UNREVOKED_PARTITIONS)
             .setMemberEpoch(2)
             .setPreviousMemberEpoch(1)
-            .setTargetMemberEpoch(2)
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0)))
             .build();
 
         consumerGroup.updateMember(member2);
 
-        assertEquals(ConsumerGroupMember.MemberState.ASSIGNING, member2.state());
+        assertEquals(MemberState.UNREVOKED_PARTITIONS, member2.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
 
         member2 = new ConsumerGroupMember.Builder(member2)
+            .setState(MemberState.STABLE)
             .setMemberEpoch(2)
             .setPreviousMemberEpoch(1)
-            .setTargetMemberEpoch(2)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0)))
-            .setPartitionsPendingAssignment(Collections.emptyMap())
             .build();
 
         consumerGroup.updateMember(member2);
 
-        assertEquals(ConsumerGroupMember.MemberState.STABLE, member2.state());
+        assertEquals(MemberState.STABLE, member2.state());
         assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
 
         consumerGroup.removeMember("member1");
@@ -883,7 +873,6 @@ public class ConsumerGroupTest {
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
-            .setTargetMemberEpoch(1)
             .build();
         consumerGroup.updateMember(member1);
 
@@ -1015,7 +1004,6 @@ public class ConsumerGroupTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
-            .setTargetMemberEpoch(1)
             .build();
 
         consumerGroup.updateMember(member);

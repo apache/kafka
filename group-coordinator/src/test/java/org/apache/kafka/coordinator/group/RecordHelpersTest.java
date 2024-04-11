@@ -23,10 +23,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.Group.GroupType;
-import org.apache.kafka.coordinator.group.consumer.ClientAssignor;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.common.TopicMetadata;
-import org.apache.kafka.coordinator.group.common.VersionedMetadata;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.common.MemberState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -43,9 +45,6 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
-import org.apache.kafka.coordinator.group.classic.ClassicGroup;
-import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
-import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -55,14 +54,11 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -105,14 +101,6 @@ public class RecordHelpersTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "zar", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setClientAssignors(Collections.singletonList(new ClientAssignor(
-                "assignor",
-                (byte) 0,
-                (byte) 1,
-                (byte) 10,
-                new VersionedMetadata(
-                    (byte) 5,
-                    ByteBuffer.wrap("hello".getBytes(StandardCharsets.UTF_8))))))
             .build();
 
         Record expectedRecord = new Record(
@@ -130,13 +118,7 @@ public class RecordHelpersTest {
                     .setClientHost("client-host")
                     .setSubscribedTopicNames(Arrays.asList("bar", "foo", "zar"))
                     .setSubscribedTopicRegex("regex")
-                    .setServerAssignor("range")
-                    .setAssignors(Collections.singletonList(new ConsumerGroupMemberMetadataValue.Assignor()
-                        .setName("assignor")
-                        .setMinimumVersion((short) 1)
-                        .setMaximumVersion((short) 10)
-                        .setVersion((short) 5)
-                        .setMetadata("hello".getBytes(StandardCharsets.UTF_8)))),
+                    .setServerAssignor("range"),
                 (short) 0));
 
         assertEquals(expectedRecord, newMemberSubscriptionRecord(
@@ -419,11 +401,6 @@ public class RecordHelpersTest {
             mkSortedTopicAssignment(topicId2, 24, 25, 26)
         );
 
-        Map<Uuid, Set<Integer>> assigning = mkSortedAssignment(
-            mkSortedTopicAssignment(topicId1, 17, 18, 19),
-            mkSortedTopicAssignment(topicId2, 27, 28, 29)
-        );
-
         Record expectedRecord = new Record(
             new ApiMessageAndVersion(
                 new ConsumerGroupCurrentMemberAssignmentKey()
@@ -432,9 +409,9 @@ public class RecordHelpersTest {
                 (short) 8),
             new ApiMessageAndVersion(
                 new ConsumerGroupCurrentMemberAssignmentValue()
+                    .setState(MemberState.UNREVOKED_PARTITIONS.value())
                     .setMemberEpoch(22)
                     .setPreviousMemberEpoch(21)
-                    .setTargetMemberEpoch(23)
                     .setAssignedPartitions(Arrays.asList(
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId1)
@@ -448,25 +425,17 @@ public class RecordHelpersTest {
                             .setPartitions(Arrays.asList(14, 15, 16)),
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId2)
-                            .setPartitions(Arrays.asList(24, 25, 26))))
-                    .setPartitionsPendingAssignment(Arrays.asList(
-                        new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
-                            .setTopicId(topicId1)
-                            .setPartitions(Arrays.asList(17, 18, 19)),
-                        new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
-                            .setTopicId(topicId2)
-                            .setPartitions(Arrays.asList(27, 28, 29)))),
+                            .setPartitions(Arrays.asList(24, 25, 26)))),
                 (short) 0));
 
         assertEquals(expectedRecord, newCurrentAssignmentRecord(
             "group-id",
             new ConsumerGroupMember.Builder("member-id")
+                .setState(MemberState.UNREVOKED_PARTITIONS)
                 .setMemberEpoch(22)
                 .setPreviousMemberEpoch(21)
-                .setTargetMemberEpoch(23)
                 .setAssignedPartitions(assigned)
                 .setPartitionsPendingRevocation(revoking)
-                .setPartitionsPendingAssignment(assigning)
                 .build()
         ));
     }

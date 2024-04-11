@@ -34,6 +34,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.io.IOException;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -42,6 +43,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -127,7 +129,7 @@ public class ShareGroupsCommand {
             ? Collections.emptySet()
             : shareGroupStatesFromString(stateValue);
         List<ShareGroupListing> listings = listShareGroupsWithState(states);
-        printGroupStates(listings.stream().map(e -> new Tuple2<>(e.groupId(), e.state().toString())).collect(Collectors.toList()));
+        printGroupStates(listings.stream().map(e -> new AbstractMap.SimpleImmutableEntry<String, String>(e.groupId(), e.state().toString()) { }).collect(Collectors.toList()));
       } else
         listShareGroups().forEach(System.out::println);
     }
@@ -149,17 +151,17 @@ public class ShareGroupsCommand {
       return new ArrayList<>(result.all().get());
     }
 
-    private void printGroupStates(List<Tuple2<String, String>> groupsAndStates) {
+    private void printGroupStates(List<Entry<String, String>> groupsAndStates) {
       // find proper columns width
       int maxGroupLen = 15;
-      for (Tuple2<String, String> tuple : groupsAndStates) {
-        String groupId = tuple.v1;
+      for (Entry<String, String> entry : groupsAndStates) {
+        String groupId = entry.getKey();
         maxGroupLen = Math.max(maxGroupLen, groupId.length());
       }
       System.out.printf("%" + (-maxGroupLen) + "s %s", "GROUP", "STATE");
-      for (Tuple2<String, String> tuple : groupsAndStates) {
-        String groupId = tuple.v1;
-        String state = tuple.v2;
+      for (Entry<String, String> entry : groupsAndStates) {
+        String groupId = entry.getKey();
+        String state = entry.getValue();
         System.out.printf("%" + (-maxGroupLen) + "s %s", groupId, state);
       }
     }
