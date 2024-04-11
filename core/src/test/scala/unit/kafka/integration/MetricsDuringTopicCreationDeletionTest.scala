@@ -19,7 +19,7 @@ package kafka.integration
 
 import java.util.Properties
 import kafka.server.KafkaConfig
-import kafka.utils.{Logging, TestInfoUtils, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 
 import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
@@ -68,7 +68,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   /*
    * checking all metrics we care in a single test is faster though it would be more elegant to have 3 @Test methods
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testMetricsDuringTopicCreateDelete(quorum: String): Unit = {
 
