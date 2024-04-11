@@ -16,14 +16,7 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs;
-
-import java.util.Set;
-
 public class ProducerStateManagerConfig {
-    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG, TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
-
     private volatile int producerIdExpirationMs;
     private volatile boolean transactionVerificationEnabled;
 
