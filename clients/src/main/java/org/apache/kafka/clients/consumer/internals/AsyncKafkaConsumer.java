@@ -1399,26 +1399,22 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         try {
-            CompletableFuture<Void> futureToAwait;
+            final CompletableFuture<Void> futureToAwait = new CompletableFuture<>();
+            // We don't want the wake-up trigger to complete our pending async commit future,
+            // so create new future here. Any errors in the pending async commit will be handled
+            // by the async commit future / the commit callback - here, we just want to wait for it to complete.
+            lastPendingAsyncCommit.whenComplete((v, t) -> {
+                futureToAwait.complete(null);
+            });
             if (!disableWakeup) {
-                // We don't want the wake-up trigger to complete our pending async commit future,
-                // so create new future here.
-                futureToAwait = new CompletableFuture<>();
-                lastPendingAsyncCommit.whenComplete((v, t) -> {
-                    if (t != null) {
-                        futureToAwait.completeExceptionally(t);
-                    } else {
-                        futureToAwait.complete(v);
-                    }
-                });
                 wakeupTrigger.setActiveTask(futureToAwait);
-            } else {
-                futureToAwait = lastPendingAsyncCommit;
             }
             ConsumerUtils.getResult(futureToAwait, timer);
             lastPendingAsyncCommit = null;
         } finally {
-            if (!disableWakeup) wakeupTrigger.clearTask();
+            if (!disableWakeup) {
+                wakeupTrigger.clearTask();
+            }
             timer.update();
         }
         offsetCommitCallbackInvoker.executeCallbacks();

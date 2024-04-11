@@ -157,10 +157,12 @@ public class AsyncKafkaConsumerTest {
     @AfterEach
     public void resetAll() {
         backgroundEventQueue.clear();
-        try {
-            consumer.close(Duration.ZERO);
-        } catch (Exception e) {
-            // ignore
+        if (consumer != null) {
+            try {
+                consumer.close(Duration.ZERO);
+            } catch (Exception e) {
+                assertInstanceOf(KafkaException.class, e);
+            }
         }
         consumer = null;
         Mockito.framework().clearInlineMocks();
@@ -674,6 +676,35 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testCommitSyncAwaitsCommitAsyncButDoesNotFail() {
+        time = new MockTime(1);
+        consumer = newConsumer();
+
+        // Commit async (incomplete)
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        final TopicPartition tp = new TopicPartition("foo", 0);
+        consumer.assign(Collections.singleton(tp));
+        consumer.seek(tp, 20);
+        consumer.commitAsync();
+
+        // Mock to complete sync event
+        completeCommitSyncApplicationEventSuccessfully();
+
+        // Commit async is not completed yet, so commit sync should wait for it to complete (time out)
+        assertThrows(TimeoutException.class, () -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
+
+        // Complete exceptionally async commit event and sync commit event
+        final ArgumentCaptor<AsyncCommitEvent> commitEventCaptor = ArgumentCaptor.forClass(AsyncCommitEvent.class);
+        verify(applicationEventHandler).add(commitEventCaptor.capture());
+        final AsyncCommitEvent commitEvent = commitEventCaptor.getValue();
+        commitEvent.future().completeExceptionally(new KafkaException("Test exception"));
+
+        // Commit async is completed exceptionally, but this will be handled by commit callback - commit sync should not fail.
+        assertDoesNotThrow(() -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
+    }
+
+    @Test
     public void testPollTriggersFencedExceptionFromCommitAsync() {
         final String groupId = "consumerGroupA";
         final String groupInstanceId = "groupInstanceId1";
@@ -1085,7 +1116,7 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
         MockCommitCallback cb = new MockCommitCallback();
 
-        // Commit async (complte)
+        // Commit async (complete)
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         final TopicPartition tp = new TopicPartition("foo", 0);
