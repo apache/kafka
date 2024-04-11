@@ -540,11 +540,13 @@ class ZkMigrationIntegrationTest {
       admin = zkCluster.createAdminClient()
       alterTopicConfig(admin).all().get(60, TimeUnit.SECONDS)
       alterClientQuotas(admin).all().get(60, TimeUnit.SECONDS)
+      alterBrokerConfigs(admin).all().get(60, TimeUnit.SECONDS)
 
       // Verify the changes made to KRaft are seen in ZK
       log.info("Verifying metadata changes with ZK")
       verifyTopicConfigs(zkClient)
       verifyClientQuotas(zkClient)
+      verifyBrokerConfigs(zkClient)
       val nextKRaftProducerId = sendAllocateProducerIds(zkCluster.asInstanceOf[ZkClusterInstance]).get(30, TimeUnit.SECONDS)
       assertNotEquals(nextProducerId, nextKRaftProducerId)
 
@@ -770,6 +772,34 @@ class ZkMigrationIntegrationTest {
     }
   }
 
+  @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_4_IV0, serverProperties = Array(
+    new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
+    new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
+  ))
+  def testIncrementalAlterConfigsPreMigration(zkCluster: ClusterInstance): Unit = {
+    // Enable migration configs and restart brokers without KRaft quorum ready
+    log.info("Restart brokers in migration mode")
+    zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+    zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9999")
+    zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+    zkCluster.rollingBrokerRestart()
+    zkCluster.waitForReadyBrokers()
+
+    val admin = zkCluster.createAdminClient()
+    val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
+    try {
+      alterBrokerConfigs(admin)
+      verifyBrokerConfigs(zkClient)
+    } finally {
+      admin.close()
+      zkClient.close()
+      zkCluster.stop()
+    }
+  }
+
   def createTopic(topicName: String, numPartitions: Int, replicationFactor: Short, configs: util.Map[String, String], admin: Admin): Unit = {
     val newTopic = new NewTopic(topicName, numPartitions, replicationFactor).configs(configs)
     val createTopicResult = admin.createTopics(util.Collections.singletonList(newTopic))
@@ -869,6 +899,21 @@ class ZkMigrationIntegrationTest {
     dataOpt.map(ProducerIdBlockZNode.parseProducerIdBlockData).get
   }
 
+  def alterBrokerConfigs(admin: Admin): AlterConfigsResult = {
+    val defaultBrokerResource = new ConfigResource(ConfigResource.Type.BROKER, "")
+    val defaultBrokerConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(KafkaConfig.LogRetentionTimeMillisProp, "86400000"), AlterConfigOp.OpType.SET),
+    ).asJavaCollection
+    val specificBrokerResource = new ConfigResource(ConfigResource.Type.BROKER, "1")
+    val specificBrokerConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(KafkaConfig.LogRetentionTimeMillisProp, "43200000"), AlterConfigOp.OpType.SET),
+    ).asJavaCollection
+    admin.incrementalAlterConfigs(Map(
+      defaultBrokerResource -> defaultBrokerConfigs,
+      specificBrokerResource -> specificBrokerConfigs
+    ).asJava)
+  }
+
   def alterTopicConfig(admin: Admin): AlterConfigsResult = {
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, "test")
     val alterConfigs = Seq(
@@ -916,6 +961,16 @@ class ZkMigrationIntegrationTest {
       val propsAfter = zkClient.getEntityConfigs(ConfigType.TOPIC, "test")
       assertEquals("204800", propsAfter.getProperty(TopicConfig.SEGMENT_BYTES_CONFIG))
       assertFalse(propsAfter.containsKey(TopicConfig.SEGMENT_MS_CONFIG))
+    }
+  }
+
+  def verifyBrokerConfigs(zkClient: KafkaZkClient): Unit = {
+    TestUtils.retry(10000) {
+      val defaultBrokerProps = zkClient.getEntityConfigs(ConfigType.BROKER, "<default>")
+      assertEquals("86400000", defaultBrokerProps.getProperty(KafkaConfig.LogRetentionTimeMillisProp))
+
+      val specificBrokerProps = zkClient.getEntityConfigs(ConfigType.BROKER, "1")
+      assertEquals("43200000", specificBrokerProps.getProperty(KafkaConfig.LogRetentionTimeMillisProp))
     }
   }
 
