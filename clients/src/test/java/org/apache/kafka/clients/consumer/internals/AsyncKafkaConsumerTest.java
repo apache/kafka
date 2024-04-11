@@ -148,7 +148,7 @@ public class AsyncKafkaConsumerTest {
 
     private AsyncKafkaConsumer<String, String> consumer = null;
 
-    private Time time = new MockTime(1);
+    private Time time = new MockTime(0);
     private final FetchCollector<String, String> fetchCollector = mock(FetchCollector.class);
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
@@ -337,6 +337,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testCommitted() {
+        time = new MockTime(1);
         consumer = newConsumer();
         Map<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = mockTopicPartitionOffset();
         completeFetchedCommittedOffsetApplicationEventSuccessfully(topicPartitionOffsets);
@@ -866,8 +867,6 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
         Map<TopicPartition, OffsetAndTimestampInternal> expectedOffsets = mockOffsetAndTimestamp();
 
-        // Don't use the instance's Timer as it auto-increments and will break the test.
-        Time time = new MockTime();
         when(applicationEventHandler.addAndGet(any(ListOffsetsEvent.class))).thenAnswer(invocation -> {
             ListOffsetsEvent event = invocation.getArgument(0);
             Timer timer = time.timer(event.deadlineMs() - time.milliseconds());
@@ -1610,9 +1609,6 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testProcessBackgroundEventsWithInitialDelay() throws Exception {
         consumer = newConsumer();
-
-        // Don't use the instance's Timer as it auto-increments.
-        Time time = new MockTime();
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
         CountDownLatch latch = new CountDownLatch(3);
@@ -1646,9 +1642,6 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testProcessBackgroundEventsWithoutDelay() {
         consumer = newConsumer();
-
-        // Don't use the instance's Timer as it auto-increments.
-        Time time = new MockTime();
         Timer timer = time.timer(1000);
 
         // Create a future that is already completed.
@@ -1668,9 +1661,6 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testProcessBackgroundEventsTimesOut() throws Exception {
         consumer = newConsumer();
-
-        // Don't use the instance's Timer as it auto-increments.
-        Time time = new MockTime();
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
 
