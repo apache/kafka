@@ -18,32 +18,52 @@ package kafka.raft
 
 import java.nio.channels.FileChannel
 import java.nio.channels.OverlappingFileLockException
-import java.nio.file.Path
-import java.nio.file.StandardOpenOption
+import java.nio.file.{Files, Path, StandardOpenOption}
 import java.util.Properties
 import java.util.concurrent.CompletableFuture
 import kafka.log.LogManager
-import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.KafkaConfig
-import kafka.server.KafkaRaftServer.BrokerRole
-import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.KafkaRaftServer.ProcessRole
+import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole, ProcessRole}
 import kafka.utils.TestUtils
 import kafka.tools.TestRaftServer.ByteArraySerde
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.raft.KafkaRaftClient
 import org.apache.kafka.raft.RaftConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
+import org.apache.kafka.server.fault.FaultHandler
 import org.mockito.Mockito._
 
+
 class RaftManagerTest {
+  private def createZkBrokerConfig(
+    migrationEnabled: Boolean,
+    nodeId: Int,
+    logDir: Seq[Path],
+    metadataDir: Option[Path]
+  ): KafkaConfig = {
+    val props = new Properties
+    logDir.foreach { value =>
+      props.setProperty(KafkaConfig.LogDirProp, value.toString)
+    }
+    if (migrationEnabled) {
+      metadataDir.foreach { value =>
+        props.setProperty(KafkaConfig.MetadataLogDirProp, value.toString)
+      }
+      props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
+      props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
+      props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    }
+
+    props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.setProperty(KafkaConfig.BrokerIdProp, nodeId.toString)
+    new KafkaConfig(props)
+  }
+
   private def createConfig(
     processRoles: Set[ProcessRole],
     nodeId: Int,
@@ -181,8 +201,108 @@ class RaftManagerTest {
     assertFalse(fileLocked(lockPath))
   }
 
+  def createMetadataLog(config: KafkaConfig): Unit = {
+    val raftManager = createRaftManager(
+      new TopicPartition("__cluster_metadata", 0),
+      config
+    )
+    raftManager.shutdown()
+  }
+
+  def assertLogDirsExist(
+    logDirs: Seq[Path],
+    metadataLogDir: Option[Path],
+    expectMetadataLog: Boolean
+  ): Unit = {
+    // In all cases, the log dir and metadata log dir themselves should be untouched
+    assertTrue(Files.exists(metadataLogDir.get))
+    logDirs.foreach { logDir =>
+      assertTrue(Files.exists(logDir), "Should not delete log dir")
+    }
+
+    if (expectMetadataLog) {
+      assertTrue(Files.exists(metadataLogDir.get.resolve("__cluster_metadata-0")))
+    } else {
+      assertFalse(Files.exists(metadataLogDir.get.resolve("__cluster_metadata-0")))
+    }
+  }
+
+  @Test
+  def testMigratingZkBrokerDeletesMetadataLog(): Unit = {
+    val logDirs = Seq(TestUtils.tempDir().toPath)
+    val metadataLogDir = Some(TestUtils.tempDir().toPath)
+    val nodeId = 1
+    val config = createZkBrokerConfig(migrationEnabled = true, nodeId, logDirs, metadataLogDir)
+    createMetadataLog(config)
+
+    KafkaRaftManager.maybeDeleteMetadataLogDir(config)
+    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = false)
+  }
+
+  @Test
+  def testNonMigratingZkBrokerDoesNotDeleteMetadataLog(): Unit = {
+    val logDirs = Seq(TestUtils.tempDir().toPath)
+    val metadataLogDir = Some(TestUtils.tempDir().toPath)
+    val nodeId = 1
+
+    val config = createZkBrokerConfig(migrationEnabled = false, nodeId, logDirs, metadataLogDir)
+
+    // Create the metadata log dir directly as if the broker was previously in migration mode.
+    // This simulates a misconfiguration after downgrade
+    Files.createDirectory(metadataLogDir.get.resolve("__cluster_metadata-0"))
+
+    val err = assertThrows(classOf[RuntimeException], () => KafkaRaftManager.maybeDeleteMetadataLogDir(config),
+      "Should have not deleted the metadata log")
+    assertEquals("Not deleting metadata log dir since migrations are not enabled.", err.getMessage)
+
+    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = true)
+  }
+
+  @Test
+  def testZkBrokerDoesNotDeleteSeparateLogDirs(): Unit = {
+    val logDirs = Seq(TestUtils.tempDir().toPath, TestUtils.tempDir().toPath)
+    val metadataLogDir = Some(TestUtils.tempDir().toPath)
+    val nodeId = 1
+    val config = createZkBrokerConfig(migrationEnabled = true, nodeId, logDirs, metadataLogDir)
+    createMetadataLog(config)
+
+    KafkaRaftManager.maybeDeleteMetadataLogDir(config)
+    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = false)
+  }
+
+  @Test
+  def testZkBrokerDoesNotDeleteSameLogDir(): Unit = {
+    val logDirs = Seq(TestUtils.tempDir().toPath, TestUtils.tempDir().toPath)
+    val metadataLogDir = logDirs.headOption
+    val nodeId = 1
+    val config = createZkBrokerConfig(migrationEnabled = true, nodeId, logDirs, metadataLogDir)
+    createMetadataLog(config)
+
+    KafkaRaftManager.maybeDeleteMetadataLogDir(config)
+    assertLogDirsExist(logDirs, metadataLogDir, expectMetadataLog = false)
+  }
+
+  @Test
+  def testKRaftBrokerDoesNotDeleteMetadataLog(): Unit = {
+    val logDir = TestUtils.tempDir().toPath
+    val metadataLogDir = Some(TestUtils.tempDir().toPath)
+    val nodeId = 1
+    val config = createConfig(
+      Set(BrokerRole),
+      nodeId,
+      Some(logDir),
+      metadataLogDir
+    )
+    createMetadataLog(config)
+
+    assertThrows(classOf[RuntimeException], () => KafkaRaftManager.maybeDeleteMetadataLogDir(config),
+      "Should not have deleted metadata log")
+    assertLogDirsExist(Seq(logDir), metadataLogDir, expectMetadataLog = true)
+
+  }
+
   private def fileLocked(path: Path): Boolean = {
-    TestUtils.resource(FileChannel.open(path, StandardOpenOption.WRITE)) { channel =>
+    TestUtils.resource(FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) { channel =>
       try {
         Option(channel.tryLock()).foreach(_.close())
         false
@@ -192,49 +312,4 @@ class RaftManagerTest {
     }
   }
 
-  @Test
-  def testShutdownIoThread(): Unit = {
-    val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val faultHandler = new MockFaultHandler("RaftManagerTestFaultHandler")
-    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft", faultHandler)
-
-    when(raftClient.isRunning).thenReturn(true)
-    assertTrue(ioThread.isRunning)
-
-    val shutdownFuture = new CompletableFuture[Void]
-    when(raftClient.shutdown(5000)).thenReturn(shutdownFuture)
-
-    ioThread.initiateShutdown()
-    assertTrue(ioThread.isRunning)
-    assertTrue(ioThread.isShutdownInitiated)
-    verify(raftClient).shutdown(5000)
-
-    shutdownFuture.complete(null)
-    when(raftClient.isRunning).thenReturn(false)
-    ioThread.run()
-    assertFalse(ioThread.isRunning)
-    assertTrue(ioThread.isShutdownComplete)
-    assertNull(faultHandler.firstException)
-  }
-
-  @Test
-  def testUncaughtExceptionInIoThread(): Unit = {
-    val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val faultHandler = new MockFaultHandler("RaftManagerTestFaultHandler")
-    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft", faultHandler)
-
-    when(raftClient.isRunning).thenReturn(true)
-    assertTrue(ioThread.isRunning)
-
-    val exception = new RuntimeException()
-    when(raftClient.poll()).thenThrow(exception)
-    ioThread.run()
-
-    assertTrue(ioThread.isShutdownComplete)
-    assertTrue(ioThread.isThreadFailed)
-    assertFalse(ioThread.isRunning)
-
-    val caughtException = faultHandler.firstException.getCause
-    assertEquals(exception, caughtException)
-  }
 }
