@@ -25,8 +25,6 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.coordinator.group.OffsetConfig;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
-import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
-import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.security.PasswordEncoderConfigs;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -158,20 +156,6 @@ public class Defaults {
     public static final long OFFSETS_RETENTION_CHECK_INTERVAL_MS = OffsetConfig.DEFAULT_OFFSETS_RETENTION_CHECK_INTERVAL_MS;
     public static final int OFFSET_COMMIT_TIMEOUT_MS = OffsetConfig.DEFAULT_OFFSET_COMMIT_TIMEOUT_MS;
     public static final short OFFSET_COMMIT_REQUIRED_ACKS = OffsetConfig.DEFAULT_OFFSET_COMMIT_REQUIRED_ACKS;
-
-    /** ********* Transaction management configuration *********/
-    public static final int TRANSACTIONAL_ID_EXPIRATION_MS = TransactionStateManagerConfig.DEFAULT_TRANSACTIONAL_ID_EXPIRATION_MS;
-    public static final int TRANSACTIONS_MAX_TIMEOUT_MS = TransactionStateManagerConfig.DEFAULT_TRANSACTIONS_MAX_TIMEOUT_MS;
-    public static final int TRANSACTIONS_TOPIC_MIN_ISR = TransactionLogConfig.DEFAULT_MIN_IN_SYNC_REPLICAS;
-    public static final int TRANSACTIONS_LOAD_BUFFER_SIZE = TransactionLogConfig.DEFAULT_LOAD_BUFFER_SIZE;
-    public static final short TRANSACTIONS_TOPIC_REPLICATION_FACTOR = TransactionLogConfig.DEFAULT_REPLICATION_FACTOR;
-    public static final int TRANSACTIONS_TOPIC_PARTITIONS = TransactionLogConfig.DEFAULT_NUM_PARTITIONS;
-    public static final int TRANSACTIONS_TOPIC_SEGMENT_BYTES = TransactionLogConfig.DEFAULT_SEGMENT_BYTES;
-    public static final int TRANSACTIONS_ABORT_TIMED_OUT_CLEANUP_INTERVAL_MS = TransactionStateManagerConfig.DEFAULT_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS;
-    public static final int TRANSACTIONS_REMOVE_EXPIRED_CLEANUP_INTERVAL_MS = TransactionStateManagerConfig.DEFAULT_REMOVE_EXPIRED_TRANSACTIONAL_IDS_INTERVAL_MS;
-    public static final boolean TRANSACTION_PARTITION_VERIFICATION_ENABLE = true;
-    public static final int PRODUCER_ID_EXPIRATION_MS = 86400000;
-    public static final int PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS = 600000;
 
     /** ********* Fetch Configuration *********/
     public static final int MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS = 1000;
