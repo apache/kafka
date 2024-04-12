@@ -1294,14 +1294,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       metadataRequest.data.topics.forEach{ topic =>
         if (topic.name == null && metadataRequest.version < 12) {
           throw new InvalidRequestException(s"Topic name can not be null for version ${metadataRequest.version}")
-        } else if (topic.topicId != Uuid.ZERO_UUID && metadataRequest.version < 12) {
+        } else if (!topic.topicId.equals(Uuid.ZERO_UUID) && metadataRequest.version < 12) {
           throw new InvalidRequestException(s"Topic IDs are not supported in requests for version ${metadataRequest.version}")
         }
       }
     }
 
     // Check if topicId is presented firstly.
-    val topicIds = metadataRequest.topicIds.asScala.toSet.filterNot(_ == Uuid.ZERO_UUID)
+    val topicIds = metadataRequest.topicIds.asScala.toSet.filterNot(_.equals(Uuid.ZERO_UUID))
     val useTopicId = topicIds.nonEmpty
 
     // Only get topicIds and topicNames when supporting topicId
@@ -2145,11 +2145,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       sendResponseCallback(results)
     } else {
-      val topicIdsFromRequest = deleteTopicRequest.topicIds().asScala.filter(topicId => topicId != Uuid.ZERO_UUID).toSet
+      val topicIdsFromRequest = deleteTopicRequest.topicIds().asScala.filter(topicId => !topicId.equals(Uuid.ZERO_UUID)).toSet
       deleteTopicRequest.topics().forEach { topic =>
-        if (topic.name() != null && topic.topicId() != Uuid.ZERO_UUID)
+        if (topic.name() != null && !topic.topicId().equals(Uuid.ZERO_UUID))
           throw new InvalidRequestException("Topic name and topic ID can not both be specified.")
-        val name = if (topic.topicId() == Uuid.ZERO_UUID) topic.name()
+        val name = if (topic.topicId().equals(Uuid.ZERO_UUID)) topic.name()
         else zkSupport.controller.controllerContext.topicName(topic.topicId).orNull
         results.add(new DeletableTopicResult()
           .setName(name)
@@ -2160,7 +2160,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val authorizedDeleteTopics = authHelper.filterByAuthorized(request.context, DELETE, TOPIC,
         results.asScala.filter(result => result.name() != null))(_.name)
       results.forEach { topic =>
-        val unresolvedTopicId = topic.topicId() != Uuid.ZERO_UUID && topic.name() == null
+        val unresolvedTopicId = !topic.topicId().equals(Uuid.ZERO_UUID) && topic.name() == null
         if (unresolvedTopicId) {
           topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
         } else if (topicIdsFromRequest.contains(topic.topicId) && !authorizedDescribeTopics.contains(topic.name)) {
