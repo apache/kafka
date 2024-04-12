@@ -271,7 +271,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
     }
 
     private String listJsonText(String value) {
-        if (value.isEmpty() || value.length() <= 1)
+        if (value.length() <= 1)
             return "[]";
         String delimiter;
         String unescapedDelimiterChar = value.substring(0, 1);

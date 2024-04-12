@@ -61,7 +61,6 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
     /**
      * Create a wrapped trust manager factory
      * @param kmfAlgorithm the algorithm
-     * @return A wrapped trust manager factory
      * @throws NoSuchAlgorithmException
      */
     protected CommonNameLoggingTrustManagerFactoryWrapper(String kmfAlgorithm) throws NoSuchAlgorithmException {
@@ -213,7 +212,6 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
          * @param origChain The original (unsorted) certificate chain
          * @return The sorted and wrapped certificate chain
          * @throws CertificateException
-         * @throws NoSuchAlgorithmException
          */
         public static X509Certificate[] sortChainAnWrapEndCertificate(X509Certificate[] origChain) throws CertificateException {
             if (origChain == null || origChain.length < 1) {
@@ -312,10 +310,8 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
         }
 
         @Override
-        public void checkValidity(Date date)
-                throws CertificateExpiredException, CertificateNotYetValidException {
-            // We do not check validity at all. 
-            return;
+        public void checkValidity(Date date) {
+            // We do not check validity at all.
         }
 
         @Override

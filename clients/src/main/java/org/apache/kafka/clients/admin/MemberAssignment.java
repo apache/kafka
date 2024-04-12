@@ -36,7 +36,7 @@ public class MemberAssignment {
      * @param topicPartitions List of topic partitions
      */
     public MemberAssignment(Set<TopicPartition> topicPartitions) {
-        this.topicPartitions = topicPartitions == null ? Collections.<TopicPartition>emptySet() :
+        this.topicPartitions = topicPartitions == null ? Collections.emptySet() :
             Collections.unmodifiableSet(new HashSet<>(topicPartitions));
     }
 

@@ -70,7 +70,7 @@ public class Resource {
 
     @Override
     public String toString() {
-        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ")";
+        return "(resourceType=" + resourceType + ", name=" + name + ")";
     }
 
     /**
