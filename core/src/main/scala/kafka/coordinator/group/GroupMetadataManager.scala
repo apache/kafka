@@ -894,9 +894,7 @@ class GroupMetadataManager(brokerId: Int,
             }
             trace(s"Marked ${removedOffsets.size} offsets in $appendPartition for deletion.")
 
-            // We avoid writing the tombstone when the generationId is 0, since this group is only using
-            // Kafka for offset storage.
-            if (groupIsDead && groupMetadataCache.remove(groupId, group) && generation > 0) {
+            if (groupIsDead && groupMetadataCache.remove(groupId, group)) {
               // Append the tombstone messages to the partition. It is okay if the replicas don't receive these (say,
               // if we crash or leaders move) since the new leaders will still expire the consumers with heartbeat and
               // retry removing this group.
