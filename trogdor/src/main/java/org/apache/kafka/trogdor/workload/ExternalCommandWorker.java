@@ -143,7 +143,7 @@ public class ExternalCommandWorker implements TaskWorker {
         this.doneFuture = doneFuture;
         this.executor = Executors.newCachedThreadPool(
             ThreadUtils.createThreadFactory("ExternalCommandWorkerThread%d", false));
-        Process process = null;
+        Process process;
         try {
             process = startProcess();
         } catch (Throwable t) {
@@ -168,8 +168,7 @@ public class ExternalCommandWorker implements TaskWorker {
             throw new RuntimeException("No command specified");
         }
         ProcessBuilder bld = new ProcessBuilder(spec.command());
-        Process process = bld.start();
-        return process;
+        return bld.start();
     }
 
     private static JsonNode readObject(String line) {

@@ -164,7 +164,7 @@ public final class Agent {
      * @return              True if the task run successfully; false otherwise.
      */
     boolean exec(TaskSpec spec, PrintStream out) throws Exception {
-        TaskController controller = null;
+        TaskController controller;
         try {
             controller = spec.newController(EXEC_TASK_ID);
         } catch (Exception e) {
@@ -179,7 +179,7 @@ public final class Agent {
                 platform.curNode().name());
             return false;
         }
-        KafkaFuture<String> future = null;
+        KafkaFuture<String> future;
         try {
             future = workerManager.createWorker(EXEC_WORKER_ID, EXEC_TASK_ID, spec);
         } catch (Throwable e) {

@@ -57,7 +57,6 @@ import static org.apache.kafka.trogdor.common.StringFormatter.durationString;
  * A client for the Trogdor agent.
  */
 public class AgentClient {
-    private final Logger log;
 
     /**
      * The maximum number of tries to make.
@@ -106,7 +105,6 @@ public class AgentClient {
     }
 
     private AgentClient(Logger log, int maxTries, String target) {
-        this.log = log;
         this.maxTries = maxTries;
         this.target = target;
     }
@@ -125,7 +123,7 @@ public class AgentClient {
 
     public AgentStatusResponse status() throws Exception {
         HttpResponse<AgentStatusResponse> resp =
-            JsonRestServer.<AgentStatusResponse>httpRequest(url("/agent/status"), "GET",
+            JsonRestServer.httpRequest(url("/agent/status"), "GET",
                 null, new TypeReference<AgentStatusResponse>() { }, maxTries);
         return resp.body();
     }
@@ -139,7 +137,7 @@ public class AgentClient {
 
     public void createWorker(CreateWorkerRequest request) throws Exception {
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(
+            JsonRestServer.httpRequest(
                 url("/agent/worker/create"), "POST",
                 request, new TypeReference<Empty>() { }, maxTries);
         resp.body();
@@ -147,7 +145,7 @@ public class AgentClient {
 
     public void stopWorker(StopWorkerRequest request) throws Exception {
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(url(
+            JsonRestServer.httpRequest(url(
                 "/agent/worker/stop"), "PUT",
                 request, new TypeReference<Empty>() { }, maxTries);
         resp.body();
@@ -157,14 +155,14 @@ public class AgentClient {
         UriBuilder uriBuilder = UriBuilder.fromPath(url("/agent/worker"));
         uriBuilder.queryParam("workerId", request.workerId());
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(uriBuilder.build().toString(), "DELETE",
+            JsonRestServer.httpRequest(uriBuilder.build().toString(), "DELETE",
                 null, new TypeReference<Empty>() { }, maxTries);
         resp.body();
     }
 
     public void invokeShutdown() throws Exception {
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(url(
+            JsonRestServer.httpRequest(url(
                 "/agent/shutdown"), "PUT",
                 null, new TypeReference<Empty>() { }, maxTries);
         resp.body();
