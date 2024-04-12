@@ -16,49 +16,32 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
-
 import java.util.Optional;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
-import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTrackerSupplier;
-import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class KStreamKStreamLeftJoin<K, VL, VR, VOut> implements ProcessorSupplier<K, VL, K, VOut> {
+class KStreamKStreamLeftJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL, VR, VOut, VL, VR> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamLeftJoin.class);
 
-    private final String otherWindowName;
     private final long joinBeforeMs;
     private final long joinAfterMs;
     private final long joinGraceMs;
-    private final boolean enableSpuriousResultFix;
     private final long windowsBeforeMs;
     private final long windowsAfterMs;
 
     private final boolean outer;
-    private static final boolean IS_LEFT_SIDE = true;
-    private final Optional<String> outerJoinWindowName;
     private final ValueJoinerWithKey<? super K, ? super VL, ? super VR, ? extends VOut> joiner;
 
-    private final TimeTrackerSupplier sharedTimeTrackerSupplier;
 
     KStreamKStreamLeftJoin(final String otherWindowName,
                        final JoinWindowsInternal windows,
@@ -66,17 +49,14 @@ class KStreamKStreamLeftJoin<K, VL, VR, VOut> implements ProcessorSupplier<K, VL
                        final boolean outer,
                        final Optional<String> outerJoinWindowName,
                        final TimeTrackerSupplier sharedTimeTrackerSupplier) {
-        this.otherWindowName = otherWindowName;
+        super(otherWindowName, sharedTimeTrackerSupplier, windows.spuriousResultFixEnabled(), outerJoinWindowName);
         this.joinBeforeMs = windows.beforeMs;
         this.joinAfterMs = windows.afterMs;
         this.windowsAfterMs = windows.afterMs;
         this.windowsBeforeMs = windows.beforeMs;
         this.joinGraceMs = windows.gracePeriodMs();
-        this.enableSpuriousResultFix = windows.spuriousResultFixEnabled();
         this.joiner = joiner;
         this.outer = outer;
-        this.outerJoinWindowName = outerJoinWindowName;
-        this.sharedTimeTrackerSupplier = sharedTimeTrackerSupplier;
     }
 
     @Override
@@ -84,37 +64,8 @@ class KStreamKStreamLeftJoin<K, VL, VR, VOut> implements ProcessorSupplier<K, VL
         return new KStreamKStreamJoinLeftProcessor();
     }
 
-    private class KStreamKStreamJoinLeftProcessor extends ContextualProcessor<K, VL, K, VOut> {
-        private WindowStore<K, VR> otherWindowStore;
-        private Sensor droppedRecordsSensor;
-        private Optional<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>>> outerJoinStore = Optional.empty();
-        private InternalProcessorContext<K, VOut> internalProcessorContext;
-        private TimeTracker sharedTimeTracker;
+    private class KStreamKStreamJoinLeftProcessor extends KStreamKStreamJoinProcessor {
 
-        @Override
-        public void init(final ProcessorContext<K, VOut> context) {
-            super.init(context);
-            internalProcessorContext = (InternalProcessorContext<K, VOut>) context;
-
-            final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
-            droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
-            otherWindowStore = context.getStateStore(otherWindowName);
-            sharedTimeTracker = sharedTimeTrackerSupplier.get(context.taskId());
-
-            if (enableSpuriousResultFix) {
-                outerJoinStore = outerJoinWindowName.map(context::getStateStore);
-
-                sharedTimeTracker.setEmitInterval(
-                    StreamsConfig.InternalConfig.getLong(
-                        context.appConfigs(),
-                        EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
-                        1000L
-                    )
-                );
-            }
-        }
-
-//        @SuppressWarnings("unchecked")
         @Override
         public void process(final Record<K, VL> record) {
             final long inputRecordTimestamp = record.timestamp();
@@ -148,7 +99,7 @@ class KStreamKStreamLeftJoin<K, VL, VR, VOut> implements ProcessorSupplier<K, VL
                         // we may delete some values with the same key early but since we are going
                         // range over all values of the same key even after failure, since the other window-store
                         // is only cleaned up by stream time, so this is okay for at-least-once.
-                        store.putIfAbsent(TimestampedKeyAndJoinSide.make(!IS_LEFT_SIDE, record.key(), otherRecordTimestamp), null);
+                        store.putIfAbsent(TimestampedKeyAndJoinSide.makeRight(record.key(), otherRecordTimestamp), null);
                     });
 
                     context().forward(
@@ -179,7 +130,7 @@ class KStreamKStreamLeftJoin<K, VL, VR, VOut> implements ProcessorSupplier<K, VL
                     } else {
                         sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
                         outerJoinStore.ifPresent(store -> store.put(
-                            TimestampedKeyAndJoinSide.make(IS_LEFT_SIDE, record.key(), inputRecordTimestamp),
+                            TimestampedKeyAndJoinSide.makeLeft(record.key(), inputRecordTimestamp),
                             LeftOrRightValue.makeLeft(record.value())));
                     }
                 }
@@ -267,10 +218,7 @@ class KStreamKStreamLeftJoin<K, VL, VR, VOut> implements ProcessorSupplier<K, VL
         }
 
         private VOut getNullJoinedValue(final K key, final LeftOrRightValue<VL, VR> leftOrRightValue) {
-            // depending on the JoinSide fill in the joiner key and joiner values
-            return joiner.apply(key,
-                    leftOrRightValue.getLeftValue(),
-                    leftOrRightValue.getRightValue());
+            return joiner.apply(key, leftOrRightValue.getLeftValue(), leftOrRightValue.getRightValue());
         }
 
         private long getOuterJoinLookBackTimeMs(
@@ -283,9 +231,5 @@ class KStreamKStreamLeftJoin<K, VL, VR, VOut> implements ProcessorSupplier<K, VL
             }
         }
 
-        @Override
-        public void close() {
-            sharedTimeTrackerSupplier.remove(context().taskId());
-        }
     }
 }

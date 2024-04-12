@@ -182,7 +182,7 @@ class KStreamImplJoin {
         );
 
         final KStreamKStreamRightJoin<K, V1, V2, VOut> joinOther = new KStreamKStreamRightJoin<>(
-                thisWindowStore.name(),
+            thisWindowStore.name(),
             internalWindows,
             AbstractStream.reverseJoinerWithKey(joiner),
             rightOuter,

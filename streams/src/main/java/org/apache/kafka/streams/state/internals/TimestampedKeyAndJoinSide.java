@@ -53,6 +53,13 @@ public class TimestampedKeyAndJoinSide<K> {
         return new TimestampedKeyAndJoinSide<>(leftSide, key, timestamp);
     }
 
+    public static <K> TimestampedKeyAndJoinSide<K> makeLeft(final K key, final long timestamp) {
+        return new TimestampedKeyAndJoinSide<>(true, key, timestamp);
+    }
+
+    public static <K> TimestampedKeyAndJoinSide<K> makeRight(final K key, final long timestamp) {
+        return new TimestampedKeyAndJoinSide<>(false, key, timestamp);
+    }
     public boolean isLeftSide() {
         return leftSide;
     }
