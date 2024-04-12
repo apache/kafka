@@ -21,8 +21,8 @@
   // Version 1 implements multiple leader election types, as described by KIP-460.
   //
   // Version 2 is the first flexible version.
-  "validVersions": "0-2",
-  "flexibleVersions": "2+",
+  "validVersions": "0-3",
+  "flexibleVersions": "3+",
   "fields": [
     { "name": "ElectionType", "type": "int8", "versions": "1+",
       "about": "Type of elections to conduct for the partition. A value of '0' elects the preferred replica. A value of '1' elects the first live replica if there are no in-sync replica." },
@@ -32,7 +32,9 @@
         { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
           "about": "The name of a topic." },
         { "name": "Partitions", "type": "[]int32", "versions": "0+",
-          "about": "The partitions of this topic whose leader should be elected." }
+          "about": "The partitions of this topic whose leader should be elected." },
+        { "name": "DesiredLeaders", "type": "[]int32", "versions": "3+", "nullableVersions": "3+",
+          "about": "The desired leaders. The entry should match with the entry in Partitions by the index." }
       ]
     },
     { "name": "TimeoutMs", "type": "int32", "versions": "0+", "default": "60000",
