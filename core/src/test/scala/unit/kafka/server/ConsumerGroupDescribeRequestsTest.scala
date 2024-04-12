@@ -25,11 +25,9 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.DescribedGroup
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.{Tag, Timeout}
 
-import java.util
-import java.util.ArrayList
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
@@ -85,7 +83,7 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
               .setClientId(clientId)
               .setClientHost(clientHost)
               .setSubscribedTopicRegex("")
-              .setSubscribedTopicNames(new util.ArrayList[String](0))
+              .setSubscribedTopicNames(List("").asJava)
           ).asJava)
       )
 
@@ -95,7 +93,6 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
       )
 
       assertEquals(expected, actual)
-
     }
   }
 
