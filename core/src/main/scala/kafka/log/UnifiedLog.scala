@@ -380,6 +380,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       }
 
       highWatermarkMetadata = newHighWatermark
+      if (topicPartition.topic().contains("topic"))
+        System.err.println(s"[CHIA] updateHighWatermarkMetadata $topicPartition with $highWatermarkMetadata thread: ${Thread.currentThread().getName}")
       producerStateManager.onHighWatermarkUpdated(newHighWatermark.messageOffset)
       logOffsetsListener.onHighWatermarkUpdated(newHighWatermark.messageOffset)
       maybeIncrementFirstUnstableOffset()
@@ -721,7 +723,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      requestLocal: RequestLocal = RequestLocal.NoCaching,
                      verificationGuard: VerificationGuard = VerificationGuard.SENTINEL): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
-    append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationGuard, ignoreRecordSize = false)
+    val r = append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationGuard, ignoreRecordSize = false)
+    if (topicPartition.topic().contains("topic"))
+      System.err.println(s"[CHIA][appendAsLeader] $topicPartition has appendInfo.lastOffset: ${r.lastOffset()} thread: ${Thread.currentThread().getName}")
+    r
   }
 
   /**
@@ -732,7 +737,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @return Information about the appended messages including the first and last offset.
    */
   def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
-    append(records,
+    val r = append(records,
       origin = AppendOrigin.REPLICATION,
       interBrokerProtocolVersion = MetadataVersion.latestProduction,
       validateAndAssignOffsets = false,
@@ -741,6 +746,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       verificationGuard = VerificationGuard.SENTINEL,
       // disable to check the validation of record size since the record is already accepted by leader.
       ignoreRecordSize = true)
+    if (topicPartition.topic().contains("topic"))
+      System.err.println(s"[CHIA][appendAsFollower] $topicPartition has appendInfo.lastOffset: ${r.lastOffset()} thread: ${Thread.currentThread().getName}")
+    r
   }
 
   /**

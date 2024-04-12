@@ -1607,6 +1607,8 @@ class Partition(val topicPartition: TopicPartition,
     // or for a timestamp lookup that is beyond the last fetchable offset.
     timestamp match {
       case ListOffsetsRequest.LATEST_TIMESTAMP =>
+        if (topicPartition.topic().contains("topic"))
+          System.err.println(s"[CHIA] fetchOffsetForTimestamp $topicPartition has $lastFetchableOffset offset thread: ${Thread.currentThread().getName}")
         maybeOffsetsError.map(e => throw e)
           .orElse(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch))))
       case ListOffsetsRequest.EARLIEST_TIMESTAMP | ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP =>
