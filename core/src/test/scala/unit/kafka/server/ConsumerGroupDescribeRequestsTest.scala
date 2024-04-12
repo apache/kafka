@@ -20,9 +20,10 @@ import kafka.server.GroupCoordinatorBaseRequestTest
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
+import kafka.utils.TestUtils
 import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData
-import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.DescribedGroup
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.{Assignment, DescribedGroup, TopicPartitions}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.extension.ExtendWith
@@ -50,7 +51,9 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
 
-    createTopic(
+    val admin = cluster.createAdminClient()
+    val topicId = TestUtils.createTopicWithAdminRaw(
+      admin = admin,
       topic = "foo",
       numPartitions = 3
     )
@@ -60,12 +63,36 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
     val clientHost = "/127.0.0.1"
 
     // Add first group
-    val consumerGroupHeartbeatResponseData = consumerGroupHeartbeat(
+    val consumerGroupHeartbeatResponseData1 = consumerGroupHeartbeat(
       groupId = "grp-1",
       rebalanceTimeoutMs = timeoutMs,
       subscribedTopicNames = List(""),
       topicPartitions = List.empty
     )
+
+    // Add second group
+    val consumerGroupHeartbeatResponseData2 = consumerGroupHeartbeat(
+      groupId = "grp-2",
+      rebalanceTimeoutMs = timeoutMs,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty
+    )
+
+    //    // Add second member to second group
+    //    val consumerGroupHeartbeatResponseData3 = consumerGroupHeartbeat(
+    //      groupId = "grp-2",
+    //      rebalanceTimeoutMs = timeoutMs,
+    //      subscribedTopicNames = List("foo"),
+    //      topicPartitions = List.empty
+    //    )
+
+    val assignmentMember1 = new Assignment()
+      .setTopicPartitions(List(
+        new TopicPartitions()
+          .setTopicId(topicId)
+          .setTopicName("foo")
+          .setPartitions(List[Integer](0, 1, 2).asJava)
+      ).asJava)
 
     for (version <- ApiKeys.CONSUMER_GROUP_DESCRIBE.oldestVersion() to ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)) {
 
@@ -78,17 +105,42 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
           .setAssignorName("uniform")
           .setMembers(List(
             new ConsumerGroupDescribeResponseData.Member()
-              .setMemberId(consumerGroupHeartbeatResponseData.memberId)
+              .setMemberId(consumerGroupHeartbeatResponseData1.memberId)
               .setMemberEpoch(1)
               .setClientId(clientId)
               .setClientHost(clientHost)
               .setSubscribedTopicRegex("")
               .setSubscribedTopicNames(List("").asJava)
-          ).asJava)
+          ).asJava),
+
+        new DescribedGroup()
+          .setGroupId("grp-2")
+          .setGroupState(ConsumerGroupState.STABLE.toString)
+          .setGroupEpoch(1)
+          .setAssignmentEpoch(1)
+          .setAssignorName("uniform")
+          .setMembers(List(
+            new ConsumerGroupDescribeResponseData.Member()
+              .setMemberId(consumerGroupHeartbeatResponseData2.memberId)
+              .setMemberEpoch(1)
+              .setClientId(clientId)
+              .setClientHost(clientHost)
+              .setSubscribedTopicRegex("")
+              .setSubscribedTopicNames(List("foo").asJava)
+              .setAssignment(assignmentMember1)
+              .setTargetAssignment(assignmentMember1)
+            //            new ConsumerGroupDescribeResponseData.Member()
+            //              .setMemberId(consumerGroupHeartbeatResponseData3.memberId)
+            //              .setMemberEpoch(1)
+            //              .setClientId(clientId)
+            //              .setClientHost(clientHost)
+            //              .setSubscribedTopicRegex("")
+            //              .setSubscribedTopicNames(List("foo").asJava)
+          ).asJava),
       )
 
       val actual = consumerGroupDescribe(
-        groupIds = List("grp-1"),
+        groupIds = List("grp-1", "grp-2"),
         version = version.toShort
       )
 
