@@ -176,7 +176,7 @@ public class AssignmentsManagerTest {
             time.sleep(100);
             manager.wakeup();
             return readyToAssert.await(1, TimeUnit.MILLISECONDS);
-        }, 1000, "Wait for ready to assert.");
+        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
 
         ArgumentCaptor<AssignReplicasToDirsRequest.Builder> captor =
             ArgumentCaptor.forClass(AssignReplicasToDirsRequest.Builder.class);
@@ -249,7 +249,7 @@ public class AssignmentsManagerTest {
             time.sleep(TimeUnit.SECONDS.toMillis(1));
             manager.wakeup();
             return readyToAssert.await(1, TimeUnit.MILLISECONDS);
-        }, 10000, "Wait for ready to assert.");
+        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
 
         ArgumentCaptor<AssignReplicasToDirsRequest.Builder> captor =
             ArgumentCaptor.forClass(AssignReplicasToDirsRequest.Builder.class);
@@ -301,7 +301,7 @@ public class AssignmentsManagerTest {
             time.sleep(TimeUnit.SECONDS.toMillis(1));
             manager.wakeup();
             return readyToAssert.await(1, TimeUnit.MILLISECONDS);
-        }, 10000, "Wait for ready to assert");
+        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
     }
 
     private static ClientResponse buildSuccessfulResponse(AssignReplicasToDirsRequestData request) {
@@ -391,7 +391,7 @@ public class AssignmentsManagerTest {
         TestUtils.waitForCondition(() -> {
             time.sleep(100);
             return readyToAssert.await(1, TimeUnit.MILLISECONDS);
-        }, 1000, "Wait for ready to assert");
+        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
         assertEquals(4, queuedReplicaToDirAssignments.value());
 
         for (int i = 4; i < 8; i++) {
