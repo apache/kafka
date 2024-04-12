@@ -17,68 +17,27 @@
 
 package org.apache.kafka.controller;
 
-import java.io.File;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.OptionalLong;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.message.ControllerRegistrationRequestData;
-import org.apache.kafka.common.message.RequestHeaderData;
-import org.apache.kafka.common.metadata.AbortTransactionRecord;
-import org.apache.kafka.common.metadata.BeginTransactionRecord;
-import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
-import org.apache.kafka.common.metadata.ConfigRecord;
-import org.apache.kafka.common.metadata.EndTransactionRecord;
-import org.apache.kafka.common.metadata.RegisterControllerRecord;
-import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
-import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.AlterPartitionRequest;
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
-import org.apache.kafka.common.message.AlterPartitionRequestData;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignmentCollection;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
@@ -86,15 +45,31 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.RequestHeaderData;
+import org.apache.kafka.common.metadata.AbortTransactionRecord;
+import org.apache.kafka.common.metadata.BeginTransactionRecord;
+import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
+import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
+import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.QuorumController.ConfigResourceExistenceChecker;
 import org.apache.kafka.image.AclsDelta;
 import org.apache.kafka.image.AclsImage;
@@ -148,6 +123,32 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 import static java.util.Collections.singletonList;
 import static java.util.function.Function.identity;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
@@ -156,6 +157,7 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER0;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.SCHEMA;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
+import static org.apache.kafka.controller.ConfigurationControlManagerTest.toMap;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextFor;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.brokerFeatures;
@@ -496,6 +498,134 @@ public class QuorumControllerTest {
             assertEquals(0, partition.elr.length, partition.toString());
             assertEquals(0, partition.lastKnownElr.length, partition.toString());
             assertEquals(brokerToBeTheLeader, partition.leader, partition.toString());
+        }
+    }
+
+
+    @Test
+    public void testMinIsrUpdateWithElr() throws Throwable {
+        List<Integer> allBrokers = Arrays.asList(1, 2, 3);
+        List<Integer> brokersToKeepUnfenced = Arrays.asList(1);
+        List<Integer> brokersToFence = Arrays.asList(2, 3);
+        short replicationFactor = (short) allBrokers.size();
+        long sessionTimeoutMillis = 500;
+
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                setControllerBuilderInitializer(controllerBuilder -> {
+                    controllerBuilder.setConfigSchema(SCHEMA);
+                }).
+                setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
+
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_8_IV0, "test-provided bootstrap ELR enabled")).
+                build()
+        ) {
+            ListenerCollection listeners = new ListenerCollection();
+            listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
+            QuorumController active = controlEnv.activeController();
+            Map<Integer, Long> brokerEpochs = new HashMap<>();
+
+            for (Integer brokerId : allBrokers) {
+                CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
+                    anonymousContextFor(ApiKeys.BROKER_REGISTRATION),
+                    new BrokerRegistrationRequestData().
+                        setBrokerId(brokerId).
+                        setClusterId(active.clusterId()).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
+                        setIncarnationId(Uuid.randomUuid()).
+                        setLogDirs(Collections.singletonList(Uuid.randomUuid())).
+                        setListeners(listeners));
+                brokerEpochs.put(brokerId, reply.get().epoch());
+            }
+
+            // Brokers are only registered and should still be fenced
+            allBrokers.forEach(brokerId -> {
+                assertFalse(active.clusterControl().isUnfenced(brokerId),
+                    "Broker " + brokerId + " should have been fenced");
+            });
+
+            // Unfence all brokers and create a topic foo
+            sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
+            CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
+                new CreatableTopicCollection(Arrays.asList(
+                    new CreatableTopic().setName("foo").setNumPartitions(1).
+                        setReplicationFactor(replicationFactor),
+                    new CreatableTopic().setName("bar").setNumPartitions(1).
+                            setReplicationFactor(replicationFactor)
+                ).iterator()));
+            CreateTopicsResponseData createTopicsResponseData = active.createTopics(
+                ANONYMOUS_CONTEXT, createTopicsRequestData,
+                new HashSet<>(Arrays.asList("foo", "bar"))).get();
+            assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
+            assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("bar").errorCode()));
+            Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
+            Uuid topicIdBar = createTopicsResponseData.topics().find("bar").topicId();
+            ConfigRecord configRecord = new ConfigRecord()
+                .setResourceType(BROKER.id())
+                .setResourceName("")
+                .setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)
+                .setValue("2");
+            RecordTestUtils.replayAll(active.configurationControl(), singletonList(new ApiMessageAndVersion(configRecord, (short) 0)));
+
+            // Fence brokers
+            TestUtils.waitForCondition(() -> {
+                    sendBrokerHeartbeatToUnfenceBrokers(active, brokersToKeepUnfenced, brokerEpochs);
+                    for (Integer brokerId : brokersToFence) {
+                        if (active.clusterControl().isUnfenced(brokerId)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }, sessionTimeoutMillis * 3,
+                "Fencing of brokers did not process within expected time"
+            );
+
+            // Send another heartbeat to the brokers we want to keep alive
+            sendBrokerHeartbeatToUnfenceBrokers(active, brokersToKeepUnfenced, brokerEpochs);
+
+            // At this point only the brokers we want fenced should be fenced.
+            brokersToKeepUnfenced.forEach(brokerId -> {
+                assertTrue(active.clusterControl().isUnfenced(brokerId),
+                    "Broker " + brokerId + " should have been unfenced");
+            });
+            brokersToFence.forEach(brokerId -> {
+                assertFalse(active.clusterControl().isUnfenced(brokerId),
+                    "Broker " + brokerId + " should have been fenced");
+            });
+            sendBrokerHeartbeatToUnfenceBrokers(active, brokersToKeepUnfenced, brokerEpochs);
+
+            // First, update the config on topic level.
+            // Verify the isr and elr for the topic partition
+            PartitionRegistration partition = active.replicationControl().getPartition(topicIdFoo, 0);
+            assertArrayEquals(new int[]{1}, partition.isr, partition.toString());
+
+            // The ELR set is not determined but the size is 1.
+            assertEquals(1, partition.elr.length, partition.toString());
+
+            ControllerResult<Map<ConfigResource, ApiError>> result = active.configurationControl().incrementalAlterConfigs(toMap(
+                entry(new ConfigResource(TOPIC, "foo"), toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "1"))))),
+                true);
+            assertEquals(1, result.records().size(), result.records().toString());
+            RecordTestUtils.replayAll(active.configurationControl(), singletonList(result.records().get(0)));
+
+            partition = active.replicationControl().getPartition(topicIdFoo, 0);
+            assertEquals(0, partition.elr.length, partition.toString());
+            assertArrayEquals(new int[]{1}, partition.isr, partition.toString());
+
+            // Now let's try update config on cluster level.
+            partition = active.replicationControl().getPartition(topicIdBar, 0);
+            assertArrayEquals(new int[]{1}, partition.isr, partition.toString());
+            assertEquals(1, partition.elr.length, partition.toString());
+
+            result = active.configurationControl().incrementalAlterConfigs(toMap(
+                entry(new ConfigResource(BROKER, ""), toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "1"))))),
+                true);
+            assertEquals(1, result.records().size(), result.records().toString());
+            RecordTestUtils.replayAll(active.configurationControl(), singletonList(result.records().get(0)));
+            partition = active.replicationControl().getPartition(topicIdBar, 0);
+            assertEquals(0, partition.elr.length, partition.toString());
+            assertArrayEquals(new int[]{1}, partition.isr, partition.toString());
         }
     }
 

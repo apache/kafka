@@ -20,8 +20,9 @@ package org.apache.kafka.controller;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.ConfigResource.Type;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -47,6 +48,7 @@ import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
@@ -66,6 +68,7 @@ public class ConfigurationControlManager {
     private final TimelineHashMap<ConfigResource, TimelineHashMap<String, String>> configData;
     private final Map<String, Object> staticConfig;
     private final ConfigResource currentController;
+    private final MinIsrConfigUpdatePartitionHandler minIsrConfigUpdatePartitionHandler;
 
     static class Builder {
         private LogContext logContext = null;
@@ -75,6 +78,7 @@ public class ConfigurationControlManager {
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator validator = ConfigurationValidator.NO_OP;
         private Map<String, Object> staticConfig = Collections.emptyMap();
+        private MinIsrConfigUpdatePartitionHandler minIsrConfigUpdatePartitionHandler;
         private int nodeId = 0;
 
         Builder setLogContext(LogContext logContext) {
@@ -117,9 +121,19 @@ public class ConfigurationControlManager {
             return this;
         }
 
+        Builder setMinIsrConfigUpdatePartitionHandler(
+            MinIsrConfigUpdatePartitionHandler minIsrConfigUpdatePartitionHandler
+        ) {
+            this.minIsrConfigUpdatePartitionHandler = minIsrConfigUpdatePartitionHandler;
+            return this;
+        }
+
         ConfigurationControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
+            if (minIsrConfigUpdatePartitionHandler == null) {
+                throw new RuntimeException("You must specify MinIsrConfigUpdatePartitionHandler");
+            }
             return new ConfigurationControlManager(
                 logContext,
                 snapshotRegistry,
@@ -128,7 +142,8 @@ public class ConfigurationControlManager {
                 alterConfigPolicy,
                 validator,
                 staticConfig,
-                nodeId);
+                nodeId,
+                minIsrConfigUpdatePartitionHandler);
         }
     }
 
@@ -139,7 +154,9 @@ public class ConfigurationControlManager {
             Optional<AlterConfigPolicy> alterConfigPolicy,
             ConfigurationValidator validator,
             Map<String, Object> staticConfig,
-            int nodeId) {
+            int nodeId,
+            MinIsrConfigUpdatePartitionHandler minIsrConfigUpdatePartitionHandler
+    ) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
         this.configSchema = configSchema;
@@ -149,6 +166,7 @@ public class ConfigurationControlManager {
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticConfig = Collections.unmodifiableMap(new HashMap<>(staticConfig));
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
+        this.minIsrConfigUpdatePartitionHandler = minIsrConfigUpdatePartitionHandler;
     }
 
     SnapshotRegistry snapshotRegistry() {
@@ -400,7 +418,7 @@ public class ConfigurationControlManager {
      *
      * @param record            The ConfigRecord.
      */
-    public void replay(ConfigRecord record) {
+    public void replay(ConfigRecord record) throws Throwable {
         Type type = Type.forId(record.resourceType());
         ConfigResource configResource = new ConfigResource(type, record.resourceName());
         TimelineHashMap<String, String> configs = configData.get(configResource);
@@ -422,6 +440,17 @@ public class ConfigurationControlManager {
         } else {
             log.info("Replayed ConfigRecord for {} which set configuration {} to {}",
                     configResource, record.name(), record.value());
+        }
+        if (record.name() == TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG) {
+            try {
+                if (type == Type.TOPIC) {
+                    minIsrConfigUpdatePartitionHandler.addRecordsForMinIsrUpdate(Optional.of(record.resourceName()));
+                } else {
+                    minIsrConfigUpdatePartitionHandler.addRecordsForMinIsrUpdate(Optional.empty());
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                throw new Throwable("Fail to append partition updates for the min isr update: " + e.getMessage());
+            }
         }
     }
 
@@ -512,5 +541,10 @@ public class ConfigurationControlManager {
     Map<String, String> currentControllerConfig() {
         Map<String, String> result = configData.get(currentController);
         return (result == null) ? Collections.emptyMap() : result;
+    }
+
+    @FunctionalInterface
+    interface MinIsrConfigUpdatePartitionHandler {
+        void addRecordsForMinIsrUpdate(Optional<String> topicName) throws InterruptedException, ExecutionException;
     }
 }

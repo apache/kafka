@@ -145,6 +145,7 @@ import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -1476,7 +1477,7 @@ public final class QuorumController implements Controller {
      * @param snapshotId        The snapshotId if this record is from a snapshot
      * @param offset            The offset of the record
      */
-    private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long offset) {
+    private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long offset) throws Throwable {
         if (log.isTraceEnabled()) {
             if (snapshotId.isPresent()) {
                 log.trace("Replaying snapshot {} record {}",
@@ -1503,6 +1504,7 @@ public final class QuorumController implements Controller {
                 replicationControl.replay((PartitionRecord) message);
                 break;
             case CONFIG_RECORD:
+                // An exception can be thrown if partition change record can't be appended when min isr is changed.
                 configurationControl.replay((ConfigRecord) message);
                 break;
             case PARTITION_CHANGE_RECORD:
@@ -1834,6 +1836,7 @@ public final class QuorumController implements Controller {
             setValidator(configurationValidator).
             setStaticConfig(staticConfig).
             setNodeId(nodeId).
+            setMinIsrConfigUpdatePartitionHandler(this::maybeTriggerMinIsrConfigUpdate).
             build();
         this.clientQuotaControlManager = new ClientQuotaControlManager.Builder().
             setLogContext(logContext).
@@ -2359,5 +2362,10 @@ public final class QuorumController implements Controller {
 
     void handleUncleanBrokerShutdown(int brokerId, List<ApiMessageAndVersion> records) {
         replicationControl.handleBrokerUncleanShutdown(brokerId, records);
+    }
+
+    void maybeTriggerMinIsrConfigUpdate(Optional<String> topicName) throws InterruptedException, ExecutionException {
+        appendWriteEvent("partitionUpdateForMinIsrChange", OptionalLong.empty(),
+            () -> replicationControl.getPartitionElrUpdatesForConfigChanges(topicName)).get();
     }
 }

@@ -2117,6 +2117,20 @@ public class ReplicationControlManager {
         return response;
     }
 
+    ControllerResult<Void> getPartitionElrUpdatesForConfigChanges(Optional<String> topicName) {
+        if (!isElrEnabled()) return ControllerResult.of(Collections.emptyList(), null);
+
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        if (topicName.isPresent()) {
+            generateLeaderAndIsrUpdates("handleMinIsrUpdate", NO_LEADER, NO_LEADER, NO_LEADER, records,
+                brokersToElrs.partitionsWithElr(topicsByName.get(topicName.get())));
+        } else {
+            generateLeaderAndIsrUpdates("handleMinIsrUpdate", NO_LEADER, NO_LEADER, NO_LEADER, records,
+                brokersToElrs.partitionsWithElr());
+        }
+        return ControllerResult.of(records, null);
+    }
+
     ControllerResult<AssignReplicasToDirsResponseData> handleAssignReplicasToDirs(AssignReplicasToDirsRequestData request) {
         if (!featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
             throw new UnsupportedVersionException("Directory assignment is not supported yet.");
