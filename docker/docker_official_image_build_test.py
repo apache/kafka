@@ -52,7 +52,7 @@ def set_executable_permissions(directory):
             os.chmod(path, os.stat(path).st_mode | 0o111)
 
 
-def build_jvm(image, tag, kafka_url, kafka_version):
+def build_jvm(image, tag, kafka_version):
     image = f'{image}:{tag}'
     current_dir = os.path.dirname(os.path.realpath(__file__))
     temp_dir_path = tempfile.mkdtemp()
@@ -119,7 +119,7 @@ if __name__ == '__main__':
 
     if args.image_type == "jvm" and (args.build_only or not (args.build_only or args.test_only)):
         if args.kafka_url and args.kafka_version:
-            build_jvm(args.image, args.tag, args.kafka_url, args.kafka_version)
+            build_jvm(args.image, args.tag, args.kafka_version)
         else:
             raise ValueError(
                 "--kafka-url and --kafka-version are required argument for jvm docker official image image")
