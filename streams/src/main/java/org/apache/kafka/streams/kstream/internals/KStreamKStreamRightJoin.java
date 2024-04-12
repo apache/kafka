@@ -53,45 +53,43 @@ class KStreamKStreamRightJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL,
 
         @Override
         public void process(final Record<K, VR> record) {
-
-            final long inputRecordTimestamp = record.timestamp();
-            final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
-            final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
-
-            sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
-
+            sharedTimeTracker.advanceStreamTime(record.timestamp());
             if (outer && record.key() == null && record.value() != null) {
                 context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                 return;
             } else if (StreamStreamJoinUtil.skipRecord(record, LOG, droppedRecordsSensor, context())) {
                 return;
             }
+            final long inputRecordTimestamp = record.timestamp();
 
             // Emit all non-joined records which window has closed
             if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
                 outerJoinStore.ifPresent(store -> emitNonJoinedOuterRecords(store, record));
             }
 
+            final TimestampedKeyAndJoinSide<K> thisKey =
+                    TimestampedKeyAndJoinSide.makeRight(record.key(), inputRecordTimestamp);
+            final LeftOrRightValue<VL, VR> thisValue = LeftOrRightValue.makeRight(record.value());
+            performInnerJoin(record, inputRecordTimestamp, thisKey, thisValue);
+        }
+
+        private void performInnerJoin(final Record<K, VR> record,
+                final long inputRecordTimestamp, final TimestampedKeyAndJoinSide<K> thisKey,
+                final LeftOrRightValue<VL, VR> thisValue) {
             boolean needOuterJoin = outer;
+            final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
+            final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
             try (final WindowStoreIterator<VL> iter = otherWindowStore.fetch(record.key(), timeFrom, timeTo)) {
-                while (iter.hasNext()) {
+                if (iter.hasNext()) {
                     needOuterJoin = false;
-                    final KeyValue<Long, VL> otherRecord = iter.next();
-                    final long otherRecordTimestamp = otherRecord.key;
-
-                    outerJoinStore.ifPresent(store -> {
-                        // use putIfAbsent to first read and see if there's any values for the key,
-                        // if yes delete the key, otherwise do not issue a put;
-                        // we may delete some values with the same key early but since we are going
-                        // range over all values of the same key even after failure, since the other window-store
-                        // is only cleaned up by stream time, so this is okay for at-least-once.
-                        store.putIfAbsent(TimestampedKeyAndJoinSide.makeLeft(record.key(), otherRecordTimestamp), null);
-                    });
-
-                    context().forward(
-                            record.withValue(joiner.apply(record.key(), record.value(), otherRecord.value))
-                                    .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
                 }
+                iter.forEachRemaining(otherRecord -> {
+                    final long leftRecordTimestamp = otherRecord.key;
+                    final TimestampedKeyAndJoinSide<K> otherKey =
+                                TimestampedKeyAndJoinSide.makeLeft(record.key(), leftRecordTimestamp);
+                    emitInnerJoin(record, otherRecord, inputRecordTimestamp, otherKey);
+                    }
+                );
 
                 if (needOuterJoin) {
                     // The maxStreamTime contains the max time observed in both sides of the join.
@@ -115,9 +113,7 @@ class KStreamKStreamRightJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL,
                         context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                     } else {
                         sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
-                        outerJoinStore.ifPresent(store -> store.put(
-                                TimestampedKeyAndJoinSide.makeRight(record.key(), inputRecordTimestamp),
-                                LeftOrRightValue.makeRight(record.value())));
+                        putInOuterJoinStore(thisKey, thisValue);
                     }
                 }
             }
@@ -125,7 +121,7 @@ class KStreamKStreamRightJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL,
 
         private void emitNonJoinedOuterRecords(
                 final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>> store,
-                final Record<K, VR> record) {
+                final Record<K, ?> record) {
 
             // calling `store.all()` creates an iterator what is an expensive operation on RocksDB;
             // to reduce runtime cost, we try to avoid paying those cost
@@ -184,7 +180,8 @@ class KStreamKStreamRightJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL,
 
                     final K key = timestampedKeyAndJoinSide.getKey();
                     final LeftOrRightValue<VL, VR> leftOrRightValue = next.value;
-                    final VOut nullJoinedValue = getNullJoinedValue(key, leftOrRightValue);
+                    final VOut nullJoinedValue =
+                            joiner.apply(key, leftOrRightValue.getRightValue(), leftOrRightValue.getLeftValue());
                     context().forward(
                             record.withKey(key).withValue(nullJoinedValue).withTimestamp(timestamp)
                     );
@@ -207,21 +204,5 @@ class KStreamKStreamRightJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL,
                 }
             }
         }
-
-        private VOut getNullJoinedValue(final K key, final LeftOrRightValue<VL, VR> leftOrRightValue) {
-            return joiner.apply(key, leftOrRightValue.getRightValue(), leftOrRightValue.getLeftValue());
-        }
-
-        private long getOuterJoinLookBackTimeMs(
-                final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide) {
-            // depending on the JoinSide we fill in the outerJoinLookBackTimeMs
-            if (timestampedKeyAndJoinSide.isLeftSide()) {
-                return windowsAfterMs; // On the left-JoinSide we look back in time
-            } else {
-                return windowsBeforeMs; // On the right-JoinSide we look forward in time
-            }
-        }
-
-
     }
 }

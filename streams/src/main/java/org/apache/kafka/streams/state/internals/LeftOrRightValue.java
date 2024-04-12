@@ -79,7 +79,7 @@ public class LeftOrRightValue<V1, V2> {
      * Create a new {@link LeftOrRightValue} instance for the left side with the V1 value as {@code leftValue}
      *
      * @param value the V value (either V1 or V2 type)
-     * @param <V1>   the type of the left value
+     * @param <V2>   the type of the left value
      * @return a new {@link LeftOrRightValue} instance
      */
     public static <V1, V2> LeftOrRightValue<V1, V2> makeRight(final V2 value) {

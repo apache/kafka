@@ -21,6 +21,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 
 import java.util.Optional;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
@@ -43,11 +44,11 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
     private final boolean enableSpuriousResultFix;
     private final Optional<String> outerJoinWindowName;
 
+    private final long windowsBeforeMs;
+    private final long windowsAfterMs;
     protected final long joinBeforeMs;
     protected final long joinAfterMs;
     protected final long joinGraceMs;
-    protected final long windowsBeforeMs;
-    protected final long windowsAfterMs;
     protected final boolean outer;
 
     protected final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner;
@@ -104,12 +105,41 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
 
         @Override
         public void process(final Record<K, VThis> record) {
-
         }
 
         @Override
         public void close() {
             sharedTimeTrackerSupplier.remove(context().taskId());
+        }
+
+        protected void emitInnerJoin(final Record<K, VThis> thisRecord, final KeyValue<Long, VOther> otherRecord,
+                final long inputRecordTimestamp, final TimestampedKeyAndJoinSide<K> otherKey) {
+            outerJoinStore.ifPresent(store -> {
+                // use putIfAbsent to first read and see if there's any values for the key,
+                // if yes delete the key, otherwise do not issue a put;
+                // we may delete some values with the same key early but since we are going
+                // range over all values of the same key even after failure, since the other window-store
+                // is only cleaned up by stream time, so this is okay for at-least-once.
+                store.putIfAbsent(otherKey, null);
+            });
+
+            context().forward(
+                    thisRecord.withValue(joiner.apply(thisRecord.key(), thisRecord.value(), otherRecord.value))
+                            .withTimestamp(Math.max(inputRecordTimestamp, otherRecord.key)));
+        }
+
+        protected long getOuterJoinLookBackTimeMs(
+                final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide) {
+            // depending on the JoinSide we fill in the outerJoinLookBackTimeMs
+            if (timestampedKeyAndJoinSide.isLeftSide()) {
+                return windowsAfterMs; // On the left-JoinSide we look back in time
+            } else {
+                return windowsBeforeMs; // On the right-JoinSide we look forward in time
+            }
+        }
+        protected void putInOuterJoinStore(final TimestampedKeyAndJoinSide<K> thisKey,
+                final LeftOrRightValue<VL, VR> thisValue) {
+            outerJoinStore.ifPresent(store -> store.put(thisKey, thisValue));
         }
     }
 }
