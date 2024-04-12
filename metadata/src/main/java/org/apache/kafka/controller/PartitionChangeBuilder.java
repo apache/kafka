@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.metadata.LeaderRecoveryState;
@@ -77,7 +78,11 @@ public class PartitionChangeBuilder {
         /**
          * Prefer replicas in the ISR but keep the partition online even if it requires picking a leader that is not in the ISR.
          */
-        UNCLEAN
+        UNCLEAN,
+        /**
+         * Perform leader election for designated leader
+         */
+        DESIGNATED
     }
 
     private final PartitionRegistration partition;
@@ -98,6 +103,7 @@ public class PartitionChangeBuilder {
     private LeaderRecoveryState targetLeaderRecoveryState;
     private boolean eligibleLeaderReplicasEnabled;
     private DefaultDirProvider defaultDirProvider;
+    private int desiredLeader;
 
     // Whether allow electing last known leader in a Balanced recovery. Note, the last known leader will be stored in the
     // lastKnownElr field if enabled.
@@ -196,6 +202,11 @@ public class PartitionChangeBuilder {
         return this;
     }
 
+    public PartitionChangeBuilder setDesiredLeader(int desiredLeader) {
+        this.desiredLeader = desiredLeader;
+        return this;
+    }
+
     // VisibleForTesting
     static class ElectionResult {
         final int node;
@@ -220,9 +231,22 @@ public class PartitionChangeBuilder {
     ElectionResult electLeader() {
         if (election == Election.PREFERRED) {
             return electPreferredLeader();
+        } else if (election == Election.DESIGNATED) {
+            return electDesignatedLeader();
         }
 
         return electAnyLeader();
+    }
+
+    /**
+     * Assumes that the election type is Election.DESIGNATED
+     */
+    private ElectionResult electDesignatedLeader() {
+        if (isValidNewLeader(desiredLeader)) {
+            return new ElectionResult(desiredLeader, false);
+        }
+
+        throw new UnknownServerException("Invalid desired leader");
     }
 
     /**
