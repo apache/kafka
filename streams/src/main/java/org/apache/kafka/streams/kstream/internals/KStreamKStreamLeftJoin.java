@@ -33,14 +33,6 @@ import org.slf4j.LoggerFactory;
 class KStreamKStreamLeftJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL, VR, VOut, VL, VR> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamLeftJoin.class);
 
-    private final long joinBeforeMs;
-    private final long joinAfterMs;
-    private final long joinGraceMs;
-    private final long windowsBeforeMs;
-    private final long windowsAfterMs;
-
-    private final boolean outer;
-    private final ValueJoinerWithKey<? super K, ? super VL, ? super VR, ? extends VOut> joiner;
 
 
     KStreamKStreamLeftJoin(final String otherWindowName,
@@ -49,14 +41,8 @@ class KStreamKStreamLeftJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL, 
                        final boolean outer,
                        final Optional<String> outerJoinWindowName,
                        final TimeTrackerSupplier sharedTimeTrackerSupplier) {
-        super(otherWindowName, sharedTimeTrackerSupplier, windows.spuriousResultFixEnabled(), outerJoinWindowName);
-        this.joinBeforeMs = windows.beforeMs;
-        this.joinAfterMs = windows.afterMs;
-        this.windowsAfterMs = windows.afterMs;
-        this.windowsBeforeMs = windows.beforeMs;
-        this.joinGraceMs = windows.gracePeriodMs();
-        this.joiner = joiner;
-        this.outer = outer;
+        super(otherWindowName, sharedTimeTrackerSupplier, windows.spuriousResultFixEnabled(), outerJoinWindowName,
+                windows.beforeMs, windows.afterMs, windows, outer, joiner);
     }
 
     @Override

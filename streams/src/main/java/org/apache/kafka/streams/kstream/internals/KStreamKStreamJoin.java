@@ -22,6 +22,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 import java.util.Optional;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTrackerSupplier;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
@@ -42,12 +43,30 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
     private final boolean enableSpuriousResultFix;
     private final Optional<String> outerJoinWindowName;
 
+    protected final long joinBeforeMs;
+    protected final long joinAfterMs;
+    protected final long joinGraceMs;
+    protected final long windowsBeforeMs;
+    protected final long windowsAfterMs;
+    protected final boolean outer;
+
+    protected final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner;
+
     KStreamKStreamJoin(final String otherWindowName, final TimeTrackerSupplier sharedTimeTrackerSupplier,
-            final boolean enableSpuriousResultFix, final Optional<String> outerJoinWindowName) {
+            final boolean enableSpuriousResultFix, final Optional<String> outerJoinWindowName, final long joinBeforeMs,
+            final long joinAfterMs, final JoinWindowsInternal windows, final boolean outer,
+            final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner) {
         this.otherWindowName = otherWindowName;
         this.sharedTimeTrackerSupplier = sharedTimeTrackerSupplier;
         this.enableSpuriousResultFix = enableSpuriousResultFix;
         this.outerJoinWindowName = outerJoinWindowName;
+        this.joinBeforeMs = joinBeforeMs;
+        this.joinAfterMs = joinAfterMs;
+        this.joinGraceMs = windows.gracePeriodMs();
+        this.windowsBeforeMs = windows.beforeMs;
+        this.windowsAfterMs = windows.afterMs;
+        this.outer = outer;
+        this.joiner = joiner;
     }
 
     protected abstract class KStreamKStreamJoinProcessor extends ContextualProcessor<K, VThis, K, VOut> {
