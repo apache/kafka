@@ -83,6 +83,7 @@ import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.partitio
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.replicaMoveStatesToString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -300,6 +301,13 @@ public class ReassignPartitionsUnitTest {
 
             assertEquals(assignments,
                 getReplicaAssignmentForPartitions(adminClient, new HashSet<>(asList(new TopicPartition("foo", 0), new TopicPartition("bar", 0)))));
+
+            UnknownTopicOrPartitionException exception =
+                assertInstanceOf(UnknownTopicOrPartitionException.class,
+                    assertThrows(ExecutionException.class,
+                        () -> getReplicaAssignmentForPartitions(adminClient,
+                            new HashSet<>(asList(new TopicPartition("foo", 0), new TopicPartition("foo", 10))))).getCause());
+            assertEquals("Unable to find partition: foo-10", exception.getMessage());
         }
     }
 

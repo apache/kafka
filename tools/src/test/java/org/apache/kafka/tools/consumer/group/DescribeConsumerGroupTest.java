@@ -46,7 +46,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.RANDOM;
 import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES;
-import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -87,7 +86,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeWithMultipleSubActions(String quorum) {
         AtomicInteger exitStatus = new AtomicInteger(0);
@@ -107,7 +106,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         assertTrue(exitMessage.get().contains("Option [describe] takes at most one of these options"));
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeWithStateValue(String quorum) {
         AtomicInteger exitStatus = new AtomicInteger(0);
@@ -127,7 +126,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         assertTrue(exitMessage.get().contains("Option [describe] does not take a value for [state]"));
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testPrintVersion(String quorum) {
         ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
@@ -699,7 +698,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }, "Expected a stable group with two members in describe group state result.");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft", "kraft+kip848"})
     public void testDescribeSimpleConsumerGroup(String quorum) throws Exception {
         // Ensure that the offsets of consumers which don't use group management are still displayed
@@ -791,7 +790,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         assertEquals(TimeoutException.class, e.getCause().getClass());
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeWithUnrecognizedNewConsumerOption(String quorum) {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};

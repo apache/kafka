@@ -72,16 +72,6 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABL
 public class ClassicGroup implements Group {
 
     /**
-     * Empty generation.
-     */
-    public static final int NO_GENERATION = -1;
-
-    /**
-     * Protocol with empty name.
-     */
-    public static final String NO_PROTOCOL_NAME = "";
-
-    /**
      * No leader.
      */
     public static final String NO_LEADER = "";
@@ -545,7 +535,6 @@ public class ClassicGroup implements Group {
         JoinGroupResponseData joinGroupResponse = new JoinGroupResponseData()
             .setMembers(Collections.emptyList())
             .setMemberId(oldMemberId)
-            .setGenerationId(NO_GENERATION)
             .setProtocolName(null)
             .setProtocolType(null)
             .setLeader(NO_LEADER)
@@ -1143,12 +1132,12 @@ public class ClassicGroup implements Group {
 
     /**
      * Collects the set of topics that the members are subscribed to when the Protocol Type is equal
-     * to 'consumer'. None is returned if
+     * to 'consumer'. Empty is returned if
      * - the protocol type is not equal to 'consumer';
      * - the protocol is not defined yet; or
      * - the protocol metadata does not comply with the schema.
      *
-     * @return the subscribed topics or None based on the condition above.
+     * @return the subscribed topics or Empty based on the condition above.
      */
     public Optional<Set<String>> computeSubscribedTopics() {
         if (!protocolType.isPresent()) {
