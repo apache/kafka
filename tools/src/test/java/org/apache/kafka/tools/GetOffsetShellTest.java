@@ -24,36 +24,27 @@ import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.admin.TopicListing;
-import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -69,7 +60,6 @@ public class GetOffsetShellTest {
     private final int offsetTopicPartitionCount = 4;
     private final ClusterInstance cluster;
     private final String topicName = "topic";
-    private final Duration consumerTimeout = Duration.ofMillis(1000);
 
     public GetOffsetShellTest(ClusterInstance cluster) {
         this.cluster = cluster;
@@ -103,8 +93,14 @@ public class GetOffsetShellTest {
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
             IntStream.range(0, topicCount + 1)
                 .forEach(i -> IntStream.range(0, i * i)
-                        .forEach(msgCount -> producer.send(
-                                new ProducerRecord<>(getTopicName(i), msgCount % i, null, "val" + msgCount)))
+                        .forEach(msgCount -> {
+                            try {
+                                producer.send(
+                                        new ProducerRecord<>(getTopicName(i), msgCount % i, null, "val" + msgCount)).get();
+                            } catch (InterruptedException | ExecutionException e) {
+                                throw new RuntimeException(e);
+                            }
+                        })
                 );
         }
     }
@@ -123,14 +119,14 @@ public class GetOffsetShellTest {
                 topics.add(getTopicName(i));
             }
             consumer.subscribe(topics);
-            consumer.poll(consumerTimeout);
+            consumer.poll(Duration.ofMillis(1000));
         }
     }
 
     static class Row {
-        private String name;
-        private int partition;
-        private Long offset;
+        private final String name;
+        private final int partition;
+        private final Long offset;
 
         public Row(String name, int partition, Long offset) {
             this.name = name;
@@ -164,10 +160,11 @@ public class GetOffsetShellTest {
     public void testNoFilterOptions() {
         setUp();
 
+        List<Row> output = executeAndParse();
         if (!cluster.isKRaftTest()) {
-            retryUntilEqual(expectedOffsetsWithInternal(), this::executeAndParse);
+            assertEquals(expectedOffsetsWithInternal(), output);
         } else {
-            retryUntilEqual(expectedTestTopicOffsets(), this::executeAndParse);
+            assertEquals(expectedTestTopicOffsets(), output);
         }
     }
 
@@ -175,34 +172,41 @@ public class GetOffsetShellTest {
     public void testInternalExcluded() {
         setUp();
 
-        retryUntilEqual(expectedTestTopicOffsets(), () -> executeAndParse("--exclude-internal-topics"));
+        List<Row> output = executeAndParse("--exclude-internal-topics");
+
+        assertEquals(expectedTestTopicOffsets(), output);
     }
 
     @ClusterTest
     public void testTopicNameArg() {
         setUp();
 
-        IntStream.range(1, topicCount + 1).forEach(i -> retryUntilEqual(expectedOffsetsForTopic(i),
-                () -> executeAndParse("--topic", getTopicName(i))));
+        IntStream.range(1, topicCount + 1).forEach(i -> {
+            List<Row> offsets = executeAndParse("--topic", getTopicName(i));
+
+            assertEquals(expectedOffsetsForTopic(i), offsets, () -> "Offset output did not match for " + getTopicName(i));
+            }
+        );
     }
 
     @ClusterTest
     public void testTopicPatternArg() {
         setUp();
 
-        retryUntilEqual(expectedTestTopicOffsets(), () -> executeAndParse("--topic", "topic.*"));
+        List<Row> offsets = executeAndParse("--topic", "topic.*");
+
+        assertEquals(expectedTestTopicOffsets(), offsets);
     }
 
     @ClusterTest
     public void testPartitionsArg() {
         setUp();
 
+        List<Row> offsets = executeAndParse("--partitions", "0,1");
         if (!cluster.isKRaftTest()) {
-            retryUntilEqual(expectedOffsetsWithInternal().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()),
-                    () -> executeAndParse("--partitions", "0,1"));
+            assertEquals(expectedOffsetsWithInternal().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
         } else {
-            retryUntilEqual(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()),
-                    () -> executeAndParse("--partitions", "0,1"));
+            assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
         }
     }
 
@@ -210,8 +214,9 @@ public class GetOffsetShellTest {
     public void testTopicPatternArgWithPartitionsArg() {
         setUp();
 
-        retryUntilEqual(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()),
-                () -> executeAndParse("--topic", "topic.*", "--partitions", "0,1"));
+        List<Row> offsets = executeAndParse("--topic", "topic.*", "--partitions", "0,1");
+
+        assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
     }
 
     @ClusterTest
@@ -220,6 +225,7 @@ public class GetOffsetShellTest {
 
         createConsumerAndPoll();
 
+        List<Row> offsets = executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3");
         List<Row> expected = Arrays.asList(
                 new Row("__consumer_offsets", 3, 0L),
                 new Row("topic1", 0, 1L),
@@ -228,7 +234,7 @@ public class GetOffsetShellTest {
                 new Row("topic4", 2, 4L)
         );
 
-        retryUntilEqual(expected, () -> executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3"));
+        assertEquals(expected, offsets);
     }
 
     @ClusterTest
@@ -236,6 +242,7 @@ public class GetOffsetShellTest {
         setUp();
 
         for (String time : new String[] {"-1", "latest"}) {
+            List<Row> offsets = executeAndParse("--topic-partitions", "topic.*:0", "--time", time);
             List<Row> expected = Arrays.asList(
                     new Row("topic1", 0, 1L),
                     new Row("topic2", 0, 2L),
@@ -243,7 +250,7 @@ public class GetOffsetShellTest {
                     new Row("topic4", 0, 4L)
             );
 
-            retryUntilEqual(expected, () -> executeAndParse("--topic-partitions", "topic.*:0", "--time", time));
+            assertEquals(expected, offsets);
         }
     }
 
@@ -252,6 +259,7 @@ public class GetOffsetShellTest {
         setUp();
 
         for (String time : new String[] {"-2", "earliest"}) {
+            List<Row> offsets = executeAndParse("--topic-partitions", "topic.*:0", "--time", time);
             List<Row> expected = Arrays.asList(
                     new Row("topic1", 0, 0L),
                     new Row("topic2", 0, 0L),
@@ -259,7 +267,7 @@ public class GetOffsetShellTest {
                     new Row("topic4", 0, 0L)
             );
 
-            retryUntilEqual(expected, () -> executeAndParse("--topic-partitions", "topic.*:0", "--time", time));
+            assertEquals(expected, offsets);
         }
     }
 
@@ -282,6 +290,7 @@ public class GetOffsetShellTest {
 
         String time = String.valueOf(System.currentTimeMillis() / 2);
 
+        List<Row> offsets = executeAndParse("--topic-partitions", "topic.*:0", "--time", time);
         List<Row> expected = Arrays.asList(
                 new Row("topic1", 0, 0L),
                 new Row("topic2", 0, 0L),
@@ -289,7 +298,7 @@ public class GetOffsetShellTest {
                 new Row("topic4", 0, 0L)
         );
 
-        retryUntilEqual(expected, () -> executeAndParse("--topic-partitions", "topic.*:0", "--time", time));
+        assertEquals(expected, offsets);
     }
 
     @ClusterTest
@@ -298,13 +307,16 @@ public class GetOffsetShellTest {
 
         String time = String.valueOf(System.currentTimeMillis() * 2);
 
-        retryUntilEqual(new ArrayList<>(), () -> executeAndParse("--topic-partitions", "topic.*", "--time", time));
+        List<Row> offsets = executeAndParse("--topic-partitions", "topic.*", "--time", time);
+
+        assertEquals(new ArrayList<Row>(), offsets);
     }
 
     @ClusterTest
     public void testTopicPartitionsArgWithInternalExcluded() {
         setUp();
 
+        List<Row> offsets = executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3", "--exclude-internal-topics");
         List<Row> expected = Arrays.asList(
                 new Row("topic1", 0, 1L),
                 new Row("topic2", 1, 2L),
@@ -312,7 +324,7 @@ public class GetOffsetShellTest {
                 new Row("topic4", 2, 4L)
         );
 
-        retryUntilEqual(expected, () -> executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3", "--exclude-internal-topics"));
+        assertEquals(expected, offsets);
     }
 
     @ClusterTest
@@ -321,8 +333,9 @@ public class GetOffsetShellTest {
 
         createConsumerAndPoll();
 
-        retryUntilEqual(Arrays.asList(new Row("__consumer_offsets", 0, 0L)),
-                () -> executeAndParse("--topic-partitions", "__.*:0"));
+        List<Row> offsets = executeAndParse("--topic-partitions", "__.*:0");
+
+        assertEquals(Arrays.asList(new Row("__consumer_offsets", 0, 0L)), offsets);
     }
 
     @ClusterTest
@@ -427,31 +440,5 @@ public class GetOffsetShellTest {
         newArgs.add(cluster.bootstrapServers());
 
         return newArgs.toArray(new String[0]);
-    }
-
-    private void retryUntilEqual(List<Row> expected, Supplier<List<Row>> outputSupplier) {
-        try {
-            TestUtils.waitForCondition(
-                    () -> expected.equals(outputSupplier.get()),
-                    "TopicOffsets did not match. Expected: " + expectedTestTopicOffsets() + ", but was: "
-                            + outputSupplier.get() + ". Final offsets: " + getFinalOffsets()
-            );
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private Set<Row> getFinalOffsets() throws ExecutionException, InterruptedException {
-        try (Admin admin = cluster.createAdminClient()) {
-            Set<String> topics = admin.listTopics(new ListTopicsOptions().listInternal(true)).listings().get()
-                    .stream().map(TopicListing::name).collect(Collectors.toSet());
-            Map<TopicPartition, OffsetSpec> offsetRequest = admin.describeTopics(topics)
-                    .allTopicNames().get().entrySet().stream().flatMap(entry -> entry.getValue().partitions()
-                            .stream().map(p -> new AbstractMap.SimpleImmutableEntry<>(new TopicPartition(entry.getKey(), p.partition()), OffsetSpec.latest())))
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-            return admin.listOffsets(offsetRequest).all().get().entrySet().stream()
-                    .map(entry -> new Row(entry.getKey().topic(), entry.getKey().partition(), entry.getValue().offset()))
-                    .collect(Collectors.toSet());
-        }
     }
 }
