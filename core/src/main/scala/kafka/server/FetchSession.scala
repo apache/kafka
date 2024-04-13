@@ -179,7 +179,7 @@ class CachedPartition(var topic: String,
    * @return the hash code for the CachedPartition depending on what request version we are using.
    */
   override def hashCode: Int =
-    if (!topicId.equals(Uuid.ZERO_UUID))
+    if (topicId != Uuid.ZERO_UUID)
       (31 * partition) + topicId.hashCode
     else
       (31 * partition) + topic.hashCode
@@ -196,7 +196,7 @@ class CachedPartition(var topic: String,
   override def equals(that: Any): Boolean =
     that match {
       case that: CachedPartition =>
-        this.eq(that) || (if (!this.topicId.equals(Uuid.ZERO_UUID))
+        this.eq(that) || (if (this.topicId != Uuid.ZERO_UUID)
           this.partition.equals(that.partition) && this.topicId.equals(that.topicId)
         else
           this.partition.equals(that.partition) && this.topic.equals(that.topic))

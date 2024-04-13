@@ -556,7 +556,7 @@ class ZkMetadataCache(
       topicIds ++= metadataSnapshot.topicIds
       val (newTopicIds, newZeroIds) = updateMetadataRequest.topicStates().asScala
         .map(topicState => (topicState.topicName(), topicState.topicId()))
-        .partition { case (_, topicId) => !topicId.equals(Uuid.ZERO_UUID) }
+        .partition { case (_, topicId) => topicId != Uuid.ZERO_UUID }
       newZeroIds.foreach { case (zeroIdTopic, _) => topicIds.remove(zeroIdTopic) }
       topicIds ++= newTopicIds.toMap
 

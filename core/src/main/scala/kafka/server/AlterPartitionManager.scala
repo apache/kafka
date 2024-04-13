@@ -270,7 +270,7 @@ class DefaultAlterPartitionManager(
 
     inflightAlterPartitionItems.groupBy(_.topicIdPartition.topic).foreach { case (topicName, items) =>
       val topicId = items.head.topicIdPartition.topicId
-      canUseTopicIds &= !topicId.equals(Uuid.ZERO_UUID)
+      canUseTopicIds &= topicId != Uuid.ZERO_UUID
       topicNamesByIds(topicId) = topicName
 
       // Both the topic name and the topic id are set here because at this stage
