@@ -63,30 +63,6 @@ public class LeftOrRightValue<V1, V2> {
         return new LeftOrRightValue<>(null, rightValue);
     }
 
-    /**
-     * Create a new {@link LeftOrRightValue} instance for the left side with the V1 value as {@code leftValue}
-     *
-     * @param value the V value (either V1 or V2 type)
-     * @param <V1>   the type of the left value
-     * @return a new {@link LeftOrRightValue} instance
-     */
-    public static <V1, V2> LeftOrRightValue<V1, V2> makeLeft(final V1 value) {
-        Objects.requireNonNull(value, "left value is null");
-        return makeLeftValue(value);
-    }
-
-    /**
-     * Create a new {@link LeftOrRightValue} instance for the left side with the V1 value as {@code leftValue}
-     *
-     * @param value the V value (either V1 or V2 type)
-     * @param <V2>   the type of the left value
-     * @return a new {@link LeftOrRightValue} instance
-     */
-    public static <V1, V2> LeftOrRightValue<V1, V2> makeRight(final V2 value) {
-        Objects.requireNonNull(value, "right value is null");
-        return makeRightValue(value);
-    }
-
     public V1 getLeftValue() {
         return leftValue;
     }

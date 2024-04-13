@@ -43,12 +43,11 @@ import org.slf4j.LoggerFactory;
 
 abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements ProcessorSupplier<K, VThis, K, VOut> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
-
+    private final boolean outer;
+    private final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner;
     private final long joinBeforeMs;
     private final long joinAfterMs;
     private final long joinGraceMs;
-    protected final boolean outer;
-    protected final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner;
     private final String otherWindowName;
     private final TimeTrackerSupplier sharedTimeTrackerSupplier;
     private final boolean enableSpuriousResultFix;
@@ -57,12 +56,12 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
     private final long windowsAfterMs;
 
     KStreamKStreamJoin(final String otherWindowName, final TimeTrackerSupplier sharedTimeTrackerSupplier,
-            final boolean enableSpuriousResultFix, final Optional<String> outerJoinWindowName, final long joinBeforeMs,
+            final Optional<String> outerJoinWindowName, final long joinBeforeMs,
             final long joinAfterMs, final JoinWindowsInternal windows, final boolean outer,
             final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner) {
         this.otherWindowName = otherWindowName;
         this.sharedTimeTrackerSupplier = sharedTimeTrackerSupplier;
-        this.enableSpuriousResultFix = enableSpuriousResultFix;
+        this.enableSpuriousResultFix = windows.spuriousResultFixEnabled();
         this.outerJoinWindowName = outerJoinWindowName;
         this.joinBeforeMs = joinBeforeMs;
         this.joinAfterMs = joinAfterMs;
@@ -74,8 +73,8 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
     }
 
     protected abstract class KStreamKStreamJoinProcessor extends ContextualProcessor<K, VThis, K, VOut> {
-        protected InternalProcessorContext<K, VOut> internalProcessorContext;
-        protected Sensor droppedRecordsSensor;
+        private InternalProcessorContext<K, VOut> internalProcessorContext;
+        private Sensor droppedRecordsSensor;
 
         private TimeTracker sharedTimeTracker;
         private Optional<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>>> outerJoinStore =
@@ -124,7 +123,13 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
             performInnerJoin(thisRecord, thisRecordTimestamp);
         }
 
+        @Override
+        public void close() {
+            sharedTimeTrackerSupplier.remove(context().taskId());
+        }
+
         protected abstract TimestampedKeyAndJoinSide<K> makeThisKey(final K key, final long inputRecordTimestamp);
+
         protected abstract LeftOrRightValue<VL, VR> makeThisValue(final VThis thisValue);
 
         protected abstract TimestampedKeyAndJoinSide<K> makeOtherKey(final K key, final long timestamp);
@@ -132,11 +137,6 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
         protected abstract VThis getThisValue(final LeftOrRightValue<? extends VL, ? extends VR> leftOrRightValue);
 
         protected abstract VOther getOtherValue(final LeftOrRightValue<? extends VL, ? extends VR> leftOrRightValue);
-
-        @Override
-        public void close() {
-            sharedTimeTrackerSupplier.remove(context().taskId());
-        }
 
         private void emitNonJoinedOuterRecords(
                 final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>> store,
@@ -184,7 +184,8 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
                     // There might be an outer record for the other joinSide which window has not closed yet
                     // We rely on the <timestamp><left/right-boolean><key> ordering of KeyValueIterator
                     final long outerJoinLookBackTimeMs = getOuterJoinLookBackTimeMs(timestampedKeyAndJoinSide);
-                    if (sharedTimeTracker.minTime + outerJoinLookBackTimeMs + joinGraceMs >= sharedTimeTracker.streamTime) {
+                    if (sharedTimeTracker.minTime + outerJoinLookBackTimeMs + joinGraceMs
+                            >= sharedTimeTracker.streamTime) {
                         if (timestampedKeyAndJoinSide.isLeftSide()) {
                             outerJoinLeftWindowOpen =
                                     true; // there are no more candidates to emit on left-outerJoin-side
@@ -225,15 +226,15 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
         }
 
 
-        private void performInnerJoin(final Record<K, VThis> thisRecord, final long inputRecordTimestamp) {
+        private void performInnerJoin(final Record<K, VThis> thisRecord, final long thisRecordTimestamp) {
             boolean needOuterJoin = outer;
-            final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
-            final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
+            final long timeFrom = Math.max(0L, thisRecordTimestamp - joinBeforeMs);
+            final long timeTo = Math.max(0L, thisRecordTimestamp + joinAfterMs);
             try (final WindowStoreIterator<VOther> iter = otherWindowStore.fetch(thisRecord.key(), timeFrom, timeTo)) {
                 if (iter.hasNext()) {
                     needOuterJoin = false;
                 }
-                iter.forEachRemaining(otherRecord -> emitInnerJoin(thisRecord, otherRecord, inputRecordTimestamp));
+                iter.forEachRemaining(otherRecord -> emitInnerJoin(thisRecord, otherRecord, thisRecordTimestamp));
 
                 if (needOuterJoin) {
                     // The maxStreamTime contains the max time observed in both sides of the join.
@@ -254,17 +255,17 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
                     // This condition below allows us to process the out-of-order records without the need
                     // to hold it in the temporary outer store
                     if (!outerJoinStore.isPresent() || timeTo < sharedTimeTracker.streamTime) {
-                        context().forward(thisRecord.withValue(joiner.apply(thisRecord.key(), thisRecord.value(), null)));
+                        context().forward(
+                                thisRecord.withValue(joiner.apply(thisRecord.key(), thisRecord.value(), null)));
                     } else {
-                        sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
-                        putInOuterJoinStore(thisRecord, inputRecordTimestamp);
+                        sharedTimeTracker.updatedMinTime(thisRecordTimestamp);
+                        putInOuterJoinStore(thisRecord, thisRecordTimestamp);
                     }
                 }
             }
         }
 
-        private long getOuterJoinLookBackTimeMs(
-                final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide) {
+        private long getOuterJoinLookBackTimeMs(final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide) {
             // depending on the JoinSide we fill in the outerJoinLookBackTimeMs
             if (timestampedKeyAndJoinSide.isLeftSide()) {
                 return windowsAfterMs; // On the left-JoinSide we look back in time

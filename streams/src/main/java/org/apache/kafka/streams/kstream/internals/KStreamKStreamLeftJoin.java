@@ -22,11 +22,8 @@ import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTrackerSup
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 class KStreamKStreamLeftJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL, VR, VOut, VL, VR> {
-    private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamLeftJoin.class);
 
     KStreamKStreamLeftJoin(final String otherWindowName,
             final JoinWindowsInternal windows,
@@ -34,7 +31,7 @@ class KStreamKStreamLeftJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL, 
             final boolean outer,
             final Optional<String> outerJoinWindowName,
             final TimeTrackerSupplier sharedTimeTrackerSupplier) {
-        super(otherWindowName, sharedTimeTrackerSupplier, windows.spuriousResultFixEnabled(), outerJoinWindowName,
+        super(otherWindowName, sharedTimeTrackerSupplier, outerJoinWindowName,
                 windows.beforeMs, windows.afterMs, windows, outer, joiner);
     }
 
@@ -53,7 +50,7 @@ class KStreamKStreamLeftJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL, 
 
         @Override
         public LeftOrRightValue<VL, VR> makeThisValue(final VL thisValue) {
-            return LeftOrRightValue.makeLeft(thisValue);
+            return LeftOrRightValue.makeLeftValue(thisValue);
         }
 
         @Override
