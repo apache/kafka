@@ -119,7 +119,7 @@ public class KStreamKStreamJoinTest {
 
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKStreamLeftJoin.class);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKStreamJoin.class);
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, Integer> inputTopic =
