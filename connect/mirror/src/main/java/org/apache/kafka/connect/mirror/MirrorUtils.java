@@ -333,7 +333,7 @@ public final class MirrorUtils {
             if (cause instanceof TopicAuthorizationException ||
                     cause instanceof ClusterAuthorizationException ||
                     cause instanceof GroupAuthorizationException) {
-                log.error("Authorization error occurred while trying to " + errMsg.get());
+                log.error("{} occurred while trying to {}", cause.getClass().getSimpleName(), errMsg.get());
             }
             throw e;
         } catch (Exception e) {
