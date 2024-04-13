@@ -34,13 +34,10 @@ import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.concurrent.Future;
@@ -58,26 +55,15 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.mock;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ConnectorOffsetBackingStoreTest {
-
-    private static final String NAMESPACE = "namespace";
-    // Connect format - any types should be accepted here
-    private static final Map<String, Object> OFFSET_KEY = Collections.singletonMap("key", "key");
-    private static final Map<String, Object> OFFSET_VALUE = Collections.singletonMap("key", 12);
 
     // Serialized
     private static final byte[] OFFSET_KEY_SERIALIZED = "key-serialized".getBytes();
     private static final byte[] OFFSET_VALUE_SERIALIZED = "value-serialized".getBytes();
 
     private static final Exception PRODUCE_EXCEPTION = new KafkaException();
-
-    @Mock
-    private Converter keyConverter;
-    @Mock
-    private Converter valueConverter;
 
     @Test
     public void testFlushFailureWhenWriteToSecondaryStoreFailsForTombstoneOffsets() {
@@ -95,7 +81,7 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, null), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
@@ -120,7 +106,7 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, null), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
@@ -145,7 +131,7 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, null), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
@@ -170,7 +156,7 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
@@ -195,7 +181,7 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
@@ -220,7 +206,7 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
@@ -245,7 +231,7 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, null), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
@@ -268,7 +254,7 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
@@ -291,7 +277,7 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
@@ -360,14 +346,8 @@ public class ConnectorOffsetBackingStoreTest {
         };
     }
 
-    private Map<ByteBuffer, ByteBuffer> getSerialisedOffsets(Map<String, Object> key, byte[] keySerialized,
-                                                             Map<String, Object> value, byte[] valueSerialized) {
-        List<Object> keyWrapped = Arrays.asList(NAMESPACE, key);
-        when(keyConverter.fromConnectData(NAMESPACE, null, keyWrapped)).thenReturn(keySerialized);
-        when(valueConverter.fromConnectData(NAMESPACE, null, value)).thenReturn(valueSerialized);
-
-        return Collections.singletonMap(
-            keySerialized == null ? null : ByteBuffer.wrap(keySerialized),
+    private Map<ByteBuffer, ByteBuffer> getSerialisedOffsets(byte[] keySerialized, byte[] valueSerialized) {
+        return Collections.singletonMap(ByteBuffer.wrap(keySerialized),
             valueSerialized == null ? null : ByteBuffer.wrap(valueSerialized));
     }
 }
