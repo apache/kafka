@@ -106,24 +106,22 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
         }
 
         @Override
-        public void process(final Record<K, VThis> record) {
-            sharedTimeTracker.advanceStreamTime(record.timestamp());
-            if (outer && record.key() == null && record.value() != null) {
-                context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
+        public void process(final Record<K, VThis> thisRecord) {
+            final long thisRecordTimestamp = thisRecord.timestamp();
+            sharedTimeTracker.advanceStreamTime(thisRecordTimestamp);
+            if (outer && thisRecord.key() == null && thisRecord.value() != null) {
+                context().forward(thisRecord.withValue(joiner.apply(thisRecord.key(), thisRecord.value(), null)));
                 return;
-            } else if (StreamStreamJoinUtil.skipRecord(record, LOG, droppedRecordsSensor, context())) {
+            } else if (StreamStreamJoinUtil.skipRecord(thisRecord, LOG, droppedRecordsSensor, context())) {
                 return;
             }
-            final long inputRecordTimestamp = record.timestamp();
 
             // Emit all non-joined records which window has closed
-            if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
-                outerJoinStore.ifPresent(store -> emitNonJoinedOuterRecords(store, record));
+            if (thisRecordTimestamp == sharedTimeTracker.streamTime) {
+                outerJoinStore.ifPresent(store -> emitNonJoinedOuterRecords(store, thisRecord));
             }
 
-            final TimestampedKeyAndJoinSide<K> thisKey = makeThisKey(record.key(), inputRecordTimestamp);
-            final LeftOrRightValue<VL, VR> thisValue = makeThisValue(record.value());
-            performInnerJoin(record, inputRecordTimestamp, thisKey, thisValue);
+            performInnerJoin(thisRecord, thisRecordTimestamp);
         }
 
         protected abstract TimestampedKeyAndJoinSide<K> makeThisKey(final K key, final long inputRecordTimestamp);
@@ -227,21 +225,15 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
         }
 
 
-        private void performInnerJoin(final Record<K, VThis> record,
-                final long inputRecordTimestamp, final TimestampedKeyAndJoinSide<K> thisKey,
-                final LeftOrRightValue<VL, VR> thisValue) {
+        private void performInnerJoin(final Record<K, VThis> thisRecord, final long inputRecordTimestamp) {
             boolean needOuterJoin = outer;
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
-            try (final WindowStoreIterator<VOther> iter = otherWindowStore.fetch(record.key(), timeFrom, timeTo)) {
+            try (final WindowStoreIterator<VOther> iter = otherWindowStore.fetch(thisRecord.key(), timeFrom, timeTo)) {
                 if (iter.hasNext()) {
                     needOuterJoin = false;
                 }
-                iter.forEachRemaining(otherRecord -> {
-                    final long otherRecordTimestamp = otherRecord.key;
-                    final TimestampedKeyAndJoinSide<K> otherKey = makeOtherKey(record.key(), otherRecordTimestamp);
-                    emitInnerJoin(record, otherRecord, inputRecordTimestamp, otherKey);
-                });
+                iter.forEachRemaining(otherRecord -> emitInnerJoin(thisRecord, otherRecord, inputRecordTimestamp));
 
                 if (needOuterJoin) {
                     // The maxStreamTime contains the max time observed in both sides of the join.
@@ -262,10 +254,10 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
                     // This condition below allows us to process the out-of-order records without the need
                     // to hold it in the temporary outer store
                     if (!outerJoinStore.isPresent() || timeTo < sharedTimeTracker.streamTime) {
-                        context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
+                        context().forward(thisRecord.withValue(joiner.apply(thisRecord.key(), thisRecord.value(), null)));
                     } else {
                         sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
-                        putInOuterJoinStore(thisKey, thisValue);
+                        putInOuterJoinStore(thisRecord, inputRecordTimestamp);
                     }
                 }
             }
@@ -282,13 +274,14 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
         }
 
         private void emitInnerJoin(final Record<K, VThis> thisRecord, final KeyValue<Long, VOther> otherRecord,
-                final long inputRecordTimestamp, final TimestampedKeyAndJoinSide<K> otherKey) {
+                final long inputRecordTimestamp) {
             outerJoinStore.ifPresent(store -> {
                 // use putIfAbsent to first read and see if there's any values for the key,
                 // if yes delete the key, otherwise do not issue a put;
                 // we may delete some values with the same key early but since we are going
                 // range over all values of the same key even after failure, since the other window-store
                 // is only cleaned up by stream time, so this is okay for at-least-once.
+                final TimestampedKeyAndJoinSide<K> otherKey = makeOtherKey(thisRecord.key(), otherRecord.key);
                 store.putIfAbsent(otherKey, null);
             });
 
@@ -297,9 +290,12 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
                             .withTimestamp(Math.max(inputRecordTimestamp, otherRecord.key)));
         }
 
-        private void putInOuterJoinStore(final TimestampedKeyAndJoinSide<K> thisKey,
-                final LeftOrRightValue<VL, VR> thisValue) {
-            outerJoinStore.ifPresent(store -> store.put(thisKey, thisValue));
+        private void putInOuterJoinStore(final Record<K, VThis> thisRecord, final long inputRecordTimestamp) {
+            outerJoinStore.ifPresent(store -> {
+                final TimestampedKeyAndJoinSide<K> thisKey = makeThisKey(thisRecord.key(), inputRecordTimestamp);
+                final LeftOrRightValue<VL, VR> thisValue = makeThisValue(thisRecord.value());
+                store.put(thisKey, thisValue);
+            });
         }
     }
 }
