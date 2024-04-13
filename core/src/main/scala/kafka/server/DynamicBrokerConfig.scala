@@ -92,6 +92,7 @@ object DynamicBrokerConfig {
     DynamicLogConfig.ReconfigurableConfigs ++
     DynamicThreadPool.ReconfigurableConfigs ++
     Set(KafkaConfig.MetricReporterClassesProp) ++
+    Set(KafkaConfig.AutoCreateTopicsEnableProp) ++
     DynamicListenerConfig.ReconfigurableConfigs ++
     SocketServer.ReconfigurableConfigs ++
     DynamicProducerStateManagerConfig ++
