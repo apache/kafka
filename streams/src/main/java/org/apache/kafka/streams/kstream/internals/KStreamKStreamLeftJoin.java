@@ -24,7 +24,6 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.slf4j.Logger;
@@ -40,7 +39,7 @@ class KStreamKStreamLeftJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL, 
             final Optional<String> outerJoinWindowName,
             final TimeTrackerSupplier sharedTimeTrackerSupplier) {
         super(otherWindowName, sharedTimeTrackerSupplier, windows.spuriousResultFixEnabled(), outerJoinWindowName,
-                windows.beforeMs, windows.afterMs, windows, outer, joiner);
+                windows.beforeMs, windows.afterMs, windows, outer, joiner, JoinSideFactory.makeLeft());
     }
 
     @Override
@@ -68,55 +67,10 @@ class KStreamKStreamLeftJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL, 
 
             // TODO: Make these only if other store is present
             final TimestampedKeyAndJoinSide<K> thisKey =
-                    TimestampedKeyAndJoinSide.makeLeft(record.key(), inputRecordTimestamp);
-            final LeftOrRightValue<VL, VR> thisValue = LeftOrRightValue.makeLeft(record.value());
+                    joinSide.thisKey(record.key(), inputRecordTimestamp);
+            final LeftOrRightValue<VL, VR> thisValue = joinSide.thisValue(record.value());
 
             performInnerJoin(record, inputRecordTimestamp, thisKey, thisValue);
-        }
-
-        private void performInnerJoin(final Record<K, VL> record,
-                final long inputRecordTimestamp, final TimestampedKeyAndJoinSide<K> thisKey,
-                final LeftOrRightValue<VL, VR> thisValue) {
-            boolean needOuterJoin = outer;
-            final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
-            final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
-            try (final WindowStoreIterator<VR> iter = otherWindowStore.fetch(record.key(), timeFrom, timeTo)) {
-                if (iter.hasNext()) {
-                    needOuterJoin = false;
-                }
-                iter.forEachRemaining(otherRecord -> {
-                    final long leftRecordTimestamp = otherRecord.key;
-                    final TimestampedKeyAndJoinSide<K> otherKey =
-                            TimestampedKeyAndJoinSide.makeRight(record.key(), leftRecordTimestamp);
-                    emitInnerJoin(record, otherRecord, inputRecordTimestamp, otherKey);
-                });
-
-                if (needOuterJoin) {
-                    // The maxStreamTime contains the max time observed in both sides of the join.
-                    // Having access to the time observed in the other join side fixes the following
-                    // problem:
-                    //
-                    // Say we have a window size of 5 seconds
-                    //  1. A non-joined record with time T10 is seen in the left-topic (maxLeftStreamTime: 10)
-                    //     The record is not processed yet, and is added to the outer-join store
-                    //  2. A non-joined record with time T2 is seen in the right-topic (maxRightStreamTime: 2)
-                    //     The record is not processed yet, and is added to the outer-join store
-                    //  3. A joined record with time T11 is seen in the left-topic (maxLeftStreamTime: 11)
-                    //     It is time to look at the expired records. T10 and T2 should be emitted, but
-                    //     because T2 was late, then it is not fetched by the window store, so it is not processed
-                    //
-                    // See KStreamKStreamLeftJoinTest.testLowerWindowBound() tests
-                    //
-                    // This condition below allows us to process the out-of-order records without the need
-                    // to hold it in the temporary outer store
-                    if (!outerJoinStore.isPresent() || timeTo < sharedTimeTracker.streamTime) {
-                        context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
-                    } else {
-                        sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
-                        putInOuterJoinStore(thisKey, thisValue);
-                    }
-                }
-            }
         }
 
         private void emitNonJoinedOuterRecords(
