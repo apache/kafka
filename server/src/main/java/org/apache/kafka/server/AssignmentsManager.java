@@ -46,8 +46,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -83,12 +85,16 @@ public class AssignmentsManager {
     private volatile Map<TopicIdPartition, AssignmentEvent> pending = new HashMap<>();
     private final ExponentialBackoff resendExponentialBackoff =
             new ExponentialBackoff(100, 2, MAX_BACKOFF_INTERVAL_MS, 0.02);
+    private final Function<Uuid, Optional<String>> dirIdToPath;
+    private final Function<Uuid, Optional<String>> topicIdToName;
     private int failedAttempts = 0;
 
     public AssignmentsManager(Time time,
                               NodeToControllerChannelManager channelManager,
                               int brokerId,
-                              Supplier<Long> brokerEpochSupplier) {
+                              Supplier<Long> brokerEpochSupplier,
+                              Function<Uuid, Optional<String>> dirIdToPath,
+                              Function<Uuid, Optional<String>> topicIdToName) {
         this.time = time;
         this.channelManager = channelManager;
         this.brokerId = brokerId;
@@ -108,6 +114,10 @@ public class AssignmentsManager {
                 return map == null ? 0 : map.size();
             }
         });
+        if (dirIdToPath == null) dirIdToPath = id -> Optional.empty();
+        this.dirIdToPath = dirIdToPath;
+        if (topicIdToName == null) topicIdToName = id -> Optional.empty();
+        this.topicIdToName = topicIdToName;
     }
 
     public void close() throws InterruptedException {
@@ -118,11 +128,15 @@ public class AssignmentsManager {
         }
     }
 
-    public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, Runnable callback) {
+    public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, String reason, Runnable callback) {
         if (callback == null) {
             callback = () -> { };
         }
-        eventQueue.append(new AssignmentEvent(time.nanoseconds(), topicPartition, dirId, callback));
+        AssignmentEvent assignment = new AssignmentEvent(time.nanoseconds(), topicPartition, dirId, reason, callback);
+        if (log.isDebugEnabled()) {
+            log.debug("Queued assignment {}", assignment);
+        }
+        eventQueue.append(assignment);
     }
 
     // only for testing
@@ -165,11 +179,13 @@ public class AssignmentsManager {
         final long timestampNs;
         final TopicIdPartition partition;
         final Uuid dirId;
+        final String reason;
         final List<Runnable> completionHandlers;
-        AssignmentEvent(long timestampNs, TopicIdPartition partition, Uuid dirId, Runnable onComplete) {
+        AssignmentEvent(long timestampNs, TopicIdPartition partition, Uuid dirId, String reason, Runnable onComplete) {
             this.timestampNs = timestampNs;
-            this.partition = partition;
-            this.dirId = dirId;
+            this.partition = Objects.requireNonNull(partition);
+            this.dirId = Objects.requireNonNull(dirId);
+            this.reason = reason;
             this.completionHandlers = new ArrayList<>();
             if (onComplete != null) {
                 completionHandlers.add(onComplete);
@@ -219,10 +235,16 @@ public class AssignmentsManager {
         }
         @Override
         public String toString() {
-            return "AssignmentEvent{" +
+            String partitionString = topicIdToName.apply(partition.topicId())
+                    .map(name -> name + ":" + partition.partitionId())
+                    .orElseGet(() -> "<topic name unknown id: " + partition.topicId() + " partition: " + partition.partitionId() + ">");
+            String dirString = dirIdToPath.apply(dirId)
+                    .orElseGet(() -> "<dir path unknown id:" + dirId + ">");
+            return "Assignment{" +
                     "timestampNs=" + timestampNs +
-                    ", partition=" + partition +
-                    ", dirId=" + dirId +
+                    ", partition=" + partitionString +
+                    ", dir=" + dirString +
+                    ", reason='" + reason + '\'' +
                     '}';
         }
         @Override
@@ -230,13 +252,14 @@ public class AssignmentsManager {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             AssignmentEvent that = (AssignmentEvent) o;
-            return timestampNs == that.timestampNs &&
-                    Objects.equals(partition, that.partition) &&
-                    Objects.equals(dirId, that.dirId);
+            return timestampNs == that.timestampNs
+                    && Objects.equals(partition, that.partition)
+                    && Objects.equals(dirId, that.dirId)
+                    && Objects.equals(reason, that.reason);
         }
         @Override
         public int hashCode() {
-            return Objects.hash(timestampNs, partition, dirId);
+            return Objects.hash(timestampNs, partition, dirId, reason);
         }
     }
 
@@ -300,6 +323,9 @@ public class AssignmentsManager {
                 Set<AssignmentEvent> failed = filterFailures(data, inflight);
                 Set<AssignmentEvent> completed = Utils.diff(HashSet::new, inflight.values().stream().collect(Collectors.toSet()), failed);
                 for (AssignmentEvent assignmentEvent : completed) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Successfully propagated assignment {}", assignmentEvent);
+                    }
                     assignmentEvent.onComplete();
                 }
 
@@ -367,7 +393,7 @@ public class AssignmentsManager {
 
     private static boolean responseIsError(ClientResponse response) {
         if (response == null) {
-            log.debug("Response is null");
+            log.error("Response is null");
             return true;
         }
         if (response.authenticationException() != null) {

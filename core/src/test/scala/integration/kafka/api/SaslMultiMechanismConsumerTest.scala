@@ -13,7 +13,7 @@
 package kafka.api
 
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
-import kafka.utils.{JaasTestUtils, TestInfoUtils, TestUtils}
+import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.params.ParameterizedTest
@@ -44,7 +44,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     closeSasl()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testMultipleBrokerMechanisms(quorum: String): Unit = {
     val plainSaslProducer = createProducer()

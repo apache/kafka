@@ -43,7 +43,8 @@ public class GroupCoordinatorConfigTest {
             10 * 60 * 1000,
             600000L,
             24 * 60 * 60 * 1000L,
-            5000
+            5000,
+            ConsumerGroupMigrationPolicy.DISABLED
         );
 
         assertEquals(10, config.numThreads);
@@ -83,7 +84,8 @@ public class GroupCoordinatorConfigTest {
             10 * 5 * 1000,
             offsetsRetentionCheckIntervalMs,
             offsetsRetentionMs,
-            5000
+            5000,
+            ConsumerGroupMigrationPolicy.DISABLED
         );
     }
 }

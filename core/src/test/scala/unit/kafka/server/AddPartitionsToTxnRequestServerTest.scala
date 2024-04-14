@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 
 import java.util.{Collections, Properties}
 import java.util.stream.{Stream => JStream}
@@ -52,7 +52,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     createTopic(topic1, numPartitions, brokers.size, new Properties())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @MethodSource(value = Array("parameters"))
   def shouldReceiveOperationNotAttemptedWhenOtherPartitionHasError(quorum: String, version: Short): Unit = {
     // The basic idea is that we have one unknown topic and one created topic. We should get the 'UNKNOWN_TOPIC_OR_PARTITION'

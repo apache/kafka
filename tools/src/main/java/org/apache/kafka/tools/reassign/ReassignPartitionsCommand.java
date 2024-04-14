@@ -641,7 +641,7 @@ public class ReassignPartitionsCommand {
      * @param adminClient     The AdminClient to use.
      * @param partitions      The partitions to get information about.
      * @return                A map from partitions to broker assignments.
-     *                        If any topic can't be found, an exception will be thrown.
+     *                        If any topic or partition can't be found, an exception will be thrown.
      */
     static Map<TopicPartition, List<Integer>> getReplicaAssignmentForPartitions(Admin adminClient,
                                                                                 Set<TopicPartition> partitions
@@ -654,6 +654,13 @@ public class ReassignPartitionsCommand {
                     res.put(tp, info.replicas().stream().map(Node::id).collect(Collectors.toList()));
             })
         );
+
+        if (!res.keySet().equals(partitions)) {
+            Set<TopicPartition> missingPartitions = new HashSet<>(partitions);
+            missingPartitions.removeAll(res.keySet());
+            throw new ExecutionException(new UnknownTopicOrPartitionException("Unable to find partition: " +
+                missingPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))));
+        }
         return res;
     }
 
