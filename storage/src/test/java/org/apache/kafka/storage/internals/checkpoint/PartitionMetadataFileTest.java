@@ -19,29 +19,27 @@ package org.apache.kafka.storage.internals.checkpoint;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentTopicIdException;
-import org.apache.kafka.common.utils.Utils;
 
-import org.junit.jupiter.api.AfterEach;
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PartitionMetadataFileTest  {
-    private final File dir = assertDoesNotThrow(() -> Files.createTempDirectory("tmp")).toFile();
-
-    @AfterEach
-    public void tearDown() {
-        assertDoesNotThrow(() -> Utils.delete(dir));
-    }
+    private final File dir = TestUtils.tempDirectory();
 
     @Test
     public void testSetRecordWithDifferentTopicId() {
-        File partitionMetadata = PartitionMetadataFile.newFile(dir);
-        PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(partitionMetadata, null);
+        File file = PartitionMetadataFile.newFile(dir);
+        PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, null);
         Uuid topicId = Uuid.randomUuid();
         assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
         Uuid differentTopicId = Uuid.randomUuid();
@@ -50,10 +48,51 @@ public class PartitionMetadataFileTest  {
 
     @Test
     public void testSetRecordWithSameTopicId() {
-        File partitionMetadata = PartitionMetadataFile.newFile(dir);
-        PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(partitionMetadata, null);
+        File file = PartitionMetadataFile.newFile(dir);
+        PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, null);
         Uuid topicId = Uuid.randomUuid();
         assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
         assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
+    }
+
+    @Test
+    public void testMaybeFlushWithTopicIdPresent() {
+        File file = PartitionMetadataFile.newFile(dir);
+        PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, null);
+
+        Uuid topicId = Uuid.randomUuid();
+        assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
+        assertDoesNotThrow(partitionMetadataFile::maybeFlush);
+
+        assertDoesNotThrow(() -> {
+            List<String> lines = Files.readAllLines(file.toPath());
+            assertEquals(2, lines.size());
+            assertEquals("version: 0", lines.get(0));
+            assertEquals("topic_id: " + topicId, lines.get(1));
+        });
+    }
+
+    @Test
+    public void testMaybeFlushWithNoTopicIdPresent() {
+        File file = PartitionMetadataFile.newFile(dir);
+        PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, null);
+
+        assertDoesNotThrow(partitionMetadataFile::maybeFlush);
+        assertEquals(0, file.length());
+    }
+
+    @Test
+    public void testRead() {
+        File file = PartitionMetadataFile.newFile(dir);
+        LogDirFailureChannel channel = Mockito.mock(LogDirFailureChannel.class);
+        PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, channel);
+
+        Uuid topicId = Uuid.randomUuid();
+        assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
+        assertDoesNotThrow(partitionMetadataFile::maybeFlush);
+
+        PartitionMetadata metadata = partitionMetadataFile.read();
+        assertEquals(0, metadata.version());
+        assertEquals(topicId, metadata.topicId());
     }
 }
