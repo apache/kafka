@@ -33,7 +33,6 @@ import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 
-// TODO: File an issue to remove the RecordSerde. The internal listener should just skip data record batches
 // TODO: Add unnitest for it
 /**
  * The KRaft state machine for tracking control records in the topic partition.

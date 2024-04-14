@@ -16,22 +16,15 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.net.InetSocketAddress;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 final public class VoterSetHistoryTest {
     @Test
     void testStaicVoterSet() {
-        VoterSet staticVoterSet = createVoterSet(Arrays.asList(1, 2, 3));
+        VoterSet staticVoterSet = new VoterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)));
         VoterSetHistory votersHistory = new VoterSetHistory(Optional.of(staticVoterSet));
 
         validateStaticVoterSet(staticVoterSet, votersHistory);
@@ -49,26 +42,5 @@ final public class VoterSetHistoryTest {
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(0));
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(100));
         assertEquals(expected, votersHistory.lastValue());
-    }
-
-    private VoterSet createVoterSet(List<Integer> replicas) {
-        return new VoterSet(
-            replicas
-                .stream()
-                .collect(
-                    Collectors.toMap(
-                        Function.identity(),
-                        replica -> new VoterSet.VoterNode(
-                            replica,
-                            Optional.of(Uuid.randomUuid()),
-                            Collections.singletonMap(
-                                "LISTNER",
-                                InetSocketAddress.createUnresolved(String.format("replica-%d", replica), 1234)
-                            ),
-                            new SupportedVersionRange((short) 0, (short) 0)
-                        )
-                    )
-                )
-        );
     }
 }

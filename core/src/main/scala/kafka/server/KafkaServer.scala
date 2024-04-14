@@ -331,7 +331,7 @@ class KafkaServer(
           config.brokerId,
           config.interBrokerProtocolVersion,
           brokerFeatures,
-          kraftControllerNodes, // TODO: This needs to use the raft manager
+          kraftControllerNodes,
           config.migrationEnabled)
         val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config)
 
@@ -436,7 +436,6 @@ class KafkaServer(
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
           val controllerNodes = RaftConfig.voterConnectionsToNodes(quorumVoters).asScala
-          // TODO: This needs to use the raft manager
           val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
           val brokerToQuorumChannelManager = new NodeToControllerChannelManagerImpl(
             controllerNodeProvider = quorumControllerNodeProvider,

@@ -381,7 +381,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         logger.info("Reading KRaft snapshot and log as part of the initialization");
         internalListener.updateListener();
 
-        // TODO: Fix this to use internal listener
         requestManager = new RequestManager(
             internalListener.lastVoterSet().voterIds(),
             raftConfig.retryBackoffMs(),
@@ -389,7 +388,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             random
         );
 
-        // TODO: Fix this to use internal listener
         quorum = new QuorumState(
             nodeId,
             internalListener.lastVoterSet().voterIds(),
@@ -406,8 +404,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         // so there are no unknown voter connections. Report this metric as 0.
         kafkaRaftMetrics.updateNumUnknownVoterConnections(0);
 
-        // TODO: Create issue to fix this. RaftRequest.Outbound should contain the node not just the id
-        // we need this because the controller.quorum.bootstrap.server doesn't contain an id.
         VoterSet lastVoterSet = internalListener.lastVoterSet();
         for (Integer voterId : lastVoterSet.voterIds()) {
             channel.updateEndpoint(voterId, lastVoterSet.voterAddress(voterId, listenerName).get());
@@ -1523,9 +1519,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                     quorum.leaderIdOrSentinel()
                 );
 
-                // TODO: are we guarantee to always load a snapshot? This always true, if the next offset is always less
-                // than the snapshot id. Is this true? I think this always true because the internal listener is always
-                // at the LEO and we now that the LEO is less that the snapshot id.
+                // This will aways reload the snapshot because the internal listener's next offset
+                // is always less than the snapshot id just downloaded.
                 internalListener.updateListener();
 
                 updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark().offset));

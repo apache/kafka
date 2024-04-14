@@ -31,7 +31,6 @@ import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 
-// TODO: write unittest for VoterSet
 /**
  * A type for representing the set of voters for a topic partition.
  *
@@ -44,6 +43,10 @@ final public class VoterSet {
     private final Map<Integer, VoterNode> voters;
 
     VoterSet(Map<Integer, VoterNode> voters) {
+        if (voters.isEmpty()) {
+            throw new IllegalArgumentException("Voters cannot be empty");
+        }
+
         this.voters = voters;
     }
 
@@ -64,6 +67,50 @@ final public class VoterSet {
      */
     public Set<Integer> voterIds() {
         return voters.keySet();
+    }
+
+    /**
+     * Adds a voter to the voter set.
+     *
+     * This object is immutable. A new voter set is returned if the voter was added.
+     *
+     * A new voter can be added to a voter set if its id doesn't already exist in the voter set.
+     *
+     * @param voter the new voter to add
+     * @return a new voter set if the voter was added, otherwise {@code Optional.empty()}
+     */
+    public Optional<VoterSet> addVoter(VoterNode voter) {
+        if (voters.containsKey(voter.id())) {
+            return Optional.empty();
+        }
+
+        HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
+        newVoters.put(voter.id(), voter);
+
+        return Optional.of(new VoterSet(newVoters));
+    }
+
+    /**
+     * Removew a voter from the voter set.
+     *
+     * This object is immutable. A new voter set is returned if the voter was removed.
+     *
+     * A voter can be removed from the voter set if its id and uuid match.
+     *
+     * @param voterId the voter id
+     * @param voterUuid the voter uuid
+     * @return a new voter set if the voter was remove, otherwise {@code Optional.empty()}
+     */
+    public Optional<VoterSet> removeVoter(int voterId, Optional<Uuid> voterUuid) {
+        VoterNode oldVoter = voters.get(voterId);
+        if (oldVoter != null && Objects.equals(oldVoter.uuid(), voterUuid)) {
+            HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
+            newVoters.remove(voterId);
+
+            return Optional.of(new VoterSet(newVoters));
+        }
+
+        return Optional.empty();
     }
 
     /**
@@ -222,7 +269,7 @@ final public class VoterSet {
      * @return the voter set
      */
     public static VoterSet fromVotersRecord(VotersRecord voters) {
-        Map<Integer, VoterNode> voterNodes = new HashMap<>(voters.voters().size());
+        HashMap<Integer, VoterNode> voterNodes = new HashMap<>(voters.voters().size());
         for (VotersRecord.Voter voter: voters.voters()) {
             final Optional<Uuid> uuid;
             if (!voter.voterUuid().equals(Uuid.ZERO_UUID)) {

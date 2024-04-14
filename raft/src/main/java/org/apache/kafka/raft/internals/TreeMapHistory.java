@@ -21,7 +21,6 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.Map;
 
-// TODO: add unittest
 /**
  * A implementation for {@code History} which uses a red-black tree to store values sorted by offset.
  */
