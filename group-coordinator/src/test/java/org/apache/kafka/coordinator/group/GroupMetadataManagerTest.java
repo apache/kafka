@@ -10333,7 +10333,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testLastNewProtocolConsumerLeavingUpgradingConsumerGroup() {
+    public void testLastClassicProtocolMemberLeavingConsumerGroup() {
         String groupId = "group-id";
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
@@ -10347,12 +10347,20 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
 
-        ConsumerGroupMemberMetadataValue.ClassicProtocolCollection protocols =
-            new ConsumerGroupMemberMetadataValue.ClassicProtocolCollection(1);
-        protocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
-            .setName("range")
-            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                Arrays.asList(fooTopicName, barTopicName)))))
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = Collections.singletonList(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                    Arrays.asList(fooTopicName, barTopicName),
+                    null,
+                    Arrays.asList(
+                        new TopicPartition(fooTopicName, 0),
+                        new TopicPartition(fooTopicName, 1),
+                        new TopicPartition(fooTopicName, 2),
+                        new TopicPartition(barTopicName, 0),
+                        new TopicPartition(barTopicName, 1)
+                    )
+                ))))
         );
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
@@ -10364,8 +10372,7 @@ public class GroupMetadataManagerTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                .setSupportedProtocols(protocols)
-            )
+                .setSupportedProtocols(protocols))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2),
                 mkTopicAssignment(barTopicId, 0, 1)))
@@ -10407,8 +10414,8 @@ public class GroupMetadataManagerTest {
                 .withAssignmentEpoch(10))
             .build();
 
-        // Member 2 leaves the consumer group.
-        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeatWithoutReplay(
+        // Member 2 leaves the consumer group, triggering the downgrade.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId2)
@@ -10466,6 +10473,7 @@ public class GroupMetadataManagerTest {
                 }
             }),
             RecordHelpers.newGroupEpochRecord(groupId, 11),
+
             RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId),
             RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId),
             RecordHelpers.newGroupEpochTombstoneRecord(groupId),
@@ -10473,6 +10481,17 @@ public class GroupMetadataManagerTest {
         );
 
         assertRecordsEquals(expectedRecords, result.records());
+
+        ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
+        // Simulate a successful write to the log.
+        result.appendFuture().complete(null);
+
+        ScheduledTimeout<Void, Record> timeout = context.timer.timeout(
+            classicGroupHeartbeatKey(groupId, memberId1));
+        assertNotNull(timeout);
+
+        // A new rebalance is triggered.
+        assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
     }
 
     private static void checkJoinGroupResponse(

@@ -777,60 +777,35 @@ public class GroupMetadataManager {
     }
 
     public boolean validateOnlineDowngrade(ConsumerGroup consumerGroup, String memberId) {
-        return consumerGroupMigrationPolicy.isDowngradeEnabled() &&
-            consumerGroup.allUseClassicProtocolExcept(memberId) &&
-            consumerGroup.numMembers() > 1 &&
-            consumerGroup.numMembers() - 1 <= classicGroupMaxSize;
+        if (!consumerGroupMigrationPolicy.isDowngradeEnabled()) {
+            log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
+                consumerGroup.groupId());
+            return false;
+        } else if (!consumerGroup.allMembersUseClassicProtocolExcept(memberId)) {
+            log.debug("Cannot downgrade consumer group {} to classic group because not all its members use the classic protocol.",
+                consumerGroup.groupId());
+            return false;
+        } else if (consumerGroup.numMembers() <= 1) {
+            log.info("Skip downgrading the consumer group {} to classic group because it's empty.",
+                consumerGroup.groupId());
+            return false;
+        } else if (consumerGroup.numMembers() - 1 > classicGroupMaxSize) {
+            log.info("Cannot downgrade consumer group {} to classic group because its group size is greater than classic group max size.",
+                consumerGroup.groupId());
+        }
+        return true;
     }
 
     public CompletableFuture<Void> convertToClassicGroup(ConsumerGroup consumerGroup, String leavingMemberId, List<Record> records) {
-        createGroupTombstoneRecords(consumerGroup, records);
-        ClassicGroup classicGroup = new ClassicGroup(
+        consumerGroup.createGroupTombstoneRecords(records);
+        ClassicGroup classicGroup = consumerGroup.toClassicGroup(
+            leavingMemberId,
             logContext,
-            consumerGroup.groupId(),
-            STABLE,
             time,
-            metrics,
-            consumerGroup.groupEpoch(),
-            Optional.ofNullable(ConsumerProtocol.PROTOCOL_TYPE),
-            Optional.empty(),
-            consumerGroup.members().keySet().stream().findAny(), // TODO: need to find any except the leaving member id
-            Optional.of(time.milliseconds())
+            consumerGroupSessionTimeoutMs,
+            metadataImage,
+            records
         );
-
-        consumerGroup.members().forEach((memberId, member) -> {
-            if (!memberId.equals(leavingMemberId)) {
-                classicGroup.add(
-                    new ClassicGroupMember(
-                        memberId,
-                        Optional.ofNullable(member.instanceId()),
-                        member.clientId(),
-                        member.clientHost(),
-                        member.rebalanceTimeoutMs(),
-                        consumerGroupSessionTimeoutMs,
-                        ConsumerProtocol.PROTOCOL_TYPE,
-                        member.supportedJoinGroupRequestProtocols(),
-                        null
-                    )
-                );
-            }
-        });
-
-        classicGroup.setProtocolName(Optional.of(classicGroup.selectProtocol()));
-        classicGroup.setSubscribedTopics(classicGroup.computeSubscribedTopics());
-
-        Map<String, byte[]> assignments = new HashMap<>();
-        classicGroup.allMembers().forEach(classicGroupMember -> {
-            byte[] assignment = consumerGroup.getOrMaybeCreateMember(classicGroupMember.memberId(), false).assignment(
-                classicGroupMember.protocolVersion(classicGroup.protocolName().orElse("")),
-                metadataImage.topics()
-            );
-            classicGroupMember.setAssignment(assignment);
-            assignments.put(classicGroupMember.memberId(), assignment);
-        });
-
-        records.add(RecordHelpers.newGroupMetadataRecord(
-            classicGroup, assignments, metadataImage.features().metadataVersion()));
 
         groups.put(consumerGroup.groupId(), classicGroup);
         metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
@@ -839,7 +814,7 @@ public class GroupMetadataManager {
         appendFuture.whenComplete((__, t) -> {
             if (t == null) {
                 classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
-                prepareRebalance(classicGroup, "Protocol downgrade.");
+                prepareRebalance(classicGroup, String.format("Downgrade group %s.", classicGroup.groupId()));
             }
         });
         return appendFuture;

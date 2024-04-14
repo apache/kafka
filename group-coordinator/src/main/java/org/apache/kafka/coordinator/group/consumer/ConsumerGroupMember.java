@@ -16,13 +16,9 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.image.TopicImage;
@@ -477,37 +473,25 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * @param version The version with which the assignment is serialized.
-     *
-     * @return The assigned partitions converted into the format of client-side assignor assignment.
-     */
-    public byte[] assignment(short version, TopicsImage topicsImage) {
-        List<TopicPartition> partitions = new ArrayList<>();
-        assignedPartitions.forEach((topicId, partitionSet) -> {
-            String topicName = lookupTopicNameById(topicId, topicsImage);
-            partitionSet.forEach(partition -> partitions.add(new TopicPartition(topicName, partition)));
-        });
-        return Utils.toArray(ConsumerProtocol.serializeAssignment(
-            new ConsumerPartitionAssignor.Assignment(partitions), version));
-    }
-
-    /**
      * @return The set of partitions awaiting revocation from the member.
      */
     public Map<Uuid, Set<Integer>> partitionsPendingRevocation() {
         return partitionsPendingRevocation;
     }
 
+    /**
+     * @return The supported classic protocol converted to JoinGroupRequestProtocolCollection.
+     */
     public JoinGroupRequestData.JoinGroupRequestProtocolCollection supportedJoinGroupRequestProtocols() {
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
-            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(supportedClassicProtocols().size());
-        supportedClassicProtocols().forEach(protocol ->
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
+        supportedClassicProtocols().ifPresent(classicProtocols -> classicProtocols.forEach(protocol ->
             protocols.add(
                 new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName(protocol.name())
                     .setMetadata(protocol.metadata())
             )
-        );
+        ));
         return protocols;
     }
 
