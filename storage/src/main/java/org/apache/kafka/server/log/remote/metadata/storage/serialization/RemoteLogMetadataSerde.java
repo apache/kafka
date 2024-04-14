@@ -74,16 +74,15 @@ public class RemoteLogMetadataSerde {
 
     public byte[] serialize(RemoteLogMetadata remoteLogMetadata) {
 
-        String className = remoteLogMetadata.getClass().getName();
         RemoteLogMetadataTransform metadataTransform;
 
-        if(className.equals(RemoteLogSegmentMetadata.class.getName())) {
+        if(remoteLogMetadata.getClass() == RemoteLogSegmentMetadata.class) {
             metadataTransform = new RemoteLogSegmentMetadataTransform();
-        } else if (className.equals(RemoteLogSegmentMetadataUpdate.class.getName())) {
+        } else if (remoteLogMetadata.getClass() == RemoteLogSegmentMetadataUpdate.class) {
             metadataTransform = new RemoteLogSegmentMetadataUpdateTransform();
-        } else if (className.equals(RemotePartitionDeleteMetadata.class.getName())) {
+        } else if (remoteLogMetadata.getClass() == RemotePartitionDeleteMetadata.class) {
             metadataTransform = new RemotePartitionDeleteMetadataTransform();
-        } else if (className.equals(RemoteLogSegmentMetadataSnapshot.class.getName())) {
+        } else if (remoteLogMetadata.getClass() == RemoteLogSegmentMetadataSnapshot.class) {
             metadataTransform = new RemoteLogSegmentMetadataSnapshotTransform();
         } else {
             throw new IllegalArgumentException("RemoteLogMetadataTransform for given RemoteStorageMetadata class: " + remoteLogMetadata.getClass()
