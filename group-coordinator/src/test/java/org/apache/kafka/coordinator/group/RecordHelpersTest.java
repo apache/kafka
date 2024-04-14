@@ -92,9 +92,8 @@ public class RecordHelpersTest {
 
     @Test
     public void testNewMemberSubscriptionRecord() {
-        ConsumerGroupMemberMetadataValue.ClassicProtocolCollection collection =
-            new ConsumerGroupMemberMetadataValue.ClassicProtocolCollection();
-        collection.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = new ArrayList<>();
+        protocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("range")
             .setMetadata(new byte[0]));
 
@@ -108,7 +107,7 @@ public class RecordHelpersTest {
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
             .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(collection)
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(protocols)
             )
             .build();
 
@@ -129,7 +128,7 @@ public class RecordHelpersTest {
                     .setSubscribedTopicRegex("regex")
                     .setServerAssignor("range")
                     .setClassicMemberMetadata(
-                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(collection)
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(protocols)
                     ),
                 (short) 0));
 

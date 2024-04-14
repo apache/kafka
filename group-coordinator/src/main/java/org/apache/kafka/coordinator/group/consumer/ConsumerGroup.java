@@ -21,15 +21,13 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.GroupMetadataManager;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
@@ -45,7 +43,6 @@ import org.apache.kafka.timeline.TimelineInteger;
 import org.apache.kafka.timeline.TimelineObject;
 import org.slf4j.Logger;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -109,11 +106,6 @@ public class ConsumerGroup implements Group {
      * The snapshot registry.
      */
     private final SnapshotRegistry snapshotRegistry;
-
-    /**
-     * The slf4j logger.
-     */
-    private final Logger log;
 
     /**
      * The group id.
@@ -205,12 +197,10 @@ public class ConsumerGroup implements Group {
 
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
-        LogContext logContext,
         String groupId,
         GroupCoordinatorMetricsShard metrics
     ) {
         this.snapshotRegistry = Objects.requireNonNull(snapshotRegistry);
-        this.log = Objects.requireNonNull(logContext).logger(ConsumerGroup.class);
         this.groupId = Objects.requireNonNull(groupId);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
@@ -454,7 +444,7 @@ public class ConsumerGroup implements Group {
     /**
      * @return The number of members that use the classic protocol.
      */
-    public int numClassicProtocolMember() {
+    public int numClassicProtocolMembers() {
         return numClassicProtocolMember.get();
     }
 
@@ -898,7 +888,7 @@ public class ConsumerGroup implements Group {
         if (newMember != null && newMember.useClassicProtocol()) {
             delta++;
         }
-        setNumClassicProtocolMember(numClassicProtocolMember() + delta);
+        setNumClassicProtocolMember(numClassicProtocolMembers() + delta);
     }
 
     /**
@@ -912,13 +902,17 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember newMember
     ) {
         if (oldMember != null && oldMember.useClassicProtocol()) {
-            oldMember.supportedClassicProtocols().forEach(protocol ->
-                classicProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::decValue)
+            oldMember.supportedClassicProtocols().ifPresent(protocols ->
+                protocols.forEach(protocol ->
+                    classicProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::decValue)
+                )
             );
         }
         if (newMember != null && newMember.useClassicProtocol()) {
-            newMember.supportedClassicProtocols().forEach(protocol ->
-                classicProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::incValue)
+            newMember.supportedClassicProtocols().ifPresent(protocols ->
+                protocols.forEach(protocol ->
+                    classicProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::incValue)
+                )
             );
         }
     }
@@ -1097,73 +1091,81 @@ public class ConsumerGroup implements Group {
 
     /**
      * Create a new consumer group according to the given classic group.
-     * Add the records for the creation.
      *
      * @param snapshotRegistry  The SnapshotRegistry.
-     * @param logContext        The LogContext.
      * @param metrics           The GroupCoordinatorMetricsShard.
      * @param classicGroup      The converted classic group.
-     * @param records           The list to which the new records are added.
      * @param topicsImage       The TopicsImage for topic id and topic name conversion.
+     * @param log               The logger to use.
      * @return  The created ConsumerGruop.
      */
     public static ConsumerGroup fromClassicGroup(
         SnapshotRegistry snapshotRegistry,
-        LogContext logContext,
         GroupCoordinatorMetricsShard metrics,
         ClassicGroup classicGroup,
-        List<Record> records,
-        TopicsImage topicsImage
+        TopicsImage topicsImage,
+        Logger log
     ) {
         String groupId = classicGroup.groupId();
-        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, logContext, groupId, metrics);
+        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+        consumerGroup.setGroupEpoch(classicGroup.generationId());
+        consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
-            try {
-                ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(classicGroupMember.assignment()));
-                Map<Uuid, Set<Integer>> partitions = topicPartitionMapFromList(assignment.partitions(), topicsImage);
-                ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().get())));
+            ConsumerPartitionAssignor.Subscription subscription = GroupMetadataManager.deserializeSubscription(
+                classicGroupMember.metadata(classicGroup.protocolName().get()),
+                log,
+                "group upgrade"
+            );
+            Map<Uuid, Set<Integer>> partitions = topicPartitionMapFromList(subscription.ownedPartitions(), topicsImage);
 
-                ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(classicGroupMember.memberId())
-                    .setMemberEpoch(classicGroup.generationId())
-                    .setPreviousMemberEpoch(classicGroup.generationId())
-                    .setInstanceId(classicGroupMember.groupInstanceId().orElse(null))
-                    .setRackId(subscription.rackId().orElse(null))
-                    .setRebalanceTimeoutMs(classicGroupMember.rebalanceTimeoutMs())
-                    .setClientId(classicGroupMember.clientId())
-                    .setClientHost(classicGroupMember.clientHost())
-                    .setSubscribedTopicNames(subscription.topics())
-                    .setAssignedPartitions(partitions)
-                    .setSupportedClassicProtocols(classicGroupMember.supportedProtocols())
-                    .build();
-                consumerGroup.updateMember(newMember);
-            } catch (SchemaException e) {
-                consumerGroup.log.warn("Cannot upgrade the classic group " + groupId + " to a consumer group because of the failure" +
-                    "to parse the Consumer Protocol " + ConsumerProtocol.PROTOCOL_TYPE + ":" + classicGroup.protocolName().get() + ".", e);
-
-                throw new GroupIdNotFoundException(String.format("Fail to upgrade the classic group %s.", groupId));
-            }
+            ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(classicGroupMember.memberId())
+                .setMemberEpoch(classicGroup.generationId())
+                .setState(MemberState.STABLE)
+                .setPreviousMemberEpoch(classicGroup.generationId())
+                .setInstanceId(classicGroupMember.groupInstanceId().orElse(null))
+                .setRackId(subscription.rackId().orElse(null))
+                .setRebalanceTimeoutMs(classicGroupMember.rebalanceTimeoutMs())
+                .setClientId(classicGroupMember.clientId())
+                .setClientHost(classicGroupMember.clientHost())
+                .setSubscribedTopicNames(subscription.topics())
+                .setAssignedPartitions(partitions)
+                .setSupportedClassicProtocols(classicGroupMember.supportedProtocols())
+                .build();
+            consumerGroup.updateMember(newMember);
+            consumerGroup.updateTargetAssignment(newMember.memberId(), new Assignment(partitions));
         });
+
+        return consumerGroup;
+    }
+
+    /**
+     * Populate the record list with the records needed to create the given consumer group.
+     *
+     * @param consumerGroup     The consumer group to create.
+     * @param records           The list to which the new records are added.
+     */
+    public static void createConsumerGroupRecords(
+        ConsumerGroup consumerGroup,
+        List<Record> records
+    ) {
+        String groupId = consumerGroup.groupId;
 
         consumerGroup.members().forEach((__, consumerGroupMember) ->
             records.add(RecordHelpers.newMemberSubscriptionRecord(groupId, consumerGroupMember))
         );
 
-        consumerGroup.setGroupEpoch(classicGroup.generationId());
-        records.add(RecordHelpers.newGroupEpochRecord(groupId, classicGroup.generationId()));
+        records.add(RecordHelpers.newGroupEpochRecord(groupId, consumerGroup.groupEpoch()));
 
         consumerGroup.members().forEach((consumerGroupMemberId, consumerGroupMember) ->
-            records.add(RecordHelpers.newTargetAssignmentRecord(groupId, consumerGroupMemberId, consumerGroupMember.assignedPartitions()))
+            records.add(RecordHelpers.newTargetAssignmentRecord(groupId, consumerGroupMemberId, consumerGroup.targetAssignment(consumerGroupMemberId).partitions()))
         );
 
-        consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
-        records.add(RecordHelpers.newTargetAssignmentEpochRecord(groupId, classicGroup.generationId()));
+        records.add(RecordHelpers.newTargetAssignmentEpochRecord(groupId, consumerGroup.groupEpoch()));
 
         consumerGroup.members().forEach((__, consumerGroupMember) ->
             records.add(RecordHelpers.newCurrentAssignmentRecord(groupId, consumerGroupMember))
         );
-
-        return consumerGroup;
     }
 
     /**
@@ -1201,14 +1203,14 @@ public class ConsumerGroup implements Group {
         } else {
             return ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType) &&
                 memberProtocols.stream()
-                    .anyMatch(name -> classicProtocolMembersSupportedProtocols.getOrDefault(name, 0) == numClassicProtocolMember());
+                    .anyMatch(name -> classicProtocolMembersSupportedProtocols.getOrDefault(name, 0) == numClassicProtocolMembers());
         }
     }
 
     /**
      * @return The boolean indicating whether all the members use the classic protocol.
      */
-    public boolean allUseClassicProtocol() {
-        return numClassicProtocolMember() == members().size();
+    public boolean allMembersUseClassicProtocol() {
+        return numClassicProtocolMembers() == members().size();
     }
 }

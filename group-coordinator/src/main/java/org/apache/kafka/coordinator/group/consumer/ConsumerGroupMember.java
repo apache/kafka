@@ -65,7 +65,6 @@ public class ConsumerGroupMember {
         private String serverAssignorName = null;
         private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
         private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Collections.emptyMap();
-        // The default value of supportedProtocols cannot be null, or its record will not be able to convert to String.
         private ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata = null;
 
         public Builder(String memberId) {
@@ -202,8 +201,7 @@ public class ConsumerGroupMember {
         }
 
         public Builder setSupportedClassicProtocols(JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols) {
-            ConsumerGroupMemberMetadataValue.ClassicProtocolCollection newSupportedProtocols =
-                new ConsumerGroupMemberMetadataValue.ClassicProtocolCollection();
+            List<ConsumerGroupMemberMetadataValue.ClassicProtocol> newSupportedProtocols = new ArrayList<>();
             protocols.forEach(protocol ->
                 newSupportedProtocols.add(
                     new ConsumerGroupMemberMetadataValue.ClassicProtocol()
@@ -491,11 +489,11 @@ public class ConsumerGroupMember {
     /**
      * @return The list of protocols if the consumer uses the classic protocol.
      */
-    public ConsumerGroupMemberMetadataValue.ClassicProtocolCollection supportedClassicProtocols() {
+    public Optional<List<ConsumerGroupMemberMetadataValue.ClassicProtocol>> supportedClassicProtocols() {
         if (useClassicProtocol()) {
-            return classicMemberMetadata.supportedProtocols();
+            return Optional.ofNullable(classicMemberMetadata.supportedProtocols());
         } else {
-            return null;
+            return Optional.empty();
         }
     }
 
@@ -555,6 +553,9 @@ public class ConsumerGroupMember {
         }
     }
 
+    /**
+     * @return The boolean indicating whether the member uses the classic protocol.
+     */
     public boolean useClassicProtocol() {
         return classicMemberMetadata != null;
     }
