@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
@@ -50,7 +48,6 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
@@ -92,7 +89,6 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
 import org.slf4j.Logger;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -3871,53 +3867,5 @@ public class GroupMetadataManager {
      */
     static String classicGroupSyncKey(String groupId) {
         return "sync-" + groupId;
-    }
-
-    /**
-     * @param metadata      The metadata to deserialize.
-     * @param log           The log to use.
-     * @param reason        The reason for deserializing the assignment.
-     * @return  The deserialized assignment.
-     */
-    public static ConsumerPartitionAssignor.Assignment deserializeAssignment(byte[] metadata, Logger log, String reason) {
-        try {
-            return ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(metadata));
-        } catch (SchemaException e) {
-            log.warn("Cannot parse the Consumer Protocol {} when deserializing the assignment for {}.",
-                ConsumerProtocol.PROTOCOL_TYPE, reason);
-            throw new GroupIdNotFoundException(String.format("Fail to deserialize the assignment when %s.", reason));
-        }
-    }
-
-    /**
-     * @param metadata      The metadata to deserialize.
-     * @param log           The log to use.
-     * @param reason        The reason for deserializing the subscription.
-     * @return  The deserialized subscription.
-     */
-    public static ConsumerPartitionAssignor.Subscription deserializeSubscription(byte[] metadata, Logger log, String reason) {
-        try {
-            return ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(metadata));
-        } catch (SchemaException e) {
-            log.warn("Cannot parse the Consumer Protocol {} when deserializing the subscription for {}.",
-                ConsumerProtocol.PROTOCOL_TYPE, reason);
-            throw new GroupIdNotFoundException(String.format("Fail to deserialize the subscription when %s.", reason));
-        }
-    }
-
-    /**
-     * @param metadata      The metadata to deserialize.
-     * @param log           The log to use.
-     * @param reason        The reason for deserializing the version.
-     * @return  The deserialized ConsumerProtocol version.
-     */
-    public static Short deserializeVersion(byte[] metadata, Logger log, String reason) {
-        try {
-            return ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(metadata));
-        } catch (SchemaException e) {
-            log.warn("Cannot parse the Consumer Protocol {} when deserializing the version for {}.",
-                ConsumerProtocol.PROTOCOL_TYPE, reason);
-            throw new GroupIdNotFoundException(String.format("Fail to deserialize the version when %s.", reason));
-        }
     }
 }

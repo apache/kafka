@@ -21,13 +21,14 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.GroupMetadataManager;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
@@ -43,6 +44,7 @@ import org.apache.kafka.timeline.TimelineInteger;
 import org.apache.kafka.timeline.TimelineObject;
 import org.slf4j.Logger;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1112,7 +1114,7 @@ public class ConsumerGroup implements Group {
         consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
-            ConsumerPartitionAssignor.Subscription subscription = GroupMetadataManager.deserializeSubscription(
+            ConsumerPartitionAssignor.Subscription subscription = deserializeSubscription(
                 classicGroupMember.metadata(classicGroup.protocolName().get()),
                 log,
                 "group upgrade"
@@ -1212,5 +1214,53 @@ public class ConsumerGroup implements Group {
      */
     public boolean allMembersUseClassicProtocol() {
         return numClassicProtocolMembers() == members().size();
+    }
+
+    /**
+     * @param metadata      The metadata to deserialize.
+     * @param log           The log to use.
+     * @param reason        The reason for deserializing the assignment.
+     * @return  The deserialized assignment.
+     */
+    public static ConsumerPartitionAssignor.Assignment deserializeAssignment(byte[] metadata, Logger log, String reason) {
+        try {
+            return ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(metadata));
+        } catch (SchemaException e) {
+            log.warn("Cannot parse the Consumer Protocol {} when deserializing the assignment for {}.",
+                ConsumerProtocol.PROTOCOL_TYPE, reason);
+            throw new GroupIdNotFoundException(String.format("Fail to deserialize the assignment when %s.", reason));
+        }
+    }
+
+    /**
+     * @param metadata      The metadata to deserialize.
+     * @param log           The log to use.
+     * @param reason        The reason for deserializing the subscription.
+     * @return  The deserialized subscription.
+     */
+    public static ConsumerPartitionAssignor.Subscription deserializeSubscription(byte[] metadata, Logger log, String reason) {
+        try {
+            return ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(metadata));
+        } catch (SchemaException e) {
+            log.warn("Cannot parse the Consumer Protocol {} when deserializing the subscription for {}.",
+                ConsumerProtocol.PROTOCOL_TYPE, reason);
+            throw new GroupIdNotFoundException(String.format("Fail to deserialize the subscription when %s.", reason));
+        }
+    }
+
+    /**
+     * @param metadata      The metadata to deserialize.
+     * @param log           The log to use.
+     * @param reason        The reason for deserializing the version.
+     * @return  The deserialized ConsumerProtocol version.
+     */
+    public static Short deserializeVersion(byte[] metadata, Logger log, String reason) {
+        try {
+            return ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(metadata));
+        } catch (SchemaException e) {
+            log.warn("Cannot parse the Consumer Protocol {} when deserializing the version for {}.",
+                ConsumerProtocol.PROTOCOL_TYPE, reason);
+            throw new GroupIdNotFoundException(String.format("Fail to deserialize the version when %s.", reason));
+        }
     }
 }
