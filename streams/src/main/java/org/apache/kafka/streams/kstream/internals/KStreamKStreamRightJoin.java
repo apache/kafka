@@ -41,7 +41,6 @@ class KStreamKStreamRightJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL,
     }
 
     private class KStreamKStreamRightJoinProcessor extends KStreamKStreamJoinProcessor {
-
         @Override
         public TimestampedKeyAndJoinSide<K> makeThisKey(final K key, final long timestamp) {
             return TimestampedKeyAndJoinSide.makeRight(key, timestamp);

@@ -42,17 +42,6 @@ public class TimestampedKeyAndJoinSide<K> {
     }
 
     /**
-     * Create a new {@link TimestampedKeyAndJoinSide} instance if the provide {@code key} is not {@code null}.
-     *
-     * @param leftSide True if the key is part of the left join side; False if it is from the right join side
-     * @param key      the key
-     * @param <K>      the type of the key
-     * @return a new {@link TimestampedKeyAndJoinSide} instance if the provide {@code key} is not {@code null}
-     */
-    public static <K> TimestampedKeyAndJoinSide<K> make(final boolean leftSide, final K key, final long timestamp) {
-        return new TimestampedKeyAndJoinSide<>(leftSide, key, timestamp);
-    }
-    /**
      * Create a new {@link TimestampedKeyAndJoinSide} instance for the left join side if the provide {@code key} is not {@code null}.
      *
      * @param key      the key
