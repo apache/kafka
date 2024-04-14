@@ -1053,32 +1053,30 @@ public class ConsumerGroupTest {
     }
 
     @Test
-    public void testSupportsProtocols() {
+    public void testClassicMembersSupportedProtocols() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
-        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols1 = new ArrayList<>();
-        protocols1.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> rangeProtocol = new ArrayList<>();
+        rangeProtocol.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("range")
             .setMetadata(new byte[0]));
 
-        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols2 = new ArrayList<>();
-        protocols2.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> roundRobinAndRangeProtocols = new ArrayList<>();
+        roundRobinAndRangeProtocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("roundrobin")
             .setMetadata(new byte[0]));
-        protocols2.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+        roundRobinAndRangeProtocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("range")
             .setMetadata(new byte[0]));
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member-1")
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(protocols1)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(rangeProtocol))
             .build();
         consumerGroup.updateMember(member1);
 
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member-2")
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(protocols2)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(roundRobinAndRangeProtocols))
             .build();
         consumerGroup.updateMember(member2);
 
@@ -1088,9 +1086,8 @@ public class ConsumerGroupTest {
         assertFalse(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("sticky", "roundrobin"))));
 
         member2 = new ConsumerGroupMember.Builder(member2)
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(protocols1)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(rangeProtocol))
             .build();
         consumerGroup.updateMember(member2);
 
@@ -1098,15 +1095,13 @@ public class ConsumerGroupTest {
         assertFalse(consumerGroup.classicMembersSupportedProtocols().containsKey("roundrobin"));
 
         member1 = new ConsumerGroupMember.Builder(member1)
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(protocols2)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(roundRobinAndRangeProtocols))
             .build();
         consumerGroup.updateMember(member1);
         member2 = new ConsumerGroupMember.Builder(member2)
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(protocols2)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(roundRobinAndRangeProtocols))
             .build();
         consumerGroup.updateMember(member2);
 
@@ -1125,30 +1120,32 @@ public class ConsumerGroupTest {
 
         // The group has member 1 (using the classic protocol).
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member-1")
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(protocols)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(protocols))
             .build();
         consumerGroup.updateMember(member1);
+        assertEquals(1, consumerGroup.numClassicProtocolMembers());
         assertTrue(consumerGroup.allMembersUseClassicProtocol());
 
         // The group has member 1 (using the classic protocol) and member 2 (using the consumer protocol).
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member-2")
             .build();
         consumerGroup.updateMember(member2);
+        assertEquals(1, consumerGroup.numClassicProtocolMembers());
         assertFalse(consumerGroup.allMembersUseClassicProtocol());
 
         // The group has member 2 (using the consumer protocol).
         consumerGroup.removeMember(member1.memberId());
+        assertEquals(0, consumerGroup.numClassicProtocolMembers());
         assertFalse(consumerGroup.allMembersUseClassicProtocol());
 
         // The group has member 2 (using the classic protocol).
         member2 = new ConsumerGroupMember.Builder("member-2")
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(protocols)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(protocols))
             .build();
         consumerGroup.updateMember(member2);
+        assertEquals(1, consumerGroup.numClassicProtocolMembers());
         assertTrue(consumerGroup.allMembersUseClassicProtocol());
     }
 }
