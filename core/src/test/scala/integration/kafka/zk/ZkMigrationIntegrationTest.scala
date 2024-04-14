@@ -16,7 +16,7 @@
  */
 package kafka.zk
 
-import kafka.server.KafkaConfig
+import kafka.server.{KRaftCachedControllerId, KafkaConfig}
 import kafka.test.{ClusterConfig, ClusterGenerator, ClusterInstance}
 import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTemplate, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
@@ -475,6 +475,87 @@ class ZkMigrationIntegrationTest {
       // Verify the changes made to KRaft are seen in ZK
       log.info("Verifying metadata changes with ZK")
       verifyUserScramCredentials(zkClient)
+    } finally {
+      shutdownInSequence(zkCluster, kraftCluster)
+    }
+  }
+
+  @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_8_IV0, serverProperties = Array(
+    new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
+    new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
+  ))
+  def testDeleteLogOnStartup(zkCluster: ClusterInstance): Unit = {
+    var admin = zkCluster.createAdminClient()
+    try {
+      val newTopics = new util.ArrayList[NewTopic]()
+      newTopics.add(new NewTopic("testDeleteLogOnStartup", 2, 3.toShort)
+        .configs(Map(TopicConfig.SEGMENT_BYTES_CONFIG -> "102400", TopicConfig.SEGMENT_MS_CONFIG -> "300000").asJava))
+      val createTopicResult = admin.createTopics(newTopics)
+      createTopicResult.all().get(60, TimeUnit.SECONDS)
+    } finally {
+      admin.close()
+    }
+
+    // Bootstrap the ZK cluster ID into KRaft
+    val clusterId = zkCluster.clusterId()
+    val kraftCluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_8_IV0).
+        setClusterId(Uuid.fromString(clusterId)).
+        setNumBrokerNodes(0).
+        setNumControllerNodes(1).build())
+      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
+      .setConfigProp(ZkConfigs.ZK_CONNECT_CONFIG, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .build()
+    try {
+      kraftCluster.format()
+      kraftCluster.startup()
+      val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
+
+      // Enable migration configs and restart brokers
+      log.info("Restart brokers in migration mode")
+      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.rollingBrokerRestart() // This would throw if authorizers weren't allowed
+      zkCluster.waitForReadyBrokers()
+      readyFuture.get(30, TimeUnit.SECONDS)
+
+      val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
+      TestUtils.waitUntilTrue(
+        () => zkClient.getControllerId.contains(3000),
+        "Timed out waiting for KRaft controller to take over",
+        30000)
+
+      def hasKRaftController: Boolean = {
+        zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().brokers.forall(
+          broker => broker.metadataCache.getControllerId match {
+            case Some(_: KRaftCachedControllerId) => true
+            case _ => false
+          }
+        )
+      }
+      TestUtils.waitUntilTrue(() => hasKRaftController, "Timed out waiting for ZK brokers to see a KRaft controller")
+
+      log.info("Restart brokers again")
+      zkCluster.rollingBrokerRestart()
+      zkCluster.waitForReadyBrokers()
+
+      admin = zkCluster.createAdminClient()
+      try {
+        // List topics is served from local MetadataCache on brokers. For ZK brokers this cache is populated by UMR
+        // which won't be sent until the broker has been unfenced by the KRaft controller. So, seeing the topic in
+        // the brokers cache tells us it has recreated and re-replicated the metadata log
+        TestUtils.waitUntilTrue(
+          () => admin.listTopics().names().get(30, TimeUnit.SECONDS).asScala.contains("testDeleteLogOnStartup"),
+          "Timed out listing topics",
+          30000)
+      } finally {
+        admin.close()
+      }
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
     }
