@@ -113,7 +113,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     superuserClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, privilegedClientLoginContext)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testCreateUserWithDelegationToken(quorum: String): Unit = {
     val privilegedAdminClient = Admin.create(privilegedAdminClientConfig)

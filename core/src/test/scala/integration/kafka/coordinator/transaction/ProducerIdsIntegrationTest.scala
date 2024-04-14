@@ -19,9 +19,9 @@ package kafka.coordinator.transaction
 
 import kafka.network.SocketServer
 import kafka.server.{IntegrationTestUtils, KafkaConfig}
-import kafka.test.annotation.{AutoStart, ClusterTest, ClusterTests, Type}
+import kafka.test.ClusterInstance
+import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTest, ClusterTestDefaults, ClusterTests, Type}
 import kafka.test.junit.ClusterTestExtensions
-import kafka.test.{ClusterConfig, ClusterInstance}
 import org.apache.kafka.common.message.InitProducerIdRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -29,21 +29,19 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{InitProducerIdRequest, InitProducerIdResponse}
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{BeforeEach, Disabled, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.{Disabled, Timeout}
 
 import java.util.stream.{Collectors, IntStream}
 import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters._
 
+
+@ClusterTestDefaults(serverProperties = Array(
+  new ClusterConfigProperty(key = "transaction.state.log.num.partitions", value = "1")
+))
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ProducerIdsIntegrationTest {
-
-  @BeforeEach
-  def setup(clusterConfig: ClusterConfig): Unit = {
-    clusterConfig.serverProperties().put(KafkaConfig.TransactionsTopicPartitionsProp, "1")
-    clusterConfig.serverProperties().put(KafkaConfig.TransactionsTopicReplicationFactorProp, "3")
-  }
 
   @ClusterTests(Array(
     new ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_2_8_IV1),

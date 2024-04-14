@@ -19,11 +19,12 @@ package kafka.api
 
 import java.util.Properties
 import kafka.server.KafkaConfig
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -52,8 +53,8 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
   overridingProps.put(KafkaConfig.OffsetsTopicReplicationFactorProp, 3.toString)
   overridingProps.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-  overridingProps.put(KafkaConfig.TransactionsTopicPartitionsProp, 1.toString)
-  overridingProps.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 3.toString)
+  overridingProps.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 1.toString)
+  overridingProps.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, 3.toString)
   overridingProps.put(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
   overridingProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
 
@@ -74,14 +75,14 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   override protected def brokerCount: Int = 4
 
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testWithGroupId(quorum: String): Unit = {
     testBrokerFailure((producer, groupId, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testWithGroupMetadata(quorum: String): Unit = {
     testBrokerFailure((producer, _, consumer) =>

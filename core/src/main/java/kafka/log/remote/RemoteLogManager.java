@@ -484,9 +484,9 @@ public class RemoteLogManager implements Closeable {
      * <p>
      * This method returns an option of TimestampOffset. The returned value is determined using the following ordered list of rules:
      * <p>
-     * - If there are no messages in the remote storage, return None
-     * - If all the messages in the remote storage have smaller offsets, return None
-     * - If all the messages in the remote storage have smaller timestamps, return None
+     * - If there are no messages in the remote storage, return Empty
+     * - If all the messages in the remote storage have smaller offsets, return Empty
+     * - If all the messages in the remote storage have smaller timestamps, return Empty
      * - Otherwise, return an option of TimestampOffset. The offset is the offset of the first message whose timestamp
      * is greater than or equals to the target timestamp and whose offset is greater than or equals to the startingOffset.
      *
@@ -494,7 +494,7 @@ public class RemoteLogManager implements Closeable {
      * @param timestamp        The timestamp to search for.
      * @param startingOffset   The starting offset to search.
      * @param leaderEpochCache LeaderEpochFileCache of the topic partition.
-     * @return the timestamp and offset of the first message that meets the requirements. None will be returned if there
+     * @return the timestamp and offset of the first message that meets the requirements. Empty will be returned if there
      * is no such message.
      */
     public Optional<FileRecords.TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
@@ -1336,7 +1336,7 @@ public class RemoteLogManager implements Closeable {
 
         if (logOptional.isPresent()) {
             Option<LeaderEpochFileCache> leaderEpochCache = logOptional.get().leaderEpochCache();
-            if (leaderEpochCache.isDefined()) {
+            if (leaderEpochCache != null && leaderEpochCache.isDefined()) {
                 epoch = leaderEpochCache.get().epochForOffset(offset);
             }
         }

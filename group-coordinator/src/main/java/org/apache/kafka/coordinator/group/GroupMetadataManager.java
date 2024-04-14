@@ -160,6 +160,7 @@ public class GroupMetadataManager {
         private int classicGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
         private int classicGroupMinSessionTimeoutMs;
         private int classicGroupMaxSessionTimeoutMs;
+        private ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy;
         private GroupCoordinatorMetricsShard metrics;
 
         Builder withLogContext(LogContext logContext) {
@@ -237,6 +238,11 @@ public class GroupMetadataManager {
             return this;
         }
 
+        Builder withGroupProtocolMigrationPolicy(ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy) {
+            this.consumerGroupMigrationPolicy = consumerGroupMigrationPolicy;
+            return this;
+        }
+
         Builder withGroupCoordinatorMetricsShard(GroupCoordinatorMetricsShard metrics) {
             this.metrics = metrics;
             return this;
@@ -271,10 +277,12 @@ public class GroupMetadataManager {
                 classicGroupInitialRebalanceDelayMs,
                 classicGroupNewMemberJoinTimeoutMs,
                 classicGroupMinSessionTimeoutMs,
-                classicGroupMaxSessionTimeoutMs
+                classicGroupMaxSessionTimeoutMs,
+                consumerGroupMigrationPolicy
             );
         }
     }
+
     /**
      * The log context.
      */
@@ -384,6 +392,11 @@ public class GroupMetadataManager {
      */
     private final int classicGroupMaxSessionTimeoutMs;
 
+    /**
+     * The config indicating whether group protocol upgrade/downgrade is allowed.
+     */
+    private final ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy;
+
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
@@ -400,7 +413,8 @@ public class GroupMetadataManager {
         int classicGroupInitialRebalanceDelayMs,
         int classicGroupNewMemberJoinTimeoutMs,
         int classicGroupMinSessionTimeoutMs,
-        int classicGroupMaxSessionTimeoutMs
+        int classicGroupMaxSessionTimeoutMs,
+        ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy
     ) {
         this.logContext = logContext;
         this.log = logContext.logger(GroupMetadataManager.class);
@@ -422,6 +436,7 @@ public class GroupMetadataManager {
         this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
         this.classicGroupMinSessionTimeoutMs = classicGroupMinSessionTimeoutMs;
         this.classicGroupMaxSessionTimeoutMs = classicGroupMaxSessionTimeoutMs;
+        this.consumerGroupMigrationPolicy = consumerGroupMigrationPolicy;
     }
 
     /**
@@ -1920,6 +1935,47 @@ public class GroupMetadataManager {
         });
     }
 
+    /**
+     * Called when the partition is unloaded.
+     * ClassicGroup: Complete all awaiting join and sync futures. Transition group to Dead.
+     */
+    public void onUnloaded() {
+        groups.values().forEach(group -> {
+            switch (group.type()) {
+                case CONSUMER:
+                    ConsumerGroup consumerGroup = (ConsumerGroup) group;
+                    log.info("[GroupId={}] Unloaded group metadata for group epoch {}.",
+                        consumerGroup.groupId(), consumerGroup.groupEpoch());
+                    break;
+                case CLASSIC:
+                    ClassicGroup classicGroup = (ClassicGroup) group;
+                    log.info("[GroupId={}] Unloading group metadata for generation {}.",
+                        classicGroup.groupId(), classicGroup.generationId());
+
+                    classicGroup.transitionTo(DEAD);
+                    switch (classicGroup.previousState()) {
+                        case EMPTY:
+                        case DEAD:
+                            break;
+                        case PREPARING_REBALANCE:
+                            classicGroup.allMembers().forEach(member -> {
+                                classicGroup.completeJoinFuture(member, new JoinGroupResponseData()
+                                    .setMemberId(member.memberId())
+                                    .setErrorCode(NOT_COORDINATOR.code()));
+                            });
+
+                            break;
+                        case COMPLETING_REBALANCE:
+                        case STABLE:
+                            classicGroup.allMembers().forEach(member -> {
+                                classicGroup.completeSyncFuture(member, new SyncGroupResponseData()
+                                    .setErrorCode(NOT_COORDINATOR.code()));
+                            });
+                    }
+            }
+        });
+    }
+
     public static String consumerGroupSessionTimeoutKey(String groupId, String memberId) {
         return "session-timeout-" + groupId + "-" + memberId;
     }
@@ -2244,7 +2300,7 @@ public class GroupMetadataManager {
                 request.sessionTimeoutMs(),
                 TimeUnit.MILLISECONDS,
                 false,
-                () -> expireClassicGroupMemberHeartbeat(group, newMemberId)
+                () -> expireClassicGroupMemberHeartbeat(group.groupId(), newMemberId)
             );
 
             responseFuture.complete(new JoinGroupResponseData()
@@ -2416,6 +2472,22 @@ public class GroupMetadataManager {
     }
 
     /**
+     * An overload of {@link GroupMetadataManager#completeClassicGroupJoin(ClassicGroup)} used as
+     * timeout operation. It additionally looks up the group by the id and checks the group type.
+     * completeClassicGroupJoin will only be called if the group is CLASSIC.
+     */
+    private CoordinatorResult<Void, Record> completeClassicGroupJoin(String groupId) {
+        ClassicGroup group;
+        try {
+            group = getOrMaybeCreateClassicGroup(groupId, false);
+        } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
+            log.debug("Cannot find the group, skipping rebalance stage.", exception);
+            return EMPTY_RESULT;
+        }
+        return completeClassicGroupJoin(group);
+    }
+
+    /**
      * Complete the join group phase. Remove all dynamic members that have not rejoined
      * during this stage and proceed with the next generation for this group. The generation id
      * is incremented and the group transitions to CompletingRebalance state if there is at least
@@ -2462,7 +2534,7 @@ public class GroupMetadataManager {
                 group.rebalanceTimeoutMs(),
                 TimeUnit.MILLISECONDS,
                 false,
-                () -> completeClassicGroupJoin(group)
+                () -> completeClassicGroupJoin(group.groupId())
             );
 
             return EMPTY_RESULT;
@@ -2533,22 +2605,31 @@ public class GroupMetadataManager {
             group.rebalanceTimeoutMs(),
             TimeUnit.MILLISECONDS,
             false,
-            () -> expirePendingSync(group, group.generationId()));
+            () -> expirePendingSync(group.groupId(), group.generationId()));
     }
 
     /**
      * Invoked when the heartbeat operation is expired from the timer. Possibly remove the member and
      * try complete the join phase.
      *
-     * @param group     The group.
+     * @param groupId   The group id.
      * @param memberId  The member id.
      *
      * @return The coordinator result that will be appended to the log.
      */
     private CoordinatorResult<Void, Record> expireClassicGroupMemberHeartbeat(
-        ClassicGroup group,
+        String groupId,
         String memberId
     ) {
+        ClassicGroup group;
+        try {
+            group = getOrMaybeCreateClassicGroup(groupId, false);
+        } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
+            log.debug("Received notification of heartbeat expiration for member {} after group {} " +
+                "had already been deleted or upgraded.", memberId, groupId);
+            return EMPTY_RESULT;
+        }
+
         if (group.isInState(DEAD)) {
             log.info("Received notification of heartbeat expiration for member {} after group {} " +
                     "had already been unloaded or deleted.",
@@ -2763,7 +2844,7 @@ public class GroupMetadataManager {
                 delayMs,
                 TimeUnit.MILLISECONDS,
                 false,
-                () -> tryCompleteInitialRebalanceElseSchedule(group, delayMs, remainingMs)
+                () -> tryCompleteInitialRebalanceElseSchedule(group.groupId(), delayMs, remainingMs)
             );
         }
 
@@ -2795,7 +2876,7 @@ public class GroupMetadataManager {
                 group.rebalanceTimeoutMs(),
                 TimeUnit.MILLISECONDS,
                 false,
-                () -> completeClassicGroupJoin(group)
+                () -> completeClassicGroupJoin(group.groupId())
             );
             return EMPTY_RESULT;
         }
@@ -2805,15 +2886,23 @@ public class GroupMetadataManager {
      * Try to complete the join phase of the initial rebalance.
      * Otherwise, extend the rebalance.
      *
-     * @param group The group under initial rebalance.
+     * @param groupId The group under initial rebalance.
      *
      * @return The coordinator result that will be appended to the log.
      */
     private CoordinatorResult<Void, Record> tryCompleteInitialRebalanceElseSchedule(
-        ClassicGroup group,
+        String groupId,
         int delayMs,
         int remainingMs
     ) {
+        ClassicGroup group;
+        try {
+            group = getOrMaybeCreateClassicGroup(groupId, false);
+        } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
+            log.debug("Cannot find the group, skipping the initial rebalance stage.", exception);
+            return EMPTY_RESULT;
+        }
+
         if (group.newMemberAdded() && remainingMs != 0) {
             // A new member was added. Extend the delay.
             group.setNewMemberAdded(false);
@@ -2825,7 +2914,7 @@ public class GroupMetadataManager {
                 newDelayMs,
                 TimeUnit.MILLISECONDS,
                 false,
-                () -> tryCompleteInitialRebalanceElseSchedule(group, newDelayMs, newRemainingMs)
+                () -> tryCompleteInitialRebalanceElseSchedule(group.groupId(), newDelayMs, newRemainingMs)
             );
         } else {
             // No more time remaining. Complete the join phase.
@@ -2937,7 +3026,7 @@ public class GroupMetadataManager {
             timeoutMs,
             TimeUnit.MILLISECONDS,
             false,
-            () -> expireClassicGroupMemberHeartbeat(group, member.memberId()));
+            () -> expireClassicGroupMemberHeartbeat(group.groupId(), member.memberId()));
     }
 
     /**
@@ -2954,15 +3043,23 @@ public class GroupMetadataManager {
     /**
      * Expire pending sync.
      *
-     * @param group           The group.
+     * @param groupId         The group id.
      * @param generationId    The generation when the pending sync was originally scheduled.
      *
      * @return The coordinator result that will be appended to the log.
      * */
     private CoordinatorResult<Void, Record> expirePendingSync(
-        ClassicGroup group,
+        String groupId,
         int generationId
     ) {
+        ClassicGroup group;
+        try {
+            group = getOrMaybeCreateClassicGroup(groupId, false);
+        } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
+            log.debug("Received notification of sync expiration for an unknown classic group {}.", groupId);
+            return EMPTY_RESULT;
+        }
+
         if (generationId != group.generationId()) {
             log.error("Received unexpected notification of sync expiration for {} with an old " +
                 "generation {} while the group has {}.", group.groupId(), generationId, group.generationId());
@@ -2985,7 +3082,6 @@ public class GroupMetadataManager {
                 }
             }
         }
-
         return EMPTY_RESULT;
     }
 
@@ -3088,7 +3184,6 @@ public class GroupMetadataManager {
 
                         responseFuture.complete(
                             new JoinGroupResponseData()
-                                .setMembers(Collections.emptyList())
                                 .setMemberId(UNKNOWN_MEMBER_ID)
                                 .setGenerationId(group.generationId())
                                 .setProtocolName(group.protocolName().orElse(null))
@@ -3111,7 +3206,6 @@ public class GroupMetadataManager {
                         );
                     } else {
                         group.completeJoinFuture(newMember, new JoinGroupResponseData()
-                            .setMembers(Collections.emptyList())
                             .setMemberId(newMemberId)
                             .setGenerationId(group.generationId())
                             .setProtocolName(group.protocolName().orElse(null))

@@ -91,6 +91,7 @@ public class ClusterControlManager {
         private ReplicaPlacer replicaPlacer = null;
         private FeatureControlManager featureControl = null;
         private boolean zkMigrationEnabled = false;
+        private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler = null;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -132,6 +133,11 @@ public class ClusterControlManager {
             return this;
         }
 
+        Builder setBrokerUncleanShutdownHandler(BrokerUncleanShutdownHandler brokerUncleanShutdownHandler) {
+            this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
+            return this;
+        }
+
         ClusterControlManager build() {
             if (logContext == null) {
                 logContext = new LogContext();
@@ -148,6 +154,9 @@ public class ClusterControlManager {
             if (featureControl == null) {
                 throw new RuntimeException("You must specify FeatureControlManager");
             }
+            if (brokerUncleanShutdownHandler == null) {
+                throw new RuntimeException("You must specify BrokerUncleanShutdownHandler");
+            }
             return new ClusterControlManager(logContext,
                 clusterId,
                 time,
@@ -155,7 +164,8 @@ public class ClusterControlManager {
                 sessionTimeoutNs,
                 replicaPlacer,
                 featureControl,
-                zkMigrationEnabled
+                zkMigrationEnabled,
+                brokerUncleanShutdownHandler
             );
         }
     }
@@ -247,6 +257,8 @@ public class ClusterControlManager {
      */
     private final boolean zkMigrationEnabled;
 
+    private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
+
     /**
      * Maps controller IDs to controller registrations.
      */
@@ -265,7 +277,8 @@ public class ClusterControlManager {
         long sessionTimeoutNs,
         ReplicaPlacer replicaPlacer,
         FeatureControlManager featureControl,
-        boolean zkMigrationEnabled
+        boolean zkMigrationEnabled,
+        BrokerUncleanShutdownHandler brokerUncleanShutdownHandler
     ) {
         this.logContext = logContext;
         this.clusterId = clusterId;
@@ -281,6 +294,7 @@ public class ClusterControlManager {
         this.zkMigrationEnabled = zkMigrationEnabled;
         this.controllerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.directoryToBroker = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
     }
 
     ReplicaPlacer replicaPlacer() {
@@ -336,10 +350,11 @@ public class ClusterControlManager {
                 ", but got cluster ID " + request.clusterId());
         }
         int brokerId = request.brokerId();
+        List<ApiMessageAndVersion> records = new ArrayList<>();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
         if (version < 2 || existing == null || request.previousBrokerEpoch() != existing.epoch()) {
-            // TODO(KIP-966): Update the ELR if the broker has an unclean shutdown.
             log.debug("Received an unclean shutdown request");
+            brokerUncleanShutdownHandler.addRecordsForShutdown(request.brokerId(), records);
         }
         if (existing != null) {
             if (heartbeatManager.hasValidSession(brokerId)) {
@@ -410,7 +425,6 @@ public class ClusterControlManager {
 
         heartbeatManager.register(brokerId, record.fenced());
 
-        List<ApiMessageAndVersion> records = new ArrayList<>();
         records.add(new ApiMessageAndVersion(record, featureControl.metadataVersion().
             registerBrokerRecordVersion()));
         return ControllerResult.atomicOf(records, new BrokerRegistrationReply(brokerEpoch));
@@ -779,5 +793,10 @@ public class ClusterControlManager {
                         registration.supportedFeatures());
             }
         };
+    }
+
+    @FunctionalInterface
+    interface BrokerUncleanShutdownHandler {
+        void addRecordsForShutdown(int brokerId, List<ApiMessageAndVersion> records);
     }
 }

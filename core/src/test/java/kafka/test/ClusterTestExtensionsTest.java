@@ -32,7 +32,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 
-@ClusterTestDefaults(clusterType = Type.ZK)   // Set defaults for a few params in @ClusterTest(s)
+@ClusterTestDefaults(clusterType = Type.ZK, serverProperties = {
+    @ClusterConfigProperty(key = "default.key", value = "default.value"),
+})   // Set defaults for a few params in @ClusterTest(s)
 @ExtendWith(ClusterTestExtensions.class)
 public class ClusterTestExtensionsTest {
 
@@ -89,20 +91,24 @@ public class ClusterTestExtensionsTest {
         }),
         @ClusterTest(name = "cluster-tests-2", clusterType = Type.KRAFT, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
-            @ClusterConfigProperty(key = "spam", value = "eggz")
+            @ClusterConfigProperty(key = "spam", value = "eggz"),
+            @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
         }),
         @ClusterTest(name = "cluster-tests-3", clusterType = Type.CO_KRAFT, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
-            @ClusterConfigProperty(key = "spam", value = "eggz")
+            @ClusterConfigProperty(key = "spam", value = "eggz"),
+            @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
         })
     })
     public void testClusterTests() {
         if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.ZK)) {
-            Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("foo"), "bar");
-            Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("spam"), "eggs");
+            Assertions.assertEquals("bar", clusterInstance.config().serverProperties().getProperty("foo"));
+            Assertions.assertEquals("eggs", clusterInstance.config().serverProperties().getProperty("spam"));
+            Assertions.assertEquals("default.value", clusterInstance.config().serverProperties().getProperty("default.key"));
         } else if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.RAFT)) {
-            Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("foo"), "baz");
-            Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("spam"), "eggz");
+            Assertions.assertEquals("baz", clusterInstance.config().serverProperties().getProperty("foo"));
+            Assertions.assertEquals("eggz", clusterInstance.config().serverProperties().getProperty("spam"));
+            Assertions.assertEquals("overwrite.value", clusterInstance.config().serverProperties().getProperty("default.key"));
         } else {
             Assertions.fail("Unknown cluster type " + clusterInstance.clusterType());
         }

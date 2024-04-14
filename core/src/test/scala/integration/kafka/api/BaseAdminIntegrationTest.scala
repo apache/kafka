@@ -19,7 +19,6 @@ package kafka.api
 import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
-import kafka.security.authorizer.AclEntry
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
@@ -29,6 +28,8 @@ import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
@@ -99,7 +100,6 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic).get())
       assertEquals(topicIds(topic), createResult.topicId(topic).get())
     }
-    
 
     val failedCreateResult = client.createTopics(newTopics.asJava)
     val results = failedCreateResult.values()
@@ -183,12 +183,12 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
     //with includeAuthorizedOperations flag
     topicResult = getTopicMetadata(client, topic, new DescribeTopicsOptions().includeAuthorizedOperations(true))
-    expectedOperations = AclEntry.supportedOperations(ResourceType.TOPIC).asJava
+    expectedOperations = AclEntry.supportedOperations(ResourceType.TOPIC)
     assertEquals(expectedOperations, topicResult.authorizedOperations)
   }
 
   def configuredClusterPermissions: Set[AclOperation] =
-    AclEntry.supportedOperations(ResourceType.CLUSTER)
+    AclEntry.supportedOperations(ResourceType.CLUSTER).asScala.toSet
 
   override def modifyConfigs(configs: Seq[Properties]): Unit = {
     super.modifyConfigs(configs)
@@ -208,8 +208,8 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       config.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
       // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
       // set for subclasses with security enabled and we don't want to overwrite it.
-      if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))
-        config.setProperty(KafkaConfig.SslTruststorePasswordProp, "some.invalid.pass")
+      if (!config.containsKey(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG))
+        config.setProperty(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "some.invalid.pass")
     }
   }
 
