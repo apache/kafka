@@ -954,6 +954,23 @@ class ConfigCommandTest extends Logging {
   }
 
   @Test
+  def shouldNotAllowAddEntityDefaultBrokerQuotaConfigWhileBrokerUpUsingZookeeper(): Unit = {
+    val alterOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-default",
+      "--entity-type", "brokers",
+      "--alter",
+      "--add-config", "leader.replication.throttled.rate=10,follower.replication.throttled.rate=20"))
+
+    val mockZkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    val mockBroker: Broker = EasyMock.createNiceMock(classOf[Broker])
+    EasyMock.expect(mockZkClient.getAllBrokersInCluster).andReturn(Seq(mockBroker))
+    EasyMock.replay(mockZkClient)
+
+    assertThrows(classOf[IllegalArgumentException],
+      () => ConfigCommand.alterConfigWithZk(mockZkClient, alterOpts, new DummyAdminZkClient(zkClient)))
+  }
+
+  @Test
   def shouldNotAllowDescribeBrokerWhileBrokerUpUsingZookeeper(): Unit = {
     val describeOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
@@ -966,6 +983,22 @@ class ConfigCommandTest extends Logging {
 
     assertThrows(classOf[IllegalArgumentException],
       () => ConfigCommand.describeConfigWithZk(mockZkClient, describeOpts, dummyAdminZkClient))
+  }
+
+  @Test
+  def shouldNotAllowDescribeEntityDefaultBrokerWhileBrokerUpUsingZookeeper(): Unit = {
+    val describeOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-default",
+      "--entity-type", "brokers",
+      "--describe"))
+
+    val mockZkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    val mockBroker: Broker = EasyMock.createNiceMock(classOf[Broker])
+    EasyMock.expect(mockZkClient.getAllBrokersInCluster).andReturn(Seq(mockBroker))
+    EasyMock.replay(mockZkClient)
+
+    assertThrows(classOf[IllegalArgumentException],
+      () => ConfigCommand.describeConfigWithZk(mockZkClient, describeOpts, new DummyAdminZkClient(zkClient)))
   }
 
   @Test
@@ -988,6 +1021,29 @@ class ConfigCommandTest extends Logging {
     when(mockZkClient.getBroker(1)).thenReturn(None)
 
     ConfigCommand.describeConfigWithZk(mockZkClient, describeOpts, new TestAdminZkClient(null))
+  }
+
+  @Test
+  def shouldSupportDescribeEntityDefaultBrokerBeforeBrokerUpUsingZookeeper(): Unit = {
+    val describeOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-default",
+      "--entity-type", "brokers",
+      "--describe"))
+
+    class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
+      override def fetchEntityConfig(rootEntityType: String, sanitizedEntityName: String): Properties = {
+        assertEquals("brokers", rootEntityType)
+        assertEquals("<default>", sanitizedEntityName)
+
+        new Properties()
+      }
+    }
+
+    val mockZkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    EasyMock.expect(mockZkClient.getAllBrokersInCluster).andReturn(Seq.empty)
+    EasyMock.replay(mockZkClient)
+
+    ConfigCommand.describeConfigWithZk(mockZkClient, describeOpts, new TestAdminZkClient(zkClient))
   }
 
   @Test
