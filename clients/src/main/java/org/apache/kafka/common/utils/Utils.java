@@ -94,7 +94,7 @@ public final class Utils {
 
     // This matches URIs of formats: host:port and protocol:\\host:port
     // IPv6 is supported with [ip] pattern
-    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%._:]*)\\]?:([0-9]+)");
+    private static final Pattern HOST_PORT_PATTERN = Pattern.compile("(.*?)\\[?([0-9a-zA-Z\\-%._:]*)\\]?:([0-9]+)");
 
     private static final Pattern VALID_HOST_CHARACTERS = Pattern.compile("([0-9a-zA-Z\\-%._:]*)");
 
@@ -527,7 +527,13 @@ public final class Utils {
      */
     public static String getHost(String address) {
         Matcher matcher = HOST_PORT_PATTERN.matcher(address);
-        return matcher.matches() ? matcher.group(1) : null;
+        if (matcher.matches()) {
+            if (!matcher.group(1).isEmpty()) {
+                log.warn("Address '" + address + "' should be in host:port format, but includes a protocol part. Using a protocol here will be an error in a future release.");
+            }
+            return matcher.group(2);
+        }
+        return null;
     }
 
     /**
@@ -537,7 +543,13 @@ public final class Utils {
      */
     public static Integer getPort(String address) {
         Matcher matcher = HOST_PORT_PATTERN.matcher(address);
-        return matcher.matches() ? Integer.parseInt(matcher.group(2)) : null;
+        if (matcher.matches()) {
+            if (!matcher.group(1).isEmpty()) {
+                log.warn("Address '" + address + "' should be in host:port format, but includes a protocol part. Using a protocol here will be an error in a future release.");
+            }
+            return Integer.parseInt(matcher.group(3));
+        }
+        return null;
     }
 
     /**
