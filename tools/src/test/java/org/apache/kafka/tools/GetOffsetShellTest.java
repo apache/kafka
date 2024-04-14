@@ -18,6 +18,7 @@
 package org.apache.kafka.tools;
 
 import kafka.test.ClusterInstance;
+import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.Type;
@@ -34,7 +35,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -44,36 +44,31 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.ALL)
+@ClusterTestDefaults(clusterType = Type.ALL, serverProperties = {
+    @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+    @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+    @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "4")
+})
 @Tag("integration")
 public class GetOffsetShellTest {
     private final int topicCount = 4;
-    private final int offsetTopicPartitionCount = 4;
     private final ClusterInstance cluster;
-    private final String topicName = "topic";
 
     public GetOffsetShellTest(ClusterInstance cluster) {
         this.cluster = cluster;
     }
 
     private String getTopicName(int i) {
-        return topicName + i;
-    }
-
-    @BeforeEach
-    public void before() {
-        cluster.config().serverProperties().put("auto.create.topics.enable", false);
-        cluster.config().serverProperties().put("offsets.topic.replication.factor", "1");
-        cluster.config().serverProperties().put("offsets.topic.num.partitions", String.valueOf(offsetTopicPartitionCount));
+        return "topic" + i;
     }
 
     private void setUp() {
@@ -94,12 +89,8 @@ public class GetOffsetShellTest {
             IntStream.range(0, topicCount + 1)
                 .forEach(i -> IntStream.range(0, i * i)
                         .forEach(msgCount -> {
-                            try {
-                                producer.send(
-                                        new ProducerRecord<>(getTopicName(i), msgCount % i, null, "val" + msgCount)).get();
-                            } catch (InterruptedException | ExecutionException e) {
-                                throw new RuntimeException(e);
-                            }
+                            assertDoesNotThrow(() -> producer.send(
+                                    new ProducerRecord<>(getTopicName(i), msgCount % i, null, "val" + msgCount)).get());
                         })
                 );
         }
@@ -401,7 +392,7 @@ public class GetOffsetShellTest {
     }
 
     private List<Row> expectedOffsetsWithInternal() {
-        List<Row> consOffsets = IntStream.range(0, offsetTopicPartitionCount)
+        List<Row> consOffsets = IntStream.range(0, 4)
                 .mapToObj(i -> new Row("__consumer_offsets", i, 0L))
                 .collect(Collectors.toList());
 
