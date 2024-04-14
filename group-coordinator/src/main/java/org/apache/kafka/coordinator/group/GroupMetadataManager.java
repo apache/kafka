@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
@@ -49,6 +50,7 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
@@ -90,6 +92,7 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
 import org.slf4j.Logger;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -626,7 +629,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null || (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records))) {
-            return new ConsumerGroup(snapshotRegistry, logContext, groupId, metrics);
+            return new ConsumerGroup(snapshotRegistry, groupId, metrics);
         } else {
             if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
@@ -697,7 +700,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, logContext, groupId, metrics);
+            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
             metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
             return consumerGroup;
@@ -854,7 +857,7 @@ public class GroupMetadataManager {
      */
     private boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
         if (!consumerGroupMigrationPolicy.isUpgradeEnabled()) {
-            log.info("Cannot upgrade classic group {} to consumer group because the online upgrade is disabled",
+            log.info("Cannot upgrade classic group {} to consumer group because the online upgrade is disabled.",
                 classicGroup.groupId());
             return false;
         } else if (!classicGroup.usesConsumerGroupProtocol()) {
@@ -885,8 +888,14 @@ public class GroupMetadataManager {
         classicGroup.completeAllSyncFutures(Errors.REBALANCE_IN_PROGRESS);
 
         classicGroup.createGroupTombstoneRecords(records);
-        ConsumerGroup consumerGroup =
-            ConsumerGroup.fromClassicGroup(snapshotRegistry, logContext, metrics, classicGroup, records, metadataImage.topics());
+        ConsumerGroup consumerGroup = ConsumerGroup.fromClassicGroup(
+            snapshotRegistry,
+            metrics,
+            classicGroup,
+            metadataImage.topics(),
+            log
+        );
+        ConsumerGroup.createConsumerGroupRecords(consumerGroup, records);
 
         // Create the session timeouts for the new members. If the conversion fails, the group will remain a
         // classic group, thus these timers will fail the group type check and do nothing.
@@ -3944,5 +3953,53 @@ public class GroupMetadataManager {
      */
     static String classicGroupSyncKey(String groupId) {
         return "sync-" + groupId;
+    }
+
+    /**
+     * @param metadata      The metadata to deserialize.
+     * @param log           The log to use.
+     * @param reason        The reason for deserializing the assignment.
+     * @return  The deserialized assignment.
+     */
+    public static ConsumerPartitionAssignor.Assignment deserializeAssignment(byte[] metadata, Logger log, String reason) {
+        try {
+            return ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(metadata));
+        } catch (SchemaException e) {
+            log.warn("Cannot parse the Consumer Protocol {} when deserializing the assignment for {}.",
+                ConsumerProtocol.PROTOCOL_TYPE, reason);
+            throw new GroupIdNotFoundException(String.format("Fail to deserialize the assignment when %s.", reason));
+        }
+    }
+
+    /**
+     * @param metadata      The metadata to deserialize.
+     * @param log           The log to use.
+     * @param reason        The reason for deserializing the subscription.
+     * @return  The deserialized subscription.
+     */
+    public static ConsumerPartitionAssignor.Subscription deserializeSubscription(byte[] metadata, Logger log, String reason) {
+        try {
+            return ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(metadata));
+        } catch (SchemaException e) {
+            log.warn("Cannot parse the Consumer Protocol {} when deserializing the subscription for {}.",
+                ConsumerProtocol.PROTOCOL_TYPE, reason);
+            throw new GroupIdNotFoundException(String.format("Fail to deserialize the subscription when %s.", reason));
+        }
+    }
+
+    /**
+     * @param metadata      The metadata to deserialize.
+     * @param log           The log to use.
+     * @param reason        The reason for deserializing the version.
+     * @return  The deserialized ConsumerProtocol version.
+     */
+    public static Short deserializeVersion(byte[] metadata, Logger log, String reason) {
+        try {
+            return ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(metadata));
+        } catch (SchemaException e) {
+            log.warn("Cannot parse the Consumer Protocol {} when deserializing the version for {}.",
+                ConsumerProtocol.PROTOCOL_TYPE, reason);
+            throw new GroupIdNotFoundException(String.format("Fail to deserialize the version when %s.", reason));
+        }
     }
 }

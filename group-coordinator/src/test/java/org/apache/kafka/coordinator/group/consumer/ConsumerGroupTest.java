@@ -38,9 +38,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -66,7 +68,6 @@ public class ConsumerGroupTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         return new ConsumerGroup(
             snapshotRegistry,
-            new LogContext(),
             groupId,
             mock(GroupCoordinatorMetricsShard.class)
         );
@@ -822,7 +823,7 @@ public class ConsumerGroupTest {
             Collections.emptyMap(),
             new TopicPartition("__consumer_offsets", 0)
         );
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, new LogContext(), "group-foo", metricsShard);
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.getOrCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         group.updateMember(new ConsumerGroupMember.Builder("member1")
@@ -838,7 +839,6 @@ public class ConsumerGroupTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConsumerGroup group = new ConsumerGroup(
             snapshotRegistry,
-            new LogContext(),
             "group-foo",
             mock(GroupCoordinatorMetricsShard.class)
         );
@@ -899,7 +899,7 @@ public class ConsumerGroupTest {
         long commitTimestamp = 20000L;
         long offsetsRetentionMs = 10000L;
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
-        ConsumerGroup group = new ConsumerGroup(new SnapshotRegistry(new LogContext()), new LogContext(), "group-id", mock(GroupCoordinatorMetricsShard.class));
+        ConsumerGroup group = new ConsumerGroup(new SnapshotRegistry(new LogContext()), "group-id", mock(GroupCoordinatorMetricsShard.class));
 
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
         assertTrue(offsetExpirationCondition.isPresent());
@@ -958,7 +958,7 @@ public class ConsumerGroupTest {
     @Test
     public void testAsDescribedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, new LogContext(), "group-id-1", mock(GroupCoordinatorMetricsShard.class));
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-id-1", mock(GroupCoordinatorMetricsShard.class));
         snapshotRegistry.getOrCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
 
@@ -997,7 +997,6 @@ public class ConsumerGroupTest {
         GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
         ConsumerGroup consumerGroup = new ConsumerGroup(
             new SnapshotRegistry(new LogContext()),
-            new LogContext(),
             "group-id",
             metrics
         );
@@ -1039,7 +1038,7 @@ public class ConsumerGroupTest {
             Collections.emptyMap(),
             new TopicPartition("__consumer_offsets", 0)
         );
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, new LogContext(), "group-foo", metricsShard);
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.getOrCreateSnapshot(0);
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));
         assertFalse(group.isInStates(Collections.singleton("Empty"), 0));
@@ -1054,34 +1053,30 @@ public class ConsumerGroupTest {
     }
 
     @Test
-    public void testSupportsProtocols() {
+    public void testClassicMembersSupportedProtocols() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
-        ConsumerGroupMemberMetadataValue.ClassicProtocolCollection collection1 =
-            new ConsumerGroupMemberMetadataValue.ClassicProtocolCollection();
-        collection1.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> rangeProtocol = new ArrayList<>();
+        rangeProtocol.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("range")
             .setMetadata(new byte[0]));
 
-        ConsumerGroupMemberMetadataValue.ClassicProtocolCollection collection2 =
-            new ConsumerGroupMemberMetadataValue.ClassicProtocolCollection();
-        collection2.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> roundRobinAndRangeProtocols = new ArrayList<>();
+        roundRobinAndRangeProtocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("roundrobin")
             .setMetadata(new byte[0]));
-        collection2.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+        roundRobinAndRangeProtocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("range")
             .setMetadata(new byte[0]));
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member-1")
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(collection1)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(rangeProtocol))
             .build();
         consumerGroup.updateMember(member1);
 
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member-2")
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(collection2)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(roundRobinAndRangeProtocols))
             .build();
         consumerGroup.updateMember(member2);
 
@@ -1091,9 +1086,8 @@ public class ConsumerGroupTest {
         assertFalse(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("sticky", "roundrobin"))));
 
         member2 = new ConsumerGroupMember.Builder(member2)
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(collection1)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(rangeProtocol))
             .build();
         consumerGroup.updateMember(member2);
 
@@ -1101,15 +1095,13 @@ public class ConsumerGroupTest {
         assertFalse(consumerGroup.classicMembersSupportedProtocols().containsKey("roundrobin"));
 
         member1 = new ConsumerGroupMember.Builder(member1)
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(collection2)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(roundRobinAndRangeProtocols))
             .build();
         consumerGroup.updateMember(member1);
         member2 = new ConsumerGroupMember.Builder(member2)
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(collection2)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(roundRobinAndRangeProtocols))
             .build();
         consumerGroup.updateMember(member2);
 
@@ -1121,38 +1113,39 @@ public class ConsumerGroupTest {
     @Test
     public void testAllUseClassicProtocol() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
-        ConsumerGroupMemberMetadataValue.ClassicProtocolCollection collection =
-            new ConsumerGroupMemberMetadataValue.ClassicProtocolCollection();
-        collection.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = new ArrayList<>();
+        protocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("range")
             .setMetadata(new byte[0]));
 
         // The group has member 1 (using the classic protocol).
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member-1")
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(collection)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(protocols))
             .build();
         consumerGroup.updateMember(member1);
-        assertTrue(consumerGroup.allUseClassicProtocol());
+        assertEquals(1, consumerGroup.numClassicProtocolMembers());
+        assertTrue(consumerGroup.allMembersUseClassicProtocol());
 
         // The group has member 1 (using the classic protocol) and member 2 (using the consumer protocol).
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member-2")
             .build();
         consumerGroup.updateMember(member2);
-        assertFalse(consumerGroup.allUseClassicProtocol());
+        assertEquals(1, consumerGroup.numClassicProtocolMembers());
+        assertFalse(consumerGroup.allMembersUseClassicProtocol());
 
         // The group has member 2 (using the consumer protocol).
         consumerGroup.removeMember(member1.memberId());
-        assertFalse(consumerGroup.allUseClassicProtocol());
+        assertEquals(0, consumerGroup.numClassicProtocolMembers());
+        assertFalse(consumerGroup.allMembersUseClassicProtocol());
 
         // The group has member 2 (using the classic protocol).
         member2 = new ConsumerGroupMember.Builder("member-2")
-            .setClassicMemberMetadata(
-                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(collection)
-            )
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(protocols))
             .build();
         consumerGroup.updateMember(member2);
-        assertTrue(consumerGroup.allUseClassicProtocol());
+        assertEquals(1, consumerGroup.numClassicProtocolMembers());
+        assertTrue(consumerGroup.allMembersUseClassicProtocol());
     }
 }
