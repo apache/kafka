@@ -804,7 +804,8 @@ public class GroupMetadataManager {
             time,
             consumerGroupSessionTimeoutMs,
             metadataImage,
-            records
+            records,
+            log
         );
 
         groups.put(consumerGroup.groupId(), classicGroup);

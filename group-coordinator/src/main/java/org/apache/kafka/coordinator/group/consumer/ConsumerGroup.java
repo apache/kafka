@@ -1207,6 +1207,7 @@ public class ConsumerGroup implements Group {
      * @param consumerGroupSessionTimeoutMs The consumerGroupSessionTimeoutMs.
      * @param metadataImage                 The metadataImage.
      * @param records                       The record list.
+     * @param log                           The logger to use.
      * @return  The created ClassicGroup.
      */
     public ClassicGroup toClassicGroup(
@@ -1215,7 +1216,8 @@ public class ConsumerGroup implements Group {
         Time time,
         int consumerGroupSessionTimeoutMs,
         MetadataImage metadataImage,
-        List<Record> records
+        List<Record> records,
+        Logger log
     ) {
         ClassicGroup classicGroup = new ClassicGroup(
             logContext,
@@ -1252,13 +1254,20 @@ public class ConsumerGroup implements Group {
         classicGroup.setSubscribedTopics(classicGroup.computeSubscribedTopics());
 
         Map<String, byte[]> assignments = new HashMap<>();
+
         classicGroup.allMembers().forEach(classicGroupMember -> {
             byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(
                 new ConsumerPartitionAssignor.Assignment(ConsumerGroup.topicPartitionListFromMap(
                     targetAssignment().get(classicGroupMember.memberId()).partitions(),
                     metadataImage.topics()
-                ))
+                )),
+                deserializeVersion(
+                    classicGroupMember.metadata(classicGroup.protocolName().orElse("")),
+                    log,
+                    "group downgrade"
+                )
             ));
+
             classicGroupMember.setAssignment(assignment);
             assignments.put(classicGroupMember.memberId(), assignment);
         });
