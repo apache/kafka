@@ -190,7 +190,7 @@ public class ConsumerGroup implements Group {
     /**
      * The number of members that use the classic protocol.
      */
-    private final TimelineInteger numClassicProtocolMember;
+    private final TimelineInteger numClassicProtocolMembers;
 
     /**
      * Map of protocol names to the number of members that use classic protocol and support them.
@@ -215,7 +215,7 @@ public class ConsumerGroup implements Group {
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
-        this.numClassicProtocolMember = new TimelineInteger(snapshotRegistry);
+        this.numClassicProtocolMembers = new TimelineInteger(snapshotRegistry);
         this.classicProtocolMembersSupportedProtocols = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
@@ -312,10 +312,10 @@ public class ConsumerGroup implements Group {
     /**
      * Sets the number of members using the classic protocol.
      *
-     * @param numClassicProtocolMember The new NumClassicProtocolMember.
+     * @param numClassicProtocolMembers The new NumClassicProtocolMembers.
      */
-    public void setNumClassicProtocolMember(int numClassicProtocolMember) {
-        this.numClassicProtocolMember.set(numClassicProtocolMember);
+    public void setNumClassicProtocolMembers(int numClassicProtocolMembers) {
+        this.numClassicProtocolMembers.set(numClassicProtocolMembers);
     }
 
     /**
@@ -383,7 +383,7 @@ public class ConsumerGroup implements Group {
         maybeUpdatePartitionEpoch(oldMember, newMember);
         updateStaticMember(newMember);
         maybeUpdateGroupState();
-        maybeUpdateNumClassicProtocolMember(oldMember, newMember);
+        maybeUpdateNumClassicProtocolMembers(oldMember, newMember);
         maybeUpdateClassicProtocolMembersSupportedProtocols(oldMember, newMember);
     }
 
@@ -410,7 +410,7 @@ public class ConsumerGroup implements Group {
         maybeRemovePartitionEpoch(oldMember);
         removeStaticMember(oldMember);
         maybeUpdateGroupState();
-        maybeUpdateNumClassicProtocolMember(oldMember, null);
+        maybeUpdateNumClassicProtocolMembers(oldMember, null);
         maybeUpdateClassicProtocolMembersSupportedProtocols(oldMember, null);
     }
 
@@ -447,7 +447,7 @@ public class ConsumerGroup implements Group {
      * @return The number of members that use the classic protocol.
      */
     public int numClassicProtocolMembers() {
-        return numClassicProtocolMember.get();
+        return numClassicProtocolMembers.get();
     }
 
     /**
@@ -879,7 +879,7 @@ public class ConsumerGroup implements Group {
      * @param oldMember The old member.
      * @param newMember The new member.
      */
-    private void maybeUpdateNumClassicProtocolMember(
+    private void maybeUpdateNumClassicProtocolMembers(
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
@@ -890,7 +890,7 @@ public class ConsumerGroup implements Group {
         if (newMember != null && newMember.useClassicProtocol()) {
             delta++;
         }
-        setNumClassicProtocolMember(numClassicProtocolMembers() + delta);
+        setNumClassicProtocolMembers(numClassicProtocolMembers() + delta);
     }
 
     /**
