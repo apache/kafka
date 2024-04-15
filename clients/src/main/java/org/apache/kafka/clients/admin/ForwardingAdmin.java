@@ -279,6 +279,11 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
+        return delegate.listClientMetricsResources(options);
+    }
+
+    @Override
     public Uuid clientInstanceId(Duration timeout) {
         return delegate.clientInstanceId(timeout);
     }

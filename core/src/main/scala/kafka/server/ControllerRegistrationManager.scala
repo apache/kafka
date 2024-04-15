@@ -31,6 +31,7 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.queue.EventQueue.DeadlineFunction
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
+import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.MetadataVersion
 
 import scala.jdk.CollectionConverters._
@@ -204,7 +205,7 @@ class ControllerRegistrationManager(
       debug("maybeSendControllerRegistration: cannot register yet because the channel manager has " +
           "not been initialized.")
     } else if (!metadataVersion.isControllerRegistrationSupported) {
-      info("maybeSendControllerRegistration: cannot register yet because the metadata version is " +
+      info("maybeSendControllerRegistration: cannot register yet because the metadata.version is " +
           s"still $metadataVersion, which does not support KIP-919 controller registration.")
     } else if (pendingRpc) {
       info("maybeSendControllerRegistration: waiting for the previous RPC to complete.")

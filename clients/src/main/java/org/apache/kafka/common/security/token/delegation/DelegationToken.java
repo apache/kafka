@@ -29,8 +29,8 @@ import java.util.Objects;
  */
 @InterfaceStability.Evolving
 public class DelegationToken {
-    private TokenInformation tokenInformation;
-    private byte[] hmac;
+    private final TokenInformation tokenInformation;
+    private final byte[] hmac;
 
     public DelegationToken(TokenInformation tokenInformation, byte[] hmac) {
         this.tokenInformation = tokenInformation;

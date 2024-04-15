@@ -26,11 +26,13 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type
-import org.apache.kafka.common.errors.{PolicyViolationException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.{InvalidPartitionsException, PolicyViolationException, UnsupportedVersionException}
 import org.apache.kafka.common.message.DescribeClusterRequestData
+import org.apache.kafka.common.metadata.{ConfigRecord, FeatureLevelRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors._
+import org.apache.kafka.common.quota.ClientQuotaAlteration.Op
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -38,8 +40,9 @@ import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartitio
 import org.apache.kafka.controller.{QuorumController, QuorumControllerIntegrationTestUtils}
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.quota
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaType}
@@ -50,7 +53,8 @@ import org.junit.jupiter.params.provider.ValueSource
 import org.slf4j.LoggerFactory
 
 import java.io.File
-import java.nio.file.{FileSystems, Path}
+import java.nio.charset.StandardCharsets
+import java.nio.file.{FileSystems, Files, Path}
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage, ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
@@ -307,11 +311,73 @@ class KRaftClusterTest {
         filter = ClientQuotaFilter.contains(
           List(ClientQuotaFilterComponent.ofEntity("user", "testkit")).asJava)
 
-        TestUtils.tryUntilNoAssertionError(){
+        TestUtils.tryUntilNoAssertionError() {
           val results = admin.describeClientQuotas(filter).entities().get()
           assertEquals(2, results.size(), "Broker did not see two client quotas")
           assertEquals(9999.0, results.get(entity).get("producer_byte_rate"), 1e-6)
           assertEquals(9998.0, results.get(entity2).get("producer_byte_rate"), 1e-6)
+        }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  def setConsumerByteRate(
+    admin: Admin,
+    entity: ClientQuotaEntity,
+    value: Long
+  ): Unit = {
+    admin.alterClientQuotas(Collections.singletonList(
+      new ClientQuotaAlteration(entity, Collections.singletonList(
+        new Op("consumer_byte_rate", value.doubleValue()))))).
+        all().get()
+  }
+
+  def getConsumerByteRates(admin: Admin): Map[ClientQuotaEntity, Long] = {
+    val allFilter = ClientQuotaFilter.contains(Collections.emptyList())
+    val results = new java.util.HashMap[ClientQuotaEntity, Long]
+    admin.describeClientQuotas(allFilter).entities().get().forEach {
+      case (entity, entityMap) =>
+        Option(entityMap.get("consumer_byte_rate")).foreach {
+          case value => results.put(entity, value.longValue())
+        }
+    }
+    results.asScala.toMap
+  }
+
+  @Test
+  def testDefaultClientQuotas(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
+        "Broker never made it to RUNNING state.")
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val defaultUser = new ClientQuotaEntity(Collections.singletonMap[String, String]("user", null))
+        val bobUser = new ClientQuotaEntity(Collections.singletonMap[String, String]("user", "bob"))
+        TestUtils.retry(30000) {
+          assertEquals(Map(), getConsumerByteRates(admin))
+        }
+        setConsumerByteRate(admin, defaultUser, 100L)
+        TestUtils.retry(30000) {
+          assertEquals(Map(
+              defaultUser -> 100L
+            ), getConsumerByteRates(admin))
+        }
+        setConsumerByteRate(admin, bobUser, 1000L)
+        TestUtils.retry(30000) {
+          assertEquals(Map(
+            defaultUser -> 100L,
+            bobUser -> 1000L
+          ), getConsumerByteRates(admin))
         }
       } finally {
         admin.close()
@@ -355,7 +421,7 @@ class KRaftClusterTest {
 
   @Test
   def testCreateClusterInvalidMetadataVersion(): Unit = {
-    assertEquals("Bootstrap metadata versions before 3.3-IV0 are not supported. Can't load " +
+    assertEquals("Bootstrap metadata.version before 3.3-IV0 are not supported. Can't load " +
       "metadata from testkit", assertThrows(classOf[RuntimeException], () => {
         new KafkaClusterTestKit.Builder(
           new TestKitNodes.Builder().
@@ -789,6 +855,39 @@ class KRaftClusterTest {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("3.7-IV0", "3.7-IV2"))
+  def testCreatePartitions(metadataVersionString: String): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(4).
+        setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString)).
+        setNumControllerNodes(3).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val createResults = admin.createTopics(Arrays.asList(
+          new NewTopic("foo", 1, 3.toShort),
+          new NewTopic("bar", 2, 3.toShort))).values()
+        createResults.get("foo").get()
+        createResults.get("bar").get()
+        val increaseResults = admin.createPartitions(Map(
+          "foo" -> NewPartitions.increaseTo(3),
+          "bar" -> NewPartitions.increaseTo(2)).asJava).values()
+        increaseResults.get("foo").get()
+        assertEquals(classOf[InvalidPartitionsException], assertThrows(
+          classOf[ExecutionException], () => increaseResults.get("bar").get()).getCause.getClass)
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
   private def clusterImage(
     cluster: KafkaClusterTestKit,
     brokerId: Int
@@ -921,13 +1020,13 @@ class KRaftClusterTest {
       try {
         admin.updateFeatures(
           Map(MetadataVersion.FEATURE_NAME ->
-            new FeatureUpdate(MetadataVersion.latest().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions
+            new FeatureUpdate(MetadataVersion.latestTesting().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions
         )
       } finally {
         admin.close()
       }
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(1).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latest()),
-        "Timed out waiting for metadata version update.")
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(1).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latestTesting()),
+        "Timed out waiting for metadata.version update.")
     } finally {
       cluster.close()
     }
@@ -984,6 +1083,11 @@ class KRaftClusterTest {
       val countAfterTenIntervals = snapshotCounter(metaLog)
       assertTrue(countAfterTenIntervals > 1, s"Expected to see at least one more snapshot, saw $countAfterTenIntervals")
       assertTrue(countAfterTenIntervals < 20, s"Did not expect to see more than twice as many snapshots as snapshot intervals, saw $countAfterTenIntervals")
+      TestUtils.waitUntilTrue(() => {
+        val emitterMetrics = cluster.controllers().values().iterator().next().
+          sharedServer.snapshotEmitter.metrics()
+        emitterMetrics.latestSnapshotGeneratedBytes() > 0
+      }, "Failed to see latestSnapshotGeneratedBytes > 0")
     } finally {
       cluster.close()
     }
@@ -1207,6 +1311,90 @@ class KRaftClusterTest {
           () => admin.describeCluster().clusterId().get(1, TimeUnit.MINUTES))
         assertNotNull(exception.getCause)
         assertEquals(classOf[UnsupportedVersionException], exception.getCause.getClass)
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testStartupWithNonDefaultKControllerDynamicConfiguration(): Unit = {
+    val bootstrapRecords = util.Arrays.asList(
+      new ApiMessageAndVersion(new FeatureLevelRecord().
+        setName(MetadataVersion.FEATURE_NAME).
+        setFeatureLevel(MetadataVersion.IBP_3_7_IV0.featureLevel), 0.toShort),
+      new ApiMessageAndVersion(new ConfigRecord().
+        setResourceType(ConfigResource.Type.BROKER.id).
+        setResourceName("").
+        setName("num.io.threads").
+        setValue("9"), 0.toShort))
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadata(BootstrapMetadata.fromRecords(bootstrapRecords, "testRecords")).
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val controller = cluster.controllers().values().iterator().next()
+      TestUtils.retry(60000) {
+        assertNotNull(controller.controllerApisHandlerPool)
+        assertEquals(9, controller.controllerApisHandlerPool.threadPoolSize.get())
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testTopicDeletedAndRecreatedWhileBrokerIsDown(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV2).
+        setNumBrokerNodes(3).
+        setNumControllerNodes(1).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val broker0 = cluster.brokers().get(0)
+        val broker1 = cluster.brokers().get(1)
+        val foo0 = new TopicPartition("foo", 0)
+
+        admin.createTopics(Arrays.asList(
+          new NewTopic("foo", 3, 3.toShort))).all().get()
+
+        // Wait until foo-0 is created on broker0.
+        TestUtils.retry(60000) {
+          assertTrue(broker0.logManager.getLog(foo0).isDefined)
+        }
+
+        // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
+        broker0.shutdown()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          assertTrue(info.isDefined)
+          assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
+        }
+
+        // Modify foo-0 so that it has the wrong topic ID.
+        val logDir = broker0.logManager.getLog(foo0).get.dir
+        val partitionMetadataFile = new File(logDir, "partition.metadata")
+        Files.write(partitionMetadataFile.toPath,
+          "version: 0\ntopic_id: AAAAAAAAAAAAA7SrBWaJ7g\n".getBytes(StandardCharsets.UTF_8));
+
+        // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
+        broker0.startup()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          assertTrue(info.isDefined)
+          assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
+        }
       } finally {
         admin.close()
       }

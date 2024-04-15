@@ -73,7 +73,7 @@ public class ConnectorRestartApiIntegrationTest {
 
     private static final String TOPIC_NAME = "test-topic";
 
-    private static Map<Integer, EmbeddedConnectCluster> connectClusterMap = new ConcurrentHashMap<>();
+    private static final Map<Integer, EmbeddedConnectCluster> CONNECT_CLUSTERS = new ConcurrentHashMap<>();
 
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
@@ -91,7 +91,7 @@ public class ConnectorRestartApiIntegrationTest {
     }
 
     private void startOrReuseConnectWithNumWorkers(int numWorkers) throws Exception {
-        connect = connectClusterMap.computeIfAbsent(numWorkers, n -> {
+        connect = CONNECT_CLUSTERS.computeIfAbsent(numWorkers, n -> {
             // setup Connect worker properties
             Map<String, String> workerProps = new HashMap<>();
             workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(OFFSET_COMMIT_INTERVAL_MS));
@@ -125,7 +125,7 @@ public class ConnectorRestartApiIntegrationTest {
     @AfterClass
     public static void close() {
         // stop all Connect, Kafka and Zk threads.
-        connectClusterMap.values().forEach(EmbeddedConnectCluster::stop);
+        CONNECT_CLUSTERS.values().forEach(EmbeddedConnectCluster::stop);
     }
 
     @Test

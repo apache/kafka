@@ -27,15 +27,11 @@
     <allow pkg="javax.management" />
     <allow pkg="org.slf4j" />
     <allow pkg="org.junit" />
-    <allow pkg="org.opentest4j" />
     <allow pkg="org.hamcrest" />
     <allow pkg="org.mockito" />
-    <allow pkg="org.easymock" />
-    <allow pkg="org.powermock" />
     <allow pkg="java.security" />
     <allow pkg="javax.net.ssl" />
     <allow pkg="javax.security" />
-    <allow pkg="org.ietf.jgss" />
     <allow pkg="net.jqwik.api" />
 
     <!-- no one depends on the server -->

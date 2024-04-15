@@ -19,8 +19,8 @@ import java.util.concurrent.TimeUnit
 import java.util.{Collections, HashMap, Properties}
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
-import kafka.server.{ClientQuotaManager, ClientQuotaManagerConfig, KafkaBroker, KafkaConfig, QuotaType}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.server.{ClientQuotaManager, KafkaBroker, KafkaConfig, QuotaType}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer._
@@ -33,6 +33,7 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -86,7 +87,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients = createQuotaTestClients(topic1, leaderNode)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThrottledProducerConsumer(quorum: String): Unit = {
     val numRecords = 1000
@@ -98,7 +99,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProducerConsumerOverrideUnthrottled(quorum: String): Unit = {
     // Give effectively unlimited quota for producer and consumer
@@ -118,7 +119,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = false)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProducerConsumerOverrideLowerQuota(quorum: String): Unit = {
     // consumer quota is set such that consumer quota * default quota window (10 seconds) is less than
@@ -136,7 +137,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testQuotaOverrideDelete(quorum: String): Unit = {
     // Override producer and consumer quotas to unlimited
@@ -163,7 +164,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThrottledRequest(quorum: String): Unit = {
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, 0.1)
@@ -182,7 +183,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
     assertTrue(throttled, "Should have been throttled")
     quotaTestClients.verifyConsumerClientThrottleTimeMetric(expectThrottle = true,
-      Some(ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds * 1000.0))
+      Some(ClientQuotaManagerConfig.DEFAULT_QUOTA_WINDOW_SIZE_SECONDS * 1000.0))
 
     val exemptMetric = quotaTestClients.exemptRequestMetric
     assertNotNull(exemptMetric, "Exempt requests not recorded")

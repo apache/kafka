@@ -51,7 +51,7 @@ import scala.util.{Failure, Success, Try}
 
 object ControllerIntegrationTest {
   def testAlterPartitionSource(): JStream[Arguments] = {
-    Seq(MetadataVersion.IBP_2_7_IV0, MetadataVersion.latest).asJava.stream.flatMap { metadataVersion =>
+    Seq(MetadataVersion.IBP_2_7_IV0, MetadataVersion.latestTesting).asJava.stream.flatMap { metadataVersion =>
       ApiKeys.ALTER_PARTITION.allVersions.stream.map { alterPartitionVersion =>
         Arguments.of(metadataVersion, alterPartitionVersion)
       }
@@ -90,7 +90,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     waitUntilControllerEpoch(firstControllerEpoch, "broker failed to set controller epoch")
     servers.head.shutdown()
     servers.head.awaitShutdown()
-    TestUtils.waitUntilTrue(() => !zkClient.getControllerId.isDefined, "failed to kill controller")
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isEmpty, "failed to kill controller")
     waitUntilControllerEpoch(firstControllerEpoch, "controller epoch was not persisted after broker failure")
   }
 
@@ -1010,7 +1010,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     // topic ids anymore. However, the already assigned topic ids are kept. This means
     // that using AlterPartition version 2 should still work assuming that it only
     // contains topic with topics ids.
-    servers = makeServers(1, interBrokerProtocolVersion = Some(MetadataVersion.latest))
+    servers = makeServers(1, interBrokerProtocolVersion = Some(MetadataVersion.latestTesting))
 
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val tp = new TopicPartition("t", 0)

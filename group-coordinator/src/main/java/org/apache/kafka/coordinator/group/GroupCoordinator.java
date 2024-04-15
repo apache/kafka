@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
@@ -25,12 +26,12 @@ import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
-import org.apache.kafka.common.message.OffsetCommitRequestData;
-import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
@@ -45,10 +46,12 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.IntSupplier;
 
 /**
@@ -71,7 +74,7 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Join a Generic Group.
+     * Join a Classic Group.
      *
      * @param context           The request context.
      * @param request           The JoinGroupRequest data.
@@ -87,7 +90,7 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Sync a Generic Group.
+     * Sync a Classic Group.
      *
      * @param context           The coordinator request context.
      * @param request           The SyncGroupRequest data.
@@ -103,7 +106,7 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Heartbeat to a Generic Group.
+     * Heartbeat to a Classic Group.
      *
      * @param context           The coordinator request context.
      * @param request           The HeartbeatRequest data.
@@ -117,7 +120,7 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Leave a Generic Group.
+     * Leave a Classic Group.
      *
      * @param context           The coordinator request context.
      * @param request           The LeaveGroupRequest data.
@@ -154,6 +157,19 @@ public interface GroupCoordinator {
      *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> describeGroups(
+        RequestContext context,
+        List<String> groupIds
+    );
+
+    /**
+     * Describe consumer groups.
+     *
+     * @param context           The coordinator request context.
+     * @param groupIds          The group ids.
+     *
+     * @return A future yielding the results or an exception.
+     */
+    CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> consumerGroupDescribe(
         RequestContext context,
         List<String> groupIds
     );
@@ -253,6 +269,29 @@ public interface GroupCoordinator {
     );
 
     /**
+     * Complete a transaction. This is called when the WriteTxnMarkers API is called
+     * by the Transaction Coordinator in order to write the markers to the
+     * __consumer_offsets partitions.
+     *
+     * @param tp                The topic-partition.
+     * @param producerId        The producer id.
+     * @param producerEpoch     The producer epoch.
+     * @param coordinatorEpoch  The epoch of the transaction coordinator.
+     * @param result            The transaction result.
+     * @param timeout           The operation timeout.
+     *
+     * @return A future yielding the result.
+     */
+    CompletableFuture<Void> completeTransaction(
+        TopicPartition tp,
+        long producerId,
+        short producerEpoch,
+        int coordinatorEpoch,
+        TransactionResult result,
+        Duration timeout
+    );
+
+    /**
      * Return the partition index for the given Group.
      *
      * @param groupId           The group id.
@@ -283,7 +322,7 @@ public interface GroupCoordinator {
     void onPartitionsDeleted(
         List<TopicPartition> topicPartitions,
         BufferSupplier bufferSupplier
-    );
+    ) throws ExecutionException, InterruptedException;
 
     /**
      * Group coordinator is now the leader for the given partition at the

@@ -128,6 +128,11 @@ public class TargetAssignmentBuilder {
     private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
 
     /**
+     * The static members in the group.
+     */
+    private Map<String, String> staticMembers = new HashMap<>();
+
+    /**
      * Constructs the object.
      *
      * @param groupId       The group id.
@@ -154,6 +159,19 @@ public class TargetAssignmentBuilder {
         Map<String, ConsumerGroupMember> members
     ) {
         this.members = members;
+        return this;
+    }
+
+    /**
+     * Adds all the existing static members.
+     *
+     * @param staticMembers   The existing static members in the consumer group.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withStaticMembers(
+        Map<String, String> staticMembers
+    ) {
+        this.staticMembers = staticMembers;
         return this;
     }
 
@@ -234,9 +252,17 @@ public class TargetAssignmentBuilder {
             if (updatedMemberOrNull == null) {
                 memberSpecs.remove(memberId);
             } else {
+                ConsumerGroupMember member = members.get(memberId);
+                Assignment assignment;
+                // A new static member joins and needs to replace an existing departed one.
+                if (member == null && staticMembers.containsKey(updatedMemberOrNull.instanceId())) {
+                    assignment = targetAssignment.getOrDefault(staticMembers.get(updatedMemberOrNull.instanceId()), Assignment.EMPTY);
+                } else {
+                    assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+                }
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                     updatedMemberOrNull,
-                    targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+                    assignment,
                     subscriptionMetadata
                 ));
             }

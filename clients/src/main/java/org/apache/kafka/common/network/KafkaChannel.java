@@ -369,6 +369,16 @@ public class KafkaChannel implements AutoCloseable {
         return transportLayer.socketChannel().socket().getInetAddress();
     }
 
+    /**
+     * Returns the port to which this channel's socket is connected or 0 if the socket has never been connected.
+     *
+     * If the socket was connected prior to being closed, then this method will continue to return the
+     * connected port number after the socket is closed.
+     */
+    public int socketPort() {
+        return transportLayer.socketChannel().socket().getPort();
+    }
+
     public String socketDescription() {
         Socket socket = transportLayer.socketChannel().socket();
         if (socket.getInetAddress() == null)

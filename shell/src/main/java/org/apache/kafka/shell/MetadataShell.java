@@ -19,6 +19,7 @@ package org.apache.kafka.shell;
 
 import kafka.raft.KafkaRaftManager;
 import kafka.tools.TerseFailure;
+import kafka.utils.FileLock;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -36,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
@@ -59,6 +61,8 @@ public final class MetadataShell {
         private String snapshotPath = null;
         private FaultHandler faultHandler = new LoggingFaultHandler("shell", () -> { });
 
+        // Note: we assume that we have already taken the lock on the log directory before calling
+        // this method.
         public Builder setRaftManager(KafkaRaftManager<ApiMessageAndVersion> raftManager) {
             this.raftManager = raftManager;
             return this;
@@ -81,6 +85,52 @@ public final class MetadataShell {
         }
     }
 
+    /**
+     * Return the parent directory of a file. This works around Java's quirky API,
+     * which does not honor the UNIX convention of the parent of root being root itself.
+     */
+    static File parent(File file) {
+        File parent = file.getParentFile();
+        return parent == null ? file : parent;
+    }
+    
+    static File parentParent(File file) {
+        return parent(parent(file));
+    }
+
+    /**
+     * Take the FileLock in the given directory, if it already exists. Technically, there is a
+     * TOCTOU bug here where someone could create and lock the lockfile in between our check
+     * and our use. However, this is very unlikely to ever be a problem in practice, and closing
+     * this hole would require the parent parent directory to always be writable when loading a
+     * snapshot so that we could create our .lock file there.
+     */
+    static FileLock takeDirectoryLockIfExists(File directory) {
+        if (new File(directory, ".lock").exists()) {
+            return takeDirectoryLock(directory);
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Take the FileLock in the given directory.
+     */
+    static FileLock takeDirectoryLock(File directory) {
+        FileLock fileLock = new FileLock(new File(directory, ".lock"));
+        try {
+            if (!fileLock.tryLock()) {
+                throw new RuntimeException("Unable to lock " + directory.getAbsolutePath() +
+                    ". Please ensure that no broker or controller process is using this " +
+                    "directory before proceeding.");
+            }
+        } catch (Throwable e) {
+            fileLock.destroy();
+            throw e;
+        }
+        return fileLock;
+    }
+
     private final MetadataShellState state;
 
     private final KafkaRaftManager<ApiMessageAndVersion> raftManager;
@@ -90,6 +140,8 @@ public final class MetadataShell {
     private final FaultHandler faultHandler;
 
     private final MetadataShellPublisher publisher;
+
+    private FileLock fileLock;
 
     private SnapshotFileReader snapshotFileReader;
 
@@ -105,6 +157,7 @@ public final class MetadataShell {
         this.snapshotPath = snapshotPath;
         this.faultHandler = faultHandler;
         this.publisher = new MetadataShellPublisher(state);
+        this.fileLock = null;
         this.snapshotFileReader = null;
     }
 
@@ -119,6 +172,7 @@ public final class MetadataShell {
     }
 
     private void initializeWithSnapshotFileReader() throws Exception {
+        this.fileLock = takeDirectoryLockIfExists(parentParent(new File(snapshotPath)));
         this.loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setNodeId(-1).
@@ -173,6 +227,15 @@ public final class MetadataShell {
             }
         }
         Utils.closeQuietly(snapshotFileReader, "raftManager");
+        if (fileLock != null) {
+            try {
+                fileLock.destroy();
+            } catch (Exception e) {
+                log.error("Error destroying fileLock", e);
+            } finally {
+                fileLock = null;
+            }
+        }
     }
 
     public static void main(String[] args) throws Exception {

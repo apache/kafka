@@ -16,18 +16,18 @@
  */
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.StoreBuilder;
-
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
     private final String[] storeNames;
-    private final StoreBuilder<?> storeBuilder;
+    private final StoreFactory storeFactory;
 
     /**
      * Create a node representing a stateful processor, where the named stores have already been registered.
@@ -39,7 +39,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
         final Stream<String> registeredStoreNames = preRegisteredStores.stream().map(StoreBuilder::name);
         final Stream<String> valueGetterStoreNames = valueGetterSuppliers.stream().flatMap(s -> Arrays.stream(s.storeNames()));
         storeNames = Stream.concat(registeredStoreNames, valueGetterStoreNames).toArray(String[]::new);
-        storeBuilder = null;
+        storeFactory = null;
     }
 
     /**
@@ -51,7 +51,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
         super(nodeName, processorParameters);
 
         this.storeNames = storeNames;
-        this.storeBuilder = null;
+        this.storeFactory = null;
     }
 
 
@@ -61,18 +61,18 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
      */
     public StatefulProcessorNode(final String nodeName,
                                  final ProcessorParameters<K, V, ?, ?> processorParameters,
-                                 final StoreBuilder<?> materializedKTableStoreBuilder) {
+                                 final StoreFactory materializedKTableStoreBuilder) {
         super(nodeName, processorParameters);
 
         this.storeNames = null;
-        this.storeBuilder = materializedKTableStoreBuilder;
+        this.storeFactory = materializedKTableStoreBuilder;
     }
 
     @Override
     public String toString() {
         return "StatefulProcessorNode{" +
             "storeNames=" + Arrays.toString(storeNames) +
-            ", storeBuilder=" + storeBuilder +
+            ", storeBuilder=" + storeFactory +
             "} " + super.toString();
     }
 
@@ -84,8 +84,8 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
             topologyBuilder.connectProcessorAndStateStores(processorParameters().processorName(), storeNames);
         }
 
-        if (storeBuilder != null) {
-            topologyBuilder.addStateStore(storeBuilder, processorParameters().processorName());
+        if (storeFactory != null) {
+            topologyBuilder.addStateStore(storeFactory, processorParameters().processorName());
         }
     }
 }

@@ -37,6 +37,8 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
+import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
+import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.ControllerRegistrationRequestData;
@@ -1713,7 +1715,7 @@ public final class QuorumController implements Controller {
      * from this callbacks need to compare against this value to verify that the event
      * was not from a previous registration.
      */
-    private QuorumMetaLogListener metaLogListener;
+    private final QuorumMetaLogListener metaLogListener;
 
     /**
      * If this controller is active, this is the non-negative controller epoch.
@@ -1859,6 +1861,7 @@ public final class QuorumController implements Controller {
             setReplicaPlacer(replicaPlacer).
             setFeatureControlManager(featureControl).
             setZkMigrationEnabled(zkMigrationEnabled).
+            setBrokerUncleanShutdownHandler(this::handleUncleanBrokerShutdown).
             build();
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
             setLogContext(logContext).
@@ -2296,6 +2299,15 @@ public final class QuorumController implements Controller {
     }
 
     @Override
+    public CompletableFuture<AssignReplicasToDirsResponseData> assignReplicasToDirs(
+        ControllerRequestContext context,
+        AssignReplicasToDirsRequestData request
+    ) {
+        return appendWriteEvent("assignReplicasToDirs", context.deadlineNs(),
+                () -> replicationControl.handleAssignReplicasToDirs(request));
+    }
+
+    @Override
     public CompletableFuture<Void> waitForReadyBrokers(int minBrokers) {
         final CompletableFuture<Void> future = new CompletableFuture<>();
         appendControlEvent("waitForReadyBrokers", () -> {
@@ -2343,5 +2355,9 @@ public final class QuorumController implements Controller {
         appendControlEvent("setNewNextWriteOffset", () -> {
             offsetControl.setNextWriteOffset(newNextWriteOffset);
         });
+    }
+
+    void handleUncleanBrokerShutdown(int brokerId, List<ApiMessageAndVersion> records) {
+        replicationControl.handleBrokerUncleanShutdown(brokerId, records);
     }
 }

@@ -92,12 +92,16 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
     }
 
     @Override
-    public synchronized void putConnectorConfig(String connector, Map<String, String> properties) {
+    public synchronized void putConnectorConfig(String connector, Map<String, String> properties, TargetState targetState) {
         ConnectorState state = connectors.get(connector);
         if (state == null)
-            connectors.put(connector, new ConnectorState(properties));
-        else
+            connectors.put(connector, new ConnectorState(properties, targetState));
+        else {
             state.connConfig = properties;
+            if (targetState != null) {
+                state.targetState = targetState;
+            }
+        }
 
         if (updateListener != null)
             updateListener.onConnectorConfigUpdate(connector);
@@ -184,8 +188,13 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         private Map<String, String> connConfig;
         private Map<ConnectorTaskId, Map<String, String>> taskConfigs;
 
-        public ConnectorState(Map<String, String> connConfig) {
-            this.targetState = TargetState.STARTED;
+        /**
+         * @param connConfig the connector's configuration
+         * @param targetState the connector's initial {@link TargetState}; may be {@code null} in which case the default initial target state
+         * {@link TargetState#STARTED} will be used
+         */
+        public ConnectorState(Map<String, String> connConfig, TargetState targetState) {
+            this.targetState = targetState == null ? TargetState.STARTED : targetState;
             this.connConfig = connConfig;
             this.taskConfigs = new HashMap<>();
         }

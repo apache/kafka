@@ -51,7 +51,7 @@ public class ListPartitionReassignmentsRequest extends AbstractRequest {
         }
     }
 
-    private ListPartitionReassignmentsRequestData data;
+    private final ListPartitionReassignmentsRequestData data;
 
     private ListPartitionReassignmentsRequest(ListPartitionReassignmentsRequestData data, short version) {
         super(ApiKeys.LIST_PARTITION_REASSIGNMENTS, version);

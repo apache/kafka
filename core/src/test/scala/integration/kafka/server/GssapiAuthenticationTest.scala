@@ -247,6 +247,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
         assertEquals(ChannelState.State.AUTHENTICATION_FAILED, disconnectState.state())
       disconnectState != null
     }, "Client not disconnected within timeout")
+    selector.close()
   }
 
   private def createSelector(): Selector = {

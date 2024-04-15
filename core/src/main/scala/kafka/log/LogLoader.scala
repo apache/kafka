@@ -52,6 +52,7 @@ import scala.jdk.CollectionConverters._
  * @param leaderEpochCache An optional LeaderEpochFileCache instance to be updated during recovery
  * @param producerStateManager The ProducerStateManager instance to be updated during recovery
  * @param numRemainingSegments The remaining segments to be recovered in this log keyed by recovery thread name
+ * @param isRemoteLogEnabled Boolean flag to indicate whether the remote storage is enabled or not
  */
 class LogLoader(
   dir: File,

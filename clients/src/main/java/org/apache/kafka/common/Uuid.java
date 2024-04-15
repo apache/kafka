@@ -17,10 +17,12 @@
 package org.apache.kafka.common;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -168,5 +170,33 @@ public class Uuid implements Comparable<Uuid> {
         } else {
             return 0;
         }
+    }
+
+    /**
+     * Convert a list of Uuid to an array of Uuid.
+     *
+     * @param list          The input list
+     * @return              The output array
+     */
+    public static Uuid[] toArray(List<Uuid> list) {
+        if (list == null) return null;
+        Uuid[] array = new Uuid[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            array[i] = list.get(i);
+        }
+        return array;
+    }
+
+    /**
+     * Convert an array of Uuids to a list of Uuid.
+     *
+     * @param array         The input array
+     * @return              The output list
+     */
+    public static List<Uuid> toList(Uuid[] array) {
+        if (array == null) return null;
+        List<Uuid> list = new ArrayList<>(array.length);
+        list.addAll(Arrays.asList(array));
+        return list;
     }
 }

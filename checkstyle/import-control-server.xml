@@ -1,0 +1,93 @@
+<!DOCTYPE import-control PUBLIC
+        "-//Puppy Crawl//DTD Import Control 1.1//EN"
+        "http://www.puppycrawl.com/dtds/import_control_1_1.dtd">
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<import-control pkg="org.apache.kafka">
+
+  <!-- THINK HARD ABOUT THE LAYERING OF THE PROJECT BEFORE CHANGING THIS FILE -->
+
+  <!-- common library dependencies -->
+  <allow pkg="java" />
+  <allow pkg="javax.management" />
+  <allow pkg="org.slf4j" />
+  <allow pkg="org.junit" />
+  <allow pkg="org.mockito" />
+  <allow pkg="java.security" />
+  <allow pkg="javax.net.ssl" />
+  <allow pkg="javax.security" />
+  <allow pkg="net.jqwik.api" />
+
+  <!-- no one depends on the server -->
+  <disallow pkg="kafka" />
+
+  <!-- anyone can use public classes -->
+  <allow pkg="org.apache.kafka.common" exact-match="true" />
+  <allow pkg="org.apache.kafka.common.cache" />
+  <allow pkg="org.apache.kafka.common.config" />
+  <allow pkg="org.apache.kafka.common.security" />
+  <allow pkg="org.apache.kafka.common.serialization" />
+  <allow pkg="org.apache.kafka.common.utils" />
+  <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
+  <allow pkg="org.apache.kafka.common.memory" />
+  <allow pkg="org.apache.kafka.common.network" />
+
+  <!-- protocol, records and request/response utilities -->
+  <allow pkg="org.apache.kafka.clients" />
+  <allow pkg="org.apache.kafka.common.message" />
+  <allow pkg="org.apache.kafka.common.protocol" />
+  <allow pkg="org.apache.kafka.common.record" />
+  <allow pkg="org.apache.kafka.common.requests" />
+  <allow pkg="org.apache.kafka.metadata" />
+
+  <!-- utilities and reusable classes from server-common -->
+  <allow pkg="org.apache.kafka.queue" />
+  <allow pkg="org.apache.kafka.security" />
+  <allow pkg="org.apache.kafka.server.common" />
+  <allow pkg="org.apache.kafka.server.metrics" />
+  <allow pkg="org.apache.kafka.server.util" />
+  <allow pkg="com.yammer.metrics" />
+
+  <!-- utilities for testing -->
+  <allow pkg="org.apache.kafka.test" />
+
+  <!-- persistent collection factories/non-library-specific wrappers -->
+  <allow pkg="org.apache.kafka.server.immutable" exact-match="true" />
+
+  <!-- server-metrics specific classes -->
+  <allow pkg="org.apache.kafka.server.metrics" />
+
+  <!-- server-configs dependencies -->
+  <allow pkg="org.apache.kafka.coordinator" />
+  <allow pkg="org.apache.kafka.common" />
+  <allow pkg="org.apache.kafka.raft" />
+
+  <subpackage name="server">
+    <subpackage name="metrics">
+      <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
+      <allow pkg="org.apache.kafka.server.telemetry" />
+    </subpackage>
+  </subpackage>
+
+  <subpackage name="security">
+    <allow pkg="org.apache.kafka.common.resource" />
+    <allow pkg="org.apache.kafka.network" />
+    <allow pkg="org.apache.kafka.server.authorizer" />
+  </subpackage>
+
+</import-control>

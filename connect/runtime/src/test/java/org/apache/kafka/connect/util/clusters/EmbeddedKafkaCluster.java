@@ -55,6 +55,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.metadata.BrokerState;
+import org.apache.kafka.server.config.ZkConfigs;
+import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -153,14 +155,14 @@ public class EmbeddedKafkaCluster {
     }
 
     private void doStart() {
-        brokerConfig.put(KafkaConfig.ZkConnectProp(), zKConnectString());
+        brokerConfig.put(ZkConfigs.ZK_CONNECT_CONFIG, zKConnectString());
 
         putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
         putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), 0);
         putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), (short) brokers.length);
         putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), false);
         // reduce the size of the log cleaner map to reduce test memory usage
-        putIfAbsent(brokerConfig, KafkaConfig.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
+        putIfAbsent(brokerConfig, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
 
         Object listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerListenerNameProp());
         if (listenerConfig == null)
@@ -554,42 +556,47 @@ public class EmbeddedKafkaCluster {
     ) throws TimeoutException, InterruptedException, ExecutionException {
         long endTimeMs = System.currentTimeMillis() + maxDurationMs;
 
-        Consumer<byte[], byte[]> consumer = createConsumer(consumerProps != null ? consumerProps : Collections.emptyMap());
-        Admin admin = createAdminClient(adminProps != null ? adminProps : Collections.emptyMap());
+        long remainingTimeMs;
+        Set<TopicPartition> topicPartitions;
+        Map<TopicPartition, Long> endOffsets;
+        try (Admin admin = createAdminClient(adminProps != null ? adminProps : Collections.emptyMap())) {
 
-        long remainingTimeMs = endTimeMs - System.currentTimeMillis();
-        Set<TopicPartition> topicPartitions = listPartitions(remainingTimeMs, admin, Arrays.asList(topics));
+            remainingTimeMs = endTimeMs - System.currentTimeMillis();
+            topicPartitions = listPartitions(remainingTimeMs, admin, Arrays.asList(topics));
 
-        remainingTimeMs = endTimeMs - System.currentTimeMillis();
-        Map<TopicPartition, Long> endOffsets = readEndOffsets(remainingTimeMs, admin, topicPartitions);
+            remainingTimeMs = endTimeMs - System.currentTimeMillis();
+            endOffsets = readEndOffsets(remainingTimeMs, admin, topicPartitions);
+        }
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = topicPartitions.stream()
                 .collect(Collectors.toMap(
                         Function.identity(),
                         tp -> new ArrayList<>()
                 ));
-        consumer.assign(topicPartitions);
+        try (Consumer<byte[], byte[]> consumer = createConsumer(consumerProps != null ? consumerProps : Collections.emptyMap())) {
+            consumer.assign(topicPartitions);
 
-        while (!endOffsets.isEmpty()) {
-            Iterator<Map.Entry<TopicPartition, Long>> it = endOffsets.entrySet().iterator();
-            while (it.hasNext()) {
-                Map.Entry<TopicPartition, Long> entry = it.next();
-                TopicPartition topicPartition = entry.getKey();
-                long endOffset = entry.getValue();
-                long lastConsumedOffset = consumer.position(topicPartition);
-                if (lastConsumedOffset >= endOffset) {
-                    // We've reached the end offset for the topic partition; can stop polling it now
-                    it.remove();
-                } else {
-                    remainingTimeMs = endTimeMs - System.currentTimeMillis();
-                    if (remainingTimeMs <= 0) {
-                        throw new AssertionError("failed to read to end of topic(s) " + Arrays.asList(topics) + " within " + maxDurationMs + "ms");
+            while (!endOffsets.isEmpty()) {
+                Iterator<Map.Entry<TopicPartition, Long>> it = endOffsets.entrySet().iterator();
+                while (it.hasNext()) {
+                    Map.Entry<TopicPartition, Long> entry = it.next();
+                    TopicPartition topicPartition = entry.getKey();
+                    long endOffset = entry.getValue();
+                    long lastConsumedOffset = consumer.position(topicPartition);
+                    if (lastConsumedOffset >= endOffset) {
+                        // We've reached the end offset for the topic partition; can stop polling it now
+                        it.remove();
+                    } else {
+                        remainingTimeMs = endTimeMs - System.currentTimeMillis();
+                        if (remainingTimeMs <= 0) {
+                            throw new AssertionError("failed to read to end of topic(s) " + Arrays.asList(topics) + " within " + maxDurationMs + "ms");
+                        }
+                        // We haven't reached the end offset yet; need to keep polling
+                        ConsumerRecords<byte[], byte[]> recordBatch = consumer.poll(Duration.ofMillis(remainingTimeMs));
+                        recordBatch.partitions().forEach(tp -> records.get(tp)
+                                .addAll(recordBatch.records(tp))
+                        );
                     }
-                    // We haven't reached the end offset yet; need to keep polling
-                    ConsumerRecords<byte[], byte[]> recordBatch = consumer.poll(Duration.ofMillis(remainingTimeMs));
-                    recordBatch.partitions().forEach(tp -> records.get(tp)
-                            .addAll(recordBatch.records(tp))
-                    );
                 }
             }
         }

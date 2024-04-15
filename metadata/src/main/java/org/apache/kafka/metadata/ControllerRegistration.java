@@ -112,7 +112,7 @@ public class ControllerRegistration {
                 supportedFeatures = new HashMap<>();
                 supportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                         MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
-                        MetadataVersion.latest().featureLevel()));
+                        MetadataVersion.latestProduction().featureLevel()));
             }
             return new ControllerRegistration(id,
                 incarnationId,
@@ -189,7 +189,7 @@ public class ControllerRegistration {
                 setMaxSupportedVersion(entry.getValue().max()));
         }
         return new ApiMessageAndVersion(registrationRecord,
-            options.metadataVersion().registerBrokerRecordVersion());
+            options.metadataVersion().registerControllerRecordVersion());
     }
 
     @Override

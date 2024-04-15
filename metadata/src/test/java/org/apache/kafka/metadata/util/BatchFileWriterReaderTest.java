@@ -102,7 +102,7 @@ final public class BatchFileWriterReaderTest {
             assertEquals(0, apiMessageAndVersion.version());
 
             SnapshotFooterRecord footerRecord = (SnapshotFooterRecord) apiMessageAndVersion.message();
-            assertEquals(0, headerRecord.version());
+            assertEquals(0, footerRecord.version());
         }
     }
 }

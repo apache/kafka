@@ -30,8 +30,8 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
-import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.SinkUtils;
@@ -187,12 +187,42 @@ abstract class EmbeddedConnect {
      *
      * @param connName   the name of the connector
      * @param connConfig the intended configuration
-     * @throws ConnectRestException if the REST api returns error status
+     * @throws ConnectRestException if the REST API returns error status
      * @throws ConnectException if the configuration fails to be serialized or if the request could not be sent
      */
     public String configureConnector(String connName, Map<String, String> connConfig) {
         String url = endpointForResource(String.format("connectors/%s/config", connName));
         return putConnectorConfig(url, connConfig);
+    }
+
+    /**
+     * Configure a new connector using the <strong><em>POST /connectors</em></strong> endpoint. If the connector already exists, a
+     * {@link ConnectRestException} will be thrown.
+     *
+     * @param createConnectorRequest the connector creation request
+     * @throws ConnectRestException if the REST API returns error status
+     * @throws ConnectException if the request could not be sent
+     */
+    public String configureConnector(CreateConnectorRequest createConnectorRequest) {
+        String url = endpointForResource("connectors");
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        String requestBody;
+        try {
+            requestBody = objectMapper.writeValueAsString(createConnectorRequest);
+        } catch (IOException e) {
+            throw new ConnectException("Failed to serialize connector creation request: " + createConnectorRequest);
+        }
+
+        Response response = requestPost(url, requestBody, Collections.emptyMap());
+        if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+            return responseToString(response);
+        } else {
+            throw new ConnectRestException(
+                response.getStatus(),
+                "Could not execute 'POST /connectors' request. Error response: " + responseToString(response)
+            );
+        }
     }
 
     /**
@@ -314,6 +344,23 @@ abstract class EmbeddedConnect {
      */
     public void restartConnector(String connName) {
         String url = endpointForResource(String.format("connectors/%s/restart", connName));
+        Response response = requestPost(url, "", Collections.emptyMap());
+        if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
+            throw new ConnectRestException(response.getStatus(),
+                    "Could not execute POST request. Error response: " + responseToString(response));
+        }
+    }
+
+    /**
+     * Restart an existing task.
+     *
+     * @param connName name of the connector
+     * @param taskNum ID of the task (starting from 0)
+     * @throws ConnectRestException if the REST API returns error status
+     * @throws ConnectException for any other error.
+     */
+    public void restartTask(String connName, int taskNum) {
+        String url = endpointForResource(String.format("connectors/%s/tasks/%d/restart", connName, taskNum));
         Response response = requestPost(url, "", Collections.emptyMap());
         if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
             throw new ConnectRestException(response.getStatus(),
@@ -928,15 +975,22 @@ abstract class EmbeddedConnect {
      * @return the list of handles of the online workers
      */
     public Set<WorkerHandle> activeWorkers() {
-        ObjectMapper mapper = new ObjectMapper();
         return workers().stream()
                 .filter(w -> {
                     try {
-                        mapper.readerFor(ServerInfo.class)
-                                .readValue(responseToString(requestGet(w.url().toString())));
-                        return true;
-                    } catch (ConnectException | IOException e) {
+                        String endpoint = w.url().resolve("/connectors/liveness-check").toString();
+                        Response response = requestGet(endpoint);
+                        boolean live = response.getStatus() == Response.Status.NOT_FOUND.getStatusCode()
+                                || response.getStatus() == Response.Status.OK.getStatusCode();
+                        if (live) {
+                            return true;
+                        } else {
+                            log.warn("Worker failed liveness probe. Response: {}", response);
+                            return false;
+                        }
+                    } catch (Exception e) {
                         // Worker failed to respond. Consider it's offline
+                        log.warn("Failed to contact worker during liveness check", e);
                         return false;
                     }
                 })

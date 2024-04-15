@@ -32,7 +32,11 @@
   // records that cause the whole batch to be dropped.  See KIP-467 for details.
   //
   // Version 9 enables flexible versions.
-  "validVersions": "0-9",
+  //
+  // Version 10 adds 'CurrentLeader' and 'NodeEndpoints' as tagged fields (KIP-951)
+  //
+  // Version 11 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
+  "validVersions": "0-11",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "Responses", "type": "[]TopicProduceResponse", "versions": "0+",
@@ -59,10 +63,26 @@
             "about": "The error message of the record that caused the batch to be dropped"}
         ]},
         { "name":  "ErrorMessage", "type": "string", "default": "null", "versions": "8+", "nullableVersions": "8+", "ignorable":  true,
-          "about":  "The global error message summarizing the common root cause of the records that caused the batch to be dropped"}
+          "about":  "The global error message summarizing the common root cause of the records that caused the batch to be dropped"},
+        { "name": "CurrentLeader", "type": "LeaderIdAndEpoch", "versions": "10+", "taggedVersions": "10+", "tag": 0, "fields": [
+          { "name": "LeaderId", "type": "int32", "versions": "10+", "default": "-1", "entityType": "brokerId",
+            "about": "The ID of the current leader or -1 if the leader is unknown."},
+          { "name": "LeaderEpoch", "type": "int32", "versions": "10+", "default": "-1", "about": "The latest known leader epoch"}
+        ]}
       ]}
     ]},
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true, "default": "0",
-      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." }
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "NodeEndpoints", "type": "[]NodeEndpoint", "versions": "10+", "taggedVersions": "10+", "tag": 0,
+      "about": "Endpoints for all current-leaders enumerated in PartitionProduceResponses, with errors NOT_LEADER_OR_FOLLOWER.", "fields": [
+      { "name": "NodeId", "type": "int32", "versions": "10+",
+        "mapKey": true, "entityType": "brokerId", "about": "The ID of the associated node."},
+      { "name": "Host", "type": "string", "versions": "10+",
+        "about": "The node's hostname." },
+      { "name": "Port", "type": "int32", "versions": "10+",
+        "about": "The node's port." },
+      { "name": "Rack", "type": "string", "versions": "10+", "nullableVersions": "10+", "default": "null",
+        "about": "The rack of the node, or null if it has not been assigned to a rack." }
+    ]}
   ]
 }

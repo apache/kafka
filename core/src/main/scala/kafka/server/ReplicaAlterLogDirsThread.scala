@@ -17,11 +17,14 @@
 
 package kafka.server
 
+import kafka.cluster.Partition
+import kafka.server.ReplicaAlterLogDirsThread.{DirectoryEventRequestState, QUEUED}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchResponse
-import org.apache.kafka.server.common.OffsetAndEpoch
+import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch, TopicIdPartition}
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 
+import java.util.concurrent.ConcurrentHashMap
 import scala.collection.{Map, Set}
 
 class ReplicaAlterLogDirsThread(name: String,
@@ -30,7 +33,9 @@ class ReplicaAlterLogDirsThread(name: String,
                                 replicaMgr: ReplicaManager,
                                 quota: ReplicationQuotaManager,
                                 brokerTopicStats: BrokerTopicStats,
-                                fetchBackOffMs: Int)
+                                fetchBackOffMs: Int,
+                                directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
+                               )
   extends AbstractFetcherThread(name = name,
                                 clientId = name,
                                 leader = leader,
@@ -39,6 +44,8 @@ class ReplicaAlterLogDirsThread(name: String,
                                 fetchBackOffMs = fetchBackOffMs,
                                 isInterruptible = false,
                                 brokerTopicStats) {
+
+  private val assignmentRequestStates: ConcurrentHashMap[TopicPartition, DirectoryEventRequestState] = new ConcurrentHashMap()
 
   override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
     replicaMgr.futureLocalLogOrException(topicPartition).latestEpoch
@@ -76,11 +83,68 @@ class ReplicaAlterLogDirsThread(name: String,
     futureLog.updateHighWatermark(partitionData.highWatermark)
     futureLog.maybeIncrementLogStartOffset(partitionData.logStartOffset, LogStartOffsetIncrementReason.LeaderOffsetIncremented)
 
-    if (partition.maybeReplaceCurrentWithFutureReplica())
-      removePartitions(Set(topicPartition))
+    directoryEventHandler match {
+      case DirectoryEventHandler.NOOP =>
+        if (partition.maybeReplaceCurrentWithFutureReplica())
+          removePartitions(Set(topicPartition))
+      case _ =>
+        maybePromoteFutureReplica(topicPartition, partition)
+    }
 
     quota.record(records.sizeInBytes)
     logAppendInfo
+  }
+
+  override def removePartitions(topicPartitions: Set[TopicPartition]): Map[TopicPartition, PartitionFetchState] = {
+    // Schedule assignment request to revert any queued request before cancelling
+    for {
+      topicPartition <- topicPartitions
+      partitionState <- partitionAssignmentRequestState(topicPartition)
+      if partitionState == QUEUED
+      partition = replicaMgr.getPartitionOrException(topicPartition)
+      topicId <- partition.topicId
+      directoryId <- partition.logDirectoryId()
+      topicIdPartition = new TopicIdPartition(topicId, topicPartition.partition())
+    } directoryEventHandler.handleAssignment(topicIdPartition, directoryId, () => ())
+
+    super.removePartitions(topicPartitions)
+  }
+
+  // Visible for testing
+  private[server] def updatedAssignmentRequestState(topicPartition: TopicPartition)(state: ReplicaAlterLogDirsThread.DirectoryEventRequestState): Unit = {
+    assignmentRequestStates.put(topicPartition, state)
+  }
+
+  private def maybePromoteFutureReplica(topicPartition: TopicPartition, partition: Partition) = {
+    val topicId = partition.topicId
+    if (topicId.isEmpty)
+      throw new IllegalStateException(s"Topic ${topicPartition.topic()} does not have an ID.")
+
+    partitionAssignmentRequestState(topicPartition) match {
+      case None =>
+        // Schedule assignment request and don't promote the future replica yet until the controller has accepted the request.
+        partition.runCallbackIfFutureReplicaCaughtUp(_ => {
+          partition.futureReplicaDirectoryId()
+            .map(id => {
+              directoryEventHandler.handleAssignment(new TopicIdPartition(topicId.get, topicPartition.partition()), id,
+                () => updatedAssignmentRequestState(topicPartition)(ReplicaAlterLogDirsThread.COMPLETED))
+              // mark the assignment request state as queued.
+              updatedAssignmentRequestState(topicPartition)(ReplicaAlterLogDirsThread.QUEUED)
+            })
+        })
+      case Some(ReplicaAlterLogDirsThread.COMPLETED) =>
+        // Promote future replica if controller accepted the request and the replica caught-up with the original log.
+        if (partition.maybeReplaceCurrentWithFutureReplica()) {
+          removePartitions(Set(topicPartition))
+          assignmentRequestStates.remove(topicPartition)
+        }
+      case _ =>
+        log.trace("Waiting for AssignmentRequest to succeed before promoting the future replica.")
+    }
+  }
+
+  private def partitionAssignmentRequestState(topicPartition: TopicPartition): Option[DirectoryEventRequestState] = {
+    Option(assignmentRequestStates.get(topicPartition))
   }
 
   override def addPartitions(initialFetchStates: Map[TopicPartition, InitialFetchState]): Set[TopicPartition] = {
@@ -122,4 +186,11 @@ class ReplicaAlterLogDirsThread(name: String,
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.truncateFullyAndStartAt(offset, isFuture = true)
   }
+}
+object ReplicaAlterLogDirsThread {
+  sealed trait DirectoryEventRequestState
+
+  case object QUEUED extends DirectoryEventRequestState
+
+  case object COMPLETED extends DirectoryEventRequestState
 }

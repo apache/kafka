@@ -216,6 +216,42 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
         }
 
         @Test
+        public void shouldFindAll() {
+            if (testCase.isDegenerate) {
+                // cannot find() on degenerate segment
+                return;
+            }
+
+            final SegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
+
+
+            // verify results
+            final List<SegmentSearchResult> results =
+                segmentValue.findAll(testCase.records.get(testCase.records.size() - 1).timestamp, testCase.records.get(0).timestamp);
+
+            int i = 0;
+            int index = 0;
+            for (final TestRecord expectedRecord : testCase.records) {
+                if (expectedRecord.value == null) { // should not return tombstones
+                    index++;
+                    continue;
+                }
+                final long expectedValidTo = index == 0 ? testCase.nextTimestamp : testCase.records.get(index - 1).timestamp;
+                assertThat(results.get(i).index(), equalTo(index));
+                assertThat(results.get(i).value(), equalTo(expectedRecord.value));
+                assertThat(results.get(i).validFrom(), equalTo(expectedRecord.timestamp));
+                assertThat(results.get(i).validTo(), equalTo(expectedValidTo));
+                i++;
+                index++;
+            }
+
+            // verify exception when timestamp is out of range
+            assertThrows(IllegalArgumentException.class, () -> segmentValue.find(testCase.nextTimestamp, false));
+            assertThrows(IllegalArgumentException.class, () -> segmentValue.find(testCase.nextTimestamp + 1, false));
+            assertThrows(IllegalArgumentException.class, () -> segmentValue.find(testCase.minTimestamp - 1, false));
+        }
+
+        @Test
         public void shouldGetTimestamps() {
             final byte[] segmentValue = buildSegmentWithInsertLatest(testCase).serialize();
 

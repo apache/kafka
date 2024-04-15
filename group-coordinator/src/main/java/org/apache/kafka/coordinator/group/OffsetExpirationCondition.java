@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 /**
  * An offset is considered expired based on different factors, such as the state of the group
- * and/or the GroupMetadata record version (for generic groups). This class is used to check
+ * and/or the GroupMetadata record version (for classic groups). This class is used to check
  * how offsets for the group should be expired.
  */
 public interface OffsetExpirationCondition {

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.internals.IdempotentCloser;
@@ -62,15 +63,15 @@ public class ApplicationEventHandler implements Closeable {
     }
 
     /**
-     * Add an {@link ApplicationEvent} to the handler and then internally invoke {@link #wakeupNetworkThread}
+     * Add an {@link ApplicationEvent} to the handler and then internally invoke {@link #wakeupNetworkThread()}
      * to alert the network I/O thread that it has something to process.
      *
      * @param event An {@link ApplicationEvent} created by the application thread
      */
     public void add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
-        log.trace("Enqueued event: {}", event);
         applicationEventQueue.add(event);
+        log.trace("Enqueued event: {}", event);
         wakeupNetworkThread();
     }
 
@@ -82,15 +83,26 @@ public class ApplicationEventHandler implements Closeable {
     }
 
     /**
+     * Returns the delay for which the application thread can safely wait before it should be responsive
+     * to results from the request managers. For example, the subscription state can change when heartbeats
+     * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
+     * responsive to changes.
+     *
+     * @return The maximum delay in milliseconds
+     */
+    public long maximumTimeToWait() {
+        return networkThread.maximumTimeToWait();
+    }
+
+    /**
      * Add a {@link CompletableApplicationEvent} to the handler. The method blocks waiting for the result, and will
      * return the result value upon successful completion; otherwise throws an error.
      *
      * <p/>
      *
-     * See {@link CompletableApplicationEvent#get(Timer)} and {@link Future#get(long, TimeUnit)} for more details.
+     * See {@link ConsumerUtils#getResult(Future, Timer)} and {@link Future#get(long, TimeUnit)} for more details.
      *
      * @param event A {@link CompletableApplicationEvent} created by the polling thread
-     * @param timer Timer for which to wait for the event to complete
      * @return      Value that is the result of the event
      * @param <T>   Type of return value of the event
      */
@@ -98,7 +110,7 @@ public class ApplicationEventHandler implements Closeable {
         Objects.requireNonNull(event, "CompletableApplicationEvent provided to addAndGet must be non-null");
         Objects.requireNonNull(timer, "Timer provided to addAndGet must be non-null");
         add(event);
-        return event.get(timer);
+        return ConsumerUtils.getResult(event.future(), timer);
     }
 
     @Override

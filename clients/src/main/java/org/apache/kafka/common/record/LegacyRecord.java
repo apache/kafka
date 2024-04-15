@@ -385,8 +385,7 @@ public final class LegacyRecord {
                               ByteBuffer value,
                               CompressionType compressionType,
                               TimestampType timestampType) {
-        try {
-            DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
+        try (DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer))) {
             write(out, magic, timestamp, key, value, compressionType, timestampType);
         } catch (IOException e) {
             throw new KafkaException(e);

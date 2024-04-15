@@ -793,10 +793,10 @@ public class MetadataLoaderTest {
 
             @Override
             public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage, LoaderManifest manifest) {
+                capturedImages.add(newImage);
                 if (!firstPublish.isDone()) {
                     firstPublish.complete(null);
                 }
-                capturedImages.add(newImage);
             }
         };
 

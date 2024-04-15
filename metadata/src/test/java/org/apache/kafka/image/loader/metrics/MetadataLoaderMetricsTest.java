@@ -45,10 +45,6 @@ public class MetadataLoaderMetricsTest {
             new AtomicReference<>(MetadataProvenance.EMPTY);
         final MetadataLoaderMetrics metrics;
 
-        FakeMetadataLoaderMetrics() {
-            this(Optional.empty());
-        }
-
         FakeMetadataLoaderMetrics(MetricsRegistry registry) {
             this(Optional.of(registry));
         }
@@ -74,6 +70,7 @@ public class MetadataLoaderMetricsTest {
             try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(registry)) {
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
                     new HashSet<>(Arrays.asList(
+                        "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount"
                     )));
@@ -139,6 +136,21 @@ public class MetadataLoaderMetricsTest {
                 Collections.emptySet());
         } finally {
             registry.shutdown();
+        }
+    }
+
+    @Test
+    public void testInitialValueOfCurrentControllerId() {
+        try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(Optional.empty())) {
+            assertEquals(-1, fakeMetrics.metrics.currentControllerId());
+        }
+    }
+
+    @Test
+    public void testSetValueOfCurrentControllerId() {
+        try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(Optional.empty())) {
+            fakeMetrics.metrics.setCurrentControllerId(1001);
+            assertEquals(1001, fakeMetrics.metrics.currentControllerId());
         }
     }
 

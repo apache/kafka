@@ -68,8 +68,8 @@ public class RaftConfig {
 
     public static final String QUORUM_FETCH_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "fetch.timeout.ms";
     public static final String QUORUM_FETCH_TIMEOUT_MS_DOC = "Maximum time without a successful fetch from " +
-        "the current leader before becoming a candidate and triggering an election for voters; Maximum time without " +
-        "receiving fetch from a majority of the quorum before asking around to see if there's a new epoch for leader.";
+        "the current leader before becoming a candidate and triggering an election for voters; Maximum time " +
+        "a leader can go without receiving valid fetch or fetchSnapshot request from a majority of the quorum before resigning.";
     public static final int DEFAULT_QUORUM_FETCH_TIMEOUT_MS = 2_000;
 
     public static final String QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG = QUORUM_PREFIX + "election.backoff.max.ms";

@@ -24,7 +24,6 @@ public class CombinedKey<KF, KP> {
     private final KP primaryKey;
 
     CombinedKey(final KF foreignKey, final KP primaryKey) {
-        Objects.requireNonNull(foreignKey, "foreignKey can't be null");
         Objects.requireNonNull(primaryKey, "primaryKey can't be null");
         this.foreignKey = foreignKey;
         this.primaryKey = primaryKey;

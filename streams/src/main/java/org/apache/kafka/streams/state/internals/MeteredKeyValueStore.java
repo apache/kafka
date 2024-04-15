@@ -40,6 +40,7 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -247,28 +248,23 @@ public class MeteredKeyValueStore<K, V>
     }
 
     @SuppressWarnings("unchecked")
-    protected <R> QueryResult<R> runRangeQuery(final Query<R> query,
-                                               final PositionBound positionBound,
-                                               final QueryConfig config) {
+    private <R> QueryResult<R> runRangeQuery(final Query<R> query,
+                                             final PositionBound positionBound,
+                                             final QueryConfig config) {
 
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
         RangeQuery<Bytes, byte[]> rawRangeQuery;
-        final boolean isKeyAscending = typedQuery.isKeyAscending();
-        if (typedQuery.getLowerBound().isPresent() && typedQuery.getUpperBound().isPresent()) {
-            rawRangeQuery = RangeQuery.withRange(
-                keyBytes(typedQuery.getLowerBound().get()),
-                keyBytes(typedQuery.getUpperBound().get())
-            );
-        } else if (typedQuery.getLowerBound().isPresent()) {
-            rawRangeQuery = RangeQuery.withLowerBound(keyBytes(typedQuery.getLowerBound().get()));
-        } else if (typedQuery.getUpperBound().isPresent()) {
-            rawRangeQuery = RangeQuery.withUpperBound(keyBytes(typedQuery.getUpperBound().get()));
-        } else {
-            rawRangeQuery = RangeQuery.withNoBounds();
-        }
-        if (!isKeyAscending) {
+        final ResultOrder order = typedQuery.resultOrder();
+        rawRangeQuery = RangeQuery.withRange(
+                keyBytes(typedQuery.getLowerBound().orElse(null)),
+                keyBytes(typedQuery.getUpperBound().orElse(null))
+        );
+        if (order.equals(ResultOrder.DESCENDING)) {
             rawRangeQuery = rawRangeQuery.withDescendingKeys();
+        }
+        if (order.equals(ResultOrder.ASCENDING)) {
+            rawRangeQuery = rawRangeQuery.withAscendingKeys();
         }
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
             wrapped().query(rawRangeQuery, positionBound, config);
@@ -293,9 +289,9 @@ public class MeteredKeyValueStore<K, V>
     }
 
     @SuppressWarnings("unchecked")
-    protected <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                             final PositionBound positionBound,
-                                             final QueryConfig config) {
+    private  <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                            final PositionBound positionBound,
+                                            final QueryConfig config) {
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =

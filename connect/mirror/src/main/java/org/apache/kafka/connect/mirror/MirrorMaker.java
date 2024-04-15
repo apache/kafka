@@ -27,16 +27,16 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
-import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
-import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -198,8 +198,7 @@ public class MirrorMaker {
             log.info("Initializing internal REST resources");
             internalServer.initializeInternalResources(herders);
         }
-        log.info("Configuring connectors...");
-        herderPairs.forEach(this::configureConnectors);
+        log.info("Configuring connectors will happen once the worker joins the group as a leader");
         log.info("Kafka MirrorMaker started");
     }
 
@@ -229,30 +228,10 @@ public class MirrorMaker {
         }
     }
 
-    private void configureConnector(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
-        checkHerder(sourceAndTarget);
-        Map<String, String> connectorProps = config.connectorBaseConfig(sourceAndTarget, connectorClass);
-        herders.get(sourceAndTarget)
-                .putConnectorConfig(connectorClass.getSimpleName(), connectorProps, true, (e, x) -> {
-                    if (e == null) {
-                        log.info("{} connector configured for {}.", connectorClass.getSimpleName(), sourceAndTarget);
-                    } else if (e instanceof NotLeaderException) {
-                        // No way to determine if the herder is a leader or not beforehand.
-                        log.info("This node is a follower for {}. Using existing connector configuration.", sourceAndTarget);
-                    } else {
-                        log.error("Failed to configure {} connector for {}", connectorClass.getSimpleName(), sourceAndTarget, e);
-                    }
-                });
-    }
-
     private void checkHerder(SourceAndTarget sourceAndTarget) {
         if (!herders.containsKey(sourceAndTarget)) {
             throw new IllegalArgumentException("No herder for " + sourceAndTarget.toString());
         }
-    }
-
-    private void configureConnectors(SourceAndTarget sourceAndTarget) {
-        CONNECTOR_CLASSES.forEach(x -> configureConnector(sourceAndTarget, x));
     }
 
     private void addHerder(SourceAndTarget sourceAndTarget) {
@@ -297,7 +276,7 @@ public class MirrorMaker {
         // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
         // herder is stopped. MirrorMaker has multiple herders, and having the herder own the close responsibility is much easier than
         // tracking the various shared admin objects in this class.
-        Herder herder = new DistributedHerder(distributedConfig, time, worker,
+        Herder herder = new MirrorHerder(config, sourceAndTarget, distributedConfig, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
                 advertisedUrl, restClient, clientConfigOverridePolicy,
                 restNamespace, sharedAdmin);
@@ -335,6 +314,11 @@ public class MirrorMaker {
     public ConnectorStateInfo connectorStatus(SourceAndTarget sourceAndTarget, String connector) {
         checkHerder(sourceAndTarget);
         return herders.get(sourceAndTarget).connectorStatus(connector);
+    }
+
+    public void taskConfigs(SourceAndTarget sourceAndTarget, String connector, Callback<List<TaskInfo>> cb) {
+        checkHerder(sourceAndTarget);
+        herders.get(sourceAndTarget).taskConfigs(connector, cb);
     }
 
     public static void main(String[] args) {

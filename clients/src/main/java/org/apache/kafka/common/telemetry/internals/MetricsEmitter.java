@@ -29,10 +29,6 @@ import java.io.Closeable;
  *
  * <p>
  *
- * An {@code MetricsEmitter} is stateless and the telemetry reporter should assume that the object is
- * not thread safe and thus concurrent access to either the
- * {@link #shouldEmitMetric(MetricKeyable)} or {@link #emitMetric(SinglePointMetric)} should be avoided.
- *
  * Regarding threading, the {@link #init()} and {@link #close()} methods may be called from
  * different threads and so proper care should be taken by implementations of the
  * {@code MetricsCollector} interface to be thread-safe. However, the telemetry reporter must
@@ -49,6 +45,13 @@ public interface MetricsEmitter extends Closeable {
      * @return {@code true} if the metric should be emitted, {@code false} otherwise
      */
     boolean shouldEmitMetric(MetricKeyable metricKeyable);
+
+    /**
+     * Determines if the delta aggregation temporality metrics are to be emitted.
+     *
+     * @return {@code true} if the delta metric should be emitted, {@code false} otherwise
+     */
+    boolean shouldEmitDeltaMetrics();
 
     /**
      * Emits the metric in an implementation-specific fashion. Depending on the implementation,

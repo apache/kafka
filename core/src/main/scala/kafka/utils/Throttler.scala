@@ -95,13 +95,13 @@ object Throttler {
     val interval = 30000
     var start = System.currentTimeMillis
     var total = 0
-    while(true) {
+    while (true) {
       val value = rand.nextInt(1000)
       Thread.sleep(1)
       throttler.maybeThrottle(value)
       total += value
       val now = System.currentTimeMillis
-      if(now - start >= interval) {
+      if (now - start >= interval) {
         println(total / (interval/1000.0))
         start = now
         total = 0

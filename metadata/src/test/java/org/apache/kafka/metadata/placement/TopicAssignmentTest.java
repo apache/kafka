@@ -17,9 +17,11 @@
 
 package org.apache.kafka.metadata.placement;
 
+import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
+import org.apache.kafka.common.Uuid;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -32,8 +34,8 @@ public class TopicAssignmentTest {
         List<Integer> replicasP0 = Arrays.asList(0, 1, 2);
         List<Integer> replicasP1 = Arrays.asList(1, 2, 0);
         List<PartitionAssignment> partitionAssignments = Arrays.asList(
-            new PartitionAssignment(replicasP0),
-            new PartitionAssignment(replicasP1)
+            partitionAssignment(replicasP0),
+            partitionAssignment(replicasP1)
         );
         assertEquals(partitionAssignments, new TopicAssignment(partitionAssignments).assignments());
     }
@@ -43,14 +45,14 @@ public class TopicAssignmentTest {
         List<TopicAssignment> topicAssignments = Arrays.asList(
             new TopicAssignment(
                 Arrays.asList(
-                    new PartitionAssignment(
+                    partitionAssignment(
                         Arrays.asList(0, 1, 2)
                     )
                 )
             ),
             new TopicAssignment(
                 Arrays.asList(
-                    new PartitionAssignment(
+                    partitionAssignment(
                         Arrays.asList(1, 2, 0)
                     )
                 )
@@ -74,10 +76,16 @@ public class TopicAssignmentTest {
     @Test
     public void testToString() {
         List<Integer> replicas = Arrays.asList(0, 1, 2);
+        List<Uuid> directories = Arrays.asList(
+                Uuid.fromString("v56qeYzNRrqNtXsxzcReog"),
+                Uuid.fromString("MvUIAsOiRlSePeiBHdZrSQ"),
+                Uuid.fromString("jUqCchHtTHqMxeVv4dw1RA")
+        );
         List<PartitionAssignment> partitionAssignments = Arrays.asList(
-            new PartitionAssignment(replicas)
+            new PartitionAssignment(replicas, directories::get)
         );
         TopicAssignment topicAssignment = new TopicAssignment(partitionAssignments);
-        assertEquals("TopicAssignment(assignments=[PartitionAssignment(replicas=[0, 1, 2])])", topicAssignment.toString());
+        assertEquals("TopicAssignment(assignments=[PartitionAssignment(replicas=[0, 1, 2], " +
+                "directories=[v56qeYzNRrqNtXsxzcReog, MvUIAsOiRlSePeiBHdZrSQ, jUqCchHtTHqMxeVv4dw1RA])])", topicAssignment.toString());
     }
 }

@@ -41,13 +41,17 @@ public interface TasksRegistry {
 
     void addPendingTaskToRecycle(final TaskId taskId, final Set<TopicPartition> inputPartitions);
 
+    Set<TopicPartition> removePendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId);
+
+    void addPendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions);
+
     Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId);
 
     void addPendingTaskToUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions);
 
-    boolean removePendingTaskToCloseDirty(final TaskId taskId);
+    boolean removePendingTaskToAddBack(final TaskId taskId);
 
-    void addPendingTaskToCloseDirty(final TaskId taskId);
+    void addPendingTaskToAddBack(final TaskId taskId);
 
     boolean removePendingTaskToCloseClean(final TaskId taskId);
 

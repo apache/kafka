@@ -453,12 +453,14 @@ public class QuorumState {
         // we typically expect the state machine to be caught up anyway.
 
         LeaderState<T> state = new LeaderState<>(
+            time,
             localIdOrThrow(),
             epoch(),
             epochStartOffset,
             voters,
             candidateState.grantingVoters(),
             accumulator,
+            fetchTimeoutMs,
             logContext
         );
         durableTransitionTo(state);

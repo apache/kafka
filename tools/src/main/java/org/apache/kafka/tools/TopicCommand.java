@@ -208,9 +208,9 @@ public abstract class TopicCommand {
      *                           If set to true, the command will throw an exception if the topic with the
      *                           requested name does not exist.
      */
-    private static void ensureTopicExists(List<String> foundTopics, String requestedTopic, Boolean requireTopicExists) {
+    private static void ensureTopicExists(List<String> foundTopics, Optional<String> requestedTopic, Boolean requireTopicExists) {
         // If no topic name was mentioned, do not need to throw exception.
-        if (!(requestedTopic.isEmpty() || !Optional.ofNullable(requestedTopic).isPresent()) && requireTopicExists && foundTopics.isEmpty()) {
+        if (requestedTopic.isPresent() && !requestedTopic.get().isEmpty() && requireTopicExists && foundTopics.isEmpty()) {
             // If given topic doesn't exist then throw exception
             throw new IllegalArgumentException(String.format("Topic '%s' does not exist as expected", requestedTopic));
         }
@@ -247,7 +247,7 @@ public abstract class TopicCommand {
     }
 
     static class CommandTopicPartition {
-        private final Optional<String> name;
+        private final String name;
         private final Optional<Integer> partitions;
         private final Optional<Integer> replicationFactor;
         private final Map<Integer, List<Integer>> replicaAssignment;
@@ -257,7 +257,7 @@ public abstract class TopicCommand {
 
         public CommandTopicPartition(TopicCommandOptions options) {
             opts = options;
-            name = options.topic();
+            name = options.topic().get();
             partitions = options.partitions();
             replicationFactor = options.replicationFactor();
             replicaAssignment = options.replicaAssignment().orElse(Collections.emptyMap());
@@ -420,7 +420,7 @@ public abstract class TopicCommand {
     }
 
     public static class TopicService implements AutoCloseable {
-        private Admin adminClient;
+        private final Admin adminClient;
 
         public TopicService(Properties commandConfig, Optional<String> bootstrapServer) {
             this.adminClient = createAdminClient(commandConfig, bootstrapServer);
@@ -439,7 +439,7 @@ public abstract class TopicCommand {
 
         public void createTopic(TopicCommandOptions opts) throws Exception {
             CommandTopicPartition topic = new CommandTopicPartition(opts);
-            if (Topic.hasCollisionChars(topic.name.get())) {
+            if (Topic.hasCollisionChars(topic.name)) {
                 System.out.println("WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could " +
                     "collide. To avoid issues it is best to use either, but not both.");
             }
@@ -457,9 +457,9 @@ public abstract class TopicCommand {
             try {
                 NewTopic newTopic;
                 if (topic.hasReplicaAssignment()) {
-                    newTopic = new NewTopic(topic.name.get(), topic.replicaAssignment);
+                    newTopic = new NewTopic(topic.name, topic.replicaAssignment);
                 } else {
-                    newTopic = new NewTopic(topic.name.get(), topic.partitions, topic.replicationFactor.map(Integer::shortValue));
+                    newTopic = new NewTopic(topic.name, topic.partitions, topic.replicationFactor.map(Integer::shortValue));
                 }
 
                 Map<String, String> configsMap = topic.configsToAdd.stringPropertyNames().stream()
@@ -490,7 +490,7 @@ public abstract class TopicCommand {
         public void alterTopic(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
             CommandTopicPartition topic = new CommandTopicPartition(opts);
             List<String> topics = getTopics(opts.topic(), opts.excludeInternalTopics());
-            ensureTopicExists(topics, opts.topic().orElse(""), !opts.ifExists());
+            ensureTopicExists(topics, opts.topic(), !opts.ifExists());
 
             if (!topics.isEmpty()) {
                 Map<String, KafkaFuture<org.apache.kafka.clients.admin.TopicDescription>> topicsInfo = adminClient.describeTopics(topics).topicNameValues();
@@ -556,7 +556,7 @@ public abstract class TopicCommand {
             if (useTopicId) {
                 ensureTopicIdExists(topicIds, inputTopicId.get(), !opts.ifExists());
             } else {
-                ensureTopicExists(topics, opts.topic().orElse(""), !opts.ifExists());
+                ensureTopicExists(topics, opts.topic(), !opts.ifExists());
             }
             List<org.apache.kafka.clients.admin.TopicDescription> topicDescriptions = new ArrayList<>();
 
@@ -632,7 +632,7 @@ public abstract class TopicCommand {
 
         public void deleteTopic(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
             List<String> topics = getTopics(opts.topic(), opts.excludeInternalTopics());
-            ensureTopicExists(topics, opts.topic().orElse(""), !opts.ifExists());
+            ensureTopicExists(topics, opts.topic(), !opts.ifExists());
             adminClient.deleteTopics(Collections.unmodifiableList(topics),
                 new DeleteTopicsOptions().retryOnQuotaViolation(false)
             ).all().get();

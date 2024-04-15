@@ -36,7 +36,7 @@ public class CapturingDelegationTokenMigrationClient implements DelegationTokenM
 
     @Override
     public List<String> getDelegationTokens() {
-        return new ArrayList<String>();
+        return new ArrayList<>();
     }
 
     @Override

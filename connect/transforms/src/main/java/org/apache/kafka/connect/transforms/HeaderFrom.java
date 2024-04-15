@@ -72,6 +72,7 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
                     "Either <code>move</code> if the fields are to be moved to the headers (removed from the key/value), " +
                             "or <code>copy</code> if the fields are to be copied to the headers (retained in the key/value).");
 
+    private final Cache<Schema, Schema> moveSchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
     enum Operation {
         MOVE(MOVE_OPERATION),
         COPY(COPY_OPERATION);
@@ -103,8 +104,6 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
     private List<String> headers;
 
     private Operation operation;
-
-    private Cache<Schema, Schema> moveSchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
 
     @Override
     public R apply(R record) {

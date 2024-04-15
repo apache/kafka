@@ -54,11 +54,13 @@ public final class QuorumFeatures {
         return Optional.empty();
     }
 
-    public static Map<String, VersionRange> defaultFeatureMap() {
+    public static Map<String, VersionRange> defaultFeatureMap(boolean enableUnstable) {
         Map<String, VersionRange> features = new HashMap<>(1);
         features.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                 MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
-                MetadataVersion.latest().featureLevel()));
+                enableUnstable ?
+                    MetadataVersion.latestTesting().featureLevel() :
+                    MetadataVersion.latestProduction().featureLevel()));
         return features;
     }
 
@@ -106,7 +108,7 @@ public final class QuorumFeatures {
         Map<Integer, ControllerRegistration> controllers
     ) {
         if (!metadataVersion.isMigrationSupported()) {
-            return Optional.of("Metadata version too low at " + metadataVersion);
+            return Optional.of("The metadata.version too low at " + metadataVersion);
         } else if (!metadataVersion.isControllerRegistrationSupported()) {
             return Optional.empty();
         }

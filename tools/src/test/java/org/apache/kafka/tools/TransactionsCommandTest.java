@@ -187,13 +187,24 @@ public class TransactionsCommandTest {
         assertEquals(expectedRows, new HashSet<>(table.subList(1, table.size())));
     }
 
-    @Test
-    public void testListTransactions() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testListTransactions(boolean hasDurationFilter) throws Exception {
         String[] args = new String[] {
             "--bootstrap-server",
             "localhost:9092",
             "list"
         };
+
+        if (hasDurationFilter) {
+            args = new String[] {
+                "--bootstrap-server",
+                "localhost:9092",
+                "list",
+                "--duration-filter",
+                Long.toString(Long.MAX_VALUE)
+            };
+        }
 
         Map<Integer, Collection<TransactionListing>> transactions = new HashMap<>();
         transactions.put(0, asList(
@@ -204,7 +215,11 @@ public class TransactionsCommandTest {
             new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
         ));
 
-        expectListTransactions(transactions);
+        if (hasDurationFilter) {
+            expectListTransactions(new ListTransactionsOptions().filterOnDuration(Long.MAX_VALUE), transactions);
+        } else {
+            expectListTransactions(transactions);
+        }
 
         execute(args);
         assertNormalExit();

@@ -495,13 +495,17 @@ public final class AssignmentTestUtils {
     }
 
     static void assertBalancedTasks(final Map<UUID, ClientState> clientStates) {
-        final TaskSkewReport taskSkewReport = analyzeTaskAssignmentBalance(clientStates);
+        assertBalancedTasks(clientStates, 1);
+    }
+
+    static void assertBalancedTasks(final Map<UUID, ClientState> clientStates, final int skewThreshold) {
+        final TaskSkewReport taskSkewReport = analyzeTaskAssignmentBalance(clientStates, skewThreshold);
         if (taskSkewReport.totalSkewedTasks() > 0) {
             fail("Expected a balanced task assignment, but was: " + taskSkewReport);
         }
     }
 
-    static TaskSkewReport analyzeTaskAssignmentBalance(final Map<UUID, ClientState> clientStates) {
+    static TaskSkewReport analyzeTaskAssignmentBalance(final Map<UUID, ClientState> clientStates, final int skewThreshold) {
         final Function<Integer, Map<UUID, AtomicInteger>> initialClientCounts =
             i -> clientStates.keySet().stream().collect(Collectors.toMap(c -> c, c -> new AtomicInteger(0)));
 
@@ -531,7 +535,7 @@ public final class AssignmentTestUtils {
             }
             final int taskSkew = max - min;
             maxTaskSkew = Math.max(maxTaskSkew, taskSkew);
-            if (taskSkew > 1) {
+            if (taskSkew > skewThreshold) {
                 skewedSubtopologies.add(entry.getKey());
             }
         }
@@ -676,18 +680,27 @@ public final class AssignmentTestUtils {
         return taskTopicPartitionMap;
     }
 
-    static Map<String, Object> configProps(final boolean enableRackAwareAssignor) {
-        return configProps(enableRackAwareAssignor, 0);
+    static Map<Subtopology, Set<TaskId>> getTasksForTopicGroup(final int tpSize, final int partitionSize) {
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = new HashMap<>();
+        for (int i = 0; i < tpSize; i++) {
+            for (int j = 0; j < partitionSize; j++) {
+                final Subtopology subtopology = new Subtopology(i, null);
+                tasksForTopicGroup.computeIfAbsent(subtopology, k -> new HashSet<>()).add(new TaskId(i, j));
+            }
+        }
+        return tasksForTopicGroup;
     }
 
-    static Map<String, Object> configProps(final boolean enableRackAwareAssignor, final int replicaNum) {
+    static Map<String, Object> configProps(final String rackAwareConfig) {
+        return configProps(rackAwareConfig, 0);
+    }
+
+    static Map<String, Object> configProps(final String rackAwareConfig, final int replicaNum) {
         final Map<String, Object> configurationMap = new HashMap<>();
         configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
         configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, USER_END_POINT);
         configurationMap.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, replicaNum);
-        if (enableRackAwareAssignor) {
-            configurationMap.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC);
-        }
+        configurationMap.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, rackAwareConfig);
 
         final ReferenceContainer referenceContainer = new ReferenceContainer();
         configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
@@ -696,7 +709,7 @@ public final class AssignmentTestUtils {
 
     static InternalTopicManager mockInternalTopicManagerForRandomChangelog(final int nodeSize, final int tpSize, final int partitionSize) {
         final MockTime time = new MockTime();
-        final StreamsConfig streamsConfig = new StreamsConfig(configProps(true));
+        final StreamsConfig streamsConfig = new StreamsConfig(configProps(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC));
         final MockClientSupplier mockClientSupplier = new MockClientSupplier();
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,
@@ -846,6 +859,15 @@ public final class AssignmentTestUtils {
         );
     }
 
+    static Map<Subtopology, Set<TaskId>> getTasksForTopicGroup() {
+        return mkMap(
+            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_0_6)),
+            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3)),
+            mkEntry(new Subtopology(2, null), mkSet(TASK_2_0, TASK_2_1, TASK_2_2, TASK_2_3)),
+            mkEntry(new Subtopology(3, null), mkSet(TASK_3_0, TASK_3_1, TASK_3_2))
+        );
+    }
+
     static Map<TaskId, Set<TopicPartition>> getTaskChangelogMapForAllTasks() {
         return mkMap(
             mkEntry(TASK_0_0, mkSet(CHANGELOG_TP_0_0)),
@@ -871,7 +893,7 @@ public final class AssignmentTestUtils {
 
     static InternalTopicManager mockInternalTopicManagerForChangelog() {
         final MockTime time = new MockTime();
-        final StreamsConfig streamsConfig = new StreamsConfig(configProps(true));
+        final StreamsConfig streamsConfig = new StreamsConfig(configProps(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC));
         final MockClientSupplier mockClientSupplier = new MockClientSupplier();
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,
@@ -995,12 +1017,16 @@ public final class AssignmentTestUtils {
     }
 
     static RackAwareTaskAssignor getRackAwareTaskAssignor(final AssignmentConfigs configs) {
+        return getRackAwareTaskAssignor(configs, mkMap());
+    }
+
+    static RackAwareTaskAssignor getRackAwareTaskAssignor(final AssignmentConfigs configs, final Map<Subtopology, Set<TaskId>> taskForTopicGroup) {
         return spy(
             new RackAwareTaskAssignor(
                 getClusterForAllTopics(),
                 getTaskTopicPartitionMapForAllTasks(),
                 getTaskChangelogMapForAllTasks(),
-                new HashMap<>(),
+                taskForTopicGroup,
                 getProcessRacksForAllProcess(),
                 mockInternalTopicManagerForChangelog(),
                 configs,

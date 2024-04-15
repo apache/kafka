@@ -18,17 +18,15 @@ package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Field;
@@ -65,7 +63,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
@@ -73,19 +70,17 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.INCLUDE_TASKS_FIELD_NAME;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.ONLY_FAILED_FIELD_NAME;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.READ_WRITE_TOTAL_TIMEOUT_MS;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_KEY;
-import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -177,6 +172,10 @@ public class KafkaConfigBackingStoreTest {
             "config-bytes-7".getBytes(), "config-bytes-8".getBytes(), "config-bytes-9".getBytes()
     );
 
+    private static final List<byte[]> TARGET_STATES_SERIALIZED = Arrays.asList(
+        "started".getBytes(), "paused".getBytes(), "stopped".getBytes()
+    );
+
     @Mock
     private Converter converter;
     @Mock
@@ -228,125 +227,6 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testStartStop() throws Exception {
-        props.put("config.storage.min.insync.replicas", "3");
-        props.put("config.storage.max.message.bytes", "1001");
-        createStore();
-        expectConfigure();
-        expectStart(Collections.emptyList(), Collections.emptyMap());
-        expectPartitionCount(1);
-        expectStop();
-        PowerMock.replayAll();
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-
-        assertEquals(TOPIC, capturedTopic.getValue());
-        assertEquals("org.apache.kafka.common.serialization.StringSerializer", capturedProducerProps.getValue().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
-        assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
-        assertEquals("org.apache.kafka.common.serialization.StringDeserializer", capturedConsumerProps.getValue().get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG));
-        assertEquals("org.apache.kafka.common.serialization.ByteArrayDeserializer", capturedConsumerProps.getValue().get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
-
-        assertEquals(TOPIC, capturedNewTopic.getValue().name());
-        assertEquals(1, capturedNewTopic.getValue().numPartitions());
-        assertEquals(TOPIC_REPLICATION_FACTOR, capturedNewTopic.getValue().replicationFactor());
-        assertEquals("3", capturedNewTopic.getValue().configs().get("min.insync.replicas"));
-        assertEquals("1001", capturedNewTopic.getValue().configs().get("max.message.bytes"));
-        configStorage.start();
-        configStorage.stop();
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testSnapshotCannotMutateInternalState() throws Exception {
-        props.put("config.storage.min.insync.replicas", "3");
-        props.put("config.storage.max.message.bytes", "1001");
-        createStore();
-        expectConfigure();
-        expectStart(Collections.emptyList(), Collections.emptyMap());
-        expectPartitionCount(1);
-        PowerMock.replayAll();
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-
-        configStorage.start();
-        ClusterConfigState snapshot = configStorage.snapshot();
-        assertNotSame(snapshot.connectorTaskCounts, configStorage.connectorTaskCounts);
-        assertNotSame(snapshot.connectorConfigs, configStorage.connectorConfigs);
-        assertNotSame(snapshot.connectorTargetStates, configStorage.connectorTargetStates);
-        assertNotSame(snapshot.taskConfigs, configStorage.taskConfigs);
-        assertNotSame(snapshot.connectorTaskCountRecords, configStorage.connectorTaskCountRecords);
-        assertNotSame(snapshot.connectorTaskConfigGenerations, configStorage.connectorTaskConfigGenerations);
-        assertNotSame(snapshot.connectorsPendingFencing, configStorage.connectorsPendingFencing);
-        assertNotSame(snapshot.inconsistentConnectors, configStorage.inconsistent);
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testPutConnectorConfig() throws Exception {
-        expectConfigure();
-        expectStart(Collections.emptyList(), Collections.emptyMap());
-
-        expectConvertWriteAndRead(
-                CONNECTOR_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
-                "properties", SAMPLE_CONFIGS.get(0));
-        configUpdateListener.onConnectorConfigUpdate(CONNECTOR_IDS.get(0));
-        EasyMock.expectLastCall();
-
-        expectConvertWriteAndRead(
-                CONNECTOR_CONFIG_KEYS.get(1), KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(1),
-                "properties", SAMPLE_CONFIGS.get(1));
-        configUpdateListener.onConnectorConfigUpdate(CONNECTOR_IDS.get(1));
-        EasyMock.expectLastCall();
-
-        // Config deletion
-        expectConnectorRemoval(CONNECTOR_CONFIG_KEYS.get(1), TARGET_STATE_KEYS.get(1));
-        configUpdateListener.onConnectorConfigRemove(CONNECTOR_IDS.get(1));
-        EasyMock.expectLastCall();
-
-        expectPartitionCount(1);
-        expectStop();
-
-        PowerMock.replayAll();
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-        configStorage.start();
-
-        // Null before writing
-        ClusterConfigState configState = configStorage.snapshot();
-        assertEquals(-1, configState.offset());
-        assertNull(configState.connectorConfig(CONNECTOR_IDS.get(0)));
-        assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
-
-        // Writing should block until it is written and read back from Kafka
-        configStorage.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0));
-        configState = configStorage.snapshot();
-        assertEquals(1, configState.offset());
-        assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
-        assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
-
-        // Second should also block and all configs should still be available
-        configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(1));
-        configState = configStorage.snapshot();
-        assertEquals(2, configState.offset());
-        assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
-        assertEquals(SAMPLE_CONFIGS.get(1), configState.connectorConfig(CONNECTOR_IDS.get(1)));
-
-        // Deletion should remove the second one we added
-        configStorage.removeConnectorConfig(CONNECTOR_IDS.get(1));
-        configState = configStorage.snapshot();
-        assertEquals(4, configState.offset());
-        assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
-        assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
-        assertNull(configState.targetState(CONNECTOR_IDS.get(1)));
-
-        configStorage.stop();
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
     public void testPutConnectorConfigProducerError() throws Exception {
         expectConfigure();
         expectStart(Collections.emptyList(), Collections.emptyMap());
@@ -373,7 +253,8 @@ public class KafkaConfigBackingStoreTest {
         assertEquals(0, configState.connectors().size());
 
         // verify that the producer exception from KafkaBasedLog::send is propagated
-        ConnectException e = assertThrows(ConnectException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0)));
+        ConnectException e = assertThrows(ConnectException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(0),
+            SAMPLE_CONFIGS.get(0), null));
         assertTrue(e.getMessage().contains("Error writing connector configuration to Kafka"));
         configStorage.stop();
 
@@ -505,16 +386,16 @@ public class KafkaConfigBackingStoreTest {
         configStorage.putTaskCountRecord(CONNECTOR_IDS.get(0), 6);
 
         // Should fail again when we get fenced out
-        assertThrows(PrivilegedWriteException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0)));
+        assertThrows(PrivilegedWriteException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0), null));
         // Should fail if we retry without reclaiming write privileges
-        assertThrows(IllegalStateException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0)));
+        assertThrows(IllegalStateException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0), null));
 
         // Should succeed even without write privileges (target states can be written by anyone)
         configStorage.putTargetState(CONNECTOR_IDS.get(1), TargetState.PAUSED);
 
         // Should succeed if we re-claim write privileges
         configStorage.claimWritePrivileges();
-        configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0));
+        configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0), null);
 
         configStorage.stop();
 
@@ -891,7 +772,6 @@ public class KafkaConfigBackingStoreTest {
         expectRead(serializedAfterStartup, deserializedAfterStartup);
 
         configUpdateListener.onConnectorTargetStateChange(CONNECTOR_IDS.get(0));
-        configUpdateListener.onConnectorTargetStateChange(CONNECTOR_IDS.get(1));
         EasyMock.expectLastCall();
 
         expectPartitionCount(1);
@@ -1387,42 +1267,6 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testRecordToRestartRequest() {
-        ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
-                CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
-        Struct struct = RESTART_REQUEST_STRUCTS.get(0);
-        SchemaAndValue schemaAndValue = new SchemaAndValue(struct.schema(), structToMap(struct));
-        RestartRequest restartRequest = configStorage.recordToRestartRequest(record, schemaAndValue);
-        assertEquals(CONNECTOR_1_NAME, restartRequest.connectorName());
-        assertEquals(struct.getBoolean(INCLUDE_TASKS_FIELD_NAME), restartRequest.includeTasks());
-        assertEquals(struct.getBoolean(ONLY_FAILED_FIELD_NAME), restartRequest.onlyFailed());
-    }
-
-    @Test
-    public void testRecordToRestartRequestOnlyFailedInconsistent() {
-        ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
-                CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
-        Struct struct = ONLY_FAILED_MISSING_STRUCT;
-        SchemaAndValue schemaAndValue = new SchemaAndValue(struct.schema(), structToMap(struct));
-        RestartRequest restartRequest = configStorage.recordToRestartRequest(record, schemaAndValue);
-        assertEquals(CONNECTOR_1_NAME, restartRequest.connectorName());
-        assertEquals(struct.getBoolean(INCLUDE_TASKS_FIELD_NAME), restartRequest.includeTasks());
-        assertFalse(restartRequest.onlyFailed());
-    }
-
-    @Test
-    public void testRecordToRestartRequestIncludeTasksInconsistent() {
-        ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
-                CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
-        Struct struct = INCLUDE_TASKS_MISSING_STRUCT;
-        SchemaAndValue schemaAndValue = new SchemaAndValue(struct.schema(), structToMap(struct));
-        RestartRequest restartRequest = configStorage.recordToRestartRequest(record, schemaAndValue);
-        assertEquals(CONNECTOR_1_NAME, restartRequest.connectorName());
-        assertFalse(restartRequest.includeTasks());
-        assertEquals(struct.getBoolean(ONLY_FAILED_FIELD_NAME), restartRequest.onlyFailed());
-    }
-
-    @Test
     public void testRestoreRestartRequestInconsistentState() throws Exception {
         // Restoring data should notify only of the latest values after loading is complete. This also validates
         // that inconsistent state doesnt prevent startup.
@@ -1561,24 +1405,6 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testFencableProducerPropertiesOverrideUserSuppliedValues() throws Exception {
-        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "preparing");
-        String groupId = "my-other-connect-cluster";
-        props.put(GROUP_ID_CONFIG, groupId);
-        props.put(TRANSACTIONAL_ID_CONFIG, "my-custom-transactional-id");
-        props.put(ENABLE_IDEMPOTENCE_CONFIG, "false");
-        createStore();
-
-        PowerMock.replayAll();
-
-        Map<String, Object> fencableProducerProperties = configStorage.fencableProducerProps(config);
-        assertEquals("connect-cluster-" + groupId, fencableProducerProperties.get(TRANSACTIONAL_ID_CONFIG));
-        assertEquals("true", fencableProducerProperties.get(ENABLE_IDEMPOTENCE_CONFIG));
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
     public void testConsumerPropertiesInsertedByDefaultWithExactlyOnceSourceEnabled() throws Exception {
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
         props.remove(ISOLATION_LEVEL_CONFIG);
@@ -1590,7 +1416,7 @@ public class KafkaConfigBackingStoreTest {
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
 
         assertEquals(
-                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_COMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
 
@@ -1600,7 +1426,7 @@ public class KafkaConfigBackingStoreTest {
     @Test
     public void testConsumerPropertiesOverrideUserSuppliedValuesWithExactlyOnceSourceEnabled() throws Exception {
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
-        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.toString());
         createStore();
 
         expectConfigure();
@@ -1609,7 +1435,7 @@ public class KafkaConfigBackingStoreTest {
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
 
         assertEquals(
-                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_COMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
 
@@ -1628,45 +1454,6 @@ public class KafkaConfigBackingStoreTest {
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
 
         assertNull(capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG));
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testConsumerPropertiesDoNotOverrideUserSuppliedValuesWithoutExactlyOnceSourceEnabled() throws Exception {
-        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "preparing");
-        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
-        createStore();
-
-        expectConfigure();
-        PowerMock.replayAll();
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-
-        assertEquals(
-                IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT),
-                capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
-        );
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testClientIds() throws Exception {
-        props = new HashMap<>(DEFAULT_CONFIG_STORAGE_PROPS);
-        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
-        createStore();
-
-        expectConfigure();
-        PowerMock.replayAll();
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-        Map<String, Object> fencableProducerProps = configStorage.fencableProducerProps(config);
-
-        final String expectedClientId = CLIENT_ID_BASE + "configs";
-        assertEquals(expectedClientId, capturedProducerProps.getValue().get(CLIENT_ID_CONFIG));
-        assertEquals(expectedClientId, capturedConsumerProps.getValue().get(CLIENT_ID_CONFIG));
-        assertEquals(expectedClientId + "-leader", fencableProducerProps.get(CLIENT_ID_CONFIG));
 
         PowerMock.verifyAll();
     }

@@ -46,7 +46,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -66,6 +65,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -405,7 +405,7 @@ public class KafkaOffsetBackingStoreTest {
         callback0.getValue().onCompletion(null, null);
         ExecutionException e = assertThrows(ExecutionException.class, () -> setFuture.get(10000, TimeUnit.MILLISECONDS));
         assertNotNull(e.getCause());
-        assertTrue(e.getCause() instanceof KafkaException);
+        assertInstanceOf(KafkaException.class, e.getCause());
 
         store.stop();
 
@@ -420,7 +420,7 @@ public class KafkaOffsetBackingStoreTest {
         store.configure(mockConfig(props));
 
         assertEquals(
-                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_COMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
     }
@@ -428,12 +428,12 @@ public class KafkaOffsetBackingStoreTest {
     @Test
     public void testConsumerPropertiesOverrideUserSuppliedValuesWithExactlyOnceSourceEnabled() {
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
-        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.toString());
 
         store.configure(mockConfig(props));
 
         assertEquals(
-                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_COMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
     }
@@ -451,12 +451,12 @@ public class KafkaOffsetBackingStoreTest {
     @Test
     public void testConsumerPropertiesDoNotOverrideUserSuppliedValuesWithoutExactlyOnceSourceEnabled() {
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
-        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.toString());
 
         store.configure(mockConfig(props));
 
         assertEquals(
-                IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_UNCOMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
 

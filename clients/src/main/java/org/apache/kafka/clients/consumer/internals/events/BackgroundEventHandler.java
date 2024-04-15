@@ -26,7 +26,7 @@ import java.util.Queue;
 /**
  * An event handler that receives {@link BackgroundEvent background events} from the
  * {@link ConsumerNetworkThread network thread} which are then made available to the application thread
- * via the {@link BackgroundEventProcessor}.
+ * via an {@link EventProcessor}.
  */
 
 public class BackgroundEventHandler {
@@ -46,7 +46,7 @@ public class BackgroundEventHandler {
      */
     public void add(BackgroundEvent event) {
         Objects.requireNonNull(event, "BackgroundEvent provided to add must be non-null");
-        log.trace("Enqueued event: {}", event);
         backgroundEventQueue.add(event);
+        log.trace("Enqueued event: {}", event);
     }
 }

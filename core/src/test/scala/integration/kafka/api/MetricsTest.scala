@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.{InvalidTopicException, UnknownTopicOrPart
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.TestJaasConfig
+import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteStorageMetrics}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -43,7 +44,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   private val kafkaServerJaasEntryName =
     s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KafkaServerContextName}"
-  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "false")
+  this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "false")
   this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
   this.serverConfig.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
   this.producerConfig.setProperty(ProducerConfig.LINGER_MS_CONFIG, "10")
@@ -320,16 +321,35 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     assertTrue(metrics.isEmpty, s"$errorMessage: ${metrics.keys}")
   }
 
+  private def fromNameToBrokerTopicStatsMBean(name: String): String = {
+    s"kafka.server:type=BrokerTopicMetrics,name=$name"
+  }
+
   private def verifyRemoteStorageMetrics(shouldContainMetrics: Boolean): Unit = {
     val metrics = RemoteStorageMetrics.allMetrics().asScala.filter(name =>
       KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.find(metric => {
         metric._1.getMBeanName().equals(name.getMBeanName)
       }).isDefined
     ).toList
+    val aggregatedBrokerTopicStats = Set(
+      RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName)
+    val aggregatedBrokerTopicMetrics = aggregatedBrokerTopicStats.filter(name =>
+      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.find(metric => {
+        metric._1.getMBeanName().equals(fromNameToBrokerTopicStatsMBean(name))
+      }).isDefined
+    ).toList
     if (shouldContainMetrics) {
       assertEquals(RemoteStorageMetrics.allMetrics().size(), metrics.size, s"Only $metrics appear in the metrics")
+      assertEquals(aggregatedBrokerTopicStats.size, aggregatedBrokerTopicMetrics.size, s"Only $aggregatedBrokerTopicMetrics appear in the metrics")
     } else {
       assertEquals(0, metrics.size, s"$metrics should not appear in the metrics")
+      assertEquals(0, aggregatedBrokerTopicMetrics.size, s"$aggregatedBrokerTopicMetrics should not appear in the metrics")
     }
   }
 }

@@ -70,7 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 240000, unit = MILLISECONDS)
 public class CoordinatorTest {
 
     private static final Logger log = LoggerFactory.getLogger(CoordinatorTest.class);

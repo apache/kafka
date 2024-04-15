@@ -52,7 +52,7 @@ public class KafkaNetworkChannel implements NetworkChannel {
 
     static class SendThread extends InterBrokerSendThread {
 
-        private Queue<RequestAndCompletionHandler> queue = new ConcurrentLinkedQueue<>();
+        private final Queue<RequestAndCompletionHandler> queue = new ConcurrentLinkedQueue<>();
 
         public SendThread(String name, KafkaClient networkClient, int requestTimeoutMs, Time time, boolean isInterruptible) {
             super(name, networkClient, requestTimeoutMs, time, isInterruptible);

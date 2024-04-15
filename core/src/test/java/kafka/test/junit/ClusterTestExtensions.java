@@ -128,7 +128,8 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             generatedClusterConfigs.add(ClusterConfig.defaultClusterBuilder().build());
         }
 
-        generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(config, testInvocations));
+        String baseDisplayName = context.getRequiredTestMethod().getName();
+        generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(baseDisplayName, config, testInvocations));
     }
 
     private void generateClusterConfigurations(ExtensionContext context, String generateClustersMethods, ClusterGenerator generator) {
@@ -183,8 +184,6 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             annot.securityProtocol(), annot.metadataVersion());
         if (!annot.name().isEmpty()) {
             builder.name(annot.name());
-        } else {
-            builder.name(context.getRequiredTestMethod().getName());
         }
         if (!annot.listener().isEmpty()) {
             builder.listenerName(annot.listener());
@@ -197,7 +196,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
         ClusterConfig config = builder.build();
         config.serverProperties().putAll(properties);
-        type.invocationContexts(config, testInvocations);
+        type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {

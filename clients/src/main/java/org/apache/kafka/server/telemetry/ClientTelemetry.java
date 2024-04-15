@@ -17,9 +17,8 @@
 
 package org.apache.kafka.server.telemetry;
 
-import org.apache.kafka.common.metrics.MetricsContext;
-import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.metrics.MetricsReporter;
 
 /**
  * A {@link MetricsReporter} may implement this interface to indicate support for collecting client
@@ -29,14 +28,9 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 public interface ClientTelemetry {
 
     /**
-     * Implemented by the broker {@link MetricsReporter} to provide a {@link ClientTelemetryReceiver}
-     * instance.
+     * Called by the broker to fetch instance of {@link ClientTelemetryReceiver}.
      * <p>
      * This instance may be cached by the broker.
-     * <p>
-     * This method must always be called after the initial call to
-     * {@link MetricsReporter#contextChange(MetricsContext)} on the {@link MetricsReporter}
-     * implementing this interface.
      *
      * @return broker side instance of {@link ClientTelemetryReceiver}.
      */

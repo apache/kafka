@@ -108,7 +108,7 @@ public class LocalLogManagerTest {
             long highestOffset = -1;
             for (String event : listener.serializedEvents()) {
                 if (event.startsWith(LAST_COMMITTED_OFFSET)) {
-                    long offset = Long.valueOf(
+                    long offset = Long.parseLong(
                         event.substring(LAST_COMMITTED_OFFSET.length() + 1));
                     if (offset < highestOffset) {
                         throw new RuntimeException("Invalid offset: " + offset +

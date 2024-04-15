@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -35,24 +36,24 @@ import java.util.SortedSet;
  * interface. When consumer group partition assignment changes, these methods are invoked. This class wraps those
  * callback calls with some logging, optional {@link Sensor} updates, etc.
  */
-class ConsumerRebalanceListenerInvoker {
+public class ConsumerRebalanceListenerInvoker {
 
     private final Logger log;
     private final SubscriptionState subscriptions;
     private final Time time;
-    private final ConsumerCoordinatorMetrics coordinatorMetrics;
+    private final RebalanceCallbackMetricsManager metricsManager;
 
     ConsumerRebalanceListenerInvoker(LogContext logContext,
                                      SubscriptionState subscriptions,
                                      Time time,
-                                     ConsumerCoordinatorMetrics coordinatorMetrics) {
+                                     RebalanceCallbackMetricsManager metricsManager) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.time = time;
-        this.coordinatorMetrics = coordinatorMetrics;
+        this.metricsManager = metricsManager;
     }
 
-    Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
+    public Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
         log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
@@ -61,12 +62,12 @@ class ConsumerRebalanceListenerInvoker {
             try {
                 final long startMs = time.milliseconds();
                 listener.get().onPartitionsAssigned(assignedPartitions);
-                coordinatorMetrics.assignCallbackSensor.record(time.milliseconds() - startMs);
+                metricsManager.recordPartitionsAssignedLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
                 log.error("User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
-                        listener.getClass().getName(), assignedPartitions, e);
+                        listener.get().getClass().getName(), assignedPartitions, e);
                 return e;
             }
         }
@@ -74,7 +75,7 @@ class ConsumerRebalanceListenerInvoker {
         return null;
     }
 
-    Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
+    public Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
         log.info("Revoke previously assigned partitions {}", Utils.join(revokedPartitions, ", "));
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(revokedPartitions);
@@ -87,12 +88,12 @@ class ConsumerRebalanceListenerInvoker {
             try {
                 final long startMs = time.milliseconds();
                 listener.get().onPartitionsRevoked(revokedPartitions);
-                coordinatorMetrics.revokeCallbackSensor.record(time.milliseconds() - startMs);
+                metricsManager.recordPartitionsRevokedLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
                 log.error("User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
-                        listener.getClass().getName(), revokedPartitions, e);
+                        listener.get().getClass().getName(), revokedPartitions, e);
                 return e;
             }
         }
@@ -100,7 +101,7 @@ class ConsumerRebalanceListenerInvoker {
         return null;
     }
 
-    Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
+    public Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
         log.info("Lost previously assigned partitions {}", Utils.join(lostPartitions, ", "));
         Set<TopicPartition> lostPausedPartitions = subscriptions.pausedPartitions();
         lostPausedPartitions.retainAll(lostPartitions);
@@ -113,12 +114,12 @@ class ConsumerRebalanceListenerInvoker {
             try {
                 final long startMs = time.milliseconds();
                 listener.get().onPartitionsLost(lostPartitions);
-                coordinatorMetrics.loseCallbackSensor.record(time.milliseconds() - startMs);
+                metricsManager.recordPartitionsLostLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
                 log.error("User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
-                        listener.getClass().getName(), lostPartitions, e);
+                        listener.get().getClass().getName(), lostPartitions, e);
                 return e;
             }
         }

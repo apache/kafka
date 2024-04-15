@@ -59,7 +59,7 @@ import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
  * Manages DelegationTokens.
  */
 public class DelegationTokenControlManager {
-    private Time time = Time.SYSTEM;
+    private final Time time = Time.SYSTEM;
 
     static class Builder {
         private LogContext logContext = null;

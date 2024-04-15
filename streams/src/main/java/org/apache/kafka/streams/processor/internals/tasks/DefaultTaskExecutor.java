@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.internals.ProcessingThread;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -39,7 +40,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class DefaultTaskExecutor implements TaskExecutor {
 
-    private class TaskExecutorThread extends Thread {
+    private class TaskExecutorThread extends Thread implements ProcessingThread {
 
         private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
         private final AtomicReference<KafkaFutureImpl<StreamTask>> taskReleaseRequested = new AtomicReference<>(null);
