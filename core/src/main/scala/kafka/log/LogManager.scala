@@ -283,6 +283,8 @@ class LogManager(logDirs: Seq[File],
    */
   def directoryId(dir: String): Option[Uuid] = directoryIds.get(dir)
 
+  def directoryPath(uuid: Uuid): Option[String] = directoryIds.find(_._2 == uuid).map(_._1)
+
   /**
    * Determine directory ID for each directory with a meta.properties.
    * If meta.properties does not include a directory ID, one is generated and persisted back to meta.properties.

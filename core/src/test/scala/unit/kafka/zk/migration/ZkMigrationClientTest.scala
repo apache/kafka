@@ -28,7 +28,7 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.migration.{KRaftMigrationZkWriter, ZkMigrationLeadershipState}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.Test
 
@@ -331,7 +331,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     val topicId = Uuid.randomUuid()
     val props = new Properties()
     props.put(KafkaConfig.DefaultReplicationFactorProp, "1") // normal config
-    props.put(KafkaConfig.SslKeystorePasswordProp, SECRET) // sensitive config
+    props.put(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, SECRET) // sensitive config
 
     //    // Leave Zk in an incomplete state.
     //    zkClient.createTopicAssignment(topicName, Some(topicId), Map(tp -> Seq(1)))
@@ -402,7 +402,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(2, brokerProps.size())
 
     brokerProps.asScala.foreach { case (key, value) =>
-      if (key == KafkaConfig.SslKeystorePasswordProp) {
+      if (key == KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) {
         assertEquals(SECRET, encoder.decode(value).value)
       } else {
         assertEquals(props.getProperty(key), value)
@@ -410,7 +410,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     }
 
     topicProps.asScala.foreach { case (key, value) =>
-      if (key == KafkaConfig.SslKeystorePasswordProp) {
+      if (key == KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) {
         assertEquals(SECRET, encoder.decode(value).value)
       } else {
         assertEquals(props.getProperty(key), value)

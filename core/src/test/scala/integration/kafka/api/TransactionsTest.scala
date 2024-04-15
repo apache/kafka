@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerGrou
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -61,18 +62,18 @@ class TransactionsTest extends IntegrationTestHarness {
     props.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
      // Set a smaller value for the number of partitions for the __consumer_offsets topic + // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
     props.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
-    props.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
-    props.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
-    props.put(KafkaConfig.TransactionsTopicMinISRProp, 2.toString)
+    props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 3.toString)
+    props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, 2.toString)
+    props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, 2.toString)
     props.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
     props.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
     props.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
     props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-    props.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
+    props.put(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, "200")
 
     // The new group coordinator does not support verifying transactions yet.
     if (isNewGroupCoordinatorEnabled()) {
-      props.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "false")
+      props.put(TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "false")
     }
 
     props

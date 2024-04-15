@@ -2886,6 +2886,11 @@ class ReplicaManager(val config: KafkaConfig,
       topicPartitionActualLog <- logManager.getLog(partition.topicPartition(), false)
       topicPartitionActualDirectoryId <- logManager.directoryId(topicPartitionActualLog.dir.getParent)
       if partitionDirectoryId != topicPartitionActualDirectoryId
-    } directoryEventHandler.handleAssignment(new common.TopicIdPartition(partition.topicId, partition.partition()), topicPartitionActualDirectoryId, () => ())
+    } directoryEventHandler.handleAssignment(
+      new common.TopicIdPartition(partition.topicId, partition.partition()),
+      topicPartitionActualDirectoryId,
+      "Applying metadata delta",
+      () => ()
+    )
   }
 }
