@@ -19,6 +19,8 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 
+import java.util.function.BiConsumer;
+
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -49,6 +51,16 @@ public class RequestStateTest {
         assertTrue(state.canSendRequest(200));
     }
 
+    @Test
+    public void testTrackInflightOnSuccessfulAttempt() {
+        testTrackInflight(RequestState::onSuccessfulAttempt);
+    }
+
+    @Test
+    public void testTrackInflightOnFailedAttempt() {
+        testTrackInflight(RequestState::onFailedAttempt);
+    }
+
     /**
      * In some cases, the network layer is <em>very</em> fast and can send out multiple requests within the same
      * millisecond timestamp.
@@ -60,8 +72,7 @@ public class RequestStateTest {
      * inflight request. However, this approach would incorrectly return <code>false</code> from
      * {@link RequestState#requestInFlight()} if the two timestamps were <em>equal</em>.
      */
-    @Test
-    public void testTrackInflightWithSuccessfulAttempt() {
+    private void testTrackInflight(BiConsumer<RequestState, Integer> onCompletedAttempt) {
         RequestState state = new RequestState(
                 new LogContext(),
                 this.getClass().getSimpleName(),
@@ -78,21 +89,12 @@ public class RequestStateTest {
         assertTrue(state.requestInFlight());
 
         // Now we've received the response.
-        state.onSuccessfulAttempt(236);
+        onCompletedAttempt.accept(state, 236);
 
         // When we've sent a second request with THE SAME TIMESTAMP as the previous request,
         // the flag should update from false to true.
         assertFalse(state.requestInFlight());
         state.onSendAttempt(236);
-        assertTrue(state.requestInFlight());
-
-        // For our second request, we receive its response. It's a failed response, but a response all the same.
-        state.onFailedAttempt(242);
-
-        // When we've sent a second request with THE SAME TIMESTAMP as the previous request,
-        // the flag should update from false to true.
-        assertFalse(state.requestInFlight());
-        state.onSendAttempt(242);
         assertTrue(state.requestInFlight());
     }
 }
