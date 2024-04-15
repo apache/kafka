@@ -62,8 +62,8 @@ public class RequestStateTest {
     }
 
     /**
-     * In some cases, the network layer is <em>very</em> fast and can send out multiple requests within the same
-     * millisecond timestamp.
+     * In some cases, the network layer is <em>very</em> fast and can send out a second request within the same
+     * millisecond timestamp as receiving the first response.
      *
      * <p/>
      *
@@ -91,7 +91,7 @@ public class RequestStateTest {
         // Now we've received the response.
         onCompletedAttempt.accept(state, 236);
 
-        // When we've sent a second request with THE SAME TIMESTAMP as the previous request,
+        // When we've sent a second request with THE SAME TIMESTAMP as the previous response,
         // the flag should update from false to true.
         assertFalse(state.requestInFlight());
         state.onSendAttempt(236);
