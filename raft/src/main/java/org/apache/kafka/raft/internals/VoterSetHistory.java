@@ -18,7 +18,6 @@ package org.apache.kafka.raft.internals;
 
 import java.util.Optional;
 
-// TODO: write unittest for VoterSetHistory 
 /**
  * A type for storing the historical value of the set of voters.
  *

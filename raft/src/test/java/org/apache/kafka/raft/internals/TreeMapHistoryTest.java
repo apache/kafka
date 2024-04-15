@@ -38,6 +38,8 @@ final public class TreeMapHistoryTest {
         history.addAt(100, "100");
         assertThrows(IllegalArgumentException.class, () -> history.addAt(99, ""));
         assertThrows(IllegalArgumentException.class, () -> history.addAt(100, ""));
+        assertEquals(Optional.of("100"), history.valueAtOrBefore(100));
+        assertEquals(Optional.of("100"), history.valueAtOrBefore(201));
 
         history.addAt(200, "200");
         assertEquals(Optional.empty(), history.valueAtOrBefore(99));

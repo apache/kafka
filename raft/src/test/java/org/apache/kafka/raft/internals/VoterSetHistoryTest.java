@@ -17,9 +17,12 @@
 package org.apache.kafka.raft.internals;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 final public class VoterSetHistoryTest {
     @Test
@@ -27,20 +30,138 @@ final public class VoterSetHistoryTest {
         VoterSet staticVoterSet = new VoterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)));
         VoterSetHistory votersHistory = new VoterSetHistory(Optional.of(staticVoterSet));
 
-        validateStaticVoterSet(staticVoterSet, votersHistory);
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(0));
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(100));
+        assertEquals(staticVoterSet, votersHistory.lastValue());
 
         // Should be a no-op
         votersHistory.truncateTo(100);
-        validateStaticVoterSet(staticVoterSet, votersHistory);
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(0));
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(100));
+        assertEquals(staticVoterSet, votersHistory.lastValue());
 
         // Should be a no-op
         votersHistory.trimPrefixTo(100);
-        validateStaticVoterSet(staticVoterSet, votersHistory);
-    }
-
-    private void validateStaticVoterSet(VoterSet expected, VoterSetHistory votersHistory) {
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(0));
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(100));
-        assertEquals(expected, votersHistory.lastValue());
+        assertEquals(staticVoterSet, votersHistory.lastValue());
+    }
+
+    @Test
+    void TestNoStaticVoterSet() {
+        VoterSetHistory votersHistory = new VoterSetHistory(Optional.empty());
+
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(0));
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(100));
+        assertThrows(IllegalStateException.class, votersHistory::lastValue);
+    }
+
+    @Test
+    void testAddAt() {
+        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3));
+        VoterSet staticVoterSet = new VoterSet(new HashMap<>(voterMap));
+        VoterSetHistory votersHistory = new VoterSetHistory(Optional.of(staticVoterSet));
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> votersHistory.addAt(-1, new VoterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3))))
+        );
+        assertEquals(staticVoterSet, votersHistory.lastValue());
+
+        voterMap.put(4, VoterSetTest.voterNode(4));
+        VoterSet addedVoterSet = new VoterSet(new HashMap<>(voterMap));
+        votersHistory.addAt(100, addedVoterSet);
+
+        assertEquals(addedVoterSet, votersHistory.lastValue());
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(99));
+        assertEquals(Optional.of(addedVoterSet), votersHistory.valueAtOrBefore(100));
+
+        VoterSet removedVoterSet = new VoterSet(new HashMap<>(voterMap));
+        votersHistory.addAt(200, removedVoterSet);
+
+        assertEquals(removedVoterSet, votersHistory.lastValue());
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(99));
+        assertEquals(Optional.of(addedVoterSet), votersHistory.valueAtOrBefore(199));
+        assertEquals(Optional.of(removedVoterSet), votersHistory.valueAtOrBefore(200));
+    }
+
+    @Test
+    void testTruncateTo() {
+        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3));
+        VoterSet staticVoterSet = new VoterSet(new HashMap<>(voterMap));
+        VoterSetHistory votersHistory = new VoterSetHistory(Optional.of(staticVoterSet));
+
+        // Add voter 4 to the voter set and voter set history
+        voterMap.put(4, VoterSetTest.voterNode(4));
+        VoterSet voterSet1234 = new VoterSet(new HashMap<>(voterMap));
+        votersHistory.addAt(100, voterSet1234);
+
+        // Add voter 5 to the voter set and voter set history
+        voterMap.put(5, VoterSetTest.voterNode(5));
+        VoterSet voterSet12345 = new VoterSet(new HashMap<>(voterMap));
+        votersHistory.addAt(200, voterSet12345);
+
+        votersHistory.truncateTo(201);
+        assertEquals(Optional.of(new History.Entry<>(200, voterSet12345)), votersHistory.lastEntry());
+        votersHistory.truncateTo(200);
+        assertEquals(Optional.of(new History.Entry<>(100, voterSet1234)), votersHistory.lastEntry());
+        votersHistory.truncateTo(101);
+        assertEquals(Optional.of(new History.Entry<>(100, voterSet1234)), votersHistory.lastEntry());
+        votersHistory.truncateTo(100);
+        assertEquals(Optional.of(new History.Entry<>(-1, staticVoterSet)), votersHistory.lastEntry());
+    }
+
+    @Test
+    void testTrimPrefixTo() {
+        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3));
+        VoterSet staticVoterSet = new VoterSet(new HashMap<>(voterMap));
+        VoterSetHistory votersHistory = new VoterSetHistory(Optional.of(staticVoterSet));
+
+        // Add voter 4 to the voter set and voter set history
+        voterMap.put(4, VoterSetTest.voterNode(4));
+        VoterSet voterSet1234 = new VoterSet(new HashMap<>(voterMap));
+        votersHistory.addAt(100, voterSet1234);
+
+        // Add voter 5 to the voter set and voter set history
+        voterMap.put(5, VoterSetTest.voterNode(5));
+        VoterSet voterSet12345 = new VoterSet(new HashMap<>(voterMap));
+        votersHistory.addAt(200, voterSet12345);
+
+        votersHistory.trimPrefixTo(99);
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(99));
+        assertEquals(Optional.of(voterSet1234), votersHistory.valueAtOrBefore(100));
+
+        votersHistory.trimPrefixTo(100);
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(99));
+        assertEquals(Optional.of(voterSet1234), votersHistory.valueAtOrBefore(100));
+
+        votersHistory.trimPrefixTo(101);
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(99));
+        assertEquals(Optional.of(voterSet1234), votersHistory.valueAtOrBefore(100));
+
+        votersHistory.trimPrefixTo(200);
+        assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(199));
+        assertEquals(Optional.of(voterSet12345), votersHistory.valueAtOrBefore(200));
+    }
+
+    @Test
+    void testClear() {
+        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3));
+        VoterSet staticVoterSet = new VoterSet(new HashMap<>(voterMap));
+        VoterSetHistory votersHistory = new VoterSetHistory(Optional.of(staticVoterSet));
+
+        // Add voter 4 to the voter set and voter set history
+        voterMap.put(4, VoterSetTest.voterNode(4));
+        VoterSet voterSet1234 = new VoterSet(new HashMap<>(voterMap));
+        votersHistory.addAt(100, voterSet1234);
+
+        // Add voter 5 to the voter set and voter set history
+        voterMap.put(5, VoterSetTest.voterNode(5));
+        VoterSet voterSet12345 = new VoterSet(new HashMap<>(voterMap));
+        votersHistory.addAt(200, voterSet12345);
+
+        votersHistory.clear();
+
+        assertEquals(Optional.of(new History.Entry<>(-1, staticVoterSet)), votersHistory.lastEntry());
     }
 }
