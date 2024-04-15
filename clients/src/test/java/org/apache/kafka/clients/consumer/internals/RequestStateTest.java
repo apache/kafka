@@ -48,4 +48,53 @@ public class RequestStateTest {
         state.reset();
         assertTrue(state.canSendRequest(200));
     }
+
+    /**
+     * In some cases, the network layer is <em>very</em> fast and can send out multiple requests within the same
+     * millisecond timestamp.
+     *
+     * <p/>
+     *
+     * The previous logic for tracking inflight status used timestamps: if the timestamp from the last received
+     * response was <em>less</em> than the timestamp from the last sent request, we'd interpret that as having an
+     * inflight request. However, this approach would incorrectly return <code>false</code> from
+     * {@link RequestState#requestInFlight()} if the two timestamps were <em>equal</em>.
+     */
+    @Test
+    public void testTrackInflightWithSuccessfulAttempt() {
+        long currentTimeMs = 20;
+
+        RequestState state = new RequestState(
+                new LogContext(),
+                this.getClass().getSimpleName(),
+                100,
+                2,
+                1000,
+                0);
+
+        // This is just being paranoid...
+        assertFalse(state.requestInFlight());
+
+        // When we've sent a request, the flag should update from false to true.
+        state.onSendAttempt(currentTimeMs);
+        assertTrue(state.requestInFlight());
+
+        // Now we've received the response.
+        state.onSuccessfulAttempt(currentTimeMs);
+
+        // When we've sent a second request with THE SAME TIMESTAMP as the previous request,
+        // the flag should update from false to true.
+        assertFalse(state.requestInFlight());
+        state.onSendAttempt(currentTimeMs);
+        assertTrue(state.requestInFlight());
+
+        // For our second request, we receive its response. It's a failed response, but a response all the same.
+        state.onFailedAttempt(currentTimeMs);
+
+        // When we've sent a second request with THE SAME TIMESTAMP as the previous request,
+        // the flag should update from false to true.
+        assertFalse(state.requestInFlight());
+        state.onSendAttempt(currentTimeMs);
+        assertTrue(state.requestInFlight());
+    }
 }
