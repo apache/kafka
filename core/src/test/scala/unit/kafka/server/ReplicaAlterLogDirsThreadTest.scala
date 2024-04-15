@@ -464,7 +464,8 @@ class ReplicaAlterLogDirsThreadTest {
       ArgumentCaptor.forClass(classOf[org.apache.kafka.server.common.TopicIdPartition])
     val logIdCaptureT1p0: ArgumentCaptor[Uuid] = ArgumentCaptor.forClass(classOf[Uuid])
 
-    verify(directoryEventHandler).handleAssignment(topicIdPartitionCaptureT1p0.capture(), logIdCaptureT1p0.capture(), any())
+    verify(directoryEventHandler).handleAssignment(topicIdPartitionCaptureT1p0.capture(), logIdCaptureT1p0.capture(),
+      ArgumentMatchers.eq("Reverting reassignment for canceled future replica"), any())
 
     assertEquals(new org.apache.kafka.server.common.TopicIdPartition(topicId, t1p0.partition()), topicIdPartitionCaptureT1p0.getValue)
     assertEquals(partition.logDirectoryId().get, logIdCaptureT1p0.getValue)
@@ -499,8 +500,10 @@ class ReplicaAlterLogDirsThreadTest {
 
     thread.removePartitions(tp.toSet)
 
-    verify(directoryEventHandler).handleAssignment(ArgumentMatchers.eq(tips(1)), ArgumentMatchers.eq(dirIds(1)), any())
-    verify(directoryEventHandler).handleAssignment(ArgumentMatchers.eq(tips(2)), ArgumentMatchers.eq(dirIds(2)), any())
+    verify(directoryEventHandler).handleAssignment(ArgumentMatchers.eq(tips(1)), ArgumentMatchers.eq(dirIds(1)),
+      ArgumentMatchers.eq("Reverting reassignment for canceled future replica"), any())
+    verify(directoryEventHandler).handleAssignment(ArgumentMatchers.eq(tips(2)), ArgumentMatchers.eq(dirIds(2)),
+      ArgumentMatchers.eq("Reverting reassignment for canceled future replica"), any())
     verifyNoMoreInteractions(directoryEventHandler)
   }
 

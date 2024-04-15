@@ -226,7 +226,6 @@ public class LogConfig extends AbstractConfig {
     @SuppressWarnings("deprecation")
     private static final String MESSAGE_FORMAT_VERSION_DOC = TopicConfig.MESSAGE_FORMAT_VERSION_DOC;
 
-    @SuppressWarnings("deprecation")
     private static final LogConfigDef CONFIG = new LogConfigDef();
     static {
         CONFIG.
@@ -390,7 +389,6 @@ public class LogConfig extends AbstractConfig {
 
     //In the transition period before messageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
     // we are using its value if messageTimestampBeforeMaxMs default value hasn't changed.
-    @SuppressWarnings("deprecation")
     private long getMessageTimestampBeforeMaxMs() {
         final Long messageTimestampBeforeMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG);
         if (!messageTimestampBeforeMaxMs.equals(Long.MAX_VALUE)) {
@@ -402,7 +400,6 @@ public class LogConfig extends AbstractConfig {
 
     //In the transition period before messageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
     // we are using its value if messageTimestampAfterMaxMs default value hasn't changed.
-    @SuppressWarnings("deprecation")
     private long getMessageTimestampAfterMaxMs() {
         final Long messageTimestampAfterMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
         if (!messageTimestampAfterMaxMs.equals(Long.MAX_VALUE)) {
@@ -412,7 +409,6 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    @SuppressWarnings("deprecation")
     public RecordVersion recordVersion() {
         return messageFormatVersion.highestSupportedRecordVersion();
     }

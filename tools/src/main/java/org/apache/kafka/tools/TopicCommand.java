@@ -296,7 +296,7 @@ public abstract class TopicCommand {
                 .map(ce -> ce.name() + "=" + ce.value())
                 .collect(Collectors.joining(","));
             System.out.print("Topic: " +  topic);
-            if (topicId != Uuid.ZERO_UUID)
+            if (!topicId.equals(Uuid.ZERO_UUID))
                 System.out.print("\tTopicId: " + topicId);
             System.out.print("\tPartitionCount: " + numPartitions);
             System.out.print("\tReplicationFactor: " + replicationFactor);
@@ -539,7 +539,7 @@ public abstract class TopicCommand {
         public void describeTopic(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
             // If topicId is provided and not zero, will use topicId regardless of topic name
             Optional<Uuid> inputTopicId = opts.topicId()
-                .map(Uuid::fromString).filter(uuid -> uuid != Uuid.ZERO_UUID);
+                .map(Uuid::fromString).filter(uuid -> !uuid.equals(Uuid.ZERO_UUID));
             Boolean useTopicId = inputTopicId.isPresent();
 
             List<Uuid> topicIds;
