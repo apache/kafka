@@ -201,10 +201,10 @@ object TierStateMachineTest {
   class Params extends ArgumentsProvider {
     override def provideArguments(context: ExtensionContext): java.util.stream.Stream[_ <: Arguments] =
       java.util.stream.Stream.of(
-        Arguments.of(true, true),
-        Arguments.of(true, false),
-        Arguments.of(false, true),
-        Arguments.of(false, false)
+        Arguments.of(Boolean.box(true), Boolean.box(true)),
+        Arguments.of(Boolean.box(true), Boolean.box(false)),
+        Arguments.of(Boolean.box(false), Boolean.box(true)),
+        Arguments.of(Boolean.box(false), Boolean.box(false))
       )
   }
 }
