@@ -597,7 +597,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 int brokerId = entry.getKey();
                 BrokerServer broker = entry.getValue();
                 futureEntries.add(new SimpleImmutableEntry<>("broker" + brokerId,
-                    executorService.submit(broker::shutdown)));
+                    executorService.submit((Runnable) broker::shutdown)));
             }
             waitForAllFutures(futureEntries);
             futureEntries.clear();

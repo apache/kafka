@@ -39,9 +39,8 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
    * metadata refresh the consumer becomes subscribed to this new topic and all partitions
    * of that topic are assigned to it.
    */
-  // TODO: enable this test for the consumer group protocol when support for pattern subscriptions is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPatternSubscription(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
@@ -98,9 +97,8 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
    * The metadata refresh interval is intentionally increased to a large enough value to guarantee
    * that it is the subscription call that triggers a metadata refresh, and not the timeout.
    */
-  // TODO: enable this test for the consumer group protocol when support for pattern subscriptions is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testSubsequentPatternSubscription(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "30000")
     val consumer = createConsumer()
@@ -151,9 +149,8 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
    * When consumer unsubscribes from all its subscriptions, it is expected that its
    * assignments are cleared right away.
    */
-  // TODO: enable this test for the consumer group protocol when support for pattern subscriptions is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPatternUnsubscription(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
@@ -229,9 +226,6 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
 }
 
 object PlaintextConsumerSubscriptionTest {
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly: Stream[Arguments] =
-    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly()
-
   def getTestQuorumAndGroupProtocolParametersAll: Stream[Arguments] =
     BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
 }

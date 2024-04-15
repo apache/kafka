@@ -53,6 +53,7 @@ import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 
+import java.time.Duration
 import java.util
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
@@ -295,11 +296,13 @@ class BrokerServer(
         time,
         assignmentsChannelManager,
         config.brokerId,
-        () => lifecycleManager.brokerEpoch
+        () => lifecycleManager.brokerEpoch,
+        (directoryId: Uuid) => logManager.directoryPath(directoryId).asJava,
+        (topicId: Uuid) => Optional.ofNullable(metadataCache.topicIdsToNames().get(topicId))
       )
       val directoryEventHandler = new DirectoryEventHandler {
-        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, callback: Runnable): Unit =
-          assignmentsManager.onAssignment(partition, directoryId, callback)
+        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, reason: String, callback: Runnable): Unit =
+          assignmentsManager.onAssignment(partition, directoryId, reason, callback)
 
         override def handleFailure(directoryId: Uuid): Unit =
           lifecycleManager.propagateDirectoryFailure(directoryId)
@@ -568,7 +571,8 @@ class BrokerServer(
         config.groupMaxSessionTimeoutMs,
         config.offsetsRetentionCheckIntervalMs,
         config.offsetsRetentionMinutes * 60 * 1000L,
-        config.offsetCommitTimeoutMs
+        config.offsetCommitTimeoutMs,
+        config.consumerGroupMigrationPolicy
       )
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",
@@ -623,9 +627,10 @@ class BrokerServer(
     }
   }
 
-  override def shutdown(): Unit = {
+  override def shutdown(timeout: Duration): Unit = {
     if (!maybeChangeStatus(STARTED, SHUTTING_DOWN)) return
     try {
+      val deadline = time.milliseconds() + timeout.toMillis;
       info("shutting down")
 
       if (config.controlledShutdownEnable) {
@@ -634,7 +639,8 @@ class BrokerServer(
 
         lifecycleManager.beginControlledShutdown()
         try {
-          lifecycleManager.controlledShutdownFuture.get(5L, TimeUnit.MINUTES)
+          val controlledShutdownTimeoutMs = deadline - time.milliseconds()
+          lifecycleManager.controlledShutdownFuture.get(controlledShutdownTimeoutMs, TimeUnit.MILLISECONDS)
         } catch {
           case _: TimeoutException =>
             error("Timed out waiting for the controller to approve controlled shutdown")
