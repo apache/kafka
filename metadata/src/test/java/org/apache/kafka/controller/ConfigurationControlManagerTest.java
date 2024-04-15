@@ -125,25 +125,25 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testReplay() throws Exception {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-            setMinIsrConfigUpdatePartitionHandler(t -> System.out.println("Do nothing")).
+            setMinIsrConfigUpdatePartitionHandler(t -> { }).
             setKafkaConfigSchema(SCHEMA).
             build();
         assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
-        assertDoesNotThrow(() -> manager.replay(new ConfigRecord().
+        manager.replay(new ConfigRecord().
             setResourceType(BROKER.id()).setResourceName("0").
-            setName("foo.bar").setValue("1,2")));
+            setName("foo.bar").setValue("1,2"));
         assertEquals(Collections.singletonMap("foo.bar", "1,2"),
             manager.getConfigs(BROKER0));
-        assertDoesNotThrow(() -> manager.replay(new ConfigRecord().
+        manager.replay(new ConfigRecord().
             setResourceType(BROKER.id()).setResourceName("0").
-            setName("foo.bar").setValue(null)));
+            setName("foo.bar").setValue(null));
         assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
-        assertDoesNotThrow(() -> manager.replay(new ConfigRecord().
+        manager.replay(new ConfigRecord().
             setResourceType(TOPIC.id()).setResourceName("mytopic").
-            setName("abc").setValue("x,y,z")));
-        assertDoesNotThrow(() -> manager.replay(new ConfigRecord().
+            setName("abc").setValue("x,y,z"));
+        manager.replay(new ConfigRecord().
             setResourceType(TOPIC.id()).setResourceName("mytopic").
-            setName("def").setValue("blah")));
+            setName("def").setValue("blah"));
         assertEquals(toMap(entry("abc", "x,y,z"), entry("def", "blah")),
             manager.getConfigs(MYTOPIC));
         assertEquals("x,y,z", manager.getTopicConfig(MYTOPIC.name(), "abc"));
@@ -153,7 +153,7 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterConfigs() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-            setMinIsrConfigUpdatePartitionHandler(t -> System.out.println("Do nothing")).
+            setMinIsrConfigUpdatePartitionHandler(t -> { }).
             setKafkaConfigSchema(SCHEMA).
             build();
 
@@ -185,7 +185,7 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterConfig() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-            setMinIsrConfigUpdatePartitionHandler(t -> System.out.println("Do nothing")).
+            setMinIsrConfigUpdatePartitionHandler(t -> { }).
             setKafkaConfigSchema(SCHEMA).
             build();
         Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps = toMap(entry("abc", entry(APPEND, "123")));
@@ -210,7 +210,7 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterMultipleConfigValues() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-            setMinIsrConfigUpdatePartitionHandler(t -> System.out.println("Do nothing")).
+            setMinIsrConfigUpdatePartitionHandler(t -> { }).
             setKafkaConfigSchema(SCHEMA).
             build();
 
@@ -258,7 +258,7 @@ public class ConfigurationControlManagerTest {
     public void testIncrementalAlterConfigsWithoutExistence() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setKafkaConfigSchema(SCHEMA).
-            setMinIsrConfigUpdatePartitionHandler(t -> System.out.println("Do nothing")).
+            setMinIsrConfigUpdatePartitionHandler(t -> { }).
             setExistenceChecker(TestExistenceChecker.INSTANCE).
             build();
         ConfigResource existingTopic = new ConfigResource(TOPIC, "ExistingTopic");
@@ -320,16 +320,16 @@ public class ConfigurationControlManagerTest {
                 entry("broker.config.to.remove", null)))));
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setKafkaConfigSchema(SCHEMA).
-            setMinIsrConfigUpdatePartitionHandler(t -> System.out.println("Do nothing")).
+            setMinIsrConfigUpdatePartitionHandler(t -> { }).
             setAlterConfigPolicy(Optional.of(policy)).
             build();
         // Existing configs should not be passed to the policy
-        assertDoesNotThrow(() -> manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                setName("broker.config").setValue("123")));
-        assertDoesNotThrow(() -> manager.replay(new ConfigRecord().setResourceType(TOPIC.id()).setResourceName(MYTOPIC.name()).
-                setName("topic.config").setValue("123")));
-        assertDoesNotThrow(() -> manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                setName("broker.config.to.remove").setValue("123")));
+        manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                setName("broker.config").setValue("123"));
+        manager.replay(new ConfigRecord().setResourceType(TOPIC.id()).setResourceName(MYTOPIC.name()).
+                setName("topic.config").setValue("123"));
+        manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                setName("broker.config.to.remove").setValue("123"));
         assertEquals(ControllerResult.atomicOf(asList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
                     setName("foo.bar").setValue("123"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
@@ -379,7 +379,7 @@ public class ConfigurationControlManagerTest {
     public void testLegacyAlterConfigs() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setKafkaConfigSchema(SCHEMA).
-            setMinIsrConfigUpdatePartitionHandler(t -> System.out.println("Do nothing")).
+            setMinIsrConfigUpdatePartitionHandler(t -> { }).
             setAlterConfigPolicy(Optional.of(new CheckForNullValuesPolicy())).
             build();
         List<ApiMessageAndVersion> expectedRecords1 = asList(
@@ -395,7 +395,7 @@ public class ConfigurationControlManagerTest {
                 toMap(entry(MYTOPIC, toMap(entry("abc", "456"), entry("def", "901")))),
                 true));
         for (ApiMessageAndVersion message : expectedRecords1) {
-            assertDoesNotThrow(() -> manager.replay((ConfigRecord) message.message()));
+            manager.replay((ConfigRecord) message.message());
         }
         assertEquals(ControllerResult.atomicOf(asList(
             new ApiMessageAndVersion(
@@ -420,10 +420,10 @@ public class ConfigurationControlManagerTest {
             ).
             build();
 
-        assertDoesNotThrow(() -> manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).setValue("123")));
-        assertDoesNotThrow(() -> manager.replay(new ConfigRecord().setResourceType(TOPIC.id()).setResourceName(MYTOPIC.name()).
-                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).setValue("123")));
+        manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+            setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).setValue("123"));
+        manager.replay(new ConfigRecord().setResourceType(TOPIC.id()).setResourceName(MYTOPIC.name()).
+            setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).setValue("123"));
 
         verify(replicationControlManager, times(2)).getPartitionElrUpdatesForConfigChanges(ArgumentMatchers.any());
     }

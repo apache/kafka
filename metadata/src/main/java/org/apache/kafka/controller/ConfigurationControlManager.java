@@ -48,7 +48,6 @@ import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
@@ -418,7 +417,7 @@ public class ConfigurationControlManager {
      *
      * @param record            The ConfigRecord.
      */
-    public void replay(ConfigRecord record) throws Throwable {
+    public void replay(ConfigRecord record) {
         Type type = Type.forId(record.resourceType());
         ConfigResource configResource = new ConfigResource(type, record.resourceName());
         TimelineHashMap<String, String> configs = configData.get(configResource);
@@ -441,15 +440,11 @@ public class ConfigurationControlManager {
             log.info("Replayed ConfigRecord for {} which set configuration {} to {}",
                     configResource, record.name(), record.value());
         }
-        if (record.name() == TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG) {
-            try {
-                if (type == Type.TOPIC) {
-                    minIsrConfigUpdatePartitionHandler.addRecordsForMinIsrUpdate(Optional.of(record.resourceName()));
-                } else {
-                    minIsrConfigUpdatePartitionHandler.addRecordsForMinIsrUpdate(Optional.empty());
-                }
-            } catch (InterruptedException | ExecutionException e) {
-                throw new Throwable("Fail to append partition updates for the min isr update: " + e.getMessage());
+        if (record.name().equals(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)) {
+            if (type == Type.TOPIC) {
+                minIsrConfigUpdatePartitionHandler.addRecordsForMinIsrUpdate(Optional.of(record.resourceName()));
+            } else {
+                minIsrConfigUpdatePartitionHandler.addRecordsForMinIsrUpdate(Optional.empty());
             }
         }
     }
@@ -545,6 +540,6 @@ public class ConfigurationControlManager {
 
     @FunctionalInterface
     interface MinIsrConfigUpdatePartitionHandler {
-        void addRecordsForMinIsrUpdate(Optional<String> topicName) throws InterruptedException, ExecutionException;
+        void addRecordsForMinIsrUpdate(Optional<String> topicName);
     }
 }

@@ -31,10 +31,10 @@ import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
-import org.apache.kafka.common.message.AlterPartitionRequestData;
-import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
@@ -78,11 +78,11 @@ import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
-import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -95,6 +95,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.errors.ControllerExceptions;
 import org.apache.kafka.controller.errors.EventHandlerExceptionInfo;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
+import org.apache.kafka.deferred.DeferredEvent;
+import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
@@ -106,10 +108,8 @@ import org.apache.kafka.metadata.migration.ZkRecordConsumer;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.util.RecordRedactor;
-import org.apache.kafka.deferred.DeferredEventQueue;
-import org.apache.kafka.deferred.DeferredEvent;
-import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.EventQueue;
+import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
@@ -137,15 +137,14 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -1477,7 +1476,7 @@ public final class QuorumController implements Controller {
      * @param snapshotId        The snapshotId if this record is from a snapshot
      * @param offset            The offset of the record
      */
-    private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long offset) throws Throwable {
+    private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long offset) {
         if (log.isTraceEnabled()) {
             if (snapshotId.isPresent()) {
                 log.trace("Replaying snapshot {} record {}",
@@ -1504,7 +1503,6 @@ public final class QuorumController implements Controller {
                 replicationControl.replay((PartitionRecord) message);
                 break;
             case CONFIG_RECORD:
-                // An exception can be thrown if partition change record can't be appended when min isr is changed.
                 configurationControl.replay((ConfigRecord) message);
                 break;
             case PARTITION_CHANGE_RECORD:
@@ -2363,9 +2361,9 @@ public final class QuorumController implements Controller {
     void handleUncleanBrokerShutdown(int brokerId, List<ApiMessageAndVersion> records) {
         replicationControl.handleBrokerUncleanShutdown(brokerId, records);
     }
-
-    void maybeTriggerMinIsrConfigUpdate(Optional<String> topicName) throws InterruptedException, ExecutionException {
+    
+    void maybeTriggerMinIsrConfigUpdate(Optional<String> topicName) {
         appendWriteEvent("partitionUpdateForMinIsrChange", OptionalLong.empty(),
-            () -> replicationControl.getPartitionElrUpdatesForConfigChanges(topicName)).get();
+                () -> replicationControl.getPartitionElrUpdatesForConfigChanges(topicName));
     }
 }

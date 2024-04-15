@@ -17,6 +17,32 @@
 
 package org.apache.kafka.controller;
 
+import java.io.File;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
@@ -122,32 +148,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.File;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.OptionalLong;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static java.util.Collections.singletonList;
 import static java.util.function.Function.identity;
@@ -508,7 +508,7 @@ public class QuorumControllerTest {
         List<Integer> brokersToKeepUnfenced = Arrays.asList(1);
         List<Integer> brokersToFence = Arrays.asList(2, 3);
         short replicationFactor = (short) allBrokers.size();
-        long sessionTimeoutMillis = 500;
+        long sessionTimeoutMillis = 5000;
 
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
@@ -609,8 +609,14 @@ public class QuorumControllerTest {
             assertEquals(1, result.records().size(), result.records().toString());
             RecordTestUtils.replayAll(active.configurationControl(), singletonList(result.records().get(0)));
 
+            TestUtils.waitForCondition(() -> {
+                    PartitionRegistration partition1 = active.replicationControl().getPartition(topicIdFoo, 0);
+                    if (partition1.elr.length != 0) return false;
+                    return true;
+                }, sessionTimeoutMillis * 3,
+                "Waiting for the partition to be updated."
+            );
             partition = active.replicationControl().getPartition(topicIdFoo, 0);
-            assertEquals(0, partition.elr.length, partition.toString());
             assertArrayEquals(new int[]{1}, partition.isr, partition.toString());
 
             // Now let's try update config on cluster level.
@@ -623,8 +629,14 @@ public class QuorumControllerTest {
                 true);
             assertEquals(1, result.records().size(), result.records().toString());
             RecordTestUtils.replayAll(active.configurationControl(), singletonList(result.records().get(0)));
+            TestUtils.waitForCondition(() -> {
+                    PartitionRegistration partition1 = active.replicationControl().getPartition(topicIdBar, 0);
+                    if (partition1.elr.length != 0) return false;
+                    return true;
+                }, sessionTimeoutMillis * 3,
+                "Waiting for the partition to be updated."
+            );
             partition = active.replicationControl().getPartition(topicIdBar, 0);
-            assertEquals(0, partition.elr.length, partition.toString());
             assertArrayEquals(new int[]{1}, partition.isr, partition.toString());
         }
     }
