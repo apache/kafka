@@ -62,8 +62,6 @@ public class RequestStateTest {
      */
     @Test
     public void testTrackInflightWithSuccessfulAttempt() {
-        long currentTimeMs = 20;
-
         RequestState state = new RequestState(
                 new LogContext(),
                 this.getClass().getSimpleName(),
@@ -76,25 +74,25 @@ public class RequestStateTest {
         assertFalse(state.requestInFlight());
 
         // When we've sent a request, the flag should update from false to true.
-        state.onSendAttempt(currentTimeMs);
+        state.onSendAttempt(202);
         assertTrue(state.requestInFlight());
 
         // Now we've received the response.
-        state.onSuccessfulAttempt(currentTimeMs);
+        state.onSuccessfulAttempt(236);
 
         // When we've sent a second request with THE SAME TIMESTAMP as the previous request,
         // the flag should update from false to true.
         assertFalse(state.requestInFlight());
-        state.onSendAttempt(currentTimeMs);
+        state.onSendAttempt(236);
         assertTrue(state.requestInFlight());
 
         // For our second request, we receive its response. It's a failed response, but a response all the same.
-        state.onFailedAttempt(currentTimeMs);
+        state.onFailedAttempt(242);
 
         // When we've sent a second request with THE SAME TIMESTAMP as the previous request,
         // the flag should update from false to true.
         assertFalse(state.requestInFlight());
-        state.onSendAttempt(currentTimeMs);
+        state.onSendAttempt(242);
         assertTrue(state.requestInFlight());
     }
 }
