@@ -197,7 +197,7 @@ class KafkaServer(
 
   override def logManager: LogManager = _logManager
 
-  def kafkaController: KafkaController = _kafkaController
+  @volatile def kafkaController: KafkaController = _kafkaController
 
   var lifecycleManager: BrokerLifecycleManager = _
   private var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
@@ -420,6 +420,11 @@ class KafkaServer(
             s"zk-broker-${config.nodeId}-",
             isZkBroker = true,
             logManager.directoryIdsSet)
+
+          // For ZK brokers in migration mode, always delete the metadata partition on startup.
+          logger.info(s"Deleting local metadata log from ${config.metadataLogDir} since this is a ZK broker in migration mode.")
+          KafkaRaftManager.maybeDeleteMetadataLogDir(config)
+          logger.info("Successfully deleted local metadata log. It will be re-created.")
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
           val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
@@ -657,15 +662,19 @@ class KafkaServer(
   }
 
   private def createCurrentControllerIdMetric(): Unit = {
-    KafkaYammerMetrics.defaultRegistry().newGauge(MetadataLoaderMetrics.CURRENT_CONTROLLER_ID, () => {
-      Option(metadataCache) match {
-        case None => -1
-        case Some(cache) => cache.getControllerId match {
-          case None => -1
-          case Some(id) => id.id
-        }
-      }
-    })
+    KafkaYammerMetrics.defaultRegistry().newGauge(MetadataLoaderMetrics.CURRENT_CONTROLLER_ID,
+      () => getCurrentControllerIdFromOldController())
+  }
+
+  /**
+   * Get the current controller ID from the old controller code.
+   * This is the most up-to-date controller ID we can get when in ZK mode.
+   */
+  def getCurrentControllerIdFromOldController(): Int = {
+    Option(_kafkaController) match {
+      case None => -1
+      case Some(controller) => controller.activeControllerId
+    }
   }
 
   private def unregisterCurrentControllerIdMetric(): Unit = {
@@ -770,7 +779,7 @@ class KafkaServer(
       if (config.requiresZookeeper &&
         metadataCache.getControllerId.exists(_.isInstanceOf[KRaftCachedControllerId])) {
         info("ZkBroker currently has a KRaft controller. Controlled shutdown will be handled " +
-          "through broker life cycle manager")
+          "through broker lifecycle manager")
         return true
       }
       val metadataUpdater = new ManualMetadataUpdater()

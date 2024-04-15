@@ -1702,7 +1702,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private static boolean topicIdIsUnrepresentable(Uuid topicId) {
-        return topicId == null || topicId == Uuid.ZERO_UUID;
+        return topicId == null || topicId.equals(Uuid.ZERO_UUID);
     }
 
     // for testing
