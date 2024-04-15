@@ -3,7 +3,6 @@ package org.apache.kafka.jmh.group_coordinator;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
 import org.apache.kafka.clients.consumer.RangeAssignor;
-import org.apache.kafka.clients.consumer.StickyAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -23,6 +22,7 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -30,12 +30,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import static java.lang.Integer.max;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
 @Warmup(iterations = 5)
-@Measurement(iterations = 7)
+@Measurement(iterations = 5)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class ClientSideAssignorBenchmark {
@@ -49,16 +50,16 @@ public class ClientSideAssignorBenchmark {
     @Param({"500", "1000", "10000"})
     private int memberCount;
 
-    @Param({"true"})
+    @Param({"true", "false"})
     private boolean isRackAware;
 
-    @Param({"true"})
+    @Param({"true", "false"})
     private boolean isSubscriptionUniform;
 
-    @Param({"false"})
+    @Param({"true", "false"})
     private boolean isRangeAssignor;
 
-    @Param({"true"})
+    @Param({"true", "false"})
     private boolean isReassignment;
 
     private Map<String, ConsumerPartitionAssignor.Subscription> subscriptions = new HashMap<>();
@@ -71,17 +72,18 @@ public class ClientSideAssignorBenchmark {
 
     private Map<String, List<PartitionInfo>> partitionsPerTopic;
 
+    private final List<String> allTopicNames = new ArrayList<>(topicCount);
+
     @Setup(Level.Trial)
     public void setup() {
-        List<String> topics = new ArrayList<>();
         this.partitionsPerTopic = new HashMap<>();
         for (int i = 0; i < topicCount; i++) {
             String topicName = "topic" + i;
-            topics.add(topicName);
+            allTopicNames.add(topicName);
             this.partitionsPerTopic.put(topicName, partitionInfos(topicName, partitionsPerTopicCount));
         }
 
-        addSubscriptions(topics);
+        addTopicSubscriptions();
         if (isRangeAssignor) {
             this.assignor = new RangeAssignor();
         } else {
@@ -91,12 +93,12 @@ public class ClientSideAssignorBenchmark {
         if (isReassignment) {
             Map<String, List<TopicPartition>> initialAssignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
             Map<String, ConsumerPartitionAssignor.Subscription> newSubscriptions = new HashMap<>();
-            subscriptions.forEach((member, subscription) -> {
+            subscriptions.forEach((member, subscription) ->
                 newSubscriptions.put(
                     member,
                     subscriptionWithOwnedPartitions(initialAssignment.get(member), subscription)
-                );
-            });
+                )
+            );
             // Add new member to trigger a reassignment.
             newSubscriptions.put("newMember", subscription(
                 new ArrayList<>(partitionsPerTopic.keySet()),
@@ -107,32 +109,30 @@ public class ClientSideAssignorBenchmark {
         }
     }
 
-    private void addSubscriptions(List<String> topics) {
-        int topicCount = topics.size();
+    private void addTopicSubscriptions() {
         subscriptions.clear();
+        int topicCounter = 0;
 
         for (int i = 0; i < memberCount; i++) {
             String memberName = "member" + i;
-            List<String> assignedTopics = new ArrayList<>();
 
-            if (!isSubscriptionUniform) {
-                // Assign topics in a round-robin fashion ensuring each topic is assigned exactly to two members.
-                for (int t = 0; t < topicCount; t++) {
-                    // Calculate the two members to assign each topic to, based on the topic index.
-                    int firstMemberIndex = t % memberCount;
-                    int secondMemberIndex = (t + 1) % memberCount;
-
-                    // If the current member is one of the two calculated members, add the topic to their list.
-                    if (i == firstMemberIndex || i == secondMemberIndex) {
-                        assignedTopics.add(topics.get(t));
-                    }
-                }
+            List<String> subscribedTopics;
+            // When subscriptions are uniform, all members are assigned all topics.
+            if (isSubscriptionUniform) {
+                subscribedTopics = allTopicNames;
             } else {
-                // If distribution is uniform, just assign the full list of topics.
-                assignedTopics.addAll(topics);
+                subscribedTopics = Arrays.asList(
+                    allTopicNames.get(i % topicCount),
+                    allTopicNames.get((i+1) % topicCount)
+                );
+                topicCounter = max (topicCounter, ((i+1) % topicCount));
+
+                if (i == memberCount - 1 && topicCounter < topicCount - 1) {
+                    subscribedTopics.addAll(allTopicNames.subList(topicCounter + 1, topicCount - 1));
+                }
             }
 
-            subscriptions.put(memberName, subscription(assignedTopics, i));
+            subscriptions.put(memberName, subscription(subscribedTopics, i));
         }
     }
 
@@ -163,22 +163,16 @@ public class ClientSideAssignorBenchmark {
     }
 
     protected ConsumerPartitionAssignor.Subscription subscription(List<String> topics, int consumerIndex) {
-        if (isRackAware) {
-            String rackId = "rack" + consumerIndex % 3;
-            return new ConsumerPartitionAssignor.Subscription(
-                topics,
-                null,
-                Collections.emptyList(),
-                DEFAULT_GENERATION,
-                Optional.of(rackId)
-            );
-        }
+        Optional<String> rackId = isRackAware ?
+            Optional.of("rack" + consumerIndex % numBrokerRacks) :
+            Optional.empty();
+
         return new ConsumerPartitionAssignor.Subscription(
             topics,
             null,
             Collections.emptyList(),
             DEFAULT_GENERATION,
-            Optional.empty()
+            rackId
         );
     }
 
