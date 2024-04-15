@@ -179,7 +179,7 @@ public class AssignmentsManagerTest {
         manager.onAssignment(new TopicIdPartition(TOPIC_1, 3), DIR_3, "testAssignmentAggregation", () -> { });
         manager.onAssignment(new TopicIdPartition(TOPIC_1, 4), DIR_1, "testAssignmentAggregation", () -> { });
         manager.onAssignment(new TopicIdPartition(TOPIC_2, 5), DIR_2, "testAssignmentAggregation", () -> { });
-        while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
+        TestUtils.waitForCondition(() -> {
             time.sleep(100);
             manager.wakeup();
             return readyToAssert.await(1, TimeUnit.MILLISECONDS);
@@ -250,7 +250,7 @@ public class AssignmentsManagerTest {
             any(ControllerRequestCompletionHandler.class));
 
         manager.onAssignment(new TopicIdPartition(TOPIC_1, 1), DIR_1, "testRequeuesFailedAssignmentPropagations", () -> { });
-        while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
+        TestUtils.waitForCondition(() -> {
             time.sleep(TimeUnit.SECONDS.toMillis(1));
             manager.wakeup();
             return readyToAssert.await(1, TimeUnit.MILLISECONDS);
