@@ -26,15 +26,23 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MultiFieldPathsTest {
+
+    @Test void shouldCreateMultiPathsWithDups() {
+        MultiFieldPaths paths = new MultiFieldPaths(Arrays.asList("test", "test"), FieldSyntaxVersion.V2);
+        assertEquals(1, paths.size());
+        Optional<MultiFieldPaths.TrieNode> test = paths.trie.find("test");
+        assertTrue(test.isPresent());
+        assertArrayEquals(test.get().path.path(), new String[]{"test"});
+    }
 
     @Test void shouldBuildEmptyTrie() {
         MultiFieldPaths.Trie trie = new MultiFieldPaths.Trie();
@@ -140,7 +148,7 @@ class MultiFieldPathsTest {
                 .field("baz", Schema.INT32_SCHEMA)
                 .build();
 
-        MultiFieldPaths fieldPath = MultiFieldPaths.of(Arrays.asList("foo", "bar"), FieldSyntaxVersion.V1);
+        MultiFieldPaths fieldPath = new MultiFieldPaths(Arrays.asList("foo", "bar"), FieldSyntaxVersion.V1);
         SchemaBuilder updated = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
         Schema result = fieldPath.updateSchemaFrom(
                 schema,
@@ -162,7 +170,7 @@ class MultiFieldPathsTest {
                 .field("foo", nested)
                 .build();
 
-        MultiFieldPaths fieldPath = MultiFieldPaths.of(Arrays.asList("foo.baz", "foo.bar"), FieldSyntaxVersion.V2);
+        MultiFieldPaths fieldPath = new MultiFieldPaths(Arrays.asList("foo.baz", "foo.bar"), FieldSyntaxVersion.V2);
         Schema result = fieldPath.updateSchemaFrom(
                 schema,
                 (builder, field, path) -> builder.field(field.name() + "_other", field.schema())
@@ -255,6 +263,6 @@ class MultiFieldPathsTest {
     }
 
     static MultiFieldPaths createMultiFieldPaths(SingleFieldPath... fields) {
-        return new MultiFieldPaths(new HashSet<>(Arrays.asList(fields)));
+        return new MultiFieldPaths(Arrays.asList(fields));
     }
 }

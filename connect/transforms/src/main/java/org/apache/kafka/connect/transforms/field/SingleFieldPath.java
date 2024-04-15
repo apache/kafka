@@ -50,10 +50,13 @@ public class SingleFieldPath {
     private static final char DOT = '.';
     private static final char BACKSLASH = '\\';
 
+    private final String originalPath;
+    private final FieldSyntaxVersion version;
     private final List<String> steps;
 
     public SingleFieldPath(String pathText, FieldSyntaxVersion version) {
-        Objects.requireNonNull(pathText, "Field path cannot be null");
+        this.originalPath = Objects.requireNonNull(pathText, "Field path cannot be null");
+        this.version = version;
         switch (version) {
             case V1: // backward compatibility
                 this.steps = Collections.singletonList(pathText);
@@ -144,6 +147,10 @@ public class SingleFieldPath {
         throw new ConfigException("Incomplete backtick pair in path: [" + path + "],"
                 + " consider adding a backslash before backtick at position " + backtickAt
                 + " to escape it");
+    }
+
+    public String originalPath() {
+        return this.originalPath;
     }
 
 
@@ -502,6 +509,9 @@ public class SingleFieldPath {
 
     @Override
     public String toString() {
-        return "FieldPath(path = " + String.join(".", steps) + ")";
+        return "SingleFieldPath{" +
+            "version=" + version +
+            ", path=" + String.join(".", steps) +
+            '}';
     }
 }

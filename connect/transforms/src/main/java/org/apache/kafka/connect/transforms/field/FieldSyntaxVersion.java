@@ -62,7 +62,7 @@ public enum FieldSyntaxVersion {
      * @param configDef exiting config definition
      * @return config definition including field syntax version definition
      */
-    public static ConfigDef appendConfig(ConfigDef configDef) {
+    public static ConfigDef appendConfigTo(ConfigDef configDef) {
         return configDef
                 .define(
                         FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG,

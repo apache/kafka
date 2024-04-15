@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class FieldSyntaxVersionTest {
     @Test
     void shouldAppendConfigToDef() {
-        ConfigDef def = FieldSyntaxVersion.appendConfig(new ConfigDef());
+        ConfigDef def = FieldSyntaxVersion.appendConfigTo(new ConfigDef());
         assertEquals(def.configKeys().size(), 1);
         final ConfigDef.ConfigKey configKey = def.configKeys().get("field.syntax.version");
         assertEquals(configKey.name, "field.syntax.version");
@@ -42,9 +42,9 @@ public class FieldSyntaxVersionTest {
 
     @Test
     void shouldFailWhenAppendConfigToDefAgain() {
-        ConfigDef def = FieldSyntaxVersion.appendConfig(new ConfigDef());
+        ConfigDef def = FieldSyntaxVersion.appendConfigTo(new ConfigDef());
         assertEquals(def.configKeys().size(), 1);
-        ConfigException e = assertThrows(ConfigException.class, () -> FieldSyntaxVersion.appendConfig(def));
+        ConfigException e = assertThrows(ConfigException.class, () -> FieldSyntaxVersion.appendConfigTo(def));
         assertEquals(e.getMessage(), "Configuration field.syntax.version is defined twice.");
     }
 
@@ -53,7 +53,7 @@ public class FieldSyntaxVersionTest {
     void shouldGetVersionFromConfig(String input, FieldSyntaxVersion version) {
         Map<String, String> configs = new HashMap<>();
         configs.put("field.syntax.version", input);
-        AbstractConfig config = new AbstractConfig(FieldSyntaxVersion.appendConfig(new ConfigDef()), configs);
+        AbstractConfig config = new AbstractConfig(FieldSyntaxVersion.appendConfigTo(new ConfigDef()), configs);
         assertEquals(version, FieldSyntaxVersion.fromConfig(config));
     }
 
@@ -62,7 +62,7 @@ public class FieldSyntaxVersionTest {
     void shouldFailWhenWrongVersionIsPassed(String input) {
         Map<String, String> configs = new HashMap<>();
         configs.put("field.syntax.version", input);
-        ConfigException e = assertThrows(ConfigException.class, () -> new AbstractConfig(FieldSyntaxVersion.appendConfig(new ConfigDef()), configs));
+        ConfigException e = assertThrows(ConfigException.class, () -> new AbstractConfig(FieldSyntaxVersion.appendConfigTo(new ConfigDef()), configs));
         assertEquals(
             "Invalid value " + input + " for configuration field.syntax.version: " +
                 "String must be one of (case insensitive): V1, V2",

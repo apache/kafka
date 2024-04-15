@@ -26,11 +26,11 @@ import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import java.util.AbstractMap;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -47,14 +47,14 @@ import java.util.stream.Collectors;
 public class MultiFieldPaths {
     final Trie trie = new Trie();
 
-    MultiFieldPaths(Set<SingleFieldPath> paths) {
+    public MultiFieldPaths(List<SingleFieldPath> paths) {
         paths.forEach(trie::insert);
     }
 
-    public static MultiFieldPaths of(List<String> fields, FieldSyntaxVersion syntaxVersion) {
-        return new MultiFieldPaths(fields.stream()
+    public MultiFieldPaths(List<String> fields, FieldSyntaxVersion syntaxVersion) {
+        this(fields.stream()
             .map(f -> new SingleFieldPath(f, syntaxVersion))
-            .collect(Collectors.toSet()));
+            .collect(Collectors.toList()));
     }
 
     /**
@@ -65,7 +65,7 @@ public class MultiFieldPaths {
      */
     public Map<SingleFieldPath, Map.Entry<Field, Object>> fieldAndValuesFrom(Struct struct) {
         if (trie.isEmpty()) return Collections.emptyMap();
-        return findFieldAndValues(struct, trie.root, new HashMap<>());
+        return findFieldAndValues(struct, trie.root, new LinkedHashMap<>());
     }
 
     private Map<SingleFieldPath, Map.Entry<Field, Object>> findFieldAndValues(
@@ -102,7 +102,7 @@ public class MultiFieldPaths {
      */
     public Map<SingleFieldPath, Map.Entry<String, Object>> fieldAndValuesFrom(Map<String, Object> value) {
         if (trie.isEmpty()) return Collections.emptyMap();
-        return findFieldAndValues(value, trie.root, new HashMap<>());
+        return findFieldAndValues(value, trie.root, new LinkedHashMap<>());
     }
 
     @SuppressWarnings("unchecked")
@@ -164,8 +164,8 @@ public class MultiFieldPaths {
         MapValueUpdater others
     ) {
         if (originalValue == null) return null;
-        Map<String, Object> updatedValue = new HashMap<>(originalValue.size());
-        Map<String, TrieNode> notFoundFields = new HashMap<>(trieAt.steps);
+        Map<String, Object> updatedValue = new LinkedHashMap<>(originalValue.size());
+        Map<String, TrieNode> notFoundFields = new LinkedHashMap<>(trieAt.steps);
         for (Map.Entry<String, Object> entry : originalValue.entrySet()) {
             String fieldName = entry.getKey();
             Object fieldValue = entry.getValue();
@@ -203,7 +203,7 @@ public class MultiFieldPaths {
                 notFound.apply(originalValue, updatedValue, trieValue.path, fieldName);
             } else {
                 Map<String, Object> updatedField = updateValues(
-                    new HashMap<>(),
+                    new LinkedHashMap<>(),
                     trieValue,
                     matching, notFound, others);
                 updatedValue.put(fieldName, updatedField);
@@ -419,6 +419,10 @@ public class MultiFieldPaths {
         return baseSchemaBuilder.build();
     }
 
+    public int size() {
+        return trie.size();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -452,7 +456,7 @@ public class MultiFieldPaths {
         }
 
 
-        public void insert(SingleFieldPath path) {
+        void insert(SingleFieldPath path) {
             TrieNode current = root;
 
             for (String step : path.stepsWithoutLast()) {
@@ -469,15 +473,15 @@ public class MultiFieldPaths {
             }
         }
 
-        public boolean isEmpty() {
+        boolean isEmpty() {
             return root.isEmpty();
         }
 
-        public Optional<TrieNode> find(String step) {
+        Optional<TrieNode> find(String step) {
             return root.find(step);
         }
 
-        public int size() {
+        int size() {
             if (root.isEmpty()) return 0;
             return root.size();
         }
@@ -507,14 +511,14 @@ public class MultiFieldPaths {
         Map<String, TrieNode> steps = new HashMap<>();
         SingleFieldPath path;
 
-        TrieNode() {
+        private TrieNode() {
         }
 
         private TrieNode(SingleFieldPath path) {
             this.path = path;
         }
 
-        public boolean contains(String step) {
+        boolean contains(String step) {
             return steps.containsKey(step);
         }
 
@@ -528,16 +532,33 @@ public class MultiFieldPaths {
             steps.put(step, new TrieNode(path));
         }
 
-        public TrieNode get(String step) {
+        TrieNode get(String step) {
             return steps.get(step);
         }
 
-        public Optional<TrieNode> find(String step) {
+        Optional<TrieNode> find(String step) {
             return Optional.ofNullable(steps.get(step));
         }
 
-        public boolean isEmpty() {
+        boolean isEmpty() {
             return steps.isEmpty() && path == null;
+        }
+
+        public boolean isLeaf() {
+            return path != null;
+        }
+
+        Map<String, TrieNode> steps() {
+            return new HashMap<>(steps);
+        }
+
+        int size() {
+            if (isLeaf()) return 1;
+            int size = 0;
+            for (TrieNode child : steps.values()) {
+                size = size + child.size();
+            }
+            return size;
         }
 
         @Override
@@ -559,23 +580,6 @@ public class MultiFieldPaths {
                 "steps = " + steps +
                 (path != null ? (", path = " + path) : "") +
                 ')';
-        }
-
-        public boolean isLeaf() {
-            return path != null;
-        }
-
-        public Map<String, TrieNode> steps() {
-            return new HashMap<>(steps);
-        }
-
-        public int size() {
-            if (isLeaf()) return 1;
-            int size = 0;
-            for (TrieNode child : steps.values()) {
-                size = size + child.size();
-            }
-            return size;
         }
     }
 }
