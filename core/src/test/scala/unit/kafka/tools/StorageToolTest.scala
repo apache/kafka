@@ -193,6 +193,86 @@ Found problem:
   }
 
   @Test
+  def testFormatSucceedsIfAllDirectoriesAreAvailable(): Unit = {
+    val availableDir1 = TestUtils.tempDir()
+    val availableDir2 = TestUtils.tempDir()
+
+    try {
+      val metaProperties = new MetaProperties.Builder().
+        setVersion(MetaPropertiesVersion.V1).
+        setClusterId("XcZZOzUqS4yHOjhMQB6JLQ").
+        setNodeId(2).
+        build()
+      val stream = new ByteArrayOutputStream()
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
+
+      assertEquals(0,
+        StorageTool.formatCommand(new PrintStream(stream), Seq(availableDir1.toString, availableDir2.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
+      assertTrue(stream.toString().contains("Formatting %s".format(availableDir1)))
+      assertTrue(stream.toString().contains("Formatting %s".format(availableDir2)))
+
+    } finally {
+      Utils.delete(availableDir1)
+      Utils.delete(availableDir2)
+    }
+  }
+
+  @Test
+  def testFormatSucceedsIfAtLeastOneDirectoryIsAvailable(): Unit = {
+    val availableDir1 = TestUtils.tempDir()
+    val unavailableDir1 = TestUtils.tempFile()
+
+    try {
+      val metaProperties = new MetaProperties.Builder().
+        setVersion(MetaPropertiesVersion.V1).
+        setClusterId("XcZZOzUqS4yHOjhMQB6JLQ").
+        setNodeId(2).
+        build()
+      val stream = new ByteArrayOutputStream()
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
+
+      assertEquals(0,
+        StorageTool.formatCommand(new PrintStream(stream), Seq(availableDir1.toString, unavailableDir1.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
+      assertTrue(stream.toString().contains("I/O error trying to read log directory %s. Ignoring...".format(unavailableDir1)))
+      assertTrue(stream.toString().contains("Formatting %s".format(availableDir1)))
+      assertFalse(stream.toString().contains("Formatting %s".format(unavailableDir1)))
+
+    } finally {
+      Utils.delete(availableDir1)
+      Utils.delete(unavailableDir1)
+    }
+  }
+
+  @Test
+  def testFormatFailsIfAllDirectoriesAreUnavailable(): Unit = {
+    val unavailableDir1 = TestUtils.tempFile()
+    val unavailableDir2 = TestUtils.tempFile()
+
+    try {
+      val metaProperties = new MetaProperties.Builder().
+        setVersion(MetaPropertiesVersion.V1).
+        setClusterId("XcZZOzUqS4yHOjhMQB6JLQ").
+        setNodeId(2).
+        build()
+      val stream = new ByteArrayOutputStream()
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
+
+      try {
+        assertEquals(1,
+          StorageTool.formatCommand(new PrintStream(stream), Seq(unavailableDir1.toString, unavailableDir2.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
+      } catch {
+        case e: TerseFailure => assertEquals("No available log directories to format.", e.getMessage)
+      }
+      assertTrue(stream.toString().contains("I/O error trying to read log directory %s. Ignoring...".format(unavailableDir1)))
+      assertTrue(stream.toString().contains("I/O error trying to read log directory %s. Ignoring...".format(unavailableDir2)))
+
+    } finally {
+      Utils.delete(unavailableDir1)
+      Utils.delete(unavailableDir2)
+    }
+  }
+
+  @Test
   def testFormatWithInvalidClusterId(): Unit = {
     val config = new KafkaConfig(newSelfManagedProperties())
     assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
