@@ -460,17 +460,11 @@ public class MultiFieldPaths {
             TrieNode current = root;
 
             for (String step : path.stepsWithoutLast()) {
-                if (!current.contains(step)) {
-                    current.addStep(step);
-                }
-
-                current = current.get(step);
+                current = current.addStep(step);
             }
 
             final String step = path.lastStep();
-            if (!current.contains(step)) {
-                current.addLeaf(step, path);
-            }
+            current.addLeaf(step, path);
         }
 
         boolean isEmpty() {
@@ -522,14 +516,18 @@ public class MultiFieldPaths {
             return steps.containsKey(step);
         }
 
-        public void addStep(String step) {
-            if (path != null) path = null;
-            steps.put(step, new TrieNode());
+        private TrieNode addStep(String step) {
+            return steps.computeIfAbsent(step, ignored -> {
+                if (path != null) path = null;
+                return new TrieNode();
+            });
         }
 
-        public void addLeaf(String step, SingleFieldPath path) {
-            if (this.path != null) this.path = null;
-            steps.put(step, new TrieNode(path));
+        private void addLeaf(String step, SingleFieldPath path) {
+            steps.computeIfAbsent(step, ignored -> {
+                if (this.path != null) this.path = null;
+                return new TrieNode(path);
+            });
         }
 
         TrieNode get(String step) {
