@@ -648,6 +648,8 @@ public class ShareMembershipManager implements RequestManager {
         memberEpoch = ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
         // Clear the current assignment and subscribed partitions before member sending the leave group
         updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+        transitionTo(MemberState.PREPARE_LEAVING);
+        transitionTo(MemberState.LEAVING);
         transitionTo(MemberState.STALE);
     }
 
