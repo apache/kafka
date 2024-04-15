@@ -1111,7 +1111,7 @@ public class ConsumerGroupTest {
     }
 
     @Test
-    public void testAllUseClassicProtocol() {
+    public void testAllMembersUseClassicProtocol() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
         List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = new ArrayList<>();
         protocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
