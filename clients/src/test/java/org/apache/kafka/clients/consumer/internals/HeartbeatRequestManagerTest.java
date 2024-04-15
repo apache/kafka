@@ -232,7 +232,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     @Test
-    public void testHeartbeatNotSentIfAnotherOnInFlight() {
+    public void testHeartbeatNotSentIfAnotherOneInFlight() {
         mockStableMember();
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
 
@@ -250,13 +250,14 @@ public class HeartbeatRequestManagerTest {
         assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent when the " +
             "interval expires if there is a previous HB request in-flight");
 
-        // Receive response for the inflight. The next HB should be sent on the next poll after
-        // the interval expires.
+        // Receive response for the inflight after the interval expired. The next HB should be sent
+        // on the next poll waiting only for the minimal backoff.
         inflightReq.handler().onComplete(createHeartbeatResponse(inflightReq, Errors.NONE));
         time.sleep(DEFAULT_RETRY_BACKOFF_MS);
         result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, result.unsentRequests.size());
-
+        assertEquals(1, result.unsentRequests.size(), "A next heartbeat should be sent on " +
+            "the first poll after receiving a response that took longer than the interval, " +
+            "waiting only for the minimal backoff.");
     }
 
     @Test
