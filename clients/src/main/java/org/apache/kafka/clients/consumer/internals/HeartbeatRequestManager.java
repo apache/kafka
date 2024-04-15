@@ -483,7 +483,7 @@ public class HeartbeatRequestManager implements RequestManager {
         }
 
         public void onFailedAttempt(final long currentTimeMs) {
-            // Expire timer to allow sending HB after a failure without waiting for the interval.
+            // Reset timer to allow sending HB after a failure without waiting for the interval.
             // After a failure, a next HB may be needed with backoff (ex. errors that lead to
             // retries, like coordinator load error), or immediately (ex. errors that lead to
             // rejoining, like fencing errors).
