@@ -175,6 +175,7 @@ public class LogConfig extends AbstractConfig {
     public static final String DEFAULT_COMPRESSION_TYPE = BrokerCompressionType.PRODUCER.name;
     public static final boolean DEFAULT_PREALLOCATE = false;
     public static final String DEFAULT_MESSAGE_TIMESTAMP_TYPE = "CreateTime";
+    public static final long DEFAULT_INITIAL_TASK_DELAY_MS = 30 * 1000L;
     /* See `TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG` for details */
     @Deprecated
     public static final long DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS = Long.MAX_VALUE;

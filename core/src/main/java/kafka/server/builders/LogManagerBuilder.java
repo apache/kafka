@@ -179,6 +179,7 @@ public class LogManagerBuilder {
                               logDirFailureChannel,
                               time,
                               keepPartitionMetadataFile,
-                              remoteStorageSystemEnable);
+                              remoteStorageSystemEnable,
+                              LogConfig.DEFAULT_INITIAL_TASK_DELAY_MS);
     }
 }

@@ -1524,7 +1524,8 @@ object TestUtils extends Logging {
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
                    keepPartitionMetadataFile = true,
                    interBrokerProtocolVersion = interBrokerProtocolVersion,
-                   remoteStorageSystemEnable = remoteStorageSystemEnable)
+                   remoteStorageSystemEnable = remoteStorageSystemEnable,
+                   initialTaskDelayMs = LogConfig.DEFAULT_INITIAL_TASK_DELAY_MS)
 
     if (log.isDefined) {
       val spyLogManager = Mockito.spy(logManager)
