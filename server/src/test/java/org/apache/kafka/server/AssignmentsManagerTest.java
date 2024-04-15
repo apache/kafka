@@ -160,9 +160,7 @@ public class AssignmentsManagerTest {
     public void testAssignmentAggregation() throws InterruptedException {
         CountDownLatch readyToAssert = new CountDownLatch(1);
         doAnswer(invocation -> {
-            if (readyToAssert.getCount() > 0) {
-                readyToAssert.countDown();
-            }
+            readyToAssert.countDown();
             return null;
         }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class),
             any(ControllerRequestCompletionHandler.class));
@@ -202,9 +200,7 @@ public class AssignmentsManagerTest {
     void testRequeuesFailedAssignmentPropagations() throws InterruptedException {
         CountDownLatch readyToAssert = new CountDownLatch(5);
         doAnswer(invocation -> {
-            if (readyToAssert.getCount() > 0) {
-                readyToAssert.countDown();
-            }
+            readyToAssert.countDown();
             if (readyToAssert.getCount() == 4) {
                 invocation.getArgument(1, ControllerRequestCompletionHandler.class).onTimeout();
                 manager.onAssignment(new TopicIdPartition(TOPIC_1, 2), DIR_3, () -> { });
