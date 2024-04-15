@@ -22,7 +22,9 @@ import kafka.zk.EmbeddedZookeeper;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs;
 import org.apache.kafka.server.config.ConfigType;
+import org.apache.kafka.server.config.KafkaLogConfigs;
 import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -41,8 +43,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-
-import static org.apache.kafka.server.config.KafkaLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
 
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and supplied number of Kafka brokers.
@@ -120,8 +120,8 @@ public class EmbeddedKafkaCluster {
         putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), 0);
         putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), (short) 1);
         putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicPartitionsProp(), 5);
-        putIfAbsent(brokerConfig, KafkaConfig.TransactionsTopicPartitionsProp(), 5);
-        putIfAbsent(brokerConfig, AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
+        putIfAbsent(brokerConfig, TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 5);
+        putIfAbsent(brokerConfig, KafkaLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
 
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig.BrokerIdProp(), i);

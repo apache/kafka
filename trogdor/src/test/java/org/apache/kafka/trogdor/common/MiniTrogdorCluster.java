@@ -162,7 +162,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
                         Integer.toString(node.coordinatorPort));
                 }
                 node.node = new BasicNode(entry.getKey(), node.hostname, config,
-                    Collections.<String>emptySet());
+                    Collections.emptySet());
             }
             TreeMap<String, Node> topologyNodes = new TreeMap<>();
             for (Map.Entry<String, NodeData> entry : nodes.entrySet()) {
@@ -171,7 +171,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
             final BasicTopology topology = new BasicTopology(topologyNodes);
             ScheduledExecutorService executor = Executors.newScheduledThreadPool(1,
                 ThreadUtils.createThreadFactory("MiniTrogdorClusterStartupThread%d", false));
-            final AtomicReference<Exception> failure = new AtomicReference<Exception>(null);
+            final AtomicReference<Exception> failure = new AtomicReference<>(null);
             for (final Map.Entry<String, NodeData> entry : nodes.entrySet()) {
                 executor.submit((Callable<Void>) () -> {
                     String nodeName = entry.getKey();
