@@ -21,13 +21,11 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -1121,12 +1119,16 @@ public class ConsumerGroup implements Group {
         consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
-            ConsumerPartitionAssignor.Subscription subscription = deserializeSubscription(
-                classicGroupMember.metadata(classicGroup.protocolName().get()),
-                log,
-                "group upgrade"
-            );
-            Map<Uuid, Set<Integer>> partitions = topicPartitionMapFromList(subscription.ownedPartitions(), topicsImage);
+            // The new ConsumerGroupMember's assignedPartitions and targetAssignmentSet need to be the same
+            // in order to keep it stable. Thus, both of them are set to be classicGroupMember.assignment().
+            // If the consumer's real assigned partitions haven't been updated according to
+            // classicGroupMember.assignment(), it will retry the request.
+            ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(
+                ByteBuffer.wrap(classicGroupMember.assignment()));
+            Map<Uuid, Set<Integer>> partitions = topicPartitionMapFromList(assignment.partitions(), topicsImage);
+
+            ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(
+                ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().get())));
 
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(classicGroupMember.memberId())
                 .setMemberEpoch(classicGroup.generationId())
@@ -1141,8 +1143,8 @@ public class ConsumerGroup implements Group {
                 .setAssignedPartitions(partitions)
                 .setSupportedClassicProtocols(classicGroupMember.supportedProtocols())
                 .build();
-            consumerGroup.updateMember(newMember);
             consumerGroup.updateTargetAssignment(newMember.memberId(), new Assignment(partitions));
+            consumerGroup.updateMember(newMember);
         });
 
         return consumerGroup;
@@ -1151,29 +1153,29 @@ public class ConsumerGroup implements Group {
     /**
      * Populate the record list with the records needed to create the given consumer group.
      *
-     * @param consumerGroup     The consumer group to create.
      * @param records           The list to which the new records are added.
      */
-    public static void createConsumerGroupRecords(
-        ConsumerGroup consumerGroup,
+    public void createConsumerGroupRecords(
         List<Record> records
     ) {
-        String groupId = consumerGroup.groupId;
-
-        consumerGroup.members().forEach((__, consumerGroupMember) ->
-            records.add(RecordHelpers.newMemberSubscriptionRecord(groupId, consumerGroupMember))
+        members().forEach((__, consumerGroupMember) ->
+            records.add(RecordHelpers.newMemberSubscriptionRecord(groupId(), consumerGroupMember))
         );
 
-        records.add(RecordHelpers.newGroupEpochRecord(groupId, consumerGroup.groupEpoch()));
+        records.add(RecordHelpers.newGroupEpochRecord(groupId(), groupEpoch()));
 
-        consumerGroup.members().forEach((consumerGroupMemberId, consumerGroupMember) ->
-            records.add(RecordHelpers.newTargetAssignmentRecord(groupId, consumerGroupMemberId, consumerGroup.targetAssignment(consumerGroupMemberId).partitions()))
+        members().forEach((consumerGroupMemberId, consumerGroupMember) ->
+            records.add(RecordHelpers.newTargetAssignmentRecord(
+                groupId(),
+                consumerGroupMemberId,
+                targetAssignment(consumerGroupMemberId).partitions()
+            ))
         );
 
-        records.add(RecordHelpers.newTargetAssignmentEpochRecord(groupId, consumerGroup.groupEpoch()));
+        records.add(RecordHelpers.newTargetAssignmentEpochRecord(groupId(), groupEpoch()));
 
-        consumerGroup.members().forEach((__, consumerGroupMember) ->
-            records.add(RecordHelpers.newCurrentAssignmentRecord(groupId, consumerGroupMember))
+        members().forEach((__, consumerGroupMember) ->
+            records.add(RecordHelpers.newCurrentAssignmentRecord(groupId(), consumerGroupMember))
         );
     }
 
@@ -1261,10 +1263,8 @@ public class ConsumerGroup implements Group {
                     targetAssignment().get(classicGroupMember.memberId()).partitions(),
                     metadataImage.topics()
                 )),
-                deserializeVersion(
-                    classicGroupMember.metadata(classicGroup.protocolName().orElse("")),
-                    log,
-                    "group downgrade"
+                ConsumerProtocol.deserializeVersion(
+                    ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().orElse("")))
                 )
             ));
 
@@ -1323,53 +1323,5 @@ public class ConsumerGroup implements Group {
     public boolean allMembersUseClassicProtocolExcept(String memberId) {
         return numClassicProtocolMembers() == members().size() - 1 &&
             !getOrMaybeCreateMember(memberId, false).useClassicProtocol();
-    }
-
-    /**
-     * @param metadata      The metadata to deserialize.
-     * @param log           The log to use.
-     * @param reason        The reason for deserializing the assignment.
-     * @return  The deserialized assignment.
-     */
-    public static ConsumerPartitionAssignor.Assignment deserializeAssignment(byte[] metadata, Logger log, String reason) {
-        try {
-            return ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(metadata));
-        } catch (SchemaException e) {
-            log.warn("Cannot parse the Consumer Protocol {} when deserializing the assignment for {}.",
-                ConsumerProtocol.PROTOCOL_TYPE, reason);
-            throw new GroupIdNotFoundException(String.format("Fail to deserialize the assignment when %s.", reason));
-        }
-    }
-
-    /**
-     * @param metadata      The metadata to deserialize.
-     * @param log           The log to use.
-     * @param reason        The reason for deserializing the subscription.
-     * @return  The deserialized subscription.
-     */
-    public static ConsumerPartitionAssignor.Subscription deserializeSubscription(byte[] metadata, Logger log, String reason) {
-        try {
-            return ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(metadata));
-        } catch (SchemaException e) {
-            log.warn("Cannot parse the Consumer Protocol {} when deserializing the subscription for {}.",
-                ConsumerProtocol.PROTOCOL_TYPE, reason);
-            throw new GroupIdNotFoundException(String.format("Fail to deserialize the subscription when %s.", reason));
-        }
-    }
-
-    /**
-     * @param metadata      The metadata to deserialize.
-     * @param log           The log to use.
-     * @param reason        The reason for deserializing the version.
-     * @return  The deserialized ConsumerProtocol version.
-     */
-    public static Short deserializeVersion(byte[] metadata, Logger log, String reason) {
-        try {
-            return ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(metadata));
-        } catch (SchemaException e) {
-            log.warn("Cannot parse the Consumer Protocol {} when deserializing the version for {}.",
-                ConsumerProtocol.PROTOCOL_TYPE, reason);
-            throw new GroupIdNotFoundException(String.format("Fail to deserialize the version when %s.", reason));
-        }
     }
 }

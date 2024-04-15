@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
@@ -48,6 +49,7 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
@@ -860,14 +862,23 @@ public class GroupMetadataManager {
         classicGroup.completeAllSyncFutures(Errors.REBALANCE_IN_PROGRESS);
 
         classicGroup.createGroupTombstoneRecords(records);
-        ConsumerGroup consumerGroup = ConsumerGroup.fromClassicGroup(
-            snapshotRegistry,
-            metrics,
-            classicGroup,
-            metadataImage.topics(),
-            log
-        );
-        ConsumerGroup.createConsumerGroupRecords(consumerGroup, records);
+        ConsumerGroup consumerGroup;
+        try {
+            consumerGroup = ConsumerGroup.fromClassicGroup(
+                snapshotRegistry,
+                metrics,
+                classicGroup,
+                metadataImage.topics(),
+                log
+            );
+        } catch (SchemaException e) {
+            log.warn("Cannot upgrade the classic group " + classicGroup.groupId() + ": fail to parse " +
+                "the Consumer Protocol " + ConsumerProtocol.PROTOCOL_TYPE + ":" + classicGroup.protocolName().get() + ".", e);
+
+            throw new GroupIdNotFoundException(String.format("Cannot upgrade the classic group %s: %s.",
+                classicGroup.groupId(), e.getMessage()));
+        }
+        consumerGroup.createConsumerGroupRecords(records);
 
         // Create the session timeouts for the new members. If the conversion fails, the group will remain a
         // classic group, thus these timers will fail the group type check and do nothing.
