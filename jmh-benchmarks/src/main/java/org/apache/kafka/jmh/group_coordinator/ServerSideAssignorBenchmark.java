@@ -37,10 +37,12 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
+import static java.lang.Integer.max;
+
 @State(Scope.Benchmark)
 @Fork(value = 1)
-@Warmup(iterations = 3)
-@Measurement(iterations = 3)
+@Warmup(iterations = 5)
+@Measurement(iterations = 5)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class ServerSideAssignorBenchmark {
@@ -54,16 +56,16 @@ public class ServerSideAssignorBenchmark {
     @Param({"500", "1000"})
     private int memberCount;
 
-    @Param({"true"})
+    @Param({"true", "false"})
     private boolean isRackAware;
 
-    @Param({"true"})
+    @Param({"true", "false"})
     private boolean isSubscriptionUniform;
 
-    @Param({"false"})
+    @Param({"true", "false"})
     private boolean isRangeAssignor;
 
-    @Param({"true"})
+    @Param({"true", "false"})
     private boolean isReassignment;
 
     private PartitionAssignor partitionAssignor;
@@ -77,21 +79,15 @@ public class ServerSideAssignorBenchmark {
     @Setup(Level.Trial)
     public void setup() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+        Map<Integer, Set<String>> partitionRacks = isRackAware ?
+            mkMapOfPartitionRacks(partitionsPerTopicCount) :
+            Collections.emptyMap();
 
-        if (!isRackAware) {
-            for (int i = 1; i <= topicCount; i++) {
-                Uuid topicUuid = Uuid.randomUuid();
-                String topicName = "topic" + i;
-                topicMetadata.put(topicUuid, new TopicMetadata(
-                    topicUuid, topicName, partitionsPerTopicCount, Collections.emptyMap()));
-            }
-        } else {
-            for (int i = 1; i <= topicCount; i++) {
-                Uuid topicUuid = Uuid.randomUuid();
-                String topicName = "topic" + i;
-                topicMetadata.put(topicUuid, new TopicMetadata(
-                    topicUuid, topicName, partitionsPerTopicCount, mkMapOfPartitionRacks(partitionsPerTopicCount)));
-            }
+        for (int i = 1; i <= topicCount; i++) {
+            Uuid topicUuid = Uuid.randomUuid();
+            String topicName = "topic" + i;
+            topicMetadata.put(topicUuid, new TopicMetadata(
+                topicUuid, topicName, partitionsPerTopicCount, partitionRacks));
         }
 
         addTopicSubscriptions(topicMetadata);
@@ -123,22 +119,15 @@ public class ServerSideAssignorBenchmark {
             });
 
             // Add new member to trigger a reassignment.
-            if (isRackAware) {
-                String rackId = "rack" + (memberCount + 1) % numberOfRacks;
-                updatedMembers.put("newMember", new AssignmentMemberSpec(
-                    Optional.empty(),
-                    Optional.of(rackId),
-                    topicMetadata.keySet(),
-                    Collections.emptyMap()
-                ));
-            } else {
-                updatedMembers.put("newMember", new AssignmentMemberSpec(
-                    Optional.empty(),
-                    Optional.empty(),
-                    topicMetadata.keySet(),
-                    Collections.emptyMap()
-                ));
-            }
+            Optional<String> rackId = isRackAware ? Optional.of("rack" + (memberCount + 1) % numberOfRacks) : Optional.empty();
+
+            updatedMembers.put("newMember", new AssignmentMemberSpec(
+                Optional.empty(),
+                rackId,
+                topicMetadata.keySet(),
+                Collections.emptyMap()
+            ));
+
             this.assignmentSpec = new AssignmentSpec(updatedMembers);
         }
     }
@@ -153,47 +142,35 @@ public class ServerSideAssignorBenchmark {
 
     private void addTopicSubscriptions(Map<Uuid, TopicMetadata> topicMetadata) {
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
-        List<Uuid> topicUuids = new ArrayList<>(topicMetadata.keySet());
+        List<Uuid> allTopicIds = new ArrayList<>(topicMetadata.keySet());
+        int topicCounter = 0;
 
-        if (!isRackAware) {
-            for (int i = 1; i <= memberCount; i++) {
-                String memberName = "member" + i;
+        for (int i = 0; i < memberCount; i++) {
+            String memberName = "member" + i;
+            Optional<String> rackId = isRackAware ? Optional.of("rack" + i % numberOfRacks) : Optional.empty();
+            List<Uuid> subscribedTopicIds;
 
-                // Distribute topics among members.
-                List<Uuid> assignedTopics = new ArrayList<>();
-                if (i == memberCount - 1 && !isSubscriptionUniform) {
-                    assignedTopics.add(topicUuids.get(0));
-                    assignedTopics.add(topicUuids.get(1));
-                } else {
-                    assignedTopics = topicUuids;
+            // When subscriptions are uniform, all members are assigned all topics.
+            if (isSubscriptionUniform) {
+                subscribedTopicIds = allTopicIds;
+            } else {
+                subscribedTopicIds = Arrays.asList(
+                    allTopicIds.get(i % topicCount),
+                    allTopicIds.get((i+1) % topicCount)
+                );
+                topicCounter = max (topicCounter, ((i+1) % topicCount));
+
+                if (i == memberCount - 1 && topicCounter < topicCount - 1) {
+                    subscribedTopicIds.addAll(allTopicIds.subList(topicCounter + 1, topicCount - 1));
                 }
-
-                members.put(memberName, new AssignmentMemberSpec(
-                    Optional.empty(),
-                    Optional.empty(),
-                    assignedTopics,
-                    Collections.emptyMap()));
             }
-        } else {
-            for (int i = 1; i <= memberCount; i++) {
-                String memberName = "member" + i;
-                String rackId = "rack" + i % numberOfRacks;
 
-                // Distribute topics among members.
-                List<Uuid> assignedTopics = new ArrayList<>();
-                if (i == memberCount - 1 && !isSubscriptionUniform) {
-                    assignedTopics.add(topicUuids.get(0));
-                    assignedTopics.add(topicUuids.get(1));
-                } else {
-                    assignedTopics = topicUuids;
-                }
-
-                members.put(memberName, new AssignmentMemberSpec(
-                    Optional.empty(),
-                    Optional.of(rackId),
-                    assignedTopics,
-                    Collections.emptyMap()));
-            }
+            members.put(memberName, new AssignmentMemberSpec(
+                Optional.empty(),
+                rackId,
+                subscribedTopicIds,
+                Collections.emptyMap()
+            ));
         }
 
         this.assignmentSpec = new AssignmentSpec(members);
