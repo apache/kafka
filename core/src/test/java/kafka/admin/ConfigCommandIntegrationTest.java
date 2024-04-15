@@ -58,27 +58,25 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
     List<String> alterOpts;
 
     @ParameterizedTest
-    @ValueSource(strings = "zk")
+    @ValueSource(strings = {"zk", "kraft"})
     public void shouldExitWithNonZeroStatusOnUpdatingUnallowedConfigViaZk(String quorum) {
-        assertNonZeroStatusExit(
-            "--zookeeper", zkConnect(),
+        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
             "--entity-name", "1",
             "--entity-type", "brokers",
             "--alter",
-            "--add-config", "security.inter.broker.protocol=PLAINTEXT");
+            "--add-config", "security.inter.broker.protocol=PLAINTEXT")));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = "zk")
+    @ValueSource(strings = {"zk", "kraft"})
     public void shouldExitWithNonZeroStatusOnZkCommandAlterUserQuota(String quorum) {
-        assertNonZeroStatusExit(
-            "--zookeeper", zkConnect(),
+        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
             "--entity-type", "users",
             "--entity-name", "admin",
-            "--alter", "--add-config", "consumer_byte_rate=20000");
+            "--alter", "--add-config", "consumer_byte_rate=20000")));
     }
 
-    public static void assertNonZeroStatusExit(String...args) {
+    public static void assertNonZeroStatusExit(Stream<String> args) {
         AtomicReference<Integer> exitStatus = new AtomicReference<>();
         Exit.setExitProcedure((status, __) -> {
             exitStatus.set(status);
@@ -86,7 +84,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
         });
 
         try {
-            ConfigCommand.main(args);
+            ConfigCommand.main(args.toArray(String[]::new));
         } catch (RuntimeException e) {
             // do nothing.
         } finally {
@@ -95,6 +93,12 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
 
         assertNotNull(exitStatus.get());
         assertEquals(1, exitStatus.get());
+    }
+
+    private Stream<String> quorumArgs() {
+        return isKRaftTest()
+            ? Stream.of("--bootstrap-server", "")
+            : Stream.of("--zookeeper", zkConnect());
     }
 
     public List<String> entityOp(Optional<String> brokerId) {
@@ -131,7 +135,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = "zk")
+    @ValueSource(strings = {"zk", "kraft"})
     public void testDynamicBrokerConfigUpdateUsingZooKeeper(String quorum) throws Exception {
         String brokerId = "1";
         adminZkClient = new AdminZkClient(zkClient(), scala.None$.empty());
