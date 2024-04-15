@@ -18,7 +18,6 @@
 package org.apache.kafka.trogdor.agent;
 
 import static java.util.Arrays.asList;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -69,7 +68,7 @@ import java.util.HashMap;
 import java.util.TreeMap;
 import org.junit.jupiter.api.Timeout;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 120)
 public class AgentTest {
 
     private Agent agent;
