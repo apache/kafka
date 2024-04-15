@@ -18,7 +18,6 @@
 package org.apache.kafka.image.node;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
