@@ -1209,7 +1209,6 @@ public class ConsumerGroup implements Group {
      * @param consumerGroupSessionTimeoutMs The consumerGroupSessionTimeoutMs.
      * @param metadataImage                 The metadataImage.
      * @param records                       The record list.
-     * @param log                           The logger to use.
      * @return  The created ClassicGroup.
      */
     public ClassicGroup toClassicGroup(
@@ -1218,8 +1217,7 @@ public class ConsumerGroup implements Group {
         Time time,
         int consumerGroupSessionTimeoutMs,
         MetadataImage metadataImage,
-        List<Record> records,
-        Logger log
+        List<Record> records
     ) {
         ClassicGroup classicGroup = new ClassicGroup(
             logContext,

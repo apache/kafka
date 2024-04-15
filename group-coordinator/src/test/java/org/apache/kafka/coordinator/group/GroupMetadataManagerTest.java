@@ -10332,8 +10332,9 @@ public class GroupMetadataManagerTest {
             .setErrorCode(NOT_COORDINATOR.code()), pendingMemberSyncResult.syncFuture.get());
     }
 
-    @Test
-    public void testLastClassicProtocolMemberLeavingConsumerGroup() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLastClassicProtocolMemberLeavingConsumerGroup(boolean appendLogSuccessfully) {
         String groupId = "group-id";
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
@@ -10414,6 +10415,9 @@ public class GroupMetadataManagerTest {
                 .withAssignmentEpoch(10))
             .build();
 
+        context.commit();
+        ConsumerGroup consumerGroup = context.groupMetadataManager.consumerGroup(groupId);
+
         // Member 2 leaves the consumer group, triggering the downgrade.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
@@ -10482,16 +10486,30 @@ public class GroupMetadataManagerTest {
 
         assertRecordsEquals(expectedRecords, result.records());
 
-        ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
-        // Simulate a successful write to the log.
-        result.appendFuture().complete(null);
+        if (appendLogSuccessfully) {
+            ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
 
-        ScheduledTimeout<Void, Record> timeout = context.timer.timeout(
-            classicGroupHeartbeatKey(groupId, memberId1));
-        assertNotNull(timeout);
+            // Simulate a successful write to the log.
+            result.appendFuture().complete(null);
 
-        // A new rebalance is triggered.
-        assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
+            ScheduledTimeout<Void, Record> timeout = context.timer.timeout(
+                classicGroupHeartbeatKey(groupId, memberId1));
+            assertNotNull(timeout);
+
+            // A new rebalance is triggered.
+            assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
+        } else {
+            // Simulate a failed write to the log.
+            result.appendFuture().completeExceptionally(new NotLeaderOrFollowerException());
+            context.rollback();
+
+            ScheduledTimeout<Void, Record> timeout = context.timer.timeout(
+                classicGroupHeartbeatKey(groupId, memberId1));
+            assertNull(timeout);
+
+            // The group is reverted back to the consumer group.
+            assertEquals(consumerGroup, context.groupMetadataManager.consumerGroup(groupId));
+        }
     }
 
     private static void checkJoinGroupResponse(

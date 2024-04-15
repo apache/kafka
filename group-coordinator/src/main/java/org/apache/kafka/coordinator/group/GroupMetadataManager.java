@@ -800,15 +800,23 @@ public class GroupMetadataManager {
 
     public CompletableFuture<Void> convertToClassicGroup(ConsumerGroup consumerGroup, String leavingMemberId, List<Record> records) {
         consumerGroup.createGroupTombstoneRecords(records);
-        ClassicGroup classicGroup = consumerGroup.toClassicGroup(
-            leavingMemberId,
-            logContext,
-            time,
-            consumerGroupSessionTimeoutMs,
-            metadataImage,
-            records,
-            log
-        );
+        ClassicGroup classicGroup;
+        try {
+            classicGroup = consumerGroup.toClassicGroup(
+                leavingMemberId,
+                logContext,
+                time,
+                consumerGroupSessionTimeoutMs,
+                metadataImage,
+                records
+            );
+        } catch (SchemaException e) {
+            log.warn("Cannot downgrade the consumer group " + consumerGroup.groupId() + ": fail to parse " +
+                "the Consumer Protocol " + ConsumerProtocol.PROTOCOL_TYPE + ".", e);
+
+            throw new GroupIdNotFoundException(String.format("Cannot downgrade the classic group %s: %s.",
+                consumerGroup.groupId(), e.getMessage()));
+        }
 
         groups.put(consumerGroup.groupId(), classicGroup);
         metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
