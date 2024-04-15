@@ -24,7 +24,7 @@ import org.apache.kafka.server.common.MetadataVersion;
 
 public class ReplicationConfigs {
     public static final String CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG = "controller.socket.timeout.ms";
-    public static final int CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT = Defaults.REQUEST_TIMEOUT_MS;
+    public static final int CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT = 30000;
     public static final String CONTROLLER_SOCKET_TIMEOUT_MS_DOC = "The socket timeout for controller-to-broker channels.";
 
     public static final String DEFAULT_REPLICATION_FACTOR_CONFIG = "default.replication.factor";
