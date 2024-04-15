@@ -112,7 +112,7 @@ public class MetadataResponse extends AbstractResponse {
     public Map<Uuid, Errors> errorsByTopicId() {
         Map<Uuid, Errors> errors = new HashMap<>();
         for (MetadataResponseTopic metadata : data.topics()) {
-            if (metadata.topicId() == Uuid.ZERO_UUID) {
+            if (metadata.topicId().equals(Uuid.ZERO_UUID)) {
                 throw new IllegalStateException("Use errors() when managing topic using topic name");
             }
             if (metadata.errorCode() != Errors.NONE.code())
