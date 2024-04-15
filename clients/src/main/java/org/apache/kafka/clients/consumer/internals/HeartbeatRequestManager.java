@@ -269,8 +269,6 @@ public class HeartbeatRequestManager implements RequestManager {
         heartbeatRequestState.onSendAttempt(currentTimeMs);
         membershipManager.onHeartbeatRequestSent();
         metricsManager.recordHeartbeatSentMs(currentTimeMs);
-        // Reset timer when sending the request, to make sure that, if waiting for the interval,
-        // we don't include the response time (which may introduce delay)
         heartbeatRequestState.resetTimer();
         return request;
     }
