@@ -2183,6 +2183,7 @@ project(':streams') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':storage')
     testImplementation project(':group-coordinator')
+    testImplementation project(':transaction-coordinator')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':server')
