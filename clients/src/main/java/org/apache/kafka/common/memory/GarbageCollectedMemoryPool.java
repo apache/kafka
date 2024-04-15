@@ -38,11 +38,10 @@ public class GarbageCollectedMemoryPool extends SimpleMemoryPool implements Auto
     //to ever be enqueued), 2nd keeps some (small) metadata for every buffer allocated
     private final Map<BufferReference, BufferMetadata> buffersInFlight = new ConcurrentHashMap<>();
     private final Thread gcListenerThread;
-    private volatile boolean alive;
+    private volatile boolean alive = true;
 
     public GarbageCollectedMemoryPool(long sizeBytes, int maxSingleAllocationSize, boolean strict, Sensor oomPeriodSensor) {
         super(sizeBytes, maxSingleAllocationSize, strict, oomPeriodSensor);
-        this.alive = true;
         GarbageCollectionListener gcListener = new GarbageCollectionListener();
         this.gcListenerThread = new Thread(gcListener, "memory pool GC listener");
         this.gcListenerThread.setDaemon(true); //so we dont need to worry about shutdown
