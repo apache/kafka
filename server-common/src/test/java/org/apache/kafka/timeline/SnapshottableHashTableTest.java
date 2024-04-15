@@ -309,8 +309,8 @@ public class SnapshottableHashTableTest {
             }
         }
         if (!extraObjects.isEmpty() || !remaining.isEmpty()) {
-            throw new RuntimeException("Found extra object(s): [" + extraObjects.stream().map(e -> e.toString()).collect(Collectors.joining(", ")) +
-                "] and didn't find object(s): [" + remaining.keySet().stream().map(e -> e.toString()).collect(Collectors.joining(", ")) + "]");
+            throw new RuntimeException("Found extra object(s): [" + extraObjects.stream().map(Object::toString).collect(Collectors.joining(", ")) +
+                "] and didn't find object(s): [" + remaining.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "]");
         }
     }
 }
