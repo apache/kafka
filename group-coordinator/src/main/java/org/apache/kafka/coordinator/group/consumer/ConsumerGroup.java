@@ -46,7 +46,6 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
 import org.apache.kafka.timeline.TimelineObject;
-import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -908,14 +907,14 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
-        if (oldMember != null && oldMember.useClassicProtocol()) {
+        if (oldMember != null) {
             oldMember.supportedClassicProtocols().ifPresent(protocols ->
                 protocols.forEach(protocol ->
                     classicProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::decValue)
                 )
             );
         }
-        if (newMember != null && newMember.useClassicProtocol()) {
+        if (newMember != null) {
             newMember.supportedClassicProtocols().ifPresent(protocols ->
                 protocols.forEach(protocol ->
                     classicProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::incValue)
@@ -1103,15 +1102,13 @@ public class ConsumerGroup implements Group {
      * @param metrics           The GroupCoordinatorMetricsShard.
      * @param classicGroup      The converted classic group.
      * @param topicsImage       The TopicsImage for topic id and topic name conversion.
-     * @param log               The logger to use.
      * @return  The created ConsumerGruop.
      */
     public static ConsumerGroup fromClassicGroup(
         SnapshotRegistry snapshotRegistry,
         GroupCoordinatorMetricsShard metrics,
         ClassicGroup classicGroup,
-        TopicsImage topicsImage,
-        Logger log
+        TopicsImage topicsImage
     ) {
         String groupId = classicGroup.groupId();
         ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
@@ -1119,17 +1116,19 @@ public class ConsumerGroup implements Group {
         consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
-            // The new ConsumerGroupMember's assignedPartitions and targetAssignmentSet need to be the same
-            // in order to keep it stable. Thus, both of them are set to be classicGroupMember.assignment().
-            // If the consumer's real assigned partitions haven't been updated according to
-            // classicGroupMember.assignment(), it will retry the request.
             ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(
-                ByteBuffer.wrap(classicGroupMember.assignment()));
+                ByteBuffer.wrap(classicGroupMember.assignment())
+            );
             Map<Uuid, Set<Integer>> partitions = topicPartitionMapFromList(assignment.partitions(), topicsImage);
 
             ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(
-                ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().get())));
+                ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().get()))
+            );
 
+            // The target assignment and the assigned partitions of each member are set based on the last
+            // assignment of the classic group. All the members are put in the Stable state. If the classic
+            // group was in Preparing Rebalance or Completing Rebalance states, the classic members are
+            // asked to rejoin the group to re-trigger a rebalance or collect their assignments.
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(classicGroupMember.memberId())
                 .setMemberEpoch(classicGroup.generationId())
                 .setState(MemberState.STABLE)
@@ -1153,7 +1152,7 @@ public class ConsumerGroup implements Group {
     /**
      * Populate the record list with the records needed to create the given consumer group.
      *
-     * @param records           The list to which the new records are added.
+     * @param records The list to which the new records are added.
      */
     public void createConsumerGroupRecords(
         List<Record> records
@@ -1180,7 +1179,7 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Converts the list of TopicPartition to a map of topic id and partition set.
+     * @return The map of topic id and partition set converted from the list of TopicPartition.
      */
     private static Map<Uuid, Set<Integer>> topicPartitionMapFromList(
         List<TopicPartition> partitions,
@@ -1298,25 +1297,26 @@ public class ConsumerGroup implements Group {
      * protocol can be supported if it is supported by all members that use the
      * classic protocol.
      *
-     * @param memberProtocolType  the member protocol type.
-     * @param memberProtocols     the set of protocol names.
+     * @param memberProtocolType  The member protocol type.
+     * @param memberProtocols     The set of protocol names.
      *
-     * @return a boolean based on the condition mentioned above.
+     * @return A boolean based on the condition mentioned above.
      */
     public boolean supportsClassicProtocols(String memberProtocolType, Set<String> memberProtocols) {
         if (isEmpty()) {
             return !memberProtocolType.isEmpty() && !memberProtocols.isEmpty();
         } else {
             return ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType) &&
-                memberProtocols.stream()
-                    .anyMatch(name -> classicProtocolMembersSupportedProtocols.getOrDefault(name, 0) == numClassicProtocolMembers());
+                memberProtocols.stream().anyMatch(
+                    name -> classicProtocolMembersSupportedProtocols.getOrDefault(name, 0) == numClassicProtocolMembers()
+                );
         }
     }
 
     /**
      * @param memberId The member to remove.
      *
-     * @return The boolean indicating whether all the members use the classic protocol if the given member is removed.
+     * @return A boolean indicating whether all the members use the classic protocol.
      */
     public boolean allMembersUseClassicProtocolExcept(String memberId) {
         return numClassicProtocolMembers() == members().size() - 1 &&
