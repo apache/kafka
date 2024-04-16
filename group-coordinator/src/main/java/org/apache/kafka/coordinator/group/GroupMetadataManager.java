@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
@@ -782,7 +781,7 @@ public class GroupMetadataManager {
      * Validates the online upgrade if the Classic Group receives a ConsumerGroupHeartbeat request.
      *
      * @param classicGroup A ClassicGroup.
-     * @return the boolean indicating whether it's valid to online upgrade the classic group.
+     * @return The boolean indicating whether it's valid to online upgrade the classic group.
      */
     private boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
         if (!consumerGroupMigrationPolicy.isUpgradeEnabled()) {
@@ -806,7 +805,7 @@ public class GroupMetadataManager {
      *
      * @param classicGroup  The ClassicGroup to convert.
      * @param records       The list of Records.
-     * @return  The created ConsumerGroup.
+     * @return The created ConsumerGroup.
      */
     ConsumerGroup convertToConsumerGroup(ClassicGroup classicGroup, List<Record> records) {
         // The upgrade is always triggered by a new member joining the classic group, which always results in
@@ -817,21 +816,22 @@ public class GroupMetadataManager {
         classicGroup.completeAllSyncFutures(Errors.REBALANCE_IN_PROGRESS);
 
         classicGroup.createGroupTombstoneRecords(records);
+
         ConsumerGroup consumerGroup;
         try {
             consumerGroup = ConsumerGroup.fromClassicGroup(
                 snapshotRegistry,
                 metrics,
                 classicGroup,
-                metadataImage.topics(),
-                log
+                metadataImage.topics()
             );
         } catch (SchemaException e) {
-            log.warn("Cannot upgrade the classic group " + classicGroup.groupId() + ": fail to parse " +
-                "the Consumer Protocol " + ConsumerProtocol.PROTOCOL_TYPE + ":" + classicGroup.protocolName().get() + ".", e);
+            log.warn("Cannot upgrade the classic group " + classicGroup.groupId() +
+                " to consumer group because the embedded consumer protocol is malformed: "
+                + e.getMessage() + ".", e);
 
-            throw new GroupIdNotFoundException(String.format("Cannot upgrade the classic group %s: %s.",
-                classicGroup.groupId(), e.getMessage()));
+            throw new GroupIdNotFoundException("Cannot upgrade the classic group " + classicGroup.groupId() +
+                " to consumer group because the embedded consumer protocol is malformed.");
         }
         consumerGroup.createConsumerGroupRecords(records);
 
