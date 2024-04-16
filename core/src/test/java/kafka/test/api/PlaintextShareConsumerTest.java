@@ -20,6 +20,7 @@ import kafka.api.AbstractShareConsumerTest;
 import kafka.api.BaseConsumerTest;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -28,13 +29,15 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -44,11 +47,13 @@ import scala.jdk.javaapi.CollectionConverters;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
-import java.util.Iterator;
-import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
@@ -60,13 +65,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(600)
 public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
     public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.quorum={argumentsWithNames}";
 
+    Map<TopicPartition, Exception> partitionExceptionMap;
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"kraft+kip932"})
     public void testPollNoSubscribeFails(String quorum) {
@@ -188,6 +196,57 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
         producer.send(record);
         records = shareConsumer.poll(Duration.ofMillis(5000));
         assertEquals(1, records.count());
+        shareConsumer.close();
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testAcknowledgementCommitCallbackInvalidRecordException(String quorum) throws Exception {
+        partitionExceptionMap = new HashMap<>();
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        producer.send(record);
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgeCommitCallBack());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
+        assertEquals(1, records.count());
+        // Waiting until acquisition lock expires.
+        Thread.sleep(10000);
+        // Now in the second poll, we implicitly acknowledge the record received in the first poll.
+        // We get back the acknowledgment error code after the second poll.
+        // When we start the 3rd poll, the acknowledgment commit callback is invoked.
+        shareConsumer.poll(Duration.ofMillis(2000));
+        shareConsumer.poll(Duration.ofMillis(2000));
+        // As we tried to acknowledge a record after acquisition lock expired,
+        // we wil get an InvalidRecordStateException.
+        assertTrue(partitionExceptionMap.get(tp()) instanceof InvalidRecordStateException);
+        shareConsumer.close();
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testAcknowledgementCommitCallbackSuccessfulAcknowledgement(String quorum) throws Exception {
+        partitionExceptionMap = new HashMap<>();
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        producer.send(record);
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgeCommitCallBack());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
+        assertEquals(1, records.count());
+        // Now in the second poll, we implicitly acknowledge the record received in the first poll.
+        // We get back the acknowledgment error code after the second poll.
+        // When we start the 3rd poll, the acknowledgment commit callback is evoked
+        shareConsumer.poll(Duration.ofMillis(2000));
+        shareConsumer.poll(Duration.ofMillis(2000));
+        // We expect null exception as the acknowledgment error code is null.
+        assertNull(partitionExceptionMap.get(tp()));
         shareConsumer.close();
     }
 
@@ -872,5 +931,14 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
 
         producer.close();
         shareConsumer1.close();
+    }
+
+    public class TestableAcknowledgeCommitCallBack implements AcknowledgementCommitCallback {
+        @Override
+        public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
+            offsetsMap.forEach((partition, offsets) -> offsets.forEach(offset -> {
+                partitionExceptionMap.put(partition.topicPartition(), exception);
+            }));
+        }
     }
 }
