@@ -112,7 +112,7 @@ class ConsumerEventHandler(object):
         self.revoked_count += 1
         self.state = ConsumerState.Rebalancing
         self.position = {}
-        logger.debug("All partitions revoked for %s" % node.account.hostname)
+        logger.debug("All partitions revoked from %s" % node.account.hostname)
 
     def handle_partitions_assigned(self, event, node, logger):
         self.assigned_count += 1
@@ -121,7 +121,7 @@ class ConsumerEventHandler(object):
         for topic_partition in event["partitions"]:
             tp = _create_partition_from_dict(topic_partition)
             assignment.append(tp)
-        logger.debug("Partitions %s revoked for %s" % (assignment, node.account.hostname))
+        logger.debug("Partitions %s assigned to %s" % (assignment, node.account.hostname))
         self.assignment = assignment
 
     def handle_kill_process(self, clean_shutdown):
@@ -163,9 +163,9 @@ class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
                 self.assignment.remove(tp)
                 revoked.append(tp)
             else:
-                logger.warn("Could not remove topic partition %s from assignment as it was not previously assigned")
+                logger.warn("Could not remove topic partition %s from assignment as it was not previously assigned to %s" % (tp, node.account.hostname))
 
-        logger.debug("Partitions %s revoked for %s" % (revoked, node.account.hostname))
+        logger.debug("Partitions %s revoked from %s" % (revoked, node.account.hostname))
 
     def handle_partitions_assigned(self, event, node, logger):
         self.assigned_count += 1
@@ -174,7 +174,7 @@ class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
         for topic_partition in event["partitions"]:
             tp = _create_partition_from_dict(topic_partition)
             assignment.append(tp)
-        logger.debug("Partitions %s assigned for %s" % (assignment, node.account.hostname))
+        logger.debug("Partitions %s assigned to %s" % (assignment, node.account.hostname))
         self.assignment.extend(assignment)
 
 
