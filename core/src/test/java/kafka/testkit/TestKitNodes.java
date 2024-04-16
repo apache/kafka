@@ -25,9 +25,12 @@ import org.apache.kafka.test.TestUtils;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class TestKitNodes {
     public static class Builder {
@@ -79,8 +82,15 @@ public class TestKitNodes {
         }
 
         public Builder setNumBrokerNodes(int numBrokerNodes) {
+            return setNumBrokerNodes(numBrokerNodes, 1);
+        }
+
+        public Builder setNumBrokerNodes(int numBrokerNodes, int disksPerBroker) {
             if (numBrokerNodes < 0) {
                 throw new RuntimeException("Invalid negative value for numBrokerNodes");
+            }
+            if (disksPerBroker < 0) {
+                throw new RuntimeException("Invalid negative value for disksPerBroker");
             }
             while (brokerNodeBuilders.size() > numBrokerNodes) {
                 brokerNodeBuilders.pollFirstEntry();
@@ -90,9 +100,17 @@ public class TestKitNodes {
                 if (!brokerNodeBuilders.isEmpty()) {
                     nextId = brokerNodeBuilders.lastKey() + 1;
                 }
-                brokerNodeBuilders.put(nextId,
-                    new BrokerNode.Builder().
-                        setId(nextId));
+                BrokerNode.Builder brokerNodeBuilder = new BrokerNode.Builder().setId(nextId);
+                // Keeping consistent behaviour for existing tests when disksPerBroker == 1
+                if (disksPerBroker > 1) {
+                    int brokerId = nextId; // this is because the lambda below requires a final
+                    List<String> logDataDirectories = IntStream
+                            .range(0, disksPerBroker)
+                            .mapToObj(i -> String.format("broker_%d_data%d", brokerId, i))
+                            .collect(Collectors.toList());
+                    brokerNodeBuilder.setLogDirectories(logDataDirectories);
+                }
+                brokerNodeBuilders.put(nextId, brokerNodeBuilder);
             }
             return this;
         }
