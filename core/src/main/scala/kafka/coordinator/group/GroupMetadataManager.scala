@@ -896,13 +896,17 @@ class GroupMetadataManager(brokerId: Int,
 
             // We avoid writing the tombstone when the generationId is 0, since this group is only using
             // Kafka for offset storage.
-            if (groupIsDead && groupMetadataCache.remove(groupId, group) && generation > 0) {
+            if (groupIsDead && groupMetadataCache.remove(groupId, group)) {
               // Append the tombstone messages to the partition. It is okay if the replicas don't receive these (say,
               // if we crash or leaders move) since the new leaders will still expire the consumers with heartbeat and
               // retry removing this group.
-              val groupMetadataKey = GroupMetadataManager.groupMetadataKey(group.groupId)
-              tombstones += new SimpleRecord(timestamp, groupMetadataKey, null)
-              trace(s"Group $groupId removed from the metadata cache and marked for deletion in $appendPartition.")
+              if (generation > 0) {
+                val groupMetadataKey = GroupMetadataManager.groupMetadataKey(group.groupId)
+                tombstones += new SimpleRecord(timestamp, groupMetadataKey, null)
+                trace(s"Group $groupId removed from the metadata cache and marked for deletion in $appendPartition.")
+              } else {
+                trace(s"Group $groupId removed from the metadata cache with generation: $generation.")
+              }
             }
 
             if (tombstones.nonEmpty) {
