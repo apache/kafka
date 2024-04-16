@@ -17,7 +17,6 @@
 
 package kafka.testkit;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -32,22 +31,12 @@ import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class KafkaClusterTestKitTest {
-    @Test
-    public void testCreateClusterWithNoDisksThrows() {
+    @ParameterizedTest
+    @ValueSource(ints = {0, -1})
+    public void testCreateClusterWithBadNumDisksThrows(int disks) {
         RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder()
-                        .setBrokerNodes(1, 0)
-                        .setNumControllerNodes(1)
-                        .build())
-        );
-        assertEquals("Invalid value for disksPerBroker", e.getMessage());
-    }
-
-    @Test
-    public void testCreateClusterWithNegativeDisksThrows() {
-        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
-                new TestKitNodes.Builder()
-                        .setBrokerNodes(1, -1)
+                        .setBrokerNodes(1, disks)
                         .setNumControllerNodes(1)
                         .build())
         );
