@@ -74,7 +74,7 @@ class KRaftClusterTest {
   def testCreateClusterAndClose(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setNumBrokerNodes(1, 2).
+        setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
       cluster.format()
