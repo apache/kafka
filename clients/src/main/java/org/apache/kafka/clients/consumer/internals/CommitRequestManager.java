@@ -1170,7 +1170,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             // Add all unsent offset commit requests to the unsentRequests list
             List<NetworkClientDelegate.UnsentRequest> unsentRequests = unsentOffsetCommits.stream()
                 .filter(request -> request.canSendRequest(currentTimeMs))
-                .peek(request -> request.onSendAttempt(currentTimeMs))
+                .peek(RequestState::onSendAttempt)
                 .map(OffsetCommitRequestState::toUnsentRequest)
                 .collect(Collectors.toCollection(ArrayList::new));
 
@@ -1183,7 +1183,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
             // Add all sendable offset fetch requests to the unsentRequests list and to the inflightOffsetFetches list
             for (OffsetFetchRequestState request : partitionedBySendability.get(true)) {
-                request.onSendAttempt(currentTimeMs);
+                request.onSendAttempt();
                 unsentRequests.add(request.toUnsentRequest());
                 inflightOffsetFetches.add(request);
             }

@@ -98,15 +98,15 @@ public class CoordinatorRequestManager implements RequestManager {
             return EMPTY;
 
         if (coordinatorRequestState.canSendRequest(currentTimeMs)) {
-            NetworkClientDelegate.UnsentRequest request = makeFindCoordinatorRequest(currentTimeMs);
+            NetworkClientDelegate.UnsentRequest request = makeFindCoordinatorRequest();
             return new NetworkClientDelegate.PollResult(request);
         }
 
         return new NetworkClientDelegate.PollResult(coordinatorRequestState.remainingBackoffMs(currentTimeMs));
     }
 
-    NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {
-        coordinatorRequestState.onSendAttempt(currentTimeMs);
+    NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest() {
+        coordinatorRequestState.onSendAttempt();
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
                 .setKey(this.groupId);

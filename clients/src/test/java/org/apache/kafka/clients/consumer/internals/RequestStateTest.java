@@ -37,7 +37,7 @@ public class RequestStateTest {
 
         // ensure not permitting consecutive requests
         assertTrue(state.canSendRequest(0));
-        state.onSendAttempt(0);
+        state.onSendAttempt();
         assertFalse(state.canSendRequest(0));
         state.onFailedAttempt(35);
         assertTrue(state.canSendRequest(135));
@@ -61,17 +61,6 @@ public class RequestStateTest {
         testTrackInflight(RequestState::onFailedAttempt);
     }
 
-    /**
-     * In some cases, the network layer is <em>very</em> fast and can send out a second request within the same
-     * millisecond timestamp as receiving the first response.
-     *
-     * <p/>
-     *
-     * The previous logic for tracking inflight status used timestamps: if the timestamp from the last received
-     * response was <em>less</em> than the timestamp from the last sent request, we'd interpret that as having an
-     * inflight request. However, this approach would incorrectly return <code>false</code> from
-     * {@link RequestState#requestInFlight()} if the two timestamps were <em>equal</em>.
-     */
     private void testTrackInflight(BiConsumer<RequestState, Integer> onCompletedAttempt) {
         RequestState state = new RequestState(
                 new LogContext(),
@@ -85,7 +74,7 @@ public class RequestStateTest {
         assertFalse(state.requestInFlight());
 
         // When we've sent a request, the flag should update from false to true.
-        state.onSendAttempt(202);
+        state.onSendAttempt();
         assertTrue(state.requestInFlight());
 
         // Now we've received the response.
@@ -94,7 +83,7 @@ public class RequestStateTest {
         // When we've sent a second request with THE SAME TIMESTAMP as the previous response,
         // the flag should update from false to true.
         assertFalse(state.requestInFlight());
-        state.onSendAttempt(236);
+        state.onSendAttempt();
         assertTrue(state.requestInFlight());
     }
 }
