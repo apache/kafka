@@ -20,7 +20,6 @@ import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
 import kafka.server.KafkaConfig;
 import kafka.server.QuorumTestHarness;
-import kafka.utils.TestInfoUtils;
 import kafka.zk.AdminZkClient;
 import kafka.zk.BrokerInfo;
 import org.apache.kafka.common.config.ConfigException;
@@ -48,20 +47,16 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.tools.config.ConfigCommandTest.toArray;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ConfigCommandIntegrationTest extends QuorumTestHarness {
-    /** @see TestInfoUtils#TestWithParameterizedQuorumName()  */
-    public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.{argumentsWithNames}";
-
     AdminZkClient adminZkClient;
     List<String> alterOpts;
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk")
     public void shouldExitWithNonZeroStatusOnUpdatingUnallowedConfigViaZk(String quorum) {
         assertNonZeroStatusExit(
@@ -72,7 +67,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
             "--add-config", "security.inter.broker.protocol=PLAINTEXT");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk")
     public void shouldExitWithNonZeroStatusOnZkCommandAlterUserQuota(String quorum) {
         assertNonZeroStatusExit(
@@ -114,7 +109,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
             .flatMap(Set::stream)
             .map(e -> e.getKey() + "=" + e.getValue())
             .collect(Collectors.joining(","));
-        ConfigCommandOptions addOpts = new ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId), Arrays.asList("--add-config", configStr)));
+        ConfigCommandOptions addOpts = new ConfigCommandOptions(ConfigCommandTest.toArray(alterOpts, entityOp(brokerId), Arrays.asList("--add-config", configStr)));
         ConfigCommand.alterConfigWithZk(zkClient(), addOpts, adminZkClient);
     }
 
@@ -129,12 +124,12 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
     }
 
     void deleteAndVerifyConfig(Set<String> configNames, Optional<String> brokerId) throws Exception {
-        ConfigCommandOptions deleteOpts = new ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId), Arrays.asList("--delete-config", String.join(",", configNames))));
+        ConfigCommandOptions deleteOpts = new ConfigCommandOptions(ConfigCommandTest.toArray(alterOpts, entityOp(brokerId), Arrays.asList("--delete-config", String.join(",", configNames))));
         ConfigCommand.alterConfigWithZk(zkClient(), deleteOpts, adminZkClient);
         verifyConfig(Collections.emptyMap(), brokerId);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk")
     public void testDynamicBrokerConfigUpdateUsingZooKeeper(String quorum) throws Exception {
         String brokerId = "1";

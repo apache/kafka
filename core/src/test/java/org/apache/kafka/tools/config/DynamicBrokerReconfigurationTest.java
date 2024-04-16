@@ -25,8 +25,10 @@ import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource;
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSynonym;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -51,7 +53,6 @@ import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_KEY_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_TYPE_CONFIG;
 import static org.apache.kafka.common.network.CertStores.KEYSTORE_PROPS;
-import static org.apache.kafka.tools.config.ConfigCommandIntegrationTest.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -112,7 +113,7 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         });
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testConfigDescribeUsingAdminClient(String quorum) {
         Admin adminClient = adminClients().head();
@@ -161,7 +162,7 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         assertEquals(Collections.singletonList(new Tuple2<>(CleanerConfig.LOG_CLEANER_THREADS_PROP, ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logCleanerThreads));
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testUpdatesUsingConfigProvider(String quorum) {
         String pollingIntervalVal = "${file:polling.interval:interval}";
@@ -173,8 +174,8 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         Collection<ConfigEntry> brokerConfigs = describeConfig(adminClients().head(), servers()).entries();
         // the following are values before updated
         assertFalse(brokerConfigs.stream().anyMatch(p -> Objects.equals(p.name(), TestMetricsReporter.PollingIntervalProp())), "Initial value of polling interval");
-        assertFalse(brokerConfigs.stream().anyMatch(p -> Objects.equals(p.name(), configPrefix + KafkaConfig.SslTruststoreTypeProp())), "Initial value of ssl truststore type");
-        Optional<ConfigEntry> sslKeystorePasswordProp = brokerConfigs.stream().filter(p -> Objects.equals(p.name(), configPrefix + KafkaConfig.SslKeystorePasswordProp())).findFirst();
+        assertFalse(brokerConfigs.stream().anyMatch(p -> Objects.equals(p.name(), configPrefix + SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG)), "Initial value of ssl truststore type");
+        Optional<ConfigEntry> sslKeystorePasswordProp = brokerConfigs.stream().filter(p -> Objects.equals(p.name(), configPrefix + SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG)).findFirst();
         assertTrue(sslKeystorePasswordProp.isPresent());
         assertNull(sslKeystorePasswordProp.get().value(), "Initial value of ssl keystore password");
 
@@ -191,18 +192,18 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         updatedProps.put(TestMetricsReporter.PollingIntervalProp(), pollingIntervalVal);
 
         // 2. update String property using config provider
-        updatedProps.put(configPrefix + KafkaConfig.SslTruststoreTypeProp(), sslTruststoreTypeVal);
+        updatedProps.put(configPrefix + SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, sslTruststoreTypeVal);
 
         // merge two properties
         updatedProps.putAll(secProps);
 
         // 3. update password property using config provider
-        updatedProps.put(configPrefix + KafkaConfig.SslKeystorePasswordProp(), sslKeystorePasswordVal);
+        updatedProps.put(configPrefix + SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, sslKeystorePasswordVal);
 
         alterConfigsUsingConfigCommand(updatedProps);
         waitForConfig(TestMetricsReporter.PollingIntervalProp(), "1000", 10000);
-        waitForConfig(configPrefix + KafkaConfig.SslTruststoreTypeProp(), "JKS", 10000);
-        waitForConfig(configPrefix + KafkaConfig.SslKeystorePasswordProp(), "ServerPassword", 10000);
+        waitForConfig(configPrefix + SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS", 10000);
+        waitForConfig(configPrefix + SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "ServerPassword", 10000);
 
         // wait for MetricsReporter
         scala.collection.immutable.List<TestMetricsReporter> reporters = TestMetricsReporter.waitForReporters(servers().size());
@@ -216,8 +217,8 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
             // fetch from ZK, values should be unresolved
             Properties props = fetchBrokerConfigsFromZooKeeper(servers().head());
             assertEquals(props.getProperty(TestMetricsReporter.PollingIntervalProp()), pollingIntervalVal, "polling interval is not updated in ZK");
-            assertEquals(props.getProperty(configPrefix + KafkaConfig.SslTruststoreTypeProp()), sslTruststoreTypeVal, "store type is not updated in ZK");
-            assertEquals(props.getProperty(configPrefix + KafkaConfig.SslKeystorePasswordProp()), sslKeystorePasswordVal, "keystore password is not updated in ZK");
+            assertEquals(props.getProperty(configPrefix + SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG), sslTruststoreTypeVal, "store type is not updated in ZK");
+            assertEquals(props.getProperty(configPrefix + SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG), sslKeystorePasswordVal, "keystore password is not updated in ZK");
         }
 
         // verify the update
@@ -239,7 +240,7 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         });
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testTransactionVerificationEnable(String quorum) {
         Consumer<Boolean> verifyConfiguration = enabled -> {
@@ -261,7 +262,7 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         // Dynamically turn verification off.
         String configPrefix = listenerPrefix(SecureExternal());
         Properties updatedProps = securityProps(sslProperties1(), KEYSTORE_PROPS, configPrefix);
-        updatedProps.put(KafkaConfig.TransactionPartitionVerificationEnableProp(), "false");
+        updatedProps.put(TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "false");
         alterConfigsUsingConfigCommand(updatedProps);
         verifyConfiguration.accept(false);
 
@@ -273,7 +274,7 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         verifyConfiguration.accept(false);
 
         // Turn verification back on.
-        updatedProps.put(KafkaConfig.TransactionPartitionVerificationEnableProp(), "true");
+        updatedProps.put(TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "true");
         alterConfigsUsingConfigCommand(updatedProps);
         verifyConfiguration.accept(true);
     }

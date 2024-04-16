@@ -33,7 +33,6 @@ import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.tools.config.ConfigCommandIntegrationTest.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
 import static org.apache.kafka.tools.config.ConfigCommandTest.toArray;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -94,7 +93,7 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
         }
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"kraft", "zk"})
     public void testUserScramCredentialsRequests(String quorum) throws InterruptedException {
         String user1 = "user1";
@@ -163,7 +162,7 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
     }
 
     @SuppressWarnings("dontUseSystemExit")
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"kraft", "zk"})
     public void testAlterWithEmptyPassword(String quorum) {
         String user1 = "user1";
@@ -173,7 +172,7 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
     }
 
     @SuppressWarnings("dontUseSystemExit")
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"kraft", "zk"})
     public void testDescribeUnknownUser(String quorum) {
         String unknownUser = "unknownUser";
