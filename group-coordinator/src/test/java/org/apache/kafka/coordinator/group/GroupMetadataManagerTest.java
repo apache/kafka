@@ -2359,7 +2359,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
-            .withConsumerGroupMetadataRefreshIntervalMs(5 * 60 * 1000)
+            .withGroupMetadataRefreshIntervalMs(5 * 60 * 1000)
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
@@ -2470,7 +2470,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
-            .withConsumerGroupMetadataRefreshIntervalMs(5 * 60 * 1000)
+            .withGroupMetadataRefreshIntervalMs(5 * 60 * 1000)
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()

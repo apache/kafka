@@ -354,7 +354,7 @@ public class GroupMetadataManagerTestContext {
         private PartitionAssignor shareGroupAssignor = new MockPartitionAssignor("share");
         final private List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
-        private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
+        private int groupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
         private int classicGroupMaxSize = Integer.MAX_VALUE;
         private int classicGroupInitialRebalanceDelayMs = 3000;
         final private int classicGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
@@ -387,8 +387,8 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
-        public Builder withConsumerGroupMetadataRefreshIntervalMs(int consumerGroupMetadataRefreshIntervalMs) {
-            this.consumerGroupMetadataRefreshIntervalMs = consumerGroupMetadataRefreshIntervalMs;
+        public Builder withGroupMetadataRefreshIntervalMs(int groupMetadataRefreshIntervalMs) {
+            this.groupMetadataRefreshIntervalMs = groupMetadataRefreshIntervalMs;
             return this;
         }
 
@@ -432,7 +432,7 @@ public class GroupMetadataManagerTestContext {
                     .withConsumerGroupMaxSize(consumerGroupMaxSize)
                     .withConsumerGroupAssignors(consumerGroupAssignors)
                     .withShareGroupAssignor(shareGroupAssignor)
-                    .withConsumerGroupMetadataRefreshIntervalMs(consumerGroupMetadataRefreshIntervalMs)
+                    .withGroupMetadataRefreshIntervalMs(groupMetadataRefreshIntervalMs)
                     .withClassicGroupMaxSize(classicGroupMaxSize)
                     .withClassicGroupMinSessionTimeoutMs(classicGroupMinSessionTimeoutMs)
                     .withClassicGroupMaxSessionTimeoutMs(classicGroupMaxSessionTimeoutMs)

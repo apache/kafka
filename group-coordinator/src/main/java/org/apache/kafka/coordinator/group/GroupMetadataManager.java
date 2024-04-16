@@ -167,7 +167,7 @@ public class GroupMetadataManager {
         private PartitionAssignor shareGroupAssignor = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupHeartbeatIntervalMs = 5000;
-        private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
+        private int groupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
         private MetadataImage metadataImage = null;
         private int consumerGroupSessionTimeoutMs = 45000;
         private int classicGroupMaxSize = Integer.MAX_VALUE;
@@ -224,8 +224,8 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withConsumerGroupMetadataRefreshIntervalMs(int consumerGroupMetadataRefreshIntervalMs) {
-            this.consumerGroupMetadataRefreshIntervalMs = consumerGroupMetadataRefreshIntervalMs;
+        Builder withGroupMetadataRefreshIntervalMs(int groupMetadataRefreshIntervalMs) {
+            this.groupMetadataRefreshIntervalMs = groupMetadataRefreshIntervalMs;
             return this;
         }
 
@@ -301,7 +301,7 @@ public class GroupMetadataManager {
                 consumerGroupMaxSize,
                 consumerGroupSessionTimeoutMs,
                 consumerGroupHeartbeatIntervalMs,
-                consumerGroupMetadataRefreshIntervalMs,
+                groupMetadataRefreshIntervalMs,
                 classicGroupMaxSize,
                 classicGroupInitialRebalanceDelayMs,
                 classicGroupNewMemberJoinTimeoutMs,
@@ -386,7 +386,7 @@ public class GroupMetadataManager {
     /**
      * The metadata refresh interval.
      */
-    private final int consumerGroupMetadataRefreshIntervalMs;
+    private final int groupMetadataRefreshIntervalMs;
 
     /**
      * The metadata image.
@@ -449,7 +449,7 @@ public class GroupMetadataManager {
         int consumerGroupMaxSize,
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
-        int consumerGroupMetadataRefreshIntervalMs,
+        int groupMetadataRefreshIntervalMs,
         int classicGroupMaxSize,
         int classicGroupInitialRebalanceDelayMs,
         int classicGroupNewMemberJoinTimeoutMs,
@@ -473,7 +473,7 @@ public class GroupMetadataManager {
         this.consumerGroupMaxSize = consumerGroupMaxSize;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
         this.consumerGroupHeartbeatIntervalMs = consumerGroupHeartbeatIntervalMs;
-        this.consumerGroupMetadataRefreshIntervalMs = consumerGroupMetadataRefreshIntervalMs;
+        this.groupMetadataRefreshIntervalMs = groupMetadataRefreshIntervalMs;
         this.classicGroupMaxSize = classicGroupMaxSize;
         this.classicGroupInitialRebalanceDelayMs = classicGroupInitialRebalanceDelayMs;
         this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
@@ -1406,7 +1406,7 @@ public class GroupMetadataManager {
                 metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
             }
 
-            group.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
+            group.setMetadataRefreshDeadline(currentTimeMs + groupMetadataRefreshIntervalMs, groupEpoch);
         }
 
         // 2. Update the target assignment if the group epoch is larger than the target assignment epoch or a static member
@@ -1636,7 +1636,7 @@ public class GroupMetadataManager {
                 log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
             }
 
-            group.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
+            group.setMetadataRefreshDeadline(currentTimeMs + groupMetadataRefreshIntervalMs, groupEpoch);
         }
 
         // 2. Update the target assignment if the group epoch is larger than the target assignment epoch.
