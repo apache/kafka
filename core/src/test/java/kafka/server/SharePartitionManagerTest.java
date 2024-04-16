@@ -25,6 +25,9 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchMetadata;
 import org.apache.kafka.common.TopicIdPartition;
@@ -40,6 +43,7 @@ import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.storage.internals.log.FetchIsolation;
 import org.apache.kafka.storage.internals.log.FetchParams;
+import org.apache.kafka.storage.internals.log.FetchPartitionData;
 import org.junit.jupiter.api.Test;
 
 import org.junit.jupiter.api.Timeout;
@@ -56,6 +60,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -63,6 +69,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import scala.Tuple2;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -1293,6 +1301,122 @@ public class SharePartitionManagerTest {
         sharePartitionManager.fetchMessages(groupId, memberId1.toString(), fetchParams, Arrays.asList(tp5, tp6), partitionMaxBytes);
         Mockito.verify(replicaManager, times(3)).fetchMessages(
                 any(), any(), any(ReplicaQuota.class), any());
+    }
+
+    @Test
+    public void testProcessFetchResponse() {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+        Uuid topicId = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
+        partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp0),
+            k -> new SharePartition(groupId, tp0, 100, 5, RECORD_LOCK_DURATION_MS, TIMER, new MockTime()));
+        partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp1),
+            k -> new SharePartition(groupId, tp1, 100, 5, RECORD_LOCK_DURATION_MS, TIMER, new MockTime()));
+
+        SharePartitionManager sharePartitionManager = new SharePartitionManager(Mockito.mock(ReplicaManager.class),
+            new MockTime(), new SharePartitionManager.ShareSessionCache(10, 1000),
+            partitionCacheMap, RECORD_LOCK_DURATION_MS);
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData = new SharePartitionManager.ShareFetchPartitionData(
+            new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+                1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, memberId,
+            Arrays.asList(tp0, tp1), future, partitionMaxBytes);
+
+        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE,
+            new SimpleRecord("0".getBytes(), "v".getBytes()),
+            new SimpleRecord("1".getBytes(), "v".getBytes()),
+            new SimpleRecord("2".getBytes(), "v".getBytes()),
+            new SimpleRecord(null, "value".getBytes()));
+
+        MemoryRecords records1 = MemoryRecords.withRecords(100L, CompressionType.NONE,
+            new SimpleRecord("0".getBytes(), "v".getBytes()),
+            new SimpleRecord("1".getBytes(), "v".getBytes()),
+            new SimpleRecord("2".getBytes(), "v".getBytes()),
+            new SimpleRecord(null, "value".getBytes()));
+
+        List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = new ArrayList<>();
+        responseData.add(new Tuple2<>(tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
+            records, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+            OptionalInt.empty(), false)));
+        responseData.add(new Tuple2<>(tp1, new FetchPartitionData(Errors.NONE, 0L, 100L,
+            records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+            OptionalInt.empty(), false)));
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> result =
+            sharePartitionManager.processFetchResponse(shareFetchPartitionData, responseData);
+
+        assertTrue(result.isDone());
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData = result.join();
+        assertEquals(2, resultData.size());
+        assertTrue(resultData.containsKey(tp0));
+        assertTrue(resultData.containsKey(tp1));
+        assertEquals(0, resultData.get(tp0).partitionIndex());
+        assertEquals(1, resultData.get(tp1).partitionIndex());
+        assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
+        assertEquals(Errors.NONE.code(), resultData.get(tp1).errorCode());
+        assertEquals(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
+                .setBaseOffset(0).setLastOffset(3).setDeliveryCount((short) 1)),
+            resultData.get(tp0).acquiredRecords());
+        assertEquals(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
+                .setBaseOffset(100).setLastOffset(103).setDeliveryCount((short) 1)),
+            resultData.get(tp1).acquiredRecords());
+    }
+
+    @Test
+    public void testProcessFetchResponseWithEmptyRecords() {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+        Uuid topicId = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
+        partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp0),
+            k -> new SharePartition(groupId, tp0, 100, 5, RECORD_LOCK_DURATION_MS, TIMER, new MockTime()));
+        partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp1),
+            k -> new SharePartition(groupId, tp1, 100, 5, RECORD_LOCK_DURATION_MS, TIMER, new MockTime()));
+
+        SharePartitionManager sharePartitionManager = new SharePartitionManager(Mockito.mock(ReplicaManager.class),
+            new MockTime(), new SharePartitionManager.ShareSessionCache(10, 1000),
+            partitionCacheMap, RECORD_LOCK_DURATION_MS);
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData = new SharePartitionManager.ShareFetchPartitionData(
+            new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+            1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, memberId,
+            Arrays.asList(tp0, tp1), future, partitionMaxBytes);
+
+        List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = new ArrayList<>();
+        responseData.add(new Tuple2<>(tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
+            MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+            OptionalInt.empty(), false)));
+        responseData.add(new Tuple2<>(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
+            MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+            OptionalInt.empty(), false)));
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> result =
+            sharePartitionManager.processFetchResponse(shareFetchPartitionData, responseData);
+
+        assertTrue(result.isDone());
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData = result.join();
+        assertEquals(2, resultData.size());
+        assertTrue(resultData.containsKey(tp0));
+        assertTrue(resultData.containsKey(tp1));
+        assertEquals(0, resultData.get(tp0).partitionIndex());
+        assertEquals(1, resultData.get(tp1).partitionIndex());
+        assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
+        assertEquals(Errors.NONE.code(), resultData.get(tp1).errorCode());
+        assertEquals(Collections.emptyList(), resultData.get(tp0).acquiredRecords());
+        assertEquals(Collections.emptyList(), resultData.get(tp1).acquiredRecords());
     }
 
     @Test

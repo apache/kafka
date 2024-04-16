@@ -45,6 +45,8 @@
     <suppress checks="MethodLength"
               files="(KafkaClusterTestKit|SharePartition).java"/>
     <suppress checks="JavaNCSS" files="(SharePartition).java"/>
+    <suppress checks="ClassDataAbstractionCoupling"
+              files="(SharePartitionManagerTest).java"/>
 
     <!-- server tests -->
     <suppress checks="MethodLength|JavaNCSS|NPath" files="DescribeTopicPartitionsRequestHandlerTest.java"/>

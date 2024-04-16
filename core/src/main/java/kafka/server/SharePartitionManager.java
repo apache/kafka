@@ -22,6 +22,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
+import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchMetadata;
@@ -116,7 +117,7 @@ public class SharePartitionManager {
     /**
      * Recursive function to process all the fetch requests present inside the fetch queue
      */
-    public void maybeProcessFetchQueue() {
+    private void maybeProcessFetchQueue() {
         if (!processFetchQueueLock.compareAndSet(false, true)) {
             // The queue is already being processed hence avoid re-triggering.
             return;
@@ -140,7 +141,7 @@ public class SharePartitionManager {
                     topicPartitionData.put(topicIdPartition, new FetchRequest.PartitionData(
                         topicIdPartition.topicId(),
                         sharePartition.nextFetchOffset(),
-                        -1,
+                        0,
                         partitionMaxBytes,
                         Optional.empty()));
                 }
@@ -169,17 +170,22 @@ public class SharePartitionManager {
                 ),
                 QuotaFactory.UnboundedQuota$.MODULE$,
                 responsePartitionData -> {
+                    log.trace("Data successfully retrieved by replica manager: {}", responsePartitionData);
                     List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = CollectionConverters.asJava(
                         responsePartitionData);
-
-                    Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result =
-                        processFetchResponse(shareFetchPartitionData, responseData);
-
-                    shareFetchPartitionData.future.complete(result);
-                    // Releasing the lock to move ahead with the next request in queue.
-                    releaseFetchQueueAndPartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
-                    if (!fetchQueue.isEmpty())
-                        maybeProcessFetchQueue();
+                    processFetchResponse(shareFetchPartitionData, responseData).whenComplete(
+                        (result, throwable) -> {
+                            if (throwable != null) {
+                                log.error("Error processing fetch response for share partitions", throwable);
+                                shareFetchPartitionData.future.completeExceptionally(throwable);
+                            } else {
+                                shareFetchPartitionData.future.complete(result);
+                            }
+                            // Releasing the lock to move ahead with the next request in queue.
+                            releaseFetchQueueAndPartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
+                            if (!fetchQueue.isEmpty())
+                                maybeProcessFetchQueue();
+                        });
                     return BoxedUnit.UNIT;
                 });
         } catch (Exception e) {
@@ -189,15 +195,21 @@ public class SharePartitionManager {
         }
     }
 
-    private Map<TopicIdPartition, ShareFetchResponseData.PartitionData> processFetchResponse(ShareFetchPartitionData shareFetchPartitionData, List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData) {
-        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result = new HashMap<>();
+    // Visible for testing.
+    CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> processFetchResponse(
+        ShareFetchPartitionData shareFetchPartitionData,
+        List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData
+    ) {
+        Map<TopicIdPartition, CompletableFuture<PartitionData>> futures = new HashMap<>();
         responseData.forEach(data -> {
             TopicIdPartition topicIdPartition = data._1;
             FetchPartitionData fetchPartitionData = data._2;
 
             SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(shareFetchPartitionData.groupId, topicIdPartition));
-            sharePartition.acquire(shareFetchPartitionData.memberId, fetchPartitionData)
-                .whenComplete((acquiredRecords, throwable) -> {
+            futures.put(topicIdPartition, sharePartition.acquire(shareFetchPartitionData.memberId, fetchPartitionData)
+                .handle((acquiredRecords, throwable) -> {
+                    log.trace("Acquired records for topicIdPartition: {} with share fetch data: {}, records: {}",
+                        topicIdPartition, shareFetchPartitionData, acquiredRecords);
                     ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
                         .setPartitionIndex(topicIdPartition.partition());
 
@@ -214,16 +226,21 @@ public class SharePartitionManager {
                             .setAcquiredRecords(acquiredRecords)
                             .setAcknowledgeErrorCode(Errors.NONE.code());
                     }
-                    result.put(topicIdPartition, partitionData);
-                });
+                    return partitionData;
+                }));
         });
-        return result;
+
+        return CompletableFuture.allOf(futures.values().toArray(new CompletableFuture[0])).thenApply(v -> {
+            Map<TopicIdPartition, ShareFetchResponseData.PartitionData> processedResult = new HashMap<>();
+            futures.forEach((topicIdPartition, future) -> processedResult.put(topicIdPartition, future.join()));
+            return processedResult;
+        });
     }
 
     // Visible for testing.
     void releaseFetchQueueAndPartitionsLock(String groupId, Set<TopicIdPartition> topicIdPartitions) {
-        releaseProcessFetchQueueLock();
         topicIdPartitions.forEach(tp -> partitionCacheMap.get(sharePartitionKey(groupId, tp)).releaseFetchLock());
+        releaseProcessFetchQueueLock();
     }
 
     private void releaseProcessFetchQueueLock() {
@@ -258,7 +275,7 @@ public class SharePartitionManager {
         });
 
         CompletableFuture<Void> allFutures = CompletableFuture.allOf(
-                futures.values().toArray(new CompletableFuture[futures.size()]));
+                futures.values().toArray(new CompletableFuture[0]));
         return allFutures.thenApply(v -> {
             Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = new HashMap<>();
             futures.forEach((topicIdPartition, future) -> {
@@ -1271,7 +1288,8 @@ public class SharePartitionManager {
         }
     }
 
-    private static class ShareFetchPartitionData {
+    // Visible for testing.
+    static class ShareFetchPartitionData {
         private final FetchParams fetchParams;
         private final String groupId;
         private final String memberId;
