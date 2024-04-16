@@ -33,13 +33,12 @@ import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 
-// TODO: Add unnitest for it
 /**
  * The KRaft state machine for tracking control records in the topic partition.
  *
  * This type keeps track of changes to the finalized kraft.version and the sets of voters.
  */
-final public class InternalLogListener {
+final public class PartitionListener {
     private final ReplicatedLog log;
     private final RecordSerde<?> serde;
     private final BufferSupplier bufferSupplier;
@@ -69,7 +68,7 @@ final public class InternalLogListener {
      * @param maxBatchSizeBytes the maximum size of record batch
      * @param logContext the log context
      */
-    public InternalLogListener(
+    public PartitionListener(
         Optional<VoterSet> staticVoterSet,
         ReplicatedLog log,
         RecordSerde<?> serde,
