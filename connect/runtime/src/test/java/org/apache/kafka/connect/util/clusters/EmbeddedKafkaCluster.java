@@ -91,6 +91,8 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG;
 
 /**
  * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
@@ -164,9 +166,9 @@ public class EmbeddedKafkaCluster {
         // reduce the size of the log cleaner map to reduce test memory usage
         putIfAbsent(brokerConfig, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
 
-        Object listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerListenerNameProp());
+        Object listenerConfig = brokerConfig.get(INTER_BROKER_LISTENER_NAME_CONFIG);
         if (listenerConfig == null)
-            listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerSecurityProtocolProp());
+            listenerConfig = brokerConfig.get(INTER_BROKER_SECURITY_PROTOCOL_CONFIG);
         if (listenerConfig == null)
             listenerConfig = "PLAINTEXT";
         listenerName = new ListenerName(listenerConfig.toString());

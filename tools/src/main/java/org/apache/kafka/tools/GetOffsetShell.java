@@ -95,8 +95,6 @@ public class GetOffsetShell {
     }
 
     private static class GetOffsetShellOptions extends CommandDefaultOptions {
-        private final OptionSpec<String> brokerListOpt;
-        private final OptionSpec<String> bootstrapServerOpt;
         private final OptionSpec<String> topicPartitionsOpt;
         private final OptionSpec<String> topicOpt;
         private final OptionSpec<String> partitionsOpt;
@@ -108,11 +106,11 @@ public class GetOffsetShell {
         public GetOffsetShellOptions(String[] args) throws TerseException {
             super(args);
 
-            brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
+            OptionSpec<String> brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
                     .withRequiredArg()
                     .describedAs("HOST1:PORT1,...,HOST3:PORT3")
                     .ofType(String.class);
-            bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
+            OptionSpec<String> bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
                     .requiredUnless("broker-list")
                     .withRequiredArg()
                     .describedAs("HOST1:PORT1,...,HOST3:PORT3")

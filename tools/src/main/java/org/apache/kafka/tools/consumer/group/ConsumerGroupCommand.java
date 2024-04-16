@@ -354,8 +354,7 @@ public class ConsumerGroupCommand {
                 }
             }
 
-            String format = "\n%" + (-maxGroupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s %" + (-maxConsumerIdLen) + "s %" + (-maxHostLen) + "s %s";
-            return format;
+            return "\n%" + (-maxGroupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s %" + (-maxConsumerIdLen) + "s %" + (-maxHostLen) + "s %s";
         }
 
         private void printMembers(Map<String, Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>>> members, boolean verbose) {

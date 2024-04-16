@@ -28,7 +28,7 @@ import java.util.Set;
 /**
  * This is a hash map which can be snapshotted.
  * <br>
- * See {@SnapshottableHashTable} for more details about the implementation.
+ * See {@link SnapshottableHashTable} for more details about the implementation.
  * <br>
  * This class requires external synchronization.  Null keys and values are not supported.
  *
@@ -127,9 +127,7 @@ public class TimelineHashMap<K, V>
 
     @Override
     public boolean containsValue(Object value) {
-        Iterator<Entry<K, V>> iter = entrySet().iterator();
-        while (iter.hasNext()) {
-            Entry<K, V> e = iter.next();
+        for (Entry<K, V> e : entrySet()) {
             if (value.equals(e.getValue())) {
                 return true;
             }
@@ -378,9 +376,8 @@ public class TimelineHashMap<K, V>
     @Override
     public int hashCode() {
         int hash = 0;
-        Iterator<Entry<K, V>> iter = entrySet().iterator();
-        while (iter.hasNext()) {
-            hash += iter.next().hashCode();
+        for (Entry<K, V> kvEntry : entrySet()) {
+            hash += kvEntry.hashCode();
         }
         return hash;
     }
@@ -395,9 +392,7 @@ public class TimelineHashMap<K, V>
         if (m.size() != size())
             return false;
         try {
-            Iterator<Entry<K, V>> iter = entrySet().iterator();
-            while (iter.hasNext()) {
-                Entry<K, V> entry = iter.next();
+            for (Entry<K, V> entry : entrySet()) {
                 if (!m.get(entry.getKey()).equals(entry.getValue())) {
                     return false;
                 }

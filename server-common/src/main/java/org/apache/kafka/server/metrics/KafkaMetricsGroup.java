@@ -117,7 +117,7 @@ public class KafkaMetricsGroup {
 
     private static Optional<String> toMBeanName(Map<String, String> tags) {
         List<Map.Entry<String, String>> filteredTags = tags.entrySet().stream()
-                .filter(entry -> !entry.getValue().equals(""))
+                .filter(entry -> !entry.getValue().isEmpty())
                 .collect(Collectors.toList());
         if (!filteredTags.isEmpty()) {
             String tagsString = filteredTags.stream()
@@ -131,7 +131,7 @@ public class KafkaMetricsGroup {
 
     private static Optional<String> toScope(Map<String, String> tags) {
         List<Map.Entry<String, String>> filteredTags = tags.entrySet().stream()
-                .filter(entry -> !entry.getValue().equals(""))
+                .filter(entry -> !entry.getValue().isEmpty())
                 .collect(Collectors.toList());
         if (!filteredTags.isEmpty()) {
             // convert dot to _ since reporters like Graphite typically use dot to represent hierarchy

@@ -24,6 +24,7 @@ import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -275,7 +276,7 @@ class KafkaRaftServerTest {
     configProperties.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
     configProperties.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9093")
     configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
-    configProperties.put(KafkaConfig.InterBrokerProtocolVersionProp, "3.3-IV1")
+    configProperties.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.3-IV1")
 
     val (metaPropertiesEnsemble, bootstrapMetadata) =
       invokeLoadMetaProperties(metaProperties, configProperties, None)

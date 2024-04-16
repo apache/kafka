@@ -27,7 +27,6 @@ import org.apache.kafka.coordinator.group.OffsetConfig;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.security.PasswordEncoderConfigs;
-import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -92,28 +91,6 @@ public class Defaults {
     public static final int LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS = 60000;
     public static final int NUM_RECOVERY_THREADS_PER_DATA_DIR = 1;
     public static final boolean AUTO_CREATE_TOPICS_ENABLE = true;
-
-    /** ********* Replication configuration *********/
-    public static final int CONTROLLER_SOCKET_TIMEOUT_MS = REQUEST_TIMEOUT_MS;
-    public static final int REPLICATION_FACTOR = 1;
-    public static final long REPLICA_LAG_TIME_MAX_MS = 30000L;
-    public static final int REPLICA_SOCKET_TIMEOUT_MS = 30 * 1000;
-    public static final int REPLICA_SOCKET_RECEIVE_BUFFER_BYTES = 64 * 1024;
-    public static final int REPLICA_FETCH_MAX_BYTES = 1024 * 1024;
-    public static final int REPLICA_FETCH_WAIT_MAX_MS = 500;
-    public static final int REPLICA_FETCH_MIN_BYTES = 1;
-    public static final int REPLICA_FETCH_RESPONSE_MAX_BYTES = 10 * 1024 * 1024;
-    public static final int NUM_REPLICA_FETCHERS = 1;
-    public static final int REPLICA_FETCH_BACKOFF_MS = 1000;
-    public static final long REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS = 5000L;
-    public static final int FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS = 1000;
-    public static final int PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS = 1000;
-    public static final int DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS = 1;
-    public static final boolean AUTO_LEADER_REBALANCE_ENABLE = true;
-    public static final int LEADER_IMBALANCE_PER_BROKER_PERCENTAGE = 10;
-    public static final int LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS = 300;
-    public static final String INTER_BROKER_SECURITY_PROTOCOL = SecurityProtocol.PLAINTEXT.toString();
-    public static final String INTER_BROKER_PROTOCOL_VERSION = MetadataVersion.latestProduction().version();
 
     /** ********* Controlled shutdown configuration *********/
     public static final int CONTROLLED_SHUTDOWN_MAX_RETRIES = 3;
