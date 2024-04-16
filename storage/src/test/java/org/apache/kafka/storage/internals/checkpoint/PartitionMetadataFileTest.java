@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.util.List;
 
@@ -33,12 +34,12 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class PartitionMetadataFileTest  {
+class PartitionMetadataFileTest  {
     private final File dir = TestUtils.tempDirectory();
+    private final File file = PartitionMetadataFile.newFile(dir);
 
     @Test
     public void testSetRecordWithDifferentTopicId() {
-        File file = PartitionMetadataFile.newFile(dir);
         PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, null);
         Uuid topicId = Uuid.randomUuid();
         assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
@@ -48,7 +49,6 @@ public class PartitionMetadataFileTest  {
 
     @Test
     public void testSetRecordWithSameTopicId() {
-        File file = PartitionMetadataFile.newFile(dir);
         PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, null);
         Uuid topicId = Uuid.randomUuid();
         assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
@@ -56,25 +56,22 @@ public class PartitionMetadataFileTest  {
     }
 
     @Test
-    public void testMaybeFlushWithTopicIdPresent() {
-        File file = PartitionMetadataFile.newFile(dir);
+    public void testMaybeFlushWithTopicIdPresent() throws IOException {
         PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, null);
 
         Uuid topicId = Uuid.randomUuid();
         assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
         assertDoesNotThrow(partitionMetadataFile::maybeFlush);
 
-        assertDoesNotThrow(() -> {
-            List<String> lines = Files.readAllLines(file.toPath());
-            assertEquals(2, lines.size());
-            assertEquals("version: 0", lines.get(0));
-            assertEquals("topic_id: " + topicId, lines.get(1));
-        });
+        // The following content is encoded by PartitionMetadata#encode, which is invoked during the flush
+        List<String> lines = Files.readAllLines(file.toPath());
+        assertEquals(2, lines.size());
+        assertEquals("version: 0", lines.get(0));
+        assertEquals("topic_id: " + topicId, lines.get(1));
     }
 
     @Test
     public void testMaybeFlushWithNoTopicIdPresent() {
-        File file = PartitionMetadataFile.newFile(dir);
         PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, null);
 
         assertDoesNotThrow(partitionMetadataFile::maybeFlush);
@@ -83,7 +80,6 @@ public class PartitionMetadataFileTest  {
 
     @Test
     public void testRead() {
-        File file = PartitionMetadataFile.newFile(dir);
         LogDirFailureChannel channel = Mockito.mock(LogDirFailureChannel.class);
         PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, channel);
 
