@@ -28,20 +28,30 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class KafkaClusterTestKitTest {
     @Test
     public void testCreateClusterWithNoDisksThrows() {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-                new TestKitNodes.Builder().
-                        setBrokerNodes(1, 0).
-                        setNumControllerNodes(1).build()).build()) {
-            fail("Expected failure when building a cluster with no disks");
-        } catch (Exception e) {
-            assertEquals(RuntimeException.class, e.getClass());
-            assertEquals("Invalid value for disksPerBroker", e.getMessage());
-        }
+        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
+                new TestKitNodes.Builder()
+                        .setBrokerNodes(1, 0)
+                        .setNumControllerNodes(1)
+                        .build())
+        );
+        assertEquals("Invalid value for disksPerBroker", e.getMessage());
+    }
+
+    @Test
+    public void testCreateClusterWithNegativeDisksThrows() {
+        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
+                new TestKitNodes.Builder()
+                        .setBrokerNodes(1, -1)
+                        .setNumControllerNodes(1)
+                        .build())
+        );
+        assertEquals("Invalid value for disksPerBroker", e.getMessage());
     }
 
     @ParameterizedTest
