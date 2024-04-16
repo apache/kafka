@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.jmh.group_coordinator;
 
 import org.apache.kafka.common.Uuid;
@@ -49,20 +65,35 @@ import static java.lang.Integer.max;
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class TargetAssignmentBuilderBenchmark {
 
+    public enum AssignorType {
+        RANGE(new RangeAssignor()),
+        UNIFORM(new UniformAssignor());
+
+        private final PartitionAssignor assignor;
+
+        AssignorType(PartitionAssignor assignor) {
+            this.assignor = assignor;
+        }
+
+        public PartitionAssignor assignor() {
+            return assignor;
+        }
+    }
+
     @Param({"1000", "10000"})
     private int memberCount;
 
     @Param({"10", "50"})
     private int partitionsPerTopicCount;
 
-    @Param({"1000"})
+    @Param({"100", "1000"})
     private int topicCount;
 
     @Param({"true", "false"})
     private boolean isSubscriptionUniform;
 
-    @Param({"true", "false"})
-    private boolean isRangeAssignor;
+    @Param({"RANGE", "UNIFORM"})
+    private ServerSideAssignorBenchmark.AssignorType assignorType;
 
     @Param({"true", "false"})
     private boolean isRackAware;
@@ -75,7 +106,7 @@ public class TargetAssignmentBuilderBenchmark {
     /**
      * The group epoch.
      */
-    private final int groupEpoch = 0;
+    private static final int groupEpoch = 0;
 
     /**
      * The partition partitionAssignor used to compute the assignment.
@@ -83,57 +114,50 @@ public class TargetAssignmentBuilderBenchmark {
     private PartitionAssignor partitionAssignor;
 
     /**
-     * The members in the group.
-     */
-    private Map<String, ConsumerGroupMember> members = Collections.emptyMap();
-
-    /**
      * The subscription metadata.
      */
     private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
-
-    /**
-     * The existing target assignment.
-     */
-    private Map<String, Assignment> existingTargetAssignment = Collections.emptyMap();
 
     private TargetAssignmentBuilder targetAssignmentBuilder;
 
     private AssignmentSpec assignmentSpec;
 
-    int numberOfRacks = 3;
+    private static final int numberOfRacks = 3;
 
-    List<String> allTopicNames = new ArrayList<>(topicCount);
-    List<Uuid> allTopicIds = new ArrayList<>(topicCount);
+    private final List<String> allTopicNames = new ArrayList<>(topicCount);
+
+    private final List<Uuid> allTopicIds = new ArrayList<>(topicCount);
 
     @Setup(Level.Trial)
     public void setup() {
 
-        if (isRangeAssignor) {
-            this.partitionAssignor = new RangeAssignor();
-        } else {
-            this.partitionAssignor = new UniformAssignor();
-        }
+        partitionAssignor = assignorType.assignor();
 
-        this.subscriptionMetadata = generateMockSubscriptionMetadata();
+        subscriptionMetadata = generateMockSubscriptionMetadata();
 
-        this.members = generateMockMembers();
+        /**
+         * The members in the group.
+         */
+        Map<String, ConsumerGroupMember> members = generateMockMembers();
 
-        this.existingTargetAssignment = generateMockInitialTargetAssignment();
+        /**
+         * The existing target assignment.
+         */
+        Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignment();
 
         // Add a new member to trigger a rebalance.
         Set<String> subscribedTopics = new HashSet<>(subscriptionMetadata.keySet());
         String rackId = isRackAware ? "rack" + (memberCount + 1) % numberOfRacks : "";
-        ConsumerGroupMember new_member = new ConsumerGroupMember.Builder("new-member")
+        ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("new-member")
             .setSubscribedTopicNames(new ArrayList<>(subscribedTopics))
             .setRackId(rackId)
             .build();
 
-        this.targetAssignmentBuilder = new TargetAssignmentBuilder(groupId, groupEpoch, partitionAssignor)
+        targetAssignmentBuilder = new TargetAssignmentBuilder(groupId, groupEpoch, partitionAssignor)
             .withMembers(members)
             .withSubscriptionMetadata(subscriptionMetadata)
             .withTargetAssignment(existingTargetAssignment)
-            .addOrUpdateMember(new_member.memberId(), new_member);
+            .addOrUpdateMember(newMember.memberId(), newMember);
     }
 
     private Map<String, ConsumerGroupMember> generateMockMembers() {

@@ -1,9 +1,25 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.jmh.group_coordinator;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
 import org.apache.kafka.clients.consumer.RangeAssignor;
-import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -41,84 +57,113 @@ import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class ClientSideAssignorBenchmark {
 
-    @Param({"10", "50", "100"})
+    public enum AssignorType {
+        RANGE(new RangeAssignor()),
+        COOPERATIVE_STICKY(new CooperativeStickyAssignor());
+
+        private final ConsumerPartitionAssignor assignor;
+
+        AssignorType(ConsumerPartitionAssignor assignor) {
+            this.assignor = assignor;
+        }
+
+        public ConsumerPartitionAssignor assignor() {
+            return assignor;
+        }
+    }
+
+    /**
+     * The subscription pattern followed by the members of the group.
+     *
+     * A subscription model is considered homogenous if all the members of the group
+     * are subscribed to the same set of topics, it is heterogeneous otherwise.
+     */
+    public enum SubscriptionModel {
+        HOMOGENEOUS, HETEROGENEOUS
+    }
+
+    @Param({"1000", "10000"})
+    private int memberCount;
+
+    @Param({"10", "50"})
     private int partitionsPerTopicCount;
 
-    @Param({"100"})
+    @Param({"100", "1000"})
     private int topicCount;
-
-    @Param({"500", "1000", "10000"})
-    private int memberCount;
 
     @Param({"true", "false"})
     private boolean isRackAware;
 
-    @Param({"true", "false"})
-    private boolean isSubscriptionUniform;
+    @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
+    private SubscriptionModel subscriptionModel;
+
+    @Param({"RANGE", "COOPERATIVE_STICKY"})
+    private AssignorType assignorType;
 
     @Param({"true", "false"})
-    private boolean isRangeAssignor;
-
-    @Param({"true", "false"})
-    private boolean isReassignment;
+    private boolean simulateRebalanceTrigger;
 
     private Map<String, ConsumerPartitionAssignor.Subscription> subscriptions = new HashMap<>();
 
-    private final int numBrokerRacks = 3;
+    private ConsumerPartitionAssignor.GroupSubscription groupSubscription;
 
-    private final int replicationFactor = 2;
+    private static final int numberOfRacks = 3;
 
-    protected AbstractPartitionAssignor assignor;
+    private static final int replicationFactor = 2;
 
-    private Map<String, List<PartitionInfo>> partitionsPerTopic;
+    protected ConsumerPartitionAssignor assignor;
+
+    private Cluster metadata;
+
+    private List<Node> nodes;
 
     private final List<String> allTopicNames = new ArrayList<>(topicCount);
 
     @Setup(Level.Trial)
     public void setup() {
-        this.partitionsPerTopic = new HashMap<>();
+        // Ensure there are enough racks and brokers for the replication factor.
+        if (numberOfRacks < replicationFactor) {
+            throw new IllegalArgumentException("Number of broker racks must be at least equal to the replication factor.");
+        }
+
+        populateTopicMetadata();
+
+        addMemberSubscriptions();
+
+        assignor = assignorType.assignor();
+
+        if (simulateRebalanceTrigger) simulateRebalance();
+    }
+
+    private void populateTopicMetadata() {
+        List<PartitionInfo> partitions = new ArrayList<>();
+
+        // Create nodes (brokers), one for each rack.
+        nodes = new ArrayList<>(numberOfRacks);
+        for (int i = 0; i < numberOfRacks; i++) {
+            nodes.add(new Node(i, "", i, "rack" + i));
+        }
+
         for (int i = 0; i < topicCount; i++) {
             String topicName = "topic" + i;
             allTopicNames.add(topicName);
-            this.partitionsPerTopic.put(topicName, partitionInfos(topicName, partitionsPerTopicCount));
+            partitions.addAll(partitionInfos(topicName, partitionsPerTopicCount));
         }
 
-        addTopicSubscriptions();
-        if (isRangeAssignor) {
-            this.assignor = new RangeAssignor();
-        } else {
-            this.assignor = new CooperativeStickyAssignor();
-        }
-
-        if (isReassignment) {
-            Map<String, List<TopicPartition>> initialAssignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
-            Map<String, ConsumerPartitionAssignor.Subscription> newSubscriptions = new HashMap<>();
-            subscriptions.forEach((member, subscription) ->
-                newSubscriptions.put(
-                    member,
-                    subscriptionWithOwnedPartitions(initialAssignment.get(member), subscription)
-                )
-            );
-            // Add new member to trigger a reassignment.
-            newSubscriptions.put("newMember", subscription(
-                new ArrayList<>(partitionsPerTopic.keySet()),
-                memberCount
-            ));
-
-            this.subscriptions = newSubscriptions;
-        }
+        metadata = new Cluster("test-cluster", nodes, partitions, Collections.emptySet(), Collections.emptySet());
     }
 
-    private void addTopicSubscriptions() {
+    private void addMemberSubscriptions() {
         subscriptions.clear();
         int topicCounter = 0;
 
         for (int i = 0; i < memberCount; i++) {
             String memberName = "member" + i;
 
+            // When subscriptions are homogeneous, all members are assigned all topics.
             List<String> subscribedTopics;
-            // When subscriptions are uniform, all members are assigned all topics.
-            if (isSubscriptionUniform) {
+
+            if (subscriptionModel == SubscriptionModel.HOMOGENEOUS) {
                 subscribedTopics = allTopicNames;
             } else {
                 subscribedTopics = Arrays.asList(
@@ -134,39 +179,28 @@ public class ClientSideAssignorBenchmark {
 
             subscriptions.put(memberName, subscription(subscribedTopics, i));
         }
+
+        groupSubscription = new ConsumerPartitionAssignor.GroupSubscription(subscriptions);
     }
 
     private List<PartitionInfo> partitionInfos(String topic, int numberOfPartitions) {
-        // Ensure there are enough racks and brokers for the replication factor.
-        if (numBrokerRacks < replicationFactor) {
-            throw new IllegalArgumentException("Number of broker racks must be at least equal to the replication factor.");
-        }
-
-        // Create nodes (brokers), one for each rack.
-        List<Node> nodes = new ArrayList<>(numBrokerRacks);
-        for (int i = 0; i < numBrokerRacks; i++) {
-            nodes.add(new Node(i, "", i, "rack" + i));
-        }
-
         // Create PartitionInfo for each partition.
         List<PartitionInfo> partitionInfos = new ArrayList<>(numberOfPartitions);
         for (int i = 0; i < numberOfPartitions; i++) {
             Node[] replicas = new Node[replicationFactor];
             for (int j = 0; j < replicationFactor; j++) {
                 // Assign nodes based on partition number to mimic mkMapOfPartitionRacks logic.
-                int nodeIndex = (i + j) % numBrokerRacks;
+                int nodeIndex = (i + j) % numberOfRacks;
                 replicas[j] = nodes.get(nodeIndex);
             }
             partitionInfos.add(new PartitionInfo(topic, i, replicas[0], replicas, replicas));
         }
+
         return partitionInfos;
     }
 
     protected ConsumerPartitionAssignor.Subscription subscription(List<String> topics, int consumerIndex) {
-        Optional<String> rackId = isRackAware ?
-            Optional.of("rack" + consumerIndex % numBrokerRacks) :
-            Optional.empty();
-
+        Optional<String> rackId = rackId(consumerIndex);
         return new ConsumerPartitionAssignor.Subscription(
             topics,
             null,
@@ -174,6 +208,10 @@ public class ClientSideAssignorBenchmark {
             DEFAULT_GENERATION,
             rackId
         );
+    }
+
+    private Optional<String> rackId(int index) {
+        return isRackAware ? Optional.of("rack" + index % numberOfRacks) : Optional.empty();
     }
 
     protected ConsumerPartitionAssignor.Subscription subscriptionWithOwnedPartitions(
@@ -189,10 +227,33 @@ public class ClientSideAssignorBenchmark {
         );
     }
 
+    private void simulateRebalance() {
+            ConsumerPartitionAssignor.GroupAssignment initialAssignment = assignor.assign(metadata, groupSubscription);
+            Map<String, ConsumerPartitionAssignor.Subscription> newSubscriptions = new HashMap<>();
+            subscriptions.forEach((member, subscription) ->
+                newSubscriptions.put(
+                    member,
+                    subscriptionWithOwnedPartitions(
+                        initialAssignment.groupAssignment().get(member).partitions(),
+                        subscription
+                    )
+                )
+            );
+
+            // Add new member to trigger a reassignment.
+            newSubscriptions.put("newMember", subscription(
+                allTopicNames,
+                memberCount
+            ));
+
+            this.subscriptions = newSubscriptions;
+    }
+
+
     @Benchmark
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void doAssignment() {
-        assignor.assignPartitions(partitionsPerTopic, subscriptions);
+        assignor.assign(metadata, groupSubscription);
     }
 }

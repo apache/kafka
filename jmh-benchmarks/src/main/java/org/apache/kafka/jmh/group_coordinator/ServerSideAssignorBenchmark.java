@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.jmh.group_coordinator;
 
 import org.apache.kafka.common.Uuid;
@@ -47,30 +63,55 @@ import static java.lang.Integer.max;
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class ServerSideAssignorBenchmark {
 
-    @Param({"10", "50", "100"})
+    public enum AssignorType {
+        RANGE(new RangeAssignor()),
+        UNIFORM(new UniformAssignor());
+
+        private final PartitionAssignor assignor;
+
+        AssignorType(PartitionAssignor assignor) {
+            this.assignor = assignor;
+        }
+
+        public PartitionAssignor assignor() {
+            return assignor;
+        }
+    }
+
+    /**
+     * The subscription pattern followed by the members of the group.
+     *
+     * A subscription model is considered homogenous if all the members of the group
+     * are subscribed to the same set of topics, it is heterogeneous otherwise.
+     */
+    public enum SubscriptionModel {
+        HOMOGENEOUS, HETEROGENEOUS
+    }
+
+    @Param({"1000", "10000"})
+    private int memberCount;
+
+    @Param({"10", "50"})
     private int partitionsPerTopicCount;
 
-    @Param({"100"})
+    @Param({"100", "1000"})
     private int topicCount;
-
-    @Param({"500", "1000"})
-    private int memberCount;
 
     @Param({"true", "false"})
     private boolean isRackAware;
 
-    @Param({"true", "false"})
-    private boolean isSubscriptionUniform;
+    @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
+    private SubscriptionModel subscriptionModel;
+
+    @Param({"RANGE", "UNIFORM"})
+    private AssignorType assignorType;
 
     @Param({"true", "false"})
-    private boolean isRangeAssignor;
-
-    @Param({"true", "false"})
-    private boolean isReassignment;
+    private boolean simulateRebalanceTrigger;
 
     private PartitionAssignor partitionAssignor;
 
-    private final int numberOfRacks = 3;
+    private static final int numberOfRacks = 3;
 
     private AssignmentSpec assignmentSpec;
 
@@ -78,6 +119,19 @@ public class ServerSideAssignorBenchmark {
 
     @Setup(Level.Trial)
     public void setup() {
+        Map<Uuid, TopicMetadata> topicMetadata = createTopicMetadata();
+        subscribedTopicDescriber = new SubscribedTopicMetadata(topicMetadata);
+
+        createAssignmentSpec(topicMetadata);
+
+        partitionAssignor = assignorType.assignor();
+
+        if (simulateRebalanceTrigger) {
+            simulateIncrementalRebalance(topicMetadata);
+        }
+    }
+
+    private Map<Uuid, TopicMetadata> createTopicMetadata() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
         Map<Integer, Set<String>> partitionRacks = isRackAware ?
             mkMapOfPartitionRacks(partitionsPerTopicCount) :
@@ -87,71 +141,29 @@ public class ServerSideAssignorBenchmark {
             Uuid topicUuid = Uuid.randomUuid();
             String topicName = "topic" + i;
             topicMetadata.put(topicUuid, new TopicMetadata(
-                topicUuid, topicName, partitionsPerTopicCount, partitionRacks));
-        }
-
-        addTopicSubscriptions(topicMetadata);
-        this.subscribedTopicDescriber = new SubscribedTopicMetadata(topicMetadata);
-
-        if (isRangeAssignor) {
-            this.partitionAssignor = new RangeAssignor();
-        } else {
-            this.partitionAssignor = new UniformAssignor();
-        }
-
-        if (isReassignment) {
-            GroupAssignment initialAssignment = partitionAssignor.assign(assignmentSpec, subscribedTopicDescriber);
-            Map<String, MemberAssignment> members;
-
-            members = initialAssignment.members();
-
-            // Update the AssignmentSpec with the results from the initial assignment.
-            Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
-
-            members.forEach((memberId, memberAssignment) -> {
-                AssignmentMemberSpec memberSpec = assignmentSpec.members().get(memberId);
-                updatedMembers.put(memberId, new AssignmentMemberSpec(
-                    memberSpec.instanceId(),
-                    memberSpec.rackId(),
-                    memberSpec.subscribedTopicIds(),
-                    memberAssignment.targetPartitions()
-                ));
-            });
-
-            // Add new member to trigger a reassignment.
-            Optional<String> rackId = isRackAware ? Optional.of("rack" + (memberCount + 1) % numberOfRacks) : Optional.empty();
-
-            updatedMembers.put("newMember", new AssignmentMemberSpec(
-                Optional.empty(),
-                rackId,
-                topicMetadata.keySet(),
-                Collections.emptyMap()
+                topicUuid,
+                topicName,
+                partitionsPerTopicCount,
+                partitionRacks
             ));
-
-            this.assignmentSpec = new AssignmentSpec(updatedMembers);
         }
+
+        return topicMetadata;
     }
 
-    private Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
-        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
-        for (int i = 0; i < numPartitions; i++) {
-            partitionRacks.put(i, new HashSet<>(Arrays.asList("rack" + i % numberOfRacks, "rack" + (i + 1) % numberOfRacks)));
-        }
-        return partitionRacks;
-    }
-
-    private void addTopicSubscriptions(Map<Uuid, TopicMetadata> topicMetadata) {
+    private void createAssignmentSpec(Map<Uuid, TopicMetadata> topicMetadata) {
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
         List<Uuid> allTopicIds = new ArrayList<>(topicMetadata.keySet());
         int topicCounter = 0;
 
         for (int i = 0; i < memberCount; i++) {
             String memberName = "member" + i;
-            Optional<String> rackId = isRackAware ? Optional.of("rack" + i % numberOfRacks) : Optional.empty();
+            Optional<String> rackId = rackId(i);
+
+            // When subscriptions are homogenous, all members are assigned all topics.
             List<Uuid> subscribedTopicIds;
 
-            // When subscriptions are uniform, all members are assigned all topics.
-            if (isSubscriptionUniform) {
+            if (subscriptionModel == SubscriptionModel.HOMOGENEOUS) {
                 subscribedTopicIds = allTopicIds;
             } else {
                 subscribedTopicIds = Arrays.asList(
@@ -174,6 +186,44 @@ public class ServerSideAssignorBenchmark {
         }
 
         this.assignmentSpec = new AssignmentSpec(members);
+    }
+
+    private Optional<String> rackId(int index) {
+        return isRackAware ? Optional.of("rack" + index % numberOfRacks) : Optional.empty();
+    }
+
+    private static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
+        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
+        for (int i = 0; i < numPartitions; i++) {
+            partitionRacks.put(i, new HashSet<>(Arrays.asList("rack" + i % numberOfRacks, "rack" + (i + 1) % numberOfRacks)));
+        }
+        return partitionRacks;
+    }
+
+    private void simulateIncrementalRebalance(Map<Uuid, TopicMetadata> topicMetadata) {
+        GroupAssignment initialAssignment = partitionAssignor.assign(assignmentSpec, subscribedTopicDescriber);
+        Map<String, MemberAssignment> members = initialAssignment.members();
+
+        Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
+        members.forEach((memberId, memberAssignment) -> {
+            AssignmentMemberSpec memberSpec = assignmentSpec.members().get(memberId);
+            updatedMembers.put(memberId, new AssignmentMemberSpec(
+                memberSpec.instanceId(),
+                memberSpec.rackId(),
+                memberSpec.subscribedTopicIds(),
+                memberAssignment.targetPartitions()
+            ));
+        });
+
+        Optional<String> rackId = isRackAware ? Optional.of("rack" + (memberCount + 1) % numberOfRacks) : Optional.empty();
+        updatedMembers.put("newMember", new AssignmentMemberSpec(
+            Optional.empty(),
+            rackId,
+            topicMetadata.keySet(),
+            Collections.emptyMap()
+        ));
+
+        this.assignmentSpec = new AssignmentSpec(updatedMembers);
     }
 
     @Benchmark
