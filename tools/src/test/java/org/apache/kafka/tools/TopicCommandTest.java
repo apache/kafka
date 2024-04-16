@@ -64,8 +64,8 @@ import static org.mockito.Mockito.verify;
 
 @Timeout(value = 60)
 public class TopicCommandTest {
-    private String bootstrapServer = "localhost:9092";
-    private String topicName = "topicName";
+    private final String bootstrapServer = "localhost:9092";
+    private final String topicName = "topicName";
 
     @Test
     public void testIsNotUnderReplicatedWhenAdding() {

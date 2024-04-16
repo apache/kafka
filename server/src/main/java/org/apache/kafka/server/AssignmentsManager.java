@@ -164,7 +164,7 @@ public class AssignmentsManager {
      */
     private class ShutdownEvent extends Event {
         @Override
-        public void run() throws Exception {
+        public void run() {
             channelManager.shutdown();
         }
     }
@@ -203,7 +203,7 @@ public class AssignmentsManager {
             }
         }
         @Override
-        public void run() throws Exception {
+        public void run() {
             log.trace("Received assignment {}", this);
             AssignmentEvent existing = pending.getOrDefault(partition, null);
             boolean existingIsInFlight = false;
@@ -269,7 +269,7 @@ public class AssignmentsManager {
     private class DispatchEvent extends Event {
         static final String TAG = "dispatch";
         @Override
-        public void run() throws Exception {
+        public void run() {
             if (inflight != null) {
                 throw new IllegalStateException("Bug. Should not be dispatching while there are assignments in flight");
             }
@@ -310,7 +310,7 @@ public class AssignmentsManager {
             this.response = response;
         }
         @Override
-        public void run() throws Exception {
+        public void run() {
             if (inflight == null) {
                 throw new IllegalStateException("Bug. Cannot not be handling a client response if there is are no assignments in flight");
             }
@@ -321,7 +321,7 @@ public class AssignmentsManager {
                 AssignReplicasToDirsResponseData data = ((AssignReplicasToDirsResponse) response.responseBody()).data();
 
                 Set<AssignmentEvent> failed = filterFailures(data, inflight);
-                Set<AssignmentEvent> completed = Utils.diff(HashSet::new, inflight.values().stream().collect(Collectors.toSet()), failed);
+                Set<AssignmentEvent> completed = Utils.diff(HashSet::new, new HashSet<>(inflight.values()), failed);
                 for (AssignmentEvent assignmentEvent : completed) {
                     if (log.isDebugEnabled()) {
                         log.debug("Successfully propagated assignment {}", assignmentEvent);
