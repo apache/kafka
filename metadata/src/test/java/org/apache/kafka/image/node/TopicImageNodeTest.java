@@ -20,17 +20,14 @@ package org.apache.kafka.image.node;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.node.printer.NodeStringifier;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-
-import org.apache.kafka.image.node.printer.NodeStringifier;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
