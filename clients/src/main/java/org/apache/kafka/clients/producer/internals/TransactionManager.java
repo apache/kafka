@@ -29,14 +29,17 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.ClientExceptionHandler;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.TransactionExceptionHandler;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -460,6 +463,18 @@ public class TransactionManager {
         }
     }
 
+    synchronized void stayInTransitionState(RuntimeException exception) {
+        if (currentState == State.IN_TRANSACTION) {
+            if (exception instanceof RecordTooLargeException) {
+                log.debug("Skipping the record due to the exception: ", exception);
+            }
+            log.info("Transaction is continuing despite the exception: " + exception);
+            return;
+        }
+
+        log.info("Invalid decision for staying in the transaction. " + exception.toString());
+    }
+
     // visible for testing
     synchronized boolean isPartitionAdded(TopicPartition partition) {
         return partitionsInTransaction.contains(partition);
@@ -661,7 +676,14 @@ public class TransactionManager {
             if (canBumpEpoch() && !isCompleting()) {
                 epochBumpRequired = true;
             }
-            transitionToAbortableError(exception);
+
+            ClientExceptionHandler.ClientExceptionHandlerResponse response =
+                    new TransactionExceptionHandler().handle(exception);
+            if (response == ClientExceptionHandler.ClientExceptionHandlerResponse.CONTINUE) {
+                stayInTransitionState(exception);
+            } else {
+                transitionToAbortableError(exception);
+            }
         }
     }
 

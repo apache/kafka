@@ -1403,7 +1403,7 @@ public class KafkaProducerTest {
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
             TestUtils.assertFutureError(producer.send(largeRecord), RecordTooLargeException.class);
-            assertThrows(KafkaException.class, producer::commitTransaction);
+            assertDoesNotThrow(producer::commitTransaction);
         }
     }
 
