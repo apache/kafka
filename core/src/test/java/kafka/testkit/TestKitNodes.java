@@ -86,8 +86,8 @@ public class TestKitNodes {
             if (numBrokerNodes < 0) {
                 throw new RuntimeException("Invalid negative value for numBrokerNodes");
             }
-            if (disksPerBroker < 0) {
-                throw new RuntimeException("Invalid negative value for disksPerBroker");
+            if (disksPerBroker <= 0) {
+                throw new RuntimeException("Invalid value for disksPerBroker");
             }
             while (brokerNodeBuilders.size() > numBrokerNodes) {
                 brokerNodeBuilders.pollFirstEntry();

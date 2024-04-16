@@ -990,7 +990,6 @@ project(':core') {
     testImplementation libs.apachedsLdifPartition
     testImplementation libs.apachedsMavibotPartition
     testImplementation libs.apachedsJdbmPartition
-    testImplementation libs.hamcrest
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jlog4j
     testImplementation libs.caffeine

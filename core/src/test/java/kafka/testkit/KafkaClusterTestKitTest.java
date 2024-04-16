@@ -17,19 +17,33 @@
 
 package kafka.testkit;
 
-import org.hamcrest.Matcher;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class KafkaClusterTestKitTest {
+    @Test
+    public void testCreateClusterWithNoDisksThrows() {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+                new TestKitNodes.Builder().
+                        setBrokerNodes(1, 0).
+                        setNumControllerNodes(1).build()).build()) {
+            fail("Expected failure when building a cluster with no disks");
+        } catch (Exception e) {
+            assertEquals(RuntimeException.class, e.getClass());
+            assertEquals("Invalid value for disksPerBroker", e.getMessage());
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testCreateClusterAndCloseWithMultipleLogDirs(boolean combined) {
@@ -44,16 +58,15 @@ public class KafkaClusterTestKitTest {
 
             cluster.nodes().brokerNodes().forEach((brokerId, node) -> {
                 assertEquals(2, node.logDataDirectories().size());
-                Matcher<Iterable<? extends String>> matcher = containsInAnyOrder(String.format("broker_%d_data0", brokerId), String.format("broker_%d_data1", brokerId));
+                Set<String> expected = new HashSet<>(Arrays.asList(String.format("broker_%d_data0", brokerId), String.format("broker_%d_data1", brokerId)));
                 if (node.combined()) {
-                    matcher = containsInAnyOrder(String.format("combined_%d_0", brokerId), String.format("combined_%d_1", brokerId));
+                    expected = new HashSet<>(Arrays.asList(String.format("combined_%d_0", brokerId), String.format("combined_%d_1", brokerId)));
                 }
-                assertThat(node
-                                .logDataDirectories()
-                                .stream()
+                assertEquals(
+                        expected,
+                        node.logDataDirectories().stream()
                                 .map(p -> Paths.get(p).getFileName().toString())
-                                .collect(Collectors.toList()),
-                        matcher
+                                .collect(Collectors.toSet())
                 );
             });
 
