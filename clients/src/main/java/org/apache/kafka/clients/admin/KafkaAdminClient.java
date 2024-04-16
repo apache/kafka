@@ -2124,7 +2124,7 @@ public class KafkaAdminClient extends AdminClient {
             throw new IllegalArgumentException("The TopicCollection: " + topics + " provided did not match any supported classes for describeTopics.");
     }
 
-    Call generateDescribeTopicsCallWithMetadataAPI(
+    Call generateDescribeTopicsCallWithMetadataApi(
         List<String> topicNamesList,
         Map<String, KafkaFutureImpl<TopicDescription>> topicFutures,
         DescribeTopicsOptions options,
@@ -2282,7 +2282,7 @@ public class KafkaAdminClient extends AdminClient {
             boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
                 final long now = time.milliseconds();
                 log.warn("The DescribeTopicPartitions API is not supported, using Metadata API to describe topics.");
-                runnable.call(generateDescribeTopicsCallWithMetadataAPI(topicNamesList, topicFutures, options, now), now);
+                runnable.call(generateDescribeTopicsCallWithMetadataApi(topicNamesList, topicFutures, options, now), now);
                 return false;
             }
 
