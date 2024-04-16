@@ -1625,9 +1625,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
             //
             // Note: this will *not* initialize the position for any partitions that are in the process
-            // of being assigned and awaiting ConsumerRebalanceListener callbacks. We don't  want to reset
-            // positions until the partition has been fully assigned *and* not until
-            // initWithCommittedOffsetsIfNeeded has had its chance to look up its committed offset.
+            // of being assigned and awaiting ConsumerRebalanceListener callbacks. We don't want to reset
+            // positions until the partition has been fully assigned *and* we want to wait until
+            // initWithCommittedOffsetsIfNeeded has had a chance to look up the partition's committed
+            // offset, if applicable.
             subscriptions.resetInitializingPositions();
 
             // Reset positions using partition offsets retrieved from the leader, for any partitions
