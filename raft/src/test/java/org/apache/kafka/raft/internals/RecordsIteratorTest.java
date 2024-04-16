@@ -21,10 +21,12 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -151,10 +153,13 @@ public final class RecordsIteratorTest {
     }
 
     @Test
-    public void testControlRecordIteration() {
+    public void testControlRecordIterationWithKraftVerion0() {
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
+        VoterSet voterSet = new VoterSet(new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3))));
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setTime(new MockTime())
+            .setKraftVersion((short) 0)
+            .setVoterSet(Optional.empty())
             .setRawSnapshotWriter(
                 new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), snapshotBuf -> buffer.set(snapshotBuf))
             );
@@ -171,12 +176,69 @@ public final class RecordsIteratorTest {
                 true
             )
         ) {
-            // Check snapshot header control record
+            // Consume the control record batch
             Batch<String> batch = iterator.next();
-
             assertEquals(1, batch.controlRecords().size());
+
+            // Check snapshot header control record
             assertEquals(ControlRecordType.SNAPSHOT_HEADER, batch.controlRecords().get(0).type());
             assertEquals(new SnapshotHeaderRecord(), batch.controlRecords().get(0).message());
+
+            // Consume the iterator until we find a control record
+            do {
+                batch = iterator.next();
+            }
+            while (batch.controlRecords().isEmpty());
+
+            // Check snapshot footer control record
+            assertEquals(1, batch.controlRecords().size());
+            assertEquals(ControlRecordType.SNAPSHOT_FOOTER, batch.controlRecords().get(0).type());
+            assertEquals(new SnapshotFooterRecord(), batch.controlRecords().get(0).message());
+
+            // Snapshot footer must be last record
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Test
+    public void testControlRecordIterationWithKraftVerion1() {
+        AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
+        VoterSet voterSet = new VoterSet(new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3))));
+        RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
+            .setTime(new MockTime())
+            .setKraftVersion((short) 1)
+            .setVoterSet(Optional.of(voterSet))
+            .setRawSnapshotWriter(
+                new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), snapshotBuf -> buffer.set(snapshotBuf))
+            );
+        try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
+            snapshot.append(Arrays.asList("a", "b", "c"));
+            snapshot.append(Arrays.asList("d", "e", "f"));
+            snapshot.append(Arrays.asList("g", "h", "i"));
+            snapshot.freeze();
+        }
+
+        try (RecordsIterator<String> iterator = createIterator(
+                MemoryRecords.readableRecords(buffer.get()),
+                BufferSupplier.NO_CACHING,
+                true
+            )
+        ) {
+            // Consume the control record batch
+            Batch<String> batch = iterator.next();
+            assertEquals(3, batch.controlRecords().size());
+
+            // Check snapshot header control record
+            assertEquals(ControlRecordType.SNAPSHOT_HEADER, batch.controlRecords().get(0).type());
+            assertEquals(new SnapshotHeaderRecord(), batch.controlRecords().get(0).message());
+
+            // Check kraft version control record
+            assertEquals(ControlRecordType.KRAFT_VERSION, batch.controlRecords().get(1).type());
+            assertEquals(new KRaftVersionRecord().setKRaftVersion((short) 1), batch.controlRecords().get(1).message());
+
+            // Check the voters control record
+            assertEquals(ControlRecordType.VOTERS, batch.controlRecords().get(2).type());
+            assertEquals(voterSet.toVotersRecord((short) 0), batch.controlRecords().get(2).message());
 
             // Consume the iterator until we find a control record
             do {

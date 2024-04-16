@@ -78,8 +78,8 @@ class BatchAccumulatorTest {
         int lingerMs = 50;
         int maxBatchSize = 512;
 
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-        Mockito.when(memoryPool.tryAllocate(256))
+        ByteBuffer buffer = ByteBuffer.allocate(maxBatchSize);
+        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
             .thenReturn(buffer);
 
         BatchAccumulator<String> acc = buildAccumulator(

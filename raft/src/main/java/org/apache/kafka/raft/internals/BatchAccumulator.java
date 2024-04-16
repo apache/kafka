@@ -218,7 +218,7 @@ public class BatchAccumulator<T> implements Closeable {
     public void appendControlMessages(Function<ByteBuffer, CreatedRecords> valueCreator) {
         appendLock.lock();
         try {
-            ByteBuffer buffer = memoryPool.tryAllocate(256);
+            ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSize);
             if (buffer != null) {
                 try {
                     forceDrain();
