@@ -46,7 +46,7 @@ public class CreateTopicsResult {
      */
     public Map<String, KafkaFuture<Void>> values() {
         return futures.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().thenApply(v -> (Void) null)));
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().thenApply(v -> null)));
     }
 
     /**

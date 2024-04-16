@@ -49,6 +49,7 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class ClientMetricsCommand {
     private static final Logger LOG = LoggerFactory.getLogger(ClientMetricsCommand.class);
@@ -74,9 +75,8 @@ public class ClientMetricsCommand {
         Properties config = opts.commandConfig();
         config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.bootstrapServer());
 
-        ClientMetricsService service = new ClientMetricsService(config);
         int exitCode = 0;
-        try {
+        try (ClientMetricsService service = new ClientMetricsService(config)) {
             if (opts.hasAlterOption()) {
                 service.alterClientMetrics(opts);
             } else if (opts.hasDescribeOption()) {
@@ -84,7 +84,7 @@ public class ClientMetricsCommand {
             } else if (opts.hasDeleteOption()) {
                 service.deleteClientMetrics(opts);
             } else if (opts.hasListOption()) {
-                service.listClientMetrics(opts);
+                service.listClientMetrics();
             }
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
@@ -98,7 +98,6 @@ public class ClientMetricsCommand {
             printException(t);
             exitCode = 1;
         } finally {
-            service.close();
             Exit.exit(exitCode);
         }
     }
@@ -120,8 +119,8 @@ public class ClientMetricsCommand {
 
             Map<String, String> configsToBeSet = new HashMap<>();
             opts.interval().map(intervalVal -> configsToBeSet.put("interval.ms", intervalVal.toString()));
-            opts.metrics().map(metricslist -> configsToBeSet.put("metrics", metricslist.stream().collect(Collectors.joining(","))));
-            opts.match().map(matchlist -> configsToBeSet.put("match", matchlist.stream().collect(Collectors.joining(","))));
+            opts.metrics().map(metricslist -> configsToBeSet.put("metrics", String.join(",", metricslist)));
+            opts.match().map(matchlist -> configsToBeSet.put("match", String.join(",", matchlist)));
 
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, entityName);
             AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false);
@@ -168,7 +167,7 @@ public class ClientMetricsCommand {
             }
         }
 
-        public void listClientMetrics(ClientMetricsCommandOptions opts) throws Exception {
+        public void listClientMetrics() throws Exception {
             Collection<ClientMetricsResourceListing> resources = adminClient.listClientMetricsResources()
                     .all().get(30, TimeUnit.SECONDS);
             String results = resources.stream().map(ClientMetricsResourceListing::name).collect(Collectors.joining("\n"));
@@ -212,8 +211,6 @@ public class ClientMetricsCommand {
 
         private final ArgumentAcceptingOptionSpec<Integer> intervalOpt;
 
-        private final String nl;
-
         private final ArgumentAcceptingOptionSpec<String> matchOpt;
 
         private final ArgumentAcceptingOptionSpec<String> metricsOpt;
@@ -244,15 +241,14 @@ public class ClientMetricsCommand {
                 .describedAs("push interval")
                 .ofType(java.lang.Integer.class);
 
-            nl = System.getProperty("line.separator");
+            String nl = System.lineSeparator();
 
             String[] matchSelectors = new String[] {
                 "client_id", "client_instance_id", "client_software_name",
                 "client_software_version", "client_source_address", "client_source_port"
             };
             String matchSelectorNames = Arrays.stream(matchSelectors).map(config -> "\t" + config).collect(Collectors.joining(nl));
-            matchOpt = parser.accepts("match",  "Matching selector 'k1=v1,k2=v2'. The following is a list of valid selector names: " +
-                nl + matchSelectorNames)
+            matchOpt = parser.accepts("match",  "Matching selector 'k1=v1,k2=v2'. The following is a list of valid selector names: " + nl + matchSelectorNames)
                 .withRequiredArg()
                 .describedAs("k1=v1,k2=v2")
                 .ofType(String.class)
@@ -347,10 +343,7 @@ public class ClientMetricsCommand {
             CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to manipulate and describe client metrics configurations.");
 
             // should have exactly one action
-            long actions =
-                Arrays.asList(alterOpt, deleteOpt, describeOpt, listOpt)
-                    .stream().filter(options::has)
-                    .count();
+            long actions = Stream.of(alterOpt, deleteOpt, describeOpt, listOpt).filter(options::has).count();
             if (actions != 1)
                 CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --alter, --delete, --describe or --list.");
 

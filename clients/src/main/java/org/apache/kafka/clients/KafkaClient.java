@@ -70,7 +70,7 @@ public interface KafkaClient extends Closeable {
 
     /**
      * Check if the connection of the node has failed, based on the connection state. Such connection failure are
-     * usually transient and can be resumed in the next {@link #ready(org.apache.kafka.common.Node, long)} }
+     * usually transient and can be resumed in the next {@link #ready(org.apache.kafka.common.Node, long)}
      * call, but there are cases where transient failures needs to be caught and re-acted upon.
      *
      * @param node the node to check
