@@ -211,7 +211,7 @@ public class TargetAssignmentBuilderBenchmark {
             )
         );
 
-        addTopicSubscriptions();
+        createAssignmentSpec();
 
         GroupAssignment groupAssignment = partitionAssignor.assign(
             assignmentSpec,
@@ -232,7 +232,7 @@ public class TargetAssignmentBuilderBenchmark {
         return initialTargetAssignment;
     }
 
-    private Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
+    private static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
         Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
         for (int i = 0; i < numPartitions; i++) {
             partitionRacks.put(i, new HashSet<>(Arrays.asList("rack" + i % numberOfRacks, "rack" + (i + 1) % numberOfRacks)));
@@ -240,7 +240,7 @@ public class TargetAssignmentBuilderBenchmark {
         return partitionRacks;
     }
 
-    private void addTopicSubscriptions() {
+    private void createAssignmentSpec() {
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         int topicCounter = 0;
 
