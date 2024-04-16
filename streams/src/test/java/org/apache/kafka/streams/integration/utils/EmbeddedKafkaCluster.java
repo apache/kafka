@@ -22,6 +22,7 @@ import kafka.zk.EmbeddedZookeeper;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs;
 import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.server.util.MockTime;
@@ -118,7 +119,7 @@ public class EmbeddedKafkaCluster {
         putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), 0);
         putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), (short) 1);
         putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicPartitionsProp(), 5);
-        putIfAbsent(brokerConfig, KafkaConfig.TransactionsTopicPartitionsProp(), 5);
+        putIfAbsent(brokerConfig, TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 5);
         putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), true);
 
         for (int i = 0; i < brokers.length; i++) {

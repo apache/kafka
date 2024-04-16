@@ -82,7 +82,7 @@ public interface Selectable {
      * The collection of receives that completed on the last {@link #poll(long) poll()} call.
      *
      * Note that the caller of this method assumes responsibility to close the NetworkReceive resources which may be
-     * backed by a {@link MemoryPool}. In such scenarios (when NetworkReceive uses a {@link MemoryPool}, it is necessary
+     * backed by a {@link MemoryPool}. In such scenarios (when NetworkReceive uses a {@link MemoryPool}), it is necessary
      * to close the {@link NetworkReceive} to prevent any memory leaks.
      */
     Collection<NetworkReceive> completedReceives();

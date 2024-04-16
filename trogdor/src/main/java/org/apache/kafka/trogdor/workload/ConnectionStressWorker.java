@@ -50,6 +50,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -208,9 +209,7 @@ public class ConnectionStressWorker implements TaskWorker {
         public boolean tryConnect() {
             try (Admin client = Admin.create(this.props)) {
                 client.describeCluster().nodes().get();
-            } catch (RuntimeException e) {
-                return false;
-            } catch (Exception e) {
+            } catch (ExecutionException | InterruptedException  e) {
                 return false;
             }
             return true;
@@ -253,7 +252,7 @@ public class ConnectionStressWorker implements TaskWorker {
         public void run() {
             try {
                 long lastTimeMs = Time.SYSTEM.milliseconds();
-                JsonNode node = null;
+                JsonNode node;
                 synchronized (ConnectionStressWorker.this) {
                     node = JsonUtil.JSON_SERDE.valueToTree(
                         new StatusData(totalConnections, totalFailedConnections,

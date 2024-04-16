@@ -21,16 +21,8 @@ import org.apache.kafka.common.KafkaException;
 
 public class UnretryableException extends KafkaException {
 
-    public UnretryableException(String message) {
-        super(message);
-    }
-
     public UnretryableException(Throwable cause) {
         super(cause);
-    }
-
-    public UnretryableException(String message, Throwable cause) {
-        super(message, cause);
     }
 
 }

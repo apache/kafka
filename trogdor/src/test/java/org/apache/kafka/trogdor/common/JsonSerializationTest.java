@@ -60,7 +60,7 @@ public class JsonSerializationTest {
             0, null, null, 0));
         verify(new TopicsSpec());
         verify(new PartitionsSpec(0, (short) 0, null, null));
-        Map<Integer, List<Integer>> partitionAssignments = new HashMap<Integer, List<Integer>>();
+        Map<Integer, List<Integer>> partitionAssignments = new HashMap<>();
         partitionAssignments.put(0, Arrays.asList(1, 2, 3));
         partitionAssignments.put(1, Arrays.asList(1, 2, 3));
         verify(new PartitionsSpec(0, (short) 0, partitionAssignments, null));

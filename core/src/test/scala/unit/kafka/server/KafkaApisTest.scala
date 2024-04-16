@@ -73,7 +73,9 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
 import org.apache.kafka.common._
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.server.ClientMetricsManager
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
@@ -1190,8 +1192,8 @@ class KafkaApisTest extends Logging {
             groupId, AuthorizationResult.ALLOWED)
           Topic.GROUP_METADATA_TOPIC_NAME
         case CoordinatorType.TRANSACTION =>
-          topicConfigOverride.put(KafkaConfig.TransactionsTopicPartitionsProp, numBrokersNeeded.toString)
-          topicConfigOverride.put(KafkaConfig.TransactionsTopicReplicationFactorProp, numBrokersNeeded.toString)
+          topicConfigOverride.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
+          topicConfigOverride.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
           when(txnCoordinator.transactionTopicConfigs).thenReturn(new Properties)
           authorizeResource(authorizer, AclOperation.DESCRIBE, ResourceType.TRANSACTIONAL_ID,
             groupId, AuthorizationResult.ALLOWED)
@@ -1300,13 +1302,13 @@ class KafkaApisTest extends Logging {
           true
 
         case Topic.TRANSACTION_STATE_TOPIC_NAME =>
-          topicConfigOverride.put(KafkaConfig.TransactionsTopicPartitionsProp, numBrokersNeeded.toString)
-          topicConfigOverride.put(KafkaConfig.TransactionsTopicReplicationFactorProp, numBrokersNeeded.toString)
+          topicConfigOverride.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
+          topicConfigOverride.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
           when(txnCoordinator.transactionTopicConfigs).thenReturn(new Properties)
           true
         case _ =>
           topicConfigOverride.put(KafkaConfig.NumPartitionsProp, numBrokersNeeded.toString)
-          topicConfigOverride.put(KafkaConfig.DefaultReplicationFactorProp, numBrokersNeeded.toString)
+          topicConfigOverride.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
           false
       }
 

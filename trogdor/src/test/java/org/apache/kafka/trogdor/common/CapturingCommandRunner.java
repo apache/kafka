@@ -22,7 +22,6 @@ import org.apache.kafka.trogdor.basic.BasicPlatform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -45,7 +44,7 @@ public class CapturingCommandRunner implements BasicPlatform.CommandRunner {
     }
 
     @Override
-    public String run(Node curNode, String[] command) throws IOException {
+    public String run(Node curNode, String[] command) {
         String line = Utils.join(command, " ");
         synchronized (this) {
             getOrCreate(curNode.name()).add(line);
@@ -55,6 +54,6 @@ public class CapturingCommandRunner implements BasicPlatform.CommandRunner {
     }
 
     public synchronized List<String> lines(String nodeName) {
-        return new ArrayList<String>(getOrCreate(nodeName));
+        return new ArrayList<>(getOrCreate(nodeName));
     }
 }

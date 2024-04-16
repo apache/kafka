@@ -29,6 +29,7 @@ import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
@@ -85,8 +86,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   protected def configureListeners(props: Seq[Properties]): Unit = {
     props.foreach { config =>
-      config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
-      config.setProperty(KafkaConfig.InterBrokerListenerNameProp, interBrokerListenerName.value)
+      config.remove(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG)
+      config.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, interBrokerListenerName.value)
 
       val listenerNames = Set(listenerName, interBrokerListenerName)
       val listeners = listenerNames.map(listenerName => s"${listenerName.value}://localhost:${TestUtils.RandomPort}").mkString(",")

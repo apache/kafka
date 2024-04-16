@@ -22,7 +22,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
- * A request to the Trogdor coorinator to create a task.
+ * A request to the Trogdor coordinator to create a task.
  */
 public class CreateTaskRequest extends Message {
     private final String id;
