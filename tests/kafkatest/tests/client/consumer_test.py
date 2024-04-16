@@ -348,13 +348,32 @@ class OffsetValidationTest(VerifiableConsumerTest):
             consumer.start()
             self.await_members(consumer, len(consumer.nodes))
 
+            num_rebalances = consumer.num_rebalances()
             conflict_consumer.start()
-            self.await_members(conflict_consumer, num_conflict_consumers)
-            self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
+            if group_protocol == consumer_group.classic_group_protocol:
+                # Classic protocol: conflicting members should join, and the intial ones with conflicting instance id should fail.
+                self.await_members(conflict_consumer, num_conflict_consumers)
+                self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
 
-            wait_until(lambda: len(consumer.dead_nodes()) == num_conflict_consumers,
+                wait_until(lambda: len(consumer.dead_nodes()) == num_conflict_consumers,
                        timeout_sec=10,
                        err_msg="Timed out waiting for the fenced consumers to stop")
+            else:
+                # Consumer protocol: Existing members should remain active and new conflicting ones should not be able to join.
+                self.await_consumed_messages(consumer)
+                assert num_rebalances == consumer.num_rebalances(), "Static consumers attempt to join with instance id in use should not cause a rebalance"
+                assert len(consumer.joined_nodes()) == len(consumer.nodes)
+                assert len(conflict_consumer.joined_nodes()) == 0
+                
+                # Stop existing nodes, so conflicting ones should be able to join.
+                consumer.stop_all()
+                wait_until(lambda: len(consumer.dead_nodes()) == len(consumer.nodes),
+                           timeout_sec=self.session_timeout_sec+5,
+                           err_msg="Timed out waiting for the consumer to shutdown")
+                conflict_consumer.start()
+                self.await_members(conflict_consumer, num_conflict_consumers)
+
+            
         else:
             consumer.start()
             conflict_consumer.start()
