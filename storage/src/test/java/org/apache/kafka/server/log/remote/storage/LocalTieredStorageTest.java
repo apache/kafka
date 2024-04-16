@@ -387,7 +387,7 @@ public final class LocalTieredStorageTest {
                 getClass().getSimpleName(), testName, DATE_TIME_FORMATTER.format(LocalDateTime.now()));
     }
 
-    public final class Verifier {
+    public static final class Verifier {
         private final LocalTieredStorage remoteStorage;
         private final TopicIdPartition topicIdPartition;
 

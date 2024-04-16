@@ -34,6 +34,7 @@ import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrinci
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.junit.jupiter.api.{Test, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -62,7 +63,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[AlterCredentialsTest.TestAuthorizer].getName)
 
     }
-    this.serverConfig.setProperty(KafkaConfig.PrincipalBuilderClassProp, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName)
+    this.serverConfig.setProperty(KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName)
     this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
 
     super.setUp(testInfo)

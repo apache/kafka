@@ -24,13 +24,14 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
 
 abstract class AbstractMetadataRequestTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.setProperty(KafkaConfig.DefaultReplicationFactorProp, "2")
+    properties.setProperty(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "2")
     properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
   }
 

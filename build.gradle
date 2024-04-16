@@ -1837,6 +1837,7 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.hamcrest
@@ -2177,10 +2178,12 @@ project(':streams') {
     testCompileOnly project(':streams:test-utils')
 
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':server')
     testImplementation project(':core')
     testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':storage')
+    testImplementation project(':transaction-coordinator')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':server')
@@ -2991,6 +2994,7 @@ project(':connect:runtime') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
+    testImplementation project(':server')
     testImplementation project(':metadata')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
@@ -3207,6 +3211,7 @@ project(':connect:mirror') {
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server')
 
     testRuntimeOnly project(':connect:runtime')
     testRuntimeOnly libs.slf4jlog4j

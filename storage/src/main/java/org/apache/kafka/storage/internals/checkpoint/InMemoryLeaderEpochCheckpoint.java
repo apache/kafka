@@ -52,7 +52,7 @@ public class InMemoryLeaderEpochCheckpoint implements LeaderEpochCheckpoint {
 
     public ByteBuffer readAsByteBuffer() throws IOException {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream, StandardCharsets.UTF_8));) {
+        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream, StandardCharsets.UTF_8))) {
             CheckpointFile.CheckpointWriteBuffer<EpochEntry> writeBuffer = new CheckpointFile.CheckpointWriteBuffer<>(writer, 0, LeaderEpochCheckpointFile.FORMATTER);
             writeBuffer.write(epochs);
             writer.flush();

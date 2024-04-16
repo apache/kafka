@@ -443,13 +443,7 @@ public class TransactionsCommandTest {
         AbortTransactionResult abortTransactionResult = Mockito.mock(AbortTransactionResult.class);
         KafkaFuture<Void> abortFuture = completedFuture(null);
 
-        final int expectedCoordinatorEpoch;
-        if (coordinatorEpoch < 0) {
-            expectedCoordinatorEpoch = 0;
-        } else {
-            expectedCoordinatorEpoch = coordinatorEpoch;
-        }
-
+        int expectedCoordinatorEpoch = Math.max(coordinatorEpoch, 0);
         AbortTransactionSpec expectedAbortSpec = new AbortTransactionSpec(
             topicPartition, producerId, producerEpoch, expectedCoordinatorEpoch);
 

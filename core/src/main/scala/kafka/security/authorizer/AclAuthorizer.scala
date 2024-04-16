@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_0_IV1
 import org.apache.kafka.server.config.ZkConfigs
 import org.apache.zookeeper.client.ZKClientConfig
@@ -237,7 +238,7 @@ class AclAuthorizer extends Authorizer with Logging {
       try {
         if (!extendedAclSupport && aclBinding.pattern.patternType == PatternType.PREFIXED) {
           throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
-            s"${KafkaConfig.InterBrokerProtocolVersionProp} of $IBP_2_0_IV1 or greater")
+            s"${ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG} of $IBP_2_0_IV1 or greater")
         }
         validateAclBinding(aclBinding)
         true
