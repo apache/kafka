@@ -246,11 +246,12 @@ public class ShareHeartbeatRequestManager implements RequestManager {
      * member to {@link MemberState#JOINING}, so that it rejoins the group.
      */
     public void resetPollTimer(final long pollMs) {
+        if (pollTimer.isExpired()) {
+            logger.debug("Poll timer has been reset after it had expired");
+            shareMembershipManager.maybeRejoinStaleMember();
+        }
         pollTimer.update(pollMs);
         pollTimer.reset(maxPollIntervalMs);
-        if (shareMembershipManager.state() == MemberState.STALE) {
-            shareMembershipManager.transitionToJoining();
-        }
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs,
@@ -259,6 +260,7 @@ public class ShareHeartbeatRequestManager implements RequestManager {
         heartbeatRequestState.onSendAttempt(currentTimeMs);
         shareMembershipManager.onHeartbeatRequestSent();
         metricsManager.recordHeartbeatSentMs(currentTimeMs);
+        heartbeatRequestState.resetTimer();
         return request;
     }
 
@@ -315,8 +317,7 @@ public class ShareHeartbeatRequestManager implements RequestManager {
         if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
             heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
-            heartbeatRequestState.resetTimer();
-            shareMembershipManager.onHeartbeatResponseReceived(response.data());
+            shareMembershipManager.onHeartbeatSuccess(response.data());
             return;
         }
         onErrorResponse(response, currentTimeMs);
@@ -330,6 +331,7 @@ public class ShareHeartbeatRequestManager implements RequestManager {
 
         this.heartbeatState.reset();
         this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
+        shareMembershipManager.onHeartbeatFailure();
 
         switch (error) {
             case NOT_COORDINATOR:
@@ -371,7 +373,7 @@ public class ShareHeartbeatRequestManager implements RequestManager {
             case INVALID_REQUEST:
             case GROUP_MAX_SIZE_REACHED:
             case UNSUPPORTED_VERSION:
-                logger.error("ShareGroupHeartbeatRequest failed due to error: {}", error);
+                logger.error("ShareGroupHeartbeatRequest failed due to {}: {}", error, errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
                 break;
 
@@ -386,7 +388,7 @@ public class ShareHeartbeatRequestManager implements RequestManager {
 
             default:
                 // If the manager receives an unknown error - there could be a bug in the code or a new error code
-                logger.error("ShareGroupHeartbeatRequest failed due to unexpected error: {}", error);
+                logger.error("ShareGroupHeartbeatRequest failed due to unexpected error {}: {}", error, errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
                 break;
         }
@@ -452,6 +454,15 @@ public class ShareHeartbeatRequestManager implements RequestManager {
                 return this.remainingBackoffMs(currentTimeMs);
             }
             return heartbeatTimer.remainingMs();
+        }
+
+        public void onFailedAttempt(final long currentTimeMs) {
+            // Reset timer to allow sending HB after a failure without waiting for the interval.
+            // After a failure, a next HB may be needed with backoff (ex. errors that lead to
+            // retries, like coordinator load error), or immediately (ex. errors that lead to
+            // rejoining, like fencing errors).
+            heartbeatTimer.reset(0);
+            super.onFailedAttempt(currentTimeMs);
         }
 
         private void updateHeartbeatIntervalMs(final long heartbeatIntervalMs) {

@@ -288,7 +288,8 @@ public class RequestManagers implements Closeable {
                         subscriptions,
                         metadata,
                         clientTelemetryReporter,
-                        backgroundEventHandler);
+                        time,
+                        metrics);
                 ShareHeartbeatRequestManager shareHeartbeatRequestManager = new ShareHeartbeatRequestManager(
                         logContext,
                         time,

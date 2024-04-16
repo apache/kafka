@@ -161,7 +161,8 @@ public class ShareConsumerTestBuilder implements Closeable {
                 subscriptions,
                 metadata,
                 Optional.empty(),
-                backgroundEventHandler));
+                time,
+                metrics));
 
         CoordinatorRequestManager coordinator = spy(new CoordinatorRequestManager(
                 time,

@@ -18,21 +18,21 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicIdPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -81,11 +81,10 @@ import java.util.stream.Collectors;
  *     <li>Resolve topic names for all topic IDs received in the target assignment. Topic names
  *     found in metadata are then ready to be reconciled. Topic IDs not found are kept as
  *     unresolved, and the member request metadata updates until it resolves them (or the broker
- *     removes it from the target assignment.</li>
+ *     removes it from the target assignment).</li>
  *     <li>When the above steps complete, the member acknowledges the reconciled assignment,
  *     which is the subset of the target that was resolved from metadata and actually reconciled.
- *     The ack is performed by sending a heartbeat request back to the broker, including the
- *     reconciled assignment.</li>
+ *     The ack is performed by sending a heartbeat request back to the broker.</li>
  * </ol>
  *
  */
@@ -108,7 +107,7 @@ public class ShareMembershipManager implements RequestManager {
     final static TopicIdPartitionComparator TOPIC_ID_PARTITION_COMPARATOR = new TopicIdPartitionComparator();
 
     /**
-     * Group ID of the consumer group the member will be part of, provided when creating the current
+     * Group ID of the share group the member will be part of, provided when creating the current
      * membership manager.
      */
     private final String groupId;
@@ -133,7 +132,7 @@ public class ShareMembershipManager implements RequestManager {
     private final String rackId;
 
     /**
-     * Current state of this member as part of the consumer group, as defined in {@link MemberState}
+     * Current state of this member as part of the share group, as defined in {@link MemberState}
      */
     private MemberState state;
 
@@ -149,7 +148,7 @@ public class ShareMembershipManager implements RequestManager {
     private final SubscriptionState subscriptions;
 
     /**
-     * Metadata that allows us to create the partitions needed for {@link ConsumerRebalanceListener}.
+     * Consumer metadata that we use to check cluster state and drive refresh when required.
      */
     private final ConsumerMetadata metadata;
 
@@ -179,11 +178,11 @@ public class ShareMembershipManager implements RequestManager {
     private boolean reconciliationInProgress;
 
     /**
-     * Epoch the member had when the reconciliation in progress started. This is used to identify if
-     * the member has rejoined while it was reconciling an assignment (in which case the result
-     * of the reconciliation is not applied.)
+     * True if a reconciliation is in progress and the member rejoined the group since the start
+     * of the reconciliation. Used to know that the reconciliation in progress should be
+     * interrupted and not be applied.
      */
-    private int memberEpochOnReconciliationStart;
+    private boolean rejoinedWhileReconciliationInProgress;
 
     /**
      * If the member is currently leaving the group after a call to {@link #leaveGroup()}}, this
@@ -207,10 +206,19 @@ public class ShareMembershipManager implements RequestManager {
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
     /**
-     * Serves as the conduit by which we can report events to the application thread. This is needed as we send
-     * {@link ErrorEvent errors} to the application thread.
+     * Measures successful rebalance latency and number of failed rebalances.
      */
-    private final BackgroundEventHandler backgroundEventHandler;
+    private final RebalanceMetricsManager metricsManager;
+
+    private final Time time;
+
+    /**
+     * True if the poll timer has expired, signaled by a call to
+     * {@link #transitionToSendingLeaveGroup(boolean)} with dueToExpiredPollTimer param true. This
+     * will be used to determine that the member should transition to STALE after leaving the
+     * group, to release its assignment and wait for the timer to be reset.
+     */
+    private boolean isPollTimerExpired;
 
     public ShareMembershipManager(LogContext logContext,
                                   String groupId,
@@ -218,7 +226,27 @@ public class ShareMembershipManager implements RequestManager {
                                   SubscriptionState subscriptions,
                                   ConsumerMetadata metadata,
                                   Optional<ClientTelemetryReporter> clientTelemetryReporter,
-                                  BackgroundEventHandler backgroundEventHandler) {
+                                  Time time,
+                                  Metrics metrics) {
+        this(logContext,
+                groupId,
+                rackId,
+                subscriptions,
+                metadata,
+                clientTelemetryReporter,
+                time,
+                new RebalanceMetricsManager(metrics));
+    }
+
+    // Visible for testing
+    ShareMembershipManager(LogContext logContext,
+                           String groupId,
+                           String rackId,
+                           SubscriptionState subscriptions,
+                           ConsumerMetadata metadata,
+                           Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                           Time time,
+                           RebalanceMetricsManager metricsManager) {
         this.log = logContext.logger(ShareMembershipManager.class);
         this.groupId = groupId;
         this.rackId = rackId;
@@ -230,7 +258,8 @@ public class ShareMembershipManager implements RequestManager {
         this.currentAssignment = new HashMap<>();
         this.stateUpdatesListeners = new ArrayList<>();
         this.clientTelemetryReporter = clientTelemetryReporter;
-        this.backgroundEventHandler = backgroundEventHandler;
+        this.time = time;
+        this.metricsManager = metricsManager;
     }
 
     /**
@@ -244,8 +273,25 @@ public class ShareMembershipManager implements RequestManager {
             throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
         }
+
+        if (isCompletingRebalance(state, nextState)) {
+            metricsManager.recordRebalanceEnded(time.milliseconds());
+        }
+        if (isStartingRebalance(state, nextState)) {
+            metricsManager.recordRebalanceStarted(time.milliseconds());
+        }
+
         log.trace("Member {} with epoch {} transitioned from {} to {}.", memberId, memberEpoch, state, nextState);
         this.state = nextState;
+    }
+
+    private static boolean isCompletingRebalance(MemberState currentState, MemberState nextState) {
+        return currentState == MemberState.RECONCILING &&
+                (nextState == MemberState.STABLE || nextState == MemberState.ACKNOWLEDGING);
+    }
+
+    private static boolean isStartingRebalance(MemberState currentState, MemberState nextState) {
+        return currentState != MemberState.RECONCILING && nextState == MemberState.RECONCILING;
     }
 
     /**
@@ -281,7 +327,7 @@ public class ShareMembershipManager implements RequestManager {
      *
      * @param response Heartbeat response to extract member info and errors from.
      */
-    public void onHeartbeatResponseReceived(ShareGroupHeartbeatResponseData response) {
+    public void onHeartbeatSuccess(ShareGroupHeartbeatResponseData response) {
         if (response.errorCode() != Errors.NONE.code()) {
             String errorMessage = String.format(
                     "Unexpected error in Heartbeat response. Expected no error, but received: %s",
@@ -289,10 +335,15 @@ public class ShareMembershipManager implements RequestManager {
             );
             throw new IllegalArgumentException(errorMessage);
         }
-
+        MemberState state = state();
         if (state == MemberState.LEAVING) {
             log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} is " +
                     "already leaving the group.", memberId, memberEpoch);
+            return;
+        }
+        if (isNotInGroup()) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
+                    " so it's not a member of the group. ", memberId, state);
             return;
         }
 
@@ -319,10 +370,21 @@ public class ShareMembershipManager implements RequestManager {
                 return;
             }
             processAssignmentReceived(assignment);
-
-        } else if (targetAssignmentReconciled()) {
-            transitionTo(MemberState.STABLE);
         }
+    }
+
+    public void onHeartbeatFailure() {
+        metricsManager.maybeRecordRebalanceFailed();
+    }
+
+    /**
+     * @return True if the consumer is not a member of the group.
+     */
+    private boolean isNotInGroup() {
+        return state == MemberState.UNSUBSCRIBED ||
+                state == MemberState.FENCED ||
+                state == MemberState.FATAL ||
+                state == MemberState.STALE;
     }
 
     /**
@@ -399,7 +461,7 @@ public class ShareMembershipManager implements RequestManager {
                 "assignment and rejoin the group.", memberId, memberEpoch, MemberState.FENCED);
 
         // Release assignment
-        updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+        clearSubscription();
         transitionToJoining();
     }
 
@@ -411,7 +473,11 @@ public class ShareMembershipManager implements RequestManager {
     public void transitionToFatal() {
         MemberState previousState = state;
         transitionTo(MemberState.FATAL);
-        log.error("Member {} with epoch {} transitioned to {} state", memberId, memberEpoch, MemberState.FATAL);
+        if (memberId.isEmpty()) {
+            log.error("Member {} with epoch {} transitioned to {} state", memberId, memberEpoch, MemberState.FATAL);
+        } else {
+            log.error("Non-member transitioned to {} state", MemberState.FATAL);
+        }
         notifyEpochChange(Optional.empty(), Optional.empty());
 
         if (previousState == MemberState.UNSUBSCRIBED) {
@@ -421,7 +487,7 @@ public class ShareMembershipManager implements RequestManager {
         }
 
         // Release assignment
-        updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+        clearSubscription();
     }
 
     /**
@@ -438,29 +504,27 @@ public class ShareMembershipManager implements RequestManager {
     }
 
     /**
+     * Clear the assigned partitions in the member subscription, pending assignments and metadata cache.
+     */
+    private void clearSubscription() {
+        if (subscriptions.hasAutoAssignedPartitions()) {
+            subscriptions.assignFromSubscribed(Collections.emptySet());
+        }
+        updateAssignment(Collections.emptySet());
+        clearPendingAssignmentsAndLocalNamesCache();
+    }
+
+    /**
      * Update a new assignment by setting the assigned partitions in the member subscription.
      *
      * @param assignedPartitions Topic partitions to take as the new subscription assignment
-     * @param clearAssignments   True if the pending assignments and metadata cache should be cleared
      */
-    private void updateSubscription(SortedSet<TopicIdPartition> assignedPartitions,
-                                    boolean clearAssignments) {
+    private void updateSubscription(SortedSet<TopicIdPartition> assignedPartitions) {
         Collection<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedPartitions);
         if (subscriptions.hasAutoAssignedPartitions()) {
             subscriptions.assignFromSubscribed(assignedTopicPartitions);
         }
-        updateAssignmentLocally(assignedPartitions, clearAssignments);
-    }
-
-    /**
-     * Make assignment effective on the group manager.
-     */
-    private void updateAssignmentLocally(SortedSet<TopicIdPartition> assignedPartitions,
-                                         boolean clearAssignments) {
-        updateCurrentAssignment(assignedPartitions);
-        if (clearAssignments) {
-            clearPendingAssignmentsAndLocalNamesCache();
-        }
+        updateAssignment(assignedPartitions);
     }
 
     /**
@@ -475,6 +539,9 @@ public class ShareMembershipManager implements RequestManager {
                     "the member is in FATAL state");
             return;
         }
+        if (reconciliationInProgress) {
+            rejoinedWhileReconciliationInProgress = true;
+        }
         resetEpoch();
         transitionTo(MemberState.JOINING);
         clearPendingAssignmentsAndLocalNamesCache();
@@ -486,9 +553,11 @@ public class ShareMembershipManager implements RequestManager {
      * expected to be invoked when the user calls the unsubscribe API.
      */
     public CompletableFuture<Void> leaveGroup() {
-        if (state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL) {
-            // Member is not part of the group. No-op and return completed future to avoid
-            // unnecessary transitions.
+        if (isNotInGroup()) {
+            if (state == MemberState.FENCED) {
+                clearSubscription();
+                transitionTo(MemberState.UNSUBSCRIBED);
+            }
             return CompletableFuture.completedFuture(null);
         }
 
@@ -502,14 +571,11 @@ public class ShareMembershipManager implements RequestManager {
         CompletableFuture<Void> leaveResult = new CompletableFuture<>();
         leaveGroupInProgress = Optional.of(leaveResult);
 
-        releaseAssignment();
-
-        // Clear the subscription
-        updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+        clearSubscription();
 
         // Transition to ensure that a heartbeat request is sent out to effectively leave the
         // group (even in the case where the member had no assignment to release)
-        transitionToSendingLeaveGroup();
+        transitionToSendingLeaveGroup(false);
 
         // Return future to indicate that the leave group is done when the transition to send
         // the heartbeat has been made.
@@ -517,25 +583,15 @@ public class ShareMembershipManager implements RequestManager {
     }
 
     /**
-     * Release member assignment.
-     */
-    private void releaseAssignment() {
-        SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
-        droppedPartitions.addAll(subscriptions.assignedPartitions());
-
-        if (!droppedPartitions.isEmpty() && (memberEpoch > 0)) {
-            // Member is part of the group.
-            revokePartitions(droppedPartitions);
-        }
-    }
-
-    /**
      * Reset member epoch to the value required for the leave the group heartbeat request, and
      * transition to the {@link MemberState#LEAVING} state so that a heartbeat
      * request is sent out with it.
-     * Visible for testing.
+     *
+     * @param dueToExpiredPollTimer True if the leave group is due to an expired poll timer. This
+     *                              will indicate that the member must remain STALE after leaving,
+     *                              until it releases its assignment and the timer is reset.
      */
-    void transitionToSendingLeaveGroup() {
+    public void transitionToSendingLeaveGroup(boolean dueToExpiredPollTimer) {
         if (state == MemberState.FATAL) {
             log.warn("Member {} with epoch {} won't send leave group request because it is in " +
                     "FATAL state", memberId, memberEpoch);
@@ -545,6 +601,15 @@ public class ShareMembershipManager implements RequestManager {
             log.warn("Member {} won't send leave group request because it is already out of the group.",
                     memberId);
             return;
+        }
+
+        if (dueToExpiredPollTimer) {
+            this.isPollTimerExpired = true;
+
+            // Briefly transition through prepare leaving. The member does not have to release
+            // any assignment before sending the leave group given that is stale. It will invoke
+            // onPartitionsLost after sending the leave group on the STALE state.
+            transitionTo(MemberState.PREPARE_LEAVING);
         }
         updateMemberEpoch(ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH);
         currentAssignment = new HashMap<>();
@@ -586,7 +651,11 @@ public class ShareMembershipManager implements RequestManager {
                 transitionTo(MemberState.RECONCILING);
             }
         } else if (state == MemberState.LEAVING) {
-            transitionToUnsubscribed();
+            if (isPollTimerExpired) {
+                transitionToStale();
+            } else {
+                transitionToUnsubscribed();
+            }
         }
     }
 
@@ -627,7 +696,10 @@ public class ShareMembershipManager implements RequestManager {
      */
     public boolean shouldSkipHeartbeat() {
         MemberState state = state();
-        return state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL || state == MemberState.STALE;
+        return state == MemberState.UNSUBSCRIBED ||
+                state == MemberState.FATAL ||
+                state == MemberState.STALE ||
+                state == MemberState.FENCED;
     }
 
     /**
@@ -640,17 +712,27 @@ public class ShareMembershipManager implements RequestManager {
         return state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
     }
 
+    public void maybeRejoinStaleMember() {
+        isPollTimerExpired = false;
+        if (state == MemberState.STALE) {
+            log.debug("Expired poll timer has been reset so stale member {} will rejoin the group" +
+                    "when it completes releasing its previous assignment.", memberId);
+            transitionToJoining();
+        }
+    }
+
     /**
      * Sets the epoch to the leave group epoch and clears the assignments. The member will rejoin with
      * the existing subscriptions after the next application poll event.
      */
     public void transitionToStale() {
-        memberEpoch = ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        // Clear the current assignment and subscribed partitions before member sending the leave group
-        updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
-        transitionTo(MemberState.PREPARE_LEAVING);
-        transitionTo(MemberState.LEAVING);
         transitionTo(MemberState.STALE);
+
+        // Release assignment
+        clearSubscription();
+        log.debug("Member {} sent leave group heartbeat and released its assignment. It will remain " +
+                        "in {} state until the poll timer is reset, and it will then rejoin the group",
+                memberId, MemberState.STALE);
     }
 
     /**
@@ -667,13 +749,13 @@ public class ShareMembershipManager implements RequestManager {
      */
     void maybeReconcile() {
         if (targetAssignmentReconciled()) {
-            log.debug("Ignoring reconciliation attempt. Target assignment is equal to the " +
+            log.trace("Ignoring reconciliation attempt. Target assignment is equal to the " +
                     "current assignment.");
             return;
         }
         if (reconciliationInProgress) {
-            log.debug("Ignoring reconciliation attempt. Another reconciliation is already in progress. Assignment " +
-                    currentTargetAssignment + " will be handled in the next reconciliation loop.");
+            log.trace("Ignoring reconciliation attempt. Another reconciliation is already in progress. Assignment {}" +
+                    " will be handled in the next reconciliation loop.", currentTargetAssignment);
             return;
         }
 
@@ -695,7 +777,6 @@ public class ShareMembershipManager implements RequestManager {
         // be reconciled is the same as the current one (even though the member may remain
         // in RECONCILING state if it has some unresolved assignments).
         boolean sameAssignmentReceived = assignedTopicPartitions.equals(ownedPartitions);
-
         if (sameAssignmentReceived) {
             log.debug("Ignoring reconciliation attempt. Target assignment ready to reconcile {} " +
                     "is equal to the member current assignment {}.", assignedTopicPartitions, ownedPartitions);
@@ -725,7 +806,9 @@ public class ShareMembershipManager implements RequestManager {
                 revokedPartitions
         );
 
-        revokeAndAssign(assignedTopicIdPartitions, revokedPartitions, addedPartitions);
+        if (!maybeAbortReconciliation()) {
+            revokeAndAssign(assignedTopicIdPartitions, revokedPartitions);
+        }
     }
 
     /**
@@ -733,32 +816,41 @@ public class ShareMembershipManager implements RequestManager {
      * transition.
      */
     private void revokeAndAssign(SortedSet<TopicIdPartition> assignedTopicIdPartitions,
-                                 SortedSet<TopicPartition> revokedPartitions,
-                                 SortedSet<TopicPartition> addedPartitions) {
+                                 SortedSet<TopicPartition> revokedPartitions) {
         if (!revokedPartitions.isEmpty()) {
             revokePartitions(revokedPartitions);
         }
 
-        boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
-        if (state == MemberState.RECONCILING && !memberHasRejoined) {
-            // Apply assignment
+        // Apply assignment
+        if (!maybeAbortReconciliation()) {
             assignPartitions(assignedTopicIdPartitions);
-
-            markReconciliationCompleted();
-
-            // Make assignment effective on the broker by transitioning to send acknowledge.
-            transitionTo(MemberState.ACKNOWLEDGING);
-        } else {
-            log.debug("The member already transitioned out of the reconciling state for epoch {} into " +
-                    "{} state with epoch {}. Interrupting reconciliation as it's " +
-                    "not relevant anymore,", memberEpochOnReconciliationStart, state, memberEpoch);
-            String reason = interruptedReconciliationErrorMessage();
-            log.error("Interrupting reconciliation. " + reason);
         }
+
+        // Make assignment effective on the broker by transitioning to send acknowledge.
+        transitionTo(MemberState.ACKNOWLEDGING);
+        markReconciliationCompleted();
+    }
+
+    /**
+     * @return True if the reconciliation in progress should not continue. This could be because
+     * the member is not in RECONCILING state anymore (member failed or is leaving the group), or
+     * if it has rejoined the group (note that after rejoining the member could be RECONCILING
+     * again, so checking the state is not enough)
+     */
+    boolean maybeAbortReconciliation() {
+        boolean shouldAbort = state != MemberState.RECONCILING || rejoinedWhileReconciliationInProgress;
+        if (shouldAbort) {
+            String reason = rejoinedWhileReconciliationInProgress ?
+                    "the member has re-joined the group" :
+                    "the member already transitioned out of the reconciling state into " + state;
+            log.info("Interrupting reconciliation that is not relevant anymore because {}.", reason);
+            markReconciliationCompleted();
+        }
+        return shouldAbort;
     }
 
     // Visible for testing.
-    void updateCurrentAssignment(Set<TopicIdPartition> assignedTopicIdPartitions) {
+    void updateAssignment(Set<TopicIdPartition> assignedTopicIdPartitions) {
         currentAssignment.clear();
         assignedTopicIdPartitions.forEach(topicIdPartition -> {
             Uuid topicId = topicIdPartition.topicId();
@@ -776,24 +868,11 @@ public class ShareMembershipManager implements RequestManager {
     }
 
     /**
-     * @return Reason for interrupting a reconciliation progress.
-     */
-    private String interruptedReconciliationErrorMessage() {
-        String reason;
-        if (state != MemberState.RECONCILING) {
-            reason = "The member already transitioned out of the reconciling state into " + state;
-        } else {
-            reason = "The member has re-joined the group.";
-        }
-        return reason;
-    }
-
-    /**
      *  Visible for testing.
      */
     void markReconciliationInProgress() {
         reconciliationInProgress = true;
-        memberEpochOnReconciliationStart = memberEpoch;
+        rejoinedWhileReconciliationInProgress = false;
     }
 
     /**
@@ -801,6 +880,7 @@ public class ShareMembershipManager implements RequestManager {
      */
     void markReconciliationCompleted() {
         reconciliationInProgress = false;
+        rejoinedWhileReconciliationInProgress = false;
     }
 
     /**
@@ -876,15 +956,11 @@ public class ShareMembershipManager implements RequestManager {
 
     /**
      * Revoke partitions.
-     * Visible for testing
      */
     void revokePartitions(Set<TopicPartition> revokedPartitions) {
         log.info("Revoking previously assigned partitions {}", Utils.join(revokedPartitions, ", "));
 
-        logPausedPartitionsBeingRevoked(revokedPartitions);
-
-        // Mark partitions as pending revocation to stop fetching from the partitions (no new
-        // fetches sent out, and no in-flight fetches responses processed).
+        // Mark partitions as pending revocation to stop fetching from the partitions.
         markPendingRevocationToPauseFetching(revokedPartitions);
 
         // At this point we expect to be in a middle of a revocation triggered from RECONCILING
@@ -909,7 +985,7 @@ public class ShareMembershipManager implements RequestManager {
     private void assignPartitions(SortedSet<TopicIdPartition> assignedPartitions) {
         // Update assignment in the subscription state, and ensure that no fetching or positions
         // initialization happens for the newly added partitions.
-        updateSubscription(assignedPartitions, false);
+        updateSubscription(assignedPartitions);
 
         // Clear topic names cache, removing topics that are not assigned to the member anymore.
         Set<String> assignedTopics = assignedPartitions.stream().map(TopicIdPartition::topic).collect(Collectors.toSet());
@@ -917,35 +993,11 @@ public class ShareMembershipManager implements RequestManager {
     }
 
     /**
-     * Mark partitions as 'pending revocation', to effectively stop fetching while waiting for
-     * the commit offsets request to complete, and ensure the application's position don't get
-     * ahead of the committed positions. This mark will ensure that:
-     * <ul>
-     *     <li>No new fetches will be sent out for the partitions being revoked</li>
-     *     <li>Previous in-flight fetch requests that may complete while the partitions are being revoked won't be processed.</li>
-     * </ul>
+     * Mark partitions as 'pending revocation', to effectively stop fetching.
      */
     private void markPendingRevocationToPauseFetching(Set<TopicPartition> partitionsToRevoke) {
-        // When asynchronously committing offsets prior to the revocation of a set of partitions, there will be a
-        // window of time between when the offset commit is sent and when it returns and revocation completes. It is
-        // possible for pending fetches for these partitions to return during this time, which means the application's
-        // position may get ahead of the committed position prior to revocation. This can cause duplicate consumption.
-        // To prevent this, we mark the partitions as "pending revocation," which stops the Fetcher from sending new
-        // fetches or returning data from previous fetches to the user.
         log.debug("Marking partitions pending for revocation: {}", partitionsToRevoke);
         subscriptions.markPendingRevocation(partitionsToRevoke);
-    }
-
-    /**
-     * Log partitions being revoked that were already paused, since the pause flag will be
-     * effectively lost.
-     */
-    private void logPausedPartitionsBeingRevoked(Set<TopicPartition> partitionsToRevoke) {
-        Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
-        revokePausedPartitions.retainAll(partitionsToRevoke);
-        if (!revokePausedPartitions.isEmpty()) {
-            log.info("The pause flag in partitions [{}] will be removed due to revocation.", Utils.join(revokePausedPartitions, ", "));
-        }
     }
 
     /**

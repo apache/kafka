@@ -26,6 +26,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData.Assignment;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -72,7 +73,6 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -221,6 +221,35 @@ public class ShareHeartbeatRequestManagerTest {
     }
 
     @Test
+    public void testHeartbeatNotSentIfAnotherOneInFlight() {
+        mockStableMember();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+
+        // Heartbeat sent (no response received)
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest inflightReq = result.unsentRequests.get(0);
+
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a " +
+                "previous one in-flight");
+
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent when the " +
+                "interval expires if there is a previous heartbeat request in-flight");
+
+        // Receive response for the inflight after the interval expired. The next HB should be sent
+        // on the next poll waiting only for the minimal backoff.
+        inflightReq.handler().onComplete(createHeartbeatResponse(inflightReq, Errors.NONE));
+        time.sleep(DEFAULT_RETRY_BACKOFF_MS);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size(), "A next heartbeat should be sent on " +
+                "the first poll after receiving a response that took longer than the interval, " +
+                "waiting only for the minimal backoff.");
+    }
+
+    @Test
     public void testHeartbeatOutsideInterval() {
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
@@ -294,7 +323,7 @@ public class ShareHeartbeatRequestManagerTest {
                 new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData()
                         .setMemberId(memberId)
                         .setMemberEpoch(memberEpoch));
-        membershipManager.onHeartbeatResponseReceived(result.data());
+        membershipManager.onHeartbeatSuccess(result.data());
 
         // Create a ConsumerHeartbeatRequest and verify the payload
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
@@ -331,7 +360,7 @@ public class ShareHeartbeatRequestManagerTest {
 
         switch (error) {
             case NONE:
-                verify(membershipManager, times(2)).onHeartbeatResponseReceived(mockResponse.data());
+                verify(membershipManager).onHeartbeatSuccess(mockResponse.data());
                 assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestState.nextHeartbeatMs(time.milliseconds()));
                 break;
 
@@ -526,7 +555,7 @@ public class ShareHeartbeatRequestManagerTest {
                 .setMemberEpoch(1)
                 .setAssignment(assignmentTopic1));
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic1"));
-        membershipManager.onHeartbeatResponseReceived(rs1.data());
+        membershipManager.onHeartbeatSuccess(rs1.data());
 
         // We remain in RECONCILING state, as the assignment will be reconciled on the next poll
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -657,8 +686,11 @@ public class ShareHeartbeatRequestManagerTest {
         ShareGroupHeartbeatResponse rs1 = new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData()
                 .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
                 .setMemberId(memberId)
-                .setMemberEpoch(memberEpoch));
-        membershipManager.onHeartbeatResponseReceived(rs1.data());
+                .setMemberEpoch(memberEpoch)
+                .setAssignment(new Assignment()));
+        membershipManager.onHeartbeatSuccess(rs1.data());
+        membershipManager.poll(time.milliseconds());
+        membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
     }
 
