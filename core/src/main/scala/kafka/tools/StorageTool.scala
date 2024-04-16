@@ -443,7 +443,7 @@ object StorageTool extends Logging {
       copier.errorLogDirs().forEach(errorLogDir => {
         stream.println(s"I/O error trying to read log directory $errorLogDir. Ignoring...")
       })
-      if(metaPropertiesEnsemble.emptyLogDirs().isEmpty) {
+      if (metaPropertiesEnsemble.emptyLogDirs().isEmpty && copier.logDirProps().isEmpty) {
         throw new TerseFailure("No available log directories to format.")
       }
     }
