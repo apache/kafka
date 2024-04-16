@@ -406,26 +406,29 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /**
    * alter the checkpoint directory for the topicPartition, to remove the data in sourceLogDir, and add the data in destLogDir
    */
-  def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: File, destLogDir: File): Unit = {
+  def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: Option[File], destLogDir: File): Unit = {
     inLock(lock) {
-      try {
-        checkpoints.get(sourceLogDir).flatMap(_.read().get(topicPartition)) match {
-          case Some(offset) =>
-            debug(s"Removing the partition offset data in checkpoint file for '$topicPartition' " +
-              s"from ${sourceLogDir.getAbsoluteFile} directory.")
-            updateCheckpoints(sourceLogDir, partitionToRemove = Option(topicPartition))
+      sourceLogDir.foreach { srcLogDir =>
+        try {
+          checkpoints.get(srcLogDir).flatMap(_.read().get(topicPartition)) match {
+            case Some(offset) =>
+              debug(s"Removing the partition offset data in checkpoint file for '$topicPartition' " +
+                s"from ${srcLogDir.getAbsoluteFile} directory.")
+              updateCheckpoints(srcLogDir, partitionToRemove = Option(topicPartition))
 
-            debug(s"Adding the partition offset data in checkpoint file for '$topicPartition' " +
-              s"to ${destLogDir.getAbsoluteFile} directory.")
-            updateCheckpoints(destLogDir, partitionToUpdateOrAdd = Option(topicPartition, offset))
-          case None =>
+              debug(s"Adding the partition offset data in checkpoint file for '$topicPartition' " +
+                s"to ${destLogDir.getAbsoluteFile} directory.")
+              updateCheckpoints(destLogDir, partitionToUpdateOrAdd = Option(topicPartition, offset))
+            case None =>
+          }
+        } catch {
+          case e: KafkaStorageException =>
+            error(s"Failed to access checkpoint file in dir. source: ${srcLogDir.getAbsolutePath} dest: ${destLogDir.getAbsolutePath}", e)
         }
-      } catch {
-        case e: KafkaStorageException =>
-          error(s"Failed to access checkpoint file in dir ${sourceLogDir.getAbsolutePath}", e)
       }
-
-      val logUncleanablePartitions = uncleanablePartitions.getOrElse(sourceLogDir.toString, mutable.Set[TopicPartition]())
+      val logUncleanablePartitions = sourceLogDir
+        .map(srcLogDir => uncleanablePartitions.getOrElse(srcLogDir.toString, mutable.Set[TopicPartition]()))
+        .getOrElse(mutable.Set[TopicPartition]())
       if (logUncleanablePartitions.contains(topicPartition)) {
         logUncleanablePartitions.remove(topicPartition)
         markPartitionUncleanable(destLogDir.toString, topicPartition)

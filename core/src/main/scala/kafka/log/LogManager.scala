@@ -1182,20 +1182,11 @@ class LogManager(logDirs: Seq[File],
     val abandonedFutureLogs = findAbandonedFutureLogs(brokerId, newTopicsImage)
     abandonedFutureLogs.foreach { case (futureLog, currentLog) =>
       val tp = futureLog.topicPartition
-
-      futureLog.renameDir(UnifiedLog.logDirName(tp), shouldReinitialize = true)
-      futureLog.removeLogMetrics()
-      futureLogs.remove(tp)
-
-      currentLog.foreach { log =>
-        log.removeLogMetrics()
-        log.renameDir(UnifiedLog.logDeleteDirName(tp), shouldReinitialize = false)
-        addLogToBeDeleted(log)
-        info(s"Old log for partition ${tp} is renamed to ${log.dir.getAbsolutePath} and is scheduled for deletion")
+      if (cleaner != null) {
+        cleaner.abortAndPauseCleaning(tp)
       }
 
-      currentLogs.put(tp, futureLog)
-      futureLog.newMetrics()
+      replaceCurrentWithFutureLog(currentLog, futureLog)
 
       info(s"Successfully renamed abandoned future log for $tp")
     }
@@ -1225,50 +1216,61 @@ class LogManager(logDirs: Seq[File],
       val sourceLog = currentLogs.get(topicPartition)
       val destLog = futureLogs.get(topicPartition)
 
-      info(s"Attempting to replace current log $sourceLog with $destLog for $topicPartition")
       if (sourceLog == null)
         throw new KafkaStorageException(s"The current replica for $topicPartition is offline")
       if (destLog == null)
         throw new KafkaStorageException(s"The future replica for $topicPartition is offline")
 
-      destLog.renameDir(UnifiedLog.logDirName(topicPartition), shouldReinitialize = true)
-      // the metrics tags still contain "future", so we have to remove it.
-      // we will add metrics back after sourceLog remove the metrics
-      destLog.removeLogMetrics()
-      destLog.updateHighWatermark(sourceLog.highWatermark)
+      replaceCurrentWithFutureLog(Option(sourceLog), destLog, updateHighWatermark = true)
+    }
+  }
 
-      // Now that future replica has been successfully renamed to be the current replica
-      // Update the cached map and log cleaner as appropriate.
-      futureLogs.remove(topicPartition)
-      currentLogs.put(topicPartition, destLog)
-      if (cleaner != null) {
-        cleaner.alterCheckpointDir(topicPartition, sourceLog.parentDirFile, destLog.parentDirFile)
-        resumeCleaning(topicPartition)
-      }
+  def replaceCurrentWithFutureLog(sourceLog: Option[UnifiedLog], destLog: UnifiedLog, updateHighWatermark: Boolean = false): Unit = {
+    val topicPartition = destLog.topicPartition
+    info(s"Attempting to replace current log $sourceLog with $destLog for $topicPartition")
 
-      try {
-        sourceLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), shouldReinitialize = true)
+    destLog.renameDir(UnifiedLog.logDirName(topicPartition), shouldReinitialize = true)
+    // the metrics tags still contain "future", so we have to remove it.
+    // we will add metrics back after sourceLog remove the metrics
+    destLog.removeLogMetrics()
+    if (updateHighWatermark && sourceLog.isDefined) {
+      destLog.updateHighWatermark(sourceLog.get.highWatermark)
+    }
+
+    // Now that future replica has been successfully renamed to be the current replica
+    // Update the cached map and log cleaner as appropriate.
+    futureLogs.remove(topicPartition)
+    currentLogs.put(topicPartition, destLog)
+    if (cleaner != null) {
+      cleaner.alterCheckpointDir(topicPartition, sourceLog.map(_.parentDirFile), destLog.parentDirFile)
+      resumeCleaning(topicPartition)
+    }
+
+    try {
+      sourceLog.foreach { srcLog =>
+        srcLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), shouldReinitialize = true)
         // Now that replica in source log directory has been successfully renamed for deletion.
         // Close the log, update checkpoint files, and enqueue this log to be deleted.
-        sourceLog.close()
-        val logDir = sourceLog.parentDirFile
+        srcLog.close()
+        val logDir = srcLog.parentDirFile
         val logsToCheckpoint = logsInDir(logDir)
         checkpointRecoveryOffsetsInDir(logDir, logsToCheckpoint)
         checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
-        sourceLog.removeLogMetrics()
-        destLog.newMetrics()
-        addLogToBeDeleted(sourceLog)
-      } catch {
-        case e: KafkaStorageException =>
-          // If sourceLog's log directory is offline, we need close its handlers here.
-          // handleLogDirFailure() will not close handlers of sourceLog because it has been removed from currentLogs map
-          sourceLog.closeHandlers()
-          sourceLog.removeLogMetrics()
-          throw e
+        srcLog.removeLogMetrics()
+        addLogToBeDeleted(srcLog)
       }
-
-      info(s"The current replica is successfully replaced with the future replica for $topicPartition")
+      destLog.newMetrics()
+    } catch {
+      case e: KafkaStorageException =>
+        // If sourceLog's log directory is offline, we need close its handlers here.
+        // handleLogDirFailure() will not close handlers of sourceLog because it has been removed from currentLogs map
+        sourceLog.foreach { srcLog =>
+          srcLog.closeHandlers()
+          srcLog.removeLogMetrics()
+        }
+        throw e
     }
+    info(s"The current replica is successfully replaced with the future replica for $topicPartition")
   }
 
   /**

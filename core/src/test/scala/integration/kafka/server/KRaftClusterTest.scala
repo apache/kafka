@@ -1410,7 +1410,7 @@ class KRaftClusterTest {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
-        setNumBrokerNodes(3).
+        setBrokerNodes(3, 2).
         setNumControllerNodes(1).build()).
       build()
     try {
@@ -1465,7 +1465,7 @@ class KRaftClusterTest {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
-        setNumBrokerNodes(3).
+        setBrokerNodes(3, 2).
         setNumControllerNodes(1).build()).
       build()
     try {
