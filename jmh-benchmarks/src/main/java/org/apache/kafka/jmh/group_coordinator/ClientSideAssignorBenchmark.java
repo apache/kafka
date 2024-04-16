@@ -111,11 +111,9 @@ public class ClientSideAssignorBenchmark {
 
     private static final int replicationFactor = 2;
 
-    protected ConsumerPartitionAssignor assignor;
+    private ConsumerPartitionAssignor assignor;
 
     private Cluster metadata;
-
-    private List<Node> nodes;
 
     private final List<String> allTopicNames = new ArrayList<>(topicCount);
 
@@ -139,7 +137,7 @@ public class ClientSideAssignorBenchmark {
         List<PartitionInfo> partitions = new ArrayList<>();
 
         // Create nodes (brokers), one for each rack.
-        nodes = new ArrayList<>(numberOfRacks);
+        List<Node> nodes = new ArrayList<>(numberOfRacks);
         for (int i = 0; i < numberOfRacks; i++) {
             nodes.add(new Node(i, "", i, "rack" + i));
         }
@@ -147,7 +145,7 @@ public class ClientSideAssignorBenchmark {
         for (int i = 0; i < topicCount; i++) {
             String topicName = "topic" + i;
             allTopicNames.add(topicName);
-            partitions.addAll(partitionInfos(topicName, partitionsPerTopicCount));
+            partitions.addAll(partitionInfos(topicName, partitionsPerTopicCount, nodes));
         }
 
         metadata = new Cluster("test-cluster", nodes, partitions, Collections.emptySet(), Collections.emptySet());
@@ -183,7 +181,7 @@ public class ClientSideAssignorBenchmark {
         groupSubscription = new ConsumerPartitionAssignor.GroupSubscription(subscriptions);
     }
 
-    private List<PartitionInfo> partitionInfos(String topic, int numberOfPartitions) {
+    private List<PartitionInfo> partitionInfos(String topic, int numberOfPartitions, List<Node> nodes) {
         // Create PartitionInfo for each partition.
         List<PartitionInfo> partitionInfos = new ArrayList<>(numberOfPartitions);
         for (int i = 0; i < numberOfPartitions; i++) {
@@ -248,7 +246,6 @@ public class ClientSideAssignorBenchmark {
 
             this.subscriptions = newSubscriptions;
     }
-
 
     @Benchmark
     @Threads(1)
