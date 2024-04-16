@@ -86,7 +86,7 @@ final public class VoterSetTest {
         assertEquals(voterSet, VoterSet.fromVotersRecord(voterSet.toVotersRecord((short) 0)));
     }
 
-    static Map<Integer, VoterSet.VoterNode> voterMap(List<Integer> replicas) {
+    public static Map<Integer, VoterSet.VoterNode> voterMap(List<Integer> replicas) {
         return replicas
             .stream()
             .collect(
@@ -107,5 +107,9 @@ final public class VoterSetTest {
             ),
             new SupportedVersionRange((short) 0, (short) 0)
         );
+    }
+
+    public static VoterSet voterSet(Map<Integer, VoterSet.VoterNode> voters) {
+        return new VoterSet(voters);
     }
 }

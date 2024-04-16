@@ -141,7 +141,6 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         }
     }
 
-    // TODO: Write test for this builder
     final public static class Builder {
         private long lastContainedLogTimestamp = 0;
         private CompressionType compressionType = CompressionType.NONE;
