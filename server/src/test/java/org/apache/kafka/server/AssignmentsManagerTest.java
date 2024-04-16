@@ -321,10 +321,9 @@ public class AssignmentsManagerTest {
             }
         }
         AssignReplicasToDirsResponseData responseData = AssignmentsHelper.buildResponseData(Errors.NONE.code(), 0, errors);
-        ClientResponse response = new ClientResponse(null, null, null,
+        return new ClientResponse(null, null, null,
                 0L, 0L, false, false, null, null,
                 new AssignReplicasToDirsResponse(responseData));
-        return response;
     }
 
     @Test
