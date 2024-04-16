@@ -391,6 +391,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
     // Events handled by Migration Driver.
     abstract class MigrationEvent implements EventQueue.Event {
+        // Use no-op handler by default because the handleException will be overridden if needed
+        private Consumer<Throwable> retryHandler = NO_OP_HANDLER;
+
+        public void retryHandler(Consumer<Throwable> retryHandler) {
+            this.retryHandler = retryHandler;
+        }
         @SuppressWarnings("ThrowableNotThrown")
         @Override
         public void handleException(Throwable e) {
@@ -398,6 +404,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 KRaftMigrationDriver.this.faultHandler.handleFault("Encountered ZooKeeper authentication in " + this, e);
             } else if (e instanceof MigrationClientException) {
                 log.info(String.format("Encountered ZooKeeper error during event %s. Will retry.", this), e.getCause());
+                retryHandler.accept(e);
             } else if (e instanceof RejectedExecutionException) {
                 log.debug("Not processing {} because the event queue is closed.", this);
             } else {
@@ -787,6 +794,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     }
 
     class PollEvent extends MigrationEvent {
+
+        public PollEvent() {
+            // set retryHandler to schedule next poll for retriable errors
+            retryHandler(ex -> scheduleNextPoll());
+        }
         @Override
         public void run() throws Exception {
             switch (migrationState) {
@@ -822,6 +834,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             }
 
             // Poll again after some time
+            scheduleNextPoll();
+        }
+
+        private void scheduleNextPoll() {
             long deadline = time.nanoseconds() + NANOSECONDS.convert(pollTimeSupplier.nextPollTimeMs(), MILLISECONDS);
             eventQueue.scheduleDeferred(
                     "poll",

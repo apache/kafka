@@ -363,6 +363,66 @@ public class KRaftMigrationDriverTest {
         }
     }
 
+    @Test
+    public void testMigrationWithClientExceptionWhileMigratingZnodeCreation() throws Exception {
+        CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
+        // suppose the ZNode creation failed 3 times
+        CountDownLatch createZnodeAttempts = new CountDownLatch(3);
+        CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1, 2, 3)),
+                new CapturingTopicMigrationClient(),
+                new CapturingConfigMigrationClient(),
+                new CapturingAclMigrationClient(),
+                new CapturingDelegationTokenMigrationClient(),
+                CapturingMigrationClient.EMPTY_BATCH_SUPPLIER) {
+            @Override
+            public ZkMigrationLeadershipState getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState initialState) {
+                if (createZnodeAttempts.getCount() == 0) {
+                    this.setMigrationRecoveryState(initialState);
+                    return initialState;
+                } else {
+                    if (createZnodeAttempts.getCount() == 1) {
+                        // set the state in the last retry, so that after countDownLatch reaches 0, the state will be correctly returned
+                        this.setMigrationRecoveryState(initialState);
+                    }
+                    createZnodeAttempts.countDown();
+                    throw new MigrationClientException("Some kind of ZK error!");
+                }
+            }
+        };
+        MockFaultHandler faultHandler = new MockFaultHandler("testMigrationClientExpiration");
+        KRaftMigrationDriver.Builder builder = defaultTestBuilder()
+                .setZkMigrationClient(migrationClient)
+                .setFaultHandler(faultHandler)
+                .setPropagator(metadataPropagator);
+        try (KRaftMigrationDriver driver = builder.build()) {
+            MetadataImage image = MetadataImage.EMPTY;
+            MetadataDelta delta = new MetadataDelta(image);
+            setupDeltaForMigration(delta, true);
+
+            driver.start();
+
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
+            delta.replay(zkBrokerRecord(1));
+            delta.replay(zkBrokerRecord(2));
+            delta.replay(zkBrokerRecord(3));
+            MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
+            image = delta.apply(provenance);
+            // Before leadership claiming, the getOrCreateMigrationRecoveryState should be able to get correct state
+            assertTrue(createZnodeAttempts.await(1, TimeUnit.MINUTES));
+
+            // Notify the driver that it is the leader
+            driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 1));
+            // Publish metadata of all the ZK brokers being ready
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance,
+                    new LeaderAndEpoch(OptionalInt.of(3000), 1)).build());
+
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
+                    "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
+
+            Assertions.assertNull(faultHandler.firstException());
+        }
+    }
+
     private void setupDeltaForMigration(
         MetadataDelta delta,
         boolean registerControllers
