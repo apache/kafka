@@ -40,7 +40,7 @@ public class ProcessStopFaultSpec extends TaskSpec {
                         @JsonProperty("nodeNames") List<String> nodeNames,
                         @JsonProperty("javaProcessName") String javaProcessName) {
         super(startMs, durationMs);
-        this.nodeNames = nodeNames == null ? new HashSet<String>() : new HashSet<>(nodeNames);
+        this.nodeNames = nodeNames == null ? new HashSet<>() : new HashSet<>(nodeNames);
         this.javaProcessName = javaProcessName == null ? "" : javaProcessName;
     }
 

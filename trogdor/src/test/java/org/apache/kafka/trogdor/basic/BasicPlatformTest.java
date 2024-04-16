@@ -17,7 +17,6 @@
 
 package org.apache.kafka.trogdor.basic;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.apache.kafka.common.utils.Utils;
@@ -32,7 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import org.junit.jupiter.api.Timeout;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 120)
 public class BasicPlatformTest {
 
     @Test

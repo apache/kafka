@@ -323,10 +323,9 @@ public class RoundTripWorker implements TaskWorker {
     }
 
     class ConsumerRunnable implements Runnable {
-        private final Properties props;
 
         ConsumerRunnable(HashSet<TopicPartition> partitions) {
-            this.props = new Properties();
+            Properties props = new Properties();
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
             props.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer." + id);
             props.put(ConsumerConfig.GROUP_ID_CONFIG, "round-trip-consumer-group-" + id);
@@ -352,8 +351,7 @@ public class RoundTripWorker implements TaskWorker {
                     try {
                         pollInvoked++;
                         ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(50));
-                        for (Iterator<ConsumerRecord<byte[], byte[]>> iter = records.iterator(); iter.hasNext(); ) {
-                            ConsumerRecord<byte[], byte[]> record = iter.next();
+                        for (ConsumerRecord<byte[], byte[]> record : records) {
                             int messageIndex = ByteBuffer.wrap(record.key()).order(ByteOrder.LITTLE_ENDIAN).getInt();
                             messagesReceived++;
                             if (toReceiveTracker.removePending(messageIndex)) {
@@ -362,7 +360,7 @@ public class RoundTripWorker implements TaskWorker {
                                     lock.lock();
                                     try {
                                         log.info("{}: Consumer received the full count of {} unique messages.  " +
-                                            "Waiting for all {} sends to be acked...", id, spec.maxMessages(), unackedSends);
+                                                "Waiting for all {} sends to be acked...", id, spec.maxMessages(), unackedSends);
                                         while (unackedSends > 0)
                                             unackedSendsAreZero.await();
                                     } finally {

@@ -44,7 +44,7 @@ public class FilesUnreadableFaultSpec extends TaskSpec {
                                     @JsonProperty("prefix") String prefix,
                                     @JsonProperty("errorCode") int errorCode) {
         super(startMs, durationMs);
-        this.nodeNames = nodeNames == null ? new HashSet<String>() : nodeNames;
+        this.nodeNames = nodeNames == null ? new HashSet<>() : nodeNames;
         this.mountPath = mountPath == null ? "" : mountPath;
         this.prefix = prefix == null ? "" : prefix;
         this.errorCode = errorCode;

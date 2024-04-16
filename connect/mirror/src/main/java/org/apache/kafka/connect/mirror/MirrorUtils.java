@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -42,7 +43,9 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Collections;
 import java.util.Objects;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
@@ -319,5 +322,22 @@ public final class MirrorUtils {
 
     static void createSinglePartitionCompactedTopic(String topicName, short replicationFactor, Admin admin) {
         createCompactedTopic(topicName, (short) 1, replicationFactor, admin);
+    }
+
+    static <T> T adminCall(Callable<T> callable, Supplier<String> errMsg)
+            throws ExecutionException, InterruptedException {
+        try {
+            return callable.call();
+        } catch (ExecutionException | InterruptedException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof TopicAuthorizationException ||
+                    cause instanceof ClusterAuthorizationException ||
+                    cause instanceof GroupAuthorizationException) {
+                log.error("{} occurred while trying to {}", cause.getClass().getSimpleName(), errMsg.get());
+            }
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
