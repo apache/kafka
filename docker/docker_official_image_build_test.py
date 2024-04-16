@@ -91,12 +91,12 @@ def run_jvm_tests(image, tag, kafka_url):
         raise SystemError("Failed to run the tests")
     finally:
         shutil.rmtree(temp_dir_path)
-    test_report_location_text = f"To view test report please check {current_dir}/test/report_jvm.html"
+    test_report_location_text = f"Test report written to {current_dir}/test/report_jvm.html"
     if failure_count != 0:
         raise SystemError(
             f"{failure_count} tests have failed. {test_report_location_text}")
     else:
-        print(f"All tests passed successfully. {test_report_location_text}")
+        print(f"All tests passed. {test_report_location_text}")
 
 
 if __name__ == '__main__':
