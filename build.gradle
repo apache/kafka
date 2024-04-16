@@ -703,6 +703,11 @@ subprojects {
     if (versions.baseScala == "2.13" || JavaVersion.current().isJava9Compatible())
       scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)]
 
+    // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
+    // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
+    if (name == "compileTestScala")
+      options.compilerArgs << "-parameters"
+
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = defaultMaxHeapSize
       jvmArgs = defaultJvmArgs
@@ -1239,9 +1244,6 @@ project(':core') {
       }
     }
   }
-  // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
-  // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
-  compileTestScala.options.compilerArgs.add "-parameters"
 }
 
 project(':metadata') {
