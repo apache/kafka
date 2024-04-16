@@ -9165,4 +9165,93 @@ class KafkaApisTest extends Logging {
     assertEquals(expectedShareAcknowledgeResponse, response.data)
   }
 
+  @Test
+  def testValidateAcknowledgementBatchesInFetchRequestWithIncorrectBaseAndLastOffset(): Unit = {
+    val topicName_1 = "foo"
+    val topicId_1 = Uuid.randomUuid()
+    val topicName_2 = "bar"
+    val topicId_2 = Uuid.randomUuid()
+
+    addTopicToMetadataCache(topicName_1, 1, topicId = topicId_1)
+    addTopicToMetadataCache(topicName_2, 2, topicId = topicId_2)
+
+    val topicNames: util.Map[Uuid, String] = new util.HashMap[Uuid, String]()
+    topicNames.put(topicId_1, topicName_1)
+    topicNames.put(topicId_2, topicName_2)
+
+    val authorizedTopics: Set[String] = Set(topicName_1, topicName_2)
+
+    val shareFetchRequestData = new ShareFetchRequestData().
+      setGroupId("group").
+      setMemberId(Uuid.randomUuid().toString).
+      setShareSessionEpoch(1).
+      setTopics(List(
+        new ShareFetchRequestData.FetchTopic().
+          setTopicId(topicId_1).
+          setPartitions(List(
+            new ShareFetchRequestData.FetchPartition()
+              .setPartitionIndex(0)
+              .setPartitionMaxBytes(40000)
+              .setAcknowledgementBatches(List(
+                new ShareFetchRequestData.AcknowledgementBatch()
+                  .setBaseOffset(11)
+                  .setLastOffset(20)
+                  .setAcknowledgeTypes(util.Arrays.asList(1.toByte)),
+                new ShareFetchRequestData.AcknowledgementBatch()
+                  .setBaseOffset(28)
+                  .setLastOffset(38)
+                  .setAcknowledgeTypes(util.Arrays.asList(1.toByte)),
+              ).asJava)
+          ).asJava),
+        new ShareFetchRequestData.FetchTopic().
+          setTopicId(topicId_2).
+          setPartitions(List(
+            new ShareFetchRequestData.FetchPartition()
+              .setPartitionIndex(0)
+              .setPartitionMaxBytes(40000)
+              .setAcknowledgementBatches(List(
+                new ShareFetchRequestData.AcknowledgementBatch()
+                  .setBaseOffset(21)
+                  .setLastOffset(11)
+                  .setAcknowledgeTypes(util.Arrays.asList(1.toByte))
+              ).asJava),
+            new ShareFetchRequestData.FetchPartition()
+              .setPartitionIndex(1)
+              .setPartitionMaxBytes(40000)
+              .setAcknowledgementBatches(List(
+                new ShareFetchRequestData.AcknowledgementBatch()
+                  .setBaseOffset(24)
+                  .setLastOffset(34),
+                new ShareFetchRequestData.AcknowledgementBatch()
+                  .setBaseOffset(64)
+                  .setLastOffset(54)
+                  .setAcknowledgeTypes(util.Arrays.asList(1.toByte)),
+                new ShareFetchRequestData.AcknowledgementBatch()
+                  .setBaseOffset(82)
+                  .setLastOffset(92)
+              ).asJava)
+          ).asJava)
+      ).asJava)
+
+    when(sharePartitionManager.acknowledge(
+      anyString(),
+      anyString(),
+      any()
+    )).thenReturn(CompletableFuture.completedFuture(Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
+      new TopicIdPartition(topicId_1, new TopicPartition(topicName_1, 0)) ->
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code())
+    ).asJava))
+
+    val shareFetchRequest = buildRequest(new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion))
+    kafkaApis = createKafkaApis()
+
+    val shareAcknowledgeResponse = kafkaApis.handleAcknowledgeFromShareFetchRequest(shareFetchRequest, topicNames, sharePartitionManager, authorizedTopics)
+
+    assertEquals(Errors.NONE.code(), shareAcknowledgeResponse.data().responses().get(0).partitions().get(0).errorCode())
+    assertEquals(Errors.INVALID_REQUEST.code(), shareAcknowledgeResponse.data().responses().get(1).partitions().get(0).errorCode())
+    assertEquals(Errors.INVALID_REQUEST.code(), shareAcknowledgeResponse.data().responses().get(1).partitions().get(1).errorCode())
+  }
+
 }

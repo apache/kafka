@@ -449,16 +449,11 @@ public class SharePartition {
                 Map.Entry<Long, InFlightBatch> floorOffset = cachedState.floorEntry(batch.baseOffset);
                 if (floorOffset == null) {
                     log.debug("Batch record {} not found for share partition: {}-{}", batch, groupId, topicIdPartition);
-                    throwable = new InvalidRequestException("Batch record not found. The base offset is not found in the cache.");
+                    throwable = new InvalidRecordStateException("Batch record not found. The base offset is not found in the cache.");
                     break;
                 }
 
                 NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(floorOffset.getKey(), true, batch.lastOffset, true);
-                if (subMap.isEmpty()) {
-                    log.debug("Batch record {} not found for share partition: {}-{}", batch, groupId, topicIdPartition);
-                    throwable = new InvalidRequestException("Batch record not found. No records exists for the request batch.");
-                    break;
-                }
 
                 // Validate if the request batch has the last offset greater than the last offset of
                 // the last fetched cached batch, then there will be offsets in the request than cannot
@@ -1227,7 +1222,6 @@ public class SharePartition {
         private final AcknowledgeType acknowledgeType;
 
         public AcknowledgementBatch(long baseOffset, long lastOffset, List<Long> gapOffsets, AcknowledgeType acknowledgeType) {
-            assert baseOffset <= lastOffset;
             this.baseOffset = baseOffset;
             this.lastOffset = lastOffset;
             this.gapOffsets = gapOffsets;

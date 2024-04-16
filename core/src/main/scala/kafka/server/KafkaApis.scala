@@ -1206,6 +1206,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         var prevEndOffset = -1L
         breakable {
           acknowledgeBatches.forEach(batch => {
+            if (batch.baseOffset() > batch.lastOffset()) {
+              erroneous += tp -> ShareAcknowledgeResponse.partitionResponse(tp, Errors.INVALID_REQUEST)
+              erroneousTopicIdPartitions :+ tp
+              break()
+            }
             if (batch.baseOffset() < prevEndOffset) {
               erroneous += tp -> ShareAcknowledgeResponse.partitionResponse(tp, Errors.INVALID_REQUEST)
               erroneousTopicIdPartitions :+ tp

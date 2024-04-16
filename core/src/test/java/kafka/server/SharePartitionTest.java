@@ -428,7 +428,7 @@ public class SharePartitionTest {
             Collections.singletonList(new AcknowledgementBatch(0, 15, null, AcknowledgeType.REJECT)));
         assertFalse(ackResult.isCompletedExceptionally());
         assertTrue(ackResult.join().isPresent());
-        assertEquals(InvalidRequestException.class, ackResult.join().get().getClass());
+        assertEquals(InvalidRecordStateException.class, ackResult.join().get().getClass());
 
         MemoryRecords records = memoryRecords(5, 5);
         CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
