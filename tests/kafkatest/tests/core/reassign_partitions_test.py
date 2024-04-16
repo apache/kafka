@@ -97,7 +97,7 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         def check_all_partitions():
             acked_partitions = self.producer.acked_by_partition
             for i in range(self.num_partitions):
-                if f"{self.topic}-{i}" not in acked_partitions:
+                if TopicPartition(self.topic, i) not in acked_partitions:
                     return False
             return True
 
