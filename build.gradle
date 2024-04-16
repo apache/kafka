@@ -1239,6 +1239,7 @@ project(':core') {
       }
     }
   }
+  compileTestScala.options.compilerArgs.add "-parameters"
 }
 
 project(':metadata') {
