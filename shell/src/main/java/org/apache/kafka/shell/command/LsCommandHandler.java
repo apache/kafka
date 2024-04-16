@@ -140,7 +140,7 @@ public final class LsCommandHandler implements Commands.Handler {
                              List<String> targetFiles,
                              List<TargetDirectory> targetDirectories) {
         printEntries(writer, "", screenWidth, targetFiles);
-        boolean needIntro = targetFiles.size() > 0 || targetDirectories.size() > 1;
+        boolean needIntro = !targetFiles.isEmpty() || targetDirectories.size() > 1;
         boolean firstIntro = targetFiles.isEmpty();
         for (TargetDirectory targetDirectory : targetDirectories) {
             String intro = "";
@@ -205,8 +205,7 @@ public final class LsCommandHandler implements Commands.Handler {
         }
         for (int i = 0; i < entries.size(); i++) {
             String entry = entries.get(i);
-            for (int s = 0; s < schemas.length; s++) {
-                ColumnSchema schema = schemas[s];
+            for (ColumnSchema schema : schemas) {
                 schema.process(i, entry);
             }
         }
@@ -244,8 +243,8 @@ public final class LsCommandHandler implements Commands.Handler {
 
         int totalWidth() {
             int total = 0;
-            for (int i = 0; i < columnWidths.length; i++) {
-                total += columnWidths[i];
+            for (int columnWidth : columnWidths) {
+                total += columnWidth;
             }
             return total;
         }
@@ -264,7 +263,7 @@ public final class LsCommandHandler implements Commands.Handler {
 
         @Override
         public int hashCode() {
-            return Objects.hash(columnWidths, entriesPerColumn);
+            return Objects.hash(Arrays.hashCode(columnWidths), entriesPerColumn);
         }
 
         @Override
@@ -280,9 +279,9 @@ public final class LsCommandHandler implements Commands.Handler {
         public String toString() {
             StringBuilder bld = new StringBuilder("ColumnSchema(columnWidths=[");
             String prefix = "";
-            for (int i = 0; i < columnWidths.length; i++) {
+            for (int columnWidth : columnWidths) {
                 bld.append(prefix);
-                bld.append(columnWidths[i]);
+                bld.append(columnWidth);
                 prefix = ", ";
             }
             bld.append("], entriesPerColumn=").append(entriesPerColumn).append(")");

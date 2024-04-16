@@ -189,7 +189,7 @@ public final class NodeManager {
         public void run() {
             rescheduleNextHeartbeat(HEARTBEAT_DELAY_MS);
             try {
-                AgentStatusResponse agentStatus = null;
+                AgentStatusResponse agentStatus;
                 try {
                     agentStatus = client.status();
                 } catch (ConnectException e) {

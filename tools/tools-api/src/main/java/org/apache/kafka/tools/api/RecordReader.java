@@ -36,7 +36,7 @@ public interface RecordReader extends Closeable, Configurable {
 
     /**
      * read byte array from input stream and then generate an iterator of producer record
-     * @param {@link InputStream} of messages. the implementation does not need to close the input stream.
+     * @param inputStream {@link InputStream} of messages. the implementation does not need to close the input stream.
      * @return an iterator of producer record. It should implement following rules. 1) the hasNext() method must be idempotent.
      *         2) the convert error should be thrown by next() method.
      */
