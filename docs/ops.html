@@ -2114,6 +2114,24 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
     <td>kafka.controller:type=KafkaController,name=ActiveBrokerCount</td>
   </tr>
   <tr>
+    <td>Migrating ZK Broker Count</td>
+    <td>The number of brokers registered with the Controller that haven't yet migrated to KRaft mode.</td>
+    <td>kafka.controller:type=KafkaController,name=MigratingZkBrokerCount</td>
+  </tr>
+  <tr>
+    <td>ZK Migrating State</td>
+    <td>
+      <ul style="list-style: none; padding-left: 0; margin: 0;">
+        <li>0 - NONE, cluster created in KRaft mode;</li>
+        <li>4 - ZK, Migration has not started, controller is a ZK controller;</li>
+        <li>2 - PRE_MIGRATION, the KRaft Controller is waiting for all ZK brokers to register in migration mode;</li>
+        <li>1 - MIGRATION, ZK metadata has been migrated, but some broker is still running in ZK mode;</li>
+        <li>3 - POST_MIGRATION, the cluster migration is complete;</li>
+      </ul>
+    </td>
+    <td>kafka.controller:type=KafkaController,name=ZkMigrationState</td>
+  </tr>
+  <tr>
     <td>Global Topic Count</td>
     <td>The number of global topics as observed by this Controller.</td>
     <td>kafka.controller:type=KafkaController,name=GlobalTopicCount</td>
@@ -2126,7 +2144,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   <tr>
     <td>Offline Partition Count</td>
     <td>The number of offline topic partitions (non-internal) as observed by this Controller.</td>
-    <td>kafka.controller:type=KafkaController,name=OfflinePartitionCount</td>
+    <td>kafka.controller:type=KafkaController,name=OfflinePartitionsCount</td>
   </tr>
   <tr>
     <td>Preferred Replica Imbalance Count</td>
