@@ -2121,11 +2121,13 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   <tr>
     <td>ZK Migrating State</td>
     <td>
-      0 - NONE, cluster created in KRaft mode;
-      4 - ZK, Migration has not started, controller is a ZK controller.
-      2 - PRE_MIGRATION, the KRaft Controller is waiting for all ZK brokers to register in migration mode;
-      1 - MIGRATION, ZK metadata has been migrated, but some broker is still running in ZK mode;
-      3 - POST_MIGRATION, the cluster migration is complete;
+      <ul style="list-style: none; padding-left: 0; margin: 0;">
+        <li>0 - NONE, cluster created in KRaft mode;</li>
+        <li>4 - ZK, Migration has not started, controller is a ZK controller.</li>
+        <li>2 - PRE_MIGRATION, the KRaft Controller is waiting for all ZK brokers to register in migration mode;</li>
+        <li>1 - MIGRATION, ZK metadata has been migrated, but some broker is still running in ZK mode;</li>
+        <li>3 - POST_MIGRATION, the cluster migration is complete;</li>
+      </ul>
     </td>
     <td>kafka.controller:type=KafkaController,name=ZkMigrationState</td>
   </tr>
