@@ -57,7 +57,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
     AdminZkClient adminZkClient;
     List<String> alterOpts;
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "{displayName}.quorum={0}")
     @ValueSource(strings = {"zk", "kraft"})
     public void shouldExitWithNonZeroStatusOnUpdatingUnallowedConfigViaZk(String quorum) {
         assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
@@ -67,7 +67,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
             "--add-config", "security.inter.broker.protocol=PLAINTEXT")));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "{displayName}.quorum={0}")
     @ValueSource(strings = {"zk", "kraft"})
     public void shouldExitWithNonZeroStatusOnZkCommandAlterUserQuota(String quorum) {
         assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
@@ -97,7 +97,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
 
     private Stream<String> quorumArgs() {
         return isKRaftTest()
-            ? Stream.of("--bootstrap-server", "")
+            ? Stream.of("--bootstrap-server", "127.0.0.1:1234")
             : Stream.of("--zookeeper", zkConnect());
     }
 
@@ -134,7 +134,7 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
         verifyConfig(Collections.emptyMap(), brokerId);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "{displayName}.quorum={0}")
     @ValueSource(strings = {"zk", "kraft"})
     public void testDynamicBrokerConfigUpdateUsingZooKeeper(String quorum) throws Exception {
         String brokerId = "1";
