@@ -1204,9 +1204,10 @@ public class ConsumerGroup implements Group {
         if (isEmpty()) {
             return !memberProtocolType.isEmpty() && !memberProtocols.isEmpty();
         } else {
-            return ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType) && memberProtocols.stream().anyMatch(
-                name -> classicProtocolMembersSupportedProtocols.getOrDefault(name, 0) == numClassicProtocolMembers()
-            );
+            return ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType) &&
+                memberProtocols.stream().anyMatch(
+                    name -> classicProtocolMembersSupportedProtocols.getOrDefault(name, 0) == numClassicProtocolMembers()
+                );
         }
     }
 
