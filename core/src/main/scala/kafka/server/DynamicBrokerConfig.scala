@@ -35,9 +35,11 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.config.{ConfigType, ServerTopicConfigSynonyms, ZooKeeperInternals}
+import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ServerTopicConfigSynonyms, ZooKeeperInternals}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin
 import org.apache.kafka.server.telemetry.ClientTelemetry
@@ -84,6 +86,7 @@ import scala.jdk.CollectionConverters._
 object DynamicBrokerConfig {
 
   private[server] val DynamicSecurityConfigs = SslConfigs.RECONFIGURABLE_CONFIGS.asScala
+  private[server] val DynamicProducerStateManagerConfig = Set(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG, TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG)
 
   val AllDynamicConfigs = DynamicSecurityConfigs ++
     LogCleaner.ReconfigurableConfigs ++
@@ -92,17 +95,17 @@ object DynamicBrokerConfig {
     Set(KafkaConfig.MetricReporterClassesProp) ++
     DynamicListenerConfig.ReconfigurableConfigs ++
     SocketServer.ReconfigurableConfigs ++
-    ProducerStateManagerConfig.RECONFIGURABLE_CONFIGS.asScala ++
+    DynamicProducerStateManagerConfig ++
     DynamicRemoteLogConfig.ReconfigurableConfigs
 
   private val ClusterLevelListenerConfigs = Set(KafkaConfig.MaxConnectionsProp, KafkaConfig.MaxConnectionCreationRateProp, KafkaConfig.NumNetworkThreadsProp)
   private val PerBrokerConfigs = (DynamicSecurityConfigs ++ DynamicListenerConfig.ReconfigurableConfigs).diff(
     ClusterLevelListenerConfigs)
-  private val ListenerMechanismConfigs = Set(KafkaConfig.SaslJaasConfigProp,
-    KafkaConfig.SaslLoginCallbackHandlerClassProp,
-    KafkaConfig.SaslLoginClassProp,
-    KafkaConfig.SaslServerCallbackHandlerClassProp,
-    KafkaConfig.ConnectionsMaxReauthMsProp)
+  private val ListenerMechanismConfigs = Set(KafkaSecurityConfigs.SASL_JAAS_CONFIG,
+    KafkaSecurityConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS_CONFIG,
+    KafkaSecurityConfigs.SASL_LOGIN_CLASS_CONFIG,
+    KafkaSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
+    KafkaSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG)
 
   private val ReloadableFileConfigs = Set(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG)
 
@@ -740,13 +743,13 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
     val originalLogConfig = logManager.currentDefaultConfig
     val originalUncleanLeaderElectionEnable = originalLogConfig.uncleanLeaderElectionEnable
     val newBrokerDefaults = new util.HashMap[String, Object](originalLogConfig.originals)
-    newConfig.extractLogConfigMap.forEach { (k, v) =>
+    newConfig.valuesFromThisConfig.forEach { (k, v) =>
       if (DynamicLogConfig.ReconfigurableConfigs.contains(k)) {
         DynamicLogConfig.KafkaConfigToLogConfigName.get(k).foreach { configName =>
           if (v == null)
              newBrokerDefaults.remove(configName)
           else
-            newBrokerDefaults.put(configName, v)
+            newBrokerDefaults.put(configName, v.asInstanceOf[AnyRef])
         }
       }
     }
@@ -767,7 +770,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
 object DynamicThreadPool {
   val ReconfigurableConfigs = Set(
     KafkaConfig.NumIoThreadsProp,
-    KafkaConfig.NumReplicaFetchersProp,
+    ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG,
     KafkaConfig.NumRecoveryThreadsPerDataDirProp,
     KafkaConfig.BackgroundThreadsProp)
 
@@ -792,7 +795,7 @@ object DynamicThreadPool {
   def getValue(config: KafkaConfig, name: String): Int = {
     name match {
       case KafkaConfig.NumIoThreadsProp => config.numIoThreads
-      case KafkaConfig.NumReplicaFetchersProp => config.numReplicaFetchers
+      case ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG => config.numReplicaFetchers
       case KafkaConfig.NumRecoveryThreadsPerDataDirProp => config.numRecoveryThreadsPerDataDir
       case KafkaConfig.BackgroundThreadsProp => config.backgroundThreads
       case n => throw new IllegalStateException(s"Unexpected config $n")
@@ -967,39 +970,39 @@ object DynamicListenerConfig {
     KafkaConfig.ListenerSecurityProtocolMapProp,
 
     // SSL configs
-    KafkaConfig.PrincipalBuilderClassProp,
-    KafkaConfig.SslProtocolProp,
-    KafkaConfig.SslProviderProp,
-    KafkaConfig.SslCipherSuitesProp,
-    KafkaConfig.SslEnabledProtocolsProp,
-    KafkaConfig.SslKeystoreTypeProp,
-    KafkaConfig.SslKeystoreLocationProp,
-    KafkaConfig.SslKeystorePasswordProp,
-    KafkaConfig.SslKeyPasswordProp,
-    KafkaConfig.SslTruststoreTypeProp,
-    KafkaConfig.SslTruststoreLocationProp,
-    KafkaConfig.SslTruststorePasswordProp,
-    KafkaConfig.SslKeyManagerAlgorithmProp,
-    KafkaConfig.SslTrustManagerAlgorithmProp,
-    KafkaConfig.SslEndpointIdentificationAlgorithmProp,
-    KafkaConfig.SslSecureRandomImplementationProp,
-    KafkaConfig.SslClientAuthProp,
-    KafkaConfig.SslEngineFactoryClassProp,
+    KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
+    KafkaSecurityConfigs.SSL_PROTOCOL_CONFIG,
+    KafkaSecurityConfigs.SSL_PROVIDER_CONFIG,
+    KafkaSecurityConfigs.SSL_CIPHER_SUITES_CONFIG,
+    KafkaSecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
+    KafkaSecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+    KafkaSecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+    KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+    KafkaSecurityConfigs.SSL_KEY_PASSWORD_CONFIG,
+    KafkaSecurityConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+    KafkaSecurityConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+    KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+    KafkaSecurityConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
+    KafkaSecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
+    KafkaSecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
+    KafkaSecurityConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG,
+    KafkaSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
+    KafkaSecurityConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG,
 
     // SASL configs
-    KafkaConfig.SaslMechanismInterBrokerProtocolProp,
-    KafkaConfig.SaslJaasConfigProp,
-    KafkaConfig.SaslEnabledMechanismsProp,
-    KafkaConfig.SaslKerberosServiceNameProp,
-    KafkaConfig.SaslKerberosKinitCmdProp,
-    KafkaConfig.SaslKerberosTicketRenewWindowFactorProp,
-    KafkaConfig.SaslKerberosTicketRenewJitterProp,
-    KafkaConfig.SaslKerberosMinTimeBeforeReloginProp,
-    KafkaConfig.SaslKerberosPrincipalToLocalRulesProp,
-    KafkaConfig.SaslLoginRefreshWindowFactorProp,
-    KafkaConfig.SaslLoginRefreshWindowJitterProp,
-    KafkaConfig.SaslLoginRefreshMinPeriodSecondsProp,
-    KafkaConfig.SaslLoginRefreshBufferSecondsProp,
+    KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG,
+    KafkaSecurityConfigs.SASL_JAAS_CONFIG,
+    KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
+    KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_CONFIG,
+    KafkaSecurityConfigs.SASL_KERBEROS_KINIT_CMD_CONFIG,
+    KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG,
+    KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG,
+    KafkaSecurityConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG,
+    KafkaSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG,
+    KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR_CONFIG,
+    KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER_CONFIG,
+    KafkaSecurityConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_CONFIG,
+    KafkaSecurityConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS_CONFIG,
 
     // Connection limit configs
     KafkaConfig.MaxConnectionsProp,
@@ -1136,21 +1139,21 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
 class DynamicProducerStateManagerConfig(val producerStateManagerConfig: ProducerStateManagerConfig) extends BrokerReconfigurable with Logging {
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     if (producerStateManagerConfig.producerIdExpirationMs != newConfig.producerIdExpirationMs) {
-      info(s"Reconfigure ${KafkaConfig.ProducerIdExpirationMsProp} from ${producerStateManagerConfig.producerIdExpirationMs} to ${newConfig.producerIdExpirationMs}")
+      info(s"Reconfigure ${TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG} from ${producerStateManagerConfig.producerIdExpirationMs} to ${newConfig.producerIdExpirationMs}")
       producerStateManagerConfig.setProducerIdExpirationMs(newConfig.producerIdExpirationMs)
     }
     if (producerStateManagerConfig.transactionVerificationEnabled != newConfig.transactionPartitionVerificationEnable) {
-      info(s"Reconfigure ${KafkaConfig.TransactionPartitionVerificationEnableProp} from ${producerStateManagerConfig.transactionVerificationEnabled} to ${newConfig.transactionPartitionVerificationEnable}")
+      info(s"Reconfigure ${TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG} from ${producerStateManagerConfig.transactionVerificationEnabled} to ${newConfig.transactionPartitionVerificationEnable}")
       producerStateManagerConfig.setTransactionVerificationEnabled(newConfig.transactionPartitionVerificationEnable)
     }
   }
 
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     if (newConfig.producerIdExpirationMs < 0)
-      throw new ConfigException(s"${KafkaConfig.ProducerIdExpirationMsProp} cannot be less than 0, current value is ${producerStateManagerConfig.producerIdExpirationMs}, and new value is ${newConfig.producerIdExpirationMs}")
+      throw new ConfigException(s"${TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG} cannot be less than 0, current value is ${producerStateManagerConfig.producerIdExpirationMs}, and new value is ${newConfig.producerIdExpirationMs}")
   }
 
-  override def reconfigurableConfigs: Set[String] = ProducerStateManagerConfig.RECONFIGURABLE_CONFIGS.asScala
+  override def reconfigurableConfigs: Set[String] = DynamicProducerStateManagerConfig
 
 }
 

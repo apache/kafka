@@ -33,6 +33,7 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.scram.internals.ScramFormatter
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 
@@ -60,7 +61,7 @@ object StorageTool extends Logging {
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
           val metadataVersion = getMetadataVersion(namespace,
-            Option(config.get.originals.get(KafkaConfig.InterBrokerProtocolVersionProp)).map(_.toString))
+            Option(config.get.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).map(_.toString))
           if (!metadataVersion.isKRaftSupported) {
             throw new TerseFailure(s"Must specify a valid KRaft metadata.version of at least ${MetadataVersion.IBP_3_0_IV0}.")
           }

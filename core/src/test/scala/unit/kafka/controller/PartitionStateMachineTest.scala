@@ -24,6 +24,7 @@ import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.MetadataVersion.{IBP_3_1_IV0, IBP_3_2_IV0}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
@@ -258,7 +259,7 @@ class PartitionStateMachineTest {
       .thenReturn(Seq(GetDataResponse(Code.OK, null, Some(partition),
         TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat, ResponseMetadata(0, 0))))
 
-    when(mockZkClient.getLogConfigs(Set.empty, config.extractLogConfigMap))
+    when(mockZkClient.getLogConfigs(Set.empty, config.originals()))
       .thenReturn((Map(partition.topic -> new LogConfig(new Properties)), Map.empty[String, Exception]))
     val leaderAndIsrAfterElection = leaderAndIsr.newLeader(brokerId)
     val updatedLeaderAndIsr = leaderAndIsrAfterElection.withPartitionEpoch(2)
@@ -298,7 +299,7 @@ class PartitionStateMachineTest {
       val apiVersion = if (isLeaderRecoverySupported) IBP_3_2_IV0 else IBP_3_1_IV0
       val properties = TestUtils.createBrokerConfig(brokerId, "zkConnect")
 
-      properties.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, apiVersion.toString)
+      properties.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, apiVersion.toString)
 
       new ZkPartitionStateMachine(
         KafkaConfig.fromProps(properties),
@@ -434,7 +435,7 @@ class PartitionStateMachineTest {
     }
     prepareMockToGetTopicPartitionsStatesRaw()
     def prepareMockToGetLogConfigs(): Unit = {
-      when(mockZkClient.getLogConfigs(Set.empty, config.extractLogConfigMap)).thenReturn((Map.empty[String, LogConfig], Map.empty[String, Exception]))
+      when(mockZkClient.getLogConfigs(Set.empty, config.originals())).thenReturn((Map.empty[String, LogConfig], Map.empty[String, Exception]))
     }
     prepareMockToGetLogConfigs()
 

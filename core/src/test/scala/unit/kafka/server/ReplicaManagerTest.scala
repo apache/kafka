@@ -33,7 +33,7 @@ import kafka.log._
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.MockBlockingSender
-import kafka.utils.{Exit, Pool, TestInfoUtils, TestUtils}
+import kafka.utils.{Exit, Pool, TestUtils}
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.errors.{InvalidPidMappingException, KafkaStorageException}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
@@ -73,8 +73,10 @@ import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.log.remote.RemoteLogManager
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile
 import org.mockito.invocation.InvocationOnMock
@@ -1300,7 +1302,7 @@ class ReplicaManagerTest {
   @Test
   def testBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdateIbp26(): Unit = {
     val extraProps = new Properties
-    extraProps.put(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_6_IV0.version)
+    extraProps.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, IBP_2_6_IV0.version)
     verifyBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(extraProps, expectTruncation = true)
   }
 
@@ -1513,7 +1515,7 @@ class ReplicaManagerTest {
   @Test
   def testPreferredReplicaAsLeaderWhenSameRackFollowerIsOutOfIsr(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
-      propsModifier = props => props.put(KafkaConfig.ReplicaSelectorClassProp, classOf[MockReplicaSelector].getName))
+      propsModifier = props => props.put(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG, classOf[MockReplicaSelector].getName))
 
     try {
       val leaderBrokerId = 0
@@ -1593,7 +1595,7 @@ class ReplicaManagerTest {
   @Test
   def testFetchFromFollowerShouldNotRunPreferLeaderSelect(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
-      propsModifier = props => props.put(KafkaConfig.ReplicaSelectorClassProp, classOf[MockReplicaSelector].getName))
+      propsModifier = props => props.put(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG, classOf[MockReplicaSelector].getName))
     try {
       val leaderBrokerId = 0
       val followerBrokerId = 1
@@ -1642,7 +1644,7 @@ class ReplicaManagerTest {
   @Test
   def testFetchShouldReturnImmediatelyWhenPreferredReadReplicaIsDefined(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
-      propsModifier = props => props.put(KafkaConfig.ReplicaSelectorClassProp, "org.apache.kafka.common.replica.RackAwareReplicaSelector"))
+      propsModifier = props => props.put(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG, "org.apache.kafka.common.replica.RackAwareReplicaSelector"))
 
     try {
       val leaderBrokerId = 0
@@ -1794,7 +1796,7 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     val props = new Properties()
-    props.put(KafkaConfig.ReplicaSelectorClassProp, "non-a-class")
+    props.put(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG, "non-a-class")
     assertThrows(classOf[ClassNotFoundException], () => prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
       leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props))
@@ -2460,7 +2462,7 @@ class ReplicaManagerTest {
       // Dynamically enable verification.
       config.dynamicConfig.initialize(None, None)
       val props = new Properties()
-      props.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "true")
+      props.put(TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "true")
       config.dynamicConfig.updateBrokerConfig(config.brokerId, props)
       TestUtils.waitUntilTrue(() => config.transactionPartitionVerificationEnable == true, "Config did not dynamically update.")
 
@@ -2512,7 +2514,7 @@ class ReplicaManagerTest {
       // Disable verification
       config.dynamicConfig.initialize(None, None)
       val props = new Properties()
-      props.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "false")
+      props.put(TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "false")
       config.dynamicConfig.updateBrokerConfig(config.brokerId, props)
       TestUtils.waitUntilTrue(() => config.transactionPartitionVerificationEnable == false, "Config did not dynamically update.")
 
@@ -3885,7 +3887,7 @@ class ReplicaManagerTest {
     testStopReplicaWithExistingPartition(LeaderAndIsr.NoEpoch, true, false, Errors.NONE, enableRemoteStorage)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testOffsetOutOfRangeExceptionWhenReadFromLog(isFromFollower: Boolean): Unit = {
     val replicaId = if (isFromFollower) 1 else -1
@@ -3940,7 +3942,7 @@ class ReplicaManagerTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testOffsetOutOfRangeExceptionWhenFetchMessages(isFromFollower: Boolean): Unit = {
     val replicaId = if (isFromFollower) 1 else -1
@@ -4938,6 +4940,34 @@ class ReplicaManagerTest {
     }
   }
 
+  @Test
+  def testGetOrCreatePartitionShouldNotCreateOfflinePartition(): Unit = {
+    val localId = 1
+    val topicPartition0 = new TopicIdPartition(FOO_UUID, 0, "foo")
+    val directoryEventHandler = mock(classOf[DirectoryEventHandler])
+
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
+    try {
+      val directoryIds = replicaManager.logManager.directoryIdsSet.toList
+      assertEquals(directoryIds.size, 2)
+      val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = directoryIds)
+      val (partition: Partition, isNewWhenCreatedForFirstTime: Boolean) = replicaManager.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
+      partition.makeLeader(leaderAndIsrPartitionState(topicPartition0.topicPartition(), 1, localId, Seq(1, 2)),
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints),
+        None)
+
+      assertTrue(isNewWhenCreatedForFirstTime)
+      // mark topic partition as offline
+      replicaManager.markPartitionOffline(topicPartition0.topicPartition())
+
+      // recreate the partition again shouldn't create new partition
+      val recreateResults = replicaManager.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID)
+      assertTrue(recreateResults.isEmpty)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
   private def verifyRLMOnLeadershipChange(leaderPartitions: util.Set[Partition], followerPartitions: util.Set[Partition]): Unit = {
     val leaderCapture: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
     val followerCapture: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
@@ -5022,7 +5052,8 @@ class ReplicaManagerTest {
       val topicIdPartitionCapture: ArgumentCaptor[org.apache.kafka.server.common.TopicIdPartition] =
         ArgumentCaptor.forClass(classOf[org.apache.kafka.server.common.TopicIdPartition])
       val logIdCaptureForPartition: ArgumentCaptor[Uuid] = ArgumentCaptor.forClass(classOf[Uuid])
-      verify(replicaManager.directoryEventHandler, atLeastOnce()).handleAssignment(topicIdPartitionCapture.capture(), logIdCaptureForPartition.capture(), any())
+      verify(replicaManager.directoryEventHandler, atLeastOnce()).handleAssignment(topicIdPartitionCapture.capture(), logIdCaptureForPartition.capture(),
+        ArgumentMatchers.eq("Applying metadata delta"), any())
 
       assertEquals(topicIdPartitionCapture.getAllValues.asScala,
         List(
@@ -5067,7 +5098,8 @@ class ReplicaManagerTest {
       val topicIdPartitionCapture: ArgumentCaptor[org.apache.kafka.server.common.TopicIdPartition] =
         ArgumentCaptor.forClass(classOf[org.apache.kafka.server.common.TopicIdPartition])
       val logIdCaptureForPartition: ArgumentCaptor[Uuid] = ArgumentCaptor.forClass(classOf[Uuid])
-      verify(replicaManager.directoryEventHandler, atLeastOnce()).handleAssignment(topicIdPartitionCapture.capture(), logIdCaptureForPartition.capture(), any())
+      verify(replicaManager.directoryEventHandler, atLeastOnce()).handleAssignment(topicIdPartitionCapture.capture(), logIdCaptureForPartition.capture(),
+        ArgumentMatchers.eq("Applying metadata delta"), any())
 
       assertEquals(topicIdPartitionCapture.getAllValues.asScala,
         List(

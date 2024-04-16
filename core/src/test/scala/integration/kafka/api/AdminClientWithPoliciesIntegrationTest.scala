@@ -18,12 +18,13 @@ import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils.assertFutureExceptionTypeEquals
-import kafka.utils.{Logging, TestInfoUtils, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsOptions, Config, ConfigEntry}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
@@ -78,7 +79,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     props.put(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[Policy])
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testValidAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
@@ -97,7 +98,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     PlaintextAdminIntegrationTest.checkValidAlterConfigs(client, this, topicResource1, topicResource2)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
@@ -105,7 +106,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   }
 
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidAlterConfigsDueToPolicy(quorum: String): Unit = {
     client = Admin.create(createConfig)
@@ -140,7 +141,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     val topicConfigEntries3 = Seq(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "-1")).asJava
 
-    val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.SslTruststorePasswordProp, "12313")).asJava
+    val brokerConfigEntries = Seq(new ConfigEntry(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "12313")).asJava
 
     // Alter configs: second is valid, the others are invalid
     var alterResult = client.alterConfigs(Map(
@@ -170,7 +171,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     assertEquals("0.8", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
 
-    assertNull(configs.get(brokerResource).get(KafkaConfig.SslTruststorePasswordProp).value)
+    assertNull(configs.get(brokerResource).get(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value)
 
     // Alter configs with validateOnly = true: only second is valid
     topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.7")).asJava
@@ -202,7 +203,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     assertEquals("0.8", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
 
-    assertNull(configs.get(brokerResource).get(KafkaConfig.SslTruststorePasswordProp).value)
+    assertNull(configs.get(brokerResource).get(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value)
 
     // Do an incremental alter config on the broker, ensure we don't see the broker config we set earlier in the policy
     alterResult = client.incrementalAlterConfigs(Map(

@@ -75,7 +75,7 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         }
     }
 
-    private void stopTopicBasedRemoteLogMetadataManagerHarness() throws IOException {
+    private void stopTopicBasedRemoteLogMetadataManagerHarness() {
         remoteLogMetadataManagerHarness.closeRemoteLogMetadataManager();
     }
 

@@ -21,6 +21,7 @@ import java.util.Properties
 import kafka.admin.{RackAwareMode, RackAwareTest}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
+import org.apache.kafka.server.config.ReplicationConfigs
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.junit.jupiter.api.Assertions._
@@ -33,7 +34,7 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
   val replicationFactor = 2
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
-  overridingProps.put(KafkaConfig.DefaultReplicationFactorProp, replicationFactor.toString)
+  overridingProps.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, replicationFactor.toString)
 
   def generateConfigs =
     (0 until numServers) map { node =>

@@ -3823,6 +3823,12 @@ foo
       version</i> (also known as the <i>inter.broker.protocol.version</i>.) Please do not attempt to do this during
       a migration, or you may break the cluster.</li>
     <li>After the migration has been finalized, it is not possible to revert back to ZooKeeper mode.</li>
+    <li>
+      During the migration, if a ZK broker is running with multiple log directories,
+      any directory failure will cause the broker to shutdown.
+      Brokers with broken log directories will only be able to migrate to KRaft once the directories are repaired.
+      For further details refer to <a href="https://issues.apache.org/jira/browse/KAFKA-16431">KAFKA-16431</a>.
+    </li>
     <li><a href="#kraft_missing">As noted above</a>, some features are not fully implemented in KRaft mode. If you are
       using one of those features, you will not be able to migrate to KRaft yet.</li>
   </ul>
