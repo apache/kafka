@@ -55,6 +55,7 @@ public class LogManagerBuilder {
     private Time time = Time.SYSTEM;
     private boolean keepPartitionMetadataFile = true;
     private boolean remoteStorageSystemEnable = false;
+    private long initialTaskDelayMs = LogConfig.DEFAULT_INITIAL_TASK_DELAY_MS;
 
     public LogManagerBuilder setLogDirs(List<File> logDirs) {
         this.logDirs = logDirs;
@@ -180,6 +181,6 @@ public class LogManagerBuilder {
                               time,
                               keepPartitionMetadataFile,
                               remoteStorageSystemEnable,
-                              LogConfig.DEFAULT_INITIAL_TASK_DELAY_MS);
+                              initialTaskDelayMs);
     }
 }

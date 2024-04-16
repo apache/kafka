@@ -532,6 +532,7 @@ object KafkaConfig {
     "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface."
   val LogMessageDownConversionEnableDoc = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC
 
+  val LogInitialTaskDelayMsDoc = "The initial task delay in millisecond when initializing tasks in LogManager. This should be used for testing only."
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsDoc = "The socket timeout for controller-to-broker channels."
   val DefaultReplicationFactorDoc = "The default replication factors for automatically created topics."
@@ -836,7 +837,7 @@ object KafkaConfig {
       .define(CreateTopicPolicyClassNameProp, CLASS, null, LOW, CreateTopicPolicyClassNameDoc)
       .define(AlterConfigPolicyClassNameProp, CLASS, null, LOW, AlterConfigPolicyClassNameDoc)
       .define(LogMessageDownConversionEnableProp, BOOLEAN, LogConfig.DEFAULT_MESSAGE_DOWNCONVERSION_ENABLE, LOW, LogMessageDownConversionEnableDoc)
-      .defineInternal(LogInitialTaskDelayMsProp, LONG, LogConfig.DEFAULT_INITIAL_TASK_DELAY_MS, LOW)
+      .defineInternal(LogInitialTaskDelayMsProp, LONG, LogConfig.DEFAULT_INITIAL_TASK_DELAY_MS, atLeast(0), LOW, LogInitialTaskDelayMsDoc)
 
       /** ********* Replication configuration ***********/
       .define(ControllerSocketTimeoutMsProp, INT, Defaults.CONTROLLER_SOCKET_TIMEOUT_MS, MEDIUM, ControllerSocketTimeoutMsDoc)
@@ -1823,7 +1824,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         }
       }
     }
-    require(logInitialTaskDelayMs >= 0, s"`${KafkaConfig.LogInitialTaskDelayMsProp}` must be greater than or equal to 0")
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
     require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, greater than or equal to 1")
