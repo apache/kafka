@@ -687,42 +687,36 @@ public interface KStream<K, V> {
 
     /**
      * Marking the {@code KStream} as partitioned signals the stream is partitioned as intended,
-     * and does not require further repartitioning in downstream key changing operations.
-     *
-     * <p><em>
-     *     Note that {@link KStream#markAsPartitioned()} SHOULD NOT be used with interactive query(IQ) or {@link KStream#join}.
-     *     For reasons that when repartitions happen, records are physically shuffled by a composite key defined in the stateful operation.
-     *     However, if the repartitions were cancelled, records stayed in their original partition by its original key. IQ or joins
-     *     assumes and uses the composite key instead of the original key.
-     * </p></em>
-     *
-     *
-     * This method will overwrite a default behavior as described below.
+     * and does not require further repartitioning by downstream key changing operations.
      * <p>
-     *     By default, Kafka Streams always automatically repartition the records to prepare for a stateful operation,
-     *     however, it is not always required when input stream is partitioned as intended. As an example,
-     *     if a input stream is partitioned by a String key1, calling the below function will trigger a repartition:
-     *     <pre>{@code
+     * Note that {@link KStream#markAsPartitioned()} SHOULD NOT be used with interactive query(IQ) or {@link KStream#join}.
+     * For reasons that when repartitions happen, records are physically shuffled by a composite key defined in the stateful operation.
+     * However, if the repartitions were cancelled, records stayed in their original partition by its original key. IQ or joins
+     * assumes and uses the composite key instead of the original key.
+     * <p>
+     * This method will overwrite a default behavior as described below.
+     * By default, Kafka Streams always automatically repartition the records to prepare for a stateful operation,
+     * however, it is not always required when input stream is partitioned as intended. As an example,
+     * if an input stream is partitioned by a String key1, calling the below function will trigger a repartition:
+     * <p>
+     * <pre>{@code
      *     KStream<String, String> inputStream = builder.stream("topic");
      *     stream
      *       .selectKey( ... => (key1, metric))
      *       .groupByKey()
      *       .aggregate()
-     *     }</pre>
-     * </p>
-     *
+     * }</pre>
      * <p>
-     *     You can then overwrite the default behavior by calling this method:
-     *     <pre>{@code
+     * You can then overwrite the default behavior by calling this method:
+     * <pre>{@code
      *     stream
      *       .selectKey( ... => (key1, metric))
      *       .markAsPartitioned()
      *       .groupByKey()
      *       .aggregate()
-     *     }</pre>
-     * </p>
-     *
-     * @return a new {@code KStream} instance that will not repartition in subsequent operations: {@link KStream#selectKey(KeyValueMapper)}, {@link KStream#map(KeyValueMapper)}, {@link KStream#flatTransform(TransformerSupplier, String...)}.
+     * }</pre>
+     *  <p>
+     * @return a new {@code KStream} instance that will not repartition in subsequent operations.
      */
     KStream<K, V> markAsPartitioned();
 
