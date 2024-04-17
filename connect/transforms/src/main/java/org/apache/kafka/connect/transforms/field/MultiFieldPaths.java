@@ -22,7 +22,6 @@ import org.apache.kafka.connect.data.Struct;
 
 import java.util.AbstractMap;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,10 +65,10 @@ public class MultiFieldPaths {
 
     private Map<SingleFieldPath, Map.Entry<Field, Object>> findFieldAndValues(
         Struct originalValue,
-        TrieNode trieAt,
+        Trie.Node trieAt,
         Map<SingleFieldPath, Map.Entry<Field, Object>> fieldAndValueMap
     ) {
-        for (Map.Entry<String, TrieNode> step : trieAt.steps().entrySet()) {
+        for (Map.Entry<String, Trie.Node> step : trieAt.steps().entrySet()) {
             Field field = originalValue.schema().field(step.getKey());
             if (step.getValue().isLeaf()) {
                 Map.Entry<Field, Object> fieldAndValue =
@@ -104,10 +103,10 @@ public class MultiFieldPaths {
     @SuppressWarnings("unchecked")
     private Map<SingleFieldPath, Map.Entry<String, Object>> findFieldAndValues(
         Map<String, Object> value,
-        TrieNode trieAt,
+        Trie.Node trieAt,
         Map<SingleFieldPath, Map.Entry<String, Object>> fieldAndValueMap
     ) {
-        for (Map.Entry<String, TrieNode> step : trieAt.steps().entrySet()) {
+        for (Map.Entry<String, Trie.Node> step : trieAt.steps().entrySet()) {
             Object fieldValue = value.get(step.getKey());
             if (step.getValue().isLeaf()) {
                 fieldAndValueMap.put(
@@ -153,135 +152,4 @@ public class MultiFieldPaths {
         return "FieldPaths(trie = " + trie + ")";
     }
 
-    // Invariants:
-    // - Trie values contain either a nested trie or a field path when it is a leaf.
-    // - A trie flattens overlapping paths (e.g. `foo` and `foo.bar` in V2, only `foo.bar` would be kept)
-    static class Trie {
-        TrieNode root;
-
-        Trie() {
-            root = new TrieNode();
-        }
-
-
-        void insert(SingleFieldPath path) {
-            TrieNode current = root;
-
-            for (String step : path.stepsWithoutLast()) {
-                current = current.addStep(step);
-            }
-
-            final String step = path.lastStep();
-            current.addLeaf(step, path);
-        }
-
-        boolean isEmpty() {
-            return root.isEmpty();
-        }
-
-        TrieNode get(String step) {
-            return root.get(step);
-        }
-
-        int size() {
-            if (root.isEmpty()) return 0;
-            return root.size();
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            Trie trie = (Trie) o;
-            return Objects.equals(root, trie.root);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(root);
-        }
-
-        @Override
-        public String toString() {
-            return "Trie(" +
-                "root = " + root +
-                ')';
-        }
-    }
-
-    static class TrieNode {
-        Map<String, TrieNode> steps = new HashMap<>();
-        SingleFieldPath path;
-
-        private TrieNode() {
-        }
-
-        private TrieNode(SingleFieldPath path) {
-            this.path = path;
-        }
-
-        boolean contains(String step) {
-            return steps.containsKey(step);
-        }
-
-        private TrieNode addStep(String step) {
-            return steps.computeIfAbsent(step, ignored -> {
-                if (path != null) path = null;
-                return new TrieNode();
-            });
-        }
-
-        private void addLeaf(String step, SingleFieldPath path) {
-            steps.computeIfAbsent(step, ignored -> {
-                if (this.path != null) this.path = null;
-                return new TrieNode(path);
-            });
-        }
-
-        TrieNode get(String step) {
-            return steps.get(step);
-        }
-
-        boolean isEmpty() {
-            return steps.isEmpty() && path == null;
-        }
-
-        public boolean isLeaf() {
-            return path != null;
-        }
-
-        Map<String, TrieNode> steps() {
-            return new HashMap<>(steps);
-        }
-
-        int size() {
-            if (isLeaf()) return 1;
-            int size = 0;
-            for (TrieNode child : steps.values()) {
-                size = size + child.size();
-            }
-            return size;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            TrieNode trieNode = (TrieNode) o;
-            return Objects.equals(steps, trieNode.steps) && Objects.equals(path, trieNode.path);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(steps, path);
-        }
-
-        @Override
-        public String toString() {
-            return "TrieNode(" +
-                "steps = " + steps +
-                (path != null ? (", path = " + path) : "") +
-                ')';
-        }
-    }
 }
