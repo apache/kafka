@@ -158,11 +158,7 @@ public class AsyncKafkaConsumerTest {
     public void resetAll() {
         backgroundEventQueue.clear();
         if (consumer != null) {
-            try {
-                consumer.close(Duration.ZERO);
-            } catch (Exception e) {
-                assertInstanceOf(KafkaException.class, e);
-            }
+            consumer.close(Duration.ZERO);
         }
         consumer = null;
         Mockito.framework().clearInlineMocks();
@@ -270,6 +266,15 @@ public class AsyncKafkaConsumerTest {
         assertEquals(offsets, commitEvent.offsets());
         assertDoesNotThrow(() -> commitEvent.future().complete(null));
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, null));
+
+        // Clean-up. Close the consumer here as we know it will cause a TimeoutException to be thrown.
+        // If we get an error *other* than the TimeoutException, we'll fail the test.
+        try {
+            Exception e = assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
+            assertInstanceOf(TimeoutException.class, e.getCause());
+        } finally {
+            consumer = null;
+        }
     }
 
     @Test
@@ -574,6 +579,15 @@ public class AsyncKafkaConsumerTest {
         verify(metadata).updateLastSeenEpochIfNewer(t0, 2);
         verify(metadata).updateLastSeenEpochIfNewer(t1, 1);
         verify(applicationEventHandler).add(ArgumentMatchers.isA(AsyncCommitEvent.class));
+
+        // Clean-Up. Close the consumer here as we know it will cause a TimeoutException to be thrown.
+        // If we get an error *other* than the TimeoutException, we'll fail the test.
+        try {
+            Exception e = assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
+            assertInstanceOf(TimeoutException.class, e.getCause());
+        } finally {
+            consumer = null;
+        }
     }
 
     @Test
@@ -622,16 +636,8 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testCommitSyncAwaitsCommitAsyncCompletionWithEmptyOffsets() {
-        time = new MockTime(1);
-        consumer = newConsumer();
-
-        // Commit async (incomplete)
-        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         final TopicPartition tp = new TopicPartition("foo", 0);
-        consumer.assign(Collections.singleton(tp));
-        consumer.seek(tp, 20);
-        consumer.commitAsync();
+        testIncompleteAsyncCommit(tp);
 
         // Commit async is not completed yet, so commit sync should wait for it to complete (time out)
         assertThrows(TimeoutException.class, () -> consumer.commitSync(Collections.emptyMap(), Duration.ofMillis(100)));
@@ -657,7 +663,7 @@ public class AsyncKafkaConsumerTest {
         final AsyncCommitEvent commitEvent = commitEventCaptor.getValue();
         commitEvent.future().complete(null);
 
-        // Commit async is completed, so commit sync completes immediately (since offsets are empty)
+        // Commit async is completed, so commit sync does not need to wait before committing its offsets
         assertDoesNotThrow(() -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
     }
 
@@ -676,7 +682,7 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
     }
 
-    private void testSyncCommitTimesoutAfterIncompleteAsyncCommit(TopicPartition tp) {
+    private void testIncompleteAsyncCommit(TopicPartition tp) {
         time = new MockTime(1);
         consumer = newConsumer();
 
@@ -686,6 +692,10 @@ public class AsyncKafkaConsumerTest {
         consumer.assign(Collections.singleton(tp));
         consumer.seek(tp, 20);
         consumer.commitAsync();
+    }
+
+    private void testSyncCommitTimesoutAfterIncompleteAsyncCommit(TopicPartition tp) {
+        testIncompleteAsyncCommit(tp);
 
         // Mock to complete sync event
         completeCommitSyncApplicationEventSuccessfully();

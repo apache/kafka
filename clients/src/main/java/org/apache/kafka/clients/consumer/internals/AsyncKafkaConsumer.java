@@ -1266,7 +1266,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         prepareShutdown(closeTimer, firstException);
         closeTimer.update();
         swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.",
-            () -> awaitPendingAsyncCommitsAndExecuteCommitCallbacks(closeTimer, true), firstException);
+            () -> awaitPendingAsyncCommitsAndExecuteCommitCallbacks(closeTimer, false), firstException);
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
         closeTimer.update();
@@ -1381,7 +1381,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             SyncCommitEvent syncCommitEvent = new SyncCommitEvent(offsets, requestTimer);
             CompletableFuture<Void> commitFuture = commit(syncCommitEvent);
 
-            awaitPendingAsyncCommitsAndExecuteCommitCallbacks(requestTimer, false);
+            awaitPendingAsyncCommitsAndExecuteCommitCallbacks(requestTimer, true);
 
             wakeupTrigger.setActiveTask(commitFuture);
             ConsumerUtils.getResult(commitFuture, requestTimer);
@@ -1393,7 +1393,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    private void awaitPendingAsyncCommitsAndExecuteCommitCallbacks(Timer timer, boolean disableWakeup) {
+    private void awaitPendingAsyncCommitsAndExecuteCommitCallbacks(Timer timer, boolean enableWakeup) {
         if (lastPendingAsyncCommit == null) {
             return;
         }
@@ -1404,13 +1404,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // so create new future here. Any errors in the pending async commit will be handled
             // by the async commit future / the commit callback - here, we just want to wait for it to complete.
             lastPendingAsyncCommit.whenComplete((v, t) -> futureToAwait.complete(null));
-            if (!disableWakeup) {
+            if (enableWakeup) {
                 wakeupTrigger.setActiveTask(futureToAwait);
             }
             ConsumerUtils.getResult(futureToAwait, timer);
             lastPendingAsyncCommit = null;
         } finally {
-            if (!disableWakeup) {
+            if (enableWakeup) {
                 wakeupTrigger.clearTask();
             }
             timer.update();
