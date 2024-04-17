@@ -1505,7 +1505,8 @@ object TestUtils extends Logging {
                        recoveryThreadsPerDataDir: Int = 4,
                        transactionVerificationEnabled: Boolean = false,
                        log: Option[UnifiedLog] = None,
-                       remoteStorageSystemEnable: Boolean = false): LogManager = {
+                       remoteStorageSystemEnable: Boolean = false,
+                       initialTaskDelayMs: Long = LogConfig.DEFAULT_INITIAL_TASK_DELAY_MS): LogManager = {
     val logManager = new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
                    initialOfflineDirs = Array.empty[File],
                    configRepository = configRepository,
@@ -1526,7 +1527,7 @@ object TestUtils extends Logging {
                    keepPartitionMetadataFile = true,
                    interBrokerProtocolVersion = interBrokerProtocolVersion,
                    remoteStorageSystemEnable = remoteStorageSystemEnable,
-                   initialTaskDelayMs = LogConfig.DEFAULT_INITIAL_TASK_DELAY_MS)
+                   initialTaskDelayMs = initialTaskDelayMs)
 
     if (log.isDefined) {
       val spyLogManager = Mockito.spy(logManager)
