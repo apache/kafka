@@ -29,9 +29,7 @@ import java.util.Objects;
 /**
  * The specification for a task. This should be immutable and suitable for serializing and sending over the wire.
  */
-@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS,
-              include = JsonTypeInfo.As.PROPERTY,
-              property = "class")
+@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, property = "class")
 public abstract class TaskSpec {
     /**
      * The maximum task duration.
@@ -113,6 +111,6 @@ public abstract class TaskSpec {
     }
 
     protected Map<String, String> configOrEmptyMap(Map<String, String> config) {
-        return (config == null) ? Collections.<String, String>emptyMap() : config;
+        return (config == null) ? Collections.emptyMap() : config;
     }
 }

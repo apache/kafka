@@ -73,9 +73,12 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.server.config.ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_BACKOFF_MS_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
-import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_FOLLOWER_THROTTLE;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_LEADER_THROTTLE;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_LOG_DIR_THROTTLE;
@@ -109,7 +112,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         });
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testReassignment(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -117,20 +120,20 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         executeAndVerifyReassignment();
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk") // Note: KRaft requires AlterPartition
     public void testReassignmentWithAlterPartitionDisabled(String quorum) throws Exception {
         // Test reassignment when the IBP is on an older version which does not use
         // the `AlterPartition` API. In this case, the controller will register individual
         // watches for each reassigning partition so that the reassignment can be
         // completed as soon as the ISR is expanded.
-        Map<String, String> configOverrides = Collections.singletonMap(KafkaConfig.InterBrokerProtocolVersionProp(), IBP_2_7_IV1.version());
+        Map<String, String> configOverrides = Collections.singletonMap(INTER_BROKER_PROTOCOL_VERSION_CONFIG, IBP_2_7_IV1.version());
         cluster = new ReassignPartitionsTestCluster(configOverrides, Collections.emptyMap());
         cluster.setup();
         executeAndVerifyReassignment();
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk") // Note: KRaft requires AlterPartition
     public void testReassignmentCompletionDuringPartialUpgrade(String quorum) throws Exception {
         // Test reassignment during a partial upgrade when some brokers are relying on
@@ -144,7 +147,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         // change notification delay
         ZkAlterPartitionManager.DefaultIsrPropagationConfig_$eq(new IsrChangePropagationConfig(500, 100, 500));
 
-        Map<String, String> oldIbpConfig = Collections.singletonMap(KafkaConfig.InterBrokerProtocolVersionProp(), IBP_2_7_IV1.version());
+        Map<String, String> oldIbpConfig = Collections.singletonMap(INTER_BROKER_PROTOCOL_VERSION_CONFIG, IBP_2_7_IV1.version());
         Map<Integer, Map<String, String>> brokerConfigOverrides = new HashMap<>();
         brokerConfigOverrides.put(1, oldIbpConfig);
         brokerConfigOverrides.put(2, oldIbpConfig);
@@ -196,7 +199,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         verifyReplicaDeleted(bar0, 1);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testHighWaterMarkAfterPartitionReassignment(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -226,7 +229,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             "Expected broker 3 to have the correct high water mark for the partition.");
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testAlterReassignmentThrottle(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -263,7 +266,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     /**
      * Test running a reassignment with the interBrokerThrottle set.
      */
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testThrottledReassignment(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -325,7 +328,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testProduceAndConsumeWithReassignmentInProgress(String quorum) throws Exception {
         cluster = new ReassignPartitionsTestCluster(Collections.emptyMap(), Collections.emptyMap());
@@ -366,7 +369,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     /**
      * Test running a reassignment and then cancelling it.
      */
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCancellation(String quorum) throws Exception {
         TopicPartition foo0 = new TopicPartition("foo", 0);
@@ -410,7 +413,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         verifyReplicaDeleted(baz1, 3);
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testCancellationWithAddingReplicaInIsr(String quorum) throws Exception {
         TopicPartition foo0 = new TopicPartition("foo", 0);
@@ -536,7 +539,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     /**
      * Test moving partitions between directories.
      */
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk") // JBOD not yet implemented for KRaft
     public void testLogDirReassignment(String quorum) throws Exception {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
@@ -586,7 +589,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         assertEquals(reassignment.targetDir, info1.curLogDirs.getOrDefault(topicPartition, ""));
     }
 
-    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ParameterizedTest
     @ValueSource(strings = "zk") // JBOD not yet implemented for KRaft
     public void testAlterLogDirReassignmentThrottle(String quorum) throws Exception {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
@@ -795,10 +798,10 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                     (short) 1,
                     false);
                 // shorter backoff to reduce test durations when no active partitions are eligible for fetching due to throttling
-                config.setProperty(KafkaConfig.ReplicaFetchBackoffMsProp(), "100");
+                config.setProperty(REPLICA_FETCH_BACKOFF_MS_CONFIG, "100");
                 // Don't move partition leaders automatically.
-                config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp(), "false");
-                config.setProperty(KafkaConfig.ReplicaLagTimeMaxMsProp(), "1000");
+                config.setProperty(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, "false");
+                config.setProperty(REPLICA_LAG_TIME_MAX_MS_CONFIG, "1000");
                 configOverrides.forEach(config::setProperty);
                 brokerConfigOverrides.getOrDefault(brokerId, Collections.emptyMap()).forEach(config::setProperty);
 

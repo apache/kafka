@@ -79,8 +79,15 @@ public class TestKitNodes {
         }
 
         public Builder setNumBrokerNodes(int numBrokerNodes) {
+            return setBrokerNodes(numBrokerNodes, 1);
+        }
+
+        public Builder setBrokerNodes(int numBrokerNodes, int disksPerBroker) {
             if (numBrokerNodes < 0) {
                 throw new RuntimeException("Invalid negative value for numBrokerNodes");
+            }
+            if (disksPerBroker <= 0) {
+                throw new RuntimeException("Invalid value for disksPerBroker");
             }
             while (brokerNodeBuilders.size() > numBrokerNodes) {
                 brokerNodeBuilders.pollFirstEntry();
@@ -90,9 +97,10 @@ public class TestKitNodes {
                 if (!brokerNodeBuilders.isEmpty()) {
                     nextId = brokerNodeBuilders.lastKey() + 1;
                 }
-                brokerNodeBuilders.put(nextId,
-                    new BrokerNode.Builder().
-                        setId(nextId));
+                BrokerNode.Builder brokerNodeBuilder = new BrokerNode.Builder()
+                        .setId(nextId)
+                        .setNumLogDirectories(disksPerBroker);
+                brokerNodeBuilders.put(nextId, brokerNodeBuilder);
             }
             return this;
         }

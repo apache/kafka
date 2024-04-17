@@ -25,7 +25,7 @@ import kafka.server.KafkaConfig.fromProps
 import kafka.server.QuotaType._
 import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, NewTopic}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -69,13 +69,13 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldBootstrapTwoBrokersWithLeaderThrottle(quorum: String): Unit = {
     shouldMatchQuotaReplicatingThroughAnAsymmetricTopology(true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldBootstrapTwoBrokersWithFollowerThrottle(quorum: String): Unit = {
     shouldMatchQuotaReplicatingThroughAnAsymmetricTopology(false)
@@ -211,7 +211,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
   def tp(partition: Int): TopicPartition = new TopicPartition(topic, partition)
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldThrottleOldSegments(quorum: String): Unit = {
     /**

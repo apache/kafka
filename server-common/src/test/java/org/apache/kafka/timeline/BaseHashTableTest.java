@@ -33,7 +33,7 @@ public class BaseHashTableTest {
     public void testEmptyTable() {
         BaseHashTable<Integer> table = new BaseHashTable<>(0);
         assertEquals(0, table.baseSize());
-        assertNull(table.baseGet(Integer.valueOf(1)));
+        assertNull(table.baseGet(1));
     }
 
     @Test
@@ -54,10 +54,10 @@ public class BaseHashTableTest {
     @Test
     public void testInsertAndRemove() {
         BaseHashTable<Integer> table = new BaseHashTable<>(20);
-        Integer one = Integer.valueOf(1);
-        Integer two = Integer.valueOf(2);
-        Integer three = Integer.valueOf(3);
-        Integer four = Integer.valueOf(4);
+        Integer one = 1;
+        Integer two = 2;
+        Integer three = 3;
+        Integer four = 4;
         assertNull(table.baseAddOrReplace(one));
         assertNull(table.baseAddOrReplace(two));
         assertNull(table.baseAddOrReplace(three));
@@ -114,12 +114,12 @@ public class BaseHashTableTest {
 
         for (int i = 0; i < 4096; i++) {
             assertEquals(i, table.baseSize());
-            assertNull(table.baseAddOrReplace(Integer.valueOf(i)));
+            assertNull(table.baseAddOrReplace(i));
         }
 
         for (int i = 0; i < 4096; i++) {
             assertEquals(4096 - i, table.baseSize());
-            assertEquals(Integer.valueOf(i), table.baseRemove(Integer.valueOf(i)));
+            assertEquals(Integer.valueOf(i), table.baseRemove(i));
         }
     }
 

@@ -120,7 +120,7 @@ public class RelaxedNullKeyRequirementJoinTest {
             .to(OUT);
         initTopology();
         left.pipeInput(null, "leftValue", 1);
-        assertEquals(Collections.<KeyValue<String, String>>emptyList(), out.readKeyValuesToList());
+        assertEquals(Collections.emptyList(), out.readKeyValuesToList());
     }
 
     private void initTopology() {
