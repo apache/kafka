@@ -385,6 +385,8 @@ public class SharePartition {
                         inFlightBatch, groupId, topicIdPartition);
                     continue;
                 }
+                // Update the member id of the in-flight batch since the member acquiring could be different.
+                updateResult.memberId = memberId;
                 // Schedule acquisition lock timeout for the batch.
                 TimerTask acquisitionLockTimeoutTask = scheduleAcquisitionLockTimeout(memberId, inFlightBatch.baseOffset(), inFlightBatch.lastOffset());
                 // Set the acquisition lock timeout task for the batch.
@@ -481,10 +483,10 @@ public class SharePartition {
                 for (Map.Entry<Long, InFlightBatch> entry : subMap.entrySet()) {
                     InFlightBatch inFlightBatch = entry.getValue();
 
-                    if (!inFlightBatch.memberId().equals(memberId)) {
+                    if (inFlightBatch.offsetState == null && !inFlightBatch.inFlightState.memberId().equals(memberId)) {
                         log.debug("Member {} is not the owner of batch record {} for share partition: {}-{}",
                             memberId, inFlightBatch, groupId, topicIdPartition);
-                        throwable = new InvalidRequestException("Member is not the owner of batch record");
+                        throwable = new InvalidRecordStateException("Member is not the owner of batch record");
                         break;
                     }
 
@@ -533,6 +535,14 @@ public class SharePartition {
                                 // Cancel and clear the acquisition lock timeout task for the state since it is moved to ARCHIVED state.
                                 offsetState.getValue().cancelAndClearAcquisitionLockTimeoutTask();
                                 continue;
+                            }
+
+                            // Check if member id is the owner of the offset.
+                            if (!offsetState.getValue().memberId.equals(memberId)) {
+                                log.debug("Member {} is not the owner of offset: {} in batch: {} for the share"
+                                        + " partition: {}-{}", memberId, offsetState.getKey(), inFlightBatch, groupId, topicIdPartition);
+                                throwable = new InvalidRecordStateException("Member is not the owner of offset");
+                                break;
                             }
 
                             if (offsetState.getValue().state != RecordState.ACQUIRED) {
@@ -646,16 +656,16 @@ public class SharePartition {
             for (Map.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
                 InFlightBatch inFlightBatch = entry.getValue();
 
-                if (!inFlightBatch.memberId().equals(memberId)) {
-                    log.info("Member {} is not the owner of batch record {} for share partition: {}-{}",
-                            memberId, inFlightBatch, groupId, topicIdPartition);
-                    continue;
-                }
-
                 if (inFlightBatch.offsetState != null) {
                     log.trace("Offset tracked batch record found, batch: {} for the share partition: {}-{}", inFlightBatch,
                             groupId, topicIdPartition);
                     for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
+                        // Check if member id is the owner of the offset.
+                        if (!offsetState.getValue().memberId.equals(memberId)) {
+                            log.debug("Member {} is not the owner of offset: {} in batch: {} for the share"
+                                    + " partition: {}-{}", memberId, offsetState.getKey(), inFlightBatch, groupId, topicIdPartition);
+                            continue;
+                        }
                         if (offsetState.getValue().state == RecordState.ACQUIRED) {
                             InFlightState updateResult = offsetState.getValue().startStateTransition(recordState, false);
                             if (updateResult == null) {
@@ -675,8 +685,14 @@ public class SharePartition {
                     continue;
                 }
 
+                // Check if member id is the owner of the batch.
+                if (!inFlightBatch.inFlightState.memberId().equals(memberId)) {
+                    log.debug("Member {} is not the owner of batch record {} for share partition: {}-{}",
+                            memberId, inFlightBatch, groupId, topicIdPartition);
+                    continue;
+                }
                 // Change the state of complete batch since the same state exists for the entire inFlight batch
-                log.trace("Releasing ACQUIRED records for complete batch {} for the share partition: {}-{}",
+                log.trace("Releasing acquired records for complete batch {} for the share partition: {}-{}",
                         inFlightBatch, groupId, topicIdPartition);
 
                 if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
@@ -767,6 +783,8 @@ public class SharePartition {
                         groupId, topicIdPartition);
                     continue;
                 }
+                // Update the member id of the offset since the member acquiring could be different.
+                updateResult.memberId = memberId;
                 // Schedule acquisition lock timeout for the offset.
                 TimerTask acquisitionLockTimeoutTask = scheduleAcquisitionLockTimeout(memberId, offsetState.getKey(), offsetState.getKey());
                 // Update acquisition lock timeout task for the offset.
@@ -924,9 +942,6 @@ public class SharePartition {
      * The InFlightBatch maintains the in-memory state of the fetched records i.e. in-flight records.
      */
     class InFlightBatch {
-
-        // The member id of the client that is fetching the record.
-        private final String memberId;
         // The offset of the first record in the batch that is fetched from the log.
         private final long baseOffset;
         // The last offset of the batch that is fetched from the log.
@@ -946,15 +961,9 @@ public class SharePartition {
         private NavigableMap<Long, InFlightState> offsetState;
 
         InFlightBatch(String memberId, long baseOffset, long lastOffset, RecordState state, int deliveryCount, TimerTask acquisitionLockTimeoutTask) {
-            this.memberId = memberId;
             this.baseOffset = baseOffset;
             this.lastOffset = lastOffset;
-            this.inFlightState = new InFlightState(state, deliveryCount, acquisitionLockTimeoutTask);
-        }
-
-        // Visible for testing.
-        String memberId() {
-            return memberId;
+            this.inFlightState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
         }
 
         // Visible for testing.
@@ -973,6 +982,14 @@ public class SharePartition {
                   throw new IllegalStateException("The batch state is not available as the offset state is maintained");
             }
             return inFlightState.state;
+        }
+
+        // Visible for testing.
+        String batchMemberId() {
+            if (inFlightState == null) {
+                throw new IllegalStateException("The batch member id is not available as the offset state is maintained");
+            }
+            return inFlightState.memberId;
         }
 
         // Visible for testing.
@@ -1037,18 +1054,18 @@ public class SharePartition {
                 for (long offset = this.baseOffset; offset <= this.lastOffset; offset++) {
                     if (gapOffsets != null && gapOffsets.contains(offset)) {
                         // Directly move the record to archived if gap offset is already known.
-                        offsetState.put(offset, new InFlightState(RecordState.ARCHIVED, 0));
+                        offsetState.put(offset, new InFlightState(RecordState.ARCHIVED, 0, inFlightState.memberId));
                         continue;
                     }
                     if (inFlightState.acquisitionLockTimeoutTask != null) {
                         // The acquisition lock timeout task is already scheduled for the batch, hence we need to schedule
                         // the acquisition lock timeout task for the offset as well.
                         long delayMs = ((AcquisitionLockTimerTask) inFlightState.acquisitionLockTimeoutTask).expirationMs() - time.hiResClockMs();
-                        TimerTask timerTask = scheduleAcquisitionLockTimeout(memberId, offset, offset, delayMs);
-                        offsetState.put(offset, new InFlightState(inFlightState.state, inFlightState.deliveryCount, timerTask));
+                        TimerTask timerTask = scheduleAcquisitionLockTimeout(inFlightState.memberId, offset, offset, delayMs);
+                        offsetState.put(offset, new InFlightState(inFlightState.state, inFlightState.deliveryCount, inFlightState.memberId, timerTask));
                         timer.add(timerTask);
                     } else {
-                        offsetState.put(offset, new InFlightState(inFlightState.state, inFlightState.deliveryCount));
+                        offsetState.put(offset, new InFlightState(inFlightState.state, inFlightState.deliveryCount, inFlightState.memberId));
                     }
                 }
                 // Cancel the acquisition lock timeout task for the batch as the offset state is maintained.
@@ -1077,7 +1094,6 @@ public class SharePartition {
         @Override
         public String toString() {
             return "InFlightBatch(" +
-                " memberId=" + memberId +
                 ", baseOffset=" + baseOffset +
                 ", lastOffset=" + lastOffset +
                 ", inFlightState=" + inFlightState +
@@ -1098,18 +1114,23 @@ public class SharePartition {
         private RecordState state;
         // The number of times the records has been delivered to the client.
         private int deliveryCount;
-        // The state of the records before the transition.
+        // The member id of the client that is fetching/acknowledging the record.
+        private String memberId;
+        // The state of the records before the transition. In case we need to revert an in-flight state, we revert the above
+        // attributes of InFlightState to this state, namely - state, deliveryCount and memberId.
         private InFlightState rollbackState;
         // The timer task for the acquisition lock timeout.
         private TimerTask acquisitionLockTimeoutTask;
 
-        InFlightState(RecordState state, int deliveryCount) {
-            this(state, deliveryCount, null);
+
+        InFlightState(RecordState state, int deliveryCount, String memberId) {
+            this(state, deliveryCount, memberId, null);
         }
 
-        InFlightState(RecordState state, int deliveryCount, TimerTask acquisitionLockTimeoutTask) {
+        InFlightState(RecordState state, int deliveryCount, String memberId, TimerTask acquisitionLockTimeoutTask) {
           this.state = state;
           this.deliveryCount = deliveryCount;
+          this.memberId = memberId;
           this.acquisitionLockTimeoutTask = acquisitionLockTimeoutTask;
         }
 
@@ -1121,6 +1142,10 @@ public class SharePartition {
         // Visible for testing.
         int deliveryCount() {
             return deliveryCount;
+        }
+
+        String memberId() {
+            return memberId;
         }
 
         // Visible for testing.
@@ -1163,7 +1188,7 @@ public class SharePartition {
 
         private InFlightState startStateTransition(RecordState newState, boolean incrementDeliveryCount) {
             try {
-                rollbackState = new InFlightState(state, deliveryCount, acquisitionLockTimeoutTask);
+                rollbackState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
                 state = state.validateTransition(newState);
                 if (incrementDeliveryCount) {
                     deliveryCount++;
@@ -1182,12 +1207,13 @@ public class SharePartition {
             }
             state = rollbackState.state;
             deliveryCount = rollbackState.deliveryCount;
+            memberId = rollbackState.memberId;
             rollbackState = null;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(state, deliveryCount);
+            return Objects.hash(state, deliveryCount, memberId);
         }
 
         @Override
@@ -1199,7 +1225,7 @@ public class SharePartition {
                 return false;
             }
             InFlightState that = (InFlightState) o;
-            return state == that.state && deliveryCount == that.deliveryCount;
+            return state == that.state && deliveryCount == that.deliveryCount && memberId.equals(that.memberId);
         }
 
         @Override
@@ -1207,6 +1233,7 @@ public class SharePartition {
             return "InFlightState(" +
                 " state=" + state.toString() +
                 ", deliveryCount=" + ((deliveryCount == 0) ? "" : ("(" + deliveryCount + ")")) +
+                ", memberId=" + memberId +
                 ")";
         }
     }
