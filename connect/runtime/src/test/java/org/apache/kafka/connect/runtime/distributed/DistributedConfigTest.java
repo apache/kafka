@@ -146,9 +146,9 @@ public class DistributedConfigTest {
 
     private void testSupportedAlgorithms(String type, String... expectedAlgorithms) {
         Set<String> supportedAlgorithms = DistributedConfig.supportedAlgorithms(type);
-        Set<String> unuspportedAlgorithms = new HashSet<>(Arrays.asList(expectedAlgorithms));
-        unuspportedAlgorithms.removeAll(supportedAlgorithms);
-        assertEquals(type + " algorithms were found that should be supported by this JVM but are not", Collections.emptySet(), unuspportedAlgorithms);
+        Set<String> unsupportedAlgorithms = new HashSet<>(Arrays.asList(expectedAlgorithms));
+        unsupportedAlgorithms.removeAll(supportedAlgorithms);
+        assertEquals(type + " algorithms were found that should be supported by this JVM but are not", Collections.emptySet(), unsupportedAlgorithms);
     }
 
     @Test

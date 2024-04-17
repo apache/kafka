@@ -202,8 +202,7 @@ public class RetryWithToleranceOperatorTest {
     }
 
     private <T> RetryWithToleranceOperator<T> setupExecutor() {
-        RetryWithToleranceOperator<T> retryWithToleranceOperator = genericOperator(0, ALL, errorHandlingMetrics);
-        return retryWithToleranceOperator;
+        return genericOperator(0, ALL, errorHandlingMetrics);
     }
 
     @Test
