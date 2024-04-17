@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.jmh.group_coordinator;
+package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
@@ -22,7 +22,6 @@ import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
-import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
@@ -55,8 +54,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static java.lang.Integer.max;
-
 @State(Scope.Benchmark)
 @Fork(value = 1)
 @Warmup(iterations = 5)
@@ -65,57 +62,24 @@ import static java.lang.Integer.max;
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class TargetAssignmentBuilderBenchmark {
 
-    public enum AssignorType {
-        RANGE(new RangeAssignor()),
-        UNIFORM(new UniformAssignor());
-
-        private final PartitionAssignor assignor;
-
-        AssignorType(PartitionAssignor assignor) {
-            this.assignor = assignor;
-        }
-
-        public PartitionAssignor assignor() {
-            return assignor;
-        }
-    }
-
-    @Param({"1000", "10000"})
+    @Param({"100", "500", "1000", "5000", "10000"})
     private int memberCount;
 
-    @Param({"10", "50"})
-    private int partitionsPerTopicCount;
+    @Param({"5", "10", "50"})
+    private int partitionsToMemberRatio;
 
-    @Param({"100", "1000"})
+    @Param({"10", "100", "1000"})
     private int topicCount;
-
-    @Param({"true", "false"})
-    private boolean isSubscriptionUniform;
-
-    @Param({"RANGE", "UNIFORM"})
-    private ServerSideAssignorBenchmark.AssignorType assignorType;
 
     @Param({"true", "false"})
     private boolean isRackAware;
 
-    /**
-     * The group Id.
-     */
     String groupId = "benchmark-group";
 
-    /**
-     * The group epoch.
-     */
     private static final int groupEpoch = 0;
 
-    /**
-     * The partition partitionAssignor used to compute the assignment.
-     */
     private PartitionAssignor partitionAssignor;
 
-    /**
-     * The subscription metadata.
-     */
     private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
 
     private TargetAssignmentBuilder targetAssignmentBuilder;
@@ -130,24 +94,16 @@ public class TargetAssignmentBuilderBenchmark {
 
     @Setup(Level.Trial)
     public void setup() {
-
-        partitionAssignor = assignorType.assignor();
-
+        // For this benchmark we will use the Uniform Assignor
+        // and a group that has a homogeneous subscription model.
+        partitionAssignor = new UniformAssignor();
         subscriptionMetadata = generateMockSubscriptionMetadata();
-
-        /**
-         * The members in the group.
-         */
         Map<String, ConsumerGroupMember> members = generateMockMembers();
-
-        /**
-         * The existing target assignment.
-         */
         Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignment();
 
         // Add a new member to trigger a rebalance.
         Set<String> subscribedTopics = new HashSet<>(subscriptionMetadata.keySet());
-        String rackId = isRackAware ? "rack" + (memberCount + 1) % numberOfRacks : "";
+        String rackId = isRackAware ? "rack" + (memberCount - 1) % numberOfRacks : "";
         ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("new-member")
             .setSubscribedTopicNames(new ArrayList<>(subscribedTopics))
             .setRackId(rackId)
@@ -163,19 +119,9 @@ public class TargetAssignmentBuilderBenchmark {
     private Map<String, ConsumerGroupMember> generateMockMembers() {
         Map<String, ConsumerGroupMember> members = new HashMap<>();
 
-        int topicCounter = 0;
-
-        for (int i = 0; i < memberCount; i++) {
+        for (int i = 0; i < memberCount - 1; i++) {
             Set<String> subscribedTopics;
-            if (isSubscriptionUniform) {
-                subscribedTopics = new HashSet<>(allTopicNames);
-            } else {
-                subscribedTopics = new HashSet<>(Arrays.asList(allTopicNames.get(i % topicCount), allTopicNames.get((i+1) % topicCount)));
-                topicCounter = max (topicCounter, (i+1) % topicCount);
-                if (i == memberCount - 1 && topicCounter < topicCount - 1) {
-                    subscribedTopics.addAll(allTopicNames.subList(topicCounter + 1, topicCount));
-                }
-            }
+            subscribedTopics = new HashSet<>(allTopicNames);
 
             String rackId = isRackAware ? "rack" + i % numberOfRacks : "" ;
             ConsumerGroupMember member = new ConsumerGroupMember.Builder("member" + i)
@@ -189,6 +135,8 @@ public class TargetAssignmentBuilderBenchmark {
 
     private Map<String, TopicMetadata> generateMockSubscriptionMetadata() {
         Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
+        int partitionsPerTopicCount = (memberCount * partitionsToMemberRatio) / topicCount;
+
         for (int i = 0; i < topicCount; i++) {
             String topicName = "topic-" + i;
             Uuid topicId = Uuid.randomUuid();
@@ -240,34 +188,21 @@ public class TargetAssignmentBuilderBenchmark {
         return partitionRacks;
     }
 
+    private Optional<String> rackId(int index) {
+        return isRackAware ? Optional.of("rack" + index % numberOfRacks) : Optional.empty();
+    }
+
     private void createAssignmentSpec() {
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
-        int topicCounter = 0;
 
-        for (int i = 0; i < memberCount; i++) {
+        for (int i = 0; i < memberCount - 1; i++) {
             String memberName = "member" + i;
-            Optional<String> rackId = isRackAware ? Optional.of("rack" + i % numberOfRacks) : Optional.empty();
-            List<Uuid> subscribedTopicIds;
-
-            // When subscriptions are uniform, all members are assigned all topics.
-            if (isSubscriptionUniform) {
-                subscribedTopicIds = allTopicIds;
-            } else {
-                subscribedTopicIds = Arrays.asList(
-                    allTopicIds.get(i % topicCount),
-                    allTopicIds.get((i+1) % topicCount)
-                );
-                topicCounter = max (topicCounter, ((i+1) % topicCount));
-
-                if (i == memberCount - 1 && topicCounter < topicCount - 1) {
-                    subscribedTopicIds.addAll(allTopicIds.subList(topicCounter + 1, topicCount - 1));
-                }
-            }
+            Optional<String> rackId = rackId(i);
 
             members.put(memberName, new AssignmentMemberSpec(
                 Optional.empty(),
                 rackId,
-                subscribedTopicIds,
+                allTopicIds,
                 Collections.emptyMap()
             ));
         }

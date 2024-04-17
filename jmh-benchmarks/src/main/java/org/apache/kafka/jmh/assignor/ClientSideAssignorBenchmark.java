@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.jmh.group_coordinator;
+package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
@@ -82,13 +82,13 @@ public class ClientSideAssignorBenchmark {
         HOMOGENEOUS, HETEROGENEOUS
     }
 
-    @Param({"1000", "10000"})
+    @Param({"100", "500", "1000", "5000", "10000"})
     private int memberCount;
 
-    @Param({"10", "50"})
-    private int partitionsPerTopicCount;
+    @Param({"5", "10", "50"})
+    private int partitionsToMemberRatio;
 
-    @Param({"100", "1000"})
+    @Param({"10", "100", "1000"})
     private int topicCount;
 
     @Param({"true", "false"})
@@ -107,9 +107,7 @@ public class ClientSideAssignorBenchmark {
 
     private ConsumerPartitionAssignor.GroupSubscription groupSubscription;
 
-    private static final int numberOfRacks = 3;
-
-    private static final int replicationFactor = 2;
+    private static final int NUMBER_OF_RACKS = 3;
 
     private ConsumerPartitionAssignor assignor;
 
@@ -120,8 +118,8 @@ public class ClientSideAssignorBenchmark {
     @Setup(Level.Trial)
     public void setup() {
         // Ensure there are enough racks and brokers for the replication factor.
-        if (numberOfRacks < replicationFactor) {
-            throw new IllegalArgumentException("Number of broker racks must be at least equal to the replication factor.");
+        if (NUMBER_OF_RACKS < 2) {
+            throw new IllegalArgumentException("Number of broker racks must be at least equal to 2.");
         }
 
         populateTopicMetadata();
@@ -135,10 +133,11 @@ public class ClientSideAssignorBenchmark {
 
     private void populateTopicMetadata() {
         List<PartitionInfo> partitions = new ArrayList<>();
+        int partitionsPerTopicCount = (memberCount * partitionsToMemberRatio) / topicCount;
 
         // Create nodes (brokers), one for each rack.
-        List<Node> nodes = new ArrayList<>(numberOfRacks);
-        for (int i = 0; i < numberOfRacks; i++) {
+        List<Node> nodes = new ArrayList<>(NUMBER_OF_RACKS);
+        for (int i = 0; i < NUMBER_OF_RACKS; i++) {
             nodes.add(new Node(i, "", i, "rack" + i));
         }
 
@@ -154,41 +153,48 @@ public class ClientSideAssignorBenchmark {
     private void addMemberSubscriptions() {
         subscriptions.clear();
         int topicCounter = 0;
+        Map<Integer, List<String>> tempMemberIndexToSubscriptions = new HashMap<>(memberCount);
 
-        for (int i = 0; i < memberCount; i++) {
-            String memberName = "member" + i;
+        // In the rebalance case, we will add the last member as a trigger.
+        // This is done to keep the total members count consistent with the input.
+        int numberOfMembers = simulateRebalanceTrigger ? memberCount -1 : memberCount;
 
+        for (int i = 0; i < numberOfMembers; i++) {
             // When subscriptions are homogeneous, all members are assigned all topics.
-            List<String> subscribedTopics;
-
             if (subscriptionModel == SubscriptionModel.HOMOGENEOUS) {
-                subscribedTopics = allTopicNames;
+                String memberName = "member" + i;
+                subscriptions.put(memberName, subscription(allTopicNames, i));
             } else {
-                subscribedTopics = Arrays.asList(
+                List<String> subscribedTopics = Arrays.asList(
                     allTopicNames.get(i % topicCount),
                     allTopicNames.get((i+1) % topicCount)
                 );
                 topicCounter = max (topicCounter, ((i+1) % topicCount));
-
-                if (i == memberCount - 1 && topicCounter < topicCount - 1) {
-                    subscribedTopics.addAll(allTopicNames.subList(topicCounter + 1, topicCount - 1));
-                }
+                tempMemberIndexToSubscriptions.put(i, subscribedTopics);
             }
-
-            subscriptions.put(memberName, subscription(subscribedTopics, i));
         }
+
+        int lastAssignedTopicIndex = topicCounter;
+        tempMemberIndexToSubscriptions.forEach((memberIndex, subscriptionList) -> {
+            String memberName = "member" + memberIndex;
+            if (lastAssignedTopicIndex < topicCount - 1) {
+                subscriptionList.addAll(allTopicNames.subList(lastAssignedTopicIndex + 1, topicCount - 1));
+            }
+            subscriptions.put(memberName, subscription(allTopicNames, memberIndex));
+        });
 
         groupSubscription = new ConsumerPartitionAssignor.GroupSubscription(subscriptions);
     }
 
     private List<PartitionInfo> partitionInfos(String topic, int numberOfPartitions, List<Node> nodes) {
         // Create PartitionInfo for each partition.
+        // Replication factor is hardcoded to 2.
         List<PartitionInfo> partitionInfos = new ArrayList<>(numberOfPartitions);
         for (int i = 0; i < numberOfPartitions; i++) {
-            Node[] replicas = new Node[replicationFactor];
-            for (int j = 0; j < replicationFactor; j++) {
+            Node[] replicas = new Node[2];
+            for (int j = 0; j < 2; j++) {
                 // Assign nodes based on partition number to mimic mkMapOfPartitionRacks logic.
-                int nodeIndex = (i + j) % numberOfRacks;
+                int nodeIndex = (i + j) % NUMBER_OF_RACKS;
                 replicas[j] = nodes.get(nodeIndex);
             }
             partitionInfos.add(new PartitionInfo(topic, i, replicas[0], replicas, replicas));
@@ -197,7 +203,7 @@ public class ClientSideAssignorBenchmark {
         return partitionInfos;
     }
 
-    protected ConsumerPartitionAssignor.Subscription subscription(List<String> topics, int consumerIndex) {
+    private ConsumerPartitionAssignor.Subscription subscription(List<String> topics, int consumerIndex) {
         Optional<String> rackId = rackId(consumerIndex);
         return new ConsumerPartitionAssignor.Subscription(
             topics,
@@ -209,10 +215,10 @@ public class ClientSideAssignorBenchmark {
     }
 
     private Optional<String> rackId(int index) {
-        return isRackAware ? Optional.of("rack" + index % numberOfRacks) : Optional.empty();
+        return isRackAware ? Optional.of("rack" + index % NUMBER_OF_RACKS) : Optional.empty();
     }
 
-    protected ConsumerPartitionAssignor.Subscription subscriptionWithOwnedPartitions(
+    private ConsumerPartitionAssignor.Subscription subscriptionWithOwnedPartitions(
         List<TopicPartition> ownedPartitions,
         ConsumerPartitionAssignor.Subscription prevSubscription
     ) {
@@ -241,7 +247,7 @@ public class ClientSideAssignorBenchmark {
             // Add new member to trigger a reassignment.
             newSubscriptions.put("newMember", subscription(
                 allTopicNames,
-                memberCount
+                memberCount - 1
             ));
 
             this.subscriptions = newSubscriptions;
