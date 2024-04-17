@@ -30,7 +30,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -471,8 +470,8 @@ public class MultiFieldPaths {
             return root.isEmpty();
         }
 
-        Optional<TrieNode> find(String step) {
-            return root.find(step);
+        TrieNode get(String step) {
+            return root.get(step);
         }
 
         int size() {
@@ -532,10 +531,6 @@ public class MultiFieldPaths {
 
         TrieNode get(String step) {
             return steps.get(step);
-        }
-
-        Optional<TrieNode> find(String step) {
-            return Optional.ofNullable(steps.get(step));
         }
 
         boolean isEmpty() {

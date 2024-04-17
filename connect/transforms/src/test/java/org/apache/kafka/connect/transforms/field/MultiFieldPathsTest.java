@@ -27,11 +27,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MultiFieldPathsTest {
@@ -39,9 +40,9 @@ class MultiFieldPathsTest {
     @Test void shouldCreateMultiPathsWithDups() {
         MultiFieldPaths paths = new MultiFieldPaths(Arrays.asList("test", "test"), FieldSyntaxVersion.V2);
         assertEquals(1, paths.size());
-        Optional<MultiFieldPaths.TrieNode> test = paths.trie.find("test");
-        assertTrue(test.isPresent());
-        assertArrayEquals(test.get().path.path(), new String[]{"test"});
+        MultiFieldPaths.TrieNode test = paths.trie.get("test");
+        assertNotNull(test);
+        assertArrayEquals(test.path.path(), new String[]{"test"});
     }
 
     @Test void shouldBuildEmptyTrie() {
@@ -55,9 +56,9 @@ class MultiFieldPathsTest {
         assertFalse(paths.trie.isEmpty());
         assertEquals(1, paths.trie.size());
 
-        final Optional<MultiFieldPaths.TrieNode> maybeFoo = paths.trie.find("foo.bar.baz");
-        assertTrue(maybeFoo.isPresent());
-        assertEquals(path, maybeFoo.get().path);
+        MultiFieldPaths.TrieNode maybeFoo = paths.trie.get("foo.bar.baz");
+        assertNotNull(maybeFoo);
+        assertEquals(path, maybeFoo.path);
     }
 
     @Test void shouldBuildMultiPathWithSinglePathV2() {
@@ -66,18 +67,18 @@ class MultiFieldPathsTest {
         assertFalse(paths.trie.isEmpty());
         assertEquals(1, paths.trie.size());
 
-        final Optional<MultiFieldPaths.TrieNode> maybeV1 = paths.trie.find("foo.bar.baz");
-        assertFalse(maybeV1.isPresent());
-        final Optional<MultiFieldPaths.TrieNode> maybeFoo = paths.trie.find("foo");
-        assertTrue(maybeFoo.isPresent());
-        assertFalse(maybeFoo.get().isLeaf());
-        final Optional<MultiFieldPaths.TrieNode> maybeBar = maybeFoo.get().find("bar");
-        assertTrue(maybeBar.isPresent());
-        assertFalse(maybeBar.get().isLeaf());
-        final Optional<MultiFieldPaths.TrieNode> maybeBaz = maybeBar.get().find("baz");
-        assertTrue(maybeBaz.isPresent());
-        assertTrue(maybeBaz.get().isLeaf());
-        assertEquals(path, maybeBaz.get().path);
+        MultiFieldPaths.TrieNode maybeV1 = paths.trie.get("foo.bar.baz");
+        assertNull(maybeV1);
+        MultiFieldPaths.TrieNode maybeFoo = paths.trie.get("foo");
+        assertNotNull(maybeFoo);
+        assertFalse(maybeFoo.isLeaf());
+        MultiFieldPaths.TrieNode maybeBar = maybeFoo.get("bar");
+        assertNotNull(maybeBar);
+        assertFalse(maybeBar.isLeaf());
+        MultiFieldPaths.TrieNode maybeBaz = maybeBar.get("baz");
+        assertNotNull(maybeBaz);
+        assertTrue(maybeBaz.isLeaf());
+        assertEquals(path, maybeBaz.path);
     }
 
 
@@ -89,18 +90,18 @@ class MultiFieldPathsTest {
         assertFalse(paths.trie.isEmpty());
         assertEquals(3, paths.trie.size());
 
-        final Optional<MultiFieldPaths.TrieNode> maybeFoo = paths.trie.find("foo");
-        assertTrue(maybeFoo.isPresent());
-        assertFalse(maybeFoo.get().isLeaf());
-        final Optional<MultiFieldPaths.TrieNode> maybeBar = maybeFoo.get().find("bar");
-        assertTrue(maybeBar.isPresent());
-        assertTrue(maybeBar.get().isLeaf());
-        final Optional<MultiFieldPaths.TrieNode> maybeBaz = maybeFoo.get().find("baz");
-        assertTrue(maybeBaz.isPresent());
-        assertTrue(maybeBaz.get().isLeaf());
-        final Optional<MultiFieldPaths.TrieNode> maybeTest = paths.trie.find("test");
-        assertTrue(maybeTest.isPresent());
-        assertTrue(maybeTest.get().isLeaf());
+        MultiFieldPaths.TrieNode maybeFoo = paths.trie.get("foo");
+        assertNotNull(maybeFoo);
+        assertFalse(maybeFoo.isLeaf());
+        MultiFieldPaths.TrieNode maybeBar = maybeFoo.get("bar");
+        assertNotNull(maybeBar);
+        assertTrue(maybeBar.isLeaf());
+        MultiFieldPaths.TrieNode maybeBaz = maybeFoo.get("baz");
+        assertNotNull(maybeBaz);
+        assertTrue(maybeBaz.isLeaf());
+        MultiFieldPaths.TrieNode maybeTest = paths.trie.get("test");
+        assertNotNull(maybeTest);
+        assertTrue(maybeTest.isLeaf());
     }
 
     @Test void shouldFlatOverlappingPaths() {
@@ -113,15 +114,11 @@ class MultiFieldPathsTest {
         assertFalse(trie1.isEmpty());
         assertEquals(1, trie1.size());
 
-        final Optional<MultiFieldPaths.TrieNode> maybeFoo1 = trie1.find("foo");
-        assertTrue(maybeFoo1.isPresent());
-        final MultiFieldPaths.TrieNode fooNode1 = maybeFoo1.get();
-        assertFalse(fooNode1.isLeaf());
-        final Optional<MultiFieldPaths.TrieNode> maybeBar1 = fooNode1.find("bar");
-        assertTrue(maybeBar1.isPresent());
-        final MultiFieldPaths.TrieNode barNode = maybeBar1.get();
-        assertTrue(barNode.isLeaf());
-        assertEquals(fooBar, barNode.path);
+        MultiFieldPaths.TrieNode foo1 = trie1.get("foo");
+        assertFalse(foo1.isLeaf());
+        MultiFieldPaths.TrieNode bar1 = foo1.get("bar");
+        assertTrue(bar1.isLeaf());
+        assertEquals(fooBar, bar1.path);
 
         MultiFieldPaths.Trie trie2 = new MultiFieldPaths.Trie();
         trie2.insert(fooBar);
@@ -129,14 +126,11 @@ class MultiFieldPathsTest {
         assertFalse(trie2.isEmpty());
         assertEquals(1, trie2.size());
 
-        final Optional<MultiFieldPaths.TrieNode> maybeFoo2 = trie2.find("foo");
-        assertTrue(maybeFoo2.isPresent());
-        final MultiFieldPaths.TrieNode fooNode2 = maybeFoo2.get();
-        assertFalse(fooNode2.isLeaf());
-        final Optional<MultiFieldPaths.TrieNode> barNode2 = fooNode2.find("bar");
-        assertTrue(barNode2.isPresent());
-        assertTrue(barNode2.get().isLeaf());
-        assertEquals(fooBar, barNode2.get().path);
+        MultiFieldPaths.TrieNode foo2 = trie2.get("foo");
+        assertFalse(foo2.isLeaf());
+        MultiFieldPaths.TrieNode barNode2 = foo2.get("bar");
+        assertTrue(barNode2.isLeaf());
+        assertEquals(fooBar, barNode2.path);
 
         assertEquals(trie1, trie2);
     }
