@@ -262,7 +262,7 @@ object BrokerApiVersionsCommand {
       config
     }
 
-    class AdminConfig(originals: Map[_,_]) extends AbstractConfig(AdminConfigDef, originals.asJava, false)
+    class AdminConfig(originals: Map[_,_]) extends AbstractConfig(AdminConfigDef, originals.asJava, Utils.castToStringObjectMap(originals.asJava), false)
 
     def create(props: Properties): AdminClient = create(props.asScala.toMap)
 

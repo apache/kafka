@@ -24,6 +24,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 
 import java.util.Map;
 import java.util.HashMap;
+import org.apache.kafka.common.utils.Utils;
 
 /** Configuration required for MirrorClient to talk to a given target cluster.
  *  <p>
@@ -61,7 +62,7 @@ public class MirrorClientConfig extends AbstractConfig {
     static final String HEARTBEATS_TOPIC = "heartbeats";
  
     MirrorClientConfig(Map<?, ?> props) {
-        super(CONFIG_DEF, props, true);
+        super(CONFIG_DEF, props, Utils.castToStringObjectMap(props), true);
     }
 
     public ReplicationPolicy replicationPolicy() {
