@@ -331,13 +331,15 @@ public class ConfigurationControlManager {
     void maybeTriggerPartitionUpdateOnMinIsrChange(List<ApiMessageAndVersion> records) {
         List<ConfigRecord> minIsrRecords = new ArrayList<>();
         Map<String, String> topicMap = new HashMap<>();
+        Map<String, String> configRemovedTopicMap = new HashMap<>();
         records.forEach(record -> {
             if (MetadataRecordType.fromId(record.message().apiKey()) == MetadataRecordType.CONFIG_RECORD) {
                 ConfigRecord configRecord = (ConfigRecord) record.message();
                 if (configRecord.name().equals(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)) {
                     minIsrRecords.add(configRecord);
-                    if (Type.forId(configRecord.resourceType()) == Type.TOPIC && !configRecord.value().isEmpty()) {
-                        topicMap.put(configRecord.resourceName(), configRecord.value());
+                    if (Type.forId(configRecord.resourceType()) == Type.TOPIC) {
+                        if (configRecord.value() == null) topicMap.put(configRecord.resourceName(), configRecord.value());
+                        else configRemovedTopicMap.put(configRecord.resourceName(), configRecord.value());
                     }
                 }
             }
@@ -345,7 +347,8 @@ public class ConfigurationControlManager {
 
         if (minIsrRecords.isEmpty()) return;
         if (topicMap.size() == minIsrRecords.size()) {
-            // Trigger a simpler partition update because all the min isr config updates are on topic level.
+            // If all the min isr config updates are on the topic level, we can trigger a simpler update just on the
+            // updated topics.
             records.addAll(minIsrConfigUpdatePartitionHandler.addRecordsForMinIsrUpdate(
                 new ArrayList<>(topicMap.keySet()),
                 topicName -> topicMap.get(topicName))
@@ -353,15 +356,16 @@ public class ConfigurationControlManager {
             return;
         }
 
-        // Because it may require multiple layer look up for the min ISR config value. Build a dummy config data and apply
-        // the config updates to it. Use this dummy config for the min ISR look up.
+        // Because it may require multiple layer look up for the min ISR config value. Build a config data copy and apply
+        // the config updates to it. Use this config copy for the min ISR look up.
         Map<ConfigResource, TimelineHashMap<String, String>> configDataCopy = new HashMap<>(configData);
         SnapshotRegistry localSnapshotRegistry = new SnapshotRegistry(new LogContext("dummy-config-update"));
         for (ConfigRecord record : minIsrRecords) {
             replayInternal(record, configDataCopy, localSnapshotRegistry);
         }
         records.addAll(minIsrConfigUpdatePartitionHandler.addRecordsForMinIsrUpdate(
-            Collections.emptyList(),
+            configRemovedTopicMap.size() == minIsrRecords.size() ?
+                new ArrayList<>(configRemovedTopicMap.keySet()) : Collections.emptyList(),
             topicName -> getTopicConfigInternal(topicName, TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, configDataCopy))
         );
     }
@@ -592,7 +596,7 @@ public class ConfigurationControlManager {
         Map<String, String> creationConfigs,
         Map<ConfigResource, TimelineHashMap<String, String>> localConfigData) {
         return configSchema.resolveEffectiveTopicConfigs(staticConfig, clusterConfig(localConfigData),
-                currentControllerConfig(localConfigData), creationConfigs);
+            currentControllerConfig(localConfigData), creationConfigs);
     }
 
     Map<String, String> clusterConfig(Map<ConfigResource, TimelineHashMap<String, String>> localConfigData) {

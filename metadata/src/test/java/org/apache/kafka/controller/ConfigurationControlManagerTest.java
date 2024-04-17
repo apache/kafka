@@ -26,12 +26,15 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.server.config.ConfigSynonym;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.config.ConfigSynonym;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.mockito.ArgumentMatchers;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Arrays;
@@ -44,10 +47,6 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-import org.mockito.ArgumentMatchers;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
@@ -433,20 +432,37 @@ public class ConfigurationControlManagerTest {
             }).
             build();
 
-        manager.incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
+        ControllerResult<Map<ConfigResource, ApiError>> result =
+            manager.incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
+                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "2"))))),
+                true
+            );
+        List<ApiMessageAndVersion> records = result.records();
+        assertEquals(1, records.size());
+        manager.replay((ConfigRecord) result.records().get(0).message());
+
+        result = manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
             entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "2"))))),
             true);
+        records = result.records();
+        assertEquals(1, records.size());
+        manager.replay((ConfigRecord) result.records().get(0).message());
 
-        manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
+        result = manager.incrementalAlterConfigs(toMap(entry(new ConfigResource(BROKER, ""), toMap(
             entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "2"))))),
             true);
+        records = result.records();
+        assertEquals(1, records.size());
+        manager.replay((ConfigRecord) result.records().get(0).message());
 
-        manager.incrementalAlterConfigs(toMap(entry(new ConfigResource(BROKER, ""), toMap(
-            entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "2"))))),
-            true);
-        verify(replicationControlManager, times(3)).getPartitionElrUpdatesForConfigChanges(ArgumentMatchers.any(), ArgumentMatchers.any());
+        result = manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
+            entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(DELETE, ""))))),
+            false);
+        records = result.records();
+        assertEquals(1, records.size());
+        manager.replay((ConfigRecord) result.records().get(0).message());
 
-        // No actual update should happen.
-        assertTrue(manager.getTopicConfig(MYTOPIC.name(), TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG) == null);
+        verify(replicationControlManager, times(2)).getPartitionElrUpdatesForConfigChanges(ArgumentMatchers.eq(Collections.emptyList()), ArgumentMatchers.any());
+        verify(replicationControlManager, times(2)).getPartitionElrUpdatesForConfigChanges(ArgumentMatchers.eq(Arrays.asList(MYTOPIC.name())), ArgumentMatchers.any());
     }
 }
