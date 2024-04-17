@@ -39,6 +39,7 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
 import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerTopicConfigSynonyms, ZkConfigs}
@@ -889,20 +890,20 @@ class KafkaConfigTest {
         case KafkaConfig.ControlledShutdownMaxRetriesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ControlledShutdownRetryBackoffMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ControlledShutdownEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
-        case KafkaConfig.GroupMinSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.GroupMaxSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.GroupInitialRebalanceDelayMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.GroupMaxSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-1")
-        case KafkaConfig.OffsetMetadataMaxSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.OffsetsLoadBufferSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case KafkaConfig.OffsetsTopicReplicationFactorProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case KafkaConfig.OffsetsTopicPartitionsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case KafkaConfig.OffsetsTopicSegmentBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case KafkaConfig.OffsetsTopicCompressionCodecProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
-        case KafkaConfig.OffsetsRetentionMinutesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case KafkaConfig.OffsetsRetentionCheckIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case KafkaConfig.OffsetCommitTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case KafkaConfig.OffsetCommitRequiredAcksProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-2")
+        case GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-1")
+        case GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case GroupCoordinatorConfig.OFFSETS_LOAD_BUFFER_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-2")
         case TransactionStateManagerConfigs.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
         case TransactionStateManagerConfigs.TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
         case TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
@@ -910,7 +911,6 @@ class KafkaConfigTest {
         case TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
         case TransactionLogConfigs.TRANSACTIONS_TOPIC_SEGMENT_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
         case TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
-        case KafkaConfig.NumQuotaSamplesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.QuotaWindowSizeSecondsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.DeleteTopicEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
 
@@ -1031,18 +1031,18 @@ class KafkaConfigTest {
         case RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", -3)
 
         /** New group coordinator configs */
-        case KafkaConfig.NewGroupCoordinatorEnableProp => // ignore
-        case KafkaConfig.GroupCoordinatorNumThreadsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG => // ignore
+        case GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
 
         /** Consumer groups configs */
-        case KafkaConfig.ConsumerGroupSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case KafkaConfig.ConsumerGroupMaxSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case KafkaConfig.ConsumerGroupAssignorsProp => // ignore string
+        case GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG => // ignore string
 
         case _ => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
       }
@@ -1158,7 +1158,7 @@ class KafkaConfigTest {
     defaults.setProperty(KafkaConfig.LogRetentionTimeHoursProp, "10")
     //For LogFlushIntervalMsProp
     defaults.setProperty(KafkaConfig.LogFlushSchedulerIntervalMsProp, "123")
-    defaults.setProperty(KafkaConfig.OffsetsTopicCompressionCodecProp, CompressionType.SNAPPY.id.toString)
+    defaults.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, CompressionType.SNAPPY.id.toString)
     // For MetricRecordingLevelProp
     defaults.setProperty(KafkaConfig.MetricRecordingLevelProp, Sensor.RecordingLevel.DEBUG.toString)
 
@@ -1782,16 +1782,16 @@ class KafkaConfigTest {
     props.putAll(kraftProps())
 
     // Max should be greater than or equals to min.
-    props.put(KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp, "20")
-    props.put(KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp, "10")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "20")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "10")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
 
     // The timeout should be within the min-max range.
-    props.put(KafkaConfig.ConsumerGroupMinSessionTimeoutMsProp, "10")
-    props.put(KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp, "20")
-    props.put(KafkaConfig.ConsumerGroupSessionTimeoutMsProp, "5")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "10")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "20")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, "5")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
-    props.put(KafkaConfig.ConsumerGroupSessionTimeoutMsProp, "25")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, "25")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
 
@@ -1801,16 +1801,16 @@ class KafkaConfigTest {
     props.putAll(kraftProps())
 
     // Max should be greater than or equals to min.
-    props.put(KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp, "20")
-    props.put(KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp, "10")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "20")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, "10")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
 
     // The timeout should be within the min-max range.
-    props.put(KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp, "10")
-    props.put(KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp, "20")
-    props.put(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp, "5")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "10")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, "20")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, "5")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
-    props.put(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp, "25")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, "25")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
 
@@ -1820,15 +1820,15 @@ class KafkaConfigTest {
     props.putAll(kraftProps())
 
     // Only classic and consumer are supported.
-    props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "foo")
+    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "foo")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
     // classic cannot be disabled.
-    props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "consumer")
+    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "consumer")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
     // This is OK.
-    props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "classic,consumer")
+    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
     val config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
     assertTrue(config.isNewGroupCoordinatorEnabled)
@@ -1840,18 +1840,18 @@ class KafkaConfigTest {
     props.putAll(kraftProps())
 
     // Invalid GroupProtocolMigrationPolicy name.
-    props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, "foo")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, "foo")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
     ConsumerGroupMigrationPolicy.values.foreach { policy =>
-      props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, policy.toString)
+      props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, policy.toString)
       val config = KafkaConfig.fromProps(props)
       assertEquals(policy, config.consumerGroupMigrationPolicy)
     }
 
     // The config is case-insensitive.
     ConsumerGroupMigrationPolicy.values.foreach { policy =>
-      props.put(KafkaConfig.ConsumerGroupMigrationPolicyProp, policy.toString.toUpperCase())
+      props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, policy.toString.toUpperCase())
       val config = KafkaConfig.fromProps(props)
       assertEquals(policy, config.consumerGroupMigrationPolicy)
     }

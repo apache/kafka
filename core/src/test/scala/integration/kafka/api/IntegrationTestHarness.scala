@@ -29,6 +29,7 @@ import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
@@ -69,7 +70,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       cfgs.foreach(_.setProperty(KafkaConfig.MigrationEnabledProp, "true"))
     }
     if (isNewGroupCoordinatorEnabled()) {
-      cfgs.foreach(_.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp, "true"))
+      cfgs.foreach(_.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true"))
     }
 
     if(isKRaftTest()) {
