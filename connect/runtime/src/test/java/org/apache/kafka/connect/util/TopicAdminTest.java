@@ -611,7 +611,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithUnsupportedVersion(tp1, offset));
             TopicAdmin admin = new TopicAdmin(env.adminClient());
-            UnsupportedVersionException e = assertThrows(UnsupportedVersionException.class, () -> admin.endOffsets(tps));
+            assertThrows(UnsupportedVersionException.class, () -> admin.endOffsets(tps));
         }
     }
 
@@ -629,7 +629,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithTimeout(tp1, offset));
             TopicAdmin admin = new TopicAdmin(env.adminClient());
-            TimeoutException e = assertThrows(TimeoutException.class, () -> admin.endOffsets(tps));
+            assertThrows(TimeoutException.class, () -> admin.endOffsets(tps));
         }
     }
 
@@ -705,7 +705,6 @@ public class TopicAdminTest {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         Set<TopicPartition> tps = Collections.singleton(tp1);
-        long offset = 1000;
         Cluster cluster = createCluster(1, topicName, 1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -733,14 +732,13 @@ public class TopicAdminTest {
         for (int i = 0; i < partitions; ++i) {
             pInfos.add(new PartitionInfo(topicName, i, leader, nodeArray, nodeArray));
         }
-        Cluster cluster = new Cluster(
+        return new Cluster(
                 "mockClusterId",
                 nodes.values(),
                 pInfos,
                 Collections.emptySet(),
                 Collections.emptySet(),
                 leader);
-        return cluster;
     }
 
     private MetadataResponse prepareMetadataResponse(Cluster cluster, Errors error) {
