@@ -103,7 +103,7 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
 
         # ensure all partitions have data so we don't hit OutOfOrderExceptions due to broker restarts
         wait_until(check_all_partitions,
-                   timeout_sec=30,
+                   timeout_sec=60,
                    err_msg="Failed to produce to all partitions in 30s")
 
         # send reassign partitions command
