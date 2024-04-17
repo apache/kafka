@@ -77,7 +77,7 @@ public class JaasContext {
     /**
      * Returns an instance of this class.
      *
-     * If JAAS configuration property @link SaslConfigs#SASL_JAAS_CONFIG} is specified,
+     * If JAAS configuration property {@link SaslConfigs#SASL_JAAS_CONFIG} is specified,
      * the configuration object is created by parsing the property value. Otherwise, the default Configuration
      * is returned. The context name is always `KafkaClient`.
      *

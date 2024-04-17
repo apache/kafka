@@ -74,6 +74,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.apache.kafka.server.config.KafkaLogConfigs.LOG_DIRS_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
 
 
 @SuppressWarnings("deprecation") // Needed for Scala 2.12 compatibility
@@ -181,7 +182,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
                     "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
             props.put(KafkaConfig$.MODULE$.ListenersProp(), listeners(node.id()));
-            props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(),
+            props.put(INTER_BROKER_LISTENER_NAME_CONFIG,
                     nodes.interBrokerListenerName().value());
             props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
                     "CONTROLLER");

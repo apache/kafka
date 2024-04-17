@@ -19,7 +19,7 @@ package kafka.server.epoch
 
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig._
-import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
+import kafka.server.{KafkaServer, QuorumTestHarness}
 import kafka.tools.DumpLogSegments
 import kafka.utils.TestUtils._
 import kafka.utils.{CoreUtils, Logging, TestUtils}
@@ -28,7 +28,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.apache.kafka.server.config.KafkaLogConfigs
+import org.apache.kafka.server.config.{ReplicationConfigs, KafkaLogConfigs}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.EpochEntry
@@ -178,7 +178,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     assertEquals(getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length, "Log files should match Broker0 vs Broker 1")
   }
 
-  //We can reproduce the pre-KIP-101 failure of this test by setting KafkaConfig.InterBrokerProtocolVersionProp = IBP_0_11_0_IV1
+  //We can reproduce the pre-KIP-101 failure of this test by setting ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG = IBP_0_11_0_IV1
   @Test
   def offsetsShouldNotGoBackwards(): Unit = {
 
@@ -467,7 +467,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   private def createBrokerForId(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {
     val config = createBrokerConfig(id, zkConnect)
     TestUtils.setIbpAndMessageFormatVersions(config, metadataVersion)
-    config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
+    config.setProperty(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, enableUncleanLeaderElection.toString)
     createServer(fromProps(config))
   }
 }
