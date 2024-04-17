@@ -42,7 +42,7 @@ class PartitionMetadataFileTest  {
     public void testSetRecordWithDifferentTopicId() {
         PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, null);
         Uuid topicId = Uuid.randomUuid();
-        assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
+        partitionMetadataFile.record(topicId);
         Uuid differentTopicId = Uuid.randomUuid();
         assertThrows(InconsistentTopicIdException.class, () -> partitionMetadataFile.record(differentTopicId));
     }
@@ -51,7 +51,7 @@ class PartitionMetadataFileTest  {
     public void testSetRecordWithSameTopicId() {
         PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, null);
         Uuid topicId = Uuid.randomUuid();
-        assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
+        partitionMetadataFile.record(topicId);
         assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
     }
 
@@ -60,8 +60,8 @@ class PartitionMetadataFileTest  {
         PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, null);
 
         Uuid topicId = Uuid.randomUuid();
-        assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
-        assertDoesNotThrow(partitionMetadataFile::maybeFlush);
+        partitionMetadataFile.record(topicId);
+        partitionMetadataFile.maybeFlush();
 
         // The following content is encoded by PartitionMetadata#encode, which is invoked during the flush
         List<String> lines = Files.readAllLines(file.toPath());
@@ -73,8 +73,8 @@ class PartitionMetadataFileTest  {
     @Test
     public void testMaybeFlushWithNoTopicIdPresent() {
         PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, null);
+        partitionMetadataFile.maybeFlush();
 
-        assertDoesNotThrow(partitionMetadataFile::maybeFlush);
         assertEquals(0, file.length());
     }
 
@@ -84,8 +84,8 @@ class PartitionMetadataFileTest  {
         PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, channel);
 
         Uuid topicId = Uuid.randomUuid();
-        assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
-        assertDoesNotThrow(partitionMetadataFile::maybeFlush);
+        partitionMetadataFile.record(topicId);
+        partitionMetadataFile.maybeFlush();
 
         PartitionMetadata metadata = partitionMetadataFile.read();
         assertEquals(0, metadata.version());
