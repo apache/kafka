@@ -243,7 +243,7 @@ public class HeartbeatRequestManagerTest {
 
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a " +
-            "previous on in-flight");
+            "previous one is in-flight");
         
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         result = heartbeatRequestManager.poll(time.milliseconds());
