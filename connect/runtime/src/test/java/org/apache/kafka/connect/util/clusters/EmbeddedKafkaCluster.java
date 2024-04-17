@@ -54,6 +54,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -91,6 +92,8 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG;
 
 /**
  * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
@@ -158,15 +161,15 @@ public class EmbeddedKafkaCluster {
         brokerConfig.put(ZkConfigs.ZK_CONNECT_CONFIG, zKConnectString());
 
         putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
-        putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), 0);
-        putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), (short) brokers.length);
+        putIfAbsent(brokerConfig, GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0);
+        putIfAbsent(brokerConfig, GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, (short) brokers.length);
         putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), false);
         // reduce the size of the log cleaner map to reduce test memory usage
         putIfAbsent(brokerConfig, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
 
-        Object listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerListenerNameProp());
+        Object listenerConfig = brokerConfig.get(INTER_BROKER_LISTENER_NAME_CONFIG);
         if (listenerConfig == null)
-            listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerSecurityProtocolProp());
+            listenerConfig = brokerConfig.get(INTER_BROKER_SECURITY_PROTOCOL_CONFIG);
         if (listenerConfig == null)
             listenerConfig = "PLAINTEXT";
         listenerName = new ListenerName(listenerConfig.toString());

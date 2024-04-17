@@ -28,7 +28,6 @@ import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -44,7 +43,6 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     private final ListenerName listenerName;
     private final boolean isInterBrokerListener;
     private final Mode mode;
-    private final Logger log;
     private SslFactory sslFactory;
     private Map<String, ?> configs;
     private SslPrincipalMapper sslPrincipalMapper;
@@ -60,7 +58,6 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
         this.mode = mode;
         this.listenerName = listenerName;
         this.isInterBrokerListener = isInterBrokerListener;
-        this.log = logContext.logger(getClass());
     }
 
     public void configure(Map<String, ?> configs) throws KafkaException {
@@ -171,7 +168,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
         }
 
         @Override
-        public void close() throws IOException {
+        public void close() {
             if (principalBuilder instanceof Closeable)
                 Utils.closeQuietly((Closeable) principalBuilder, "principal builder");
         }

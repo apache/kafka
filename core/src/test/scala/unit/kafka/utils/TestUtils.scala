@@ -70,11 +70,14 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.Utils.formatAddress
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.controller.QuorumController
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.server.config.{Defaults, ZkConfigs}
+import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.server.util.timer.SystemTimer
@@ -363,18 +366,18 @@ object TestUtils extends Logging {
       props.put(ZkConfigs.ZK_CONNECT_CONFIG, zkConnect)
       props.put(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG, "10000")
     }
-    props.put(KafkaConfig.ReplicaSocketTimeoutMsProp, "1500")
-    props.put(KafkaConfig.ControllerSocketTimeoutMsProp, "1500")
+    props.put(ReplicationConfigs.REPLICA_SOCKET_TIMEOUT_MS_CONFIG, "1500")
+    props.put(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG, "1500")
     props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
     props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
     props.put(KafkaConfig.LogDeleteDelayMsProp, "1000")
     props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
     props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152")
-    props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-    if (!props.containsKey(KafkaConfig.OffsetsTopicPartitionsProp))
-      props.put(KafkaConfig.OffsetsTopicPartitionsProp, "5")
-    if (!props.containsKey(KafkaConfig.GroupInitialRebalanceDelayMsProp))
-      props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+    props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
+    if (!props.containsKey(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG))
+      props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "5")
+    if (!props.containsKey(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG))
+      props.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
     rack.foreach(props.put(KafkaConfig.RackProp, _))
     // Reduce number of threads per broker
     props.put(KafkaConfig.NumNetworkThreadsProp, "2")
@@ -387,25 +390,25 @@ object TestUtils extends Logging {
       props ++= JaasTestUtils.saslConfigs(saslProperties)
 
     interBrokerSecurityProtocol.foreach { protocol =>
-      props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
+      props.put(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG, protocol.name)
     }
 
     if (enableToken)
       props.put(KafkaConfig.DelegationTokenSecretKeyProp, "secretkey")
 
     props.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
-    props.put(KafkaConfig.DefaultReplicationFactorProp, defaultReplicationFactor.toString)
+    props.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, defaultReplicationFactor.toString)
 
     if (enableFetchFromFollower) {
       props.put(KafkaConfig.RackProp, nodeId.toString)
-      props.put(KafkaConfig.ReplicaSelectorClassProp, "org.apache.kafka.common.replica.RackAwareReplicaSelector")
+      props.put(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG, "org.apache.kafka.common.replica.RackAwareReplicaSelector")
     }
     props
   }
 
   @nowarn("cat=deprecation")
   def setIbpAndMessageFormatVersions(config: Properties, version: MetadataVersion): Unit = {
-    config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, version.version)
+    config.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, version.version)
     // for clarity, only set the log message format version if it's not ignored
     if (!LogConfig.shouldIgnoreMessageFormatVersion(version))
       config.setProperty(KafkaConfig.LogMessageFormatVersionProp, version.version)
@@ -558,8 +561,8 @@ object TestUtils extends Logging {
     createTopicWithAdmin(
       admin = admin,
       topic = Topic.GROUP_METADATA_TOPIC_NAME,
-      numPartitions = broker.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
-      replicationFactor = broker.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
+      numPartitions = broker.config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG),
+      replicationFactor = broker.config.getShort(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG).toInt,
       brokers = brokers,
       controllers = controllers,
       topicConfig = broker.groupCoordinator.groupMetadataTopicConfigs,
@@ -1515,8 +1518,8 @@ object TestUtils extends Logging {
                    flushStartOffsetCheckpointMs = 10000L,
                    retentionCheckMs = 1000L,
                    maxTransactionTimeoutMs = 5 * 60 * 1000,
-                   producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, transactionVerificationEnabled),
-                   producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
+                   producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, transactionVerificationEnabled),
+                   producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
                    scheduler = time.scheduler,
                    time = time,
                    brokerTopicStats = new BrokerTopicStats,

@@ -46,7 +46,6 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 
@@ -217,7 +216,7 @@ public final class MetadataShell {
         }
     }
 
-    public void close() throws Exception {
+    public void close() {
         Utils.closeQuietly(loader, "loader");
         if (raftManager != null) {
             try {
@@ -238,7 +237,7 @@ public final class MetadataShell {
         }
     }
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         ArgumentParser parser = ArgumentParsers
             .newArgumentParser("kafka-metadata-shell")
             .defaultHelp(true)
@@ -281,13 +280,12 @@ public final class MetadataShell {
         }
     }
 
-    void waitUntilCaughtUp() throws ExecutionException, InterruptedException {
+    void waitUntilCaughtUp() throws InterruptedException {
         while (true) {
             if (loader.lastAppliedOffset() > 0) {
                 return;
             }
             Thread.sleep(10);
         }
-        //snapshotFileReader.caughtUpFuture().get();
     }
 }

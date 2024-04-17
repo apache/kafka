@@ -886,7 +886,7 @@ public class SslTransportLayer implements TransportLayer {
      * retries and report the failure. If `flush` is true, exceptions are propagated after
      * any pending outgoing bytes are flushed to ensure that the peer is notified of the failure.
      */
-    private void handshakeFailure(SSLException sslException, boolean flush) throws IOException {
+    private void handshakeFailure(SSLException sslException, boolean flush) {
         //Release all resources such as internal buffers that SSLEngine is managing
         log.debug("SSL Handshake failed", sslException);
         sslEngine.closeOutbound();

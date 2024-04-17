@@ -44,11 +44,7 @@ final class InFlightRequests {
      */
     public void add(NetworkClient.InFlightRequest request) {
         String destination = request.destination;
-        Deque<NetworkClient.InFlightRequest> reqs = this.requests.get(destination);
-        if (reqs == null) {
-            reqs = new ArrayDeque<>();
-            this.requests.put(destination, reqs);
-        }
+        Deque<NetworkClient.InFlightRequest> reqs = this.requests.computeIfAbsent(destination, k -> new ArrayDeque<>());
         reqs.addFirst(request);
         inFlightRequestCount.incrementAndGet();
     }

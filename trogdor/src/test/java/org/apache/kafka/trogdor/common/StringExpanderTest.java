@@ -17,7 +17,6 @@
 
 package org.apache.kafka.trogdor.common;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
@@ -27,7 +26,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import org.junit.jupiter.api.Timeout;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 120)
 public class StringExpanderTest {
 
     @Test

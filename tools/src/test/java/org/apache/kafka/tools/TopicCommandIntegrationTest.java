@@ -71,6 +71,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_MAX_BYTES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -83,14 +84,12 @@ import static org.mockito.Mockito.spy;
 @Tag("integration")
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTestHarness implements Logging, RackAwareTest {
-    private short defaultReplicationFactor = 1;
-    private int defaultNumPartitions = 1;
+    private final short defaultReplicationFactor = 1;
+    private final int defaultNumPartitions = 1;
     private TopicCommand.TopicService topicService;
     private Admin adminClient;
     private String bootstrapServer;
     private String testTopicName;
-    private long defaultTimeout = 10000;
-
     private Buffer<KafkaBroker> scalaBrokers;
     private Seq<ControllerServer> scalaControllers;
 
@@ -116,15 +115,15 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
         List<KafkaConfig> configs = new ArrayList<>();
         for (Properties props : brokerConfigs) {
-            props.put(KafkaConfig.ReplicaFetchMaxBytesProp(), "1");
+            props.put(REPLICA_FETCH_MAX_BYTES_CONFIG, "1");
             configs.add(KafkaConfig.fromProps(props));
         }
         return JavaConverters.asScalaBuffer(configs).toSeq();
     }
 
     private TopicCommand.TopicCommandOptions buildTopicCommandOptionsWithBootstrap(String... opts) {
-        String[] finalOptions = Stream.concat(Arrays.asList(opts).stream(),
-                Arrays.asList("--bootstrap-server", bootstrapServer).stream()
+        String[] finalOptions = Stream.concat(Arrays.stream(opts),
+                Stream.of("--bootstrap-server", bootstrapServer)
         ).toArray(String[]::new);
         return new TopicCommand.TopicCommandOptions(finalOptions);
     }
@@ -411,7 +410,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
 
         TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get();
-        assertTrue(topicDescription.partitions().size() == 3, "Expected partition count to be 3. Got: " + topicDescription.partitions().size());
+        assertEquals(3, topicDescription.partitions().size(), "Expected partition count to be 3. Got: " + topicDescription.partitions().size());
         List<Integer> partitionReplicas = getPartitionReplicas(topicDescription.partitions(), 2);
         assertEquals(Arrays.asList(4, 2), partitionReplicas, "Expected to have replicas 4,2. Got: " + partitionReplicas);
     }
@@ -1111,7 +1110,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                         .collect(Collectors.toList());
                     partitionRackMap.put(partitionId, partitionRackValues);
                 } else {
-                    System.err.println(String.format("No mapping found for %s in `brokerRackMapping`", brokerId));
+                    System.err.printf("No mapping found for %s in `brokerRackMapping`%n", brokerId);
                 }
             });
         });

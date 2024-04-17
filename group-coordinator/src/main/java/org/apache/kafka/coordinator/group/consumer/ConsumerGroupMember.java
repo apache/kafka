@@ -480,7 +480,7 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * @return The supported classic protocol converted to JoinGroupRequestProtocolCollection.
+     * @return The supported classic protocols converted to JoinGroupRequestProtocolCollection.
      */
     public JoinGroupRequestData.JoinGroupRequestProtocolCollection supportedJoinGroupRequestProtocols() {
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
