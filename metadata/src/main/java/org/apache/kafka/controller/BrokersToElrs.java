@@ -170,15 +170,4 @@ public class BrokersToElrs {
         }
         return new BrokersToIsrs.PartitionsOnReplicaIterator(topicMap, false);
     }
-
-    BrokersToIsrs.PartitionsOnReplicaIterator partitionsWithElr(Uuid topicId) {
-        Map<Uuid, int[]> topicMap = new HashMap<>();
-        for (Map<Uuid, int[]> map : elrMembers.values()) {
-            if (map != null && map.containsKey(topicId)) {
-                topicMap.put(topicId, map.get(topicId));
-                break;
-            }
-        }
-        return new BrokersToIsrs.PartitionsOnReplicaIterator(topicMap, false);
-    }
 }

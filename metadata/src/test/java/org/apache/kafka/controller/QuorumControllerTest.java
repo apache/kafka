@@ -508,7 +508,7 @@ public class QuorumControllerTest {
         List<Integer> brokersToKeepUnfenced = Arrays.asList(1);
         List<Integer> brokersToFence = Arrays.asList(2, 3);
         short replicationFactor = (short) allBrokers.size();
-        long sessionTimeoutMillis = 5000;
+        long sessionTimeoutMillis = 500;
 
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
@@ -606,17 +606,12 @@ public class QuorumControllerTest {
             ControllerResult<Map<ConfigResource, ApiError>> result = active.configurationControl().incrementalAlterConfigs(toMap(
                 entry(new ConfigResource(TOPIC, "foo"), toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "1"))))),
                 true);
-            assertEquals(1, result.records().size(), result.records().toString());
+            assertEquals(2, result.records().size(), result.records().toString());
             RecordTestUtils.replayAll(active.configurationControl(), singletonList(result.records().get(0)));
+            RecordTestUtils.replayAll(active.replicationControl(), singletonList(result.records().get(1)));
 
-            TestUtils.waitForCondition(() -> {
-                    PartitionRegistration partition1 = active.replicationControl().getPartition(topicIdFoo, 0);
-                    if (partition1.elr.length != 0) return false;
-                    return true;
-                }, sessionTimeoutMillis * 3,
-                "Waiting for the partition to be updated."
-            );
             partition = active.replicationControl().getPartition(topicIdFoo, 0);
+            assertEquals(0, partition.elr.length, partition.toString());
             assertArrayEquals(new int[]{1}, partition.isr, partition.toString());
 
             // Now let's try update config on cluster level.
@@ -627,16 +622,12 @@ public class QuorumControllerTest {
             result = active.configurationControl().incrementalAlterConfigs(toMap(
                 entry(new ConfigResource(BROKER, ""), toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "1"))))),
                 true);
-            assertEquals(1, result.records().size(), result.records().toString());
+            assertEquals(2, result.records().size(), result.records().toString());
             RecordTestUtils.replayAll(active.configurationControl(), singletonList(result.records().get(0)));
-            TestUtils.waitForCondition(() -> {
-                    PartitionRegistration partition1 = active.replicationControl().getPartition(topicIdBar, 0);
-                    if (partition1.elr.length != 0) return false;
-                    return true;
-                }, sessionTimeoutMillis * 3,
-                "Waiting for the partition to be updated."
-            );
+            RecordTestUtils.replayAll(active.replicationControl(), singletonList(result.records().get(1)));
+
             partition = active.replicationControl().getPartition(topicIdBar, 0);
+            assertEquals(0, partition.elr.length, partition.toString());
             assertArrayEquals(new int[]{1}, partition.isr, partition.toString());
         }
     }

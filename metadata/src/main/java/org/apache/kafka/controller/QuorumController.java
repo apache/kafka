@@ -2362,8 +2362,7 @@ public final class QuorumController implements Controller {
         replicationControl.handleBrokerUncleanShutdown(brokerId, records);
     }
     
-    void maybeTriggerMinIsrConfigUpdate(Optional<String> topicName) {
-        appendWriteEvent("partitionUpdateForMinIsrChange", OptionalLong.empty(),
-                () -> replicationControl.getPartitionElrUpdatesForConfigChanges(topicName));
+    List<ApiMessageAndVersion> maybeTriggerMinIsrConfigUpdate(List<String> topicNames, Function<String, String> getTopicMinIsrConfig) {
+        return replicationControl.getPartitionElrUpdatesForConfigChanges(topicNames, getTopicMinIsrConfig);
     }
 }
