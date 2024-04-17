@@ -570,7 +570,7 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * @return The boolean indicating whether the member uses the classic protocol.
+     * @return A boolean indicating whether the member uses the classic protocol.
      */
     public boolean useClassicProtocol() {
         return classicMemberMetadata != null;

@@ -778,7 +778,14 @@ public class GroupMetadataManager {
         }
     }
 
-    public boolean validateOnlineDowngrade(ConsumerGroup consumerGroup, String memberId) {
+    /**
+     * Validates the online downgrade if a consumer member is fenced from the consumer group.
+     *
+     * @param consumerGroup The ConsumerGroup.
+     * @param memberId      The fenced member id.
+     * @return A boolean indicating whether it's valid to online downgrade the consumer group.
+     */
+    private boolean validateOnlineDowngrade(ConsumerGroup consumerGroup, String memberId) {
         if (!consumerGroupMigrationPolicy.isDowngradeEnabled()) {
             log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
                 consumerGroup.groupId());
@@ -800,15 +807,17 @@ public class GroupMetadataManager {
 
     public CompletableFuture<Void> convertToClassicGroup(ConsumerGroup consumerGroup, String leavingMemberId, List<Record> records) {
         consumerGroup.createGroupTombstoneRecords(records);
+
         ClassicGroup classicGroup;
         try {
-            classicGroup = consumerGroup.toClassicGroup(
+            classicGroup = ClassicGroup.fromConsumerGroup(
+                consumerGroup,
                 leavingMemberId,
                 logContext,
                 time,
+                metrics,
                 consumerGroupSessionTimeoutMs,
-                metadataImage,
-                records
+                metadataImage
             );
         } catch (SchemaException e) {
             log.warn("Cannot downgrade the consumer group " + consumerGroup.groupId() + ": fail to parse " +
@@ -817,6 +826,7 @@ public class GroupMetadataManager {
             throw new GroupIdNotFoundException(String.format("Cannot downgrade the classic group %s: %s.",
                 consumerGroup.groupId(), e.getMessage()));
         }
+        classicGroup.createConsumerGroupRecords(metadataImage.features().metadataVersion(), records);
 
         groups.put(consumerGroup.groupId(), classicGroup);
         metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
@@ -826,6 +836,8 @@ public class GroupMetadataManager {
             if (t == null) {
                 classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
                 prepareRebalance(classicGroup, String.format("Downgrade group %s.", classicGroup.groupId()));
+            } else {
+                metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
             }
         });
         return appendFuture;
@@ -835,7 +847,7 @@ public class GroupMetadataManager {
      * Validates the online upgrade if the Classic Group receives a ConsumerGroupHeartbeat request.
      *
      * @param classicGroup A ClassicGroup.
-     * @return The boolean indicating whether it's valid to online upgrade the classic group.
+     * @return A boolean indicating whether it's valid to online upgrade the classic group.
      */
     private boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
         if (!consumerGroupMigrationPolicy.isUpgradeEnabled()) {
@@ -1476,12 +1488,10 @@ public class GroupMetadataManager {
     ) throws ApiException {
         ConsumerGroup group = consumerGroup(groupId);
         List<Record> records;
-        CompletableFuture<Void> appendFuture = null;
         if (instanceId == null) {
             ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
             log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
             records = consumerGroupFenceMember(group, member);
-            if (validateOnlineDowngrade(group, memberId)) appendFuture = convertToClassicGroup(group, memberId, records);
         } else {
             ConsumerGroupMember member = group.staticMember(instanceId);
             throwIfStaticMemberIsUnknown(member, instanceId);
@@ -1494,9 +1504,15 @@ public class GroupMetadataManager {
                 log.info("[GroupId {}] Static Member {} with instance id {} left the consumer group.",
                     group.groupId(), memberId, instanceId);
                 records = consumerGroupFenceMember(group, member);
-                if (validateOnlineDowngrade(group, memberId)) appendFuture = convertToClassicGroup(group, memberId, records);
             }
         }
+
+        CompletableFuture<Void> appendFuture = null;
+        if ((instanceId == null || memberEpoch != LEAVE_GROUP_STATIC_MEMBER_EPOCH) &&
+            validateOnlineDowngrade(group, memberId)) {
+            appendFuture = convertToClassicGroup(group, memberId, records);
+        }
+
         return new CoordinatorResult<>(
             records,
             new ConsumerGroupHeartbeatResponseData()
