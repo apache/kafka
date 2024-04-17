@@ -54,7 +54,7 @@ class StorageToolTest {
     properties
   }
 
-  val allFeatures = List(MetadataVersion.FEATURE_NAME, TestFeatureVersion.FEATURE_NAME)
+  val allFeatures = List(TestFeatureVersion.FEATURE_NAME)
 
   @Test
   def testConfigToLogDirectories(): Unit = {

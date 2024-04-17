@@ -122,8 +122,7 @@ object StorageTool extends Logging {
     // If we are using --version-default, the default is based on the metadata version.
     val metadataVersionOpt: Optional[MetadataVersion] = if (specifiedFeatures.isEmpty) Optional.of(metadataVersion) else Optional.empty[MetadataVersion]
 
-    val featuresMinusMetadata = allFeatures.filter(!_.equals(MetadataVersion.FEATURE_NAME))
-    val allFeaturesAndVersions = featuresMinusMetadata.map { featureName =>
+    val allFeaturesAndVersions = allFeatures.map { featureName =>
         specifiedFeatures.getOrElse(featureName, FeatureVersion.defaultValue(featureName, metadataVersionOpt))
     }
 

@@ -33,12 +33,12 @@ public interface FeatureVersion {
 
     /**
      * Features currently used in production. If a feature is included in this list, it will also be specified when
-     * formatting a cluster via the StorageTool.
+     * formatting a cluster via the StorageTool. MetadataVersion is handled separately, so it is not included here.
      *
      * When a feature is added here, make sure it has a mapping in {@link #defaultValue} and {@link #createFeature}.
      * See {@link TestFeatureVersion} as an example.
      */
-    List<String> PRODUCTION_FEATURES = Arrays.asList(MetadataVersion.FEATURE_NAME);
+    List<String> PRODUCTION_FEATURES = Arrays.asList();
 
     /**
      * Name of the feature. It should be the same across all feature levels of a given feature.
