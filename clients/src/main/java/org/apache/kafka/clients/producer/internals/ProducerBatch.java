@@ -131,9 +131,7 @@ public final class ProducerBatch {
         boolean isRetry = attempts >= 1;
         if (!isRetry)
             return false;
-        if (attempts == attemptsWhenLeaderLastChanged)
-            return true;
-        return false;
+        return attempts == attemptsWhenLeaderLastChanged;
     }
 
 

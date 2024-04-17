@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.NewPartitionReassignment
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{Disabled, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -45,7 +46,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   def overridingProps: Properties = {
     val props = new Properties
     props.put(KafkaConfig.NumPartitionsProp, numParts.toString)
-    props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, numNodes.toString)
+    props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, numNodes.toString)
     props
   }
 
@@ -54,7 +55,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   @Timeout(15)
   def testFollowerCompleteDelayedFetchesOnReplication(quorum: String): Unit = {
@@ -99,7 +100,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(quorum: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
@@ -127,7 +128,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     assertEquals(-1, getPreferredReplica)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testFetchFromFollowerWithRoll(quorum: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
@@ -179,7 +180,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   }
 
   @Disabled
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testRackAwareRangeAssignor(quorum: String): Unit = {
     val partitionList = brokers.indices.toList

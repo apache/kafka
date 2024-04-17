@@ -20,7 +20,7 @@ import java.util.{Collections, HashMap, Properties}
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
 import kafka.server.{ClientQuotaManager, KafkaBroker, KafkaConfig, QuotaType}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer._
@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.junit.jupiter.api.Assertions._
@@ -51,11 +52,11 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   protected def createQuotaTestClients(topic: String, leaderNode: KafkaBroker): QuotaTestClients
 
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "2")
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100")
-  this.serverConfig.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, "60000")
-  this.serverConfig.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+  this.serverConfig.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "2")
+  this.serverConfig.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
+  this.serverConfig.setProperty(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "100")
+  this.serverConfig.setProperty(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "60000")
+  this.serverConfig.setProperty(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "-1")
   this.producerConfig.setProperty(ProducerConfig.BUFFER_MEMORY_CONFIG, "300000")
   this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
@@ -87,7 +88,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients = createQuotaTestClients(topic1, leaderNode)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThrottledProducerConsumer(quorum: String): Unit = {
     val numRecords = 1000
@@ -99,7 +100,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProducerConsumerOverrideUnthrottled(quorum: String): Unit = {
     // Give effectively unlimited quota for producer and consumer
@@ -119,7 +120,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = false)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProducerConsumerOverrideLowerQuota(quorum: String): Unit = {
     // consumer quota is set such that consumer quota * default quota window (10 seconds) is less than
@@ -137,7 +138,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testQuotaOverrideDelete(quorum: String): Unit = {
     // Override producer and consumer quotas to unlimited
@@ -164,7 +165,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testThrottledRequest(quorum: String): Unit = {
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, 0.1)

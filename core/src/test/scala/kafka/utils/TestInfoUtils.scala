@@ -52,7 +52,6 @@ object TestInfoUtils {
       testInfo.getDisplayName().contains("quorum=zkMigration")
     }
   }
-  final val TestWithParameterizedQuorumName = "{displayName}.{argumentsWithNames}"
 
   final val TestWithParameterizedQuorumAndGroupProtocolNames = "{displayName}.quorum={0}.groupProtocol={1}"
 

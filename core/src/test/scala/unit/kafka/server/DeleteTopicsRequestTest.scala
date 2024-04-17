@@ -38,7 +38,7 @@ import scala.jdk.CollectionConverters._
 
 class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testTopicDeletionClusterHasOfflinePartitions(quorum: String): Unit = {
     // Create a two topics with one partition/replica. Make one of them offline.
@@ -72,7 +72,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
       "The topics are found in the Broker's cache")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testValidDeleteTopicRequests(quorum: String): Unit = {
     val timeout = 10000
@@ -129,7 +129,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
   /*
    * Only run this test against ZK cluster. The KRaft controller doesn't perform operations that have timed out.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testErrorDeleteTopicRequests(quorum: String): Unit = {
     val timeout = 30000
@@ -220,7 +220,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
    * Only run this test against ZK clusters. KRaft doesn't have this behavior of returning NOT_CONTROLLER.
    * Instead, the request is forwarded.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "zkMigration"))
   def testNotController(quorum: String): Unit = {
     val request = new DeleteTopicsRequest.Builder(
@@ -248,7 +248,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
     connectAndReceive[DeleteTopicsResponse](request, destination = socketServer)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testDeleteTopicsVersions(quorum: String): Unit = {
     // This test assumes that the current valid versions are 0-6 please adjust the test if there are changes.

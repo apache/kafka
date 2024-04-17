@@ -189,6 +189,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 .withClassicGroupNewMemberJoinTimeoutMs(config.classicGroupNewMemberJoinTimeoutMs)
                 .withClassicGroupMinSessionTimeoutMs(config.classicGroupMinSessionTimeoutMs)
                 .withClassicGroupMaxSessionTimeoutMs(config.classicGroupMaxSessionTimeoutMs)
+                .withConsumerGroupMigrationPolicy(config.consumerGroupMigrationPolicy)
                 .withGroupCoordinatorMetricsShard(metricsShard)
                 .build();
 

@@ -1093,17 +1093,24 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return Collections.emptyMap();
             }
             final Timer timer = time.timer(timeout);
-            final ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
-                timestampsToSearch,
-                true,
-                timer);
+            ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
+                    timestampsToSearch,
+                    timer,
+                    true);
 
             // If timeout is set to zero return empty immediately; otherwise try to get the results
             // and throw timeout exception if it cannot complete in time.
-            if (timeout.toMillis() == 0L)
-                return listOffsetsEvent.emptyResult();
+            if (timeout.toMillis() == 0L) {
+                applicationEventHandler.add(listOffsetsEvent);
+                return listOffsetsEvent.emptyResults();
+            }
 
-            return applicationEventHandler.addAndGet(listOffsetsEvent, timer);
+            return applicationEventHandler.addAndGet(listOffsetsEvent, timer)
+                    .entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> entry.getValue().buildOffsetAndTimestamp()));
         } finally {
             release();
         }
@@ -1141,21 +1148,32 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (partitions.isEmpty()) {
                 return Collections.emptyMap();
             }
+
             Map<TopicPartition, Long> timestampToSearch = partitions
-                .stream()
-                .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
+                    .stream()
+                    .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
             Timer timer = time.timer(timeout);
             ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
-                timestampToSearch,
-                false,
-                timer);
-            Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = applicationEventHandler.addAndGet(
-                listOffsetsEvent,
-                timer);
-            return offsetAndTimestampMap
-                .entrySet()
-                .stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
+                    timestampToSearch,
+                    timer,
+                    false);
+
+            // If timeout is set to zero return empty immediately; otherwise try to get the results
+            // and throw timeout exception if it cannot complete in time.
+            if (timeout.isZero()) {
+                applicationEventHandler.add(listOffsetsEvent);
+                return listOffsetsEvent.emptyResults();
+            }
+
+            Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
+            offsetAndTimestampMap = applicationEventHandler.addAndGet(
+                    listOffsetsEvent,
+                    timer);
+            return offsetAndTimestampMap.entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> entry.getValue().offset()));
         } finally {
             release();
         }
@@ -1462,8 +1480,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         final Set<String> topicsToSubscribe = cluster.topics().stream()
                 .filter(subscriptions::matchesSubscribedPattern)
                 .collect(Collectors.toSet());
-        if (subscriptions.subscribeFromPattern(topicsToSubscribe))
+        if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
+            applicationEventHandler.add(new SubscriptionChangeEvent());
             metadata.requestUpdateForNewTopics();
+        }
     }
 
     @Override
@@ -1603,6 +1623,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // If there are partitions still needing a position and a reset policy is defined,
             // request reset using the default policy. If no reset strategy is defined and there
             // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
+            //
+            // Note: this will *not* initialize the position for any partitions that are in the process
+            // of being assigned and awaiting ConsumerRebalanceListener callbacks. We don't want to reset
+            // positions until the partition has been fully assigned *and* we want to wait until
+            // initWithCommittedOffsetsIfNeeded has had a chance to look up the partition's committed
+            // offset, if applicable.
             subscriptions.resetInitializingPositions();
 
             // Reset positions using partition offsets retrieved from the leader, for any partitions
@@ -1667,11 +1693,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
         maybeThrowFencedInstanceException();
         maybeInvokeCommitCallbacks();
+        maybeUpdateSubscriptionMetadata();
         backgroundEventProcessor.process();
 
-        // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
-        // in the previous implementation, because it will eventually involve group coordination
-        // logic
         return updateFetchPositions(timer);
     }
 
@@ -1750,8 +1774,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             throwIfNoAssignorsConfigured();
             log.info("Subscribed to pattern: '{}'", pattern);
             subscriptions.subscribe(pattern, listener);
-            updatePatternSubscription(metadata.fetch());
             metadata.requestUpdateForNewTopics();
+            updatePatternSubscription(metadata.fetch());
         } finally {
             release();
         }
@@ -1941,6 +1965,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Visible for testing
     SubscriptionState subscriptions() {
         return subscriptions;
+    }
+
+    private void maybeUpdateSubscriptionMetadata() {
+        if (subscriptions.hasPatternSubscription()) {
+            updatePatternSubscription(metadata.fetch());
+        }
     }
 
 }

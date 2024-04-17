@@ -2231,16 +2231,11 @@ public class ReplicationControlManager {
         if (minIsrConfig != null) {
             currentMinIsr = Integer.parseInt(minIsrConfig);
         } else {
-            log.warn("Can't find the min isr config for topic: " + topicName + " using default value " + defaultMinIsr);
+            log.debug("Can't find the min isr config for topic: " + topicName + ". Use default value " + defaultMinIsr);
         }
-
-        int replicationFactor = defaultReplicationFactor;
-        try {
-            Uuid topicId = topicsByName.get(topicName);
-            replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
-        } catch (Exception e) {
-            log.warn("Can't find the replication factor for topic: " + topicName + " using default value " + replicationFactor + ". Error=" + e);
-        }
+        
+        Uuid topicId = topicsByName.get(topicName);
+        int replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
         return Math.min(currentMinIsr, replicationFactor);
     }
 
@@ -2293,7 +2288,7 @@ public class ReplicationControlManager {
         Arrays.stream(newPartInfo.elr).forEach(validationSet::add);
         if (validationSet.size() != newPartInfo.isr.length + newPartInfo.elr.length) {
             log.error("{}-{} has overlapping ISR={} and ELR={}", topics.get(topicId).name, partitionId,
-                Arrays.toString(newPartInfo.isr), partitionId, Arrays.toString(newPartInfo.elr));
+                Arrays.toString(newPartInfo.isr), Arrays.toString(newPartInfo.elr));
         }
         brokersToIsrs.update(topicId, partitionId, prevPartInfo == null ? null : prevPartInfo.isr,
             newPartInfo.isr, prevPartInfo == null ? NO_LEADER : prevPartInfo.leader, newPartInfo.leader);

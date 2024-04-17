@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
@@ -85,7 +86,7 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
             0,
             false
         ).foreach(props -> {
-            props.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp(), isNewGroupCoordinatorEnabled() + "");
+            props.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, isNewGroupCoordinatorEnabled() + "");
             cfgs.add(KafkaConfig.fromProps(props));
             return null;
         });

@@ -36,8 +36,6 @@ import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.SharedTopicAdmin;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -55,7 +53,6 @@ import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
  * </p>
  */
 public class ConnectDistributed extends AbstractConnectCli<DistributedConfig> {
-    private static final Logger log = LoggerFactory.getLogger(ConnectDistributed.class);
 
     public ConnectDistributed(String... args) {
         super(args);

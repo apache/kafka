@@ -77,11 +77,8 @@ public class WorkerCoordinatorIncrementalTest {
 
     private String connectorId1 = "connector1";
     private String connectorId2 = "connector2";
-    private String connectorId3 = "connector3";
     private ConnectorTaskId taskId1x0 = new ConnectorTaskId(connectorId1, 0);
-    private ConnectorTaskId taskId1x1 = new ConnectorTaskId(connectorId1, 1);
     private ConnectorTaskId taskId2x0 = new ConnectorTaskId(connectorId2, 0);
-    private ConnectorTaskId taskId3x0 = new ConnectorTaskId(connectorId3, 0);
 
     private String groupId = "test-group";
     private int sessionTimeoutMs = 10;
@@ -115,8 +112,6 @@ public class WorkerCoordinatorIncrementalTest {
     private int configStorageCalls;
 
     private ClusterConfigState configState1;
-    private ClusterConfigState configState2;
-    private ClusterConfigState configStateSingleTaskConnectors;
 
     // Arguments are:
     // - Protocol type

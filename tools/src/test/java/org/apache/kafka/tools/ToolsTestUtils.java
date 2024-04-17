@@ -45,12 +45,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 public class ToolsTestUtils {
-    /** @see TestInfoUtils#TestWithParameterizedQuorumName()  */
-    public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.{argumentsWithNames}";
     /** @see TestInfoUtils#TestWithParameterizedQuorumAndGroupProtocolNames()  */
     public static final String TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES = "{displayName}.quorum={0}.groupProtocol={1}";
 
-    private static int randomPort = 0;
+    private static final int RANDOM_PORT = 0;
 
     public static String captureStandardOut(Runnable runnable) {
         return captureStandardStream(false, runnable);
@@ -70,7 +68,7 @@ public class ToolsTestUtils {
             System.setOut(tempStream);
         try {
             runnable.run();
-            return new String(outputStream.toByteArray()).trim();
+            return outputStream.toString().trim();
         } finally {
             if (isErr)
                 System.setErr(currentStream);
@@ -102,11 +100,11 @@ public class ToolsTestUtils {
         List<Properties> result = new ArrayList<>();
         int endingIdNumber = startingIdNumber + numConfigs - 1;
         for (int node = startingIdNumber; node <= endingIdNumber; node++) {
-            result.add(TestUtils.createBrokerConfig(node, zkConnect, true, true, randomPort,
+            result.add(TestUtils.createBrokerConfig(node, zkConnect, true, true, RANDOM_PORT,
                 scala.Option.empty(),
                 scala.Option.empty(),
                 scala.Option.empty(),
-                true, false, randomPort, false, randomPort, false, randomPort,
+                true, false, RANDOM_PORT, false, RANDOM_PORT, false, RANDOM_PORT,
                 scala.Option.apply(rackInfo.get(node)),
                 logDirCount, enableToken, numPartitions, defaultReplicationFactor, false));
         }

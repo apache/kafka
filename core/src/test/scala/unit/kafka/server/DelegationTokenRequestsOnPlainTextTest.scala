@@ -19,7 +19,6 @@ package kafka.server
 import java.util
 
 import kafka.utils.TestUtils
-import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -48,7 +47,7 @@ class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
     config
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testDelegationTokenRequests(quorum: String): Unit = {
     adminClient = Admin.create(createAdminConfig)

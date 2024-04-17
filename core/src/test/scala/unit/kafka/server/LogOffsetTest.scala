@@ -112,9 +112,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     log.truncateTo(0)
 
-    val secondOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
-    assertEquals(0L, secondOffset.get.offset)
-    assertEquals(-1L, secondOffset.get.timestamp)
+    assertEquals(Option.empty, log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP))
   }
 
   @ParameterizedTest
@@ -202,10 +200,8 @@ class LogOffsetTest extends BaseRequestTest {
 
     log.updateHighWatermark(log.logEndOffset)
 
-    val maxTimestampOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
     assertEquals(0L, log.logEndOffset)
-    assertEquals(0L, maxTimestampOffset.get.offset)
-    assertEquals(-1L, maxTimestampOffset.get.timestamp)
+    assertEquals(Option.empty, log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP))
   }
 
   @deprecated("legacyFetchOffsetsBefore", since = "")

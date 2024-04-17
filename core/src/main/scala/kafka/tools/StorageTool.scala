@@ -33,6 +33,7 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.scram.internals.ScramFormatter
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 
@@ -60,7 +61,7 @@ object StorageTool extends Logging {
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
           val metadataVersion = getMetadataVersion(namespace,
-            Option(config.get.originals.get(KafkaConfig.InterBrokerProtocolVersionProp)).map(_.toString))
+            Option(config.get.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).map(_.toString))
           if (!metadataVersion.isKRaftSupported) {
             throw new TerseFailure(s"Must specify a valid KRaft metadata.version of at least ${MetadataVersion.IBP_3_0_IV0}.")
           }
@@ -440,8 +441,12 @@ object StorageTool extends Logging {
         "Use --ignore-formatted to ignore this directory and format the others.")
     }
     if (!copier.errorLogDirs().isEmpty) {
-      val firstLogDir = copier.errorLogDirs().iterator().next()
-      throw new TerseFailure(s"I/O error trying to read log directory $firstLogDir.")
+      copier.errorLogDirs().forEach(errorLogDir => {
+        stream.println(s"I/O error trying to read log directory $errorLogDir. Ignoring...")
+      })
+      if (metaPropertiesEnsemble.emptyLogDirs().isEmpty && copier.logDirProps().isEmpty) {
+        throw new TerseFailure("No available log directories to format.")
+      }
     }
     if (metaPropertiesEnsemble.emptyLogDirs().isEmpty) {
       stream.println("All of the log directories are already formatted.")

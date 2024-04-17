@@ -114,6 +114,13 @@ ext {
   repo = file("$rootDir/.git").isDirectory() ? Grgit.open(currentDir: project.getRootDir()) : null
 
   commitId = determineCommitId()
+
+  addParametersForTests = { name, options ->
+    // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
+    // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
+    if (name == "compileTestJava" || name == "compileTestScala")
+      options.compilerArgs << "-parameters"
+  }
 }
 
 allprojects {
@@ -278,6 +285,8 @@ subprojects {
     // --source/--target 8 is deprecated in Java 20, suppress warning until Java 8 support is dropped in Kafka 4.0
     if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_20))
       options.compilerArgs << "-Xlint:-options"
+
+    addParametersForTests(name, options)
   }
 
   // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
@@ -698,6 +707,8 @@ subprojects {
     // Scalac 2.12 `-release` requires Java 9 or higher, but Scala 2.13 doesn't have that restriction
     if (versions.baseScala == "2.13" || JavaVersion.current().isJava9Compatible())
       scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)]
+
+    addParametersForTests(name, options)
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = defaultMaxHeapSize
@@ -1833,6 +1844,7 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.hamcrest
@@ -2021,6 +2033,7 @@ project(':tools') {
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.main.output
+    testImplementation project(':group-coordinator')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
@@ -2173,10 +2186,13 @@ project(':streams') {
     testCompileOnly project(':streams:test-utils')
 
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':server')
     testImplementation project(':core')
     testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':storage')
+    testImplementation project(':group-coordinator')
+    testImplementation project(':transaction-coordinator')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':server')
@@ -2188,6 +2204,7 @@ project(':streams') {
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
+    testImplementation project(':group-coordinator')
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly libs.slf4jlog4j
@@ -2324,6 +2341,7 @@ project(':streams:streams-scala') {
       // So we make sure to not include it in the dependencies.
       api libs.scalaCollectionCompat
     }
+    testImplementation project(':group-coordinator')
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -2987,12 +3005,15 @@ project(':connect:runtime') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
+    testImplementation project(':server')
     testImplementation project(':metadata')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server')
+    testImplementation project(':group-coordinator')
     testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
+    testImplementation project(':group-coordinator')
 
     testImplementation libs.easymock
     testImplementation libs.junitJupiterApi
@@ -3203,6 +3224,7 @@ project(':connect:mirror') {
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server')
 
     testRuntimeOnly project(':connect:runtime')
     testRuntimeOnly libs.slf4jlog4j
