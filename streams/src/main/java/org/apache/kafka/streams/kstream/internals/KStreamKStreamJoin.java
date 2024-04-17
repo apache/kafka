@@ -131,9 +131,15 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
 
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
-
+            if (sharedTimeTracker.streamTime > inputRecordTimestamp + joinBeforeMs + joinAfterMs + joinGraceMs) {
+                StreamStreamJoinUtil.logSkip(
+                    "Record is too old. It's own window and any matching window on the other input stream are closed.",
+                    LOG, droppedRecordsSensor, context()
+                );
+                return;
+            }
             if (outer && record.key() == null && record.value() != null) {
-                context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
+                onNullKeyRecord(record, inputRecordTimestamp);
                 return;
             } else if (StreamStreamJoinUtil.skipRecord(record, LOG, droppedRecordsSensor, context())) {
                 return;
@@ -159,6 +165,11 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                         // is only cleaned up by stream time, so this is okay for at-least-once.
                         store.putIfAbsent(TimestampedKeyAndJoinSide.make(!isLeftSide, record.key(), otherRecordTimestamp), null);
                     });
+
+                    //skip join if windows of both records closed
+                    if (Math.max(inputRecordTimestamp + joinAfterMs, otherRecordTimestamp + joinBeforeMs) + joinGraceMs < sharedTimeTracker.streamTime) {
+                        continue;
+                    }
 
                     context().forward(
                         record.withValue(joiner.apply(record.key(), record.value(), otherRecord.value))
@@ -193,6 +204,14 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     }
                 }
             }
+        }
+
+        private void onNullKeyRecord(final Record<K, V1> record, final long inputRecordTimestamp) {
+            if (sharedTimeTracker.streamTime > inputRecordTimestamp + joinAfterMs + joinGraceMs) {
+                StreamStreamJoinUtil.logSkip("Null-key record arrived after window close", LOG, droppedRecordsSensor, context());
+                return;
+            }
+            context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
         }
 
         private void emitNonJoinedOuterRecords(
@@ -249,7 +268,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                         // We continue with the next outer record
                         continue;
                     }
-                    
+
                     final K key = timestampedKeyAndJoinSide.getKey();
                     final LeftOrRightValue<V1, V2> leftOrRightValue = next.value;
                     final VOut nullJoinedValue = getNullJoinedValue(key, leftOrRightValue);
@@ -277,17 +296,17 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
 
         @SuppressWarnings("unchecked")
         private VOut getNullJoinedValue(
-            final K key, 
+            final K key,
             final LeftOrRightValue<V1, V2> leftOrRightValue) {
             // depending on the JoinSide fill in the joiner key and joiner values
             if (isLeftSide) {
                 return joiner.apply(key,
-                        leftOrRightValue.getLeftValue(),
-                        leftOrRightValue.getRightValue());
+                    leftOrRightValue.getLeftValue(),
+                    leftOrRightValue.getRightValue());
             } else {
                 return joiner.apply(key,
-                        (V1) leftOrRightValue.getRightValue(),
-                        (V2) leftOrRightValue.getLeftValue());
+                    (V1) leftOrRightValue.getRightValue(),
+                    (V2) leftOrRightValue.getLeftValue());
             }
         }
 

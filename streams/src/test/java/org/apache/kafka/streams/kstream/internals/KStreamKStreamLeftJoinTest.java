@@ -22,12 +22,12 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -890,7 +890,7 @@ public class KStreamKStreamLeftJoinTest {
         joined = stream1.leftJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100), ofMillis(150)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -933,6 +933,20 @@ public class KStreamKStreamLeftJoinTest {
             );
             testUpperWindowBound(expectedKeys, driver, processor);
             testLowerWindowBound(expectedKeys, driver, processor);
+            // push a dummy record to produce all left-join non-joined items
+            inputTopic1.pipeInput(0, "dummy", Long.MAX_VALUE - 20_000L);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "C0+null", 1101L),
+                new KeyValueTimestamp<>(0, "D0+null", 1102L),
+                new KeyValueTimestamp<>(1, "D1+null", 1102L),
+                new KeyValueTimestamp<>(0, "E0+null", 1103L),
+                new KeyValueTimestamp<>(1, "E1+null", 1103L),
+                new KeyValueTimestamp<>(2, "E2+null", 1103L),
+                new KeyValueTimestamp<>(0, "F0+null", 1104L),
+                new KeyValueTimestamp<>(1, "F1+null", 1104L),
+                new KeyValueTimestamp<>(2, "F2+null", 1104L),
+                new KeyValueTimestamp<>(3, "F3+null", 1104L)
+            );
         }
     }
 
@@ -1125,22 +1139,6 @@ public class KStreamKStreamLeftJoinTest {
             inputTopic1.pipeInput(expectedKey, "F" + expectedKey, time);
         }
         processor.checkAndClearProcessResult();
-
-        // push a dummy record to produce all left-join non-joined items
-        time += 301L;
-        inputTopic1.pipeInput(0, "dummy", time);
-        processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(0, "C0+null", 1101L),
-            new KeyValueTimestamp<>(0, "D0+null", 1102L),
-            new KeyValueTimestamp<>(1, "D1+null", 1102L),
-            new KeyValueTimestamp<>(0, "E0+null", 1103L),
-            new KeyValueTimestamp<>(1, "E1+null", 1103L),
-            new KeyValueTimestamp<>(2, "E2+null", 1103L),
-            new KeyValueTimestamp<>(0, "F0+null", 1104L),
-            new KeyValueTimestamp<>(1, "F1+null", 1104L),
-            new KeyValueTimestamp<>(2, "F2+null", 1104L),
-            new KeyValueTimestamp<>(3, "F3+null", 1104L)
-        );
     }
 
     private void testLowerWindowBound(final int[] expectedKeys,
@@ -1313,10 +1311,5 @@ public class KStreamKStreamLeftJoinTest {
             new KeyValueTimestamp<>(2, "K2+b2", 1002L),
             new KeyValueTimestamp<>(3, "K3+b3", 1003L)
         );
-
-        // push a dummy record that should expire non-joined items; it should produce only the dummy+null record because
-        // all previous late records were emitted immediately
-        inputTopic1.pipeInput(0, "dummy", time + 300L);
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "dummy+null", 1203L));
     }
 }

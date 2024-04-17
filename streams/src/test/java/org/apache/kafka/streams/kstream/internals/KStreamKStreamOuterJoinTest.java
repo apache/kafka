@@ -774,7 +774,7 @@ public class KStreamKStreamOuterJoinTest {
         joined = stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100), ofMillis(150)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -818,6 +818,20 @@ public class KStreamKStreamOuterJoinTest {
 
             testUpperWindowBound(expectedKeys, driver, processor);
             testLowerWindowBound(expectedKeys, driver, processor);
+            // push a dummy record to produce all left-join non-joined items
+            inputTopic1.pipeInput(0, "dummy",  Long.MAX_VALUE - 20_000L);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "C0+null", 1101L),
+                new KeyValueTimestamp<>(0, "D0+null", 1102L),
+                new KeyValueTimestamp<>(1, "D1+null", 1102L),
+                new KeyValueTimestamp<>(0, "E0+null", 1103L),
+                new KeyValueTimestamp<>(1, "E1+null", 1103L),
+                new KeyValueTimestamp<>(2, "E2+null", 1103L),
+                new KeyValueTimestamp<>(0, "F0+null", 1104L),
+                new KeyValueTimestamp<>(1, "F1+null", 1104L),
+                new KeyValueTimestamp<>(2, "F2+null", 1104L),
+                new KeyValueTimestamp<>(3, "F3+null", 1104L)
+            );
         }
     }
 
@@ -1216,22 +1230,6 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic1.pipeInput(expectedKey, "F" + expectedKey, time);
         }
         processor.checkAndClearProcessResult();
-
-        // push a dummy record to produce all left-join non-joined items
-        time += 301L;
-        inputTopic1.pipeInput(0, "dummy", time);
-        processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(0, "C0+null", 1101L),
-            new KeyValueTimestamp<>(0, "D0+null", 1102L),
-            new KeyValueTimestamp<>(1, "D1+null", 1102L),
-            new KeyValueTimestamp<>(0, "E0+null", 1103L),
-            new KeyValueTimestamp<>(1, "E1+null", 1103L),
-            new KeyValueTimestamp<>(2, "E2+null", 1103L),
-            new KeyValueTimestamp<>(0, "F0+null", 1104L),
-            new KeyValueTimestamp<>(1, "F1+null", 1104L),
-            new KeyValueTimestamp<>(2, "F2+null", 1104L),
-            new KeyValueTimestamp<>(3, "F3+null", 1104L)
-        );
     }
 
     private void testLowerWindowBound(final int[] expectedKeys,
@@ -1403,13 +1401,6 @@ public class KStreamKStreamOuterJoinTest {
             new KeyValueTimestamp<>(1, "K1+b1", 1001L),
             new KeyValueTimestamp<>(2, "K2+b2", 1002L),
             new KeyValueTimestamp<>(3, "K3+b3", 1003L)
-        );
-
-        // push a dummy record to verify there are no expired records to produce
-        // dummy window is behind the max. stream time seen (1205 used in testUpperWindowBound)
-        inputTopic1.pipeInput(0, "dummy", time + 200L);
-        processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(0, "dummy+null", 1103L)
         );
     }
 

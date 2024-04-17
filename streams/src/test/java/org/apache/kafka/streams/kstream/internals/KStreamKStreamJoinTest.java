@@ -128,7 +128,7 @@ public class KStreamKStreamJoinTest {
 
             assertThat(
                 appender.getMessages(),
-                hasItem("Skipping record due to null key or value. topic=[left] partition=[0] offset=[0]")
+                hasItem("Skipping record. Reason=[null key or value] topic=[left] partition=[0] offset=[0]")
             );
         }
     }
@@ -819,7 +819,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(150)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -1382,7 +1382,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(0)).after(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(0), ofMillis(150)).after(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(),
                 Serdes.String(),
                 Serdes.String())
@@ -1651,7 +1651,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(0)).before(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(0), ofMillis(150)).before(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);

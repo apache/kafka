@@ -274,7 +274,7 @@ public class KStreamKStreamSelfJoinTest {
         final KStream<String, String> innerJoin = stream3.join(
             stream4,
             valueJoiner,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofSeconds(10)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofSeconds(30000L)),
             StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
         );
         innerJoin.process(innerJoinSupplier);
@@ -308,7 +308,7 @@ public class KStreamKStreamSelfJoinTest {
         final KStream<String, String> selfJoin = stream1.join(
             stream2,
             valueJoiner,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofSeconds(10)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofSeconds(30000L)),
             StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
         );
         selfJoin.process(selfJoinSupplier);
