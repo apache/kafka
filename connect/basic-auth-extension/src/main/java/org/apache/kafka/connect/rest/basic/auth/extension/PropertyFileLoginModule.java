@@ -48,13 +48,12 @@ import javax.security.auth.spi.LoginModule;
  */
 public class PropertyFileLoginModule implements LoginModule {
     private static final Logger log = LoggerFactory.getLogger(PropertyFileLoginModule.class);
-    private static final Map<String, Properties> CREDENTIAL_PROPERTIES_MAP = new ConcurrentHashMap<>();
     private static final String FILE_OPTIONS = "file";
+    private static final Map<String, Properties> CREDENTIAL_PROPERTIES = new ConcurrentHashMap<>();
+
     private CallbackHandler callbackHandler;
     private String fileName;
     private boolean authenticated;
-
-    private static final Map<String, Properties> CREDENTIAL_PROPERTIES = new ConcurrentHashMap<>();
 
     @Override
     public void initialize(Subject subject, CallbackHandler callbackHandler, Map<String, ?> sharedState, Map<String, ?> options) {

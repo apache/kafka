@@ -91,13 +91,7 @@ import java.util.stream.Collectors;
 
 public class MirrorSourceConnectorTest {
     private ConfigPropertyFilter getConfigPropertyFilter() {
-        return new ConfigPropertyFilter() {
-            @Override
-            public boolean shouldReplicateConfigProperty(String prop) {
-                return true;
-            }
-
-        };
+        return prop -> true;
     }
 
     @Test

@@ -37,6 +37,7 @@ import org.apache.kafka.common.resource._
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth._
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.apache.kafka.server.config.{KafkaSecurityConfigs, ZkConfigs}
 import org.apache.kafka.server.config.ReplicationConfigs
@@ -134,8 +135,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.READ, AclPermissionType.ALLOW))
 
   // Some needed configuration for brokers, producers, and consumers
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3")
+  this.serverConfig.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
+  this.serverConfig.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "3")
   this.serverConfig.setProperty(KafkaConfig.MinInSyncReplicasProp, "3")
   this.serverConfig.setProperty(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "3")
   this.serverConfig.setProperty(KafkaSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG, "1500")

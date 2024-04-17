@@ -366,6 +366,13 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * @return the current supportedProtocols.
+     */
+    public Map<String, Integer> supportedProtocols() {
+        return supportedProtocols;
+    }
+
+    /**
      * Sets newMemberAdded.
      *
      * @param value the value to set.
@@ -381,6 +388,15 @@ public class ClassicGroup implements Group {
      */
     public void setSubscribedTopics(Optional<Set<String>> subscribedTopics) {
         this.subscribedTopics = subscribedTopics;
+    }
+
+    /**
+     * Sets protocolName.
+     *
+     * @param protocolName the value to set.
+     */
+    public void setProtocolName(Optional<String> protocolName) {
+        this.protocolName = protocolName;
     }
 
     /**
@@ -1226,6 +1242,22 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * Complete all the awaiting join future with the given error.
+     *
+     * @param error  the error to complete the future with.
+     */
+    public void completeAllJoinFutures(
+        Errors error
+    ) {
+        members.forEach((memberId, member) -> completeJoinFuture(
+            member,
+            new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setErrorCode(error.code())
+        ));
+    }
+
+    /**
      * Complete a member's sync future.
      *
      * @param member    the member.
@@ -1245,16 +1277,31 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * Complete all the awaiting sync future with the give error.
+     *
+     * @param error  the error to complete the future with.
+     */
+    public void completeAllSyncFutures(
+        Errors error
+    ) {
+        members.forEach((__, member) -> completeSyncFuture(
+            member,
+            new SyncGroupResponseData()
+                .setErrorCode(error.code())
+        ));
+    }
+
+    /**
      * Initiate the next generation for the group.
      */
     public void initNextGeneration() {
         generationId++;
         if (!members.isEmpty()) {
-            protocolName = Optional.of(selectProtocol());
+            setProtocolName(Optional.of(selectProtocol()));
             subscribedTopics = computeSubscribedTopics();
             transitionTo(COMPLETING_REBALANCE);
         } else {
-            protocolName = Optional.empty();
+            setProtocolName(Optional.empty());
             subscribedTopics = computeSubscribedTopics();
             transitionTo(EMPTY);
         }
