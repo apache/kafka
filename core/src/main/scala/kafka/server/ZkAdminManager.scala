@@ -49,7 +49,7 @@ import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, S
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals}
-import org.apache.kafka.server.config.KafkaLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG
+import org.apache.kafka.server.config.KafkaLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.{Map, mutable, _}
@@ -80,10 +80,10 @@ class ZkAdminManager(val config: KafkaConfig,
   private val configHelper = new ConfigHelper(metadataCache, config, new ZkConfigRepository(adminZkClient))
 
   private val createTopicPolicy =
-    Option(config.getConfiguredInstance(ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, classOf[CreateTopicPolicy]))
+    Option(config.getConfiguredInstance(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, classOf[CreateTopicPolicy]))
 
   private val alterConfigPolicy =
-    Option(config.getConfiguredInstance(ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, classOf[AlterConfigPolicy]))
+    Option(config.getConfiguredInstance(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, classOf[AlterConfigPolicy]))
 
   def hasDelayedTopicOperations = topicPurgatory.numDelayed != 0
 

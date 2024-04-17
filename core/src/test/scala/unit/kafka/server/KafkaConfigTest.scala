@@ -1155,7 +1155,7 @@ class KafkaConfigTest {
     defaults.setProperty(KafkaLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, "12")
     defaults.setProperty(KafkaLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG, "11")
     defaults.setProperty(KafkaLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, "10")
-    //For LOG_FLUSH_INTERVAL_MS_PROP
+    //For LOG_FLUSH_INTERVAL_MS_CONFIG
     defaults.setProperty(KafkaLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG, "123")
     defaults.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, CompressionType.SNAPPY.id.toString)
     // For MetricRecordingLevelProp

@@ -400,8 +400,8 @@ class LogConfigTest {
     }
   }
 
-  /* Verify that when the deprecated config LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_PROP has non default value the new configs
-   * LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_PROP and LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_PROP are not changed from the default we are using
+  /* Verify that when the deprecated config LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG has non default value the new configs
+   * LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG and LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG are not changed from the default we are using
    * the deprecated config for backward compatibility.
    * See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details */
   @nowarn("cat=deprecation")
