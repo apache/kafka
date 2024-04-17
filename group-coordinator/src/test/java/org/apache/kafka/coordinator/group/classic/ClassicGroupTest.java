@@ -42,14 +42,17 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
@@ -1294,6 +1297,84 @@ public class ClassicGroupTest {
 
         group.transitionTo(DEAD);
         assertTrue(group.isInStates(new HashSet<>(Arrays.asList("dead", " ")), 0));
+    }
+
+    @Test
+    public void testCompleteAllJoinFutures() throws ExecutionException, InterruptedException {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
+        List<ClassicGroupMember> memberList = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            memberList.add(new ClassicGroupMember(
+                memberId + i,
+                Optional.empty(),
+                clientId,
+                clientHost,
+                rebalanceTimeoutMs,
+                sessionTimeoutMs,
+                protocolType,
+                protocols
+            ));
+        }
+
+        List<CompletableFuture<JoinGroupResponseData>> joinGroupFutureList = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            CompletableFuture<JoinGroupResponseData> future = new CompletableFuture<>();
+            group.add(memberList.get(i), future);
+            joinGroupFutureList.add(future);
+        }
+
+        assertEquals(3, group.numAwaitingJoinResponse());
+
+        group.completeAllJoinFutures(Errors.REBALANCE_IN_PROGRESS);
+
+        for (int i = 0; i < 3; i++) {
+            assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), joinGroupFutureList.get(i).get().errorCode());
+            assertEquals(memberId + i, joinGroupFutureList.get(i).get().memberId());
+            assertFalse(memberList.get(i).isAwaitingJoin());
+        }
+        assertEquals(0, group.numAwaitingJoinResponse());
+    }
+
+    @Test
+    public void testCompleteAllSyncFutures() throws ExecutionException, InterruptedException {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("roundrobin")
+            .setMetadata(new byte[0]));
+
+        List<ClassicGroupMember> memberList = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            ClassicGroupMember member = new ClassicGroupMember(
+                memberId + i,
+                Optional.empty(),
+                clientId,
+                clientHost,
+                rebalanceTimeoutMs,
+                sessionTimeoutMs,
+                protocolType,
+                protocols
+            );
+            memberList.add(member);
+            group.add(member);
+        }
+
+        List<CompletableFuture<SyncGroupResponseData>> syncGroupFutureList = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            CompletableFuture<SyncGroupResponseData> syncGroupFuture = new CompletableFuture<>();
+            syncGroupFutureList.add(syncGroupFuture);
+            memberList.get(i).setAwaitingSyncFuture(syncGroupFuture);
+        }
+
+        group.completeAllSyncFutures(Errors.REBALANCE_IN_PROGRESS);
+
+        for (int i = 0; i < 3; i++) {
+            assertFalse(memberList.get(i).isAwaitingSync());
+            assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), syncGroupFutureList.get(i).get().errorCode());
+        }
     }
 
     private void assertState(ClassicGroup group, ClassicGroupState targetState) {

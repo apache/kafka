@@ -31,6 +31,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.List;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigException;
@@ -235,7 +236,7 @@ public class PushHttpMetricsReporterTest {
         assertEquals(3, metrics.size());
         List<JsonNode> metricsList = Arrays.asList(metrics.get(0), metrics.get(1), metrics.get(2));
         // Sort metrics based on name so that we can verify the value for each metric below
-        metricsList.sort((m1, m2) -> m1.get("name").textValue().compareTo(m2.get("name").textValue()));
+        metricsList.sort(Comparator.comparing(m -> m.get("name").textValue()));
 
         JsonNode m1 = metricsList.get(0);
         assertEquals("name1", m1.get("name").textValue());
