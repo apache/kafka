@@ -73,7 +73,7 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
                              final FetchConfig fetchConfig,
                              final ShareFetchBuffer shareFetchBuffer,
                              final FetchMetricsManager metricsManager) {
-        this.log = logContext.logger(AbstractFetch.class);
+        this.log = logContext.logger(ShareFetchRequestManager.class);
         this.logContext = logContext;
         this.groupId = groupId;
         this.metadata = metadata;
@@ -295,9 +295,7 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
 
     private Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementBatches(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
         Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementBatches = new HashMap<>();
-        acknowledgementsMap.forEach((partition, acknowledgements) -> {
-            acknowledgementBatches.put(partition, acknowledgements.getAcknowledgmentBatches());
-        });
+        acknowledgementsMap.forEach((partition, acknowledgements) -> acknowledgementBatches.put(partition, acknowledgements.getAcknowledgmentBatches()));
         return acknowledgementBatches;
     }
 
@@ -334,9 +332,7 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
 
     @Override
     public void onMemberEpochUpdated(Optional<Integer> memberEpochOpt, Optional<String> memberIdOpt) {
-        if (memberIdOpt.isPresent()) {
-            memberId = Uuid.fromString(memberIdOpt.get());
-        }
+        memberIdOpt.ifPresent(s -> memberId = Uuid.fromString(s));
     }
 
     @FunctionalInterface

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools.consumer;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.ShareConsumer;
@@ -28,7 +29,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.PrintStream;
 import java.time.Duration;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -60,7 +60,7 @@ public class ConsoleShareConsumerTest {
         });
 
         ConsoleShareConsumer.ConsumerWrapper consumer = new ConsoleShareConsumer.ConsumerWrapper(
-                Optional.of(topic),
+                topic,
                 mockConsumer,
                 timeoutMs
         );
@@ -77,7 +77,7 @@ public class ConsoleShareConsumerTest {
         int messageLimit = 10;
         when(consumer.receive()).thenReturn(record);
 
-        ConsoleShareConsumer.process(messageLimit, formatter, consumer, System.out, true);
+        ConsoleShareConsumer.process(messageLimit, formatter, consumer, System.out, true, AcknowledgeType.ACCEPT);
 
         verify(consumer, times(messageLimit)).receive();
         verify(formatter, times(messageLimit)).writeTo(any(), any());
@@ -97,7 +97,7 @@ public class ConsoleShareConsumerTest {
         //Simulate an error on System.out after the first record has been printed
         when(printStream.checkError()).thenReturn(true);
 
-        ConsoleShareConsumer.process(-1, formatter, consumer, printStream, true);
+        ConsoleShareConsumer.process(-1, formatter, consumer, printStream, true, AcknowledgeType.ACCEPT);
 
         verify(formatter).writeTo(any(), eq(printStream));
         verify(consumer).receive();

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools.consumer;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
 import org.apache.kafka.clients.consumer.ShareConsumer;
@@ -65,12 +66,12 @@ public class ConsoleShareConsumer {
         long timeoutMs = opts.timeoutMs() >= 0 ? opts.timeoutMs() : Long.MAX_VALUE;
 
         ShareConsumer<byte[], byte[]> consumer = new KafkaShareConsumer<>(opts.consumerProps(), new ByteArrayDeserializer(), new ByteArrayDeserializer());
-        ConsumerWrapper consumerWrapper = new ConsumerWrapper(Optional.of(opts.topicArg()), consumer, timeoutMs);
+        ConsumerWrapper consumerWrapper = new ConsumerWrapper(opts.topicArg(), consumer, timeoutMs);
 
         addShutdownHook(consumerWrapper);
 
         try {
-            process(opts.maxMessages(), opts.formatter(), consumerWrapper, System.out, opts.rejectMessageOnError());
+            process(opts.maxMessages(), opts.formatter(), consumerWrapper, System.out, opts.rejectMessageOnError(), opts.acknowledgeType());
         } finally {
             consumerWrapper.cleanup();
             opts.formatter().close();
@@ -92,7 +93,7 @@ public class ConsoleShareConsumer {
     }
 
     static void process(int maxMessages, MessageFormatter formatter, ConsumerWrapper consumer, PrintStream output,
-                        boolean rejectMessageOnError) {
+                        boolean rejectMessageOnError, AcknowledgeType acknowledgeType) {
         while (messageCount < maxMessages || maxMessages == -1) {
             ConsumerRecord<byte[], byte[]> msg;
             try {
@@ -110,11 +111,11 @@ public class ConsoleShareConsumer {
             try {
                 formatter.writeTo(new ConsumerRecord<>(msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), msg.timestampType(),
                         0, 0, msg.key(), msg.value(), msg.headers(), Optional.empty()), output);
-                // TODO : Should acknowledge the message
+                consumer.acknowledge(msg, acknowledgeType);
             } catch (Throwable t) {
                 if (rejectMessageOnError) {
                     LOG.error("Error processing message, skipping this message: ", t);
-                    // TODO : Should send reject Acknowledgement
+                    consumer.acknowledge(msg, AcknowledgeType.REJECT);
                 } else {
                     // Consumer will be closed
                     throw t;
@@ -141,31 +142,26 @@ public class ConsoleShareConsumer {
     }
 
     public static class ConsumerWrapper {
-        final Optional<String> topic;
+        final String topic;
         final ShareConsumer<byte[], byte[]> consumer;
         final long timeoutMs;
         final Time time = Time.SYSTEM;
 
         Iterator<ConsumerRecord<byte[], byte[]>> recordIter = Collections.emptyIterator();
 
-        public ConsumerWrapper(Optional<String> topic,
+        public ConsumerWrapper(String topic,
                                ShareConsumer<byte[], byte[]> consumer,
                                long timeoutMs) {
             this.topic = topic;
             this.consumer = consumer;
             this.timeoutMs = timeoutMs;
 
-            if (topic.isPresent()) {
-                consumer.subscribe(Collections.singletonList(topic.get()));
-            } else {
-                throw new IllegalArgumentException("'topic' must be provided.");
-            }
+            consumer.subscribe(Collections.singletonList(topic));
         }
 
         ConsumerRecord<byte[], byte[]> receive() {
             long startTimeMs = time.milliseconds();
             while (!recordIter.hasNext()) {
-                // TODO : Commit the message
                 recordIter = consumer.poll(Duration.ofMillis(timeoutMs)).iterator();
                 if (!recordIter.hasNext() && (time.milliseconds() - startTimeMs > timeoutMs)) {
                     throw new TimeoutException();
@@ -174,7 +170,9 @@ public class ConsoleShareConsumer {
             return recordIter.next();
         }
 
-        // TODO : Add acknowledge() function
+        void acknowledge(ConsumerRecord<byte[], byte[]> record, AcknowledgeType acknowledgeType) {
+            consumer.acknowledge(record, acknowledgeType);
+        }
 
         void wakeup() {
             this.consumer.wakeup();

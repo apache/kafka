@@ -18,6 +18,7 @@ package org.apache.kafka.tools.consumer;
 
 import joptsimple.OptionException;
 import joptsimple.OptionSpec;
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.utils.Utils;
@@ -40,6 +41,8 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
     private final OptionSpec<String> valueDeserializerOpt;
     private final OptionSpec<Integer> maxMessagesOpt;
     private final OptionSpec<?> rejectMessageOnErrorOpt;
+    private final OptionSpec<?> rejectOpt;
+    private final OptionSpec<?> releaseOpt;
     private final OptionSpec<String> topicOpt;
     private final OptionSpec<Integer> timeoutMsOpt;
     private final OptionSpec<String> bootstrapServerOpt;
@@ -98,6 +101,8 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                 .withRequiredArg()
                 .describedAs("timeout_ms")
                 .ofType(Integer.class);
+        rejectOpt = parser.accepts("reject", "If specified, messages are rejected as they are consumed.");
+        releaseOpt = parser.accepts("release", "If specified, messages are released as they are consumed.");
         rejectMessageOnErrorOpt = parser.accepts("reject-message-on-error", "If there is an error when processing a message, " +
                 "reject it instead of halt.");
         bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to.")
@@ -114,7 +119,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                 .ofType(String.class);
         groupIdOpt = parser.accepts("group", "The share group id of the consumer.")
                 .withRequiredArg()
-                .describedAs("consumer group id")
+                .describedAs("share group id")
                 .ofType(String.class);
 
         try {
@@ -126,6 +131,10 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
         CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from Kafka topics using share groups and outputs it to standard output.");
 
         checkRequiredArgs();
+
+        if (options.has(rejectOpt) && options.has(releaseOpt)) {
+            CommandLineUtils.printUsageAndExit(parser, "At most one of --reject and --release may be specified.");
+        }
 
         Properties consumerPropsFromFile = options.has(consumerConfigOpt)
                 ? Utils.loadProps(options.valueOf(consumerConfigOpt))
@@ -208,6 +217,16 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
 
     boolean rejectMessageOnError() {
         return options.has(rejectMessageOnErrorOpt);
+    }
+
+    AcknowledgeType acknowledgeType() {
+        if (options.has(rejectOpt)) {
+            return AcknowledgeType.REJECT;
+        } else if (options.has(releaseOpt)) {
+            return AcknowledgeType.RELEASE;
+        } else {
+            return AcknowledgeType.ACCEPT;
+        }
     }
 
     String topicArg() {
