@@ -203,7 +203,7 @@ public class WorkerConnector implements Runnable {
         }
     }
 
-    private boolean doStart() throws Throwable {
+    private boolean doStart() {
         try {
             switch (state) {
                 case STARTED:
@@ -235,12 +235,12 @@ public class WorkerConnector implements Runnable {
         this.state = State.FAILED;
     }
 
-    private void resume() throws Throwable {
+    private void resume() {
         if (doStart())
             statusListener.onResume(connName);
     }
 
-    private void start() throws Throwable {
+    private void start() {
         if (doStart())
             statusListener.onStartup(connName);
     }
@@ -392,7 +392,7 @@ public class WorkerConnector implements Runnable {
         }
     }
 
-    private void doTransitionTo(TargetState targetState) throws Throwable {
+    private void doTransitionTo(TargetState targetState) {
         log.debug("{} Transition connector to {}", this, targetState);
         if (targetState == TargetState.PAUSED) {
             suspend(true);
