@@ -203,10 +203,10 @@ public class MirrorCheckpointConnector extends SourceConnector {
                     .collect(Collectors.toSet());
             // Only perform checkpoints for groups that have offsets for at least one topic that's accepted
             // by the topic filter.
-            if (consumedTopics.size() > 0) {
-                checkpointGroups.add(group);
-            } else {
+            if (consumedTopics.isEmpty()) {
                 irrelevantGroups.add(group);
+            } else {
+                checkpointGroups.add(group);
             }
         }
 

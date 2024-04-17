@@ -92,10 +92,6 @@ public class TopicAdmin implements AutoCloseable {
             return created;
         }
 
-        public Set<String> existingTopics() {
-            return existing;
-        }
-
         public boolean isCreated(String topicName) {
             return created.contains(topicName);
         }
@@ -135,8 +131,6 @@ public class TopicAdmin implements AutoCloseable {
 
     private static final String CLEANUP_POLICY_CONFIG = TopicConfig.CLEANUP_POLICY_CONFIG;
     private static final String CLEANUP_POLICY_COMPACT = TopicConfig.CLEANUP_POLICY_COMPACT;
-    private static final String MIN_INSYNC_REPLICAS_CONFIG = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
-    private static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
 
     /**
      * A builder of {@link NewTopic} instances.
@@ -204,29 +198,6 @@ public class TopicAdmin implements AutoCloseable {
          */
         public NewTopicBuilder compacted() {
             this.configs.put(CLEANUP_POLICY_CONFIG, CLEANUP_POLICY_COMPACT);
-            return this;
-        }
-
-        /**
-         * Specify the minimum number of in-sync replicas required for this topic.
-         *
-         * @param minInSyncReplicas the minimum number of in-sync replicas allowed for the topic; must be positive
-         * @return this builder to allow methods to be chained; never null
-         */
-        public NewTopicBuilder minInSyncReplicas(short minInSyncReplicas) {
-            this.configs.put(MIN_INSYNC_REPLICAS_CONFIG, Short.toString(minInSyncReplicas));
-            return this;
-        }
-
-        /**
-         * Specify whether the broker is allowed to elect a leader that was not an in-sync replica when no ISRs
-         * are available.
-         *
-         * @param allow true if unclean leaders can be elected, or false if they are not allowed
-         * @return this builder to allow methods to be chained; never null
-         */
-        public NewTopicBuilder uncleanLeaderElection(boolean allow) {
-            this.configs.put(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, Boolean.toString(allow));
             return this;
         }
 

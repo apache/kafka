@@ -441,8 +441,12 @@ object StorageTool extends Logging {
         "Use --ignore-formatted to ignore this directory and format the others.")
     }
     if (!copier.errorLogDirs().isEmpty) {
-      val firstLogDir = copier.errorLogDirs().iterator().next()
-      throw new TerseFailure(s"I/O error trying to read log directory $firstLogDir.")
+      copier.errorLogDirs().forEach(errorLogDir => {
+        stream.println(s"I/O error trying to read log directory $errorLogDir. Ignoring...")
+      })
+      if (metaPropertiesEnsemble.emptyLogDirs().isEmpty && copier.logDirProps().isEmpty) {
+        throw new TerseFailure("No available log directories to format.")
+      }
     }
     if (metaPropertiesEnsemble.emptyLogDirs().isEmpty) {
       stream.println("All of the log directories are already formatted.")
