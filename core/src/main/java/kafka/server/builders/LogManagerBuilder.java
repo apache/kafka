@@ -152,6 +152,11 @@ public class LogManagerBuilder {
         return this;
     }
 
+    public LogManagerBuilder setInitialTaskDelayMs(long initialTaskDelayMs) {
+        this.initialTaskDelayMs = initialTaskDelayMs;
+        return this;
+    }
+
     public LogManager build() {
         if (logDirs == null) throw new RuntimeException("you must set logDirs");
         if (configRepository == null) throw new RuntimeException("you must set configRepository");
