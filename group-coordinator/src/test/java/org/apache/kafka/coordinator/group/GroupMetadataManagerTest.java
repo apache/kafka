@@ -10487,6 +10487,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertRecordsEquals(expectedRecords, result.records());
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
         // The new classic member 1 has a heartbeat timeout.
@@ -10621,6 +10622,7 @@ public class GroupMetadataManagerTest {
         // Member 2 should be fenced from the group, thus triggering the downgrade.
         context.sleep(45000 + 1);
 
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
         // The new classic member 1 has a heartbeat timeout.
