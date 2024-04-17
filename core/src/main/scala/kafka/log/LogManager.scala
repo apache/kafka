@@ -1242,7 +1242,9 @@ class LogManager(logDirs: Seq[File],
     futureLogs.remove(topicPartition)
     currentLogs.put(topicPartition, destLog)
     if (cleaner != null) {
-      cleaner.alterCheckpointDir(topicPartition, sourceLog.map(_.parentDirFile), destLog.parentDirFile)
+      sourceLog.foreach { srcLog =>
+        cleaner.alterCheckpointDir(topicPartition, srcLog.parentDirFile, destLog.parentDirFile)
+      }
       resumeCleaning(topicPartition)
     }
 

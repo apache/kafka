@@ -470,7 +470,7 @@ class LogCleanerManagerTest extends Logging {
     cleanerManager.updateCheckpoints(logDir, partitionToUpdateOrAdd = Option(topicPartition, offset))
     assertEquals(offset, cleanerManager.allCleanerCheckpoints(topicPartition))
 
-    cleanerManager.alterCheckpointDir(topicPartition, Option(logDir), logDir2)
+    cleanerManager.alterCheckpointDir(topicPartition, logDir, logDir2)
     // verify we still can get the partition offset after alterCheckpointDir
     // This data should locate in logDir2, not logDir
     assertEquals(offset, cleanerManager.allCleanerCheckpoints(topicPartition))

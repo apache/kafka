@@ -256,7 +256,7 @@ class LogCleaner(initialConfig: CleanerConfig,
    * @param sourceLogDir The source log dir to remove checkpoint
    * @param destLogDir The dest log dir to remove checkpoint
    */
-  def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: Option[File], destLogDir: File): Unit = {
+  def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: File, destLogDir: File): Unit = {
     cleanerManager.alterCheckpointDir(topicPartition, sourceLogDir, destLogDir)
   }
 
