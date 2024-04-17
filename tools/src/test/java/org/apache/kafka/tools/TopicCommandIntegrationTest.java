@@ -71,6 +71,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_MAX_BYTES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -114,7 +115,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
         List<KafkaConfig> configs = new ArrayList<>();
         for (Properties props : brokerConfigs) {
-            props.put(KafkaConfig.ReplicaFetchMaxBytesProp(), "1");
+            props.put(REPLICA_FETCH_MAX_BYTES_CONFIG, "1");
             configs.add(KafkaConfig.fromProps(props));
         }
         return JavaConverters.asScalaBuffer(configs).toSeq();

@@ -102,11 +102,7 @@ public class DeferredEventQueue {
                     offset + " which is lower than that.");
             }
         }
-        List<DeferredEvent> events = pending.get(offset);
-        if (events == null) {
-            events = new ArrayList<>();
-            pending.put(offset, events);
-        }
+        List<DeferredEvent> events = pending.computeIfAbsent(offset, k -> new ArrayList<>());
         events.add(event);
         if (log.isTraceEnabled()) {
             log.trace("Adding deferred event {} at offset {}", event, offset);

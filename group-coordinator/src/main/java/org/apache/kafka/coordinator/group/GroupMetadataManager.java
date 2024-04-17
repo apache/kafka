@@ -48,6 +48,7 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
@@ -238,7 +239,7 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withGroupProtocolMigrationPolicy(ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy) {
+        Builder withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy) {
             this.consumerGroupMigrationPolicy = consumerGroupMigrationPolicy;
             return this;
         }
@@ -629,10 +630,11 @@ public class GroupMetadataManager {
         } else {
             if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
+            } else if (createIfNotExists && validateOnlineUpgrade((ClassicGroup) group)) {
+                return convertToConsumerGroup((ClassicGroup) group, records);
             } else {
-                // We don't support upgrading/downgrading between protocols at the moment so
-                // we throw an exception if a group exists with the wrong type.
-                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
+                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
+                    groupId));
             }
         }
     }
@@ -773,6 +775,73 @@ public class GroupMetadataManager {
             throw new GroupIdNotFoundException(String.format("Group %s is not a classic group.",
                 groupId));
         }
+    }
+
+    /**
+     * Validates the online upgrade if the Classic Group receives a ConsumerGroupHeartbeat request.
+     *
+     * @param classicGroup A ClassicGroup.
+     * @return The boolean indicating whether it's valid to online upgrade the classic group.
+     */
+    private boolean validateOnlineUpgrade(ClassicGroup classicGroup) {
+        if (!consumerGroupMigrationPolicy.isUpgradeEnabled()) {
+            log.info("Cannot upgrade classic group {} to consumer group because the online upgrade is disabled.",
+                classicGroup.groupId());
+            return false;
+        } else if (!classicGroup.usesConsumerGroupProtocol()) {
+            log.info("Cannot upgrade classic group {} to consumer group because the group does not use the consumer embedded protocol.",
+                classicGroup.groupId());
+            return false;
+        } else if (classicGroup.size() > consumerGroupMaxSize) {
+            log.info("Cannot upgrade classic group {} to consumer group because the group size exceeds the consumer group maximum size.",
+                classicGroup.groupId());
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Creates a ConsumerGroup corresponding to the given classic group.
+     *
+     * @param classicGroup  The ClassicGroup to convert.
+     * @param records       The list of Records.
+     * @return The created ConsumerGroup.
+     */
+    ConsumerGroup convertToConsumerGroup(ClassicGroup classicGroup, List<Record> records) {
+        // The upgrade is always triggered by a new member joining the classic group, which always results in
+        // updatedMember.subscribedTopicNames changing, the group epoch being bumped, and triggering a new rebalance.
+        // If the ClassicGroup is rebalancing, inform the awaiting consumers of another ongoing rebalance
+        // so that they will rejoin for the new rebalance.
+        classicGroup.completeAllJoinFutures(Errors.REBALANCE_IN_PROGRESS);
+        classicGroup.completeAllSyncFutures(Errors.REBALANCE_IN_PROGRESS);
+
+        classicGroup.createGroupTombstoneRecords(records);
+
+        ConsumerGroup consumerGroup;
+        try {
+            consumerGroup = ConsumerGroup.fromClassicGroup(
+                snapshotRegistry,
+                metrics,
+                classicGroup,
+                metadataImage.topics()
+            );
+        } catch (SchemaException e) {
+            log.warn("Cannot upgrade the classic group " + classicGroup.groupId() +
+                " to consumer group because the embedded consumer protocol is malformed: "
+                + e.getMessage() + ".", e);
+
+            throw new GroupIdNotFoundException("Cannot upgrade the classic group " + classicGroup.groupId() +
+                " to consumer group because the embedded consumer protocol is malformed.");
+        }
+        consumerGroup.createConsumerGroupRecords(records);
+
+        // Create the session timeouts for the new members. If the conversion fails, the group will remain a
+        // classic group, thus these timers will fail the group type check and do nothing.
+        consumerGroup.members().forEach((memberId, __) ->
+            scheduleConsumerGroupSessionTimeout(consumerGroup.groupId(), memberId)
+        );
+
+        return consumerGroup;
     }
 
     /**

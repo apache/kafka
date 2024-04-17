@@ -57,20 +57,17 @@ final public class ElectLeadersResult {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
 
         partitions().whenComplete(
-                new KafkaFuture.BiConsumer<Map<TopicPartition, Optional<Throwable>>, Throwable>() {
-                    @Override
-                    public void accept(Map<TopicPartition, Optional<Throwable>> topicPartitions, Throwable throwable) {
-                        if (throwable != null) {
-                            result.completeExceptionally(throwable);
-                        } else {
-                            for (Optional<Throwable> exception : topicPartitions.values()) {
-                                if (exception.isPresent()) {
-                                    result.completeExceptionally(exception.get());
-                                    return;
-                                }
+                (topicPartitions, throwable) -> {
+                    if (throwable != null) {
+                        result.completeExceptionally(throwable);
+                    } else {
+                        for (Optional<Throwable> exception : topicPartitions.values()) {
+                            if (exception.isPresent()) {
+                                result.completeExceptionally(exception.get());
+                                return;
                             }
-                            result.complete(null);
                         }
+                        result.complete(null);
                     }
                 });
 
