@@ -111,6 +111,7 @@ import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListE
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupJoinKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
@@ -10332,9 +10333,8 @@ public class GroupMetadataManagerTest {
             .setErrorCode(NOT_COORDINATOR.code()), pendingMemberSyncResult.syncFuture.get());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testLastClassicProtocolMemberLeavingConsumerGroup(boolean appendLogSuccessfully) {
+    @Test
+    public void testLastClassicProtocolMemberLeavingConsumerGroup() {
         String groupId = "group-id";
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
@@ -10372,6 +10372,7 @@ public class GroupMetadataManagerTest {
             .setClientHost("localhost/127.0.0.1")
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(protocols))
             .setAssignedPartitions(mkAssignment(
@@ -10387,6 +10388,7 @@ public class GroupMetadataManagerTest {
             // Use zar only here to ensure that metadata needs to be recomputed.
             .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
             .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 2)))
@@ -10487,31 +10489,26 @@ public class GroupMetadataManagerTest {
         assertRecordsEquals(expectedRecords, result.records());
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
-        if (appendLogSuccessfully) {
-            ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
+        // The new classic member 1 has a heartbeat timeout.
+        ScheduledTimeout<Void, Record> heartbeatTimeout = context.timer.timeout(
+            classicGroupHeartbeatKey(groupId, memberId1));
+        assertNotNull(heartbeatTimeout);
+        // The new rebalance has a groupJoin timeout.
+        ScheduledTimeout<Void, Record> groupJoinTimeout = context.timer.timeout(
+            classicGroupJoinKey(groupId));
+        assertNotNull(groupJoinTimeout);
 
-            // Simulate a successful write to the log.
-            result.appendFuture().complete(null);
+        // A new rebalance is triggered.
+        ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
+        assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
 
-            ScheduledTimeout<Void, Record> timeout = context.timer.timeout(
-                classicGroupHeartbeatKey(groupId, memberId1));
-            assertNotNull(timeout);
+        // Simulate a failed write to the log.
+        result.appendFuture().completeExceptionally(new NotLeaderOrFollowerException());
+        context.rollback();
 
-            // A new rebalance is triggered.
-            assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
-        } else {
-            // Simulate a failed write to the log.
-            result.appendFuture().completeExceptionally(new NotLeaderOrFollowerException());
-            context.rollback();
-
-            ScheduledTimeout<Void, Record> timeout = context.timer.timeout(
-                classicGroupHeartbeatKey(groupId, memberId1));
-            assertNull(timeout);
-
-            // The group is reverted back to the consumer group.
-            assertEquals(consumerGroup, context.groupMetadataManager.consumerGroup(groupId));
-            verify(context.metrics, times(1)).onClassicGroupStateTransition(STABLE, null);
-        }
+        // The group is reverted back to the consumer group.
+        assertEquals(consumerGroup, context.groupMetadataManager.consumerGroup(groupId));
+        verify(context.metrics, times(1)).onClassicGroupStateTransition(PREPARING_REBALANCE, null);
     }
 
     @Test
@@ -10553,6 +10550,7 @@ public class GroupMetadataManagerTest {
             .setClientHost("localhost/127.0.0.1")
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(protocols))
             .setAssignedPartitions(mkAssignment(
@@ -10568,6 +10566,7 @@ public class GroupMetadataManagerTest {
             // Use zar only here to ensure that metadata needs to be recomputed.
             .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
             .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 2)))
@@ -10605,7 +10604,6 @@ public class GroupMetadataManagerTest {
         }));
 
         context.commit();
-        ConsumerGroup consumerGroup = context.groupMetadataManager.consumerGroup(groupId);
 
         // Session timer is scheduled on the heartbeat.
         context.consumerGroupHeartbeat(
@@ -10616,14 +10614,27 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
                 .setTopicPartitions(Collections.emptyList()));
 
-        // Verify that there is a session time.
+        // Verify that there is a session timeout.
         context.assertSessionTimeout(groupId, memberId2, 45000);
 
         // Advance time past the session timeout.
         // Member 2 should be fenced from the group, thus triggering the downgrade.
-        List<ExpiredTimeout<Void, Record>> timeouts = context.sleep(45000 + 1);
+        context.sleep(45000 + 1);
 
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
+
+        // The new classic member 1 has a heartbeat timeout.
+        ScheduledTimeout<Void, Record> heartbeatTimeout = context.timer.timeout(
+            classicGroupHeartbeatKey(groupId, memberId1));
+        assertNotNull(heartbeatTimeout);
+        // The new rebalance has a groupJoin timeout.
+        ScheduledTimeout<Void, Record> groupJoinTimeout = context.timer.timeout(
+            classicGroupJoinKey(groupId));
+        assertNotNull(groupJoinTimeout);
+
+        // A new rebalance is triggered.
+        ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
+        assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
     }
 
     private static void checkJoinGroupResponse(

@@ -830,13 +830,12 @@ public class GroupMetadataManager {
 
         groups.put(consumerGroup.groupId(), classicGroup);
         metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
+        classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
+        prepareRebalance(classicGroup, String.format("Downgrade group %s.", classicGroup.groupId()));
 
         CompletableFuture<Void> appendFuture = new CompletableFuture<>();
         appendFuture.whenComplete((__, t) -> {
-            if (t == null) {
-                classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
-                prepareRebalance(classicGroup, String.format("Downgrade group %s.", classicGroup.groupId()));
-            } else {
+            if (t != null) {
                 metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
             }
         });
