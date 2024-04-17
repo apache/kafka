@@ -114,6 +114,13 @@ ext {
   repo = file("$rootDir/.git").isDirectory() ? Grgit.open(currentDir: project.getRootDir()) : null
 
   commitId = determineCommitId()
+
+  addParametersForTests = { name, options ->
+    // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
+    // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
+    if (name == "compileTestJava" || name == "compileTestScala")
+      options.compilerArgs << "-parameters"
+  }
 }
 
 allprojects {
@@ -278,11 +285,9 @@ subprojects {
     // --source/--target 8 is deprecated in Java 20, suppress warning until Java 8 support is dropped in Kafka 4.0
     if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_20))
       options.compilerArgs << "-Xlint:-options"
-  }
 
-  // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
-  // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
-  compileTestJava.options.compilerArgs.add "-parameters"
+    addParametersForTests(name, options)
+  }
 
   // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
   // `-target` incorrectly if this is unset
@@ -702,6 +707,8 @@ subprojects {
     // Scalac 2.12 `-release` requires Java 9 or higher, but Scala 2.13 doesn't have that restriction
     if (versions.baseScala == "2.13" || JavaVersion.current().isJava9Compatible())
       scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)]
+
+    addParametersForTests(name, options)
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = defaultMaxHeapSize
