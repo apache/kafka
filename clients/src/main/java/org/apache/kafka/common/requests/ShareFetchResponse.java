@@ -177,7 +177,7 @@ public class ShareFetchResponse extends AbstractResponse {
     public static ShareFetchResponseData toMessage(Errors error, int throttleTimeMs,
                                                     Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator,
                                                     List<Node> nodeEndpoints) {
-        List<ShareFetchResponseData.ShareFetchableTopicResponse> topicResponseList = new ArrayList<>();
+        Map<Uuid, ShareFetchResponseData.ShareFetchableTopicResponse> topicResponseList = new HashMap<>();
         while (partIterator.hasNext()) {
             Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry = partIterator.next();
             ShareFetchResponseData.PartitionData partitionData = entry.getValue();
@@ -185,14 +185,12 @@ public class ShareFetchResponse extends AbstractResponse {
             partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
             // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
             // batch is in the same topic group.
-            ShareFetchResponseData.ShareFetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null
-                    : topicResponseList.get(topicResponseList.size() - 1);
-            if (matchingTopic(previousTopic, entry.getKey()))
-                previousTopic.partitions().add(partitionData);
-            else {
+            if (topicResponseList.containsKey(entry.getKey().topicId())) {
+                topicResponseList.get(entry.getKey().topicId()).partitions().add(partitionData);
+            } else {
                 List<ShareFetchResponseData.PartitionData> partitionResponses = new ArrayList<>();
                 partitionResponses.add(partitionData);
-                topicResponseList.add(new ShareFetchResponseData.ShareFetchableTopicResponse()
+                topicResponseList.put(entry.getKey().topicId(), new ShareFetchResponseData.ShareFetchableTopicResponse()
                         .setTopicId(entry.getKey().topicId())
                         .setPartitions(partitionResponses));
             }
@@ -207,7 +205,7 @@ public class ShareFetchResponse extends AbstractResponse {
                         .setRack(endpoint.rack())));
         return data.setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())
-                .setResponses(topicResponseList);
+                .setResponses(new ArrayList<>(topicResponseList.values()));
     }
 
     public static ShareFetchResponseData.PartitionData partitionResponse(TopicIdPartition topicIdPartition, Errors error) {
