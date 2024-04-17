@@ -47,6 +47,7 @@ import scala.jdk.javaapi.CollectionConverters;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -208,7 +209,7 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
         producer.send(record);
         KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
                 new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
-        shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgeCommitCallBack());
+        shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgeCommitCallback());
         shareConsumer.subscribe(Collections.singleton(tp().topic()));
 
         ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
@@ -235,7 +236,7 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
         producer.send(record);
         KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
                 new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
-        shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgeCommitCallBack());
+        shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgeCommitCallback());
         shareConsumer.subscribe(Collections.singleton(tp().topic()));
 
         ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
@@ -641,9 +642,7 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
         ExecutorService producerExecutorService = Executors.newFixedThreadPool(producerCount);
 
         for (int i = 0; i < producerCount; i++) {
-            Runnable task = () -> {
-                produceMessages(messagesPerProducer);
-            };
+            Runnable task = () -> produceMessages(messagesPerProducer);
             producerExecutorService.submit(task);
         }
 
@@ -933,9 +932,53 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
         shareConsumer1.close();
     }
 
-    public class TestableAcknowledgeCommitCallBack implements AcknowledgementCommitCallback {
+    /**
+     * Test to verify that the acknowledgement commit callback cannot invoke methods of KafkaShareConsumer.
+     * The exception thrown is verified in {@link TestableAcknowledgeCommitCallbackWithShareConsumer}
+     */
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testAcknowledgeCommitCallbackCallsShareConsumerClose(String quorum) throws Exception {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        producer.send(record);
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+
+        shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgeCommitCallbackWithShareConsumer<>(shareConsumer));
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+
+        // The acknowledgment commit callback will try to call a method of KafkaShareConsumer
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
+        // The second poll sends the acknowledgments implicitly.
+        shareConsumer.poll(Duration.ofMillis(2000));
+        // Till now acknowledgement commit callback has not been called, so no exception thrown yet.
+        // On 3rd poll, the acknowledgement commit callback will be called and exception is thrown.
+        shareConsumer.poll(Duration.ofMillis(2000));
+        shareConsumer.close();
+    }
+
+    public class TestableAcknowledgeCommitCallback implements AcknowledgementCommitCallback {
         @Override
         public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
+            offsetsMap.forEach((partition, offsets) -> offsets.forEach(offset -> {
+                partitionExceptionMap.put(partition.topicPartition(), exception);
+            }));
+        }
+    }
+
+    public class TestableAcknowledgeCommitCallbackWithShareConsumer<K, V> implements AcknowledgementCommitCallback {
+        private final KafkaShareConsumer<K, V> shareConsumer;
+        TestableAcknowledgeCommitCallbackWithShareConsumer(KafkaShareConsumer<K, V> shareConsumer) {
+            this.shareConsumer = shareConsumer;
+        }
+        @Override
+        public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
+            // Accessing methods of KafkaShareConsumer should throw an exception.
+            assertThrows(ConcurrentModificationException.class, shareConsumer::close);
+            assertThrows(ConcurrentModificationException.class, () -> shareConsumer.subscribe(Collections.singleton(tp().topic())));
+            assertThrows(ConcurrentModificationException.class, () -> shareConsumer.poll(Duration.ofMillis(2000)));
+
             offsetsMap.forEach((partition, offsets) -> offsets.forEach(offset -> {
                 partitionExceptionMap.put(partition.topicPartition(), exception);
             }));

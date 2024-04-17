@@ -694,6 +694,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
                     "currentThread(name: " + thread.getName() + ", id: " + threadId + ")" +
                     " otherThread(id: " + currentThread.get() + ")"
             );
+        if (acknowledgementCommitCallbackHandler != null && acknowledgementCommitCallbackHandler.hasEnteredCallback()) {
+            throw new ConcurrentModificationException("KafkaShareConsumer methods are not accessible from user-defined" +
+                    "acknowledgement commit callback");
+        }
         refCount.incrementAndGet();
     }
 
