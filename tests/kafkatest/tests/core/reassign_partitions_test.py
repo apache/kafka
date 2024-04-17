@@ -19,7 +19,7 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.services.kafka import config_property
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService, quorum, consumer_group
+from kafkatest.services.kafka import KafkaService, quorum, consumer_group, TopicPartition
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
