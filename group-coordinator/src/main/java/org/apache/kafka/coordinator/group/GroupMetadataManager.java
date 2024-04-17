@@ -828,8 +828,11 @@ public class GroupMetadataManager {
         }
         classicGroup.createConsumerGroupRecords(metadataImage.features().metadataVersion(), records);
 
+        removeGroup(consumerGroup.groupId());
+
         groups.put(consumerGroup.groupId(), classicGroup);
         metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
+
         classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
         prepareRebalance(classicGroup, String.format("Downgrade group %s.", classicGroup.groupId()));
 
