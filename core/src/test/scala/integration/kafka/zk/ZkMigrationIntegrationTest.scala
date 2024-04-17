@@ -538,9 +538,9 @@ class ZkMigrationIntegrationTest {
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
       admin = zkCluster.createAdminClient()
-      alterTopicConfig(admin).all().get(60, TimeUnit.SECONDS)
-      alterClientQuotas(admin).all().get(60, TimeUnit.SECONDS)
-      alterBrokerConfigs(admin).all().get(60, TimeUnit.SECONDS)
+      alterTopicConfig(admin)
+      alterClientQuotas(admin)
+      alterBrokerConfigs(admin)
 
       // Verify the changes made to KRaft are seen in ZK
       log.info("Verifying metadata changes with ZK")
@@ -549,7 +549,8 @@ class ZkMigrationIntegrationTest {
       verifyBrokerConfigs(zkClient)
       val nextKRaftProducerId = sendAllocateProducerIds(zkCluster.asInstanceOf[ZkClusterInstance]).get(30, TimeUnit.SECONDS)
       assertNotEquals(nextProducerId, nextKRaftProducerId)
-
+    } catch {
+      case t: Throwable => fail("Uncaught error in test", t)
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
     }
@@ -899,31 +900,47 @@ class ZkMigrationIntegrationTest {
     dataOpt.map(ProducerIdBlockZNode.parseProducerIdBlockData).get
   }
 
-  def alterBrokerConfigs(admin: Admin): AlterConfigsResult = {
+  def alterBrokerConfigs(admin: Admin): Unit = {
     val defaultBrokerResource = new ConfigResource(ConfigResource.Type.BROKER, "")
     val defaultBrokerConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(KafkaConfig.LogRetentionTimeMillisProp, "86400000"), AlterConfigOp.OpType.SET),
     ).asJavaCollection
-    val specificBrokerResource = new ConfigResource(ConfigResource.Type.BROKER, "1")
+    val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
+    val broker1Resource = new ConfigResource(ConfigResource.Type.BROKER, "1")
     val specificBrokerConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(KafkaConfig.LogRetentionTimeMillisProp, "43200000"), AlterConfigOp.OpType.SET),
     ).asJavaCollection
-    admin.incrementalAlterConfigs(Map(
-      defaultBrokerResource -> defaultBrokerConfigs,
-      specificBrokerResource -> specificBrokerConfigs
-    ).asJava)
+
+    TestUtils.retry(60000) {
+      val result = admin.incrementalAlterConfigs(Map(
+        defaultBrokerResource -> defaultBrokerConfigs,
+        broker0Resource -> specificBrokerConfigs,
+        broker1Resource -> specificBrokerConfigs
+      ).asJava)
+      try {
+        result.all().get(10, TimeUnit.SECONDS)
+      } catch {
+        case t: Throwable => fail("Alter Broker Configs had an error", t)
+      }
+    }
   }
 
-  def alterTopicConfig(admin: Admin): AlterConfigsResult = {
+  def alterTopicConfig(admin: Admin): Unit = {
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, "test")
     val alterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_BYTES_CONFIG, "204800"), AlterConfigOp.OpType.SET),
       new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_MS_CONFIG, null), AlterConfigOp.OpType.DELETE)
     ).asJavaCollection
-    admin.incrementalAlterConfigs(Map(topicResource -> alterConfigs).asJava)
+    TestUtils.retry(60000) {
+      try {
+        admin.incrementalAlterConfigs(Map(topicResource -> alterConfigs).asJava).all().get(10, TimeUnit.SECONDS)
+      } catch {
+        case t: Throwable => fail("Alter Topic Configs had an error", t)
+      }
+    }
   }
 
-  def alterClientQuotas(admin: Admin): AlterClientQuotasResult = {
+  def alterClientQuotas(admin: Admin): Unit = {
     val quotas = new util.ArrayList[ClientQuotaAlteration]()
     quotas.add(new ClientQuotaAlteration(
       new ClientQuotaEntity(Map("user" -> "user@1").asJava),
@@ -937,7 +954,11 @@ class ZkMigrationIntegrationTest {
     quotas.add(new ClientQuotaAlteration(
       new ClientQuotaEntity(Map("ip" -> "8.8.8.8").asJava),
       List(new ClientQuotaAlteration.Op("connection_creation_rate", 10.0)).asJava))
-    admin.alterClientQuotas(quotas)
+    try {
+      admin.alterClientQuotas(quotas).all().get(10, TimeUnit.SECONDS)
+    } catch {
+      case t: Throwable => fail("Alter Client Quotas had an error", t)
+    }
   }
 
   def createUserScramCredentials(admin: Admin): AlterUserScramCredentialsResult = {
@@ -969,8 +990,11 @@ class ZkMigrationIntegrationTest {
       val defaultBrokerProps = zkClient.getEntityConfigs(ConfigType.BROKER, "<default>")
       assertEquals("86400000", defaultBrokerProps.getProperty(KafkaConfig.LogRetentionTimeMillisProp))
 
-      val specificBrokerProps = zkClient.getEntityConfigs(ConfigType.BROKER, "1")
-      assertEquals("43200000", specificBrokerProps.getProperty(KafkaConfig.LogRetentionTimeMillisProp))
+      val broker0Props = zkClient.getEntityConfigs(ConfigType.BROKER, "0")
+      assertEquals("43200000", broker0Props.getProperty(KafkaConfig.LogRetentionTimeMillisProp))
+
+      val broker1Props = zkClient.getEntityConfigs(ConfigType.BROKER, "1")
+      assertEquals("43200000", broker1Props.getProperty(KafkaConfig.LogRetentionTimeMillisProp))
     }
   }
 

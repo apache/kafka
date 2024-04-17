@@ -2990,6 +2990,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val preprocessingResponses = configManager.preprocess(original.data(),
       (rType, rName) => authHelper.authorize(request.context, ALTER_CONFIGS, rType, rName))
     val remaining = ConfigAdminManager.copyWithoutPreprocessed(original.data(), preprocessingResponses)
+    val isKRaftController = metadataSupport match {
+      case ZkSupport(_, _, _, _, metadataCache, _) =>
+        metadataCache.getControllerId.exists(_.isInstanceOf[KRaftCachedControllerId])
+      case RaftSupport(_, _) => true
+    }
 
     def sendResponse(secondPart: Option[ApiMessage]): Unit = {
       secondPart match {
@@ -3001,12 +3006,6 @@ class KafkaApis(val requestChannel: RequestChannel,
               result).setThrottleTimeMs(requestThrottleMs)))
         case _ => handleInvalidVersionsDuringForwarding(request)
       }
-    }
-
-    val isKRaftController = metadataSupport match {
-      case ZkSupport(_, _, _, _, metadataCache, _) =>
-        metadataCache.getControllerId.exists(_.isInstanceOf[KRaftCachedControllerId])
-      case RaftSupport(_, _) => true
     }
 
     // Forwarding has not happened yet, so handle both ZK and KRaft cases here

@@ -459,6 +459,9 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * Sets or creates the entity znode path with the given configs depending
    * on whether it already exists or not.
    *
+   * This method requires that a ZK controller is defined. This is done to prevent configs from being
+   * created or modified while the ZK to KRaft migration is taking place.
+   *
    * If this is method is called concurrently, the last writer wins. In cases where we update configs and then
    * partition assignment (i.e. create topic), it's possible for one thread to set this and the other to set the
    * partition assignment. As such, the recommendation is to never call create topic for the same topic with different
@@ -467,13 +470,33 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param rootEntityType entity type
    * @param sanitizedEntityName entity name
    * @throws KeeperException if there is an error while setting or creating the znode
+   * @throws ControllerMovedException if no controller is defined, or a KRaft controller is defined
    */
   def setOrCreateEntityConfigs(rootEntityType: String, sanitizedEntityName: String, config: Properties): Unit = {
+    val controllerRegistration = getControllerRegistration match {
+      case Some(registration) => registration
+      case None =>
+        // This case is mainly here to make tests less flaky. In practice, there will always be a /controller ZNode
+        throw new ControllerMovedException(s"Cannot set entity configs when there is no controller.")
+    }
+
+    // If there is a KRaft controller defined, don't even attempt this write. The broker will soon get a UMR
+    // from the new KRaft controller that lets it know about the new controller. It will then forward
+    // IncrementalAlterConfig requests instead of processing directly.
+    if (controllerRegistration.kraftEpoch.exists(epoch => epoch > 0)) {
+      throw new ControllerMovedException(s"Cannot set entity configs directly when there is a KRaft controller.")
+    }
 
     def set(configData: Array[Byte]): SetDataResponse = {
       val setDataRequest = SetDataRequest(ConfigEntityZNode.path(rootEntityType, sanitizedEntityName),
         configData, ZkVersion.MatchAnyVersion)
-      retryRequestUntilConnected(setDataRequest)
+      if (controllerRegistration.zkVersion > 0) {
+        // Pass the zkVersion previously captured to ensure the controller hasn't changed to KRaft while
+        // this method was processing.
+        retryRequestUntilConnected(setDataRequest, controllerRegistration.zkVersion)
+      } else {
+        retryRequestUntilConnected(setDataRequest)
+      }
     }
 
     def createOrSet(configData: Array[Byte]): Unit = {
