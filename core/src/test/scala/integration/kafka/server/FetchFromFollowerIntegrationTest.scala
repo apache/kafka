@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.KafkaLogConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{Disabled, Timeout}
@@ -46,7 +47,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   def overridingProps: Properties = {
     val props = new Properties
     props.put(KafkaLogConfigs.NUM_PARTITIONS_CONFIG, numParts.toString)
-    props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, numNodes.toString)
+    props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, numNodes.toString)
     props
   }
 
