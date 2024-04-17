@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.AbstractStatus;
@@ -59,7 +58,6 @@ import javax.ws.rs.core.MultivaluedHashMap;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
-import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -145,8 +143,6 @@ public class ConnectorsResourceTest {
 
     private static final Set<String> CONNECTOR_ACTIVE_TOPICS = new HashSet<>(
             Arrays.asList("foo_topic", "bar_topic"));
-    private static final Set<String> CONNECTOR2_ACTIVE_TOPICS = new HashSet<>(
-            Arrays.asList("foo_topic", "baz_topic"));
 
     private static final RestRequestTimeout REQUEST_TIMEOUT = () -> RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
@@ -176,8 +172,7 @@ public class ConnectorsResourceTest {
     }
 
     private static Map<String, String> getConnectorConfig(Map<String, String> mapToClone) {
-        Map<String, String> result = new HashMap<>(mapToClone);
-        return result;
+        return new HashMap<>(mapToClone);
     }
 
     @Test
@@ -258,7 +253,6 @@ public class ConnectorsResourceTest {
     @Test
     public void testExpandConnectorsWithConnectorNotFound() {
         when(herder.connectors()).thenReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
-        ConnectorStateInfo connector = mock(ConnectorStateInfo.class);
         ConnectorStateInfo connector2 = mock(ConnectorStateInfo.class);
         when(herder.connectorStatus(CONNECTOR2_NAME)).thenReturn(connector2);
         doThrow(mock(NotFoundException.class)).when(herder).connectorStatus(CONNECTOR_NAME);
@@ -503,7 +497,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testGetTasksConfigConnectorNotFound() throws Throwable {
+    public void testGetTasksConfigConnectorNotFound() {
         final ArgumentCaptor<Callback<Map<ConnectorTaskId, Map<String, String>>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackException(cb, new NotFoundException("not found"))
             .when(herder).tasksConfig(eq(CONNECTOR_NAME), cb.capture());
@@ -806,8 +800,7 @@ public class ConnectorsResourceTest {
     @Test
     public void testCompleteOrForwardWithErrorAndNoForwardUrl() {
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
-        String leaderUrl = null;
-        expectAndCallbackException(cb, new NotLeaderException("not leader", leaderUrl))
+        expectAndCallbackException(cb, new NotLeaderException("not leader", null))
             .when(herder).deleteConnectorConfig(eq(CONNECTOR_NAME), cb.capture());
 
         ConnectRestException e = assertThrows(ConnectRestException.class, () ->
@@ -918,10 +911,6 @@ public class ConnectorsResourceTest {
         Response response = connectorsResource.resetConnectorOffsets(null, NULL_HEADERS, CONNECTOR_NAME);
         assertEquals(200, response.getStatus());
         assertEquals(msg, response.getEntity());
-    }
-
-    private <T> byte[] serializeAsBytes(final T value) throws IOException {
-        return new ObjectMapper().writeValueAsBytes(value);
     }
 
     private <T> Stubber expectAndCallbackResult(final ArgumentCaptor<Callback<T>> cb, final T value) {
