@@ -688,7 +688,7 @@ class ZkMigrationIntegrationTest {
       log.info("Updating metadata with AdminClient")
       admin = zkCluster.createAdminClient()
       alterUserScramCredentials(admin).all().get(60, TimeUnit.SECONDS)
-      alterClientQuotas(admin).all().get(60, TimeUnit.SECONDS)
+      alterClientQuotas(admin)
 
       // Verify the changes made to KRaft are seen in ZK
       log.info("Verifying metadata changes with ZK")
@@ -862,7 +862,6 @@ class ZkMigrationIntegrationTest {
   ))
   def testIncrementalAlterConfigsPreMigration(zkCluster: ClusterInstance): Unit = {
     // Enable migration configs and restart brokers without KRaft quorum ready
-    log.info("Restart brokers in migration mode")
     zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
     zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9999")
     zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
