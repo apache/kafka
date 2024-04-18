@@ -62,7 +62,7 @@ import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializ
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ZkConfigs}
-import org.apache.kafka.server.config.{ReplicationConfigs, KafkaLogConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
@@ -135,11 +135,11 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       props.put(KafkaSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "requested")
       props.put(KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN")
       props.put(KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, kafkaServerSaslMechanisms.mkString(","))
-      props.put(KafkaLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "2000") // low value to test log rolling on config update
+      props.put(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "2000") // low value to test log rolling on config update
       props.put(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG, "2") // greater than one to test reducing threads
       props.put(KafkaConfig.PasswordEncoderSecretProp, "dynamic-config-secret")
-      props.put(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, 1680000000.toString)
-      props.put(KafkaLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, 168.toString)
+      props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, 1680000000.toString)
+      props.put(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, 168.toString)
 
       props ++= sslProperties1
       props ++= securityProps(sslProperties1, KEYSTORE_PROPS, listenerPrefix(SecureInternal))
@@ -253,18 +253,18 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Verify a few log configs with and without synonyms
     val expectedProps = new Properties
-    expectedProps.setProperty(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "1680000000")
-    expectedProps.setProperty(KafkaLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, "168")
-    expectedProps.setProperty(KafkaLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, "168")
+    expectedProps.setProperty(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "1680000000")
+    expectedProps.setProperty(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, "168")
+    expectedProps.setProperty(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, "168")
     expectedProps.setProperty(CleanerConfig.LOG_CLEANER_THREADS_PROP, "1")
-    val logRetentionMs = configEntry(configDesc, KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG)
-    verifyConfig(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, logRetentionMs,
+    val logRetentionMs = configEntry(configDesc, ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG)
+    verifyConfig(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, logRetentionMs,
       isSensitive = false, isReadOnly = false, expectedProps)
-    val logRetentionHours = configEntry(configDesc, KafkaLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG)
-    verifyConfig(KafkaLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, logRetentionHours,
+    val logRetentionHours = configEntry(configDesc, ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG)
+    verifyConfig(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, logRetentionHours,
       isSensitive = false, isReadOnly = true, expectedProps)
-    val logRollHours = configEntry(configDesc, KafkaLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG)
-    verifyConfig(KafkaLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, logRollHours,
+    val logRollHours = configEntry(configDesc, ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG)
+    verifyConfig(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, logRollHours,
       isSensitive = false, isReadOnly = true, expectedProps)
     val logCleanerThreads = configEntry(configDesc, CleanerConfig.LOG_CLEANER_THREADS_PROP)
     verifyConfig(CleanerConfig.LOG_CLEANER_THREADS_PROP, logCleanerThreads,
@@ -272,14 +272,14 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     def synonymsList(configEntry: ConfigEntry): List[(String, ConfigSource)] =
       configEntry.synonyms.asScala.map(s => (s.name, s.source)).toList
-    assertEquals(List((KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
-      (KafkaLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
-      (KafkaLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)),
+    assertEquals(List((ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+      (ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+      (ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)),
       synonymsList(logRetentionMs))
-    assertEquals(List((KafkaLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
-      (KafkaLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)),
+    assertEquals(List((ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+      (ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)),
       synonymsList(logRetentionHours))
-    assertEquals(List((KafkaLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)), synonymsList(logRollHours))
+    assertEquals(List((ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)), synonymsList(logRollHours))
     assertEquals(List((CleanerConfig.LOG_CLEANER_THREADS_PROP, ConfigSource.DEFAULT_CONFIG)), synonymsList(logCleanerThreads))
   }
 
@@ -581,7 +581,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   def testConsecutiveConfigChange(quorum: String): Unit = {
     val topic2 = "testtopic2"
     val topicProps = new Properties
-    topicProps.put(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+    topicProps.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
     TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, controllerServers, numPartitions = 1, replicationFactor = numServers, topicConfig = topicProps)
 
     def getLogOrThrow(tp: TopicPartition): UnifiedLog = {
@@ -593,13 +593,13 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
 
     var log = getLogOrThrow(new TopicPartition(topic2, 0))
-    assertTrue(log.config.overriddenConfigs.contains(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG))
-    assertEquals("2", log.config.originals().get(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG).toString)
+    assertTrue(log.config.overriddenConfigs.contains(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG))
+    assertEquals("2", log.config.originals().get(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG).toString)
 
     val props = new Properties
-    props.put(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "3")
+    props.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "3")
     // Make a broker-default config
-    reconfigureServers(props, perBrokerConfig = false, (KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "3"))
+    reconfigureServers(props, perBrokerConfig = false, (ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "3"))
     // Verify that all broker defaults have been updated again
     servers.foreach { server =>
       props.forEach { (k, v) =>
@@ -608,16 +608,16 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
 
     log = getLogOrThrow(new TopicPartition(topic2, 0))
-    assertTrue(log.config.overriddenConfigs.contains(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG))
-    assertEquals("2", log.config.originals().get(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG).toString) // Verify topic-level config survives
+    assertTrue(log.config.overriddenConfigs.contains(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG))
+    assertEquals("2", log.config.originals().get(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG).toString) // Verify topic-level config survives
 
     // Make a second broker-default change
     props.clear()
-    props.put(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "604800000")
-    reconfigureServers(props, perBrokerConfig = false, (KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "604800000"))
+    props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "604800000")
+    reconfigureServers(props, perBrokerConfig = false, (ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "604800000"))
     log = getLogOrThrow(new TopicPartition(topic2, 0))
-    assertTrue(log.config.overriddenConfigs.contains(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG))
-    assertEquals("2", log.config.originals().get(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG).toString) // Verify topic-level config still survives
+    assertTrue(log.config.overriddenConfigs.contains(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG))
+    assertEquals("2", log.config.originals().get(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG).toString) // Verify topic-level config still survives
   }
 
   @Test
@@ -627,31 +627,31 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val (producerThread, consumerThread) = startProduceConsume(retries = 0)
 
     val props = new Properties
-    props.put(KafkaLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "4000")
-    props.put(KafkaLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, TimeUnit.HOURS.toMillis(2).toString)
-    props.put(KafkaLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG, TimeUnit.HOURS.toMillis(1).toString)
-    props.put(KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG, "100000")
-    props.put(KafkaLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_CONFIG, "1000")
-    props.put(KafkaLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG, "60000")
-    props.put(KafkaLogConfigs.LOG_RETENTION_BYTES_CONFIG, "10000000")
-    props.put(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, TimeUnit.DAYS.toMillis(1).toString)
+    props.put(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "4000")
+    props.put(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, TimeUnit.HOURS.toMillis(2).toString)
+    props.put(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG, TimeUnit.HOURS.toMillis(1).toString)
+    props.put(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG, "100000")
+    props.put(ServerLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_CONFIG, "1000")
+    props.put(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG, "60000")
+    props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "10000000")
+    props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, TimeUnit.DAYS.toMillis(1).toString)
     props.put(KafkaConfig.MessageMaxBytesProp, "100000")
-    props.put(KafkaLogConfigs.LOG_INDEX_INTERVAL_BYTES_CONFIG, "10000")
+    props.put(ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_CONFIG, "10000")
     props.put(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP, TimeUnit.DAYS.toMillis(1).toString)
     props.put(CleanerConfig.LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP, "60000")
-    props.put(KafkaLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "60000")
+    props.put(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "60000")
     props.put(CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP, "0.3")
-    props.put(KafkaLogConfigs.LOG_CLEANUP_POLICY_CONFIG, "delete")
+    props.put(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG, "delete")
     props.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
-    props.put(KafkaLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+    props.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
     props.put(KafkaConfig.CompressionTypeProp, "gzip")
-    props.put(KafkaLogConfigs.LOG_PRE_ALLOCATE_CONFIG, true.toString)
-    props.put(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.LOG_APPEND_TIME.toString)
-    props.put(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, "1000")
-    props.put(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, "1000")
-    props.put(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, "1000")
-    props.put(KafkaLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, "false")
-    reconfigureServers(props, perBrokerConfig = false, (KafkaLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "4000"))
+    props.put(ServerLogConfigs.LOG_PRE_ALLOCATE_CONFIG, true.toString)
+    props.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.LOG_APPEND_TIME.toString)
+    props.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, "1000")
+    props.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, "1000")
+    props.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, "1000")
+    props.put(ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, "false")
+    reconfigureServers(props, perBrokerConfig = false, (ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "4000"))
 
     // Verify that all broker defaults have been updated
     servers.foreach { server =>
@@ -669,7 +669,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     TestUtils.waitUntilTrue(() => log.config.segmentSize == 4000, "Existing topic config using defaults not updated")
     props.asScala.foreach { case (k, v) =>
       val logConfigName = DynamicLogConfig.KafkaConfigToLogConfigName(k)
-      val expectedValue = if (k == KafkaLogConfigs.LOG_CLEANUP_POLICY_CONFIG) s"[$v]" else v
+      val expectedValue = if (k == ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG) s"[$v]" else v
       assertEquals(expectedValue, log.config.originals.get(logConfigName).toString,
         s"Not reconfigured $logConfigName for existing log")
     }
@@ -686,19 +686,19 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Verify that we can alter subset of log configs
     props.clear()
-    props.put(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.CREATE_TIME.toString)
-    props.put(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, "1000")
-    props.put(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, "1000")
-    props.put(KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, "1000")
-    reconfigureServers(props, perBrokerConfig = false, (KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.CREATE_TIME.toString))
+    props.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.CREATE_TIME.toString)
+    props.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, "1000")
+    props.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, "1000")
+    props.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, "1000")
+    reconfigureServers(props, perBrokerConfig = false, (ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.CREATE_TIME.toString))
     consumerThread.waitForMatchingRecords(record => record.timestampType == TimestampType.CREATE_TIME)
     // Verify that invalid configs are not applied
     val invalidProps = Map(
-      KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG -> "abc", // Invalid type
-      KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG -> "abc", // Invalid type
-      KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG -> "abc", // Invalid type
-      KafkaLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG -> "invalid", // Invalid value
-      KafkaLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG -> "0" // Fails KafkaConfig validation
+      ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG -> "abc", // Invalid type
+      ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG -> "abc", // Invalid type
+      ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG -> "abc", // Invalid type
+      ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG -> "invalid", // Invalid value
+      ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG -> "0" // Fails KafkaConfig validation
     )
     invalidProps.foreach { case (k, v) =>
       val newProps = new Properties
@@ -710,14 +710,14 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // Verify that even though broker defaults can be defined at default cluster level for consistent
     // configuration across brokers, they can also be defined at per-broker level for testing
     props.clear()
-    props.put(KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG, "500000")
-    props.put(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, TimeUnit.DAYS.toMillis(2).toString)
+    props.put(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG, "500000")
+    props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, TimeUnit.DAYS.toMillis(2).toString)
     alterConfigsOnServer(servers.head, props)
-    assertEquals(500000, servers.head.config.values.get(KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG))
-    assertEquals(TimeUnit.DAYS.toMillis(2), servers.head.config.values.get(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
+    assertEquals(500000, servers.head.config.values.get(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG))
+    assertEquals(TimeUnit.DAYS.toMillis(2), servers.head.config.values.get(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
     servers.tail.foreach { server =>
-      assertEquals(KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT, server.config.values.get(KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG))
-      assertEquals(1680000000L, server.config.values.get(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
+      assertEquals(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT, server.config.values.get(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG))
+      assertEquals(1680000000L, server.config.values.get(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
     }
 
     // Verify that produce/consume worked throughout this test without any retries in producer
@@ -726,17 +726,17 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // Verify that configuration at both per-broker level and default cluster level could be deleted and
     // the default value should be restored
     props.clear()
-    props.put(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "")
-    props.put(KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG, "")
+    props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "")
+    props.put(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG, "")
     TestUtils.incrementalAlterConfigs(servers.take(1), adminClients.head, props, perBrokerConfig = true, opType = OpType.DELETE).all.get
     TestUtils.incrementalAlterConfigs(servers, adminClients.head, props, perBrokerConfig = false, opType = OpType.DELETE).all.get
     servers.foreach { server =>
-      waitForConfigOnServer(server, KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, 1680000000.toString)
+      waitForConfigOnServer(server, ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, 1680000000.toString)
     }
     servers.foreach { server =>
       val log = server.logManager.getLog(new TopicPartition(topic, 0)).getOrElse(throw new IllegalStateException("Log not found"))
       // Verify default values for these two configurations are restored on all brokers
-      TestUtils.waitUntilTrue(() => log.config.maxIndexSize == KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT && log.config.retentionMs == 1680000000L,
+      TestUtils.waitUntilTrue(() => log.config.maxIndexSize == ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT && log.config.retentionMs == 1680000000L,
         "Existing topic config using defaults not updated")
     }
   }
@@ -876,7 +876,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       fetcherThreadPrefix, mayReceiveDuplicates = false)
     verifyThreadPoolResize(KafkaConfig.BackgroundThreadsProp, config.backgroundThreads,
       "kafka-scheduler-", mayReceiveDuplicates = false)
-    verifyThreadPoolResize(KafkaLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, config.numRecoveryThreadsPerDataDir,
+    verifyThreadPoolResize(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, config.numRecoveryThreadsPerDataDir,
       "", mayReceiveDuplicates = false)
     verifyThreadPoolResize(KafkaConfig.NumNetworkThreadsProp, config.numNetworkThreads,
       networkThreadPrefix, mayReceiveDuplicates = true)

@@ -26,7 +26,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.server.config.KafkaLogConfigs
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.log4j.Logger
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.Assertions._
@@ -39,7 +39,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val topic = "topic1"
   val overridingProps = new Properties()
   val metrics = new Metrics()
-  overridingProps.put(KafkaLogConfigs.NUM_PARTITIONS_CONFIG, numParts.toString)
+  overridingProps.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, numParts.toString)
 
   override def generateConfigs = TestUtils.createBrokerConfigs(numNodes, zkConnect)
     .map(KafkaConfig.fromProps(_, overridingProps))

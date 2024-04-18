@@ -32,7 +32,7 @@ import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
-import org.apache.kafka.server.config.KafkaLogConfigs
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, FetchDataInfo, FetchIsolation, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, LogSegment, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex}
@@ -59,14 +59,14 @@ object LogTestUtils {
                       segmentBytes: Int = LogConfig.DEFAULT_SEGMENT_BYTES,
                       retentionMs: Long = LogConfig.DEFAULT_RETENTION_MS,
                       localRetentionMs: Long = LogConfig.DEFAULT_LOCAL_RETENTION_MS,
-                      retentionBytes: Long = KafkaLogConfigs.LOG_RETENTION_BYTES_DEFAULT,
+                      retentionBytes: Long = ServerLogConfigs.LOG_RETENTION_BYTES_DEFAULT,
                       localRetentionBytes: Long = LogConfig.DEFAULT_LOCAL_RETENTION_BYTES,
                       segmentJitterMs: Long = LogConfig.DEFAULT_SEGMENT_JITTER_MS,
-                      cleanupPolicy: String = KafkaLogConfigs.LOG_CLEANUP_POLICY_DEFAULT,
+                      cleanupPolicy: String = ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT,
                       maxMessageBytes: Int = LogConfig.DEFAULT_MAX_MESSAGE_BYTES,
-                      indexIntervalBytes: Int = KafkaLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT,
-                      segmentIndexBytes: Int = KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT,
-                      fileDeleteDelayMs: Long = KafkaLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
+                      indexIntervalBytes: Int = ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT,
+                      segmentIndexBytes: Int = ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT,
+                      fileDeleteDelayMs: Long = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
                       remoteLogStorageEnable: Boolean = LogConfig.DEFAULT_REMOTE_STORAGE_ENABLE): LogConfig = {
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs: java.lang.Long)

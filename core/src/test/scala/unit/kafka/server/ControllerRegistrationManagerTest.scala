@@ -27,8 +27,8 @@ import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ListenerInfo, RecordTestUtils, VersionRange}
 import org.apache.kafka.raft.LeaderAndEpoch
-import org.apache.kafka.server.config.KafkaLogConfigs
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
@@ -46,7 +46,7 @@ class ControllerRegistrationManagerTest {
 
   private def configProperties = {
     val properties = new Properties()
-    properties.setProperty(KafkaLogConfigs.LOG_DIRS_CONFIG, "/tmp/foo")
+    properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, "/tmp/foo")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
     properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:PLAINTEXT")
     properties.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:8001")

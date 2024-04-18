@@ -40,9 +40,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
-import static org.apache.kafka.server.config.KafkaLogConfigs.NUM_PARTITIONS_CONFIG;
-import static org.apache.kafka.server.config.KafkaLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
-import static org.apache.kafka.server.config.KafkaLogConfigs.LOG_DIR_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.NUM_PARTITIONS_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
 
 
 /**

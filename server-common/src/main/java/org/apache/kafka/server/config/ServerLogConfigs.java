@@ -28,7 +28,7 @@ import static org.apache.kafka.server.config.ServerTopicConfigSynonyms.LOG_PREFI
  *
  * Note this is an internal API and subject to change without notice.
  */
-public class KafkaLogConfigs {
+public class ServerLogConfigs {
     public static final String NUM_PARTITIONS_CONFIG = "num.partitions";
     public static final int NUM_PARTITIONS_DEFAULT = 1;
     public static final String NUM_PARTITIONS_DOC = "The default number of log partitions per topic";

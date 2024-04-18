@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.server.config.KafkaLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG
+import org.apache.kafka.server.config.ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG
 import org.apache.kafka.server.policy.CreateTopicPolicy
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 import org.junit.jupiter.params.ParameterizedTest
