@@ -173,6 +173,16 @@ public class TopicCommandTest {
         assertEquals(topicName, opts.topic().get());
     }
 
+    @Test
+    public void testDescribeWithDescribeTopicsApiShouldSucceed() {
+        TopicCommand.TopicCommandOptions opts = new TopicCommand.TopicCommandOptions(
+            new String[] {"--bootstrap-server", bootstrapServer,
+                "--describe",
+                "--topic", topicName});
+        assertTrue(opts.hasDescribeOption());
+        assertEquals(topicName, opts.topic().get());
+    }
+
 
     @Test
     public void testParseAssignmentDuplicateEntries() {
