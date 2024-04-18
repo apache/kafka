@@ -19,9 +19,10 @@ package kafka.server
 
 import kafka.utils.Logging
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{FeatureVersion, MetadataVersion}
 
 import java.util
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 /**
@@ -75,16 +76,19 @@ object BrokerFeatures extends Logging {
   }
 
   def defaultSupportedFeatures(unstableMetadataVersionsEnabled: Boolean): Features[SupportedVersionRange] = {
-    Features.supportedFeatures(
-      java.util.Collections.singletonMap(MetadataVersion.FEATURE_NAME,
+    val features = new util.HashMap[String, SupportedVersionRange]()
+      features.put(MetadataVersion.FEATURE_NAME,
         new SupportedVersionRange(
           MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
           if (unstableMetadataVersionsEnabled) {
             MetadataVersion.latestTesting.featureLevel
           } else {
             MetadataVersion.latestProduction.featureLevel
-          }
-        )))
+          }))
+      FeatureVersion.PRODUCTION_FEATURES.forEach { feature =>
+        features.put(feature, new SupportedVersionRange(0, FeatureVersion.defaultValue(feature, Optional.empty).featureLevel))
+      }
+    Features.supportedFeatures(features)
   }
 
   def createEmpty(): BrokerFeatures = {
