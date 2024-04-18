@@ -29,6 +29,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
+from kafkatest.utils.remote_account import path_exists
 from kafkatest.version import DEV_BRANCH, LATEST_3_4
 
 
@@ -90,6 +91,9 @@ class TestMigration(ProduceConsumeValidateTest):
             self.logger.info("Shutdown brokers to avoid waiting on unclean shutdown")
             for node in self.kafka.nodes:
                 self.kafka.stop_node(node)
+                metadata_log_dir = KafkaService.METADATA_LOG_DIR + "/__cluster_metadata-0"
+                for node in self.kafka.nodes:
+                    assert path_exists(node, metadata_log_dir), "Should still have a metadata log on the brokers."
 
             self.logger.info("Shutdown KRaft quorum")
             for node in controller.nodes:
@@ -162,7 +166,13 @@ class TestMigration(ProduceConsumeValidateTest):
             controller_json = self.zk.query(path="/controller")
             controller_data = json.loads(controller_json)
             self.logger.info("After downgrade, controller is %s" % controller_data)
-            assert controller_data.get("kraftControllerEpoch") == -1, "Should have ZK controller now"
+            assert controller_data.get("kraftControllerEpoch") == -1, "Should have ZK controller now."
+
+            for node in self.kafka.nodes:
+                du_output = node.account.ssh_output("du -s %s" % KafkaService.METADATA_FIRST_LOG)
+                self.logger.info("Metadata log size: %s" % du_output)
+                size, name = du_output.decode().split()
+                assert int(size) == 0, "Should have an empty metadata log."
 
         self.kafka.stop()
 
