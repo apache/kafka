@@ -1438,7 +1438,7 @@ public class ClassicGroup implements Group {
      * @param metadataVersion   The MetadataVersion.
      * @param records           The list to which the new records are added.
      */
-    public void createConsumerGroupRecords(
+    public void createClassicGroupRecords(
         MetadataVersion metadataVersion,
         List<Record> records
     ) {
