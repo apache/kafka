@@ -380,10 +380,6 @@ public class KRaftMigrationDriverTest {
                     this.setMigrationRecoveryState(initialState);
                     return initialState;
                 } else {
-                    if (createZnodeAttempts.getCount() == 1) {
-                        // set the state in the last retry, so that after countDownLatch reaches 0, the state will be correctly returned
-                        this.setMigrationRecoveryState(initialState);
-                    }
                     createZnodeAttempts.countDown();
                     throw new MigrationClientException("Some kind of ZK error!");
                 }
