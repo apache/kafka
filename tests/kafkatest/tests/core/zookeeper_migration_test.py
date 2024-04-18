@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import json
 from functools import partial
 import time
 
@@ -51,7 +51,7 @@ class TestMigration(ProduceConsumeValidateTest):
             wait_until(lambda: len(self.kafka.isr_idx_list(self.topic, partition)) == self.replication_factor, timeout_sec=60,
                        backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
 
-    def do_migration(self, roll_controller = False, downgrade_to_zk = False):
+    def do_migration(self, roll_controller=False, downgrade_to_zk=False):
         # Start up KRaft controller in migration mode
         remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
         controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=DEV_BRANCH,
@@ -86,10 +86,32 @@ class TestMigration(ProduceConsumeValidateTest):
                 controller.stop_node(node)
                 controller.start_node(node)
 
+        if downgrade_to_zk:
+            self.logger.info("Shutdown brokers to avoid waiting on unclean shutdown")
+            for node in self.kafka.nodes:
+                self.kafka.stop_node(node)
+
+            self.logger.info("Shutdown KRaft quorum")
+            for node in controller.nodes:
+                controller.stop_node(node)
+
+            self.logger.info("Deleting controller ZNode")
+            self.zk.delete(path="/controller", recursive=True)
+
+            self.logger.info("Rolling brokers back to ZK mode")
+            self.kafka.downgrade_kraft_broker_to_zk(controller)
+            for node in self.kafka.nodes:
+                self.kafka.start_node(node)
+
+            # This blocks until all brokers have a full ISR
+            self.wait_until_rejoin()
+
     @cluster(num_nodes=7)
-    @parametrize(roll_controller = True)
-    @parametrize(roll_controller = False)
-    def test_online_migration(self, roll_controller):
+    @parametrize(roll_controller=True, downgrade_to_zk=False)
+    @parametrize(roll_controller=False, downgrade_to_zk=False)
+    @parametrize(roll_controller=True, downgrade_to_zk=True)
+    @parametrize(roll_controller=False, downgrade_to_zk=True)
+    def test_online_migration(self, roll_controller, downgrade_to_zk):
         zk_quorum = partial(ServiceQuorumInfo, zk)
         self.zk = ZookeeperService(self.test_context, num_nodes=1, version=DEV_BRANCH)
         self.kafka = KafkaService(self.test_context,
@@ -130,7 +152,18 @@ class TestMigration(ProduceConsumeValidateTest):
                                         self.topic, consumer_timeout_ms=30000,
                                         message_validator=is_int, version=DEV_BRANCH)
 
-        self.run_produce_consume_validate(core_test_action=partial(self.do_migration, roll_controller = roll_controller))
+        self.run_produce_consume_validate(core_test_action=partial(
+            self.do_migration,
+            roll_controller=roll_controller,
+            downgrade_to_zk=downgrade_to_zk
+        ))
+
+        if downgrade_to_zk:
+            controller_json = self.zk.query(path="/controller")
+            controller_data = json.loads(controller_json)
+            self.logger.info("After downgrade, controller is %s" % controller_data)
+            assert controller_data.get("kraftControllerEpoch") == -1, "Should have ZK controller now"
+
         self.kafka.stop()
 
     @cluster(num_nodes=7)

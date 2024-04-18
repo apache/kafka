@@ -463,6 +463,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # This is not added to "advertised.listeners" because of configured_for_zk_migration=True
         self.port_mappings[kraft_quorum.controller_listener_names] = kraft_quorum.port_mappings.get(kraft_quorum.controller_listener_names)
 
+    def downgrade_kraft_broker_to_zk(self, kraft_quorum):
+        self.configured_for_zk_migration = True
+        self.quorum_info = quorum.ServiceQuorumInfo(quorum.zk, self)
+        self.controller_quorum = kraft_quorum
+
+        # Set the migration properties
+        self.server_prop_overrides.extend([
+            ["zookeeper.metadata.migration.enable", "true"],
+            ["controller.quorum.voters", kraft_quorum.controller_quorum_voters],
+            ["controller.listener.names", kraft_quorum.controller_listener_names]
+        ])
+
     def reconfigure_zk_as_kraft(self, kraft_quorum):
         self.configured_for_zk_migration = True
 
