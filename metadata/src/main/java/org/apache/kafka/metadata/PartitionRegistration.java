@@ -387,7 +387,7 @@ public class PartitionRegistration {
             record.setDirectories(Uuid.toList(directories));
         } else {
             for (Uuid directory : directories) {
-                if (!DirectoryId.MIGRATING.equals(directory)) {
+                if (!(DirectoryId.MIGRATING.equals(directory) || DirectoryId.UNASSIGNED.equals(directory))) {
                     options.handleLoss("the directory assignment state of one or more replicas");
                     break;
                 }
