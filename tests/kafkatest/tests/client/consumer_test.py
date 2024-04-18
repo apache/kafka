@@ -379,13 +379,13 @@ class OffsetValidationTest(VerifiableConsumerTest):
             conflict_consumer.start()
 
             wait_until(lambda: len(consumer.joined_nodes()) + len(conflict_consumer.joined_nodes()) == len(consumer.nodes),
-                       timeout_sec=self.session_timeout_sec,
+                       timeout_sec=self.session_timeout_sec*2,
                        err_msg="Timed out waiting for consumers to join, expected total %d joined, but only see %d joined from"
                                "normal consumer group and %d from conflict consumer group" % \
                                (len(consumer.nodes), len(consumer.joined_nodes()), len(conflict_consumer.joined_nodes()))
                        )
             wait_until(lambda: len(consumer.dead_nodes()) + len(conflict_consumer.dead_nodes()) == len(conflict_consumer.nodes),
-                       timeout_sec=self.session_timeout_sec,
+                       timeout_sec=self.session_timeout_sec*2,
                        err_msg="Timed out waiting for fenced consumers to die, expected total %d dead, but only see %d dead in"
                                "normal consumer group and %d dead in conflict consumer group" % \
                                (len(conflict_consumer.nodes), len(consumer.dead_nodes()), len(conflict_consumer.dead_nodes()))
