@@ -444,8 +444,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
 
             do {
                 // We must not allow wake-ups between polling for fetches and returning the records.
-                // If the polled fetches are not empty the consumed position has already been updated in the polling
-                // of the fetches. A wakeup between returned fetches and returning records would lead to never
+                // A wake-up between returned fetches and returning records would lead to never
                 // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
                 wakeupTrigger.maybeTriggerWakeup();
 
@@ -695,8 +694,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
                     " otherThread(id: " + currentThread.get() + ")"
             );
         if (acknowledgementCommitCallbackHandler != null && acknowledgementCommitCallbackHandler.hasEnteredCallback()) {
-            throw new ConcurrentModificationException("KafkaShareConsumer methods are not accessible from user-defined" +
-                    "acknowledgement commit callback");
+            throw new IllegalStateException("KafkaShareConsumer methods are not accessible from user-defined " +
+                    "acknowledgement commit callback.");
         }
         refCount.incrementAndGet();
     }
@@ -721,11 +720,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
     }
 
     /**
-     * Handles any completed acknowledgements. This will be the integration point for the acknowledge
-     * commit callback when that is implemented.
+     * Handles any completed acknowledgements. If there is an acknowledgement commit callback registered,
+     * call it. Otherwise, discard the completed acknowledgement information because the application is not
+     * interested.
      *
-     * @return The completed Acknowledgements which will contain the acknowledgement error code for each
-     * topic-partition.
+     * @return The completed Acknowledgements which contains the acknowledgement error code for each topic-partition.
      */
     private Map<TopicIdPartition, Acknowledgements> handleCompletedAcknowledgements() {
         Map<TopicIdPartition, Acknowledgements> completedAcks = fetchBuffer.getCompletedAcknowledgements();

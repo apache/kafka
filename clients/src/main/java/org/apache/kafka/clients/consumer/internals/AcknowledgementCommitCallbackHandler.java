@@ -30,6 +30,7 @@ public class AcknowledgementCommitCallbackHandler {
     private static final Logger LOG = LoggerFactory.getLogger(AcknowledgementCommitCallbackHandler.class);
     private final AcknowledgementCommitCallback acknowledgementCommitCallback;
     private boolean enteredCallback = false;
+
     AcknowledgementCommitCallbackHandler(AcknowledgementCommitCallback acknowledgementCommitCallback) {
         this.acknowledgementCommitCallback = acknowledgementCommitCallback;
     }
@@ -46,11 +47,12 @@ public class AcknowledgementCommitCallbackHandler {
             }
             Set<Long> offsets = acknowledgements.getAcknowledgementsTypeMap().keySet();
             Set<Long> offsetsCopy = Collections.unmodifiableSet(offsets);
+            enteredCallback = true;
             try {
-                enteredCallback = true;
                 acknowledgementCommitCallback.onComplete(Collections.singletonMap(partition, offsetsCopy), exception);
             } catch (Throwable e) {
                 LOG.error("Exception thrown by acknowledgement commit callback", e);
+                throw e;
             } finally {
                 enteredCallback = false;
             }
