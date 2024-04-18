@@ -1182,6 +1182,8 @@ class LogManager(logDirs: Seq[File],
     val abandonedFutureLogs = findAbandonedFutureLogs(brokerId, newTopicsImage)
     abandonedFutureLogs.foreach { case (futureLog, currentLog) =>
       val tp = futureLog.topicPartition
+      // We invoke abortAndPauseCleaning here because log cleaner runs asynchronously and replaceCurrentWithFutureLog
+      // invokes resumeCleaning which requires log cleaner's internal state to have a key for the given topic partition.
       abortAndPauseCleaning(tp)
 
       if (currentLog.isDefined)
