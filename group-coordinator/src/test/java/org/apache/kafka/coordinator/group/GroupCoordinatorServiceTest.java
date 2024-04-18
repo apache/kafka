@@ -73,7 +73,6 @@ import org.apache.kafka.server.util.FutureUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -1919,63 +1918,6 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(response));
-
-        CompletableFuture<TxnOffsetCommitResponseData> future = service.commitTransactionalOffsets(
-            requestContext(ApiKeys.TXN_OFFSET_COMMIT),
-            request,
-            BufferSupplier.NO_CACHING
-        );
-
-        assertEquals(response, future.get());
-    }
-
-    @ParameterizedTest
-    @CsvSource({
-        "NOT_ENOUGH_REPLICAS, COORDINATOR_NOT_AVAILABLE",
-        "NETWORK_EXCEPTION, COORDINATOR_LOAD_IN_PROGRESS"
-    })
-    public void testCommitTransactionalOffsetsWithWrappedError(
-        Errors error,
-        Errors expectedError
-    ) throws ExecutionException, InterruptedException {
-        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
-        GroupCoordinatorService service = new GroupCoordinatorService(
-            new LogContext(),
-            createConfig(),
-            runtime,
-            new GroupCoordinatorMetrics()
-        );
-        service.startup(() -> 1);
-
-        TxnOffsetCommitRequestData request = new TxnOffsetCommitRequestData()
-            .setGroupId("foo")
-            .setTransactionalId("transactional-id")
-            .setProducerId(10L)
-            .setProducerEpoch((short) 5)
-            .setMemberId("member-id")
-            .setGenerationId(10)
-            .setTopics(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
-                .setName("topic")
-                .setPartitions(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
-                    .setPartitionIndex(0)
-                    .setCommittedOffset(100)))));
-
-        TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData()
-            .setTopics(Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
-                .setName("topic")
-                .setPartitions(Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
-                    .setPartitionIndex(0)
-                    .setErrorCode(expectedError.code())))));
-
-        when(runtime.scheduleTransactionalWriteOperation(
-            ArgumentMatchers.eq("txn-commit-offset"),
-            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.eq("transactional-id"),
-            ArgumentMatchers.eq(10L),
-            ArgumentMatchers.eq((short) 5),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
-            ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(error.exception()));
 
         CompletableFuture<TxnOffsetCommitResponseData> future = service.commitTransactionalOffsets(
             requestContext(ApiKeys.TXN_OFFSET_COMMIT),

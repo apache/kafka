@@ -22,7 +22,6 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.KafkaStorageException;
-import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
@@ -1108,14 +1107,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             exception instanceof NotEnoughReplicasException ||
             exception instanceof TimeoutException) {
             return Errors.COORDINATOR_NOT_AVAILABLE;
-        }
-        // When committing offsets transactionally, we now verify the transaction with the
-        // transaction coordinator. Verification can fail with `NETWORK_EXCEPTION`, a
-        // retriable error which older clients may not expect and retry correctly. We
-        // translate the error to `COORDINATOR_LOAD_IN_PROGRESS` because it causes clients
-        // to retry the request without an unnecessary coordinator lookup.
-        if (exception instanceof NetworkException) {
-            return Errors.COORDINATOR_LOAD_IN_PROGRESS;
         }
 
         if (exception instanceof NotLeaderOrFollowerException ||
