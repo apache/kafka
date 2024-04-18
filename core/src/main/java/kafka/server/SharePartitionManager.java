@@ -1041,18 +1041,20 @@ public class SharePartitionManager {
          * @param now      The current time in milliseconds.
          */
         public void touch(ShareSession session, long now) {
-            synchronized (session) {
-                // Update the lastUsed map.
-                lastUsed.remove(session.lastUsedKey());
-                session.lastUsedMs = now;
-                lastUsed.put(session.lastUsedKey(), session);
+            synchronized (this) {
+                synchronized (session) {
+                    // Update the lastUsed map.
+                    lastUsed.remove(session.lastUsedKey());
+                    session.lastUsedMs = now;
+                    lastUsed.put(session.lastUsedKey(), session);
 
-                int oldSize = session.cachedSize;
-                if (oldSize != -1) {
-                    numPartitions = numPartitions - oldSize;
+                    int oldSize = session.cachedSize;
+                    if (oldSize != -1) {
+                        numPartitions = numPartitions - oldSize;
+                    }
+                    session.cachedSize = session.size();
+                    numPartitions = numPartitions + session.cachedSize;
                 }
-                session.cachedSize = session.size();
-                numPartitions = numPartitions + session.cachedSize;
             }
         }
 
