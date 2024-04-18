@@ -30,11 +30,11 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.LogCaptureAppender;
@@ -99,9 +99,10 @@ public class WorkerCoordinatorTest {
     private final String groupId = "test-group";
     private final int sessionTimeoutMs = 30;
     private final int rebalanceTimeoutMs = 60;
-    private final int heartbeatIntervalMs = 7;
+    private final int heartbeatIntervalMs = 2;
     private final long retryBackoffMs = 100;
     private final long retryBackoffMaxMs = 1000;
+    private final LogContext logContext = new LogContext();
     private MockTime time;
     private MockClient client;
     private Node node;
@@ -135,8 +136,6 @@ public class WorkerCoordinatorTest {
 
     @Before
     public void setup() {
-        LogContext logContext = new LogContext();
-
         this.time = new MockTime();
         this.metadata = new Metadata(0, 0, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
@@ -539,6 +538,29 @@ public class WorkerCoordinatorTest {
 
     @Test
     public void testPollTimeoutExpiry() throws InterruptedException {
+        // We will create a new WorkerCoordinator object with a rebalance timeout smaller
+        // than session timeout. This might not happen in the real world but it makes testing
+        // easier and the test not flaky.
+        int smallRebalanceTimeout = 20;
+        this.rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
+            smallRebalanceTimeout,
+            heartbeatIntervalMs,
+            groupId,
+            Optional.empty(),
+            retryBackoffMs,
+            retryBackoffMaxMs,
+            true);
+        this.coordinator = new WorkerCoordinator(rebalanceConfig,
+            logContext,
+            consumerClient,
+            new Metrics(time),
+            "consumer" + groupId,
+            time,
+            LEADER_URL,
+            configStorage,
+            rebalanceListener,
+            compatibility,
+            0);
 
         when(configStorage.snapshot()).thenReturn(configState1);
 
@@ -549,27 +571,16 @@ public class WorkerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.emptyList(),
             Collections.singletonList(taskId1x0), Errors.NONE));
 
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
-
-        // prepare 3 heartBeatResponses because we will trigger 3 heartBeat requests until rebalanceTimeout,
-        // that is (sessionTimeoutMs - 1) * 3 > rebalanceTimeoutMs
-        client.prepareResponse(new HeartbeatResponse(new HeartbeatResponseData()));
-        client.prepareResponse(new HeartbeatResponse(new HeartbeatResponseData()));
-        client.prepareResponse(new HeartbeatResponse(new HeartbeatResponseData()));
-
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(WorkerCoordinator.class)) {
             coordinator.ensureActiveGroup();
-            coordinator.poll(0, () -> {
-                return null;
-            });
+            coordinator.poll(0, () -> null);
 
-            // We keep the heartbeat thread running behind the scenes and poll frequently so that eventually
-            // the time goes past now + rebalanceTimeoutMs which triggers poll timeout expiry.
+            // The heartbeat thread is running and keeps sending heartbeat requests.
             TestUtils.waitForCondition(() -> {
-                // sleep until sessionTimeoutMs to trigger a heartBeat request to avoid session timeout.
-                // Not sure if this will be flaky in CI because the heartbeat thread might not send out the heartBeat request in time.
-                time.sleep(sessionTimeoutMs - 1);
+                // Rebalance timeout elapses while poll is never invoked causing a poll timeout expiry
+                coordinator.sendHeartbeatRequest();
+                client.prepareResponse(new HeartbeatResponse(new HeartbeatResponseData()));
+                time.sleep(1);
                 return logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
                     logCaptureAppender.getEvents().stream().anyMatch(e -> e.getMessage().startsWith("worker poll timeout has expired"));
             }, "Coordinator did not poll for rebalance.timeout.ms");

@@ -1215,7 +1215,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     // visible for testing
-    synchronized RequestFuture<Void> sendHeartbeatRequest() {
+    public synchronized RequestFuture<Void> sendHeartbeatRequest() {
         log.debug("Sending Heartbeat request with generation {} and member id {} to coordinator {}",
             generation.generationId, generation.memberId, coordinator);
         HeartbeatRequest.Builder requestBuilder =
