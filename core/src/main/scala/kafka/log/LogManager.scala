@@ -1182,13 +1182,14 @@ class LogManager(logDirs: Seq[File],
     val abandonedFutureLogs = findAbandonedFutureLogs(brokerId, newTopicsImage)
     abandonedFutureLogs.foreach { case (futureLog, currentLog) =>
       val tp = futureLog.topicPartition
-      if (cleaner != null) {
-        cleaner.abortAndPauseCleaning(tp)
-      }
+      abortAndPauseCleaning(tp)
 
+      if (currentLog.isDefined)
+        info(s"Attempting to recover abandoned future log for $tp at $futureLog and removing ${currentLog.get}")
+      else
+        info(s"Attempting to recover abandoned future log for $tp at $futureLog")
       replaceCurrentWithFutureLog(currentLog, futureLog)
-
-      info(s"Successfully renamed abandoned future log for $tp")
+      info(s"Successfully recovered abandoned future log for $tp")
     }
   }
 
@@ -1221,13 +1222,14 @@ class LogManager(logDirs: Seq[File],
       if (destLog == null)
         throw new KafkaStorageException(s"The future replica for $topicPartition is offline")
 
+      info(s"Attempting to replace current log $sourceLog with $destLog for $topicPartition")
       replaceCurrentWithFutureLog(Option(sourceLog), destLog, updateHighWatermark = true)
+      info(s"The current replica is successfully replaced with the future replica for $topicPartition")
     }
   }
 
   def replaceCurrentWithFutureLog(sourceLog: Option[UnifiedLog], destLog: UnifiedLog, updateHighWatermark: Boolean = false): Unit = {
     val topicPartition = destLog.topicPartition
-    info(s"Attempting to replace current log $sourceLog with $destLog for $topicPartition")
 
     destLog.renameDir(UnifiedLog.logDirName(topicPartition), shouldReinitialize = true)
     // the metrics tags still contain "future", so we have to remove it.
@@ -1272,7 +1274,6 @@ class LogManager(logDirs: Seq[File],
         }
         throw e
     }
-    info(s"The current replica is successfully replaced with the future replica for $topicPartition")
   }
 
   /**
