@@ -2223,7 +2223,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       assertEquals(compressionType, logConfig.originals.get(TopicConfig.COMPRESSION_TYPE_CONFIG))
       assertNull(logConfig.originals.get(TopicConfig.RETENTION_BYTES_CONFIG))
-      assertEquals(LogConfig.DEFAULT_RETENTION_BYTES, logConfig.retentionSize)
+      assertEquals(KafkaLogConfigs.LOG_RETENTION_BYTES_DEFAULT, logConfig.retentionSize)
     }
 
     client = Admin.create(createConfig)

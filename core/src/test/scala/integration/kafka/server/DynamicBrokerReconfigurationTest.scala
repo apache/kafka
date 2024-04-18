@@ -716,7 +716,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     assertEquals(500000, servers.head.config.values.get(KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG))
     assertEquals(TimeUnit.DAYS.toMillis(2), servers.head.config.values.get(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
     servers.tail.foreach { server =>
-      assertEquals(LogConfig.DEFAULT_SEGMENT_INDEX_BYTES, server.config.values.get(KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG))
+      assertEquals(KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT, server.config.values.get(KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG))
       assertEquals(1680000000L, server.config.values.get(KafkaLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
     }
 
@@ -736,7 +736,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     servers.foreach { server =>
       val log = server.logManager.getLog(new TopicPartition(topic, 0)).getOrElse(throw new IllegalStateException("Log not found"))
       // Verify default values for these two configurations are restored on all brokers
-      TestUtils.waitUntilTrue(() => log.config.maxIndexSize == LogConfig.DEFAULT_SEGMENT_INDEX_BYTES && log.config.retentionMs == 1680000000L,
+      TestUtils.waitUntilTrue(() => log.config.maxIndexSize == KafkaLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT && log.config.retentionMs == 1680000000L,
         "Existing topic config using defaults not updated")
     }
   }

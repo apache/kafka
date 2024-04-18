@@ -31,6 +31,7 @@ import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 import org.apache.kafka.storage.internals.log.{LogConfig, LogStartOffsetIncrementReason}
+import org.apache.kafka.server.config.KafkaLogConfigs
 import org.apache.kafka.test.TestUtils.assertOptional
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -842,7 +843,7 @@ final class KafkaMetadataLogTest {
       retentionMillis = 60 * 1000,
       maxBatchSizeInBytes = 512,
       maxFetchSizeInBytes = DefaultMetadataLogConfig.maxFetchSizeInBytes,
-      fileDeleteDelayMs = LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
+      fileDeleteDelayMs = KafkaLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
       nodeId = 1
     )
     config.copy()
@@ -1024,7 +1025,7 @@ object KafkaMetadataLogTest {
     retentionMillis = 60 * 1000,
     maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
     maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-    fileDeleteDelayMs = LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
+    fileDeleteDelayMs = KafkaLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
     nodeId = 1
   )
 

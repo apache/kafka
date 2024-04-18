@@ -239,7 +239,7 @@ class LogConfigTest {
 
     // Local retention defaults are derived from retention properties which can be default or custom.
     assertEquals(LogConfig.DEFAULT_RETENTION_MS, logConfig.localRetentionMs)
-    assertEquals(LogConfig.DEFAULT_RETENTION_BYTES, logConfig.localRetentionBytes)
+    assertEquals(KafkaLogConfigs.LOG_RETENTION_BYTES_DEFAULT, logConfig.localRetentionBytes)
   }
 
   @Test
