@@ -212,7 +212,7 @@ class BrokerServer(
         s"broker-${config.nodeId}-",
         isZkBroker = false,
         logDirs = logManager.directoryIdsSet,
-        () => kafkaScheduler.schedule("shutdown", () => shutdown(), 0, -1))
+        () => kafkaScheduler.scheduleOnce("shutdown", () => shutdown()))
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.

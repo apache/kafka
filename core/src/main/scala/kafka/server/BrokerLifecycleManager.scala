@@ -33,6 +33,7 @@ import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import java.util.{Comparator, OptionalLong}
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 /**
@@ -154,7 +155,7 @@ class BrokerLifecycleManager(
    * to the Controller.
    * This variable can only be read or written from the event queue thread.
    */
-  private var offlineDirs = Map[Uuid, Boolean]()
+  private var offlineDirs = mutable.Map[Uuid, Boolean]()
 
   /**
    * True if we sent a event queue to the active controller requesting controlled
@@ -333,7 +334,7 @@ class BrokerLifecycleManager(
   private class OfflineDirEvent(val dir: Uuid) extends EventQueue.Event {
     override def run(): Unit = {
       if (offlineDirs.isEmpty) {
-        offlineDirs = Map(dir -> false)
+        offlineDirs = mutable.Map(dir -> false)
       } else {
         offlineDirs += (dir -> false)
       }
@@ -346,7 +347,7 @@ class BrokerLifecycleManager(
   private class OfflineDirBrokerFailureEvent(offlineDir: Uuid) extends EventQueue.Event {
     override def run(): Unit = {
       if (!offlineDirs.getOrElse(offlineDir, false)) {
-        error(s"Shutting down because couldn't communicate offline log dirs with controllers")
+        error(s"Shutting down because couldn't communicate offline log dir $offlineDir with controllers")
         shutdownHook()
       }
     }
@@ -475,7 +476,7 @@ class BrokerLifecycleManager(
     if (isTraceEnabled) {
       trace(s"Sending broker heartbeat $data")
     }
-    val handler = new BrokerHeartbeatResponseHandler()
+    val handler = new BrokerHeartbeatResponseHandler(offlineDirs.keys)
     _channelManager.sendRequest(new BrokerHeartbeatRequest.Builder(data), handler)
     communicationInFlight = true
   }
@@ -483,18 +484,19 @@ class BrokerLifecycleManager(
   // the response handler is not invoked from the event handler thread,
   // so it is not safe to update state here, instead, schedule an event
   // to continue handling the response on the event handler thread
-  private class BrokerHeartbeatResponseHandler extends ControllerRequestCompletionHandler {
+  private class BrokerHeartbeatResponseHandler(currentOfflineDirs: Iterable[Uuid]) extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
-      eventQueue.prepend(new BrokerHeartbeatResponseEvent(response, false))
+      eventQueue.prepend(new BrokerHeartbeatResponseEvent(response, false, currentOfflineDirs))
     }
 
     override def onTimeout(): Unit = {
       info("Unable to send a heartbeat because the RPC got timed out before it could be sent.")
-      eventQueue.prepend(new BrokerHeartbeatResponseEvent(null, true))
+      eventQueue.prepend(new BrokerHeartbeatResponseEvent(null, true, currentOfflineDirs))
     }
   }
 
-  private class BrokerHeartbeatResponseEvent(response: ClientResponse, timedOut: Boolean) extends EventQueue.Event {
+  private class BrokerHeartbeatResponseEvent(response: ClientResponse, timedOut: Boolean,
+                                             currentOfflineDirs: Iterable[Uuid]) extends EventQueue.Event {
     override def run(): Unit = {
       communicationInFlight = false
       if (timedOut) {
@@ -522,7 +524,7 @@ class BrokerLifecycleManager(
         if (errorCode == Errors.NONE) {
           val responseData = message.data()
           failedAttempts = 0
-          offlineDirs = offlineDirs.map(kv => kv._1 -> true)
+          currentOfflineDirs.foreach(cur => offlineDirs.put(cur, true))
           _state match {
             case BrokerState.STARTING =>
               if (responseData.isCaughtUp) {
