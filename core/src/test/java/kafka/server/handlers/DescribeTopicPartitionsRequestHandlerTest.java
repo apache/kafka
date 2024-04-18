@@ -472,6 +472,21 @@ class DescribeTopicPartitionsRequestHandlerTest {
         } catch (Exception e) {
             assertInstanceOf(InvalidRequestException.class, e, e.getMessage());
         }
+
+        // 3.4 With cursor point to a negative partition id. Exception should be thrown if not querying all the topics.
+        describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
+            .setTopics(Arrays.asList(
+                new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
+                new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2)
+            ))
+            .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedTopic).setPartitionIndex(-1))
+        );
+
+        try {
+            handler.handleDescribeTopicPartitionsRequest(buildRequest(describeTopicPartitionsRequest, plaintextListener));
+        } catch (Exception e) {
+            assertTrue(e instanceof InvalidRequestException, e.getMessage());
+        }
     }
 
     void updateKraftMetadataCache(KRaftMetadataCache kRaftMetadataCache, List<ApiMessage> records) {
