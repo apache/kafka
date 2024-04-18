@@ -52,12 +52,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static java.lang.Integer.max;
-
 @State(Scope.Benchmark)
 @Fork(value = 1)
-@Warmup(iterations = 1)
-@Measurement(iterations = 0)
+@Warmup(iterations = 5)
+@Measurement(iterations = 5)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class ServerSideAssignorBenchmark {
@@ -87,6 +85,14 @@ public class ServerSideAssignorBenchmark {
         HOMOGENEOUS, HETEROGENEOUS
     }
 
+    /**
+     * The assignment type is decided based on whether all the members are assigned partitions
+     * for the first time (full), or incrementally when a rebalance is triggered.
+     */
+    public enum AssignmentType {
+        FULL, INCREMENTAL
+    }
+
     @Param({"100", "500", "1000", "5000", "10000"})
     private int memberCount;
 
@@ -105,8 +111,8 @@ public class ServerSideAssignorBenchmark {
     @Param({"RANGE", "UNIFORM"})
     private AssignorType assignorType;
 
-    @Param({"true", "false"})
-    private boolean simulateRebalanceTrigger;
+    @Param({"FULL", "INCREMENTAL"})
+    private AssignmentType assignmentType;
 
     private PartitionAssignor partitionAssignor;
 
@@ -127,7 +133,7 @@ public class ServerSideAssignorBenchmark {
 
         partitionAssignor = assignorType.assignor();
 
-        if (simulateRebalanceTrigger) {
+        if (assignmentType == AssignmentType.INCREMENTAL) {
             simulateIncrementalRebalance(topicMetadata);
         }
     }
@@ -158,33 +164,41 @@ public class ServerSideAssignorBenchmark {
     private void createAssignmentSpec() {
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
 
-        int topicCounter = 0;
-        Map<Integer, Set<Uuid>> tempMemberIndexToSubscriptions = new HashMap<>(memberCount);
-
         // In the rebalance case, we will add the last member as a trigger.
         // This is done to keep the total members count consistent with the input.
-        int numberOfMembers = simulateRebalanceTrigger ? memberCount -1 : memberCount;
+        int numberOfMembers = assignmentType.equals(AssignmentType.INCREMENTAL) ? memberCount - 1 : memberCount;
 
-        for (int i = 0; i < numberOfMembers; i++) {
-            if (subscriptionModel == SubscriptionModel.HOMOGENEOUS) {
+        if (subscriptionModel.equals(SubscriptionModel.HOMOGENEOUS)) {
+            for (int i = 0; i < numberOfMembers; i++) {
                 addMemberSpec(members, i, new HashSet<>(allTopicIds));
-            } else {
-                Set<Uuid> subscribedTopics = new HashSet<>(Arrays.asList(
-                    allTopicIds.get(i % topicCount),
-                    allTopicIds.get((i+1) % topicCount)
-                ));
-                topicCounter = max (topicCounter, ((i+1) % topicCount));
-                tempMemberIndexToSubscriptions.put(i, subscribedTopics);
+            }
+        } else {
+            // Check minimum topics requirement
+            if (topicCount < 5) {
+                throw new IllegalArgumentException("At least 5 topics are recommended for effective bucketing.");
+            }
+
+            // Adjust bucket count based on member count when member count < 5
+            int bucketCount = Math.min(5, numberOfMembers);
+            int bucketSizeTopics = (int) Math.ceil((double) topicCount / bucketCount);
+            int bucketSizeMembers = (int) Math.ceil((double) numberOfMembers / bucketCount);
+
+            // Define buckets for each member and assign topics from the same bucket
+            for (int bucket = 0; bucket < bucketCount; bucket++) {
+                int memberStartIndex = bucket * bucketSizeMembers;
+                int memberEndIndex = Math.min((bucket + 1) * bucketSizeMembers, numberOfMembers);
+
+                int topicStartIndex = bucket * bucketSizeTopics;
+                int topicEndIndex = Math.min((bucket + 1) * bucketSizeTopics, topicCount);
+
+                Set<Uuid> bucketTopics = new HashSet<>(allTopicIds.subList(topicStartIndex, topicEndIndex));
+
+                // Assign topics to each member in the current bucket
+                for (int i = memberStartIndex; i < memberEndIndex; i++) {
+                    addMemberSpec(members, i, new HashSet<>(bucketTopics));
+                }
             }
         }
-
-        int lastAssignedTopicIndex = topicCounter;
-        tempMemberIndexToSubscriptions.forEach((memberIndex, subscriptions) -> {
-            if (lastAssignedTopicIndex < topicCount - 1) {
-                subscriptions.addAll(allTopicIds.subList(lastAssignedTopicIndex + 1, topicCount - 1));
-            }
-            addMemberSpec(members, memberIndex, subscriptions);
-        });
 
         this.assignmentSpec = new AssignmentSpec(members);
     }
@@ -198,10 +212,10 @@ public class ServerSideAssignorBenchmark {
         int memberIndex,
         Set<Uuid> subscribedTopicIds
     ) {
-        String memberName = "member" + memberIndex;
+        String memberId = "member" + memberIndex;
         Optional<String> rackId = rackId(memberIndex);
 
-        members.put(memberName, new AssignmentMemberSpec(
+        members.put(memberId, new AssignmentMemberSpec(
             Optional.empty(),
             rackId,
             subscribedTopicIds,
@@ -232,7 +246,7 @@ public class ServerSideAssignorBenchmark {
             ));
         });
 
-        Optional<String> rackId = rackId(memberCount-1);
+        Optional<String> rackId = rackId(memberCount - 1);
         updatedMembers.put("newMember", new AssignmentMemberSpec(
             Optional.empty(),
             rackId,

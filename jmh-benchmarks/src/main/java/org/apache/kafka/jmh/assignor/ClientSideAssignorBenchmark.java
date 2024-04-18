@@ -38,7 +38,6 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -46,7 +45,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import static java.lang.Integer.max;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 
 @State(Scope.Benchmark)
@@ -82,6 +80,14 @@ public class ClientSideAssignorBenchmark {
         HOMOGENEOUS, HETEROGENEOUS
     }
 
+    /**
+     * The assignment type is decided based on whether all the members are assigned partitions
+     * for the first time (full), or incrementally when a rebalance is triggered.
+     */
+    public enum AssignmentType {
+        FULL, INCREMENTAL
+    }
+
     @Param({"100", "500", "1000", "5000", "10000"})
     private int memberCount;
 
@@ -100,8 +106,8 @@ public class ClientSideAssignorBenchmark {
     @Param({"RANGE", "COOPERATIVE_STICKY"})
     private AssignorType assignorType;
 
-    @Param({"true", "false"})
-    private boolean simulateRebalanceTrigger;
+    @Param({"FULL", "INCREMENTAL"})
+    private AssignmentType assignmentType;
 
     private Map<String, ConsumerPartitionAssignor.Subscription> subscriptions = new HashMap<>();
 
@@ -128,7 +134,9 @@ public class ClientSideAssignorBenchmark {
 
         assignor = assignorType.assignor();
 
-        if (simulateRebalanceTrigger) simulateRebalance();
+        if (assignmentType == AssignmentType.INCREMENTAL) {
+            simulateIncrementalRebalance();
+        }
     }
 
     private void populateTopicMetadata() {
@@ -151,37 +159,44 @@ public class ClientSideAssignorBenchmark {
     }
 
     private void addMemberSubscriptions() {
-        subscriptions.clear();
-        int topicCounter = 0;
-        Map<Integer, List<String>> tempMemberIndexToSubscriptions = new HashMap<>(memberCount);
-
         // In the rebalance case, we will add the last member as a trigger.
-        // This is done to keep the total members count consistent with the input.
-        int numberOfMembers = simulateRebalanceTrigger ? memberCount -1 : memberCount;
+        // This is done to keep the final members count consistent with the input.
+        int numberOfMembers = assignmentType.equals(AssignmentType.INCREMENTAL) ? memberCount - 1 : memberCount;
 
-        for (int i = 0; i < numberOfMembers; i++) {
-            // When subscriptions are homogeneous, all members are assigned all topics.
-            if (subscriptionModel == SubscriptionModel.HOMOGENEOUS) {
+        // When subscriptions are homogeneous, all members are assigned all topics.
+        if (subscriptionModel == SubscriptionModel.HOMOGENEOUS) {
+            for (int i = 0; i < numberOfMembers; i++) {
                 String memberName = "member" + i;
                 subscriptions.put(memberName, subscription(allTopicNames, i));
-            } else {
-                List<String> subscribedTopics = Arrays.asList(
-                    allTopicNames.get(i % topicCount),
-                    allTopicNames.get((i+1) % topicCount)
-                );
-                topicCounter = max (topicCounter, ((i+1) % topicCount));
-                tempMemberIndexToSubscriptions.put(i, subscribedTopics);
+            }
+        } else {
+            // Check minimum topics requirement
+            if (topicCount < 5) {
+                throw new IllegalArgumentException("At least 5 topics are recommended for effective bucketing.");
+            }
+
+            // Adjust bucket count based on member count when member count < 5
+            int bucketCount = Math.min(5, numberOfMembers);
+            int bucketSizeTopics = (int) Math.ceil((double) topicCount / bucketCount);
+            int bucketSizeMembers = (int) Math.ceil((double) numberOfMembers / bucketCount);
+
+            // Define buckets for each member and assign topics from the same bucket
+            for (int bucket = 0; bucket < bucketCount; bucket++) {
+                int memberStartIndex = bucket * bucketSizeMembers;
+                int memberEndIndex = Math.min((bucket + 1) * bucketSizeMembers, numberOfMembers);
+
+                int topicStartIndex = bucket * bucketSizeTopics;
+                int topicEndIndex = Math.min((bucket + 1) * bucketSizeTopics, topicCount);
+
+                List<String> bucketTopics = allTopicNames.subList(topicStartIndex, topicEndIndex);
+
+                // Assign topics to each member in the current bucket
+                for (int i = memberStartIndex; i < memberEndIndex; i++) {
+                    String memberName = "member" + i;
+                    subscriptions.put(memberName, subscription(bucketTopics, i));
+                }
             }
         }
-
-        int lastAssignedTopicIndex = topicCounter;
-        tempMemberIndexToSubscriptions.forEach((memberIndex, subscriptionList) -> {
-            String memberName = "member" + memberIndex;
-            if (lastAssignedTopicIndex < topicCount - 1) {
-                subscriptionList.addAll(allTopicNames.subList(lastAssignedTopicIndex + 1, topicCount - 1));
-            }
-            subscriptions.put(memberName, subscription(allTopicNames, memberIndex));
-        });
 
         groupSubscription = new ConsumerPartitionAssignor.GroupSubscription(subscriptions);
     }
@@ -231,26 +246,26 @@ public class ClientSideAssignorBenchmark {
         );
     }
 
-    private void simulateRebalance() {
-            ConsumerPartitionAssignor.GroupAssignment initialAssignment = assignor.assign(metadata, groupSubscription);
-            Map<String, ConsumerPartitionAssignor.Subscription> newSubscriptions = new HashMap<>();
-            subscriptions.forEach((member, subscription) ->
-                newSubscriptions.put(
-                    member,
-                    subscriptionWithOwnedPartitions(
-                        initialAssignment.groupAssignment().get(member).partitions(),
-                        subscription
-                    )
+    private void simulateIncrementalRebalance() {
+        ConsumerPartitionAssignor.GroupAssignment initialAssignment = assignor.assign(metadata, groupSubscription);
+        Map<String, ConsumerPartitionAssignor.Subscription> newSubscriptions = new HashMap<>();
+        subscriptions.forEach((member, subscription) ->
+            newSubscriptions.put(
+                member,
+                subscriptionWithOwnedPartitions(
+                    initialAssignment.groupAssignment().get(member).partitions(),
+                    subscription
                 )
-            );
+            )
+        );
 
-            // Add new member to trigger a reassignment.
-            newSubscriptions.put("newMember", subscription(
-                allTopicNames,
-                memberCount - 1
-            ));
+        // Add new member to trigger a reassignment.
+        newSubscriptions.put("newMember", subscription(
+            allTopicNames,
+            memberCount - 1
+        ));
 
-            this.subscriptions = newSubscriptions;
+        subscriptions = newSubscriptions;
     }
 
     @Benchmark

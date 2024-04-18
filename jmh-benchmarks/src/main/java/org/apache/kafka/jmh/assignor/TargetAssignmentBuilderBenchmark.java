@@ -44,7 +44,6 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -71,12 +70,9 @@ public class TargetAssignmentBuilderBenchmark {
     @Param({"10", "100", "1000"})
     private int topicCount;
 
-    @Param({"true", "false"})
-    private boolean isRackAware;
+    private static final String GROUP_ID = "benchmark-group";
 
-    String groupId = "benchmark-group";
-
-    private static final int groupEpoch = 0;
+    private static final int GROUP_EPOCH = 0;
 
     private PartitionAssignor partitionAssignor;
 
@@ -85,8 +81,6 @@ public class TargetAssignmentBuilderBenchmark {
     private TargetAssignmentBuilder targetAssignmentBuilder;
 
     private AssignmentSpec assignmentSpec;
-
-    private static final int numberOfRacks = 3;
 
     private final List<String> allTopicNames = new ArrayList<>(topicCount);
 
@@ -97,19 +91,19 @@ public class TargetAssignmentBuilderBenchmark {
         // For this benchmark we will use the Uniform Assignor
         // and a group that has a homogeneous subscription model.
         partitionAssignor = new UniformAssignor();
+
         subscriptionMetadata = generateMockSubscriptionMetadata();
         Map<String, ConsumerGroupMember> members = generateMockMembers();
         Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignment();
 
         // Add a new member to trigger a rebalance.
         Set<String> subscribedTopics = new HashSet<>(subscriptionMetadata.keySet());
-        String rackId = isRackAware ? "rack" + (memberCount - 1) % numberOfRacks : "";
+
         ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("new-member")
             .setSubscribedTopicNames(new ArrayList<>(subscribedTopics))
-            .setRackId(rackId)
             .build();
 
-        targetAssignmentBuilder = new TargetAssignmentBuilder(groupId, groupEpoch, partitionAssignor)
+        targetAssignmentBuilder = new TargetAssignmentBuilder(GROUP_ID, GROUP_EPOCH, partitionAssignor)
             .withMembers(members)
             .withSubscriptionMetadata(subscriptionMetadata)
             .withTargetAssignment(existingTargetAssignment)
@@ -123,10 +117,8 @@ public class TargetAssignmentBuilderBenchmark {
             Set<String> subscribedTopics;
             subscribedTopics = new HashSet<>(allTopicNames);
 
-            String rackId = isRackAware ? "rack" + i % numberOfRacks : "" ;
             ConsumerGroupMember member = new ConsumerGroupMember.Builder("member" + i)
                 .setSubscribedTopicNames(new ArrayList<>(subscribedTopics))
-                .setRackId(rackId)
                 .build();
             members.put("member" + i, member);
         }
@@ -142,8 +134,13 @@ public class TargetAssignmentBuilderBenchmark {
             Uuid topicId = Uuid.randomUuid();
             allTopicNames.add(topicName);
             allTopicIds.add(topicId);
-            Map<Integer, Set<String>> partitionRacks = mkMapOfPartitionRacks(partitionsPerTopicCount);
-            TopicMetadata metadata = new TopicMetadata(topicId, topicName, partitionsPerTopicCount, partitionRacks);
+
+            TopicMetadata metadata = new TopicMetadata(
+                topicId,
+                topicName,
+                partitionsPerTopicCount,
+                Collections.emptyMap()
+            );
             subscriptionMetadata.put(topicName, metadata);
         }
 
@@ -180,39 +177,26 @@ public class TargetAssignmentBuilderBenchmark {
         return initialTargetAssignment;
     }
 
-    private static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
-        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
-        for (int i = 0; i < numPartitions; i++) {
-            partitionRacks.put(i, new HashSet<>(Arrays.asList("rack" + i % numberOfRacks, "rack" + (i + 1) % numberOfRacks)));
-        }
-        return partitionRacks;
-    }
-
-    private Optional<String> rackId(int index) {
-        return isRackAware ? Optional.of("rack" + index % numberOfRacks) : Optional.empty();
-    }
-
     private void createAssignmentSpec() {
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
 
         for (int i = 0; i < memberCount - 1; i++) {
-            String memberName = "member" + i;
-            Optional<String> rackId = rackId(i);
+            String memberId = "member" + i;
 
-            members.put(memberName, new AssignmentMemberSpec(
+            members.put(memberId, new AssignmentMemberSpec(
                 Optional.empty(),
-                rackId,
+                Optional.empty(),
                 allTopicIds,
                 Collections.emptyMap()
             ));
         }
-        this.assignmentSpec = new AssignmentSpec(members);
+        assignmentSpec = new AssignmentSpec(members);
     }
 
     @Benchmark
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void build() {
-        this.targetAssignmentBuilder.build();
+        targetAssignmentBuilder.build();
     }
 }
