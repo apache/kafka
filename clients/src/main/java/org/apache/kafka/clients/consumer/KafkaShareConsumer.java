@@ -39,6 +39,289 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.propsToMap;
 
+/**
+ * A client that consumes records from a Kafka cluster using a share group.
+ * <p>
+ *     <em>This is an early access feature introduced by KIP-932. It is not suitable for production use until it is
+ *     fully implemented and released.</em>
+ *
+ * <h3>Cross-Version Compatibility</h3>
+ * This client can communicate with brokers that are version 4.0.0 or newer. You will receive an
+ * {@link org.apache.kafka.common.errors.UnsupportedVersionException} when invoking an API that is not
+ * available on the running broker version.
+ *
+ * <h3><a name="sharegroups">Share Groups and Topic Subscriptions</a></h3>
+ * Kafka uses the concept of <i>share groups</i> to allow a pool of consumers to cooperate on the work of
+ * consuming and processing records. All consumer instances sharing the same {@code group.id} will be part of
+ * the same share group.
+ * <p>
+ * Each consumer in a group can dynamically set the list of topics it wants to subscribe to using the
+ * {@link #subscribe(Collection)} method. Kafka will deliver each message in the subscribed topics to one
+ * consumer in the share group. Unlike consumer groups, share groups balance the partitions between all
+ * members of the share group permitting multiple consumers to consume from the same partitions. This gives
+ * more flexible sharing of records than a consumer group, at the expense of record ordering.
+ * <p>
+ * Membership in a share group is maintained dynamically: if a consumer fails, the partitions assigned to
+ * it will be reassigned to other consumers in the same group. Similarly, if a new consumer joins the group,
+ * the partition assignment is re-evaluated and partitions can be moved from existing consumers to the new one.
+ * This is known as <i>rebalancing</i> the group and is discussed in more detail <a href="#failures">below</a>.
+ * Group rebalancing is also used when new partitions are added to one of the subscribed topics. The group will
+ * automatically detect the new partitions through periodic metadata refreshes and assign them to the members of the group.
+ * <p>
+ * Conceptually, you can think of a share group as a single logical subscriber made up of multiple consumers.
+ * In fact, in other messaging systems, a share group is roughly equivalent to a <em>durable shared subscription</em>.
+ * You can have multiple share groups and consumer groups independently consuming from the same topics.
+ *
+ * <h3><a name="failures">Detecting Consumer Failures</a></h3>
+ * After subscribing to a set of topics, the consumer will automatically join the group when {@link #poll(Duration)} is
+ * invoked. This method is designed to ensure consumer liveness. As long as you continue to call poll, the consumer
+ * will stay in the group and continue to receive records from the partitions it was assigned. Under the covers,
+ * the consumer sends periodic heartbeats to the broker. If the consumer crashes or is unable to send heartbeats for
+ * the duration of the share group's session time-out, then the consumer will be considered dead and its partitions
+ * will be reassigned.
+ * <p>
+ * It is also possible that the consumer could encounter a "livelock" situation where it is continuing to send heartbeats
+ * in the background, but no progress is being made. To prevent the consumer from holding onto its partitions
+ * indefinitely in this case, we provide a liveness detection mechanism using the {@code max.poll.interval.ms} setting.
+ * If you don't call poll at least as frequently as this, the client will proactively leave the share group.
+ * So to stay in the group, you must continue to call poll.
+ *
+ * <h3>Record Delivery and Acknowledgement</h3>
+ * When a consumer in a share-group fetches records using {@link #poll(Duration)}, it receives available records from any
+ * of the topic-partitions that match its subscriptions. Records are acquired for delivery to this consumer with a
+ * time-limited acquisition lock. While a record is acquired, it is not available for another consumer. By default,
+ * the lock duration is 30 seconds, but it can also be controlled using the group {@code group.share.record.lock.duration.ms}
+ * configuration parameter. The idea is that the lock is automatically released once the lock duration has elapsed, and
+ * then the record is available to be given to another consumer. The consumer which holds the lock can deal with it in
+ * the following ways:
+ * <ul>
+ *     <li>The consumer can acknowledge successful processing of the record</li>
+ *     <li>The consumer can release the record, which makes the record available for another delivery attempt</li>
+ *     <li>The consumer can reject the record, which indicates that the record is unprocessable and does not make
+ *     the record available for another delivery attempt</li>
+ *     <li>The consumer can do nothing, in which case the lock is automatically released when the lock duration has elapsed</li>
+ * </ul>
+ * The cluster limits the number of records acquired for consumers for each topic-partition in a share group. Once the limit
+ * is reached, fetching records will temporarily yield no further records until the number of acquired records reduces,
+ * as naturally happens when the locks time out. This limit is controlled by the broker configuration property
+ * {@code group.share.record.lock.partition.limit}. By limiting the duration of the acquisition lock and automatically
+ * releasing the locks, the broker ensures delivery progresses even in the presence of consumer failures.
+ * <p>
+ * The consumer can choose to use implicit or explicit acknowledgement of the records it processes.
+ * <p>If the application calls {@link #acknowledge(ConsumerRecord, AcknowledgeType)} for any record in the batch,
+ * it is using <em>explicit acknowledgement</em>. In this case:
+ * <ul>
+ *     <li>The application calls {@link #commitSync()} or {@link #commitAsync()} which commits the acknowledgements to Kafka.
+ *     If any records in the batch were not acknowledged, they remain acquired and will be presented to the application
+ *     in response to a future poll.</li>
+ *     <li>The application calls {@link #poll(Duration)} without committing first, which commits the acknowledgements to
+ *     Kafka asynchronously. In this case, no exception is thrown by a failure to commit the acknowledgement.
+ *     If any records in the batch were not acknowledged, they remain acquired and will be presented to the application
+ *     in response to a future poll.</li>
+ *     <li>The application calls {@link #close()} which attempts to commit any pending acknowledgements and
+ *     releases any remaining acquired records.</li>
+ * </ul>
+ * If the application does not call {@link #acknowledge(ConsumerRecord, AcknowledgeType)} for any record in the batch,
+ * it is using <em>implicit acknowledgement</em>. In this case:
+ * <ul>
+ *     <li>The application calls {@link #commitSync()} or {@link #commitAsync()} which implicitly acknowledges all of
+ *     the delivered records as processed successfully and commits the acknowledgements to Kafka.</li>
+ *     <li>The application calls {@link #poll(Duration)} without committing, which also implicitly acknowledges all of
+ *     the delivered records and commits the acknowledgements to Kafka asynchronously. In this case, no exception is
+ *     thrown by a failure to commit the acknowledgements.</li>
+ *     <li>The application calls {@link #close()}  which releases any acquired records without acknowledgement.</li>
+ * </ul>
+ * <p>
+ * The consumer guarantees that the records returned in the {@code ConsumerRecords} object for a specific topic-partition
+ * are in order of increasing offset. For each topic-partition, Kafka guarantees that acknowledgements for the records
+ * in a batch are performed atomically. This makes error handling significantly more straightforward because there can be
+ * one error code per partition.
+ *
+ * <h3>Usage Examples</h3>
+ * The share consumer APIs offer flexibility to cover a variety of consumption use cases. Here are some examples to
+ * demonstrate how to use them.
+ *
+ * <h4>Acknowledging a batch of records (implicit acknowledgement)</h4>
+ * This example demonstrates implicit acknowledgement using {@link #poll(Duration)} to acknowledge the records which
+ * were delivered in the previous poll. All the records delivered are implicitly marked as successfully consumed and
+ * acknowledged synchronously with Kafka as the consumer fetches more records.
+ * <pre>
+ *     Properties props = new Properties();
+ *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
+ *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
+ *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
+ *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
+ *     while (true) {
+ *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100));
+ *         for (ConsumerRecord&lt;String, String&gt; record : records) {
+ *             System.out.printf(&quot;offset = %d, key = %s, value = %s%n&quot;, record.offset(), record.key(), record.value());
+ *             doProcessing(record);
+ *         }
+ *     }
+ * </pre>
+ *
+ * Alternatively, you can use {@link #commitSync()} or {@link #commitAsync()} to commit the acknowledgements, but this is
+ * slightly less efficient because there is an additional request sent to Kafka.
+ * <pre>
+ *     Properties props = new Properties();
+ *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
+ *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
+ *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
+ *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
+ *     while (true) {
+ *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100));
+ *         for (ConsumerRecord&lt;String, String&gt; record : records) {
+ *             System.out.printf(&quot;offset = %d, key = %s, value = %s%n&quot;, record.offset(), record.key(), record.value());
+ *             doProcessing(record);
+ *         }
+ *         consumer.commitSync();
+ *     }
+ * </pre>
+ *
+ * <h4>Per-record acknowledgement (explicit acknowledgement)</h4>
+ * This example demonstrates using different acknowledgement types depending on the outcome of processing the records.
+ * <pre>
+ *     Properties props = new Properties();
+ *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
+ *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
+ *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
+ *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
+ *     while (true) {
+ *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100));
+ *         for (ConsumerRecord&lt;String, String&gt; record : records) {
+ *             try {
+ *                 doProcessing(record);
+ *                 consumer.acknowledge(record, AcknowledgeType.ACCEPT);
+ *             } catch (Exception e) {
+ *                 consumer.acknowledge(record, AcknowledgeType.REJECT);
+ *             }
+ *         }
+ *         consumer.commitSync();
+ *     }
+ * </pre>
+ *
+ * Each record processed is separately acknowledged using a call to {@link #acknowledge(ConsumerRecord, AcknowledgeType)}.
+ * The {@link AcknowledgeType} argument indicates whether the record was processed successfully or not. In this case,
+ * the bad records are rejected meaning that they’re not eligible for further delivery attempts. For a permanent error
+ * such as a semantic error, this is appropriate. For a transient error which might not affect a subsequent processing
+ * attempt, {@link AcknowledgeType#RELEASE} is more appropriate because the record remains eligible for further delivery attempts.
+ * <p>
+ * The calls to {@link #acknowledge(ConsumerRecord, AcknowledgeType)} are simply updating local information in the consumer.
+ * It is only once {@link #commitSync()} is called that the acknowledgements are committed by sending the new state
+ * information to Kafka.
+ *
+ * <h4>Per-record acknowledgement, ending processing of the batch on an error (explicit acknowledgement)</h4>
+ * This example demonstrates ending processing of a batch of records on the first error.
+ * <pre>
+ *     Properties props = new Properties();
+ *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
+ *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
+ *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
+ *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
+ *     while (true) {
+ *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100));
+ *         for (ConsumerRecord&lt;String, String&gt; record : records) {
+ *             try {
+ *                 doProcessing(record);
+ *                 consumer.acknowledge(record, AcknowledgeType.ACCEPT);
+ *             } catch (Exception e) {
+ *                 consumer.acknowledge(record, AcknowledgeType.REJECT);
+ *                 break;
+ *             }
+ *         }
+ *         consumer.commitSync();
+ *     }
+ * </pre>
+ * There are the following cases in this example:
+ * <ol>
+ *     <li>The batch contains no records, in which case the application just polls again. The call to {@link #commitSync()}
+ *     just does nothing because the batch was empty.</li>
+ *     <li>All of the records in the batch are processed successfully. The calls to {@link #acknowledge(ConsumerRecord, AcknowledgeType)}
+ *     specifying {@code AcknowledgeType.ACCEPT} mark all records in the batch as successfully processed.</li>
+ *     <li>One of the records encounters an exception. The call to {@link #acknowledge(ConsumerRecord, AcknowledgeType)} specifying
+ *     {@code AcknowledgeType.REJECT} rejects that record. Earlier records in the batch have already been marked as successfully
+ *     processed. The call to {@link #commitSync()} commits the acknowledgements, but the records after the failed record
+ *     remain acquired as part of the same delivery attempt and will be presented to the application in response to another poll.</li>
+ * </ol>
+ *
+ * <h3>Reading Transactional Records</h3>
+ * The way that share groups handle transactional records is controlled by the {@code group.share.isolation.level}</code>
+ * configuration property. In a share group, the isolation level applies to the entire share group, not just individual
+ * consumers.
+ * <p>
+ * In <code>read_uncommitted</code> isolation level, the share group consumes all non-transactional and transactional
+ * records. The consumption is bounded by the high-water mark.
+ * <p>
+ * In <code>read_committed</code> isolation level (not yet supported), the share group only consumes non-transactional
+ * records and committed transactional records. The set of records which are eligible to become in-flight records are
+ * non-transactional records and committed transactional records only. The consumption is bounded by the last stable
+ * offset, so an open transaction blocks the progress of the share group with read_committed isolation level.
+ *
+ * <h3><a name="multithreaded">Multithreaded Processing</a></h3>
+ * The consumer is NOT thread-safe. It is the responsibility of the user to ensure that multithreaded access
+ * is properly synchronized. Unsynchronized access will result in {@link java.util.ConcurrentModificationException}.
+ * <p>
+ * The only exception to this rule is {@link #wakeup()} which can safely be used from an external thread to
+ * interrupt an active operation. In this case, a {@link org.apache.kafka.common.errors.WakeupException} will be
+ * thrown from the thread blocking on the operation. This can be used to shut down the consumer from another thread.
+ * The following snippet shows the typical pattern:
+ *
+ * <pre>
+ * public class KafkaShareConsumerRunner implements Runnable {
+ *     private final AtomicBoolean closed = new AtomicBoolean(false);
+ *     private final KafkaShareConsumer consumer;
+ *
+ *     public KafkaShareConsumerRunner(KafkaShareConsumer consumer) {
+ *       this.consumer = consumer;
+ *     }
+ *
+ *     {@literal}@Override
+ *     public void run() {
+ *         try {
+ *             consumer.subscribe(Arrays.asList("topic"));
+ *             while (!closed.get()) {
+ *                 ConsumerRecords records = consumer.poll(Duration.ofMillis(10000));
+ *                 // Handle new records
+ *             }
+ *         } catch (WakeupException e) {
+ *             // Ignore exception if closing
+ *             if (!closed.get()) throw e;
+ *         } finally {
+ *             consumer.close();
+ *         }
+ *     }
+ *
+ *     // Shutdown hook which can be called from a separate thread
+ *     public void shutdown() {
+ *         closed.set(true);
+ *         consumer.wakeup();
+ *     }
+ * }
+ * </pre>
+ *
+ * Then in a separate thread, the consumer can be shutdown by setting the closed flag and waking up the consumer.
+ * <pre>
+ *     closed.set(true);
+ *     consumer.wakeup();
+ * </pre>
+ *
+ * <p>
+ * Note that while it is possible to use thread interrupts instead of {@link #wakeup()} to abort a blocking operation
+ * (in which case, {@link InterruptException} will be raised), we discourage their use since they may cause a clean
+ * shutdown of the consumer to be aborted. Interrupts are mainly supported for those cases where using {@link #wakeup()}
+ * is impossible, such as when a consumer thread is managed by code that is unaware of the Kafka client.
+ * <p>
+ * We have intentionally avoided implementing a particular threading model for processing. Various options for
+ * multithreaded processing are possible, of which the most straightforward is to dedicate a thread to each consumer.
+ */
 @InterfaceStability.Evolving
 public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
 
@@ -149,7 +432,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      *
      * @param topics The list of topics to subscribe to
      *
-     * @throws IllegalArgumentException If topics is null or contains null or empty elements
+     * @throws IllegalArgumentException if topics is null or contains null or empty elements
      * @throws KafkaException for any other unrecoverable errors
      */
     @Override
@@ -181,17 +464,15 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      *
      * @throws AuthenticationException if authentication fails. See the exception for more details
      * @throws AuthorizationException if caller lacks Read access to any of the subscribed
-     *             topics or to the configured groupId. See the exception for more details
-     * @throws InterruptException if the calling thread is interrupted before or while this method is called
-     * @throws InvalidTopicException if the current subscription contains any invalid
-     *             topic (per {@link org.apache.kafka.common.internals.Topic#validate(String)})
-     * @throws WakeupException if {@link #wakeup()} is called before or while this method is called
-     * @throws KafkaException for any other unrecoverable errors (e.g. invalid groupId or
-     *             session timeout, errors deserializing key/value pairs,
-     *             or any new error cases in future versions)
+     *             topics or to the share group. See the exception for more details
      * @throws IllegalArgumentException if the timeout value is negative
      * @throws IllegalStateException if the consumer is not subscribed to any topics
      * @throws ArithmeticException if the timeout is greater than {@link Long#MAX_VALUE} milliseconds.
+     * @throws InvalidTopicException if the current subscription contains any invalid
+     *             topic (per {@link org.apache.kafka.common.internals.Topic#validate(String)})
+     * @throws WakeupException if {@link #wakeup()} is called before or while this method is called
+     * @throws InterruptException if the calling thread is interrupted before or while this method is called
+     * @throws KafkaException for any other unrecoverable errors
      */
     @Override
     public ConsumerRecords<K, V> poll(Duration timeout) {
@@ -220,7 +501,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * <b>explicit acknowledgement</b>.
      *
      * @param record The record to acknowledge
-     * @param type The acknowledge type which indicates whether it was processed successfully
+     * @param type The acknowledgement type which indicates whether it was processed successfully
      *
      * @throws IllegalStateException if the record is not waiting to be acknowledged, or the consumer has already
      *                               used implicit acknowledgement
@@ -243,7 +524,8 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * @return A map of the results for each topic-partition for which delivery was acknowledged.
      *         If the acknowledgement failed for a topic-partition, an exception is present.
      *
-     * @throws InterruptException If the thread is interrupted while blocked.
+     * @throws WakeupException if {@link #wakeup()} is called before or while this method is called
+     * @throws InterruptException if the thread is interrupted while blocked
      * @throws KafkaException for any other unrecoverable errors
      */
     @Override
@@ -265,8 +547,9 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * @return A map of the results for each topic-partition for which delivery was acknowledged.
      *         If the acknowledgement failed for a topic-partition, an exception is present.
      *
-     * @throws IllegalArgumentException If the {@code timeout} is negative.
-     * @throws InterruptException If the thread is interrupted while blocked.
+     * @throws IllegalArgumentException if the {@code timeout} is negative
+     * @throws WakeupException if {@link #wakeup()} is called before or while this method is called
+     * @throws InterruptException if the thread is interrupted while blocked
      * @throws KafkaException for any other unrecoverable errors
      */
     @Override
@@ -316,13 +599,13 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      *
      * @return The client's assigned instance id used for metrics collection.
      *
-     * @throws InterruptException If the thread is interrupted while blocked.
-     * @throws KafkaException If an unexpected error occurs while trying to determine the client
+     * @throws IllegalArgumentException if the {@code timeout} is negative
+     * @throws IllegalStateException if telemetry is not enabled
+     * @throws WakeupException if {@link #wakeup()} is called before or while this method is called
+     * @throws InterruptException if the thread is interrupted while blocked
+     * @throws KafkaException if an unexpected error occurs while trying to determine the client
      *                        instance ID, though this error does not necessarily imply the
-     *                        consumer client is otherwise unusable.
-     * @throws IllegalArgumentException If the {@code timeout} is negative.
-     * @throws IllegalStateException If telemetry is not enabled ie, config `{@code enable.metrics.push}`
-     *                               is set to `{@code false}`.
+     *                        consumer client is otherwise unusable
      */
     @Override
     public Uuid clientInstanceId(Duration timeout) {
@@ -342,7 +625,8 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * This will commit acknowledgements if possible within the default timeout.
      * See {@link #close(Duration)} for details. Note that {@link #wakeup()} cannot be used to interrupt close.
      *
-     * @throws InterruptException If the thread is interrupted before or while this method is called
+     * @throws WakeupException if {@link #wakeup()} is called before or while this method is called
+     * @throws InterruptException if the thread is interrupted before or while this method is called
      * @throws KafkaException for any other error during close
      */
     @Override
@@ -360,8 +644,9 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
      *
-     * @throws IllegalArgumentException If the {@code timeout} is negative.
-     * @throws InterruptException If the thread is interrupted before or while this method is called
+     * @throws IllegalArgumentException if the {@code timeout} is negative
+     * @throws WakeupException if {@link #wakeup()} is called before or while this method is called
+     * @throws InterruptException if the thread is interrupted before or while this method is called
      * @throws KafkaException for any other error during close
      */
     @Override

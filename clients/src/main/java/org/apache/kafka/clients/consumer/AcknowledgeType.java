@@ -22,7 +22,14 @@ import java.util.Locale;
 
 @InterfaceStability.Evolving
 public enum AcknowledgeType {
-    ACCEPT((byte) 1), RELEASE((byte) 2), REJECT((byte) 3);
+    /** The record was consumed successfully. */
+    ACCEPT((byte) 1),
+
+    /** The record was not consumed successfully. Release it for another delivery attempt. */
+    RELEASE((byte) 2),
+
+    /** The record was not consumed successfully. Reject it and do not release it for another delivery attempt. */
+    REJECT((byte) 3);
 
     public final byte id;
 

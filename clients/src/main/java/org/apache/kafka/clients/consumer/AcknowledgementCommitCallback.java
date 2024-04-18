@@ -44,10 +44,8 @@ public interface AcknowledgementCommitCallback {
      * <p><ul>
      * <li> {@link InvalidRecordStateException} if the record state is invalid
      * <li> {@link AuthorizationException} if not authorized to the topic of group
-     * <li> {@link WakeupException} if {@link KafkaShareConsumer#wakeup()} is called before or while this
-     *             function is called
-     * <li> {@link InterruptException} if the calling thread is interrupted before or while
-     *             this function is called
+     * <li> {@link WakeupException} if {@link KafkaShareConsumer#wakeup()} is called before or while this function is called
+     * <li> {@link InterruptException} if the calling thread is interrupted before or while this function is called
      * <li> {@link KafkaException} for any other unrecoverable errors
      * </ul>
      */
