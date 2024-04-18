@@ -1174,7 +1174,7 @@ public class ConsumerGroup implements Group {
     /**
      * @return The map of topic id and partition set converted from the list of TopicPartition.
      */
-    private static Map<Uuid, Set<Integer>> topicPartitionMapFromList(
+    public static Map<Uuid, Set<Integer>> topicPartitionMapFromList(
         List<TopicPartition> partitions,
         TopicsImage topicsImage
     ) {

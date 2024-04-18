@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -85,11 +88,13 @@ import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
 import org.slf4j.Logger;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -1092,6 +1097,86 @@ public class GroupMetadataManager {
         }
     }
 
+    /**
+     * Validates if the received classic member protocols are supported by the group.
+     *
+     * @param group         The ConsumerGroup.
+     * @param memberId      The joining member id.
+     * @param protocolType  The joining member protocol type.
+     * @param protocols     The joining member protocol collection.
+     */
+    private void throwIfClassicProtocolIsNotSupported(
+        ConsumerGroup group,
+        String memberId,
+        String protocolType,
+        JoinGroupRequestProtocolCollection protocols
+    ) {
+        if (!group.supportsClassicProtocols(protocolType, ClassicGroupMember.plainProtocolSet(protocols))) {
+            throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception("Member " + memberId + "'s protocols are not supported.");
+        }
+    }
+
+    /**
+     * Deserialize the subscription in JoinGroupRequestProtocolCollection.
+     * All the protocols have the same subscription, so the method picks a random one.
+     *
+     * @param protocols The JoinGroupRequestProtocolCollection.
+     * @return The Subscription.
+     */
+    private static ConsumerPartitionAssignor.Subscription deserializeSubscription(
+        JoinGroupRequestProtocolCollection protocols
+    ) {
+        try {
+            return ConsumerProtocol.deserializeSubscription(
+                ByteBuffer.wrap(protocols.stream().findAny().get().metadata())
+            );
+        } catch (SchemaException e) {
+            throw new IllegalStateException("Malformed embedded consumer protocol.");
+        }
+    }
+
+    /**
+     * Validates the generation id and returns the owned partitions in the JoinGroupRequest to a consumer group.
+     *
+     * @param member        The joining member.
+     * @param subscription  The Subscription.
+     * @return The owned partitions if valid, otherwise return null.
+     */
+    private List<ConsumerGroupHeartbeatRequestData.TopicPartitions> validateGenerationIdAndGetOwnedPartition(
+        ConsumerGroupMember member,
+        ConsumerPartitionAssignor.Subscription subscription
+    ) {
+        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedPartitions =
+            toTopicPartitions(subscription.ownedPartitions(), metadataImage.topics());
+        if (subscription.generationId().isPresent() && subscription.generationId().get() == member.memberEpoch()) {
+            return ownedPartitions;
+        } else {
+            // If the generation id is not provided or doesn't match the member epoch, it's still safe to
+            // accept the ownedPartitions that is a subset of the assigned partition. Otherwise, set the
+            // ownedPartition to be null. When a new assignment is provided, the consumer will stop fetching
+            // from and revoke the partitions it does not own.
+            if (isSubset(ownedPartitions, member.assignedPartitions())) {
+                return ownedPartitions;
+            } else {
+                return null;
+            }
+        }
+    }
+
+    /**
+     * @return The ConsumerGroupHeartbeatRequestData.TopicPartitions list converted from the TopicPartitions list.
+     */
+    private static List<ConsumerGroupHeartbeatRequestData.TopicPartitions> toTopicPartitions(
+        List<TopicPartition> partitions,
+        TopicsImage topicsImage
+    ) {
+        return ConsumerGroup.topicPartitionMapFromList(partitions, topicsImage).entrySet().stream().map(
+                entry -> new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                    .setTopicId(entry.getKey())
+                    .setPartitions(new ArrayList<>(entry.getValue())))
+            .collect(Collectors.toList());
+    }
+
     private ConsumerGroupHeartbeatResponseData.Assignment createResponseAssignment(
         ConsumerGroupMember member
     ) {
@@ -1213,6 +1298,250 @@ public class GroupMetadataManager {
             .setClientHost(clientHost)
             .build();
 
+        /**
+         * INPUT:   member, updatedMember, currentTimeMs
+         * OUTPUT:  groupEpoch, subscriptionMetadata
+         */
+        boolean bumpGroupEpoch = false;
+        if (!updatedMember.equals(member)) {
+            records.add(newMemberSubscriptionRecord(groupId, updatedMember));
+
+            if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
+                log.info("[GroupId {}] Member {} updated its subscribed topics to: {}.",
+                    groupId, memberId, updatedMember.subscribedTopicNames());
+                bumpGroupEpoch = true;
+            }
+
+            if (!updatedMember.subscribedTopicRegex().equals(member.subscribedTopicRegex())) {
+                log.info("[GroupId {}] Member {} updated its subscribed regex to: {}.",
+                    groupId, memberId, updatedMember.subscribedTopicRegex());
+                bumpGroupEpoch = true;
+            }
+        }
+
+        if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
+            // The subscription metadata is updated in two cases:
+            // 1) The member has updated its subscriptions;
+            // 2) The refresh deadline has been reached.
+            subscriptionMetadata = group.computeSubscriptionMetadata(
+                member,
+                updatedMember,
+                metadataImage.topics(),
+                metadataImage.cluster()
+            );
+
+            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+                log.info("[GroupId {}] Computed new subscription metadata: {}.",
+                    groupId, subscriptionMetadata);
+                bumpGroupEpoch = true;
+                records.add(newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+            }
+
+            if (bumpGroupEpoch) {
+                groupEpoch += 1;
+                records.add(newGroupEpochRecord(groupId, groupEpoch));
+                log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
+                metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
+            }
+
+            group.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
+        }
+
+        // 2. Update the target assignment if the group epoch is larger than the target assignment epoch or a static member
+        // replaces an existing static member. The delta between the existing and the new target assignment is persisted to the partition.
+
+        /**
+         * INPUT:   group, groupEpoch, staticMemberReplaced, member, updatedMember, records
+         * OUTPUT:  targetAssignmentEpoch, targetAssignment
+         */
+
+        int targetAssignmentEpoch = group.assignmentEpoch();
+        Assignment targetAssignment = group.targetAssignment(memberId);
+        if (groupEpoch > targetAssignmentEpoch || staticMemberReplaced) {
+            String preferredServerAssignor = group.computePreferredServerAssignor(
+                member,
+                updatedMember
+            ).orElse(defaultAssignor.name());
+            try {
+                TargetAssignmentBuilder assignmentResultBuilder =
+                    new TargetAssignmentBuilder(groupId, groupEpoch, assignors.get(preferredServerAssignor))
+                        .withMembers(group.members())
+                        .withStaticMembers(group.staticMembers())
+                        .withSubscriptionMetadata(subscriptionMetadata)
+                        .withTargetAssignment(group.targetAssignment())
+                        .addOrUpdateMember(memberId, updatedMember);
+                TargetAssignmentBuilder.TargetAssignmentResult assignmentResult;
+                // A new static member is replacing an older one with the same subscriptions.
+                // We just need to remove the older member and add the newer one. The new member should
+                // reuse the target assignment of the older member.
+                if (staticMemberReplaced) {
+                    assignmentResult = assignmentResultBuilder
+                        .removeMember(member.memberId())
+                        .build();
+                } else {
+                    assignmentResult = assignmentResultBuilder
+                        .build();
+                }
+
+                log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor: {}.",
+                    groupId, groupEpoch, preferredServerAssignor, assignmentResult.targetAssignment());
+
+                records.addAll(assignmentResult.records());
+                targetAssignment = assignmentResult.targetAssignment().get(memberId);
+                targetAssignmentEpoch = groupEpoch;
+            } catch (PartitionAssignorException ex) {
+                String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
+                    groupEpoch, ex.getMessage());
+                log.error("[GroupId {}] {}.", groupId, msg);
+                throw new UnknownServerException(msg, ex);
+            }
+        }
+
+        // 3. Reconcile the member's assignment with the target assignment if the member is not
+        // fully reconciled yet.
+        updatedMember = maybeReconcile(
+            groupId,
+            updatedMember,
+            group::currentPartitionEpoch,
+            targetAssignmentEpoch,
+            targetAssignment,
+            ownedTopicPartitions,
+            records
+        );
+
+        scheduleConsumerGroupSessionTimeout(groupId, memberId);
+
+        // Prepare the response.
+        ConsumerGroupHeartbeatResponseData response = new ConsumerGroupHeartbeatResponseData()
+            .setMemberId(updatedMember.memberId())
+            .setMemberEpoch(updatedMember.memberEpoch())
+            .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs);
+
+        // The assignment is only provided in the following cases:
+        // 1. The member sent a full request. It does so when joining or rejoining the group with zero
+        //    as the member epoch; or on any errors (e.g. timeout). We use all the non-optional fields
+        //    (rebalanceTimeoutMs, subscribedTopicNames and ownedTopicPartitions) to detect a full request
+        //    as those must be set in a full request.
+        // 2. The member's assignment has been updated.
+        boolean isFullRequest = memberEpoch == 0 || (rebalanceTimeoutMs != -1 && subscribedTopicNames != null && ownedTopicPartitions != null);
+        if (isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
+            response.setAssignment(createResponseAssignment(updatedMember));
+        }
+
+        return new CoordinatorResult<>(records, response);
+    }
+
+    /**
+     * Handle a JoinGroupRequest to a ConsumerGroup.
+     *
+     * @param group          The group to join.
+     * @param context        The request context.
+     * @param request        The actual JoinGroup request.
+     * @param responseFuture The join group response future.
+     *
+     * @return The result that contains records to append if the join group phase completes.
+     */
+    private CoordinatorResult<Void, Record> consumerGroupJoin(
+        ConsumerGroup group,
+        RequestContext context,
+        JoinGroupRequestData request,
+        CompletableFuture<JoinGroupResponseData> responseFuture
+    ) throws ApiException {
+        final long currentTimeMs = time.milliseconds();
+        final List<Record> records = new ArrayList<>();
+        final String groupId = request.groupId();
+        String memberId = request.memberId();
+        final String instanceId = request.groupInstanceId();
+        final JoinGroupRequestProtocolCollection protocols = request.protocols();
+
+        final boolean isUnknownMember = memberId.equals(UNKNOWN_MEMBER_ID);
+        final ConsumerPartitionAssignor.Subscription subscription = deserializeSubscription(protocols);
+        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions = null;
+
+        if (!isClassicGroupSessionTimeoutValid(memberId, request.sessionTimeoutMs(), responseFuture)) {
+            return EMPTY_RESULT;
+        }
+        throwIfConsumerGroupIsFull(group, memberId);
+        // TODO: need to throw an exception if group is dead?
+
+        // Get or create the member.
+        if (isUnknownMember) memberId = Uuid.randomUuid().toString();
+        ConsumerGroupMember member;
+        ConsumerGroupMember.Builder updatedMemberBuilder;
+        boolean staticMemberReplaced = false;
+        boolean newMemberCreated = false;
+        if (instanceId == null) {
+            if (isUnknownMember && JoinGroupRequest.requiresKnownMemberId(context.apiVersion())) {
+                // If member id required, send back a response to call for another join group request with allocated member id.
+                log.info("Dynamic member with unknown member id joins group {}. " +
+                        "Created a new member id {} and requesting the member to rejoin with this id.",
+                    group.groupId(), memberId);
+
+                responseFuture.complete(new JoinGroupResponseData()
+                    .setMemberId(memberId)
+                    .setErrorCode(Errors.MEMBER_ID_REQUIRED.code())
+                );
+                return EMPTY_RESULT;
+            } else {
+                // A dynamic member (re-)joins.
+                throwIfClassicProtocolIsNotSupported(group, memberId, request.protocolType(), protocols);
+                newMemberCreated = !group.hasMember(memberId);
+
+                member = group.getOrMaybeCreateMember(memberId, true);
+                if (!newMemberCreated) ownedTopicPartitions = validateGenerationIdAndGetOwnedPartition(member, subscription);
+                log.info("[GroupId {}] Member {} joins the consumer group.", groupId, memberId);
+                updatedMemberBuilder = new ConsumerGroupMember.Builder(member);
+            }
+        } else {
+            throwIfClassicProtocolIsNotSupported(group, memberId, request.protocolType(), protocols);
+            member = group.staticMember(instanceId);
+            // A new static member joins or the existing static member rejoins.
+            if (isUnknownMember) {
+                newMemberCreated = true;
+                if (member == null) {
+                    // New static member.
+                    member = group.getOrMaybeCreateMember(memberId, true);
+                    updatedMemberBuilder = new ConsumerGroupMember.Builder(member);
+                    log.info("[GroupId {}] Static member {} with instance id {} joins the consumer group.", groupId, memberId, instanceId);
+                } else {
+                    // Replace the current static member.
+                    staticMemberReplaced = true;
+                    updatedMemberBuilder = new ConsumerGroupMember.Builder(memberId)
+                        .setAssignedPartitions(member.assignedPartitions());
+                    ownedTopicPartitions = validateGenerationIdAndGetOwnedPartition(member, subscription);
+                    removeMemberAndCancelTimers(records, group.groupId(), member.memberId());
+                    log.info("[GroupId {}] Static member {} with instance id {} re-joins the consumer group.", groupId, memberId, instanceId);
+                }
+            } else {
+                // Rejoining static member. Fence the static group with unmatched member id.
+                throwIfStaticMemberIsUnknown(member, instanceId);
+                throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
+
+                ownedTopicPartitions = validateGenerationIdAndGetOwnedPartition(member, subscription);
+                updatedMemberBuilder = new ConsumerGroupMember.Builder(member);
+                log.info("[GroupId {}] Static member {} with instance id {} re-joins the consumer group.", groupId, memberId, instanceId);
+            }
+        }
+
+        int groupEpoch = group.groupEpoch();
+        Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
+
+        // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue
+        // record is written to the __consumer_offsets partition to persist the change. If the subscriptions have
+        // changed, the subscription metadata is updated and persisted by writing a ConsumerGroupPartitionMetadataValue
+        // record to the __consumer_offsets partition. Finally, the group epoch is bumped if the subscriptions have
+        // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
+        ConsumerGroupMember updatedMember = updatedMemberBuilder
+            .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
+            .maybeUpdateRackId(subscription.rackId())
+            .maybeUpdateRebalanceTimeoutMs(ofSentinel(request.rebalanceTimeoutMs()))
+            .maybeUpdateServerAssignorName(Optional.empty())
+            .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscription.topics()))
+            .setClientId(context.clientId())
+            .setClientHost(context.clientAddress.toString())
+            .setSupportedClassicProtocols(protocols)
+            .build();
+
         boolean bumpGroupEpoch = false;
         if (!updatedMember.equals(member)) {
             records.add(newMemberSubscriptionRecord(groupId, updatedMember));
@@ -1314,26 +1643,18 @@ public class GroupMetadataManager {
             records
         );
 
-        scheduleConsumerGroupSessionTimeout(groupId, memberId);
-
-        // Prepare the response.
-        ConsumerGroupHeartbeatResponseData response = new ConsumerGroupHeartbeatResponseData()
-            .setMemberId(updatedMember.memberId())
-            .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs);
-
-        // The assignment is only provided in the following cases:
-        // 1. The member sent a full request. It does so when joining or rejoining the group with zero
-        //    as the member epoch; or on any errors (e.g. timeout). We use all the non-optional fields
-        //    (rebalanceTimeoutMs, subscribedTopicNames and ownedTopicPartitions) to detect a full request
-        //    as those must be set in a full request.
-        // 2. The member's assignment has been updated.
-        boolean isFullRequest = memberEpoch == 0 || (rebalanceTimeoutMs != -1 && subscribedTopicNames != null && ownedTopicPartitions != null);
-        if (isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
-            response.setAssignment(createResponseAssignment(updatedMember));
+        if (newMemberCreated) {
+            scheduleConsumerGroupSessionTimeout(groupId, memberId);
         }
 
-        return new CoordinatorResult<>(records, response);
+        responseFuture.complete(new JoinGroupResponseData()
+            .setMemberId(updatedMember.memberId())
+            .setGenerationId(updatedMember.memberEpoch())
+            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+            .setProtocolName(protocols.stream().findAny().get().name())
+        );
+
+        return new CoordinatorResult<>(records, null);
     }
 
     /**
@@ -2123,6 +2444,33 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Complete the responseFuture with INVALID_SESSION_TIMEOUT error if session timeout doesn't
+     * fall in the interval (classicGroupMinSessionTimeoutMs, classicGroupMaxSessionTimeoutMs).
+     *
+     * @param memberId          The member id.
+     * @param sessionTimeoutMs  The session timeout.
+     * @param responseFuture    The response future.
+     * @return A boolean indicating whether the session timeout is valid.
+     */
+    private boolean isClassicGroupSessionTimeoutValid(
+        String memberId,
+        int sessionTimeoutMs,
+        CompletableFuture<JoinGroupResponseData> responseFuture
+    ) {
+        if (sessionTimeoutMs < classicGroupMinSessionTimeoutMs ||
+            sessionTimeoutMs > classicGroupMaxSessionTimeoutMs
+        ) {
+            responseFuture.complete(new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setErrorCode(Errors.INVALID_SESSION_TIMEOUT.code())
+            );
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    /**
      * Handle a JoinGroupRequest.
      *
      * @param context        The request context.
@@ -2131,7 +2479,29 @@ public class GroupMetadataManager {
      *
      * @return The result that contains records to append if the join group phase completes.
      */
-    public CoordinatorResult<Void, Record> classicGroupJoin(
+    public CoordinatorResult<Void, Record> groupJoin(
+        RequestContext context,
+        JoinGroupRequestData request,
+        CompletableFuture<JoinGroupResponseData> responseFuture
+    ) {
+        Group group = groups.get(request.groupId(), Long.MAX_VALUE);
+        if (group != null && group.type() == CONSUMER && !group.isEmpty()) {
+            return consumerGroupJoin((ConsumerGroup) group, context, request, responseFuture);
+        } else {
+            return classicGroupJoin(context, request, responseFuture);
+        }
+    }
+
+    /**
+     * Handle a JoinGroupRequest to a ClassicGroup or a group to be created.
+     *
+     * @param context        The request context.
+     * @param request        The actual JoinGroup request.
+     * @param responseFuture The join group response future.
+     *
+     * @return The result that contains records to append if the join group phase completes.
+     */
+    CoordinatorResult<Void, Record> classicGroupJoin(
         RequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture
@@ -2143,14 +2513,7 @@ public class GroupMetadataManager {
         String memberId = request.memberId();
         int sessionTimeoutMs = request.sessionTimeoutMs();
 
-        if (sessionTimeoutMs < classicGroupMinSessionTimeoutMs ||
-            sessionTimeoutMs > classicGroupMaxSessionTimeoutMs
-        ) {
-            responseFuture.complete(new JoinGroupResponseData()
-                .setMemberId(memberId)
-                .setErrorCode(Errors.INVALID_SESSION_TIMEOUT.code())
-            );
-        } else {
+        if (isClassicGroupSessionTimeoutValid(memberId, sessionTimeoutMs, responseFuture)) {
             boolean isUnknownMember = memberId.equals(UNKNOWN_MEMBER_ID);
             // Group is created if it does not exist and the member id is UNKNOWN. if member
             // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND

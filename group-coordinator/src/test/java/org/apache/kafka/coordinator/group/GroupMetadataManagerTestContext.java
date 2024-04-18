@@ -634,7 +634,7 @@ public class GroupMetadataManagerTestContext {
         );
 
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
-        CoordinatorResult<Void, Record> coordinatorResult = groupMetadataManager.classicGroupJoin(
+        CoordinatorResult<Void, Record> coordinatorResult = groupMetadataManager.groupJoin(
             context,
             request,
             responseFuture

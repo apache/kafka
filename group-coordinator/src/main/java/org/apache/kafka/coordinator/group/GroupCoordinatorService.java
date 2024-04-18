@@ -333,7 +333,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "classic-group-join",
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
-            coordinator -> coordinator.classicGroupJoin(context, request, responseFuture)
+            coordinator -> coordinator.groupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
                 responseFuture.complete(handleOperationException(
