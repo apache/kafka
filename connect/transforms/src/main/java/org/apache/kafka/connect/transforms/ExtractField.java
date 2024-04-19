@@ -71,8 +71,8 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         originalPath = config.getString(FIELD_CONFIG);
         fieldPath = new SingleFieldPath(originalPath, FieldSyntaxVersion.fromConfig(config));
-        keyConverterReplaceNullWithDefault = props.get(KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG) == null || (boolean) props.get(KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG);
-        valueConverterReplaceNullWithDefault = props.get(VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG) == null || (boolean) props.get(VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG);
+        keyConverterReplaceNullWithDefault = props.get(KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG) == null || (Boolean) props.get(KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG);
+        valueConverterReplaceNullWithDefault = props.get(VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG) == null || (Boolean) props.get(VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG);
     }
 
     @Override

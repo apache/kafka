@@ -126,8 +126,8 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         timestampField = InsertionSpec.parse(config.getString(ConfigName.TIMESTAMP_FIELD));
         staticField = InsertionSpec.parse(config.getString(ConfigName.STATIC_FIELD));
         staticValue = config.getString(ConfigName.STATIC_VALUE);
-        keyConverterReplaceNullWithDefault = props.get(KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG) == null || (boolean) props.get(KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG);
-        valueConverterReplaceNullWithDefault = props.get(VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG) == null || (boolean) props.get(VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG);
+        keyConverterReplaceNullWithDefault = props.get(KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG) == null || (Boolean) props.get(KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG);
+        valueConverterReplaceNullWithDefault = props.get(VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG) == null || (Boolean) props.get(VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG);
 
         if (topicField == null && partitionField == null && offsetField == null && timestampField == null && staticField == null) {
             throw new ConfigException("No field insertion configured");
