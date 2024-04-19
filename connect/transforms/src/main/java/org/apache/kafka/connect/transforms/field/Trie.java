@@ -89,10 +89,6 @@ class Trie {
             this.path = path;
         }
 
-        boolean contains(String step) {
-            return steps.containsKey(step);
-        }
-
         private Node addStep(String step) {
             return steps.computeIfAbsent(step, ignored -> {
                 if (path != null) path = null;
