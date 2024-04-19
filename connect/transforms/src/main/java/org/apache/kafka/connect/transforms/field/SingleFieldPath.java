@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import static org.apache.kafka.connect.transforms.util.Requirements.requireMapOrNull;
+
 /**
  * A SingleFieldPath is composed of one or more field names, known as path steps,
  * to access values within a data object (either {@code Struct} or {@code Map<String, Object>}).
@@ -200,26 +202,16 @@ public class SingleFieldPath {
      * Access a value at the current path within a schemaless {@code Map<String, Object>}.
      * If object is not found, then {@code null} is returned.
      */
-    @SuppressWarnings("unchecked")
     public Object valueFrom(Map<String, Object> map) {
         if (map == null) return null;
 
-        if (steps.size() == 1) {
-            return map.get(steps.get(0));
-        } else {
-            Map<String, Object> current = map;
-            for (int i = 0; i < steps.size(); i++) {
-                if (current == null) {
-                    return null;
-                }
-                if (i == lastStepIndex()) {
-                    return current.get(steps.get(i));
-                } else {
-                    current = (Map<String, Object>) current.get(steps.get(i));
-                }
-            }
+        Map<String, Object> current = map;
+        for (String step : stepsWithoutLast()) {
+            current = requireMapOrNull(current.get(step), "nested field access");
+            if (current == null)
+                return null;
         }
-        return null;
+        return current.get(lastStep());
     }
 
     // For testing
