@@ -948,6 +948,14 @@ object TestUtils extends Logging {
     brokers
   }
 
+  def createControllerInZk(zkClient: KafkaZkClient, brokerToElect: Int): (Int, Int) = {
+    zkClient.registerControllerAndIncrementControllerEpoch(brokerToElect)
+  }
+
+  def deleteControllerFromZk(zkClient: KafkaZkClient): Unit = {
+    zkClient.deleteController(ZkVersion.MatchAnyVersion)
+  }
+
   def getMsgStrings(n: Int): Seq[String] = {
     val buffer = new ListBuffer[String]
     for (i <- 0 until  n)

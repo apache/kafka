@@ -36,7 +36,7 @@ import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
@@ -48,6 +48,12 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
   private val ipConnectionRate = "10"
   var servers: Seq[KafkaServer] = Seq()
 
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
+    TestUtils.createControllerInZk(zkClient, 0)
+  }
+
   @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
@@ -58,7 +64,6 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
   def testManualReplicaAssignment(): Unit = {
     val brokers = List(0, 1, 2, 3, 4)
     TestUtils.createBrokersInZk(zkClient, brokers)
-
     val topicConfig = new Properties()
 
     // duplicate brokers
@@ -194,6 +199,8 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
    */
   @Test
   def testTopicConfigChange(): Unit = {
+    TestUtils.deleteControllerFromZk(zkClient)
+
     val partitions = 3
     val topic = "my-topic"
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))

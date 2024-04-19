@@ -476,7 +476,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     val controllerRegistration = getControllerRegistration match {
       case Some(registration) => registration
       case None =>
-        // This case is mainly here to make tests less flaky. In practice, there will always be a /controller ZNode
+        // This case is mainly here to make tests less flaky (by virtue of retries).
+        // In practice, we always expect a /controller ZNode to exist
         throw new ControllerMovedException(s"Cannot set entity configs when there is no controller.")
     }
 
@@ -488,15 +489,16 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     }
 
     def set(configData: Array[Byte]): SetDataResponse = {
-      val setDataRequest = SetDataRequest(ConfigEntityZNode.path(rootEntityType, sanitizedEntityName),
-        configData, ZkVersion.MatchAnyVersion)
-      if (controllerRegistration.zkVersion > 0) {
-        // Pass the zkVersion previously captured to ensure the controller hasn't changed to KRaft while
-        // this method was processing.
-        retryRequestUntilConnected(setDataRequest, controllerRegistration.zkVersion)
-      } else {
-        retryRequestUntilConnected(setDataRequest)
-      }
+      // Since we're guarding against the controller switching to KRaft, we need to check that the controller hasn't
+      // changed during this method. We do that here by adding a CheckOp on the controller ZNode. The reason we
+      // don't use the controller epoch zkVersion here is that we can't consistently read the controller and
+      // controller epoch. This does _not_ guard against the existing "last writer wins" behavior of this method.
+      val multi = MultiRequest(Seq(
+        CheckOp(ControllerZNode.path, controllerRegistration.zkVersion),
+        SetDataOp(ConfigEntityZNode.path(rootEntityType, sanitizedEntityName), configData, ZkVersion.MatchAnyVersion)
+      ))
+      val results = retryRequestUntilConnected(multi)
+      unwrapResponseWithControllerEpochCheck(results).asInstanceOf[SetDataResponse]
     }
 
     def createOrSet(configData: Array[Byte]): Unit = {
