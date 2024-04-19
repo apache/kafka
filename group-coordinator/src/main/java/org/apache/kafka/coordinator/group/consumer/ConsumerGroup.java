@@ -149,6 +149,16 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
 
     /**
+     * Keeps track of the consumer group's subscription model.
+     *
+     * Homogeneous means all the members of the consumer group are subscribed to the same
+     * set of topics. It is heterogeneous otherwise.
+     *
+     * It is true by default when the group is initialized.
+     */
+    private boolean isSubscriptionHomogeneous;
+
+    /**
      * The target assignment epoch. An assignment epoch smaller than the group epoch
      * means that a new assignment is required. The assignment epoch is updated when
      * a new assignment is installed.
@@ -208,6 +218,7 @@ public class ConsumerGroup implements Group {
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.isSubscriptionHomogeneous = true;
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -486,6 +497,11 @@ public class ConsumerGroup implements Group {
     public boolean isSubscribedToTopic(String topic) {
         return subscribedTopicNames.containsKey(topic);
     }
+
+    /**
+     * @return True is the subscription model is homogeneous, false otherwise.
+     */
+    public boolean isSubscriptionHomogeneous() { return isSubscriptionHomogeneous; }
 
     /**
      * Returns the target assignment of the member.
@@ -930,6 +946,8 @@ public class ConsumerGroup implements Group {
 
     /**
      * Updates the subscribed topic names count.
+     * Changes to the subscription model as a consequence
+     * of this update is reflected as well.
      *
      * @param oldMember The old member.
      * @param newMember The new member.
@@ -939,6 +957,7 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember newMember
     ) {
         maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
+        maybeUpdateGroupSubscriptionModel();
     }
 
     /**
@@ -964,6 +983,23 @@ public class ConsumerGroup implements Group {
                 subscribedTopicCount.compute(topicName, ConsumerGroup::incValue)
             );
         }
+    }
+
+    /**
+     * Updates the subscription model type, if necessary.
+     *
+     * If all members are subscribed to the same set of topics, the model is homogeneous.
+     * Otherwise, it is heterogeneous.
+     */
+    private void maybeUpdateGroupSubscriptionModel() {
+        int numOfMembers = members.size();
+        for (Map.Entry<String, Integer> entry : subscribedTopicNames.entrySet()) {
+            if (entry.getValue() != numOfMembers) {
+                isSubscriptionHomogeneous = false;
+                return;
+            }
+        }
+        isSubscriptionHomogeneous = true;
     }
 
     /**
