@@ -29,6 +29,26 @@ class FieldPathNotationTest {
     final static String[] EMPTY_PATH = new String[] {};
 
     @Test
+    void shouldIncludeEmptyFieldNames() {
+        assertArrayEquals(
+            new String[] {"", "", ""},
+            new SingleFieldPath("..", FieldSyntaxVersion.V2).path()
+        );
+        assertArrayEquals(
+            new String[] {"foo", "", ""},
+            new SingleFieldPath("foo..", FieldSyntaxVersion.V2).path()
+        );
+        assertArrayEquals(
+            new String[] {"", "bar", ""},
+            new SingleFieldPath(".bar.", FieldSyntaxVersion.V2).path()
+        );
+        assertArrayEquals(
+            new String[] {"", "", "baz"},
+            new SingleFieldPath("..baz", FieldSyntaxVersion.V2).path()
+        );
+    }
+
+    @Test
     void shouldBuildV1WithDotsAndBacktickPair() {
         // Given v1
         // When path contains dots, then single step path
