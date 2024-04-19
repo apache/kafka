@@ -48,6 +48,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
@@ -1012,6 +1013,28 @@ public class SelectorTest {
         assertEquals(0, selector.completedReceives().size());
     }
 
+    /**
+     * Validate that correct subset of io metrics marked deprecated in docs
+     */
+    @Test
+    public void testIoMetricsHaveCorrectDoc() {
+        List<String> actual = asList("io-ratio", "io-wait-ratio");
+        List<String> deprecated = asList("iotime-total", "io-waittime-total");
+
+        // iterate through all metrics, since metrics.metric(metricName) requires 
+        // knowing metric group and tag set, which are not trivial dependencies
+        for (MetricName metricName : metrics.metrics().keySet()) {
+            String name = metricName.name();
+            String description = metricName.description().toLowerCase(Locale.ROOT);
+            boolean markedDeprecated = description.contains("deprecated");
+            if (actual.contains(name)) {
+                assertFalse(markedDeprecated, name + " shouldn't be deprecated");
+            }
+            if (deprecated.contains(name)) {
+                assertTrue(markedDeprecated, name + " should be deprecated");
+            }
+        }
+    }
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
