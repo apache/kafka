@@ -60,6 +60,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
+import org.slf4j.event.Level;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -90,6 +91,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSu
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
 import static org.apache.kafka.common.utils.Utils.join;
+import static org.apache.kafka.common.utils.Utils.swallow;
 
 /**
  * This {@link ShareConsumer} implementation uses an {@link ApplicationEventHandler event handler} to process
@@ -630,6 +632,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         closeTimer.update();
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
+        swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback.", this::handleCompletedAcknowledgements,
+                firstException);
         closeTimer.update();
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
@@ -649,7 +653,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
 
     /**
      * Prior to closing the network thread, we need to make sure the following operations happen in the right sequence:
-     * 1. send leave group
+     * 1. commit pending acknowledgements and close any share sessions (AKCORE-109 will implement this)
+     * 2. send leave group
      */
     void prepareShutdown(final Timer timer, final AtomicReference<Throwable> firstException) {
         completeQuietly(
@@ -723,15 +728,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
      * Handles any completed acknowledgements. If there is an acknowledgement commit callback registered,
      * call it. Otherwise, discard the completed acknowledgement information because the application is not
      * interested.
-     *
-     * @return The completed Acknowledgements which contains the acknowledgement error code for each topic-partition.
      */
-    private Map<TopicIdPartition, Acknowledgements> handleCompletedAcknowledgements() {
-        Map<TopicIdPartition, Acknowledgements> completedAcks = fetchBuffer.getCompletedAcknowledgements();
-        if (acknowledgementCommitCallbackHandler != null) {
-            acknowledgementCommitCallbackHandler.onComplete(completedAcks);
+    private void handleCompletedAcknowledgements() {
+        Map<TopicIdPartition, Acknowledgements> completedAcknowledgements = fetchBuffer.getCompletedAcknowledgements();
+        if (!completedAcknowledgements.isEmpty() && acknowledgementCommitCallbackHandler != null) {
+            acknowledgementCommitCallbackHandler.onComplete(completedAcknowledgements);
         }
-        return completedAcks;
     }
 
     /**
