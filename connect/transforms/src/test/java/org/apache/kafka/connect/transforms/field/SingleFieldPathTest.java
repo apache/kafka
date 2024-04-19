@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms.field;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import org.apache.kafka.connect.data.Schema;
@@ -23,18 +24,71 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
+import java.util.Map;
+
 class SingleFieldPathTest {
+
+    @Test void shouldFindField() {
+        SchemaBuilder barSchema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA);
+        Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
+
+        assertEquals(barSchema.field("bar"), pathV2("foo.bar").fieldFrom(schema));
+        assertEquals(schema.field("foo"), pathV2("foo").fieldFrom(schema));
+    }
 
     @Test void shouldReturnNullFieldWhenFieldNotFound() {
         SchemaBuilder barSchema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA);
         Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
 
-        assertNull(new SingleFieldPath("un.known", FieldSyntaxVersion.V2).fieldFrom(schema));
-        assertNull(new SingleFieldPath("foo.unknown", FieldSyntaxVersion.V2).fieldFrom(schema));
-        assertNull(new SingleFieldPath("unknown", FieldSyntaxVersion.V2).fieldFrom(schema));
+        assertNull(pathV2("un.known").fieldFrom(schema));
+        assertNull(pathV2("foo.unknown").fieldFrom(schema));
+        assertNull(pathV2("unknown").fieldFrom(schema));
+        assertNull(pathV2("test").fieldFrom(null));
     }
 
-    @Test void shouldReturnNullValueWhenFieldNotFound() {
+    @Test void shouldFindValueInMap() {
+        Map<String, Object> foo = new HashMap<>();
+        foo.put("bar", 42);
+        foo.put("baz", null);
+        Map<String, Object> map = new HashMap<>();
+        map.put("foo", foo);
+
+        assertEquals(42, pathV2("foo.bar").valueFrom(map));
+        assertNull(pathV2("foo.baz").valueFrom(map));
+    }
+
+    @Test void shouldReturnNullValueWhenFieldNotFoundInMap() {
+        Map<String, Object> foo = new HashMap<>();
+        foo.put("bar", 42);
+        foo.put("baz", null);
+        Map<String, Object> map = new HashMap<>();
+        map.put("foo", foo);
+
+        assertNull(new SingleFieldPath("un.known", FieldSyntaxVersion.V2).valueFrom(map));
+        assertNull(new SingleFieldPath("foo.unknown", FieldSyntaxVersion.V2).valueFrom(map));
+        assertNull(new SingleFieldPath("unknown", FieldSyntaxVersion.V2).valueFrom(map));
+        assertNull(new SingleFieldPath("foo.baz", FieldSyntaxVersion.V2).valueFrom(map));
+        assertNull(new SingleFieldPath("foo.baz.inner", FieldSyntaxVersion.V2).valueFrom(map));
+    }
+
+    @Test void shouldFindValueInStruct() {
+        SchemaBuilder bazSchema = SchemaBuilder.struct()
+            .field("inner", Schema.STRING_SCHEMA);
+        SchemaBuilder barSchema = SchemaBuilder.struct()
+            .field("bar", Schema.INT32_SCHEMA)
+            .field("baz", bazSchema.optional());
+        Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
+        Struct foo = new Struct(barSchema)
+            .put("bar", 42)
+            .put("baz", null);
+        Struct struct = new Struct(schema).put("foo", foo);
+
+        assertEquals(42, pathV2("foo.bar").valueFrom(struct));
+        assertNull(pathV2("foo.baz").valueFrom(struct));
+    }
+
+    @Test void shouldReturnNullValueWhenFieldNotFoundInStruct() {
         SchemaBuilder bazSchema = SchemaBuilder.struct()
             .field("inner", Schema.STRING_SCHEMA);
         SchemaBuilder barSchema = SchemaBuilder.struct()
@@ -51,5 +105,9 @@ class SingleFieldPathTest {
         assertNull(new SingleFieldPath("unknown", FieldSyntaxVersion.V2).valueFrom(struct));
         assertNull(new SingleFieldPath("foo.baz", FieldSyntaxVersion.V2).valueFrom(struct));
         assertNull(new SingleFieldPath("foo.baz.inner", FieldSyntaxVersion.V2).valueFrom(struct));
+    }
+
+    private static SingleFieldPath pathV2(String path) {
+        return new SingleFieldPath(path, FieldSyntaxVersion.V2);
     }
 }

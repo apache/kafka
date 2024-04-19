@@ -40,15 +40,16 @@ import java.util.stream.Collectors;
  * @see FieldSyntaxVersion
  */
 public class MultiFieldPaths {
-    final Trie trie = new Trie();
+    private final Trie trie = new Trie();
 
     public MultiFieldPaths(List<SingleFieldPath> paths) {
+        Objects.requireNonNull(paths, "paths cannot be null");
         paths.forEach(trie::insert);
     }
 
     public MultiFieldPaths(List<String> fields, FieldSyntaxVersion syntaxVersion) {
-        this(fields.stream()
-            .map(f -> new SingleFieldPath(f, syntaxVersion))
+        this(Objects.requireNonNull(fields, "fields cannot be null").stream()
+            .map(f -> new SingleFieldPath(f, Objects.requireNonNull(syntaxVersion, "syntaxVersion cannot be null")))
             .collect(Collectors.toList()));
     }
 
