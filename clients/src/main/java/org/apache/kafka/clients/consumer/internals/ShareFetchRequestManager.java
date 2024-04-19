@@ -177,7 +177,7 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
             final ShareSessionHandler handler = sessionHandler(fetchTarget.id());
 
             if (handler == null) {
-                log.error("Unable to find ShareSessionHandler for node {}. Ignoring share fetch response.",
+                log.error("Unable to find ShareSessionHandler for node {}. Ignoring ShareFetch response.",
                         fetchTarget.id());
                 return;
             }
@@ -193,22 +193,21 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
             }
 
             final Map<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
-            Map<Uuid, String> topicNames = handler.sessionTopicNames();
 
-            response.data().responses().forEach(topicResponse -> {
-                String name = topicNames.get(topicResponse.topicId());
-                if (name != null) {
+            response.data().responses().forEach(topicResponse ->
                     topicResponse.partitions().forEach(partition ->
-                            responseData.put(new TopicIdPartition(topicResponse.topicId(), partition.partitionIndex(), name), partition));
-                }
-            });
+                            responseData.put(new TopicIdPartition(topicResponse.topicId(),
+                            partition.partitionIndex(),
+                            metadata.topicNames().get(topicResponse.topicId())), partition)));
 
             for (Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry : responseData.entrySet()) {
                 TopicIdPartition partition = entry.getKey();
 
                 ShareFetchResponseData.PartitionData partitionData = entry.getValue();
 
-                log.debug("Share fetch for partition {} returned fetch data {}", partition, partitionData);
+                log.debug("ShareFetch for partition {} returned fetch data {}", partition, partitionData);
+
+                shareFetchBuffer.handleAcknowledgementResponses(partition, Errors.forCode(partitionData.acknowledgeErrorCode()));
 
                 ShareCompletedFetch completedFetch = new ShareCompletedFetch(
                         logContext,
@@ -217,7 +216,6 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
                         partitionData,
                         requestVersion);
                 shareFetchBuffer.add(completedFetch);
-                shareFetchBuffer.handleAcknowledgementResponses(partition, Errors.forCode(partitionData.acknowledgeErrorCode()));
             }
 
             metricsManager.recordLatency(resp.requestLatencyMs());

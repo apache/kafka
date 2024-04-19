@@ -51,7 +51,7 @@ public class ShareFetchRequest extends AbstractRequest {
 
         public static Builder forConsumer(String groupId, ShareFetchMetadata metadata,
                                           int maxWait, int minBytes, int maxBytes, int fetchSize,
-                                          Map<TopicPartition, TopicIdPartition> send,
+                                          List<TopicIdPartition> send,
                                           Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementsMap) {
             ShareFetchRequestData data = new ShareFetchRequestData();
             data.setGroupId(groupId);
@@ -74,7 +74,7 @@ public class ShareFetchRequest extends AbstractRequest {
 
             // First, start by adding the list of topic-partitions we are fetching
             if (!isClosingShareSession) {
-                for (TopicIdPartition tip : send.values()) {
+                for (TopicIdPartition tip : send) {
                     Map<Integer, ShareFetchRequestData.FetchPartition> partMap = fetchMap.computeIfAbsent(tip.topicId(), k -> new HashMap<>());
                     ShareFetchRequestData.FetchPartition fetchPartition = new ShareFetchRequestData.FetchPartition()
                             .setPartitionIndex(tip.partition())

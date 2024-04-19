@@ -93,10 +93,8 @@ public class ShareFetchResponse extends AbstractResponse {
                     data.responses().forEach(topicResponse -> {
                         String name = topicNames.get(topicResponse.topicId());
                         if (name != null) {
-                            topicResponse.partitions().forEach(partitionData -> {
-                                responseDataTmp.put(new TopicIdPartition(topicResponse.topicId(),
-                                        new TopicPartition(name, partitionData.partitionIndex())), partitionData);
-                            });
+                            topicResponse.partitions().forEach(partitionData -> responseDataTmp.put(new TopicIdPartition(topicResponse.topicId(),
+                                    new TopicPartition(name, partitionData.partitionIndex())), partitionData));
                         }
                     });
                     responseData = responseDataTmp;
@@ -120,12 +118,6 @@ public class ShareFetchResponse extends AbstractResponse {
         return new ShareFetchResponse(
                 new ShareFetchResponseData(new ByteBufferAccessor(buffer), version)
         );
-    }
-
-    private static boolean matchingTopic(ShareFetchResponseData.ShareFetchableTopicResponse previousTopic, TopicIdPartition currentTopic) {
-        if (previousTopic == null)
-            return false;
-        return previousTopic.topicId().equals(currentTopic.topicId());
     }
 
     /**
@@ -174,10 +166,11 @@ public class ShareFetchResponse extends AbstractResponse {
                                    List<Node> nodeEndpoints) {
         return new ShareFetchResponse(toMessage(error, throttleTimeMs, responseData.entrySet().iterator(), nodeEndpoints));
     }
+
     public static ShareFetchResponseData toMessage(Errors error, int throttleTimeMs,
                                                     Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator,
                                                     List<Node> nodeEndpoints) {
-        Map<Uuid, ShareFetchResponseData.ShareFetchableTopicResponse> topicResponseList = new HashMap<>();
+        Map<Uuid, ShareFetchResponseData.ShareFetchableTopicResponse> topicResponseList = new LinkedHashMap<>();
         while (partIterator.hasNext()) {
             Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry = partIterator.next();
             ShareFetchResponseData.PartitionData partitionData = entry.getValue();

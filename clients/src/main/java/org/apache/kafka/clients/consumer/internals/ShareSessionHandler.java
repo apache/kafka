@@ -31,7 +31,6 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -63,20 +62,6 @@ public class ShareSessionHandler {
      */
     private LinkedHashMap<TopicPartition, TopicIdPartition> sessionPartitions;
 
-    /**
-     * All the topic names mapped to topic ids for topics which exist in the fetch request session.
-     */
-    private Map<Uuid, String> sessionTopicNames = new HashMap<>(0);
-    private final Map<TopicIdPartition, Acknowledgements> nextAcknowledgements = new LinkedHashMap<>();
-
-    public Map<Uuid, String> sessionTopicNames() {
-        return sessionTopicNames;
-    }
-
-    public Collection<TopicIdPartition> sessionPartitions() {
-        return sessionPartitions.values();
-    }
-
     public ShareSessionHandler(LogContext logContext, int node, Uuid memberId) {
         this.log = logContext.logger(ShareSessionHandler.class);
         this.node = node;
@@ -85,12 +70,21 @@ public class ShareSessionHandler {
         this.sessionPartitions = new LinkedHashMap<>();
     }
 
+    public Collection<TopicIdPartition> sessionPartitions() {
+        return Collections.unmodifiableCollection(sessionPartitions.values());
+    }
+
     public static class ShareFetchRequestData {
+
+        /**
+         * All the partitions which exist in the share session.
+         */
+        private final Map<TopicPartition, TopicIdPartition> sessionPartitions;
 
         /**
          * The partitions to send in the ShareFetch request.
          */
-        private final Map<TopicPartition, TopicIdPartition> toSend;
+        private final List<TopicIdPartition> toSend;
 
         /**
          * The partitions to send in the ShareFetch "forget" list.
@@ -103,12 +97,7 @@ public class ShareSessionHandler {
         private final List<TopicIdPartition> toReplace;
 
         /**
-         * All the partitions which exist in the fetch request session.
-         */
-        private final Map<TopicPartition, TopicIdPartition> sessionPartitions;
-
-        /**
-         * The metadata to use in this fetch request.
+         * The metadata to use in this ShareFetch request.
          */
         private final ShareFetchMetadata metadata;
 
@@ -117,10 +106,10 @@ public class ShareSessionHandler {
          */
         private final Map<TopicIdPartition, Acknowledgements> acknowledgements;
 
-        ShareFetchRequestData(Map<TopicPartition, TopicIdPartition> toSend,
+        ShareFetchRequestData(Map<TopicPartition, TopicIdPartition> sessionPartitions,
+                              List<TopicIdPartition> toSend,
                               List<TopicIdPartition> toForget,
                               List<TopicIdPartition> toReplace,
-                              Map<TopicPartition, TopicIdPartition> sessionPartitions,
                               Map<TopicIdPartition, Acknowledgements> acknowledgements,
                               ShareFetchMetadata metadata) {
             this.toSend = toSend;
@@ -131,7 +120,11 @@ public class ShareSessionHandler {
             this.acknowledgements = acknowledgements;
         }
 
-        public Map<TopicPartition, TopicIdPartition> toSend() {
+        public Map<TopicPartition, TopicIdPartition> sessionPartitions() {
+            return sessionPartitions;
+        }
+
+        public List<TopicIdPartition> toSend() {
             return toSend;
         }
 
@@ -141,10 +134,6 @@ public class ShareSessionHandler {
 
         public List<TopicIdPartition> toReplace() {
             return toReplace;
-        }
-
-        public Map<TopicPartition, TopicIdPartition> sessionPartitions() {
-            return sessionPartitions;
         }
 
         public Map<TopicIdPartition, Acknowledgements> acknowledgements() {
@@ -158,33 +147,33 @@ public class ShareSessionHandler {
 
     public class Builder {
 
-        private LinkedHashMap<TopicPartition, TopicIdPartition> next;
-        private Map<Uuid, String> topicNames;
+        private LinkedHashMap<TopicPartition, TopicIdPartition> nextPartitions;
+
+        private LinkedHashMap<TopicIdPartition, Acknowledgements> nextAcknowledgements;
 
         Builder() {
-            this.next = new LinkedHashMap<>();
-            this.topicNames = new HashMap<>();
+            this.nextPartitions = new LinkedHashMap<>();
+            this.nextAcknowledgements = new LinkedHashMap<>();
         }
 
         public void add(TopicIdPartition topicIdPartition, Acknowledgements partitionAcknowledgements) {
-            next.put(topicIdPartition.topicPartition(), topicIdPartition);
-            topicNames.putIfAbsent(topicIdPartition.topicId(), topicIdPartition.topic());
+            nextPartitions.put(topicIdPartition.topicPartition(), topicIdPartition);
             if (partitionAcknowledgements != null) {
                 nextAcknowledgements.put(topicIdPartition, partitionAcknowledgements);
-            } else {
-                nextAcknowledgements.remove(topicIdPartition);
             }
         }
 
         public ShareFetchRequestData build() {
             if (nextMetadata.isNewSession()) {
-                sessionPartitions = next;
-                next = null;
-                sessionTopicNames = topicNames;
-                Map<TopicPartition, TopicIdPartition> toSend =
-                        Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions));
-                return new ShareFetchRequestData(toSend, Collections.emptyList(), Collections.emptyList(),
-                        sessionPartitions, nextAcknowledgements, nextMetadata);
+                sessionPartitions = nextPartitions;
+                nextPartitions = null;
+                nextAcknowledgements = null;
+                return new ShareFetchRequestData(sessionPartitions,
+                        Collections.unmodifiableList(new ArrayList<>(sessionPartitions.values())),
+                        Collections.emptyList(),
+                        Collections.emptyList(),
+                        Collections.emptyMap(),
+                        nextMetadata);
             }
 
             List<TopicIdPartition> added = new ArrayList<>();
@@ -198,30 +187,28 @@ public class ShareSessionHandler {
                 Entry<TopicPartition, TopicIdPartition> entry = partitionIterator.next();
                 TopicPartition topicPartition = entry.getKey();
                 TopicIdPartition prevData = entry.getValue();
-                TopicIdPartition nextData = next.remove(topicPartition);
+                TopicIdPartition nextData = nextPartitions.remove(topicPartition);
                 if (nextData != null) {
                     // If the topic ID does not match, the topic has been recreated
                     if (!prevData.equals(nextData)) {
-                        next.put(topicPartition, nextData);
+                        nextPartitions.put(topicPartition, nextData);
                         entry.setValue(nextData);
                         replaced.add(prevData);
                     }
                 } else {
-                    // This partition not in the builder, so we need to remove it from the session
+                    // This partition is not in the builder, so we need to remove it from the session
                     partitionIterator.remove();
                     removed.add(prevData);
                 }
             }
 
             // Add any new partitions to the session
-            for (Entry<TopicPartition, TopicIdPartition> entry : next.entrySet()) {
+            for (Entry<TopicPartition, TopicIdPartition> entry : nextPartitions.entrySet()) {
                 TopicPartition topicPartition = entry.getKey();
                 TopicIdPartition topicIdPartition = entry.getValue();
                 sessionPartitions.put(topicPartition, topicIdPartition);
                 added.add(topicIdPartition);
             }
-
-            sessionTopicNames = topicNames;
 
             if (log.isDebugEnabled()) {
                 log.debug("Build ShareFetch {} for node {}. Added {}, removed {}, replaced {} out of {}",
@@ -231,12 +218,20 @@ public class ShareSessionHandler {
                         topicIdPartitionsToLogString(replaced),
                         topicIdPartitionsToLogString(sessionPartitions.values()));
             }
-            // Temporarily the broker is sessionless so we need to repeat all topic-partitions on every request
-//            Map<TopicPartition, TopicIdPartition> toSend = Collections.unmodifiableMap(next);
+
             Map<TopicPartition, TopicIdPartition> curSessionPartitions = Collections.unmodifiableMap(sessionPartitions);
-            next = null;
-//            return new ShareFetchRequestData(toSend, removed, replaced, curSessionPartitions, nextMetadata);
-            return new ShareFetchRequestData(curSessionPartitions, removed, replaced, curSessionPartitions, nextAcknowledgements, nextMetadata);
+            List<TopicIdPartition> toSend = Collections.unmodifiableList(added);
+            List<TopicIdPartition> toForget = Collections.unmodifiableList(removed);
+            List<TopicIdPartition> toReplace = Collections.unmodifiableList(replaced);
+            Map<TopicIdPartition, Acknowledgements> curAcknowledgements = Collections.unmodifiableMap(nextAcknowledgements);
+            nextPartitions = null;
+            nextAcknowledgements = null;
+            return new ShareFetchRequestData(curSessionPartitions,
+                    toSend,
+                    toForget,
+                    toReplace,
+                    curAcknowledgements,
+                    nextMetadata);
         }
     }
 
@@ -294,7 +289,7 @@ public class ShareSessionHandler {
     public boolean handleResponse(ShareAcknowledgeResponse response, short version) {
         if ((response.error() == Errors.SHARE_SESSION_NOT_FOUND) ||
                 (response.error() == Errors.INVALID_SHARE_SESSION_EPOCH)) {
-            log.info("Node {} was unable to process the ShareFetch request with {}: {}.",
+            log.info("Node {} was unable to process the ShareAcknowledge request with {}: {}.",
                     node, nextMetadata, response.error());
             nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             return false;

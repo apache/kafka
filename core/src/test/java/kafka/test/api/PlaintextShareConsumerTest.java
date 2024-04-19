@@ -635,7 +635,7 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
                 retries++;
             }
         } catch (Exception e) {
-            fail("Consumer : " + consumerNumber + " failed ! with exception : " + e);
+            fail("Consumer " + consumerNumber + " failed with exception: " + e);
         } finally {
             shareConsumer.close();
             future.complete(messagesConsumed);
@@ -665,7 +665,7 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
         for (int i = 0; i < consumerCount; i++) {
             final int consumerNumber = i + 1;
             consumerExecutorService.submit(() -> {
-                CompletableFuture<Integer> future = consumeMessages(totalMessagesConsumed, producerCount * messagesPerProducer, "group1", consumerNumber, 25);
+                CompletableFuture<Integer> future = consumeMessages(totalMessagesConsumed, producerCount * messagesPerProducer, "group1", consumerNumber, 30);
                 futures.add(future);
             });
         }
@@ -687,7 +687,6 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"kraft+kip932"})
-    @Disabled // This test is unreliable and needs more investigation
     public void testMultipleConsumersInMultipleGroupsConcurrentConsumption(String quorum) {
         AtomicInteger totalMessagesConsumedGroup1 = new AtomicInteger(0);
         AtomicInteger totalMessagesConsumedGroup2 = new AtomicInteger(0);
@@ -698,10 +697,10 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
         int messagesPerProducer = 10000;
         final int totalMessagesSent = producerCount * messagesPerProducer;
 
+        ExecutorService producerExecutorService = Executors.newFixedThreadPool(producerCount);
         ExecutorService shareGroupExecutorService1 = Executors.newFixedThreadPool(consumerCount);
         ExecutorService shareGroupExecutorService2 = Executors.newFixedThreadPool(consumerCount);
         ExecutorService shareGroupExecutorService3 = Executors.newFixedThreadPool(consumerCount);
-        ExecutorService producerExecutorService = Executors.newFixedThreadPool(producerCount);
 
         ConcurrentLinkedQueue<CompletableFuture<Integer>> producerFutures = new ConcurrentLinkedQueue<>();
 
@@ -723,7 +722,6 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
             for (CompletableFuture<Integer> future : producerFutures) {
                 actualMessagesSent += future.get();
             }
-            System.out.println("Sent " + actualMessagesSent + "messages.");
         } catch (Exception e) {
             fail("Exception occurred : " + e.getMessage());
         }
@@ -736,15 +734,15 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
         for (int i = 0; i < consumerCount; i++) {
             final int consumerNumber = i + 1;
             shareGroupExecutorService1.submit(() -> {
-                CompletableFuture<Integer> future = consumeMessages(totalMessagesConsumedGroup1, totalMessagesSent, "group1", consumerNumber, 25);
+                CompletableFuture<Integer> future = consumeMessages(totalMessagesConsumedGroup1, totalMessagesSent, "group1", consumerNumber, 100);
                 futures1.add(future);
             });
             shareGroupExecutorService2.submit(() -> {
-                CompletableFuture<Integer> future = consumeMessages(totalMessagesConsumedGroup2, totalMessagesSent, "group2", consumerNumber, 25);
+                CompletableFuture<Integer> future = consumeMessages(totalMessagesConsumedGroup2, totalMessagesSent, "group2", consumerNumber, 100);
                 futures2.add(future);
             });
             shareGroupExecutorService3.submit(() -> {
-                CompletableFuture<Integer> future = consumeMessages(totalMessagesConsumedGroup3, totalMessagesSent, "group3", consumerNumber, 25);
+                CompletableFuture<Integer> future = consumeMessages(totalMessagesConsumedGroup3, totalMessagesSent, "group3", consumerNumber, 100);
                 futures3.add(future);
             });
         }
@@ -752,9 +750,9 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
         shareGroupExecutorService2.shutdown();
         shareGroupExecutorService3.shutdown();
         try {
-            shareGroupExecutorService1.awaitTermination(60, TimeUnit.SECONDS); // Wait for all consumer threads for group 1 to complete
-            shareGroupExecutorService2.awaitTermination(60, TimeUnit.SECONDS); // Wait for all consumer threads for group 2 to complete
-            shareGroupExecutorService3.awaitTermination(60, TimeUnit.SECONDS); // Wait for all consumer threads for group 3 to complete
+            shareGroupExecutorService1.awaitTermination(120, TimeUnit.SECONDS); // Wait for all consumer threads for group 1 to complete
+            shareGroupExecutorService2.awaitTermination(120, TimeUnit.SECONDS); // Wait for all consumer threads for group 2 to complete
+            shareGroupExecutorService3.awaitTermination(120, TimeUnit.SECONDS); // Wait for all consumer threads for group 3 to complete
 
             int totalResult1 = 0;
             for (CompletableFuture<Integer> future : futures1) {

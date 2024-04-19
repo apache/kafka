@@ -133,11 +133,13 @@ public class ShareFetchRequestManagerTest {
     private TestableNetworkClientDelegate networkClientDelegate;
     private MemoryRecords records;
     private List<ShareFetchResponseData.AcquiredRecords> acquiredRecords;
+    private List<ShareFetchResponseData.AcquiredRecords> emptyAcquiredRecords;
 
     @BeforeEach
     public void setup() {
         records = buildRecords(1L, 3, 1);
         acquiredRecords = ShareCompletedFetchTest.acquiredRecords(1L, 3);
+        emptyAcquiredRecords = new ArrayList<>();
     }
 
     private void assignFromSubscribed(Set<TopicPartition> partitions) {
@@ -279,12 +281,45 @@ public class ShareFetchRequestManagerTest {
 
         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
         partitionDataMap.put(tip0, partitionData(tip0, records, acquiredRecords, Errors.NONE, Errors.NONE));
-        partitionDataMap.put(tip1, partitionData(tip1, records, acquiredRecords, Errors.TOPIC_AUTHORIZATION_FAILED, Errors.NONE));
+        partitionDataMap.put(tip1, partitionData(tip1, records, emptyAcquiredRecords, Errors.TOPIC_AUTHORIZATION_FAILED, Errors.NONE));
         client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, partitionDataMap, Collections.emptyList()));
 
         networkClientDelegate.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
+        ShareFetch<Object, Object> shareFetch = collectFetch();
+        assertEquals(1, shareFetch.records().size());
+        // The first topic-partition is fetched successfully and returns all the records.
+        assertEquals(3, shareFetch.records().get(tp0).size());
+        // As the second topic failed authorization, we do not get the records in the ShareFetch.
+        assertThrows(NullPointerException.class, (Executable) shareFetch.records().get(tp1));
+        assertThrows(TopicAuthorizationException.class, () -> collectFetch());
+    }
+
+    @Test
+    public void testMultipleTopicsFetchError() {
+        buildFetcher();
+        Set<TopicPartition> partitions = new HashSet<>();
+        partitions.add(tp0);
+        partitions.add(tp1);
+
+        assignFromSubscribed(partitions);
+
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
+        partitionDataMap.put(tip1, partitionData(tip1, records, emptyAcquiredRecords, Errors.TOPIC_AUTHORIZATION_FAILED, Errors.NONE));
+        partitionDataMap.put(tip0, partitionData(tip0, records, acquiredRecords, Errors.NONE, Errors.NONE));
+        client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, partitionDataMap, Collections.emptyList()));
+
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        // The first call throws TopicAuthorizationException because there are no records ready to return when the
+        // exception is noticed.
+        assertThrows(TopicAuthorizationException.class, () -> collectFetch());
+        // And then a second iteration returns the records.
         ShareFetch<Object, Object> shareFetch = collectFetch();
         assertEquals(1, shareFetch.records().size());
         // The first topic-partition is fetched successfully and returns all the records.
@@ -313,7 +348,7 @@ public class ShareFetchRequestManagerTest {
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
-        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NOT_LEADER_OR_FOLLOWER));
+        client.prepareResponse(fullFetchResponse(tip0, records, emptyAcquiredRecords, Errors.NOT_LEADER_OR_FOLLOWER));
         networkClientDelegate.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
@@ -440,7 +475,7 @@ public class ShareFetchRequestManagerTest {
         assignFromSubscribed(singleton(tp0));
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.TOPIC_AUTHORIZATION_FAILED));
+        client.prepareResponse(fullFetchResponse(tip0, records, emptyAcquiredRecords, Errors.TOPIC_AUTHORIZATION_FAILED));
         networkClientDelegate.poll(time.timer(0));
         try {
             collectFetch();
@@ -477,12 +512,12 @@ public class ShareFetchRequestManagerTest {
         if (hasTopLevelError)
             fetchResponse = fetchResponseWithTopLevelError(tip0, error);
         else
-            fetchResponse = fullFetchResponse(tip0, records, acquiredRecords, error);
+            fetchResponse = fullFetchResponse(tip0, records, emptyAcquiredRecords, error);
 
         client.prepareResponse(fetchResponse);
         networkClientDelegate.poll(time.timer(0));
 
-        assertEmptyFetch("Should not return records or advance position on fetch error");
+        assertEmptyFetch("Should not return records on fetch error");
 
         long timeToNextUpdate = metadata.timeToNextUpdate(time.milliseconds());
 
