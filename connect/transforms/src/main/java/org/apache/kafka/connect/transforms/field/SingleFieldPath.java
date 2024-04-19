@@ -185,6 +185,7 @@ public class SingleFieldPath {
                 return null;
             }
             current = current.getStruct(pathSegment);
+            if (current == null) return null;
         }
 
         if (current.schema().field(lastStep()) != null) {
@@ -208,8 +209,7 @@ public class SingleFieldPath {
         Map<String, Object> current = map;
         for (String step : stepsWithoutLast()) {
             current = requireMapOrNull(current.get(step), "nested field access");
-            if (current == null)
-                return null;
+            if (current == null) return null;
         }
         return current.get(lastStep());
     }

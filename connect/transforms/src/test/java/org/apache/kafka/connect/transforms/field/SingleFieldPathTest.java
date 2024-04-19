@@ -35,12 +35,21 @@ class SingleFieldPathTest {
     }
 
     @Test void shouldReturnNullValueWhenFieldNotFound() {
-        SchemaBuilder barSchema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA);
+        SchemaBuilder bazSchema = SchemaBuilder.struct()
+            .field("inner", Schema.STRING_SCHEMA);
+        SchemaBuilder barSchema = SchemaBuilder.struct()
+            .field("bar", Schema.INT32_SCHEMA)
+            .field("baz", bazSchema.optional());
         Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
-        Struct struct = new Struct(schema).put("foo", new Struct(barSchema).put("bar", 42));
+        Struct foo = new Struct(barSchema)
+            .put("bar", 42)
+            .put("baz", null);
+        Struct struct = new Struct(schema).put("foo", foo);
 
         assertNull(new SingleFieldPath("un.known", FieldSyntaxVersion.V2).valueFrom(struct));
         assertNull(new SingleFieldPath("foo.unknown", FieldSyntaxVersion.V2).valueFrom(struct));
         assertNull(new SingleFieldPath("unknown", FieldSyntaxVersion.V2).valueFrom(struct));
+        assertNull(new SingleFieldPath("foo.baz", FieldSyntaxVersion.V2).valueFrom(struct));
+        assertNull(new SingleFieldPath("foo.baz.inner", FieldSyntaxVersion.V2).valueFrom(struct));
     }
 }
