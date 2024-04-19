@@ -90,6 +90,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     TestUtils.waitUntilTrue(() => leaderServer.brokerState == BrokerState.SHUTTING_DOWN,
       s"Expected broker to be in NOT_RUNNING state but was ${leaderServer.brokerState}", 15000)
+    // wait for actual shutdown (by default max 5 minutes for graceful shutdown)
+    leaderServer.awaitShutdown()
   }
 
   @ParameterizedTest
