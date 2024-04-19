@@ -255,6 +255,7 @@ object KafkaConfig {
   /** Share Group Configurations **/
   val ShareGroupEnableProp = "group.share.enable"
   val ShareGroupRecordLockPartitionLimitProp = "group.share.record.lock.partition.limit"
+  val ShareGroupDeliveryCountLimitProp = "group.share.delivery.count.limit"
   val ShareGroupMaxGroupsProp = "group.share.max.groups"
   val ShareGroupMaxSizeProp = "group.share.max.size"
   val ShareGroupSessionTimeoutMsProp = "group.share.session.timeout.ms"
@@ -695,6 +696,7 @@ object KafkaConfig {
   /** Share Group Configurations */
   val ShareGroupEnableDoc = "Enable share groups on the broker."
   val ShareGroupRecordLockPartitionLimitDoc = "Share-group record lock limit per share-partition."
+  val ShareGroupDeliveryCountLimitDoc = "The maximum number of delivery attempts for a record delivered to a share group."
   val ShareGroupMaxGroupsDoc = "The maximum number of share groups."
   val ShareGroupMaxSizeDoc = "The maximum number of consumers that a single share group can accommodate."
   val ShareGroupSessionTimeoutMsDoc = "The timeout to detect client failures when using the share group protocol."
@@ -1078,6 +1080,7 @@ object KafkaConfig {
       /** Share Group Configurations **/
       .define(ShareGroupEnableProp, BOOLEAN, Defaults.SHARE_GROUP_ENABLE, null, MEDIUM, ShareGroupEnableDoc)
       .define(ShareGroupRecordLockPartitionLimitProp, SHORT, Defaults.SHARE_GROUP_RECORD_LOCK_PARTITION_LIMIT, between(100, 10000), MEDIUM, ShareGroupRecordLockPartitionLimitDoc)
+      .define(ShareGroupDeliveryCountLimitProp, INT, Defaults.SHARE_GROUP_DELIVERY_COUNT_LIMIT, between(2, 10), MEDIUM, ShareGroupDeliveryCountLimitDoc)
       .define(ShareGroupMaxGroupsProp, SHORT, Defaults.SHARE_GROUP_MAX_GROUPS, between(1, 100), MEDIUM, ShareGroupMaxGroupsDoc)
       .define(ShareGroupMaxSizeProp, SHORT, Defaults.SHARE_GROUP_MAX_SIZE, between(10, 1000), MEDIUM, ShareGroupMaxSizeDoc)
       .define(ShareGroupSessionTimeoutMsProp, INT, Defaults.SHARE_GROUP_SESSION_TIMEOUT_MS, atLeast(1), MEDIUM, ShareGroupSessionTimeoutMsDoc)
@@ -1746,6 +1749,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   /** Share Group Configurations **/
   val isShareGroupEnabled = getBoolean(KafkaConfig.ShareGroupEnableProp)
   val shareGroupRecordLockPartitionLimit = getShort(KafkaConfig.ShareGroupRecordLockPartitionLimitProp)
+  val shareGroupDeliveryCountLimit = getInt(KafkaConfig.ShareGroupDeliveryCountLimitProp)
   val shareGroupMaxGroups = getShort(KafkaConfig.ShareGroupMaxGroupsProp)
   val shareGroupMaxSize = getShort(KafkaConfig.ShareGroupMaxSizeProp)
   val shareGroupSessionTimeoutMs = getInt(KafkaConfig.ShareGroupSessionTimeoutMsProp)

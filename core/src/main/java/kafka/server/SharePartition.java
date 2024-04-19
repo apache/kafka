@@ -515,6 +515,7 @@ public class SharePartition {
                             inFlightBatch.maybeInitializeOffsetStateUpdate();
                         }
                         for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
+
                             // For the first batch which might have offsets prior to the request base
                             // offset i.e. cached batch of 10-14 offsets and request batch of 12-13.
                             if (offsetState.getKey() < batch.baseOffset) {
@@ -552,7 +553,11 @@ public class SharePartition {
                                 break;
                             }
 
-                            InFlightState updateResult =  offsetState.getValue().startStateTransition(recordState, false);
+                            InFlightState updateResult =  offsetState.getValue().startStateTransition(
+                                    recordState,
+                                    false,
+                                    this.maxDeliveryCount
+                            );
                             if (updateResult == null) {
                                 log.debug("Unable to acknowledge records for the offset: {} in batch: {}"
                                         + " for the share partition: {}-{}", offsetState.getKey(),
@@ -560,9 +565,11 @@ public class SharePartition {
                                 throwable = new InvalidRecordStateException("Unable to acknowledge records for the batch");
                                 break;
                             }
+                            // If the maxDeliveryCount limit has been exceeded, the record will be transitioned to ARCHIVED state.
+                            // This should not change the nextFetchOffset because the record is not available for acquisition
                             // Successfully updated the state of the offset.
                             updatedStates.add(updateResult);
-                            if (updateNextFetchOffset) {
+                            if (updateNextFetchOffset && updateResult.state != RecordState.ARCHIVED) {
                                 localNextFetchOffset = Math.min(offsetState.getKey(), localNextFetchOffset);
                             }
                         }
@@ -579,14 +586,19 @@ public class SharePartition {
                         break;
                     }
 
-                    InFlightState updateResult = inFlightBatch.startBatchStateTransition(recordState, false);
+                    InFlightState updateResult = inFlightBatch.startBatchStateTransition(
+                            recordState,
+                            false,
+                            this.maxDeliveryCount
+                    );
                     if (updateResult == null) {
                         log.debug("Unable to acknowledge records for the batch: {} with state: {}"
                             + " for the share partition: {}-{}", inFlightBatch, recordState, groupId, topicIdPartition);
                         throwable = new InvalidRecordStateException("Unable to acknowledge records for the batch");
                         break;
                     }
-
+                    // If the maxDeliveryCount limit has been exceeded, the record will be transitioned to ARCHIVED state.
+                    // This should not change the nextFetchOffset because the record is not available for acquisition
                     // Add the gap offsets.
                     if (batch.gapOffsets != null && !batch.gapOffsets.isEmpty()) {
                         for (Long gapOffset : batch.gapOffsets) {
@@ -600,7 +612,7 @@ public class SharePartition {
 
                     // Successfully updated the state of the batch.
                     updatedStates.add(updateResult);
-                    if (updateNextFetchOffset) {
+                    if (updateNextFetchOffset && updateResult.state != RecordState.ARCHIVED) {
                         localNextFetchOffset = Math.min(inFlightBatch.baseOffset, localNextFetchOffset);
                     }
                 }
@@ -649,7 +661,6 @@ public class SharePartition {
         List<InFlightState> updatedStates = new ArrayList<>();
         try {
             long localNextFetchOffset = nextFetchOffset;
-            // TODO: recordState can be ARCHIVED as well, but that will involve maxDeliveryCount which is not implemented so far
             RecordState recordState = RecordState.AVAILABLE;
 
             // Iterate over multiple fetched batches. The state can vary per offset entry
@@ -667,7 +678,11 @@ public class SharePartition {
                             continue;
                         }
                         if (offsetState.getValue().state == RecordState.ACQUIRED) {
-                            InFlightState updateResult = offsetState.getValue().startStateTransition(recordState, false);
+                            InFlightState updateResult = offsetState.getValue().startStateTransition(
+                                    recordState,
+                                    false,
+                                    this.maxDeliveryCount
+                            );
                             if (updateResult == null) {
                                 log.debug("Unable to release records from acquired state for the offset: {} in batch: {}"
                                                 + " for the share partition: {}-{}", offsetState.getKey(),
@@ -677,7 +692,11 @@ public class SharePartition {
                             }
                             // Successfully updated the state of the offset.
                             updatedStates.add(updateResult);
-                            localNextFetchOffset = Math.min(offsetState.getKey(), localNextFetchOffset);
+                            // If the maxDeliveryCount limit has been exceeded, the record will be transitioned to ARCHIVED state.
+                            // This should not change the nextFetchOffset because the record is not available for acquisition
+                            if (updateResult.state != RecordState.ARCHIVED) {
+                                localNextFetchOffset = Math.min(offsetState.getKey(), localNextFetchOffset);
+                            }
                         }
                     }
                     if (throwable != null)
@@ -696,7 +715,11 @@ public class SharePartition {
                         inFlightBatch, groupId, topicIdPartition);
 
                 if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
-                    InFlightState updateResult = inFlightBatch.startBatchStateTransition(recordState, false);
+                    InFlightState updateResult = inFlightBatch.startBatchStateTransition(
+                            recordState,
+                            false,
+                            this.maxDeliveryCount
+                    );
                     if (updateResult == null) {
                         log.debug("Unable to release records from acquired state for the batch: {}"
                                         + " for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
@@ -705,7 +728,11 @@ public class SharePartition {
                     }
                     // Successfully updated the state of the batch.
                     updatedStates.add(updateResult);
-                    localNextFetchOffset = Math.min(inFlightBatch.baseOffset, localNextFetchOffset);
+                    // If the maxDeliveryCount limit has been exceeded, the record will be transitioned to ARCHIVED state.
+                    // This should not change the nextFetchOffset because the record is not available for acquisition
+                    if (updateResult.state != RecordState.ARCHIVED) {
+                        localNextFetchOffset = Math.min(inFlightBatch.baseOffset, localNextFetchOffset);
+                    }
                 }
             }
 
@@ -1017,11 +1044,11 @@ public class SharePartition {
             return inFlightState.tryUpdateState(newState, incrementDeliveryCount);
         }
 
-        private InFlightState startBatchStateTransition(RecordState newState, boolean incrementDeliveryCount) {
+        private InFlightState startBatchStateTransition(RecordState newState, boolean incrementDeliveryCount, int maxDeliveryCount) {
             if (inFlightState == null) {
                 throw new IllegalStateException("The batch state update is not available as the offset state is maintained");
             }
-            return inFlightState.startStateTransition(newState, incrementDeliveryCount);
+            return inFlightState.startStateTransition(newState, incrementDeliveryCount, maxDeliveryCount);
         }
 
         private void addGapOffsets(Long gapOffset) {
@@ -1186,11 +1213,14 @@ public class SharePartition {
             }
         }
 
-        private InFlightState startStateTransition(RecordState newState, boolean incrementDeliveryCount) {
+        private InFlightState startStateTransition(RecordState newState, boolean incrementDeliveryCount, int maxDeliveryCount) {
             try {
                 rollbackState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
+                if (newState == RecordState.AVAILABLE && deliveryCount >= maxDeliveryCount) {
+                    newState = RecordState.ARCHIVED;
+                }
                 state = state.validateTransition(newState);
-                if (incrementDeliveryCount) {
+                if (incrementDeliveryCount && newState != RecordState.ARCHIVED) {
                     deliveryCount++;
                 }
                 return this;

@@ -393,7 +393,13 @@ class BrokerServer(
 
       val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(config.shareGroupMaxGroups * config.shareGroupMaxSize,
         KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS)
-      val sharePartitionManager = new SharePartitionManager(replicaManager, Time.SYSTEM, shareFetchSessionCache, config.shareGroupRecordLockDurationMs)
+      val sharePartitionManager = new SharePartitionManager(
+        replicaManager,
+        Time.SYSTEM,
+        shareFetchSessionCache,
+        config.shareGroupRecordLockDurationMs,
+        config.shareGroupDeliveryCountLimit
+      )
 
       // Create the request processor objects.
       val raftSupport = RaftSupport(forwardingManager, metadataCache)
