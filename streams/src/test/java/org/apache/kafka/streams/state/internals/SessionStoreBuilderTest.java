@@ -77,7 +77,7 @@ public class SessionStoreBuilderTest {
     public void shouldNotHaveChangeLoggingStoreWhenDisabled() {
         final SessionStore<String, String> store = builder.withLoggingDisabled().build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
-        assertThat(next, CoreMatchers.<StateStore>equalTo(inner));
+        assertThat(next, CoreMatchers.equalTo(inner));
     }
 
     @Test
@@ -91,18 +91,18 @@ public class SessionStoreBuilderTest {
     @Test
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
         final SessionStore<String, String> store = builder
-                .withLoggingEnabled(Collections.<String, String>emptyMap())
+                .withLoggingEnabled(Collections.emptyMap())
                 .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredSessionStore.class));
         assertThat(wrapped, instanceOf(ChangeLoggingSessionBytesStore.class));
-        assertThat(((WrappedStateStore) wrapped).wrapped(), CoreMatchers.<StateStore>equalTo(inner));
+        assertThat(((WrappedStateStore) wrapped).wrapped(), CoreMatchers.equalTo(inner));
     }
 
     @Test
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
         final SessionStore<String, String> store = builder
-                .withLoggingEnabled(Collections.<String, String>emptyMap())
+                .withLoggingEnabled(Collections.emptyMap())
                 .withCachingEnabled()
                 .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
@@ -110,7 +110,7 @@ public class SessionStoreBuilderTest {
         assertThat(store, instanceOf(MeteredSessionStore.class));
         assertThat(caching, instanceOf(CachingSessionStore.class));
         assertThat(changeLogging, instanceOf(ChangeLoggingSessionBytesStore.class));
-        assertThat(changeLogging.wrapped(), CoreMatchers.<StateStore>equalTo(inner));
+        assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
     }
 
     @Test

@@ -1426,7 +1426,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           new DescribeTopicPartitionsResponse(response)
         })
       }
-      case None => throw new InvalidRequestException("ZK cluster does not handle DescribeTopicPartitions request")
+      case None => {
+        requestHelper.sendMaybeThrottle(request, request.body[DescribeTopicPartitionsRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      }
     }
   }
 

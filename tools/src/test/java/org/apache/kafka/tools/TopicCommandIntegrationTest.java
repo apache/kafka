@@ -52,8 +52,8 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import scala.collection.JavaConverters;
-import scala.collection.mutable.Buffer;
 import scala.collection.Seq;
+import scala.collection.mutable.Buffer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -636,6 +636,33 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         String[] rows = output.split(System.lineSeparator());
         assertEquals(3, rows.length, "Expected 3 rows in output, got " + rows.length);
         assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)), "Row does not start with " + testTopicName + ". Row is: " + rows[0]);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"quorum=zk", "quorum=kraft"})
+    public void testDescribeWithDescribeTopicPartitionsApi(String quorum) throws ExecutionException, InterruptedException {
+        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, 20, (short) 2,
+            scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+        );
+        TestUtils.createTopicWithAdmin(adminClient, "test-2", scalaBrokers, scalaControllers, 41, (short) 2,
+            scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+        );
+        TestUtils.createTopicWithAdmin(adminClient, "test-3", scalaBrokers, scalaControllers, 5, (short) 2,
+                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+        );
+        TestUtils.createTopicWithAdmin(adminClient, "test-4", scalaBrokers, scalaControllers, 5, (short) 2,
+                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+        );
+        TestUtils.createTopicWithAdmin(adminClient, "test-5", scalaBrokers, scalaControllers, 100, (short) 2,
+                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+        );
+
+        String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap(
+            "--describe", "--partition-size-limit-per-response=20"));
+        String[] rows = output.split("\n");
+        assertEquals(176, rows.length, String.join("\n", rows));
+        assertTrue(rows[2].contains("\tElr"), rows[2]);
+        assertTrue(rows[2].contains("LastKnownElr"), rows[2]);
     }
 
     @ParameterizedTest
