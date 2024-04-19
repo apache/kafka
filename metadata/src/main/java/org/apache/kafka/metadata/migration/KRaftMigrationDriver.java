@@ -776,16 +776,18 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     class RecoverMigrationStateFromZKEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
-            applyMigrationOperation("Recovering migration state from ZK", zkMigrationClient::getOrCreateMigrationRecoveryState);
-            String maybeDone = migrationLeadershipState.initialZkMigrationComplete() ? "done" : "not done";
-            log.info("Initial migration of ZK metadata is {}.", maybeDone);
+            if (checkDriverState(MigrationDriverState.UNINITIALIZED, this)) {
+                applyMigrationOperation("Recovering migration state from ZK", zkMigrationClient::getOrCreateMigrationRecoveryState);
+                String maybeDone = migrationLeadershipState.initialZkMigrationComplete() ? "done" : "not done";
+                log.info("Initial migration of ZK metadata is {}.", maybeDone);
 
-            // Once we've recovered the migration state from ZK, install this class as a metadata publisher
-            // by calling the initialZkLoadHandler.
-            initialZkLoadHandler.accept(KRaftMigrationDriver.this);
+                // Once we've recovered the migration state from ZK, install this class as a metadata publisher
+                // by calling the initialZkLoadHandler.
+                initialZkLoadHandler.accept(KRaftMigrationDriver.this);
 
-            // Transition to INACTIVE state and wait for leadership events.
-            transitionTo(MigrationDriverState.INACTIVE);
+                // Transition to INACTIVE state and wait for leadership events.
+                transitionTo(MigrationDriverState.INACTIVE);
+            }
         }
     }
 
