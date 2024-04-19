@@ -67,6 +67,12 @@ public class SingleFieldPath {
         }
     }
 
+    private SingleFieldPath(String originalPath, List<String> steps, FieldSyntaxVersion version) {
+        this.originalPath = originalPath;
+        this.steps = Collections.unmodifiableList(steps);
+        this.version = version;
+    }
+
     private static List<String> buildFieldPathV2(String path) {
         final List<String> steps = new ArrayList<>();
         // path character index to track backticks and dots and break path into steps
@@ -151,6 +157,9 @@ public class SingleFieldPath {
         return this.originalPath;
     }
 
+    FieldSyntaxVersion fieldSyntaxVersion() {
+        return this.version;
+    }
 
     /**
      * Access a {@code Field} at the current path within a schema {@code Schema}
@@ -246,5 +255,12 @@ public class SingleFieldPath {
             "version=" + version +
             ", path=" + String.join(".", steps) +
             '}';
+    }
+
+    public SingleFieldPath append(String step) {
+        String currentPath = String.join(".", steps);
+        List<String> newSteps = new ArrayList<>(steps);
+        newSteps.add(step);
+        return new SingleFieldPath(currentPath, newSteps, version);
     }
 }

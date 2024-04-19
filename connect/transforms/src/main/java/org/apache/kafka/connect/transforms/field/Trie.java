@@ -22,10 +22,8 @@ import java.util.Objects;
 
 /**
  * Data structure to organize overlapping {@code SingleFieldPath}s into a {@code MultiFieldPaths}.
+ * A trie flattens overlapping paths (e.g. `foo` and `foo.bar` in V2, only `foo.bar` would be kept)
  */
-// Invariants:
-// - Trie values contain either a nested trie or a field path when it is a leaf.
-// - A trie flattens overlapping paths (e.g. `foo` and `foo.bar` in V2, only `foo.bar` would be kept)
 class Trie {
 
     final Node root;
@@ -37,16 +35,20 @@ class Trie {
     void insert(SingleFieldPath path) {
         Node current = root;
 
+        SingleFieldPath p = null;
         for (String step : path.stepsWithoutLast()) {
-            current = current.addStep(step);
+            p = p == null
+                ? new SingleFieldPath(step, path.fieldSyntaxVersion())
+                : p.append(step);
+            current = current.addStep(step, p);
         }
 
         final String step = path.lastStep();
-        current.addLeaf(step, path);
+        current.addStep(step, path);
     }
 
     boolean isEmpty() {
-        return root.isEmpty();
+        return root.isLeaf();
     }
 
     Node get(String step) {
@@ -54,7 +56,7 @@ class Trie {
     }
 
     int size() {
-        if (root.isEmpty()) return 0;
+        if (root.isLeaf()) return 0;
         return root.size();
     }
 
@@ -89,16 +91,9 @@ class Trie {
             this.path = path;
         }
 
-        private Node addStep(String step) {
+        private Node addStep(String step, SingleFieldPath path) {
             return steps.computeIfAbsent(step, ignored -> {
-                if (path != null) path = null;
-                return new Node();
-            });
-        }
-
-        private void addLeaf(String step, SingleFieldPath path) {
-            steps.computeIfAbsent(step, ignored -> {
-                if (this.path != null) this.path = null;
+//                if (this.path != null) this.path = null;
                 return new Node(path);
             });
         }
@@ -107,12 +102,8 @@ class Trie {
             return steps.get(step);
         }
 
-        boolean isEmpty() {
-            return steps.isEmpty() && path == null;
-        }
-
         public boolean isLeaf() {
-            return path != null;
+            return steps.isEmpty();
         }
 
         Map<String, Node> steps() {

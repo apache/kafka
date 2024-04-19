@@ -32,8 +32,7 @@ class TrieTest {
     @Test void shouldBuildEmptyTrie() {
         Trie trie = new Trie();
         assertTrue(trie.isEmpty());
-        assertFalse(trie.root.isLeaf());
-        assertTrue(trie.root.isEmpty());
+        assertTrue(trie.root.isLeaf());
     }
 
     @Test void shouldBuildMinimalTrie() {
@@ -95,9 +94,11 @@ class TrieTest {
         Trie.Node maybeFoo = trie.get("foo");
         assertNotNull(maybeFoo);
         assertFalse(maybeFoo.isLeaf());
+        assertArrayEquals(new String[]{"foo"}, maybeFoo.path.path());
         Trie.Node maybeBar = maybeFoo.get("bar");
         assertNotNull(maybeBar);
         assertFalse(maybeBar.isLeaf());
+        assertArrayEquals(new String[]{"foo", "bar"}, maybeBar.path.path());
         Trie.Node maybeBaz = maybeBar.get("baz");
         assertNotNull(maybeBaz);
         assertTrue(maybeBaz.isLeaf());
