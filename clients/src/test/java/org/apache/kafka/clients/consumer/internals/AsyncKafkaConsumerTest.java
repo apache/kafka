@@ -639,14 +639,13 @@ public class AsyncKafkaConsumerTest {
         final TopicPartition tp = new TopicPartition("foo", 0);
         testIncompleteAsyncCommit(tp);
 
+        final CompletableFuture<Void> asyncCommitFuture = getLastEnqueuedEventFuture();
+
         // Commit async is not completed yet, so commit sync should wait for it to complete (time out)
         assertThrows(TimeoutException.class, () -> consumer.commitSync(Collections.emptyMap(), Duration.ofMillis(100)));
 
-        // Complete async commit event
-        final ArgumentCaptor<AsyncCommitEvent> commitEventCaptor = ArgumentCaptor.forClass(AsyncCommitEvent.class);
-        verify(applicationEventHandler).add(commitEventCaptor.capture());
-        final AsyncCommitEvent commitEvent = commitEventCaptor.getValue();
-        commitEvent.future().complete(null);
+        // Complete exceptionally async commit event
+        asyncCommitFuture.completeExceptionally(new KafkaException("Test exception"));
 
         // Commit async is completed, so commit sync completes immediately (since offsets are empty)
         assertDoesNotThrow(() -> consumer.commitSync(Collections.emptyMap(), Duration.ofMillis(100)));
@@ -655,13 +654,18 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCommitSyncAwaitsCommitAsyncCompletionWithNonEmptyOffsets() {
         final TopicPartition tp = new TopicPartition("foo", 0);
-        testSyncCommitTimesoutAfterIncompleteAsyncCommit(tp);
+        testIncompleteAsyncCommit(tp);
 
-        // Complete async commit event and sync commit event
-        final ArgumentCaptor<AsyncCommitEvent> commitEventCaptor = ArgumentCaptor.forClass(AsyncCommitEvent.class);
-        verify(applicationEventHandler).add(commitEventCaptor.capture());
-        final AsyncCommitEvent commitEvent = commitEventCaptor.getValue();
-        commitEvent.future().complete(null);
+        final CompletableFuture<Void> asyncCommitFuture = getLastEnqueuedEventFuture();
+
+        // Mock to complete sync event
+        completeCommitSyncApplicationEventSuccessfully();
+
+        // Commit async is not completed yet, so commit sync should wait for it to complete (time out)
+        assertThrows(TimeoutException.class, () -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
+
+        // Complete exceptionally async commit event
+        asyncCommitFuture.completeExceptionally(new KafkaException("Test exception"));
 
         // Commit async is completed, so commit sync does not need to wait before committing its offsets
         assertDoesNotThrow(() -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
@@ -670,13 +674,18 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCommitSyncAwaitsCommitAsyncButDoesNotFail() {
         final TopicPartition tp = new TopicPartition("foo", 0);
-        testSyncCommitTimesoutAfterIncompleteAsyncCommit(tp);
+        testIncompleteAsyncCommit(tp);
 
-        // Complete exceptionally async commit event and sync commit event
-        final ArgumentCaptor<AsyncCommitEvent> commitEventCaptor = ArgumentCaptor.forClass(AsyncCommitEvent.class);
-        verify(applicationEventHandler).add(commitEventCaptor.capture());
-        final AsyncCommitEvent commitEvent = commitEventCaptor.getValue();
-        commitEvent.future().completeExceptionally(new KafkaException("Test exception"));
+        final CompletableFuture<Void> asyncCommitFuture = getLastEnqueuedEventFuture();
+
+        // Mock to complete sync event
+        completeCommitSyncApplicationEventSuccessfully();
+
+        // Commit async is not completed yet, so commit sync should wait for it to complete (time out)
+        assertThrows(TimeoutException.class, () -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
+
+        // Complete exceptionally async commit event
+        asyncCommitFuture.completeExceptionally(new KafkaException("Test exception"));
 
         // Commit async is completed exceptionally, but this will be handled by commit callback - commit sync should not fail.
         assertDoesNotThrow(() -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
@@ -694,14 +703,14 @@ public class AsyncKafkaConsumerTest {
         consumer.commitAsync();
     }
 
-    private void testSyncCommitTimesoutAfterIncompleteAsyncCommit(TopicPartition tp) {
-        testIncompleteAsyncCommit(tp);
-
-        // Mock to complete sync event
-        completeCommitSyncApplicationEventSuccessfully();
-
-        // Commit async is not completed yet, so commit sync should wait for it to complete (time out)
-        assertThrows(TimeoutException.class, () -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
+    // ArgumentCaptor's type-matching does not work reliably with Java 8, so we cannot directly capture the AsyncCommitEvent
+    // Instead, we capture the super-class CompletableApplicationEvent and fetch the last captured event.
+    private CompletableFuture<Void> getLastEnqueuedEventFuture() {
+        final ArgumentCaptor<CompletableApplicationEvent<Void>> eventArgumentCaptor = ArgumentCaptor.forClass(CompletableApplicationEvent.class);
+        verify(applicationEventHandler, atLeast(1)).add(eventArgumentCaptor.capture());
+        final List<CompletableApplicationEvent<Void>> allValues = eventArgumentCaptor.getAllValues();
+        final CompletableApplicationEvent<Void> lastEvent = allValues.get(allValues.size() - 1);
+        return lastEvent.future();
     }
 
     @Test
