@@ -74,6 +74,9 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
 
     private static final String PURPOSE = "field insertion";
 
+    private static final String KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG = "key.converter.replace.null.with.default";
+    private static final String VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG = "value.converter.replace.null.with.default";
+
     private static final Schema OPTIONAL_TIMESTAMP_SCHEMA = Timestamp.builder().optional().build();
 
     private static final class InsertionSpec {
@@ -104,6 +107,9 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     private InsertionSpec staticField;
     private String staticValue;
 
+    protected boolean keyConverterReplaceNullWithDefault;
+    protected boolean valueConverterReplaceNullWithDefault;
+
     private Cache<Schema, Schema> schemaUpdateCache;
 
     @Override
@@ -120,6 +126,8 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         timestampField = InsertionSpec.parse(config.getString(ConfigName.TIMESTAMP_FIELD));
         staticField = InsertionSpec.parse(config.getString(ConfigName.STATIC_FIELD));
         staticValue = config.getString(ConfigName.STATIC_VALUE);
+        keyConverterReplaceNullWithDefault = props.get(KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG) == null || (boolean) props.get(KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG);
+        valueConverterReplaceNullWithDefault = props.get(VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG) == null || (boolean) props.get(VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG);
 
         if (topicField == null && partitionField == null && offsetField == null && timestampField == null && staticField == null) {
             throw new ConfigException("No field insertion configured");
@@ -179,7 +187,7 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         final Struct updatedValue = new Struct(updatedSchema);
 
         for (Field field : value.schema().fields()) {
-            updatedValue.put(field.name(), value.get(field));
+            updatedValue.put(field.name(), getFieldValue(value, field));
         }
 
         if (topicField != null) {
@@ -227,6 +235,14 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         return builder.build();
     }
 
+    private Object getFieldValue(Struct value, Field field) {
+
+        if (replaceNullWithDefault()) {
+            return value.get(field);
+        }
+        return value.getWithoutDefault(field.name());
+    }
+
     @Override
     public void close() {
         schemaUpdateCache = null;
@@ -242,6 +258,9 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     protected abstract Object operatingValue(R record);
 
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
+
+    protected abstract boolean replaceNullWithDefault();
+
 
     public static class Key<R extends ConnectRecord<R>> extends InsertField<R> {
 
@@ -260,6 +279,10 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
             return record.newRecord(record.topic(), record.kafkaPartition(), updatedSchema, updatedValue, record.valueSchema(), record.value(), record.timestamp());
         }
 
+        @Override
+        protected boolean replaceNullWithDefault() {
+            return keyConverterReplaceNullWithDefault;
+        }
     }
 
     public static class Value<R extends ConnectRecord<R>> extends InsertField<R> {
@@ -279,6 +302,10 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
             return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), updatedSchema, updatedValue, record.timestamp());
         }
 
+        @Override
+        protected boolean replaceNullWithDefault() {
+            return valueConverterReplaceNullWithDefault;
+        }
     }
 
 }

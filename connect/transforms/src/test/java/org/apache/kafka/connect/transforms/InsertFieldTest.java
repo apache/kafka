@@ -209,4 +209,62 @@ public class InsertFieldTest {
 
         assertEquals(xformKey.version(), xformValue.version());
     }
+
+    @Test
+    public void whenValueConverterReplaceNullWithDefaultIsFalseNullCopiedFieldsWithNullValueMustRemainNull() {
+
+        final Map<String, Object> props = new HashMap<>();
+        props.put("topic.field", "topic_field!");
+        props.put("partition.field", "partition_field");
+        props.put("timestamp.field", "timestamp_field?");
+        props.put("static.field", "instance_id");
+        props.put("static.value", "my-instance-id");
+        props.put("value.converter.replace.null.with.default", false);
+
+        xformValue.configure(props);
+
+        Schema magicFieldSchema = SchemaBuilder.int64().optional().defaultValue(42L).build();
+        final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic_with_default", magicFieldSchema).build();
+        final Struct simpleStruct = new Struct(simpleStructSchema).put("magic_with_default", null);
+
+        final SourceRecord record = new SourceRecord(null, null, "test", 0, null, null, simpleStructSchema, simpleStruct, 789L);
+        final SourceRecord transformedRecord = xformValue.apply(record);
+
+        assertEquals(simpleStructSchema.name(), transformedRecord.valueSchema().name());
+        assertEquals(simpleStructSchema.version(), transformedRecord.valueSchema().version());
+        assertEquals(simpleStructSchema.doc(), transformedRecord.valueSchema().doc());
+
+        assertEquals(magicFieldSchema, transformedRecord.valueSchema().field("magic_with_default").schema());
+        assertNull(((Struct) transformedRecord.value()).getInt64("magic_with_default"));
+
+    }
+
+    @Test
+    public void whenValueConverterReplaceNullWithDefaultIsTrueCopiedFieldsWithNullValueMustUseDefault() {
+
+        final Map<String, Object> props = new HashMap<>();
+        props.put("topic.field", "topic_field!");
+        props.put("partition.field", "partition_field");
+        props.put("timestamp.field", "timestamp_field?");
+        props.put("static.field", "instance_id");
+        props.put("static.value", "my-instance-id");
+        props.put("value.converter.replace.null.with.default", true);
+
+        xformValue.configure(props);
+
+        Schema magicFieldSchema = SchemaBuilder.int64().optional().defaultValue(42L).build();
+        final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic_with_default", magicFieldSchema).build();
+        final Struct simpleStruct = new Struct(simpleStructSchema).put("magic_with_default", null);
+
+        final SourceRecord record = new SourceRecord(null, null, "test", 0, null, null, simpleStructSchema, simpleStruct, 789L);
+        final SourceRecord transformedRecord = xformValue.apply(record);
+
+        assertEquals(simpleStructSchema.name(), transformedRecord.valueSchema().name());
+        assertEquals(simpleStructSchema.version(), transformedRecord.valueSchema().version());
+        assertEquals(simpleStructSchema.doc(), transformedRecord.valueSchema().doc());
+
+        assertEquals(magicFieldSchema, transformedRecord.valueSchema().field("magic_with_default").schema());
+        assertEquals(42L, ((Struct) transformedRecord.value()).getInt64("magic_with_default").longValue());
+
+    }
 }
