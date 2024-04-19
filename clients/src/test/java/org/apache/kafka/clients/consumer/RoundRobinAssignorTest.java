@@ -109,7 +109,7 @@ public class RoundRobinAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertEquals(partitions(tp(topic, 0)), assignment.get(consumer1));
-        assertEquals(Collections.<TopicPartition>emptyList(), assignment.get(consumer2));
+        assertEquals(Collections.emptyList(), assignment.get(consumer2));
     }
 
     @Test

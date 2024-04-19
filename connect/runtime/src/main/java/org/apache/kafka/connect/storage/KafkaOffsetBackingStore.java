@@ -173,7 +173,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
     @Override
     public void configure(final WorkerConfig config) {
         String topic = config.getString(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG);
-        if (topic == null || topic.trim().length() == 0)
+        if (topic == null || topic.trim().isEmpty())
             throw new ConfigException("Offset storage topic must be specified");
 
         this.exactlyOnce = config.exactlyOnceSourceEnabled();
@@ -249,7 +249,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
                         + "support for source connectors, or upgrade to a newer Kafka broker version.";
             } else {
                 message = "When " + ConsumerConfig.ISOLATION_LEVEL_CONFIG + "is set to "
-                        + IsolationLevel.READ_COMMITTED.toString()
+                        + IsolationLevel.READ_COMMITTED
                         + ", a Kafka broker version that allows admin clients to read consumer offsets is required. "
                         + "Please either reconfigure the worker or connector, or upgrade to a newer Kafka broker version.";
             }

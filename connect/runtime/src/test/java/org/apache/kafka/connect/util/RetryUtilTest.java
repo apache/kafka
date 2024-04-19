@@ -136,7 +136,7 @@ public class RetryUtilTest {
     public void testBackoffMoreThanTimeoutWillOnlyExecuteOnce() throws Exception {
         Mockito.when(mockCallable.call()).thenThrow(new TimeoutException("timeout exception"));
 
-        TimeoutException e = assertThrows(TimeoutException.class,
+        assertThrows(TimeoutException.class,
                 () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(50), 100, mockTime));
         Mockito.verify(mockCallable, Mockito.times(1)).call();
     }
@@ -181,7 +181,7 @@ public class RetryUtilTest {
     public void testWakeupException() throws Exception {
         Mockito.when(mockCallable.call()).thenThrow(new WakeupException());
 
-        ConnectException e = assertThrows(ConnectException.class,
+        assertThrows(ConnectException.class,
                 () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(50), 10, mockTime));
         Mockito.verify(mockCallable, Mockito.atLeastOnce()).call();
     }

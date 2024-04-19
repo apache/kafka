@@ -176,8 +176,8 @@ public class OAuthBearerSaslClient implements SaslClient {
                 String serverName, Map<String, ?> props, CallbackHandler callbackHandler) {
             String[] mechanismNamesCompatibleWithPolicy = getMechanismNames(props);
             for (String mechanism : mechanisms) {
-                for (int i = 0; i < mechanismNamesCompatibleWithPolicy.length; i++) {
-                    if (mechanismNamesCompatibleWithPolicy[i].equals(mechanism)) {
+                for (String name : mechanismNamesCompatibleWithPolicy) {
+                    if (name.equals(mechanism)) {
                         if (!(Objects.requireNonNull(callbackHandler) instanceof AuthenticateCallbackHandler))
                             throw new IllegalArgumentException(String.format(
                                     "Callback handler must be castable to %s: %s",

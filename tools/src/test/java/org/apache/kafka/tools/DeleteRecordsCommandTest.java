@@ -124,10 +124,9 @@ class DeleteRecordsCommandUnitTest {
             "--bootstrap-server", "localhost:9092",
             "--offset-json-file", "/not/existing/file"
         }, System.out));
-        assertEquals(1, DeleteRecordsCommand.mainNoExit(new String[]{
+        assertEquals(1, DeleteRecordsCommand.mainNoExit(
             "--bootstrap-server", "localhost:9092",
-            "--offset-json-file", "/not/existing/file"
-        }));
+            "--offset-json-file", "/not/existing/file"));
     }
 
     @Test
@@ -137,11 +136,10 @@ class DeleteRecordsCommandUnitTest {
             "--offset-json-file", "/not/existing/file",
             "--command-config", "/another/not/existing/file"
         }, System.out));
-        assertEquals(1, DeleteRecordsCommand.mainNoExit(new String[] {
+        assertEquals(1, DeleteRecordsCommand.mainNoExit(
             "--bootstrap-server", "localhost:9092",
             "--offset-json-file", "/not/existing/file",
-            "--command-config", "/another/not/existing/file"
-        }));
+            "--command-config", "/another/not/existing/file"));
     }
 
     @Test
