@@ -46,7 +46,6 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -96,11 +95,8 @@ public class TargetAssignmentBuilderBenchmark {
         Map<String, ConsumerGroupMember> members = generateMockMembers();
         Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignment();
 
-        // Add a new member to trigger a rebalance.
-        Set<String> subscribedTopics = new HashSet<>(subscriptionMetadata.keySet());
-
         ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("new-member")
-            .setSubscribedTopicNames(new ArrayList<>(subscribedTopics))
+            .setSubscribedTopicNames(allTopicNames)
             .build();
 
         targetAssignmentBuilder = new TargetAssignmentBuilder(GROUP_ID, GROUP_EPOCH, partitionAssignor)
@@ -114,11 +110,8 @@ public class TargetAssignmentBuilderBenchmark {
         Map<String, ConsumerGroupMember> members = new HashMap<>();
 
         for (int i = 0; i < memberCount - 1; i++) {
-            Set<String> subscribedTopics;
-            subscribedTopics = new HashSet<>(allTopicNames);
-
             ConsumerGroupMember member = new ConsumerGroupMember.Builder("member" + i)
-                .setSubscribedTopicNames(new ArrayList<>(subscribedTopics))
+                .setSubscribedTopicNames(allTopicNames)
                 .build();
             members.put("member" + i, member);
         }

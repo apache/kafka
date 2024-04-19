@@ -115,6 +115,8 @@ public class ClientSideAssignorBenchmark {
 
     private static final int NUMBER_OF_RACKS = 3;
 
+    private static final int MAX_BUCKET_COUNT = 5;
+
     private ConsumerPartitionAssignor assignor;
 
     private Cluster metadata;
@@ -123,9 +125,9 @@ public class ClientSideAssignorBenchmark {
 
     @Setup(Level.Trial)
     public void setup() {
-        // Ensure there are enough racks and brokers for the replication factor.
-        if (NUMBER_OF_RACKS < 2) {
-            throw new IllegalArgumentException("Number of broker racks must be at least equal to 2.");
+        // Ensure there are enough racks and brokers for the replication factor = 3.
+        if (NUMBER_OF_RACKS < 3) {
+            throw new IllegalArgumentException("Number of broker racks must be at least equal to 3.");
         }
 
         populateTopicMetadata();
@@ -170,13 +172,14 @@ public class ClientSideAssignorBenchmark {
                 subscriptions.put(memberName, subscription(allTopicNames, i));
             }
         } else {
+            // Adjust bucket count based on member count when member count < max bucket count.
+            int bucketCount = Math.min(MAX_BUCKET_COUNT, numberOfMembers);
+
             // Check minimum topics requirement
-            if (topicCount < 5) {
-                throw new IllegalArgumentException("At least 5 topics are recommended for effective bucketing.");
+            if (topicCount < bucketCount) {
+                throw new IllegalArgumentException("At least " + bucketCount + " topics are recommended for effective bucketing.");
             }
 
-            // Adjust bucket count based on member count when member count < 5
-            int bucketCount = Math.min(5, numberOfMembers);
             int bucketSizeTopics = (int) Math.ceil((double) topicCount / bucketCount);
             int bucketSizeMembers = (int) Math.ceil((double) numberOfMembers / bucketCount);
 
@@ -206,8 +209,8 @@ public class ClientSideAssignorBenchmark {
         // Replication factor is hardcoded to 2.
         List<PartitionInfo> partitionInfos = new ArrayList<>(numberOfPartitions);
         for (int i = 0; i < numberOfPartitions; i++) {
-            Node[] replicas = new Node[2];
-            for (int j = 0; j < 2; j++) {
+            Node[] replicas = new Node[3];
+            for (int j = 0; j < 3; j++) {
                 // Assign nodes based on partition number to mimic mkMapOfPartitionRacks logic.
                 int nodeIndex = (i + j) % NUMBER_OF_RACKS;
                 replicas[j] = nodes.get(nodeIndex);
@@ -229,8 +232,8 @@ public class ClientSideAssignorBenchmark {
         );
     }
 
-    private Optional<String> rackId(int index) {
-        return isRackAware ? Optional.of("rack" + index % NUMBER_OF_RACKS) : Optional.empty();
+    private Optional<String> rackId(int consumerIndex) {
+        return isRackAware ? Optional.of("rack" + consumerIndex % NUMBER_OF_RACKS) : Optional.empty();
     }
 
     private ConsumerPartitionAssignor.Subscription subscriptionWithOwnedPartitions(

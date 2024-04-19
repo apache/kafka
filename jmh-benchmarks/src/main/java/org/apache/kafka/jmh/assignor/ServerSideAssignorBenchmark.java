@@ -118,6 +118,8 @@ public class ServerSideAssignorBenchmark {
 
     private static final int NUMBER_OF_RACKS = 3;
 
+    private static final int MAX_BUCKET_COUNT = 5;
+
     private AssignmentSpec assignmentSpec;
 
     private SubscribedTopicDescriber subscribedTopicDescriber;
@@ -173,13 +175,14 @@ public class ServerSideAssignorBenchmark {
                 addMemberSpec(members, i, new HashSet<>(allTopicIds));
             }
         } else {
+            // Adjust bucket count based on member count when member count < max bucket count.
+            int bucketCount = Math.min(MAX_BUCKET_COUNT, numberOfMembers);
+
             // Check minimum topics requirement
-            if (topicCount < 5) {
-                throw new IllegalArgumentException("At least 5 topics are recommended for effective bucketing.");
+            if (topicCount < bucketCount) {
+                throw new IllegalArgumentException("At least " + bucketCount + " topics are recommended for effective bucketing.");
             }
 
-            // Adjust bucket count based on member count when member count < 5
-            int bucketCount = Math.min(5, numberOfMembers);
             int bucketSizeTopics = (int) Math.ceil((double) topicCount / bucketCount);
             int bucketSizeMembers = (int) Math.ceil((double) numberOfMembers / bucketCount);
 
@@ -203,8 +206,8 @@ public class ServerSideAssignorBenchmark {
         this.assignmentSpec = new AssignmentSpec(members);
     }
 
-    private Optional<String> rackId(int index) {
-        return isRackAware ? Optional.of("rack" + index % NUMBER_OF_RACKS) : Optional.empty();
+    private Optional<String> rackId(int memberIndex) {
+        return isRackAware ? Optional.of("rack" + memberIndex % NUMBER_OF_RACKS) : Optional.empty();
     }
 
     private void addMemberSpec(
@@ -226,7 +229,11 @@ public class ServerSideAssignorBenchmark {
     private static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
         Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
         for (int i = 0; i < numPartitions; i++) {
-            partitionRacks.put(i, new HashSet<>(Arrays.asList("rack" + i % NUMBER_OF_RACKS, "rack" + (i + 1) % NUMBER_OF_RACKS)));
+            partitionRacks.put(i, new HashSet<>(Arrays.asList(
+                "rack" + i % NUMBER_OF_RACKS,
+                "rack" + (i + 1) % NUMBER_OF_RACKS,
+                "rack" + (i + 2) % NUMBER_OF_RACKS
+            )));
         }
         return partitionRacks;
     }
