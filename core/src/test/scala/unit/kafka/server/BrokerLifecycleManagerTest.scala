@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.{BrokerHeartbeatResponseData, BrokerRegis
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
 
@@ -35,7 +36,7 @@ import scala.jdk.CollectionConverters._
 class BrokerLifecycleManagerTest {
   def configProperties = {
     val properties = new Properties()
-    properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo")
+    properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, "/tmp/foo")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "broker")
     properties.setProperty(KafkaConfig.NodeIdProp, "1")
     properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9093")

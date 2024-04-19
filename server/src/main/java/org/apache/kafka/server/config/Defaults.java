@@ -77,15 +77,6 @@ public class Defaults {
     public static final long CONNECTION_SETUP_TIMEOUT_MAX_MS = CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS;
     public static final int FAILED_AUTHENTICATION_DELAY_MS = 100;
 
-    /** ********* Log Configuration *********/
-    public static final int NUM_PARTITIONS = 1;
-    public static final String LOG_DIR = "/tmp/kafka-logs";
-    public static final long LOG_CLEANUP_INTERVAL_MS = 5 * 60 * 1000L;
-    public static final int LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS = 60000;
-    public static final int LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS = 60000;
-    public static final int NUM_RECOVERY_THREADS_PER_DATA_DIR = 1;
-    public static final boolean AUTO_CREATE_TOPICS_ENABLE = true;
-
     /** ********* Controlled shutdown configuration *********/
     public static final int CONTROLLED_SHUTDOWN_MAX_RETRIES = 3;
     public static final int CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS = 5000;
