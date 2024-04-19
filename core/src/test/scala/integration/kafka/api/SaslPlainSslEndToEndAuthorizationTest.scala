@@ -24,7 +24,6 @@ import javax.security.auth.Subject
 import javax.security.auth.login.AppConfigurationEntry
 
 import scala.collection.Seq
-import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.utils.JaasTestUtils._
 import org.apache.kafka.common.config.SaslConfigs
@@ -33,6 +32,7 @@ import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback
+import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -110,11 +110,11 @@ object SaslPlainSslEndToEndAuthorizationTest {
 class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   import SaslPlainSslEndToEndAuthorizationTest._
 
-  this.serverConfig.setProperty(s"${listenerName.configPrefix}${KafkaConfig.SslClientAuthProp}", "required")
+  this.serverConfig.setProperty(s"${listenerName.configPrefix}${KafkaSecurityConfigs.SSL_CLIENT_AUTH_CONFIG}", "required")
   this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
-  this.serverConfig.put(KafkaConfig.SaslClientCallbackHandlerClassProp, classOf[TestClientCallbackHandler].getName)
+  this.serverConfig.put(KafkaSecurityConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS_CONFIG, classOf[TestClientCallbackHandler].getName)
   val mechanismPrefix = listenerName.saslMechanismConfigPrefix("PLAIN")
-  this.serverConfig.put(s"$mechanismPrefix${KafkaConfig.SaslServerCallbackHandlerClassProp}", classOf[TestServerCallbackHandler].getName)
+  this.serverConfig.put(s"$mechanismPrefix${KafkaSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG}", classOf[TestServerCallbackHandler].getName)
   this.producerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.consumerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.adminClientConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)

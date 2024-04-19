@@ -668,7 +668,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
                 ConfigValue configValue = new ConfigValue(prefix + validatedConfigValue.name(), validatedConfigValue.value(),
                                                           validatedConfigValue.recommendedValues(), validatedConfigValue.errorMessages());
-                if (configValue.errorMessages().size() > 0) {
+                if (!configValue.errorMessages().isEmpty()) {
                     errorCount++;
                 }
                 ConfigValueInfo configValueInfo = convertConfigValue(configValue, configKey != null ? configKey.type : null);

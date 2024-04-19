@@ -187,7 +187,7 @@ public class Assertions {
                 if (expectedPartitionMetadataList.size() != actualPartitionMetadataList.size()) {
                     fail("Partition metadata lists have different sizes");
                 } else if (!expectedPartitionMetadataList.isEmpty() && !actualPartitionMetadataList.isEmpty()) {
-                    for (int j = 0; j < expectedTopicMetadataList.size(); j++) {
+                    for (int j = 0; j < expectedPartitionMetadataList.size(); j++) {
                         ConsumerGroupPartitionMetadataValue.PartitionMetadata expectedPartitionMetadata =
                             expectedPartitionMetadataList.get(j);
                         ConsumerGroupPartitionMetadataValue.PartitionMetadata actualPartitionMetadata =

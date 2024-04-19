@@ -123,7 +123,7 @@ public class OAuthBearerClientInitialResponse {
     public byte[] toBytes() {
         String authzid = authorizationId.isEmpty() ? "" : "a=" + authorizationId;
         String extensions = extensionsMessage();
-        if (extensions.length() > 0)
+        if (!extensions.isEmpty())
             extensions = SEPARATOR + extensions;
 
         String message = String.format("n,%s,%sauth=Bearer %s%s%s%s", authzid,
