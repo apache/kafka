@@ -19,8 +19,6 @@ package org.apache.kafka.connect.transforms.field;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -29,40 +27,22 @@ class FieldPathNotationTest {
     final static String[] EMPTY_PATH = new String[] {};
 
     @Test
-    void shouldIncludeEmptyFieldNames() {
-        assertArrayEquals(
-            new String[] {"", "", ""},
-            new SingleFieldPath("..", FieldSyntaxVersion.V2).path()
-        );
-        assertArrayEquals(
-            new String[] {"foo", "", ""},
-            new SingleFieldPath("foo..", FieldSyntaxVersion.V2).path()
-        );
-        assertArrayEquals(
-            new String[] {"", "bar", ""},
-            new SingleFieldPath(".bar.", FieldSyntaxVersion.V2).path()
-        );
-        assertArrayEquals(
-            new String[] {"", "", "baz"},
-            new SingleFieldPath("..baz", FieldSyntaxVersion.V2).path()
-        );
-    }
-
-    @Test
     void shouldBuildV1WithDotsAndBacktickPair() {
         // Given v1
         // When path contains dots, then single step path
-        assertArrayEquals(
-                new String[] {"foo.bar.baz"},
-                new SingleFieldPath("foo.bar.baz", FieldSyntaxVersion.V1).path());
+        assertParseV1("foo.bar.baz");
         // When path contains backticks, then single step path
-        assertArrayEquals(
-                new String[] {"foo`bar`"},
-                new SingleFieldPath("foo`bar`", FieldSyntaxVersion.V1).path());
+        assertParseV1("foo`bar`");
         // When path contains dots and backticks, then single step path
-        assertArrayEquals(
-                new String[] {"foo.`bar.baz`"},
-                new SingleFieldPath("foo.`bar.baz`", FieldSyntaxVersion.V1).path());
+        assertParseV1("foo.`bar.baz`");
+    }
+
+    @Test
+    void shouldIncludeEmptyFieldNames() {
+        assertParseV2("..", "", "", "");
+        assertParseV2("foo..", "foo", "", "");
+        assertParseV2(".bar.", "", "bar", "");
+        assertParseV2("..baz", "", "", "baz");
     }
 
     @Test
@@ -70,7 +50,7 @@ class FieldPathNotationTest {
         // Given v2
         // When path is empty
         // Then build a path with no steps
-        assertArrayEquals(EMPTY_PATH, new SingleFieldPath("", FieldSyntaxVersion.V2).path());
+        assertParseV2("", EMPTY_PATH);
     }
 
     @Test
@@ -78,7 +58,7 @@ class FieldPathNotationTest {
         // Given v2
         // When path without dots
         // Then build a single step path
-        assertArrayEquals(new String[] {"foobarbaz"}, new SingleFieldPath("foobarbaz", FieldSyntaxVersion.V2).path());
+        assertParseV2("foobarbaz", "foobarbaz");
     }
 
     @Test
@@ -86,7 +66,7 @@ class FieldPathNotationTest {
         // Given v2 and fields without dots
         // When path includes dots
         // Then build a path with steps separated by dots
-        assertArrayEquals(new String[] {"foo", "bar", "baz"}, new SingleFieldPath("foo.bar.baz", FieldSyntaxVersion.V2).path());
+        assertParseV2("foo.bar.baz", "foo", "bar", "baz");
     }
 
     @Test
@@ -94,7 +74,7 @@ class FieldPathNotationTest {
         // Given v2 and fields without dots
         // When backticks are not wrapping a field name
         // Then build a single step path including backticks
-        assertArrayEquals(new String[] {"foo`bar`baz"}, new SingleFieldPath("foo`bar`baz", FieldSyntaxVersion.V2).path());
+        assertParseV2("foo`bar`baz", "foo`bar`baz");
     }
 
     @Test
@@ -102,10 +82,10 @@ class FieldPathNotationTest {
         // Given v2 and fields including dots
         // When backticks are wrapping a field name (i.e. withing edges or between dots)
         // Then build a path with steps separated by dots and not including backticks
-        assertArrayEquals(new String[] {"foo.bar.baz"}, new SingleFieldPath("`foo.bar.baz`", FieldSyntaxVersion.V2).path());
-        assertArrayEquals(new String[] {"foo", "bar.baz"}, new SingleFieldPath("foo.`bar.baz`", FieldSyntaxVersion.V2).path());
-        assertArrayEquals(new String[] {"foo.bar", "baz"}, new SingleFieldPath("`foo.bar`.baz", FieldSyntaxVersion.V2).path());
-        assertArrayEquals(new String[] {"foo", "bar", "baz"}, new SingleFieldPath("foo.`bar`.baz", FieldSyntaxVersion.V2).path());
+        assertParseV2("`foo.bar.baz`", "foo.bar.baz");
+        assertParseV2("foo.`bar.baz`", "foo", "bar.baz");
+        assertParseV2("`foo.bar`.baz", "foo.bar", "baz");
+        assertParseV2("foo.`bar`.baz", "foo", "bar", "baz");
     }
 
     @Test
@@ -113,12 +93,12 @@ class FieldPathNotationTest {
         // Given v2 and fields including dots and backticks
         // When backticks are wrapping a field name (i.e. withing edges or between dots)
         // Then build a path with steps separated by dots and including non-wrapping backticks
-        assertArrayEquals(new String[] {"foo", "`bar.baz"}, new SingleFieldPath("foo.``bar.baz`", FieldSyntaxVersion.V2).path());
-        assertArrayEquals(new String[] {"foo", "bar.baz`"}, new SingleFieldPath("foo.`bar.baz``", FieldSyntaxVersion.V2).path());
-        assertArrayEquals(new String[] {"foo", "ba`r.baz"}, new SingleFieldPath("foo.`ba`r.baz`", FieldSyntaxVersion.V2).path());
-        assertArrayEquals(new String[] {"foo", "ba`r", "baz"}, new SingleFieldPath("foo.ba`r.baz", FieldSyntaxVersion.V2).path());
-        assertArrayEquals(new String[] {"foo", "`bar`", "baz"}, new SingleFieldPath("foo.``bar``.baz", FieldSyntaxVersion.V2).path());
-        assertArrayEquals(new String[] {"`foo.bar.baz`"}, new SingleFieldPath("``foo.bar.baz``", FieldSyntaxVersion.V2).path());
+        assertParseV2("foo.``bar.baz`", "foo", "`bar.baz");
+        assertParseV2("foo.`bar.baz``", "foo", "bar.baz`");
+        assertParseV2("foo.`ba`r.baz`", "foo", "ba`r.baz");
+        assertParseV2("foo.ba`r.baz", "foo", "ba`r", "baz");
+        assertParseV2("foo.``bar``.baz", "foo", "`bar`", "baz");
+        assertParseV2("``foo.bar.baz``", "`foo.bar.baz`");
     }
 
     @Test
@@ -127,10 +107,10 @@ class FieldPathNotationTest {
         // When backticks are wrapping a field name (i.e. withing edges or between dots)
         // and wrapping backticks that are part of the field name are escaped with backslashes
         // Then build a path with steps separated by dots and including escaped and non-wrapping backticks
-        assertArrayEquals(new String[] {"foo", "bar`.baz"}, new SingleFieldPath("foo.`bar\\`.baz`", FieldSyntaxVersion.V2).path());
-        assertArrayEquals(new String[] {"foo", "bar.`baz"}, new SingleFieldPath("foo.`bar.`baz`", FieldSyntaxVersion.V2).path());
-        assertArrayEquals(new String[] {"foo", "bar`.`baz"}, new SingleFieldPath("foo.`bar\\`.`baz`", FieldSyntaxVersion.V2).path());
-        assertArrayEquals(new String[] {"foo", "bar\\`.\\`baz"}, new SingleFieldPath("foo.`bar\\\\`.\\`baz`", FieldSyntaxVersion.V2).path());
+        assertParseV2("foo.`bar\\`.baz`", "foo", "bar`.baz");
+        assertParseV2("foo.`bar.`baz`", "foo", "bar.`baz");
+        assertParseV2("foo.`bar\\`.`baz`", "foo", "bar`.`baz");
+        assertParseV2("foo.`bar\\\\`.\\`baz`", "foo", "bar\\`.\\`baz");
     }
 
     @Test
@@ -138,32 +118,43 @@ class FieldPathNotationTest {
         // Given v2
         // When backticks are not closed and not escaped
         // Then it should fail
-        ConfigException e0 = assertThrows(ConfigException.class,
-                () -> new SingleFieldPath("`foo.bar.baz", FieldSyntaxVersion.V2));
-        assertEquals(
-                "Incomplete backtick pair in path: [`foo.bar.baz], consider adding a backslash before backtick at position 0 to escape it",
-                e0.getMessage()
+        assertParseV2Error(
+            "`foo.bar.baz",
+            "Incomplete backtick pair in path: [`foo.bar.baz], consider adding a backslash before backtick at position 0 to escape it"
         );
-        ConfigException e1 = assertThrows(ConfigException.class,
-                () -> new SingleFieldPath("foo.`bar.baz", FieldSyntaxVersion.V2));
-        assertEquals(
-                "Incomplete backtick pair in path: [foo.`bar.baz], consider adding a backslash before backtick at position 4 to escape it",
-                e1.getMessage()
+        assertParseV2Error(
+            "foo.`bar.baz",
+            "Incomplete backtick pair in path: [foo.`bar.baz], consider adding a backslash before backtick at position 4 to escape it"
         );
-        ConfigException e2 = assertThrows(ConfigException.class,
-                () -> new SingleFieldPath("foo.bar.`baz", FieldSyntaxVersion.V2));
-        assertEquals(
-                "Incomplete backtick pair in path: [foo.bar.`baz], consider adding a backslash before backtick at position 8 to escape it",
-                e2.getMessage()
+        assertParseV2Error(
+            "foo.bar.`baz",
+            "Incomplete backtick pair in path: [foo.bar.`baz], consider adding a backslash before backtick at position 8 to escape it"
         );
-        ConfigException e3 = assertThrows(ConfigException.class,
-                () -> {
-                    SingleFieldPath p = new SingleFieldPath("foo.bar.`baz\\`", FieldSyntaxVersion.V2);
-                    System.out.println(Arrays.toString(p.path()));
-                });
-        assertEquals(
-                "Incomplete backtick pair in path: [foo.bar.`baz\\`], consider adding a backslash before backtick at position 8 to escape it",
-                e3.getMessage()
+        assertParseV2Error(
+            "foo.bar.`baz\\`",
+            "Incomplete backtick pair in path: [foo.bar.`baz\\`], consider adding a backslash before backtick at position 8 to escape it"
         );
+
+    }
+
+    private void assertParseV1(String path) {
+        assertArrayEquals(
+            new String[] {path},
+            new SingleFieldPath(path, FieldSyntaxVersion.V1).path());
+    }
+
+    private void assertParseV2(String inputPath, String... expectedSteps) {
+        assertArrayEquals(
+            expectedSteps,
+            new SingleFieldPath(inputPath, FieldSyntaxVersion.V2).path()
+        );
+    }
+
+    private void assertParseV2Error(String inputPath, String expectedMessage) {
+        ConfigException exception = assertThrows(
+            ConfigException.class,
+            () -> new SingleFieldPath(inputPath, FieldSyntaxVersion.V2)
+        );
+        assertEquals(expectedMessage, exception.getMessage());
     }
 }
