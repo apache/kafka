@@ -310,7 +310,7 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
   def testCommitAsyncCompletedBeforeConsumerCloses(quorum: String, groupProtocol: String): Unit = {
     // This is testing the contract that asynchronous offset commit are completed before the consumer
     // is closed, even when no commit sync is performed as part of the close (due to auto-commit
-    // disabled, or simply because there no consumed offsets).
+    // disabled, or simply because there are no consumed offsets).
     val producer = createProducer()
     sendRecords(producer, numRecords = 3, tp)
     sendRecords(producer, numRecords = 3, tp2)

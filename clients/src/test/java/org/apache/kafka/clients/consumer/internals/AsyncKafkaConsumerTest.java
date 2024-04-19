@@ -637,9 +637,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCommitSyncAwaitsCommitAsyncCompletionWithEmptyOffsets() {
         final TopicPartition tp = new TopicPartition("foo", 0);
-        testIncompleteAsyncCommit(tp);
-
-        final CompletableFuture<Void> asyncCommitFuture = getLastEnqueuedEventFuture();
+        final CompletableFuture<Void> asyncCommitFuture = setUpConsumerWithIncompleteAsyncCommit(tp);
 
         // Commit async is not completed yet, so commit sync should wait for it to complete (time out)
         assertThrows(TimeoutException.class, () -> consumer.commitSync(Collections.emptyMap(), Duration.ofMillis(100)));
@@ -654,9 +652,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCommitSyncAwaitsCommitAsyncCompletionWithNonEmptyOffsets() {
         final TopicPartition tp = new TopicPartition("foo", 0);
-        testIncompleteAsyncCommit(tp);
-
-        final CompletableFuture<Void> asyncCommitFuture = getLastEnqueuedEventFuture();
+        final CompletableFuture<Void> asyncCommitFuture = setUpConsumerWithIncompleteAsyncCommit(tp);
 
         // Mock to complete sync event
         completeCommitSyncApplicationEventSuccessfully();
@@ -664,8 +660,8 @@ public class AsyncKafkaConsumerTest {
         // Commit async is not completed yet, so commit sync should wait for it to complete (time out)
         assertThrows(TimeoutException.class, () -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
 
-        // Complete exceptionally async commit event
-        asyncCommitFuture.completeExceptionally(new KafkaException("Test exception"));
+        // Complete async commit event
+        asyncCommitFuture.complete(null);
 
         // Commit async is completed, so commit sync does not need to wait before committing its offsets
         assertDoesNotThrow(() -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
@@ -674,9 +670,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCommitSyncAwaitsCommitAsyncButDoesNotFail() {
         final TopicPartition tp = new TopicPartition("foo", 0);
-        testIncompleteAsyncCommit(tp);
-
-        final CompletableFuture<Void> asyncCommitFuture = getLastEnqueuedEventFuture();
+        final CompletableFuture<Void> asyncCommitFuture = setUpConsumerWithIncompleteAsyncCommit(tp);
 
         // Mock to complete sync event
         completeCommitSyncApplicationEventSuccessfully();
@@ -691,16 +685,17 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
     }
 
-    private void testIncompleteAsyncCommit(TopicPartition tp) {
+    private CompletableFuture<Void> setUpConsumerWithIncompleteAsyncCommit(TopicPartition tp) {
         time = new MockTime(1);
         consumer = newConsumer();
 
         // Commit async (incomplete)
-        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         consumer.assign(Collections.singleton(tp));
         consumer.seek(tp, 20);
         consumer.commitAsync();
+
+        return getLastEnqueuedEventFuture();
     }
 
     // ArgumentCaptor's type-matching does not work reliably with Java 8, so we cannot directly capture the AsyncCommitEvent
@@ -1108,7 +1103,6 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
 
         // Commit async (incomplete)
-        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         final TopicPartition tp = new TopicPartition("foo", 0);
         consumer.assign(Collections.singleton(tp));
@@ -1126,7 +1120,6 @@ public class AsyncKafkaConsumerTest {
         MockCommitCallback cb = new MockCommitCallback();
 
         // Commit async (complete)
-        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         final TopicPartition tp = new TopicPartition("foo", 0);
         consumer.assign(Collections.singleton(tp));
