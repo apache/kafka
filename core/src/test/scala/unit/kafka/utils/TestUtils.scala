@@ -71,10 +71,11 @@ import org.apache.kafka.common.utils.Utils.formatAddress
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
-import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -350,9 +351,9 @@ object TestUtils extends Logging {
         // We can verify this by using a mixture of relative path and absolute path as log directories in the test
         if (i % 2 == 0) tempDir().getAbsolutePath else tempRelativeDir("data")
       ).mkString(",")
-      props.put(KafkaConfig.LogDirsProp, logDirs)
+      props.put(ServerLogConfigs.LOG_DIRS_CONFIG, logDirs)
     } else {
-      props.put(KafkaConfig.LogDirProp, tempDir().getAbsolutePath)
+      props.put(ServerLogConfigs.LOG_DIR_CONFIG, tempDir().getAbsolutePath)
     }
     if (zkConnect == null) {
       props.put(KafkaConfig.ProcessRolesProp, "broker")
@@ -369,14 +370,14 @@ object TestUtils extends Logging {
     props.put(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG, "1500")
     props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
     props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
-    props.put(KafkaConfig.LogDeleteDelayMsProp, "1000")
+    props.put(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000")
     props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
     props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152")
-    props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-    if (!props.containsKey(KafkaConfig.OffsetsTopicPartitionsProp))
-      props.put(KafkaConfig.OffsetsTopicPartitionsProp, "5")
-    if (!props.containsKey(KafkaConfig.GroupInitialRebalanceDelayMsProp))
-      props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+    props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
+    if (!props.containsKey(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG))
+      props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "5")
+    if (!props.containsKey(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG))
+      props.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
     rack.foreach(props.put(KafkaConfig.RackProp, _))
     // Reduce number of threads per broker
     props.put(KafkaConfig.NumNetworkThreadsProp, "2")
@@ -395,7 +396,7 @@ object TestUtils extends Logging {
     if (enableToken)
       props.put(KafkaConfig.DelegationTokenSecretKeyProp, "secretkey")
 
-    props.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
+    props.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, numPartitions.toString)
     props.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, defaultReplicationFactor.toString)
 
     if (enableFetchFromFollower) {
@@ -410,7 +411,7 @@ object TestUtils extends Logging {
     config.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, version.version)
     // for clarity, only set the log message format version if it's not ignored
     if (!LogConfig.shouldIgnoreMessageFormatVersion(version))
-      config.setProperty(KafkaConfig.LogMessageFormatVersionProp, version.version)
+      config.setProperty(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG, version.version)
   }
 
   def createAdminClient[B <: KafkaBroker](
@@ -560,8 +561,8 @@ object TestUtils extends Logging {
     createTopicWithAdmin(
       admin = admin,
       topic = Topic.GROUP_METADATA_TOPIC_NAME,
-      numPartitions = broker.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
-      replicationFactor = broker.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
+      numPartitions = broker.config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG),
+      replicationFactor = broker.config.getShort(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG).toInt,
       brokers = brokers,
       controllers = controllers,
       topicConfig = broker.groupCoordinator.groupMetadataTopicConfigs,
@@ -1506,7 +1507,7 @@ object TestUtils extends Logging {
                        transactionVerificationEnabled: Boolean = false,
                        log: Option[UnifiedLog] = None,
                        remoteStorageSystemEnable: Boolean = false,
-                       initialTaskDelayMs: Long = LogConfig.DEFAULT_INITIAL_TASK_DELAY_MS): LogManager = {
+                       initialTaskDelayMs: Long = ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT): LogManager = {
     val logManager = new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
                    initialOfflineDirs = Array.empty[File],
                    configRepository = configRepository,

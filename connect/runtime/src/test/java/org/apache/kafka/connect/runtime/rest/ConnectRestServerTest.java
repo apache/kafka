@@ -328,7 +328,7 @@ public class ConnectRestServerTest {
     }
 
     @Test
-    public void testRequestLogs() throws IOException, InterruptedException {
+    public void testRequestLogs() throws IOException {
         Map<String, String> configMap = new HashMap<>(baseServerProps());
 
         doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
@@ -419,11 +419,6 @@ public class ConnectRestServerTest {
         CloseableHttpResponse response = httpClient.execute(httpHost, request);
         responses.add(response);
         return response;
-    }
-
-    private static String prettyPrint(Map<String, ?> map) throws IOException {
-        ObjectMapper mapper = new ObjectMapper();
-        return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(map);
     }
 
     private void expectEmptyRestExtensions() {

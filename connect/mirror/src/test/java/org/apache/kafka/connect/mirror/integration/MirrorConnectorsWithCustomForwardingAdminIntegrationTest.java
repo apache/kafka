@@ -331,17 +331,13 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
     }
 
     void waitForTopicToPersistInFakeLocalMetadataStore(String topicName) throws InterruptedException {
-        waitForCondition(() -> {
-                return FakeLocalMetadataStore.containsTopic(topicName);
-            }, FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
+        waitForCondition(() -> FakeLocalMetadataStore.containsTopic(topicName), FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
             "Topic: " + topicName + " didn't get created in the FakeLocalMetadataStore"
         );
     }
 
     void waitForTopicConfigPersistInFakeLocalMetaDataStore(String topicName, String configName, String expectedConfigValue) throws InterruptedException {
-        waitForCondition(() -> {
-            return FakeLocalMetadataStore.topicConfig(topicName).getOrDefault(configName, "").equals(expectedConfigValue);
-            }, FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
+        waitForCondition(() -> FakeLocalMetadataStore.topicConfig(topicName).getOrDefault(configName, "").equals(expectedConfigValue), FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
             "Topic: " + topicName + "'s configs don't have " + configName + ":" + expectedConfigValue
         );
     }

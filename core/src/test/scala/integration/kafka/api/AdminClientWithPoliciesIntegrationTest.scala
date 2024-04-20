@@ -24,7 +24,7 @@ import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, 
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.config.KafkaSecurityConfigs
+import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerLogConfigs}
 import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
@@ -76,7 +76,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   }
 
   private def overrideNodeConfigs(props: Properties): Unit = {
-    props.put(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[Policy])
+    props.put(ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, classOf[Policy])
   }
 
   @ParameterizedTest
@@ -167,7 +167,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertEquals(4, configs.size)
 
     assertEquals(LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO.toString, configs.get(topicResource1).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
-    assertEquals(LogConfig.DEFAULT_MIN_IN_SYNC_REPLICAS.toString, configs.get(topicResource1).get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value)
+    assertEquals(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DEFAULT.toString, configs.get(topicResource1).get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value)
 
     assertEquals("0.8", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
 
@@ -199,7 +199,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertEquals(4, configs.size)
 
     assertEquals(LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO.toString, configs.get(topicResource1).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
-    assertEquals(LogConfig.DEFAULT_MIN_IN_SYNC_REPLICAS.toString, configs.get(topicResource1).get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value)
+    assertEquals(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DEFAULT.toString, configs.get(topicResource1).get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value)
 
     assertEquals("0.8", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
 

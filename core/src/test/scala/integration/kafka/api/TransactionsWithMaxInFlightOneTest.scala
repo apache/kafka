@@ -24,8 +24,9 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
-import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -57,7 +58,7 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 1.toString)
+    topicConfig.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, 1.toString)
     createTopic(topic1, numPartitions, numBrokers, topicConfig)
     createTopic(topic2, numPartitions, numBrokers, topicConfig)
 
@@ -104,16 +105,16 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
 
   private def serverProps() = {
     val serverProps = new Properties()
-    serverProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
-    serverProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
-    serverProps.put(KafkaConfig.OffsetsTopicReplicationFactorProp, 1.toString)
+    serverProps.put(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
+    serverProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 1.toString)
+    serverProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, 1.toString)
     serverProps.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 1.toString)
     serverProps.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, 1.toString)
     serverProps.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, 1.toString)
     serverProps.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
     serverProps.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, false.toString)
     serverProps.put(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)
-    serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+    serverProps.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
     serverProps.put(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, "200")
     serverProps
   }

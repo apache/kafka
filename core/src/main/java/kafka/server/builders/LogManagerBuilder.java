@@ -22,6 +22,7 @@ import kafka.server.BrokerTopicStats;
 import kafka.server.metadata.ConfigRepository;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
@@ -55,7 +56,7 @@ public class LogManagerBuilder {
     private Time time = Time.SYSTEM;
     private boolean keepPartitionMetadataFile = true;
     private boolean remoteStorageSystemEnable = false;
-    private long initialTaskDelayMs = LogConfig.DEFAULT_INITIAL_TASK_DELAY_MS;
+    private long initialTaskDelayMs = ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT;
 
     public LogManagerBuilder setLogDirs(List<File> logDirs) {
         this.logDirs = logDirs;

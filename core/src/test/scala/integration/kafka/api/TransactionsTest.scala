@@ -30,7 +30,8 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
-import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -60,16 +61,16 @@ class TransactionsTest extends IntegrationTestHarness {
 
   def overridingProps(): Properties = {
     val props = new Properties()
-    props.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+    props.put(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
      // Set a smaller value for the number of partitions for the __consumer_offsets topic + // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
-    props.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
+    props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 1.toString)
     props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 3.toString)
     props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, 2.toString)
     props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, 2.toString)
     props.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
     props.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, false.toString)
     props.put(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)
-    props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+    props.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
     props.put(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, "200")
 
     // The new group coordinator does not support verifying transactions yet.
@@ -91,7 +92,7 @@ class TransactionsTest extends IntegrationTestHarness {
 
   def topicConfig(): Properties = {
     val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
+    topicConfig.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
     topicConfig
   }
 
