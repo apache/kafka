@@ -1025,8 +1025,8 @@ public class SelectorTest {
         // knowing metric group and tag set, which are not trivial dependencies
         for (MetricName metricName : metrics.metrics().keySet()) {
             String name = metricName.name();
-            String description = metricName.description().toLowerCase(Locale.ROOT);
-            boolean markedDeprecated = description.contains("deprecated");
+            String description = metricName.description();
+            boolean markedDeprecated = description.toLowerCase(Locale.ROOT).contains("deprecated");
             if (actual.contains(name)) {
                 assertFalse(markedDeprecated, name + " shouldn't be deprecated");
             }
