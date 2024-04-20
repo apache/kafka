@@ -179,23 +179,27 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 throw new IllegalStateException();
         }
 
-        ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, autoStart,
-            annot.securityProtocol(), annot.metadataVersion());
+        ClusterConfig.Builder configBuilder = ClusterConfig.clusterBuilder()
+                .type(type)
+                .brokers(brokers)
+                .controllers(controllers)
+                .autoStart(autoStart)
+                .securityProtocol(annot.securityProtocol())
+                .metadataVersion(annot.metadataVersion());
         if (!annot.name().isEmpty()) {
-            builder.name(annot.name());
+            configBuilder.name(annot.name());
         }
         if (!annot.listener().isEmpty()) {
-            builder.listenerName(annot.listener());
+            configBuilder.listenerName(annot.listener());
         }
 
-        ClusterConfig config = builder.build();
         for (ClusterConfigProperty property : defaults.serverProperties()) {
-            config.serverProperties().put(property.key(), property.value());
+            configBuilder.putServerProperty(property.key(), property.value());
         }
         for (ClusterConfigProperty property : annot.serverProperties()) {
-            config.serverProperties().put(property.key(), property.value());
+            configBuilder.putServerProperty(property.key(), property.value());
         }
-        type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
+        type.invocationContexts(context.getRequiredTestMethod().getName(), configBuilder.build(), testInvocations);
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {

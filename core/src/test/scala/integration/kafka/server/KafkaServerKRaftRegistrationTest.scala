@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.test.ClusterInstance
+import kafka.test.{ClusterConfig, ClusterInstance}
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Assertions.{assertThrows, fail}
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{Tag, Timeout}
 
+import java.util.Optional
 import java.util.concurrent.{TimeUnit, TimeoutException}
 import scala.jdk.CollectionConverters._
 
@@ -70,11 +71,13 @@ class KafkaServerKRaftRegistrationTest {
       val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
 
       // Enable migration configs and restart brokers
-      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
-      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
-      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
-      zkCluster.rollingBrokerRestart()
+      val clusterConfig = ClusterConfig.clusterBuilder(zkCluster.config())
+        .putServerProperty(KafkaConfig.MigrationEnabledProp, "true")
+        .putServerProperty(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+        .putServerProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+        .putServerProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+        .build()
+      zkCluster.rollingBrokerRestart(Optional.of(clusterConfig))
       zkCluster.waitForReadyBrokers()
 
       try {
@@ -107,11 +110,13 @@ class KafkaServerKRaftRegistrationTest {
       kraftCluster.startup()
 
       // Enable migration configs and restart brokers
-      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
-      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
-      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
-      assertThrows(classOf[IllegalArgumentException], () => zkCluster.rollingBrokerRestart())
+      val clusterConfig = ClusterConfig.clusterBuilder(zkCluster.config())
+        .putServerProperty(KafkaConfig.MigrationEnabledProp, "true")
+        .putServerProperty(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+        .putServerProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+        .putServerProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+        .build()
+      assertThrows(classOf[IllegalArgumentException], () => zkCluster.rollingBrokerRestart(Optional.of(clusterConfig)))
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
     }

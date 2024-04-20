@@ -145,7 +145,18 @@ public interface ClusterInstance {
 
     void startBroker(int brokerId);
 
-    void rollingBrokerRestart();
+    /**
+     * Restart brokers with given cluster config.
+     *
+     * @param clusterConfig clusterConfig is optional. If left Optional.empty(), brokers will restart without
+     *                      reconfiguring configurations. Otherwise, the restart will reconfigure configurations
+     *                      according to the provided cluster config.
+     */
+    void rollingBrokerRestart(Optional<ClusterConfig> clusterConfig);
+
+    default void rollingBrokerRestart() {
+        rollingBrokerRestart(Optional.empty());
+    }
 
     void waitForReadyBrokers() throws InterruptedException;
 }

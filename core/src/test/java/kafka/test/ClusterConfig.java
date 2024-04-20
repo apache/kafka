@@ -44,17 +44,20 @@ public class ClusterConfig {
     private final File trustStoreFile;
     private final MetadataVersion metadataVersion;
 
-    private final Properties serverProperties = new Properties();
-    private final Properties producerProperties = new Properties();
-    private final Properties consumerProperties = new Properties();
-    private final Properties adminClientProperties = new Properties();
-    private final Properties saslServerProperties = new Properties();
-    private final Properties saslClientProperties = new Properties();
+    private final Properties serverProperties;
+    private final Properties producerProperties;
+    private final Properties consumerProperties;
+    private final Properties adminClientProperties;
+    private final Properties saslServerProperties;
+    private final Properties saslClientProperties;
     private final Map<Integer, Properties> perBrokerOverrideProperties = new HashMap<>();
 
+    @SuppressWarnings("checkstyle:ParameterNumber")
     ClusterConfig(Type type, int brokers, int controllers, String name, boolean autoStart,
                   SecurityProtocol securityProtocol, String listenerName, File trustStoreFile,
-                  MetadataVersion metadataVersion) {
+                  MetadataVersion metadataVersion, Properties serverProperties, Properties producerProperties,
+                  Properties consumerProperties, Properties adminClientProperties, Properties saslServerProperties,
+                  Properties saslClientProperties, Map<Integer, Properties> perBrokerOverrideProperties) {
         this.type = type;
         this.brokers = brokers;
         this.controllers = controllers;
@@ -64,6 +67,13 @@ public class ClusterConfig {
         this.listenerName = listenerName;
         this.trustStoreFile = trustStoreFile;
         this.metadataVersion = metadataVersion;
+        this.serverProperties = copyOf(serverProperties);
+        this.producerProperties = copyOf(producerProperties);
+        this.consumerProperties = copyOf(consumerProperties);
+        this.adminClientProperties = copyOf(adminClientProperties);
+        this.saslServerProperties = copyOf(saslServerProperties);
+        this.saslClientProperties = copyOf(saslClientProperties);
+        perBrokerOverrideProperties.forEach((brokerId, props) -> this.perBrokerOverrideProperties.put(brokerId, copyOf(props)));
     }
 
     public Type clusterType() {
@@ -87,27 +97,27 @@ public class ClusterConfig {
     }
 
     public Properties serverProperties() {
-        return serverProperties;
+        return copyOf(serverProperties);
     }
 
     public Properties producerProperties() {
-        return producerProperties;
+        return copyOf(producerProperties);
     }
 
     public Properties consumerProperties() {
-        return consumerProperties;
+        return copyOf(consumerProperties);
     }
 
     public Properties adminClientProperties() {
-        return adminClientProperties;
+        return copyOf(adminClientProperties);
     }
 
     public Properties saslServerProperties() {
-        return saslServerProperties;
+        return copyOf(saslServerProperties);
     }
 
     public Properties saslClientProperties() {
-        return saslClientProperties;
+        return copyOf(saslClientProperties);
     }
 
     public SecurityProtocol securityProtocol() {
@@ -127,7 +137,17 @@ public class ClusterConfig {
     }
 
     public Properties brokerServerProperties(int brokerId) {
-        return perBrokerOverrideProperties.computeIfAbsent(brokerId, __ -> new Properties());
+        Properties brokerOverrideProperties = perBrokerOverrideProperties.get(brokerId);
+        if (brokerOverrideProperties == null) {
+            return new Properties();
+        }
+        return copyOf(brokerOverrideProperties);
+    }
+
+    public Map<Integer, Properties> perBrokerOverrideProperties() {
+        Map<Integer, Properties> properties = new HashMap<>();
+        perBrokerOverrideProperties.forEach((brokerId, props) -> properties.put(brokerId, copyOf(props)));
+        return properties;
     }
 
     public Map<String, String> nameTags() {
@@ -139,28 +159,46 @@ public class ClusterConfig {
         return tags;
     }
 
-    public ClusterConfig copyOf() {
-        ClusterConfig copy = new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile, metadataVersion);
-        copy.serverProperties.putAll(serverProperties);
-        copy.producerProperties.putAll(producerProperties);
-        copy.consumerProperties.putAll(consumerProperties);
-        copy.saslServerProperties.putAll(saslServerProperties);
-        copy.saslClientProperties.putAll(saslClientProperties);
-        perBrokerOverrideProperties.forEach((brokerId, props) -> {
-            Properties propsCopy = new Properties();
-            propsCopy.putAll(props);
-            copy.perBrokerOverrideProperties.put(brokerId, propsCopy);
-        });
-        return copy;
-    }
-
     public static Builder defaultClusterBuilder() {
-        return new Builder(Type.ZK, 1, 1, true, SecurityProtocol.PLAINTEXT, MetadataVersion.latestTesting());
+        return new Builder()
+                .type(Type.ZK)
+                .brokers(1)
+                .controllers(1)
+                .autoStart(true)
+                .securityProtocol(SecurityProtocol.PLAINTEXT)
+                .metadataVersion(MetadataVersion.latestTesting());
     }
 
-    public static Builder clusterBuilder(Type type, int brokers, int controllers, boolean autoStart,
-                                         SecurityProtocol securityProtocol, MetadataVersion metadataVersion) {
-        return new Builder(type, brokers, controllers, autoStart, securityProtocol, metadataVersion);
+    public static Builder clusterBuilder() {
+        return new Builder();
+    }
+
+    public static Builder clusterBuilder(ClusterConfig clusterConfig) {
+        ClusterConfig.Builder builder = new Builder()
+                .type(clusterConfig.type)
+                .brokers(clusterConfig.brokers)
+                .controllers(clusterConfig.controllers)
+                .name(clusterConfig.name)
+                .autoStart(clusterConfig.autoStart)
+                .securityProtocol(clusterConfig.securityProtocol)
+                .listenerName(clusterConfig.listenerName)
+                .trustStoreFile(clusterConfig.trustStoreFile)
+                .metadataVersion(clusterConfig.metadataVersion);
+        builder.serverProperties = copyOf(clusterConfig.serverProperties);
+        builder.producerProperties = copyOf(clusterConfig.producerProperties);
+        builder.consumerProperties = copyOf(clusterConfig.consumerProperties);
+        builder.adminClientProperties = copyOf(clusterConfig.adminClientProperties);
+        builder.saslServerProperties = copyOf(clusterConfig.saslServerProperties);
+        builder.saslClientProperties = copyOf(clusterConfig.saslClientProperties);
+        clusterConfig.perBrokerOverrideProperties.forEach((brokerId, props) ->
+                builder.perBrokerOverrideProperties.put(brokerId, copyOf(props)));
+        return builder;
+    }
+
+    private static Properties copyOf(Properties properties) {
+        Properties copy = new Properties();
+        copy.putAll(properties);
+        return copy;
     }
 
     public static class Builder {
@@ -173,15 +211,13 @@ public class ClusterConfig {
         private String listenerName;
         private File trustStoreFile;
         private MetadataVersion metadataVersion;
-
-        Builder(Type type, int brokers, int controllers, boolean autoStart, SecurityProtocol securityProtocol, MetadataVersion metadataVersion) {
-            this.type = type;
-            this.brokers = brokers;
-            this.controllers = controllers;
-            this.autoStart = autoStart;
-            this.securityProtocol = securityProtocol;
-            this.metadataVersion = metadataVersion;
-        }
+        private Properties serverProperties = new Properties();
+        private Properties producerProperties = new Properties();
+        private Properties consumerProperties = new Properties();
+        private Properties adminClientProperties = new Properties();
+        private Properties saslServerProperties = new Properties();
+        private Properties saslClientProperties = new Properties();
+        private final Map<Integer, Properties> perBrokerOverrideProperties = new HashMap<>();
 
         public Builder type(Type type) {
             this.type = type;
@@ -228,8 +264,46 @@ public class ClusterConfig {
             return this;
         }
 
+        public Builder putServerProperty(String key, String value) {
+            serverProperties.put(key, value);
+            return this;
+        }
+
+        public Builder putConsumerProperty(String key, String value) {
+            consumerProperties.put(key, value);
+            return this;
+        }
+
+        public Builder putProducerProperty(String key, String value) {
+            producerProperties.put(key, value);
+            return this;
+        }
+
+        public Builder putAdminClientProperty(String key, String value) {
+            adminClientProperties.put(key, value);
+            return this;
+        }
+
+        public Builder putSaslServerProperty(String key, String value) {
+            saslServerProperties.put(key, value);
+            return this;
+        }
+
+        public Builder putSaslClientProperty(String key, String value) {
+            saslClientProperties.put(key, value);
+            return this;
+        }
+
+        public Builder putPerBrokerProperty(int id, String key, String value) {
+            perBrokerOverrideProperties.computeIfAbsent(id, ignored -> new Properties()).put(key, value);
+            return this;
+        }
+
         public ClusterConfig build() {
-            return new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile, metadataVersion);
+            return new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName,
+                    trustStoreFile, metadataVersion, serverProperties, producerProperties, consumerProperties,
+                    adminClientProperties, saslServerProperties, saslClientProperties,
+                    perBrokerOverrideProperties);
         }
     }
 }
