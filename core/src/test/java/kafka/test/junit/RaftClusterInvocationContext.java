@@ -94,11 +94,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         setBootstrapMetadataVersion(clusterConfig.metadataVersion()).
                         setCombined(isCombined).
                         setNumBrokerNodes(clusterConfig.numBrokers()).
-                        setNumControllerNodes(clusterConfig.numControllers()).build();
-                nodes.brokerNodes().forEach((brokerId, brokerNode) -> {
-                    clusterConfig.brokerServerProperties(brokerId).forEach(
-                            (key, value) -> brokerNode.propertyOverrides().put(key.toString(), value.toString()));
-                });
+                        setNumControllerNodes(clusterConfig.numControllers()).
+                        setPerBrokerPropertiesOverrides(clusterConfig.perBrokerOverrideProperties()).build();
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
 
                 if (Boolean.parseBoolean(clusterConfig.serverProperties().getProperty("zookeeper.metadata.migration.enable", "false"))) {

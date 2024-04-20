@@ -20,7 +20,7 @@ package kafka.server
 import kafka.log.UnifiedLog
 import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
-import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
+import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.commons.io.FileUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -391,9 +391,13 @@ class KRaftClusterTest {
 
   @Test
   def testCreateClusterWithAdvertisedPortZero(): Unit = {
-    val brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String] = (nodes, _) => Map(
-      (KafkaConfig.ListenersProp, s"${nodes.externalListenerName.value}://localhost:0"),
-      (KafkaConfig.AdvertisedListenersProp, s"${nodes.externalListenerName.value}://localhost:0"))
+    val brokerPropertyOverrides: util.Map[Integer, Properties] = new util.HashMap[Integer, Properties]()
+    Seq.range(0, 3).asJava.forEach(brokerId => {
+      val props = new Properties()
+      props.put(KafkaConfig.ListenersProp, "EXTERNAL://localhost:0")
+      props.put(KafkaConfig.AdvertisedListenersProp, "EXTERNAL://localhost:0")
+      brokerPropertyOverrides.put(brokerId, props)
+    })
 
     doOnStartedKafkaCluster(numBrokerNodes = 3, brokerPropertyOverrides = brokerPropertyOverrides) { implicit cluster =>
       sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))
@@ -408,9 +412,13 @@ class KRaftClusterTest {
 
   @Test
   def testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer(): Unit = {
-    val brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String] = (nodes, broker) => Map(
-      (KafkaConfig.ListenersProp, s"${nodes.externalListenerName.value}://localhost:0"),
-      (KafkaConfig.AdvertisedListenersProp, s"${nodes.externalListenerName.value}://advertised-host-${broker.id}:${broker.id + 100}"))
+    val brokerPropertyOverrides: util.Map[Integer, Properties] = new util.HashMap[Integer, Properties]()
+    Seq.range(0, 3).asJava.forEach(brokerId => {
+      val props = new Properties()
+      props.put(KafkaConfig.ListenersProp, "EXTERNAL://localhost:0")
+      props.put(KafkaConfig.AdvertisedListenersProp, s"EXTERNAL://advertised-host-$brokerId:${brokerId + 100}")
+      brokerPropertyOverrides.put(brokerId, props)
+    })
 
     doOnStartedKafkaCluster(numBrokerNodes = 3, brokerPropertyOverrides = brokerPropertyOverrides) { implicit cluster =>
       sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))
@@ -435,15 +443,13 @@ class KRaftClusterTest {
 
   private def doOnStartedKafkaCluster(numControllerNodes: Int = 1,
                                       numBrokerNodes: Int,
-                                      brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String])
+                                      brokerPropertyOverrides: util.Map[Integer, Properties])
                                      (action: KafkaClusterTestKit => Unit): Unit = {
     val nodes = new TestKitNodes.Builder()
       .setNumControllerNodes(numControllerNodes)
       .setNumBrokerNodes(numBrokerNodes)
+      .setPerBrokerPropertiesOverrides(brokerPropertyOverrides)
       .build()
-    nodes.brokerNodes.values.forEach {
-      broker => broker.propertyOverrides.putAll(brokerPropertyOverrides(nodes, broker).asJava)
-    }
     val cluster = new KafkaClusterTestKit.Builder(nodes).build()
     try {
       cluster.format()

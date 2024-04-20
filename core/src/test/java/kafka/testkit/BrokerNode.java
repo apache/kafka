@@ -25,6 +25,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +42,7 @@ public class BrokerNode implements TestKitNode {
         private int numLogDirectories = 1;
         private String metadataDirectory = null;
         private Map<String, String> propertyOverrides = new HashMap<>();
+        private boolean combined;
 
         public int id() {
             return id;
@@ -66,11 +68,27 @@ public class BrokerNode implements TestKitNode {
             return this;
         }
 
-        public BrokerNode build(
-            String baseDirectory,
-            Uuid clusterId,
-            boolean combined
-        ) {
+        public Builder setClusterId(Uuid clusterId) {
+            this.clusterId = clusterId;
+            return this;
+        }
+
+        public Builder setBaseDirectory(String baseDirectory) {
+            this.baseDirectory = baseDirectory;
+            return this;
+        }
+
+        public Builder setCombined(boolean combined) {
+            this.combined = combined;
+            return this;
+        }
+
+        public Builder setPropertyOverrides(Map<String, String> propertyOverrides) {
+            this.propertyOverrides = propertyOverrides;
+            return this;
+        }
+
+        public BrokerNode build() {
             if (id == -1) {
                 throw new RuntimeException("You must set the node id.");
             }
@@ -130,7 +148,7 @@ public class BrokerNode implements TestKitNode {
         this.incarnationId = incarnationId;
         this.initialMetaPropertiesEnsemble = initialMetaPropertiesEnsemble;
         this.combined = combined;
-        this.propertyOverrides = new HashMap<>(propertyOverrides);
+        this.propertyOverrides = Collections.unmodifiableMap(propertyOverrides);
     }
 
     public Uuid incarnationId() {

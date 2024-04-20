@@ -25,8 +25,10 @@ import org.apache.kafka.test.TestUtils;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Properties;
 import java.util.TreeMap;
 
 public class TestKitNodes {
@@ -105,6 +107,24 @@ public class TestKitNodes {
             return this;
         }
 
+        /**
+         * Set per broker properties overrides, this setter must be invoked after setBrokerNodes which
+         * setup broker id and broker builder.
+         * @param perBrokerPropertiesOverrides properties to override in each broker
+         * @return Builder
+         */
+        public Builder setPerBrokerPropertiesOverrides(Map<Integer, Properties> perBrokerPropertiesOverrides) {
+            perBrokerPropertiesOverrides.forEach((brokerId, properties) -> {
+                if (!brokerNodeBuilders.containsKey(brokerId)) {
+                    throw new RuntimeException("Broker id " + brokerId + " does not exist");
+                }
+                Map<String, String> propertiesOverride = new HashMap<>();
+                properties.forEach((key, value) -> propertiesOverride.put(key.toString(), value.toString()));
+                brokerNodeBuilders.get(brokerId).setPropertyOverrides(propertiesOverride);
+            });
+            return this;
+        }
+
         public TestKitNodes build() {
             String baseDirectory = TestUtils.tempDirectory().getAbsolutePath();
             try {
@@ -121,8 +141,11 @@ public class TestKitNodes {
                 }
                 TreeMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
                 for (BrokerNode.Builder builder : brokerNodeBuilders.values()) {
-                    BrokerNode node = builder.
-                        build(baseDirectory, clusterId, controllerNodeBuilders.containsKey(builder.id()));
+                    BrokerNode node = builder
+                        .setBaseDirectory(baseDirectory)
+                        .setClusterId(clusterId)
+                        .setCombined(controllerNodeBuilders.containsKey(builder.id()))
+                        .build();
                     if (brokerNodes.put(node.id(), node) != null) {
                         throw new RuntimeException("Duplicate builder for broker " + node.id());
                     }
