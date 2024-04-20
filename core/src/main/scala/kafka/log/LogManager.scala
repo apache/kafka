@@ -81,13 +81,12 @@ class LogManager(logDirs: Seq[File],
                  logDirFailureChannel: LogDirFailureChannel,
                  time: Time,
                  val keepPartitionMetadataFile: Boolean,
-                 remoteStorageSystemEnable: Boolean) extends Logging {
+                 remoteStorageSystemEnable: Boolean,
+                 val initialTaskDelayMs: Long) extends Logging {
 
   import LogManager._
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
-
-  val InitialTaskDelayMs: Int = 30 * 1000
 
   private val logCreationOrDeletionLock = new Object
   private val currentLogs = new Pool[TopicPartition, UnifiedLog]()
@@ -628,24 +627,24 @@ class LogManager(logDirs: Seq[File],
       info("Starting log cleanup with a period of %d ms.".format(retentionCheckMs))
       scheduler.schedule("kafka-log-retention",
                          () => cleanupLogs(),
-                         InitialTaskDelayMs,
+                         initialTaskDelayMs,
                          retentionCheckMs)
       info("Starting log flusher with a default period of %d ms.".format(flushCheckMs))
       scheduler.schedule("kafka-log-flusher",
                          () => flushDirtyLogs(),
-                         InitialTaskDelayMs,
+                         initialTaskDelayMs,
                          flushCheckMs)
       scheduler.schedule("kafka-recovery-point-checkpoint",
                          () => checkpointLogRecoveryOffsets(),
-                         InitialTaskDelayMs,
+                         initialTaskDelayMs,
                          flushRecoveryOffsetCheckpointMs)
       scheduler.schedule("kafka-log-start-offset-checkpoint",
                          () => checkpointLogStartOffsets(),
-                         InitialTaskDelayMs,
+                         initialTaskDelayMs,
                          flushStartOffsetCheckpointMs)
       scheduler.scheduleOnce("kafka-delete-logs", // will be rescheduled after each delete logs with a dynamic period
                          () => deleteLogs(),
-                         InitialTaskDelayMs)
+                         initialTaskDelayMs)
     }
     if (cleanerConfig.enableCleaner) {
       _cleaner = new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
@@ -1584,7 +1583,8 @@ object LogManager {
       time = time,
       keepPartitionMetadataFile = keepPartitionMetadataFile,
       interBrokerProtocolVersion = config.interBrokerProtocolVersion,
-      remoteStorageSystemEnable = config.remoteLogManagerConfig.enableRemoteStorageSystem())
+      remoteStorageSystemEnable = config.remoteLogManagerConfig.enableRemoteStorageSystem(),
+      initialTaskDelayMs = config.logInitialTaskDelayMs)
   }
 
   /**
