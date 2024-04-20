@@ -32,6 +32,7 @@ public class ControllerNode implements TestKitNode {
         private String baseDirectory = null;
         private String metadataDirectory = null;
         private Uuid clusterId = null;
+        private boolean combined;
 
         public int id() {
             return id;
@@ -47,11 +48,22 @@ public class ControllerNode implements TestKitNode {
             return this;
         }
 
-        public ControllerNode build(
-            String baseDirectory,
-            Uuid clusterId,
-            boolean combined
-        ) {
+        public Builder setClusterId(Uuid clusterId) {
+            this.clusterId = clusterId;
+            return this;
+        }
+
+        public Builder setBaseDirectory(String baseDirectory) {
+            this.baseDirectory = baseDirectory;
+            return this;
+        }
+
+        public Builder setCombined(boolean combined) {
+            this.combined = combined;
+            return this;
+        }
+
+        public ControllerNode build() {
             if (id == -1) {
                 throw new RuntimeException("You must set the node id.");
             }

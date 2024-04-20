@@ -133,8 +133,11 @@ public class TestKitNodes {
                 }
                 TreeMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
                 for (ControllerNode.Builder builder : controllerNodeBuilders.values()) {
-                    ControllerNode node = builder.
-                        build(baseDirectory, clusterId, brokerNodeBuilders.containsKey(builder.id()));
+                    ControllerNode node = builder
+                        .setBaseDirectory(baseDirectory)
+                        .setClusterId(clusterId)
+                        .setCombined(brokerNodeBuilders.containsKey(builder.id()))
+                        .build();
                     if (controllerNodes.put(node.id(), node) != null) {
                         throw new RuntimeException("Duplicate builder for controller " + node.id());
                     }
