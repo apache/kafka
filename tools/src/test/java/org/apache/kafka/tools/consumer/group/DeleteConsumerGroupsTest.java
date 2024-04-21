@@ -18,6 +18,7 @@ package org.apache.kafka.tools.consumer.group;
 
 import joptsimple.OptionException;
 import kafka.test.ClusterInstance;
+import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.Type;
@@ -53,7 +54,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.ALL)
+@ClusterTestDefaults(clusterType = Type.ALL, brokers = 3, serverProperties = {
+        @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+})
 public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     private final ClusterInstance cluster;
 
@@ -64,6 +68,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     @ClusterTest
     public void testDeleteWithTopicOption() {
         Admin admin = cluster.createAdminClient();
+        System.err.println(cluster.bootstrapServers());
         admin.createTopics(singleton(new NewTopic("t", 1, (short) 1)));
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP, "--topic"};
         assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
@@ -84,29 +89,30 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         admin.close();
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteNonExistingGroup(String quorum) {
-        createOffsetsTopic(listenerName(), new Properties());
+    @ClusterTest
+    public void testDeleteNonExistingGroup() {
+        Admin admin = cluster.createAdminClient();
+        admin.createTopics(singleton(new NewTopic(TOPIC, 1, (short) 1)));
         String missingGroup = "missing.group";
-
         // note the group to be deleted is a different (non-existing) group
-        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", missingGroup};
+        String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroup};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         Map<String, Throwable> result = service.deleteGroups();
         assertTrue(result.size() == 1 && result.containsKey(missingGroup) && result.get(missingGroup).getCause() instanceof GroupIdNotFoundException,
-            "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
+                "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
+        admin.close();
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteCmdNonEmptyGroup(String quorum) throws Exception {
-        createOffsetsTopic(listenerName(), new Properties());
+    @ClusterTest
+    // fixme
+    public void testDeleteCmdNonEmptyGroup() throws Exception {
+        Admin admin = cluster.createAdminClient();
+        admin.createTopics(singleton(new NewTopic(TOPIC, 1, (short) 1)));
 
         // run one consumer in the group
         addConsumerGroupExecutor(1);
-        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP};
+        String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
@@ -117,10 +123,11 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
         assertTrue(output.contains("Group '" + GROUP + "' could not be deleted due to:") && output.contains(Errors.NON_EMPTY_GROUP.message()),
                 "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Output was: (" + output + ")");
+        admin.close();
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
+    @ClusterTest
+    // fixme
     public void testDeleteNonEmptyGroup(String quorum) throws Exception {
         createOffsetsTopic(listenerName(), new Properties());
 
@@ -141,14 +148,15 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
                 "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Result was:(" + result + ")");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testDeleteCmdEmptyGroup(String quorum) throws Exception {
-        createOffsetsTopic(listenerName(), new Properties());
+    @ClusterTest
+    // fixme
+    public void testDeleteCmdEmptyGroup() throws Exception {
+        Admin admin = cluster.createAdminClient();
+        admin.createTopics(singleton(new NewTopic(TOPIC, 1, (short) 1)));
 
         // run one consumer in the group
         ConsumerGroupExecutor executor = addConsumerGroupExecutor(1);
-        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP};
+        String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
@@ -166,10 +174,11 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
         assertTrue(output.contains("Deletion of requested consumer groups ('" + GROUP + "') was successful."),
                 "The consumer group could not be deleted as expected");
+        admin.close();
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
+    @ClusterTest
+    // fixme
     public void testDeleteCmdAllGroups(String quorum) throws Exception {
         createOffsetsTopic(listenerName(), new Properties());
 
