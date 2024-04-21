@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller.errors;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -72,6 +73,11 @@ public class EventHandlerExceptionInfoTest {
             new TimeoutException(),
             () -> OptionalInt.of(1));
 
+    private static final EventHandlerExceptionInfo KAFKA_EXCEPTION =
+        EventHandlerExceptionInfo.fromInternal(
+            new KafkaException("Custom kafka exception message"),
+            () -> OptionalInt.of(1));
+
     @Test
     public void testTopicExistsExceptionInfo() {
         assertEquals(new EventHandlerExceptionInfo(false, false,
@@ -81,7 +87,7 @@ public class EventHandlerExceptionInfoTest {
 
     @Test
     public void testTopicExistsExceptionFailureMessage() {
-        assertEquals("event failed with TopicExistsException in 234 microseconds.",
+        assertEquals("event failed with TopicExistsException in 234 microseconds. Detailed exception message: Topic exists.",
             TOPIC_EXISTS.failureMessage(123, OptionalLong.of(234L), true, 456L));
     }
 
@@ -158,7 +164,7 @@ public class EventHandlerExceptionInfoTest {
     public void testNotLeaderExceptionFailureMessage() {
         assertEquals("event unable to start processing because of NotLeaderException (treated as " +
             "NotControllerException) at epoch 123. Renouncing leadership and reverting to the " +
-            "last committed offset 456.",
+            "last committed offset 456. Detailed exception message: Append failed",
             NOT_LEADER.failureMessage(123, OptionalLong.empty(), true, 456L));
     }
 
@@ -174,8 +180,16 @@ public class EventHandlerExceptionInfoTest {
     public void testUnexpectedBaseOffsetFailureMessage() {
         assertEquals("event failed with UnexpectedBaseOffsetException (treated as " +
             "NotControllerException) at epoch 123 in 90 microseconds. Renouncing leadership " +
-            "and reverting to the last committed offset 456.",
+            "and reverting to the last committed offset 456. Detailed exception message: Wanted base offset 3, but the next offset was 4",
                 UNEXPECTED_END_OFFSET.failureMessage(123, OptionalLong.of(90L), true, 456L));
+    }
+
+    @Test
+    public void testKafkaExceptionFailureMessage() {
+        String failureMessage = KAFKA_EXCEPTION.failureMessage(123, OptionalLong.of(90L), true, 456L);
+        assertEquals("event failed with KafkaException (treated as UnknownServerException) " +
+                "at epoch 123 in 90 microseconds. Renouncing leadership and reverting " +
+                "to the last committed offset 456.", failureMessage);
     }
 
     @Test
