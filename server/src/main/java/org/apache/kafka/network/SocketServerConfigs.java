@@ -45,23 +45,23 @@ public class SocketServerConfigs {
     public static final String LISTENERS_CONFIG = "listeners";
     public static final String LISTENERS_DEFAULT = "PLAINTEXT://:9092";
     public static final String LISTENERS_DOC = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
-            String.format(" If the listener name is not a security protocol, <code>%s</code> must also be set.\n", LISTENER_SECURITY_PROTOCOL_MAP_CONFIG) +
-            " Listener names and port numbers must be unique unless \n" +
-            " one listener is an IPv4 address and the other listener is \n" +
-            " an IPv6 address (for the same port).\n" +
-            " Specify hostname as 0.0.0.0 to bind to all interfaces.\n" +
-            " Leave hostname empty to bind to default interface.\n" +
-            " Examples of legal listener lists:\n" +
-            " <code>PLAINTEXT://myhost:9092,SSL://:9091</code>\n" +
-            " <code>CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093</code>\n" +
-            " <code>PLAINTEXT://127.0.0.1:9092,SSL://[::1]:9092</code>\n";
+            String.format(" If the listener name is not a security protocol, <code>%s</code> must also be set.%n", LISTENER_SECURITY_PROTOCOL_MAP_CONFIG) +
+            " Listener names and port numbers must be unique unless %n" +
+            " one listener is an IPv4 address and the other listener is %n" +
+            " an IPv6 address (for the same port).%n" +
+            " Specify hostname as 0.0.0.0 to bind to all interfaces.%n" +
+            " Leave hostname empty to bind to default interface.%n" +
+            " Examples of legal listener lists:%n" +
+            " <code>PLAINTEXT://myhost:9092,SSL://:9091</code>%n" +
+            " <code>CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093</code>%n" +
+            " <code>PLAINTEXT://127.0.0.1:9092,SSL://[::1]:9092</code>%n";
 
     public static final String ADVERTISED_LISTENERS_CONFIG = "advertised.listeners";
     public static final String ADVERTISED_LISTENERS_DOC = String.format(
             "Listeners to publish to ZooKeeper for clients to use, if different than the <code>%s</code> config property." +
                     " In IaaS environments, this may need to be different from the interface to which the broker binds." +
                     " If this is not set, the value for <code>%1$1s</code> will be used." +
-                    " Unlike <code>%1$1s</code>, it is not valid to advertise the 0.0.0.0 meta-address.\n" +
+                    " Unlike <code>%1$1s</code>, it is not valid to advertise the 0.0.0.0 meta-address.%n" +
                     " Also unlike <code>%1$1s</code>, there can be duplicated ports in this property," +
                     " so that one listener can be configured to advertise another listener's address." +
                     " This can be useful in some cases where external load balancers are used.", LISTENERS_CONFIG);
@@ -71,20 +71,20 @@ public class SocketServerConfigs {
     public static final String CONTROL_PLANE_LISTENER_NAME_DOC = String.format(
             "Name of listener used for communication between controller and brokers. " +
                     "A broker will use the <code>%s</code> to locate the endpoint in $ListenersProp list, to listen for connections from the controller. " +
-                    "For example, if a broker's config is:\n" +
+                    "For example, if a broker's config is:%n" +
                     "<code>listeners = INTERNAL://192.1.1.8:9092, EXTERNAL://10.1.1.5:9093, CONTROLLER://192.1.1.8:9094" +
                     "listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
-                    "control.plane.listener.name = CONTROLLER</code>\n" +
-                    "On startup, the broker will start listening on \"192.1.1.8:9094\" with security protocol \"SSL\".\n" +
+                    "control.plane.listener.name = CONTROLLER</code>%n" +
+                    "On startup, the broker will start listening on \"192.1.1.8:9094\" with security protocol \"SSL\".%n" +
                     "On the controller side, when it discovers a broker's published endpoints through ZooKeeper, it will use the <code>%1$1s</code> " +
-                    "to find the endpoint, which it will use to establish connection to the broker.\n" +
-                    "For example, if the broker's published endpoints on ZooKeeper are:\n" +
-                    " <code>\"endpoints\" : [\"INTERNAL://broker1.example.com:9092\",\"EXTERNAL://broker1.example.com:9093\",\"CONTROLLER://broker1.example.com:9094\"]</code>\n" +
-                    " and the controller's config is:\n" +
+                    "to find the endpoint, which it will use to establish connection to the broker.%n" +
+                    "For example, if the broker's published endpoints on ZooKeeper are:%n" +
+                    " <code>\"endpoints\" : [\"INTERNAL://broker1.example.com:9092\",\"EXTERNAL://broker1.example.com:9093\",\"CONTROLLER://broker1.example.com:9094\"]</code>%n" +
+                    " and the controller's config is:%n" +
                     "<code>listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
-                    "control.plane.listener.name = CONTROLLER</code>\n" +
-                    "then the controller will use \"broker1.example.com:9094\" with security protocol \"SSL\" to connect to the broker.\n" +
-                    "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections.\n" +
+                    "control.plane.listener.name = CONTROLLER</code>%n" +
+                    "then the controller will use \"broker1.example.com:9094\" with security protocol \"SSL\" to connect to the broker.%n" +
+                    "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections.%n" +
                     "If explicitly configured, the value cannot be the same as the value of <code>%s</code>.",
             CONTROL_PLANE_LISTENER_NAME_CONFIG, ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG);
 
