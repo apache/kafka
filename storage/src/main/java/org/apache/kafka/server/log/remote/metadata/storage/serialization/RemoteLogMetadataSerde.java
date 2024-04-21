@@ -45,7 +45,6 @@ public class RemoteLogMetadataSerde {
     private static final short REMOTE_LOG_SEGMENT_METADATA_SNAPSHOT_API_KEY = new RemoteLogSegmentMetadataSnapshotRecord().apiKey();
 
     private final BytesApiMessageSerde bytesApiMessageSerde;
-    private static ApiMessageAndVersion apiMessageAndVersion;
 
     private final RemoteLogSegmentMetadataTransform segmentTransform;
     private final RemoteLogSegmentMetadataUpdateTransform segmentUpdateTransform;
@@ -71,6 +70,7 @@ public class RemoteLogMetadataSerde {
 
     public byte[] serialize(RemoteLogMetadata remoteLogMetadata) {
 
+        ApiMessageAndVersion apiMessageAndVersion;
         if (remoteLogMetadata instanceof RemoteLogSegmentMetadata) {
             apiMessageAndVersion = segmentTransform.toApiMessageAndVersion((RemoteLogSegmentMetadata) remoteLogMetadata);
         } else if (remoteLogMetadata instanceof RemoteLogSegmentMetadataUpdate) {
@@ -88,7 +88,7 @@ public class RemoteLogMetadataSerde {
     }
 
     public RemoteLogMetadata deserialize(byte[] data) {
-        apiMessageAndVersion = bytesApiMessageSerde.deserialize(data);
+        ApiMessageAndVersion apiMessageAndVersion = bytesApiMessageSerde.deserialize(data);
 
         short apiKey = apiMessageAndVersion.message().apiKey();
         if (apiKey == REMOTE_LOG_SEGMENT_METADATA_API_KEY) {
