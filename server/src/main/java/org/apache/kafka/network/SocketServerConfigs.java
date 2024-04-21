@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 public class SocketServerConfigs {
     public static final String LISTENER_SECURITY_PROTOCOL_MAP_CONFIG = "listener.security.protocol.map";
     public static final String LISTENER_SECURITY_PROTOCOL_MAP_DEFAULT = Arrays.stream(SecurityProtocol.values())
-            .collect(Collectors.toMap(sp -> ListenerName.forSecurityProtocol(sp), sp -> sp))
+            .collect(Collectors.toMap(ListenerName::forSecurityProtocol, sp -> sp))
             .entrySet()
             .stream()
             .map(entry -> entry.getKey().value() + ":" + entry.getValue().name())
