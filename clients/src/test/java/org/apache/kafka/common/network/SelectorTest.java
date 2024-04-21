@@ -55,6 +55,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -1020,20 +1021,26 @@ public class SelectorTest {
     public void testIoMetricsHaveCorrectDoc() {
         List<String> actual = asList("io-ratio", "io-wait-ratio");
         List<String> deprecated = asList("iotime-total", "io-waittime-total");
+        Predicate<MetricName> docDeprecated =
+                mName -> mName.description().toLowerCase(Locale.ROOT).contains("deprecated");
 
-        // iterate through all metrics, since metrics.metric(metricName) requires 
-        // knowing metric group and tag set, which are not trivial dependencies
-        for (MetricName metricName : metrics.metrics().keySet()) {
-            String name = metricName.name();
-            String description = metricName.description();
-            boolean markedDeprecated = description.toLowerCase(Locale.ROOT).contains("deprecated");
-            if (actual.contains(name)) {
-                assertFalse(markedDeprecated, name + " shouldn't be deprecated");
-            }
-            if (deprecated.contains(name)) {
-                assertTrue(markedDeprecated, name + " should be deprecated");
-            }
-        }
+        assertEquals(
+                actual.size(),
+                metrics.metrics().keySet().stream()
+                        .filter(m -> actual.contains(m.name()))
+                        .filter(m -> !docDeprecated.test(m))
+                        .count(),
+                "Metrics " + actual + " should be registered as non-deprecated"
+        );
+
+        assertEquals(
+                deprecated.size(),
+                metrics.metrics().keySet().stream()
+                        .filter(m -> deprecated.contains(m.name()))
+                        .filter(docDeprecated)
+                        .count(),
+                "Metrics " + deprecated + " should be registered as deprecated"
+        );
     }
 
     private String blockingRequest(String node, String s) throws IOException {
