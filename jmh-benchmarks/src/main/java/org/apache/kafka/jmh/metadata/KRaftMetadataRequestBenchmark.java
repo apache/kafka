@@ -29,7 +29,6 @@ import kafka.server.FetchManager;
 import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
-import kafka.server.KafkaConfig$;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.RaftSupport;
@@ -61,6 +60,8 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.config.KRaftConfigs;
+
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -174,10 +175,10 @@ public class KRaftMetadataRequestBenchmark {
 
     private KafkaApis createKafkaApis() {
         Properties kafkaProps =  new Properties();
-        kafkaProps.put(KafkaConfig$.MODULE$.NodeIdProp(), brokerId + "");
-        kafkaProps.put(KafkaConfig$.MODULE$.ProcessRolesProp(), "broker");
-        kafkaProps.put(KafkaConfig$.MODULE$.QuorumVotersProp(), "9000@foo:8092");
-        kafkaProps.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(), "CONTROLLER");
+        kafkaProps.put(KRaftConfigs.NODE_ID_CONFIG, brokerId + "");
+        kafkaProps.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker");
+        kafkaProps.put(KRaftConfigs.QUORUM_VOTERS_CONFIG, "9000@foo:8092");
+        kafkaProps.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
         KafkaConfig config = new KafkaConfig(kafkaProps);
         return new KafkaApisBuilder().
                 setRequestChannel(requestChannel).

@@ -37,6 +37,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
@@ -320,13 +321,13 @@ abstract class QuorumTestHarness extends Logging {
     }
     val props = propsList(0)
     props.putAll(overridingProps)
-    props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
-    props.setProperty(KafkaConfig.ProcessRolesProp, "controller")
+    props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     props.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, "true")
-    if (props.getProperty(KafkaConfig.NodeIdProp) == null) {
-      props.setProperty(KafkaConfig.NodeIdProp, "1000")
+    if (props.getProperty(KRaftConfigs.NODE_ID_CONFIG) == null) {
+      props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1000")
     }
-    val nodeId = Integer.parseInt(props.getProperty(KafkaConfig.NodeIdProp))
+    val nodeId = Integer.parseInt(props.getProperty(KRaftConfigs.NODE_ID_CONFIG))
     val metadataDir = TestUtils.tempDir()
     val metaProperties = new MetaProperties.Builder().
       setVersion(MetaPropertiesVersion.V1).
@@ -346,12 +347,12 @@ abstract class QuorumTestHarness extends Logging {
 
     val bootstrapMetadata = BootstrapMetadata.fromRecords(metadataRecords, "test harness")
 
-    props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
+    props.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, metadataDir.getAbsolutePath)
     val proto = controllerListenerSecurityProtocol.toString
     props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:${proto}")
     props.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:0")
-    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-    props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.setProperty(KRaftConfigs.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:0")
     val config = new KafkaConfig(props)
     val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, AddressSpec]]
     val metaPropertiesEnsemble = new MetaPropertiesEnsemble.Loader().

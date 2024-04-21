@@ -54,6 +54,7 @@ import org.apache.kafka.controller.{Controller, ControllerRequestContext, Result
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.util.FutureUtils
 import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.junit.jupiter.api.Assertions._
@@ -151,10 +152,10 @@ class ControllerApisTest {
                                    controller: Controller,
                                    props: Properties = new Properties(),
                                    throttle: Boolean = false): ControllerApis = {
-    props.put(KafkaConfig.NodeIdProp, nodeId: java.lang.Integer)
-    props.put(KafkaConfig.ProcessRolesProp, "controller")
-    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
-    props.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9092")
+    props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId: java.lang.Integer)
+    props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT")
+    props.put(KRaftConfigs.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9092")
     new ControllerApis(
       requestChannel,
       authorizer,

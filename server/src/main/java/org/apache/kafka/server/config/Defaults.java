@@ -24,7 +24,6 @@ import org.apache.kafka.raft.RaftConfig;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class Defaults {
@@ -37,18 +36,7 @@ public class Defaults {
     public static final int BACKGROUND_THREADS = 10;
     public static final int QUEUED_MAX_REQUESTS = 500;
     public static final int QUEUED_MAX_REQUEST_BYTES = -1;
-    public static final int INITIAL_BROKER_REGISTRATION_TIMEOUT_MS = 60000;
-    public static final int BROKER_HEARTBEAT_INTERVAL_MS = 2000;
-    public static final int BROKER_SESSION_TIMEOUT_MS = 9000;
-    public static final int METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES = 20 * 1024 * 1024;
-    public static final long METADATA_SNAPSHOT_MAX_INTERVAL_MS = TimeUnit.HOURS.toMillis(1);
-    public static final int METADATA_MAX_IDLE_INTERVAL_MS = 500;
-    public static final int METADATA_MAX_RETENTION_BYTES = 100 * 1024 * 1024;
     public static final boolean DELETE_TOPIC_ENABLE = true;
-    /** ********* KRaft mode configs *********/
-    public static final int EMPTY_NODE_ID = -1;
-    public static final long SERVER_MAX_STARTUP_TIME_MS = Long.MAX_VALUE;
-    public static final int MIGRATION_METADATA_MIN_BATCH_SIZE = 200;
 
     /** ********* Authorizer Configuration *********/
     public static final String AUTHORIZER_CLASS_NAME = "";
