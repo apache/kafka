@@ -56,6 +56,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.metadata.BrokerState;
+import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.slf4j.Logger;
@@ -136,7 +137,7 @@ public class EmbeddedKafkaCluster {
         // Since we support `stop` followed by `startOnlyKafkaOnSamePorts`, we track whether
         // a listener config is defined during initialization in order to know if it's
         // safe to override it
-        hasListenerConfig = brokerConfig.get(KafkaConfig.ListenersProp()) != null;
+        hasListenerConfig = brokerConfig.get(SocketServerConfigs.LISTENERS_CONFIG) != null;
 
         this.clientConfigs = clientConfigs;
     }
@@ -181,7 +182,7 @@ public class EmbeddedKafkaCluster {
             currentBrokerLogDirs[i] = currentBrokerLogDirs[i] == null ? createLogDir() : currentBrokerLogDirs[i];
             brokerConfig.put(LOG_DIR_CONFIG, currentBrokerLogDirs[i]);
             if (!hasListenerConfig)
-                brokerConfig.put(KafkaConfig.ListenersProp(), listenerName.value() + "://localhost:" + currentBrokerPorts[i]);
+                brokerConfig.put(SocketServerConfigs.LISTENERS_CONFIG, listenerName.value() + "://localhost:" + currentBrokerPorts[i]);
             brokers[i] = TestUtils.createServer(new KafkaConfig(brokerConfig, true), time);
             currentBrokerPorts[i] = brokers[i].boundPort(listenerName);
         }
@@ -311,7 +312,7 @@ public class EmbeddedKafkaCluster {
     }
     
     public boolean sslEnabled() {
-        final String listeners = brokerConfig.getProperty(KafkaConfig.ListenersProp());
+        final String listeners = brokerConfig.getProperty(SocketServerConfigs.LISTENERS_CONFIG);
         return listeners != null && listeners.contains("SSL");
     }
 
@@ -469,7 +470,7 @@ public class EmbeddedKafkaCluster {
         Properties props = Utils.mkProperties(clientConfigs);
         props.putAll(adminClientConfig);
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        final Object listeners = brokerConfig.get(KafkaConfig.ListenersProp());
+        final Object listeners = brokerConfig.get(SocketServerConfigs.LISTENERS_CONFIG);
         if (listeners != null && listeners.toString().contains("SSL")) {
             props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
