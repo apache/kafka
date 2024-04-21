@@ -24,17 +24,36 @@ import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.util.*;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -51,7 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
 })
-public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
+public class DeleteConsumerGroupsTest {
     private final ClusterInstance cluster;
     private static final String TOPIC = "foo";
     private static final String GROUP = "test.group";
@@ -63,7 +82,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     @ClusterTest
     public void testDeleteWithTopicOption() {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(singleton(new NewTopic("t", 1, (short) 1)));
+            admin.createTopics(buildSingletonTestTopic());
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP, "--topic"};
             assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
         }
@@ -72,7 +91,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     @ClusterTest
     public void testDeleteCmdNonExistingGroup() {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(singleton(new NewTopic(TOPIC, 1, (short) 1)));
+            admin.createTopics(buildSingletonTestTopic());
             String missingGroup = "missing.group";
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroup};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -85,7 +104,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     @ClusterTest
     public void testDeleteNonExistingGroup() {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(singleton(new NewTopic(TOPIC, 1, (short) 1)));
+            admin.createTopics(buildSingletonTestTopic());
             String missingGroup = "missing.group";
             // note the group to be deleted is a different (non-existing) group
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroup};
@@ -99,7 +118,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     @ClusterTest
     public void testDeleteCmdNonEmptyGroup() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(singleton(new NewTopic(TOPIC, 1, (short) 1)));
+            admin.createTopics(buildSingletonTestTopic());
             // run one consumer in the group
             ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP);
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
@@ -117,11 +136,10 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         }
     }
 
-
     @ClusterTest
     public void testDeleteNonEmptyGroup() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(singleton(new NewTopic(TOPIC, 1, (short) 1)));
+            admin.createTopics(buildSingletonTestTopic());
 
             // run one consumer in the group
             ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP);
@@ -147,7 +165,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     @ClusterTest
     public void testDeleteCmdEmptyGroup() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(singleton(new NewTopic(TOPIC, 1, (short) 1)));
+            admin.createTopics(buildSingletonTestTopic());
 
             // run one consumer in the group
             ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP);
@@ -176,7 +194,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     @ClusterTest
     public void testDeleteCmdAllGroups() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(singleton(new NewTopic(TOPIC, 1, (short) 1)));
+            admin.createTopics(buildSingletonTestTopic());
 
             // Create 3 groups with 1 consumer per each
             Map<String, ConsumerGroupExecutor> groupNameToExecutor = IntStream.rangeClosed(1, 3)
@@ -201,7 +219,8 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups).trim();
             Set<String> expectedGroupsForDeletion = groupNameToExecutor.keySet();
             Set<String> deletedGroupsGrepped = Arrays.stream(output.substring(output.indexOf('(') + 1, output.indexOf(')')).split(","))
-                    .map(str -> str.replaceAll("'", "").trim()).collect(Collectors.toSet());
+                    .map(str -> str.replaceAll("'", "").trim())
+                    .collect(Collectors.toSet());
 
             assertTrue(output.matches("Deletion of requested consumer groups (.*) was successful.")
                             && Objects.equals(deletedGroupsGrepped, expectedGroupsForDeletion),
@@ -212,7 +231,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     @ClusterTest
     public void testDeleteEmptyGroup() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(singleton(new NewTopic(TOPIC, 1, (short) 1)));
+            admin.createTopics(buildSingletonTestTopic());
 
             // run one consumer in the group
             ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP);
@@ -239,7 +258,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     @ClusterTest
     public void testDeleteCmdWithMixOfSuccessAndError() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(singleton(new NewTopic(TOPIC, 1, (short) 1)));
+            admin.createTopics(buildSingletonTestTopic());
             String missingGroup = "missing.group";
 
             // run one consumer in the group
@@ -267,14 +286,13 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
                             && output.contains(Errors.GROUP_ID_NOT_FOUND.message())
                             && output.contains("These consumer groups were deleted successfully: '" + GROUP + "'"),
                     "The consumer group deletion did not work as expected");
-
         }
     }
 
     @ClusterTest
     public void testDeleteWithMixOfSuccessAndError() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(singleton(new NewTopic(TOPIC, 1, (short) 1)));
+            admin.createTopics(buildSingletonTestTopic());
             String missingGroup = "missing.group";
 
             // run one consumer in the group
@@ -302,7 +320,6 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
                             result.containsKey(missingGroup) &&
                             result.get(missingGroup).getMessage().contains(Errors.GROUP_ID_NOT_FOUND.message()),
                     "The consumer group deletion did not work as expected");
-
         }
     }
 
@@ -333,5 +350,144 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             }
         };
     }
-}
 
+    private Set<NewTopic> buildSingletonTestTopic() {
+        return singleton(new NewTopic(TOPIC, 1, (short) 1));
+    }
+
+    ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
+        ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
+        return new ConsumerGroupCommand.ConsumerGroupService(
+                opts,
+                Collections.singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
+        );
+    }
+
+    abstract class AbstractConsumerRunnable implements Runnable {
+        final String broker;
+        final String groupId;
+        final Optional<Properties> customPropsOpt;
+        final boolean syncCommit;
+
+        final Properties props = new Properties();
+        KafkaConsumer<String, String> consumer;
+
+        boolean configured = false;
+
+        public AbstractConsumerRunnable(String broker, String groupId, Optional<Properties> customPropsOpt, boolean syncCommit) {
+            this.broker = broker;
+            this.groupId = groupId;
+            this.customPropsOpt = customPropsOpt;
+            this.syncCommit = syncCommit;
+        }
+
+        void configure() {
+            configured = true;
+            configure(props);
+            customPropsOpt.ifPresent(props::putAll);
+            consumer = new KafkaConsumer<>(props);
+        }
+
+        void configure(Properties props) {
+            props.put("bootstrap.servers", broker);
+            props.put("group.id", groupId);
+            props.put("key.deserializer", StringDeserializer.class.getName());
+            props.put("value.deserializer", StringDeserializer.class.getName());
+        }
+
+        abstract void subscribe();
+
+        @Override
+        public void run() {
+            assert configured : "Must call configure before use";
+            try {
+                subscribe();
+                while (true) {
+                    consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+                    if (syncCommit)
+                        consumer.commitSync();
+                }
+            } catch (WakeupException e) {
+                // OK
+            } finally {
+                consumer.close();
+            }
+        }
+
+        void shutdown() {
+            consumer.wakeup();
+        }
+    }
+
+    class ConsumerRunnable extends AbstractConsumerRunnable {
+        final String topic;
+        final String groupProtocol;
+        final String strategy;
+        final Optional<String> remoteAssignor;
+
+        public ConsumerRunnable(String broker, String groupId, String groupProtocol, String topic, String strategy,
+                                Optional<String> remoteAssignor, Optional<Properties> customPropsOpt, boolean syncCommit) {
+            super(broker, groupId, customPropsOpt, syncCommit);
+
+            this.topic = topic;
+            this.groupProtocol = groupProtocol;
+            this.strategy = strategy;
+            this.remoteAssignor = remoteAssignor;
+        }
+
+        @Override
+        void configure(Properties props) {
+            super.configure(props);
+            props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
+            if (groupProtocol.toUpperCase(Locale.ROOT).equals(GroupProtocol.CONSUMER.toString())) {
+                remoteAssignor.ifPresent(assignor -> props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, assignor));
+            } else {
+                props.put("partition.assignment.strategy", strategy);
+            }
+        }
+
+        @Override
+        void subscribe() {
+            consumer.subscribe(Collections.singleton(topic));
+        }
+    }
+
+
+    class AbstractConsumerGroupExecutor {
+        final int numThreads;
+        final ExecutorService executor;
+        final List<AbstractConsumerRunnable> consumers = new ArrayList<>();
+
+        public AbstractConsumerGroupExecutor(int numThreads) {
+            this.numThreads = numThreads;
+            this.executor = Executors.newFixedThreadPool(numThreads);
+        }
+
+        void submit(AbstractConsumerRunnable consumerThread) {
+            consumers.add(consumerThread);
+            executor.submit(consumerThread);
+        }
+
+        void shutdown() {
+            consumers.forEach(AbstractConsumerRunnable::shutdown);
+            executor.shutdown();
+            try {
+                executor.awaitTermination(5000, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    class ConsumerGroupExecutor extends AbstractConsumerGroupExecutor {
+        public ConsumerGroupExecutor(String broker, int numConsumers, String groupId, String groupProtocol, String topic, String strategy,
+                                     Optional<String> remoteAssignor, Optional<Properties> customPropsOpt, boolean syncCommit) {
+            super(numConsumers);
+            IntStream.rangeClosed(1, numConsumers).forEach(i -> {
+                ConsumerRunnable th = new ConsumerRunnable(broker, groupId, groupProtocol, topic, strategy, remoteAssignor, customPropsOpt, syncCommit);
+                th.configure();
+                submit(th);
+            });
+        }
+    }
+}
