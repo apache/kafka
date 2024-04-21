@@ -70,7 +70,7 @@ public class SocketServerConfigs {
     public static final String CONTROL_PLANE_LISTENER_NAME_CONFIG = "control.plane.listener.name";
     public static final String CONTROL_PLANE_LISTENER_NAME_DOC = String.format(
             "Name of listener used for communication between controller and brokers. " +
-                    "A broker will use the <code>%s</code> to locate the endpoint in $ListenersProp list, to listen for connections from the controller. " +
+                    String.format("A broker will use the <code>%s</code> to locate the endpoint in %s list, to listen for connections from the controller. ", LISTENERS_CONFIG) +
                     "For example, if a broker's config is:%n" +
                     "<code>listeners = INTERNAL://192.1.1.8:9092, EXTERNAL://10.1.1.5:9093, CONTROLLER://192.1.1.8:9094" +
                     "listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
