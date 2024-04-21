@@ -231,6 +231,7 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
+    @SuppressWarnings("removal")
     RemoteStorageManager createRemoteStorageManager() {
         return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteStorageManager>() {
             private final String classPath = rlmConfig.remoteStorageManagerClassPath();
@@ -253,6 +254,7 @@ public class RemoteLogManager implements Closeable {
         remoteLogStorageManager.configure(rsmProps);
     }
 
+    @SuppressWarnings("removal")
     RemoteLogMetadataManager createRemoteLogMetadataManager() {
         return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteLogMetadataManager>() {
             private final String classPath = rlmConfig.remoteLogMetadataManagerClassPath();
