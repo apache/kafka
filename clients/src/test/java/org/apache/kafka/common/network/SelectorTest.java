@@ -1019,11 +1019,10 @@ public class SelectorTest {
      */
     @Test
     public void testIoMetricsHaveCorrectDoc() {
-        List<String> actual = asList("io-ratio", "io-wait-ratio");
-        List<String> deprecated = asList("iotime-total", "io-waittime-total");
         Predicate<MetricName> docDeprecated =
                 mName -> mName.description().toLowerCase(Locale.ROOT).contains("deprecated");
 
+        List<String> actual = asList("io-ratio", "io-wait-ratio");
         assertEquals(
                 actual.size(),
                 metrics.metrics().keySet().stream()
@@ -1033,6 +1032,7 @@ public class SelectorTest {
                 "Metrics " + actual + " should be registered as non-deprecated"
         );
 
+        List<String> deprecated = asList("iotime-total", "io-waittime-total");
         assertEquals(
                 deprecated.size(),
                 metrics.metrics().keySet().stream()
