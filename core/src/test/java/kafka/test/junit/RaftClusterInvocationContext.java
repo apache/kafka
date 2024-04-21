@@ -98,7 +98,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         setPerBrokerPropertiesOverrides(clusterConfig.perBrokerOverrideProperties()).build();
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
 
-                if (Boolean.parseBoolean(clusterConfig.serverProperties().getProperty("zookeeper.metadata.migration.enable", "false"))) {
+                if (Boolean.parseBoolean(clusterConfig.serverProperties().getOrDefault("zookeeper.metadata.migration.enable", "false"))) {
                     zkReference.set(new EmbeddedZookeeper());
                     builder.setConfigProp("zookeeper.connect", String.format("localhost:%d", zkReference.get().port()));
                 }

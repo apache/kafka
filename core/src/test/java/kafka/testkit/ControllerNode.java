@@ -27,12 +27,18 @@ import java.nio.file.Paths;
 import java.util.Optional;
 
 public class ControllerNode implements TestKitNode {
+    public static Builder builder() {
+        return new Builder();
+    }
+
     public static class Builder {
         private int id = -1;
         private String baseDirectory = null;
         private String metadataDirectory = null;
         private Uuid clusterId = null;
         private boolean combined;
+
+        private Builder() {}
 
         public int id() {
             return id;
@@ -97,7 +103,7 @@ public class ControllerNode implements TestKitNode {
 
     private final boolean combined;
 
-    ControllerNode(
+    private ControllerNode(
         MetaPropertiesEnsemble initialMetaPropertiesEnsemble,
         boolean combined
     ) {

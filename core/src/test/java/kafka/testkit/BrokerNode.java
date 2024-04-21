@@ -34,6 +34,10 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class BrokerNode implements TestKitNode {
+    public static Builder builder() {
+        return new Builder();
+    }
+
     public static class Builder {
         private int id = -1;
         private String baseDirectory = null;
@@ -43,6 +47,8 @@ public class BrokerNode implements TestKitNode {
         private String metadataDirectory = null;
         private Map<String, String> propertyOverrides = new HashMap<>();
         private boolean combined;
+
+        private Builder() {}
 
         public int id() {
             return id;
@@ -84,7 +90,7 @@ public class BrokerNode implements TestKitNode {
         }
 
         public Builder setPropertyOverrides(Map<String, String> propertyOverrides) {
-            this.propertyOverrides = propertyOverrides;
+            this.propertyOverrides = new HashMap<>(propertyOverrides);
             return this;
         }
 
@@ -139,7 +145,7 @@ public class BrokerNode implements TestKitNode {
     private final boolean combined;
     private final Map<String, String> propertyOverrides;
 
-    BrokerNode(
+    private BrokerNode(
         Uuid incarnationId,
         MetaPropertiesEnsemble initialMetaPropertiesEnsemble,
         boolean combined,

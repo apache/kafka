@@ -278,10 +278,12 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
     }
 
+    // This is what tests normally extend from to start a cluster, here we extend it and
+    // configure the cluster using values from ClusterConfig.
     private static class ClusterConfigurableIntegrationHarness extends IntegrationTestHarness {
         private ClusterConfig clusterConfig;
 
-        public ClusterConfigurableIntegrationHarness(ClusterConfig clusterConfig) {
+        private ClusterConfigurableIntegrationHarness(ClusterConfig clusterConfig) {
             this.clusterConfig = Objects.requireNonNull(clusterConfig);
         }
 
@@ -299,24 +301,31 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
         @Override
         public Properties serverConfig() {
-            Properties props = clusterConfig.serverProperties();
+            Properties props = new Properties();
+            props.putAll(clusterConfig.serverProperties());
             props.put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, clusterConfig.metadataVersion().version());
             return props;
         }
 
         @Override
         public Properties adminClientConfig() {
-            return clusterConfig.adminClientProperties();
+            Properties props = new Properties();
+            props.putAll(clusterConfig.adminClientProperties());
+            return props;
         }
 
         @Override
         public Properties consumerConfig() {
-            return clusterConfig.consumerProperties();
+            Properties props = new Properties();
+            props.putAll(clusterConfig.consumerProperties());
+            return props;
         }
 
         @Override
         public Properties producerConfig() {
-            return clusterConfig.producerProperties();
+            Properties props = new Properties();
+            props.putAll(clusterConfig.producerProperties());
+            return props;
         }
 
         @Override
@@ -335,7 +344,9 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
             if (clusterConfig.saslServerProperties().isEmpty()) {
                 return Option.empty();
             } else {
-                return Option.apply(clusterConfig.saslServerProperties());
+                Properties props = new Properties();
+                props.putAll(clusterConfig.saslServerProperties());
+                return Option.apply(props);
             }
         }
 
@@ -344,7 +355,9 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
             if (clusterConfig.saslClientProperties().isEmpty()) {
                 return Option.empty();
             } else {
-                return Option.apply(clusterConfig.saslClientProperties());
+                Properties props = new Properties();
+                props.putAll(clusterConfig.saslClientProperties());
+                return Option.apply(props);
             }
         }
 

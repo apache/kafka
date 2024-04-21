@@ -28,7 +28,6 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.Properties;
 import java.util.TreeMap;
 
 public class TestKitNodes {
@@ -73,9 +72,7 @@ public class TestKitNodes {
                 if (!controllerNodeBuilders.isEmpty()) {
                     nextId = controllerNodeBuilders.lastKey() + 1;
                 }
-                controllerNodeBuilders.put(nextId,
-                    new ControllerNode.Builder().
-                        setId(nextId));
+                controllerNodeBuilders.put(nextId, ControllerNode.builder().setId(nextId));
             }
             return this;
         }
@@ -99,7 +96,7 @@ public class TestKitNodes {
                 if (!brokerNodeBuilders.isEmpty()) {
                     nextId = brokerNodeBuilders.lastKey() + 1;
                 }
-                BrokerNode.Builder brokerNodeBuilder = new BrokerNode.Builder()
+                BrokerNode.Builder brokerNodeBuilder = BrokerNode.builder()
                         .setId(nextId)
                         .setNumLogDirectories(disksPerBroker);
                 brokerNodeBuilders.put(nextId, brokerNodeBuilder);
@@ -113,7 +110,7 @@ public class TestKitNodes {
          * @param perBrokerPropertiesOverrides properties to override in each broker
          * @return Builder
          */
-        public Builder setPerBrokerPropertiesOverrides(Map<Integer, Properties> perBrokerPropertiesOverrides) {
+        public Builder setPerBrokerPropertiesOverrides(Map<Integer, Map<String, String>> perBrokerPropertiesOverrides) {
             perBrokerPropertiesOverrides.forEach((brokerId, properties) -> {
                 if (!brokerNodeBuilders.containsKey(brokerId)) {
                     throw new RuntimeException("Broker id " + brokerId + " does not exist");

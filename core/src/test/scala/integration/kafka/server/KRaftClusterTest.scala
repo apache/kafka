@@ -391,9 +391,9 @@ class KRaftClusterTest {
 
   @Test
   def testCreateClusterWithAdvertisedPortZero(): Unit = {
-    val brokerPropertyOverrides: util.Map[Integer, Properties] = new util.HashMap[Integer, Properties]()
+    val brokerPropertyOverrides: util.Map[Integer, util.Map[String, String]] = new util.HashMap[Integer, util.Map[String, String]]()
     Seq.range(0, 3).asJava.forEach(brokerId => {
-      val props = new Properties()
+      val props = new util.HashMap[String, String]()
       props.put(KafkaConfig.ListenersProp, "EXTERNAL://localhost:0")
       props.put(KafkaConfig.AdvertisedListenersProp, "EXTERNAL://localhost:0")
       brokerPropertyOverrides.put(brokerId, props)
@@ -412,9 +412,9 @@ class KRaftClusterTest {
 
   @Test
   def testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer(): Unit = {
-    val brokerPropertyOverrides: util.Map[Integer, Properties] = new util.HashMap[Integer, Properties]()
+    val brokerPropertyOverrides: util.Map[Integer, util.Map[String, String]] = new util.HashMap[Integer, util.Map[String, String]]()
     Seq.range(0, 3).asJava.forEach(brokerId => {
-      val props = new Properties()
+      val props = new util.HashMap[String, String]()
       props.put(KafkaConfig.ListenersProp, "EXTERNAL://localhost:0")
       props.put(KafkaConfig.AdvertisedListenersProp, s"EXTERNAL://advertised-host-$brokerId:${brokerId + 100}")
       brokerPropertyOverrides.put(brokerId, props)
@@ -443,7 +443,7 @@ class KRaftClusterTest {
 
   private def doOnStartedKafkaCluster(numControllerNodes: Int = 1,
                                       numBrokerNodes: Int,
-                                      brokerPropertyOverrides: util.Map[Integer, Properties])
+                                      brokerPropertyOverrides: util.Map[Integer, util.Map[String, String]])
                                      (action: KafkaClusterTestKit => Unit): Unit = {
     val nodes = new TestKitNodes.Builder()
       .setNumControllerNodes(numControllerNodes)

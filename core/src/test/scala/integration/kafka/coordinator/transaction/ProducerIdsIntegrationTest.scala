@@ -39,7 +39,7 @@ import scala.jdk.CollectionConverters._
 
 object ProducerIdsIntegrationTest {
   def uniqueProducerIdsBumpIBP(clusterGenerator: ClusterGenerator): Unit = {
-    clusterGenerator.accept(ClusterConfig.defaultClusterBuilder()
+    clusterGenerator.accept(ClusterConfig.defaultBuilder()
       .`type`(Type.ZK)
       .brokers(3)
       .autoStart(false)

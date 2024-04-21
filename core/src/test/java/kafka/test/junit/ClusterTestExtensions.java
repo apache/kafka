@@ -124,7 +124,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
         } else {
             // Ensure we have at least one cluster config
-            generatedClusterConfigs.add(ClusterConfig.defaultClusterBuilder().build());
+            generatedClusterConfigs.add(ClusterConfig.defaultBuilder().build());
         }
 
         String baseDisplayName = context.getRequiredTestMethod().getName();
@@ -179,7 +179,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 throw new IllegalStateException();
         }
 
-        ClusterConfig.Builder configBuilder = ClusterConfig.clusterBuilder()
+        ClusterConfig.Builder configBuilder = ClusterConfig.builder()
                 .type(type)
                 .brokers(brokers)
                 .controllers(controllers)

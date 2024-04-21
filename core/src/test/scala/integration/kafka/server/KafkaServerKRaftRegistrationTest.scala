@@ -71,7 +71,7 @@ class KafkaServerKRaftRegistrationTest {
       val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
 
       // Enable migration configs and restart brokers
-      val clusterConfig = ClusterConfig.clusterBuilder(zkCluster.config())
+      val clusterConfig = ClusterConfig.builder(zkCluster.config())
         .putServerProperty(KafkaConfig.MigrationEnabledProp, "true")
         .putServerProperty(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
         .putServerProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
@@ -110,7 +110,7 @@ class KafkaServerKRaftRegistrationTest {
       kraftCluster.startup()
 
       // Enable migration configs and restart brokers
-      val clusterConfig = ClusterConfig.clusterBuilder(zkCluster.config())
+      val clusterConfig = ClusterConfig.builder(zkCluster.config())
         .putServerProperty(KafkaConfig.MigrationEnabledProp, "true")
         .putServerProperty(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
         .putServerProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")

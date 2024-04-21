@@ -44,7 +44,7 @@ object SaslApiVersionsRequestTest {
   val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
 
   def saslApiVersionsRequestClusterConfig(clusterGenerator: ClusterGenerator): Unit = {
-    clusterGenerator.accept(ClusterConfig.defaultClusterBuilder
+    clusterGenerator.accept(ClusterConfig.defaultBuilder
       .securityProtocol(securityProtocol)
       .`type`(Type.ZK)
       .putSaslServerProperty(KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, kafkaClientSaslMechanism)
