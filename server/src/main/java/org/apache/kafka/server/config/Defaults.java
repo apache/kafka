@@ -19,7 +19,6 @@ package org.apache.kafka.server.config;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.raft.RaftConfig;
-import org.apache.kafka.security.PasswordEncoderConfigs;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -96,10 +95,6 @@ public class Defaults {
     public static final long DELEGATION_TOKEN_EXPIRY_TIME_MS = 24 * 60 * 60 * 1000L;
     public static final long DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS = 1 * 60 * 60 * 1000L;
 
-    /**  ********* Password Encryption Configuration for Dynamic Configs *********/
-    public static final String PASSWORD_ENCODER_CIPHER_ALGORITHM = PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM;
-    public static final int PASSWORD_ENCODER_KEY_LENGTH = PasswordEncoderConfigs.DEFAULT_KEY_LENGTH;
-    public static final int PASSWORD_ENCODER_ITERATIONS = PasswordEncoderConfigs.DEFAULT_ITERATIONS;
 
     /**  ********* Raft Quorum Configuration *********/
     public static final List<String> QUORUM_VOTERS = RaftConfig.DEFAULT_QUORUM_VOTERS;
