@@ -21,6 +21,7 @@ import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.config._
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.server.common.AdminOperationException
+import org.apache.kafka.server.config.ServerQuotaConfigs
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
@@ -43,13 +44,13 @@ class DynamicConfigTest extends QuorumTestHarness {
   @Test
   def shouldFailLeaderConfigsWithInvalidValues(): Unit = {
     assertThrows(classOf[ConfigException], () => adminZkClient.changeBrokerConfig(Seq(0),
-      propsWith(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "-100")))
+      propsWith(ServerQuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "-100")))
   }
 
   @Test
   def shouldFailFollowerConfigsWithInvalidValues(): Unit = {
     assertThrows(classOf[ConfigException], () => adminZkClient.changeBrokerConfig(Seq(0),
-      propsWith(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "-100")))
+      propsWith(ServerQuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "-100")))
   }
 
   @Test

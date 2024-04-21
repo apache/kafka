@@ -42,6 +42,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
+import org.apache.kafka.server.config.ServerQuotaConfigs;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.Json;
 import org.apache.kafka.server.util.json.DecodeJson;
@@ -98,12 +99,9 @@ public class ReassignPartitionsCommand {
     static final int EARLIEST_TOPICS_JSON_VERSION = 1;
 
     // Throttles that are set at the level of an individual broker.
-    //DynamicConfig.Broker.LeaderReplicationThrottledRateProp
-    static final String BROKER_LEVEL_LEADER_THROTTLE = "leader.replication.throttled.rate";
-    //DynamicConfig.Broker.FollowerReplicationThrottledRateProp
-    static final String BROKER_LEVEL_FOLLOWER_THROTTLE = "follower.replication.throttled.rate";
-    //DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp
-    static final String BROKER_LEVEL_LOG_DIR_THROTTLE = "replica.alter.log.dirs.io.max.bytes.per.second";
+    static final String BROKER_LEVEL_LEADER_THROTTLE = ServerQuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG;
+    static final String BROKER_LEVEL_FOLLOWER_THROTTLE = ServerQuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG;
+    static final String BROKER_LEVEL_LOG_DIR_THROTTLE = ServerQuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG;
     static final List<String> BROKER_LEVEL_THROTTLES = Arrays.asList(
         BROKER_LEVEL_LEADER_THROTTLE,
         BROKER_LEVEL_FOLLOWER_THROTTLE,
@@ -111,10 +109,8 @@ public class ReassignPartitionsCommand {
     );
 
     // Throttles that are set at the level of an individual topic.
-    //LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG
-    static final String TOPIC_LEVEL_LEADER_THROTTLE = "leader.replication.throttled.replicas";
-    //LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
-    static final String TOPIC_LEVEL_FOLLOWER_THROTTLE = "follower.replication.throttled.replicas";
+    static final String TOPIC_LEVEL_LEADER_THROTTLE = ServerQuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
+    static final String TOPIC_LEVEL_FOLLOWER_THROTTLE = ServerQuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
     private static final List<String> TOPIC_LEVEL_THROTTLES = Arrays.asList(
         TOPIC_LEVEL_LEADER_THROTTLE,
         TOPIC_LEVEL_FOLLOWER_THROTTLE

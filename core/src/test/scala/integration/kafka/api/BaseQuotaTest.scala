@@ -33,8 +33,8 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.server.config.ServerQuotaConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -184,7 +184,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
     assertTrue(throttled, "Should have been throttled")
     quotaTestClients.verifyConsumerClientThrottleTimeMetric(expectThrottle = true,
-      Some(ClientQuotaManagerConfig.DEFAULT_QUOTA_WINDOW_SIZE_SECONDS * 1000.0))
+      Some(ServerQuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT * 1000.0))
 
     val exemptMetric = quotaTestClients.exemptRequestMetric
     assertNotNull(exemptMetric, "Exempt requests not recorded")
