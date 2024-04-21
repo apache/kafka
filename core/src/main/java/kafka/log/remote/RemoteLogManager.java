@@ -36,6 +36,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RemoteLogInputStream;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ChildFirstClassLoader;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
@@ -463,7 +464,9 @@ public class RemoteLogManager implements Closeable {
                 RecordBatch batch = remoteLogInputStream.nextBatch();
                 if (batch == null) break;
                 if (batch.maxTimestamp() >= timestamp && batch.lastOffset() >= startingOffset) {
-                    for (Record record : batch) {
+                    Iterator<Record> recordStreamingIterator = batch.streamingIterator(BufferSupplier.NO_CACHING);
+                    while (recordStreamingIterator.hasNext()) {
+                        Record record = recordStreamingIterator.next();
                         if (record.timestamp() >= timestamp && record.offset() >= startingOffset)
                             return Optional.of(new FileRecords.TimestampAndOffset(record.timestamp(), record.offset(), maybeLeaderEpoch(batch.partitionLeaderEpoch())));
                     }
