@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -44,7 +45,7 @@ public class WakeupTriggerTest {
 
     @BeforeEach
     public void setup() {
-        this.wakeupTrigger = new WakeupTrigger();
+        this.wakeupTrigger = new WakeupTrigger(new LogContext());
     }
     
     @Test
