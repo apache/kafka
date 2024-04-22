@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
-import org.apache.kafka.server.config.{ServerQuotaConfigs, ZooKeeperInternals}
+import org.apache.kafka.server.config.{QuotaConfigs, ZooKeeperInternals}
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -38,9 +38,9 @@ object DynamicConfig {
     // Definitions
     val brokerConfigDef = new ConfigDef()
       // Round minimum value down, to make it easier for users.
-      .define(ServerQuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, LONG, ServerQuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, atLeast(0), MEDIUM, ServerQuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_DOC)
-      .define(ServerQuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, LONG, ServerQuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, atLeast(0), MEDIUM, ServerQuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_DOC)
-      .define(ServerQuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, LONG, ServerQuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, atLeast(0), MEDIUM, ServerQuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_DOC)
+      .define(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, LONG, QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, atLeast(0), MEDIUM, QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_DOC)
+      .define(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, LONG, QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, atLeast(0), MEDIUM, QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_DOC)
+      .define(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, LONG, QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, atLeast(0), MEDIUM, QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_DOC)
     DynamicBrokerConfig.addDynamicConfigs(brokerConfigDef)
     val nonDynamicProps = KafkaConfig.configNames.toSet -- brokerConfigDef.names.asScala
 
@@ -49,12 +49,8 @@ object DynamicConfig {
     def validate(props: Properties) = DynamicConfig.validate(brokerConfigDef, props, customPropsAllowed = true)
   }
 
-  object QuotaConfigs {
-    def isClientOrUserQuotaConfig(name: String): Boolean = org.apache.kafka.common.config.internals.QuotaConfigs.isClientOrUserConfig(name)
-  }
-
   object Client {
-    private val clientConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.userAndClientQuotaConfigs()
+    private val clientConfigs = QuotaConfigs.userAndClientQuotaConfigs()
 
     def configKeys = clientConfigs.configKeys
 
@@ -64,7 +60,7 @@ object DynamicConfig {
   }
 
   object User {
-    private val userConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.scramMechanismsPlusUserAndClientQuotaConfigs()
+    private val userConfigs = QuotaConfigs.scramMechanismsPlusUserAndClientQuotaConfigs()
 
     def configKeys = userConfigs.configKeys
 
@@ -74,7 +70,7 @@ object DynamicConfig {
   }
 
   object Ip {
-    private val ipConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.ipConfigs()
+    private val ipConfigs = QuotaConfigs.ipConfigs()
 
     def configKeys = ipConfigs.configKeys
 

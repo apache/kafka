@@ -27,11 +27,10 @@ import kafka.utils.{Logging, TestUtils}
 import kafka.zk.{AdminZkClient, ConfigEntityTypeZNode, KafkaZkClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.server.common.AdminOperationException
-import org.apache.kafka.server.config.{ConfigType, ServerQuotaConfigs}
+import org.apache.kafka.server.config.{ConfigType, QuotaConfigs}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
@@ -202,8 +201,8 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
       val props = new Properties()
       props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, messageSize.toString)
       props.setProperty(TopicConfig.RETENTION_MS_CONFIG, retentionMs.toString)
-      props.setProperty(ServerQuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, throttledLeaders)
-      props.setProperty(ServerQuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, throttledFollowers)
+      props.setProperty(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, throttledLeaders)
+      props.setProperty(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, throttledFollowers)
       props
     }
 
@@ -260,7 +259,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", quotaManagerIsThrottled = true)
 
     //Now ensure updating to "" removes the throttled replica list also
-    adminZkClient.changeTopicConfig(topic, propsWith((ServerQuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), (ServerQuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "")))
+    adminZkClient.changeTopicConfig(topic, propsWith((QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), (QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "")))
     checkConfig(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, LogConfig.DEFAULT_RETENTION_MS, "", "",  quotaManagerIsThrottled = false)
   }
 
@@ -282,27 +281,27 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
 
     // Set the limit & check it is applied to the log
     adminZkClient.changeBrokerConfig(brokerIds, propsWith(
-      (ServerQuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, limit.toString),
-      (ServerQuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, limit.toString)))
+      (QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, limit.toString),
+      (QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, limit.toString)))
     checkConfig(limit)
 
     // Now double the config values for the topic and check that it is applied
     val newLimit = 2 * limit
     adminZkClient.changeBrokerConfig(brokerIds,  propsWith(
-      (ServerQuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, newLimit.toString),
-      (ServerQuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, newLimit.toString)))
+      (QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, newLimit.toString),
+      (QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, newLimit.toString)))
     checkConfig(newLimit)
 
     // Verify that the same config can be read from ZK
     for (brokerId <- brokerIds) {
       val configInZk = adminZkClient.fetchEntityConfig(ConfigType.BROKER, brokerId.toString)
-      assertEquals(newLimit, configInZk.getProperty(ServerQuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG).toInt)
-      assertEquals(newLimit, configInZk.getProperty(ServerQuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG).toInt)
+      assertEquals(newLimit, configInZk.getProperty(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG).toInt)
+      assertEquals(newLimit, configInZk.getProperty(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG).toInt)
     }
 
     //Now delete the config
     adminZkClient.changeBrokerConfig(brokerIds, new Properties)
-    checkConfig(ServerQuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT)
+    checkConfig(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT)
   }
 
   /**
