@@ -9475,6 +9475,7 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testClassicGroupJoinWithNonEmptyConsumerGroup() throws Exception {
+        // TODO: the request should be accepted with ConsumerGroupJoin.
         String consumerGroupId = "consumer-group-id";
         String memberId = Uuid.randomUuid().toString();
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()

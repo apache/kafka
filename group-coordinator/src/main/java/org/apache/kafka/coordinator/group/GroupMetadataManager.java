@@ -1448,7 +1448,7 @@ public class GroupMetadataManager {
         final ConsumerPartitionAssignor.Subscription subscription = deserializeSubscription(protocols);
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions = null;
 
-        if (!isClassicGroupSessionTimeoutValid(memberId, request.sessionTimeoutMs(), responseFuture)) {
+        if (!validateClassicGroupSessionTimeout(memberId, request.sessionTimeoutMs(), responseFuture)) {
             return EMPTY_RESULT;
         }
         throwIfConsumerGroupIsFull(group, memberId);
@@ -2442,7 +2442,7 @@ public class GroupMetadataManager {
      * @param responseFuture    The response future.
      * @return A boolean indicating whether the session timeout is valid.
      */
-    private boolean isClassicGroupSessionTimeoutValid(
+    private boolean validateClassicGroupSessionTimeout(
         String memberId,
         int sessionTimeoutMs,
         CompletableFuture<JoinGroupResponseData> responseFuture
@@ -2503,7 +2503,7 @@ public class GroupMetadataManager {
         String memberId = request.memberId();
         int sessionTimeoutMs = request.sessionTimeoutMs();
 
-        if (isClassicGroupSessionTimeoutValid(memberId, sessionTimeoutMs, responseFuture)) {
+        if (validateClassicGroupSessionTimeout(memberId, sessionTimeoutMs, responseFuture)) {
             boolean isUnknownMember = memberId.equals(UNKNOWN_MEMBER_ID);
             // Group is created if it does not exist and the member id is UNKNOWN. if member
             // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND
