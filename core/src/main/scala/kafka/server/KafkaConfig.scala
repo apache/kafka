@@ -203,14 +203,6 @@ object KafkaConfig {
   val DelegationTokenExpiryTimeMsProp = "delegation.token.expiry.time.ms"
   val DelegationTokenExpiryCheckIntervalMsProp = "delegation.token.expiry.check.interval.ms"
 
-  /** ********* Password encryption configuration for dynamic configs *********/
-  val PasswordEncoderSecretProp = PasswordEncoderConfigs.SECRET
-  val PasswordEncoderOldSecretProp = PasswordEncoderConfigs.OLD_SECRET
-  val PasswordEncoderKeyFactoryAlgorithmProp = PasswordEncoderConfigs.KEYFACTORY_ALGORITHM
-  val PasswordEncoderCipherAlgorithmProp = PasswordEncoderConfigs.CIPHER_ALGORITHM
-  val PasswordEncoderKeyLengthProp = PasswordEncoderConfigs.KEY_LENGTH
-  val PasswordEncoderIterationsProp = PasswordEncoderConfigs.ITERATIONS
-
   /** Internal Configurations **/
   val UnstableApiVersionsEnableProp = "unstable.api.versions.enable"
   val UnstableMetadataVersionsEnableProp = "unstable.metadata.versions.enable"
@@ -418,17 +410,6 @@ object KafkaConfig {
   val DelegationTokenMaxLifeTimeDoc = "The token has a maximum lifetime beyond which it cannot be renewed anymore. Default value 7 days."
   val DelegationTokenExpiryTimeMsDoc = "The token validity time in milliseconds before the token needs to be renewed. Default value 1 day."
   val DelegationTokenExpiryCheckIntervalDoc = "Scan interval to remove expired delegation tokens."
-
-  /** ********* Password encryption configuration for dynamic configs *********/
-  val PasswordEncoderSecretDoc = "The secret used for encoding dynamically configured passwords for this broker."
-  val PasswordEncoderOldSecretDoc = "The old secret that was used for encoding dynamically configured passwords. " +
-    "This is required only when the secret is updated. If specified, all dynamically encoded passwords are " +
-    s"decoded using this old secret and re-encoded using $PasswordEncoderSecretProp when broker starts up."
-  val PasswordEncoderKeyFactoryAlgorithmDoc = "The SecretKeyFactory algorithm used for encoding dynamically configured passwords. " +
-    "Default is PBKDF2WithHmacSHA512 if available and PBKDF2WithHmacSHA1 otherwise."
-  val PasswordEncoderCipherAlgorithmDoc = "The Cipher algorithm used for encoding dynamically configured passwords."
-  val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
-  val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
   @nowarn("cat=deprecation")
   val configDef = {
@@ -765,12 +746,12 @@ object KafkaConfig {
       .define(DelegationTokenExpiryCheckIntervalMsProp, LONG, Defaults.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS, atLeast(1), LOW, DelegationTokenExpiryCheckIntervalDoc)
 
       /** ********* Password encryption configuration for dynamic configs *********/
-      .define(PasswordEncoderSecretProp, PASSWORD, null, MEDIUM, PasswordEncoderSecretDoc)
-      .define(PasswordEncoderOldSecretProp, PASSWORD, null, MEDIUM, PasswordEncoderOldSecretDoc)
-      .define(PasswordEncoderKeyFactoryAlgorithmProp, STRING, null, LOW, PasswordEncoderKeyFactoryAlgorithmDoc)
-      .define(PasswordEncoderCipherAlgorithmProp, STRING, Defaults.PASSWORD_ENCODER_CIPHER_ALGORITHM, LOW, PasswordEncoderCipherAlgorithmDoc)
-      .define(PasswordEncoderKeyLengthProp, INT, Defaults.PASSWORD_ENCODER_KEY_LENGTH, atLeast(8), LOW, PasswordEncoderKeyLengthDoc)
-      .define(PasswordEncoderIterationsProp, INT, Defaults.PASSWORD_ENCODER_ITERATIONS, atLeast(1024), LOW, PasswordEncoderIterationsDoc)
+      .define(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG, PASSWORD, null, MEDIUM, PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_DOC)
+      .define(PasswordEncoderConfigs.PASSWORD_ENCODER_OLD_SECRET_CONFIG, PASSWORD, null, MEDIUM, PasswordEncoderConfigs.PASSWORD_ENCODER_OLD_SECRET_DOC)
+      .define(PasswordEncoderConfigs.PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_CONFIG, STRING, null, LOW, PasswordEncoderConfigs.PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_DOC)
+      .define(PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG, STRING, PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT, LOW, PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_DOC)
+      .define(PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_CONFIG, INT, PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_DEFAULT, atLeast(8), LOW, PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_DOC)
+      .define(PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG, INT, PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_DEFAULT, atLeast(1024), LOW, PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_DOC)
 
       /** ********* Raft Quorum Configuration *********/
       .define(RaftConfig.QUORUM_VOTERS_CONFIG, LIST, Defaults.QUORUM_VOTERS, new RaftConfig.ControllerQuorumVotersValidator(), HIGH, RaftConfig.QUORUM_VOTERS_DOC)
@@ -1349,12 +1330,12 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val delegationTokenExpiryCheckIntervalMs = getLong(KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp)
 
   /** ********* Password encryption configuration for dynamic configs *********/
-  def passwordEncoderSecret = Option(getPassword(KafkaConfig.PasswordEncoderSecretProp))
-  def passwordEncoderOldSecret = Option(getPassword(KafkaConfig.PasswordEncoderOldSecretProp))
-  def passwordEncoderCipherAlgorithm = getString(KafkaConfig.PasswordEncoderCipherAlgorithmProp)
-  def passwordEncoderKeyFactoryAlgorithm = getString(KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp)
-  def passwordEncoderKeyLength = getInt(KafkaConfig.PasswordEncoderKeyLengthProp)
-  def passwordEncoderIterations = getInt(KafkaConfig.PasswordEncoderIterationsProp)
+  def passwordEncoderSecret = Option(getPassword(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG))
+  def passwordEncoderOldSecret = Option(getPassword(PasswordEncoderConfigs.PASSWORD_ENCODER_OLD_SECRET_CONFIG))
+  def passwordEncoderCipherAlgorithm = getString(PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG)
+  def passwordEncoderKeyFactoryAlgorithm = getString(PasswordEncoderConfigs.PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_CONFIG)
+  def passwordEncoderKeyLength = getInt(PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_CONFIG)
+  def passwordEncoderIterations = getInt(PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG)
 
   /** ********* Quota Configuration **************/
   val numQuotaSamples = getInt(KafkaConfig.NumQuotaSamplesProp)

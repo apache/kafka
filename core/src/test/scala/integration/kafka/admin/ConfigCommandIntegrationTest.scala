@@ -18,12 +18,13 @@ package kafka.admin
 
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.cluster.{Broker, EndPoint}
-import kafka.server.{KafkaConfig, QuorumTestHarness}
+import kafka.server.QuorumTestHarness
 import kafka.utils.{Exit, Logging}
 import kafka.zk.{AdminZkClient, BrokerInfo}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.security.PasswordEncoderConfigs
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ZooKeeperInternals
 import org.junit.jupiter.api.Assertions._
@@ -134,10 +135,10 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
 
     // Password config update with encoder secret should succeed and encoded password must be stored in ZK
     val configs = Map("listener.name.external.ssl.keystore.password" -> "secret", "log.cleaner.threads" -> "2")
-    val encoderConfigs = Map(KafkaConfig.PasswordEncoderSecretProp -> "encoder-secret")
+    val encoderConfigs = Map(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG -> "encoder-secret")
     alterConfigWithZk(configs, Some(brokerId), encoderConfigs)
     val brokerConfigs = zkClient.getEntityConfigs("brokers", brokerId)
-    assertFalse(brokerConfigs.contains(KafkaConfig.PasswordEncoderSecretProp), "Encoder secret stored in ZooKeeper")
+    assertFalse(brokerConfigs.contains(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG), "Encoder secret stored in ZooKeeper")
     assertEquals("2", brokerConfigs.getProperty("log.cleaner.threads")) // not encoded
     val encodedPassword = brokerConfigs.getProperty("listener.name.external.ssl.keystore.password")
     val passwordEncoder = ConfigCommand.createPasswordEncoder(encoderConfigs)
@@ -146,11 +147,11 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
 
     // Password config update with overrides for encoder parameters
     val configs2 = Map("listener.name.internal.ssl.keystore.password" -> "secret2")
-    val encoderConfigs2 = Map(KafkaConfig.PasswordEncoderSecretProp -> "encoder-secret",
-      KafkaConfig.PasswordEncoderCipherAlgorithmProp -> "DES/CBC/PKCS5Padding",
-      KafkaConfig.PasswordEncoderIterationsProp -> "1024",
-      KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp -> "PBKDF2WithHmacSHA1",
-      KafkaConfig.PasswordEncoderKeyLengthProp -> "64")
+    val encoderConfigs2 = Map(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG -> "encoder-secret",
+      PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG -> "DES/CBC/PKCS5Padding",
+      PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG -> "1024",
+      PasswordEncoderConfigs.PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_CONFIG -> "PBKDF2WithHmacSHA1",
+      PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_CONFIG -> "64")
     alterConfigWithZk(configs2, Some(brokerId), encoderConfigs2)
     val brokerConfigs2 = zkClient.getEntityConfigs("brokers", brokerId)
     val encodedPassword2 = brokerConfigs2.getProperty("listener.name.internal.ssl.keystore.password")
