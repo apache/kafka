@@ -117,6 +117,11 @@ public class TargetAssignmentBuilder {
     private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
 
     /**
+     * The subscription model followed by the group.
+     */
+    private boolean isSubscriptionHomogeneous;
+
+    /**
      * The existing target assignment.
      */
     private Map<String, Assignment> targetAssignment = Collections.emptyMap();
@@ -185,6 +190,20 @@ public class TargetAssignmentBuilder {
         Map<String, TopicMetadata> subscriptionMetadata
     ) {
         this.subscriptionMetadata = subscriptionMetadata;
+        return this;
+    }
+
+    /**
+     * Adds the subscription model in use.
+     *
+     * @param isSubscriptionHomogeneous  The flag that depicts whether the subscription
+     *                                   model is homogeneous for the group.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withSubscriptionModel(
+        boolean isSubscriptionHomogeneous
+    ) {
+        this.isSubscriptionHomogeneous = isSubscriptionHomogeneous;
         return this;
     }
 
