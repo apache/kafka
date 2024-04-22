@@ -10474,23 +10474,27 @@ public class GroupMetadataManagerTest {
         );
 
         List<Record> expectedRecords = Arrays.asList(
-            RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId2),
-            RecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId2),
-            RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId2),
-
-            RecordHelpers.newGroupEpochRecord(groupId, 11),
-
             RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId1),
+            RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId2),
+
             RecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId1),
+            RecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId2),
             RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId),
+
             RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId1),
+            RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId2),
             RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId),
             RecordHelpers.newGroupEpochTombstoneRecord(groupId),
 
             RecordHelpers.newGroupMetadataRecord(expectedClassicGroup, assignments, MetadataVersion.latestTesting())
         );
 
-        assertRecordsEquals(expectedRecords, result.records());
+        assertUnorderedListEquals(expectedRecords.subList(0, 2), result.records().subList(0, 2));
+        assertUnorderedListEquals(expectedRecords.subList(2, 4), result.records().subList(2, 4));
+        assertRecordEquals(expectedRecords.get(4), result.records().get(4));
+        assertUnorderedListEquals(expectedRecords.subList(5, 7), result.records().subList(5, 7));
+        assertRecordsEquals(expectedRecords.subList(7, 9), result.records().subList(7, 9));
+
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
@@ -10663,22 +10667,26 @@ public class GroupMetadataManagerTest {
             )
         );
         List<Record> expectedRecords = Arrays.asList(
-            RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId2),
-            RecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId2),
-            RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId2),
-
-            RecordHelpers.newGroupEpochRecord(groupId, 11),
-
             RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId1),
+            RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId2),
+
             RecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId1),
+            RecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId2),
             RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId),
+
             RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId1),
+            RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId2),
             RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId),
             RecordHelpers.newGroupEpochTombstoneRecord(groupId),
 
             RecordHelpers.newGroupMetadataRecord(expectedClassicGroup, assignments, MetadataVersion.latestTesting())
         );
-        assertRecordsEquals(expectedRecords, timeout.result.records());
+
+        assertUnorderedListEquals(expectedRecords.subList(0, 2), timeout.result.records().subList(0, 2));
+        assertUnorderedListEquals(expectedRecords.subList(2, 4), timeout.result.records().subList(2, 4));
+        assertRecordEquals(expectedRecords.get(4), timeout.result.records().get(4));
+        assertUnorderedListEquals(expectedRecords.subList(5, 7), timeout.result.records().subList(5, 7));
+        assertRecordsEquals(expectedRecords.subList(7, 9), timeout.result.records().subList(7, 9));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
@@ -10871,23 +10879,28 @@ public class GroupMetadataManagerTest {
                 assignment
             )
         );
+
         List<Record> expectedRecords = Arrays.asList(
-            RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId2),
-            RecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId2),
-            RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId2),
-
-            RecordHelpers.newGroupEpochRecord(groupId, 12),
-
             RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId1),
+            RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId2),
+
             RecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId1),
+            RecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId2),
             RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId),
+
             RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId1),
+            RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId2),
             RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId),
             RecordHelpers.newGroupEpochTombstoneRecord(groupId),
 
             RecordHelpers.newGroupMetadataRecord(expectedClassicGroup, assignments, MetadataVersion.latestTesting())
         );
-        assertRecordsEquals(expectedRecords, timeout.result.records());
+
+        assertUnorderedListEquals(expectedRecords.subList(0, 2), timeout.result.records().subList(0, 2));
+        assertUnorderedListEquals(expectedRecords.subList(2, 4), timeout.result.records().subList(2, 4));
+        assertRecordEquals(expectedRecords.get(4), timeout.result.records().get(4));
+        assertUnorderedListEquals(expectedRecords.subList(5, 7), timeout.result.records().subList(5, 7));
+        assertRecordsEquals(expectedRecords.subList(7, 9), timeout.result.records().subList(7, 9));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.RECONCILING, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);

@@ -771,36 +771,18 @@ public class ConsumerGroup implements Group {
      */
     @Override
     public void createGroupTombstoneRecords(List<Record> records) {
-        records.add(RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
-        records.add(RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
-        records.add(RecordHelpers.newGroupEpochTombstoneRecord(groupId()));
-    }
+        members().forEach((memberId, member) ->
+            records.add(RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId(), memberId))
+        );
 
-    /**
-     * Populates the list of records with tombstone(s) for deleting the group to downgrade it to a ClassicGroup.
-     *
-     * @param leavingMemberId   The leaving member that triggers the downgrade.
-     * @param records           The list of records.
-     */
-    public void createGroupTombstoneRecordsForDowngrade(String leavingMemberId, List<Record> records) {
-        members().forEach((memberId, member) -> {
-            if (!memberId.equals(leavingMemberId)) {
-                records.add(RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId(), memberId));
-            }
-        });
-
-        members().forEach((memberId, member) -> {
-            if (!memberId.equals(leavingMemberId)) {
-                records.add(RecordHelpers.newTargetAssignmentTombstoneRecord(groupId(), memberId));
-            }
-        });
+        members().forEach((memberId, member) ->
+            records.add(RecordHelpers.newTargetAssignmentTombstoneRecord(groupId(), memberId))
+        );
         records.add(RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
 
-        members().forEach((memberId, member) -> {
-            if (!memberId.equals(leavingMemberId)) {
-                records.add(RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId(), memberId));
-            }
-        });
+        members().forEach((memberId, member) ->
+            records.add(RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId(), memberId))
+        );
 
         records.add(RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
         records.add(RecordHelpers.newGroupEpochTombstoneRecord(groupId()));
