@@ -66,7 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.ALL, brokers = 3, serverProperties = {
+@ClusterTestDefaults(clusterType = Type.ALL, brokers = 1, serverProperties = {
         @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
 })
@@ -117,10 +117,12 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTest
     public void testDeleteCmdNonEmptyGroup() throws Exception {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (
+                Admin admin = cluster.createAdminClient();
+                ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP)
+        ) {
             admin.createTopics(buildSingletonTestTopic());
             // run one consumer in the group
-            ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP);
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
             TestUtils.waitForCondition(
@@ -131,19 +133,18 @@ public class DeleteConsumerGroupsTest {
             String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
             assertTrue(output.contains("Group '" + GROUP + "' could not be deleted due to:") && output.contains(Errors.NON_EMPTY_GROUP.message()),
                     "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Output was: (" + output + ")");
-
-            consumerGroupExecutor.shutdown();
         }
     }
 
     @ClusterTest
     public void testDeleteNonEmptyGroup() throws Exception {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (
+                Admin admin = cluster.createAdminClient();
+                ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP)
+        ) {
             admin.createTopics(buildSingletonTestTopic());
 
             // run one consumer in the group
-            ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP);
-
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
@@ -157,18 +158,16 @@ public class DeleteConsumerGroupsTest {
                     "Group was deleted successfully, but it shouldn't have been. Result was:(" + result + ")");
             assertTrue(result.size() == 1 && result.containsKey(GROUP) && result.get(GROUP).getCause() instanceof GroupNotEmptyException,
                     "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Result was:(" + result + ")");
-
-            consumerGroupExecutor.shutdown();
         }
     }
 
     @ClusterTest
     public void testDeleteCmdEmptyGroup() throws Exception {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (
+                Admin admin = cluster.createAdminClient();
+                ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP);
+        ) {
             admin.createTopics(buildSingletonTestTopic());
-
-            // run one consumer in the group
-            ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP);
 
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -178,7 +177,7 @@ public class DeleteConsumerGroupsTest {
                     "The group did not initialize as expected."
             );
 
-            consumerGroupExecutor.shutdown();
+            consumerGroupExecutor.close();
 
             TestUtils.waitForCondition(
                     () -> Objects.equals(service.collectGroupState(GROUP).state, "Empty"),
@@ -210,7 +209,9 @@ public class DeleteConsumerGroupsTest {
                     "The group did not initialize as expected.");
 
             // Shutdown consumers to empty out groups
-            groupNameToExecutor.values().forEach(ConsumerGroupExecutor::shutdown);
+            for (ConsumerGroupExecutor consumerGroupExecutor : groupNameToExecutor.values()) {
+                consumerGroupExecutor.close();
+            }
 
             TestUtils.waitForCondition(() ->
                             groupNameToExecutor.keySet().stream().allMatch(checkGroupState(service, "Empty")),
@@ -230,11 +231,13 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTest
     public void testDeleteEmptyGroup() throws Exception {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (
+                Admin admin = cluster.createAdminClient();
+                ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP);
+        ) {
             admin.createTopics(buildSingletonTestTopic());
 
             // run one consumer in the group
-            ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP);
 
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -243,7 +246,7 @@ public class DeleteConsumerGroupsTest {
                     () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state, "Stable"),
                     "The group did not initialize as expected.");
 
-            executor.shutdown();
+            executor.close();
 
             TestUtils.waitForCondition(
                     () -> Objects.equals(service.collectGroupState(GROUP).state, "Empty"),
@@ -257,12 +260,12 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTest
     public void testDeleteCmdWithMixOfSuccessAndError() throws Exception {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (
+                Admin admin = cluster.createAdminClient();
+                ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP)
+        ) {
             admin.createTopics(buildSingletonTestTopic());
             String missingGroup = "missing.group";
-
-            // run one consumer in the group
-            ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP);
 
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -271,8 +274,7 @@ public class DeleteConsumerGroupsTest {
                     () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state, "Stable"),
                     "The group did not initialize as expected.");
 
-            executor.shutdown();
-
+            executor.close();
             TestUtils.waitForCondition(
                     () -> Objects.equals(service.collectGroupState(GROUP).state, "Empty"),
                     "The group did not become empty as expected.");
@@ -291,12 +293,12 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTest
     public void testDeleteWithMixOfSuccessAndError() throws Exception {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (
+                Admin admin = cluster.createAdminClient();
+                ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP);
+        ) {
             admin.createTopics(buildSingletonTestTopic());
             String missingGroup = "missing.group";
-
-            // run one consumer in the group
-            ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP);
 
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -305,7 +307,7 @@ public class DeleteConsumerGroupsTest {
                     () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state, "Stable"),
                     "The group did not initialize as expected.");
 
-            executor.shutdown();
+            executor.close();
 
             TestUtils.waitForCondition(
                     () -> Objects.equals(service.collectGroupState(GROUP).state, "Empty"),
@@ -363,11 +365,12 @@ public class DeleteConsumerGroupsTest {
         );
     }
 
-    abstract class AbstractConsumerRunnable implements Runnable {
+    static abstract class AbstractConsumerRunnable implements Runnable {
         final String broker;
         final String groupId;
         final Optional<Properties> customPropsOpt;
         final boolean syncCommit;
+        volatile boolean isShutdown = false;
 
         final Properties props = new Properties();
         KafkaConsumer<String, String> consumer;
@@ -402,7 +405,7 @@ public class DeleteConsumerGroupsTest {
             assert configured : "Must call configure before use";
             try {
                 subscribe();
-                while (true) {
+                while (!isShutdown) {
                     consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
                     if (syncCommit)
                         consumer.commitSync();
@@ -415,11 +418,12 @@ public class DeleteConsumerGroupsTest {
         }
 
         void shutdown() {
+            isShutdown = true;
             consumer.wakeup();
         }
     }
 
-    class ConsumerRunnable extends AbstractConsumerRunnable {
+    static class ConsumerRunnable extends AbstractConsumerRunnable {
         final String topic;
         final String groupProtocol;
         final String strategy;
@@ -453,14 +457,38 @@ public class DeleteConsumerGroupsTest {
     }
 
 
-    class AbstractConsumerGroupExecutor {
+    static class ConsumerGroupExecutor implements AutoCloseable {
         final int numThreads;
         final ExecutorService executor;
         final List<AbstractConsumerRunnable> consumers = new ArrayList<>();
 
-        public AbstractConsumerGroupExecutor(int numThreads) {
-            this.numThreads = numThreads;
+        public ConsumerGroupExecutor(
+                String broker,
+                int numConsumers,
+                String groupId,
+                String groupProtocol,
+                String topic,
+                String strategy,
+                Optional<String> remoteAssignor,
+                Optional<Properties> customPropsOpt,
+                boolean syncCommit
+        ) {
+            this.numThreads = numConsumers;
             this.executor = Executors.newFixedThreadPool(numThreads);
+            IntStream.rangeClosed(1, numConsumers).forEach(i -> {
+                ConsumerRunnable th = new ConsumerRunnable(
+                        broker,
+                        groupId,
+                        groupProtocol,
+                        topic,
+                        strategy,
+                        remoteAssignor,
+                        customPropsOpt,
+                        syncCommit
+                );
+                th.configure();
+                submit(th);
+            });
         }
 
         void submit(AbstractConsumerRunnable consumerThread) {
@@ -468,7 +496,8 @@ public class DeleteConsumerGroupsTest {
             executor.submit(consumerThread);
         }
 
-        void shutdown() {
+        @Override
+        public void close() throws Exception {
             consumers.forEach(AbstractConsumerRunnable::shutdown);
             executor.shutdown();
             try {
@@ -476,18 +505,6 @@ public class DeleteConsumerGroupsTest {
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
-        }
-    }
-
-    class ConsumerGroupExecutor extends AbstractConsumerGroupExecutor {
-        public ConsumerGroupExecutor(String broker, int numConsumers, String groupId, String groupProtocol, String topic, String strategy,
-                                     Optional<String> remoteAssignor, Optional<Properties> customPropsOpt, boolean syncCommit) {
-            super(numConsumers);
-            IntStream.rangeClosed(1, numConsumers).forEach(i -> {
-                ConsumerRunnable th = new ConsumerRunnable(broker, groupId, groupProtocol, topic, strategy, remoteAssignor, customPropsOpt, syncCommit);
-                th.configure();
-                submit(th);
-            });
         }
     }
 }
