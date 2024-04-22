@@ -25,6 +25,8 @@ import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.CreateTopicsResult;
+import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
@@ -66,7 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.ALL, brokers = 1, serverProperties = {
+@ClusterTestDefaults(clusterType = Type.ALL, serverProperties = {
         @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
 })
@@ -80,18 +82,18 @@ public class DeleteConsumerGroupsTest {
     }
 
     @ClusterTest
-    public void testDeleteWithTopicOption() {
+    public void testDeleteWithTopicOption() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(buildSingletonTestTopic());
+            createAndAwaitTestTopic(admin);
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP, "--topic"};
             assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
         }
     }
 
     @ClusterTest
-    public void testDeleteCmdNonExistingGroup() {
+    public void testDeleteCmdNonExistingGroup() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(buildSingletonTestTopic());
+            createAndAwaitTestTopic(admin);
             String missingGroup = "missing.group";
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroup};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -102,9 +104,9 @@ public class DeleteConsumerGroupsTest {
     }
 
     @ClusterTest
-    public void testDeleteNonExistingGroup() {
+    public void testDeleteNonExistingGroup() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(buildSingletonTestTopic());
+            createAndAwaitTestTopic(admin);
             String missingGroup = "missing.group";
             // note the group to be deleted is a different (non-existing) group
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroup};
@@ -121,8 +123,7 @@ public class DeleteConsumerGroupsTest {
                 Admin admin = cluster.createAdminClient();
                 ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP)
         ) {
-            admin.createTopics(buildSingletonTestTopic());
-            // run one consumer in the group
+            createAndAwaitTestTopic(admin);
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
             TestUtils.waitForCondition(
@@ -142,9 +143,7 @@ public class DeleteConsumerGroupsTest {
                 Admin admin = cluster.createAdminClient();
                 ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP)
         ) {
-            admin.createTopics(buildSingletonTestTopic());
-
-            // run one consumer in the group
+            createAndAwaitTestTopic(admin);
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
@@ -158,6 +157,9 @@ public class DeleteConsumerGroupsTest {
                     "Group was deleted successfully, but it shouldn't have been. Result was:(" + result + ")");
             assertTrue(result.size() == 1 && result.containsKey(GROUP) && result.get(GROUP).getCause() instanceof GroupNotEmptyException,
                     "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Result was:(" + result + ")");
+
+            DeleteTopicsResult deleteTopicsResult = admin.deleteTopics(singleton(TOPIC));
+            deleteTopicsResult.all().get();
         }
     }
 
@@ -165,9 +167,9 @@ public class DeleteConsumerGroupsTest {
     public void testDeleteCmdEmptyGroup() throws Exception {
         try (
                 Admin admin = cluster.createAdminClient();
-                ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP);
+                ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP)
         ) {
-            admin.createTopics(buildSingletonTestTopic());
+            createAndAwaitTestTopic(admin);
 
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -193,7 +195,7 @@ public class DeleteConsumerGroupsTest {
     @ClusterTest
     public void testDeleteCmdAllGroups() throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(buildSingletonTestTopic());
+            createAndAwaitTestTopic(admin);
 
             // Create 3 groups with 1 consumer per each
             Map<String, ConsumerGroupExecutor> groupNameToExecutor = IntStream.rangeClosed(1, 3)
@@ -233,12 +235,9 @@ public class DeleteConsumerGroupsTest {
     public void testDeleteEmptyGroup() throws Exception {
         try (
                 Admin admin = cluster.createAdminClient();
-                ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP);
+                ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP)
         ) {
-            admin.createTopics(buildSingletonTestTopic());
-
-            // run one consumer in the group
-
+            createAndAwaitTestTopic(admin);
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
@@ -255,6 +254,7 @@ public class DeleteConsumerGroupsTest {
             Map<String, Throwable> result = service.deleteGroups();
             assertTrue(result.size() == 1 && result.containsKey(GROUP) && result.get(GROUP) == null,
                     "The consumer group could not be deleted as expected");
+
         }
     }
 
@@ -264,9 +264,8 @@ public class DeleteConsumerGroupsTest {
                 Admin admin = cluster.createAdminClient();
                 ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP)
         ) {
-            admin.createTopics(buildSingletonTestTopic());
+            createAndAwaitTestTopic(admin);
             String missingGroup = "missing.group";
-
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
@@ -295,11 +294,10 @@ public class DeleteConsumerGroupsTest {
     public void testDeleteWithMixOfSuccessAndError() throws Exception {
         try (
                 Admin admin = cluster.createAdminClient();
-                ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP);
+                ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP)
         ) {
-            admin.createTopics(buildSingletonTestTopic());
+            createAndAwaitTestTopic(admin);
             String missingGroup = "missing.group";
-
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
@@ -331,6 +329,12 @@ public class DeleteConsumerGroupsTest {
         assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
     }
 
+    private void createAndAwaitTestTopic(Admin admin) throws Exception {
+        Set<NewTopic> singletonTopic = singleton(new NewTopic(TOPIC, 1, (short) 1));
+        CreateTopicsResult result = admin.createTopics(singletonTopic);
+        result.all().get();
+    }
+
     private ConsumerGroupExecutor buildConsumerGroupExecutor(String group) {
         return new ConsumerGroupExecutor(cluster.bootstrapServers(),
                 1,
@@ -351,10 +355,6 @@ public class DeleteConsumerGroupsTest {
                 throw new RuntimeException(e);
             }
         };
-    }
-
-    private Set<NewTopic> buildSingletonTestTopic() {
-        return singleton(new NewTopic(TOPIC, 1, (short) 1));
     }
 
     ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
