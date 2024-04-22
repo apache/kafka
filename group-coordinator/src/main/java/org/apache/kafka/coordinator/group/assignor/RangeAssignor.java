@@ -88,19 +88,32 @@ public class RangeAssignor implements PartitionAssignor {
      */
     private Map<Uuid, List<String>> membersPerTopic(final AssignmentSpec assignmentSpec, final SubscribedTopicDescriber subscribedTopicDescriber) {
         Map<Uuid, List<String>> membersPerTopic = new HashMap<>();
+
         Map<String, AssignmentMemberSpec> membersData = assignmentSpec.members();
 
-        membersData.forEach((memberId, memberMetadata) -> {
-            Collection<Uuid> topics = memberMetadata.subscribedTopicIds();
+        if (assignmentSpec.isSubscriptionHomogeneous()) {
+            List<String> allMembers = new ArrayList<>(membersData.keySet());
+            Collection<Uuid> topics = membersData.values().iterator().next().subscribedTopicIds();
+
             for (Uuid topicId : topics) {
                 if (subscribedTopicDescriber.numPartitions(topicId) == -1) {
                     throw new PartitionAssignorException("Member is subscribed to a non-existent topic");
                 }
-                membersPerTopic
-                    .computeIfAbsent(topicId, k -> new ArrayList<>())
-                    .add(memberId);
+                membersPerTopic.put(topicId, allMembers);
             }
-        });
+        } else {
+            membersData.forEach((memberId, memberMetadata) -> {
+                Collection<Uuid> topics = memberMetadata.subscribedTopicIds();
+                for (Uuid topicId : topics) {
+                    if (subscribedTopicDescriber.numPartitions(topicId) == -1) {
+                        throw new PartitionAssignorException("Member is subscribed to a non-existent topic");
+                    }
+                    membersPerTopic
+                        .computeIfAbsent(topicId, k -> new ArrayList<>())
+                        .add(memberId);
+                }
+            });
+        }
 
         return membersPerTopic;
     }
