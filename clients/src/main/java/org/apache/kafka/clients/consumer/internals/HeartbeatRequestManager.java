@@ -266,7 +266,7 @@ public class HeartbeatRequestManager implements RequestManager {
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs,
                                                                      final boolean ignoreResponse) {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
-        heartbeatRequestState.onSendAttempt();
+        heartbeatRequestState.onSendAttempt(currentTimeMs);
         membershipManager.onHeartbeatRequestSent();
         metricsManager.recordHeartbeatSentMs(currentTimeMs);
         return request;

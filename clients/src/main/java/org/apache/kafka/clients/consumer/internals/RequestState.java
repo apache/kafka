@@ -27,6 +27,7 @@ class RequestState {
     final static int RETRY_BACKOFF_EXP_BASE = 2;
     final static double RETRY_BACKOFF_JITTER = 0.2;
     protected final ExponentialBackoff exponentialBackoff;
+    protected long lastSentMs = -1;
     protected long lastReceivedMs = -1;
     protected int numAttempts = 0;
     protected long backoffMs = 0;
@@ -67,6 +68,7 @@ class RequestState {
      */
     public void reset() {
         this.requestInFlight = false;
+        this.lastSentMs = -1;
         this.lastReceivedMs = -1;
         this.numAttempts = 0;
         this.backoffMs = exponentialBackoff.backoff(0);
@@ -96,8 +98,11 @@ class RequestState {
         return requestInFlight;
     }
 
-    public void onSendAttempt() {
+    public void onSendAttempt(final long currentTimeMs) {
         this.requestInFlight = true;
+
+        // Here we update the timer everytime we try to send a request.
+        this.lastSentMs = currentTimeMs;
     }
 
     /**
@@ -143,13 +148,15 @@ class RequestState {
     protected String toStringBase() {
         return "owner='" + owner + '\'' +
                 ", exponentialBackoff=" + exponentialBackoff +
+                ", lastSentMs=" + lastSentMs +
                 ", lastReceivedMs=" + lastReceivedMs +
                 ", numAttempts=" + numAttempts +
-                ", backoffMs=" + backoffMs;
+                ", backoffMs=" + backoffMs +
+                ", requestInFlight=" + requestInFlight;
     }
 
     @Override
-    public String toString() {
-        return "RequestState{" + toStringBase() + '}';
+    public final String toString() {
+        return getClass().getSimpleName() + "{" + toStringBase() + '}';
     }
 }

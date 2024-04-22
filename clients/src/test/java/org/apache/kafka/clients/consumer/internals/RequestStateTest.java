@@ -37,7 +37,7 @@ public class RequestStateTest {
 
         // ensure not permitting consecutive requests
         assertTrue(state.canSendRequest(0));
-        state.onSendAttempt();
+        state.onSendAttempt(0);
         assertFalse(state.canSendRequest(0));
         state.onFailedAttempt(35);
         assertTrue(state.canSendRequest(135));
@@ -74,7 +74,7 @@ public class RequestStateTest {
         assertFalse(state.requestInFlight());
 
         // When we've sent a request, the flag should update from false to true.
-        state.onSendAttempt();
+        state.onSendAttempt(202);
         assertTrue(state.requestInFlight());
 
         // Now we've received the response.
@@ -83,7 +83,7 @@ public class RequestStateTest {
         // When we've sent a second request with THE SAME TIMESTAMP as the previous response,
         // the flag should update from false to true.
         assertFalse(state.requestInFlight());
-        state.onSendAttempt();
+        state.onSendAttempt(236);
         assertTrue(state.requestInFlight());
     }
 }

@@ -1090,14 +1090,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         @Override
-        public String toString() {
-            return "OffsetFetchRequestState{" +
-                    "requestedPartitions=" + requestedPartitions +
+        public String toStringBase() {
+            return super.toStringBase() +
+                    ", requestedPartitions=" + requestedPartitions +
                     ", memberId=" + memberInfo.memberId.orElse("undefined") +
                     ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ? memberInfo.memberEpoch.get() : "undefined") +
-                    ", future=" + future +
-                    ", " + toStringBase() +
-                    '}';
+                    ", future=" + future;
         }
     }
 
@@ -1170,7 +1168,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             // Add all unsent offset commit requests to the unsentRequests list
             List<NetworkClientDelegate.UnsentRequest> unsentRequests = unsentOffsetCommits.stream()
                 .filter(request -> request.canSendRequest(currentTimeMs))
-                .peek(RequestState::onSendAttempt)
+                .peek(request -> request.onSendAttempt(currentTimeMs))
                 .map(OffsetCommitRequestState::toUnsentRequest)
                 .collect(Collectors.toCollection(ArrayList::new));
 
@@ -1183,7 +1181,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
             // Add all sendable offset fetch requests to the unsentRequests list and to the inflightOffsetFetches list
             for (OffsetFetchRequestState request : partitionedBySendability.get(true)) {
-                request.onSendAttempt();
+                request.onSendAttempt(currentTimeMs);
                 unsentRequests.add(request.toUnsentRequest());
                 inflightOffsetFetches.add(request);
             }

@@ -174,7 +174,7 @@ public class TopicMetadataRequestManager implements RequestManager {
             if (!canSendRequest(currentTimeMs)) {
                 return Optional.empty();
             }
-            onSendAttempt();
+            onSendAttempt(currentTimeMs);
 
             final MetadataRequest.Builder request = allTopics
                 ? MetadataRequest.Builder.allTopics()
