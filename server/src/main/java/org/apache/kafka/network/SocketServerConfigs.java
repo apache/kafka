@@ -70,7 +70,7 @@ public class SocketServerConfigs {
     public static final String CONTROL_PLANE_LISTENER_NAME_CONFIG = "control.plane.listener.name";
     public static final String CONTROL_PLANE_LISTENER_NAME_DOC = String.format(
             "Name of listener used for communication between controller and brokers. " +
-                    String.format("A broker will use the <code>%s</code> to locate the endpoint in %s list, to listen for connections from the controller. ", LISTENERS_CONFIG) +
+                    "A broker will use the <code>%s</code> to locate the endpoint in %s list, to listen for connections from the controller. " +
                     "For example, if a broker's config is:%n" +
                     "<code>listeners = INTERNAL://192.1.1.8:9092, EXTERNAL://10.1.1.5:9093, CONTROLLER://192.1.1.8:9094" +
                     "listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
@@ -86,7 +86,7 @@ public class SocketServerConfigs {
                     "then the controller will use \"broker1.example.com:9094\" with security protocol \"SSL\" to connect to the broker.%n" +
                     "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections.%n" +
                     "If explicitly configured, the value cannot be the same as the value of <code>%s</code>.",
-            CONTROL_PLANE_LISTENER_NAME_CONFIG, ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG);
+            CONTROL_PLANE_LISTENER_NAME_CONFIG, LISTENERS_CONFIG, ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG);
 
     public static final String SOCKET_SEND_BUFFER_BYTES_CONFIG = "socket.send.buffer.bytes";
     public static final int SOCKET_SEND_BUFFER_BYTES_DEFAULT = 100 * 1024;
