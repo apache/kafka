@@ -210,7 +210,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
         boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
         if (!heartbeatRequestState.canSendRequest(currentTimeMs) && !heartbeatNow) {
-            return new NetworkClientDelegate.PollResult(heartbeatRequestState.nextHeartbeatMs(currentTimeMs));
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
         }
 
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, false);
@@ -246,7 +246,7 @@ public class HeartbeatRequestManager implements RequestManager {
         ) {
             return 0L;
         }
-        return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.nextHeartbeatMs(currentTimeMs));
+        return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
     }
 
     /**
@@ -469,13 +469,18 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatTimer.reset(heartbeatIntervalMs);
         }
 
+        /**
+         * Check if a heartbeat request should be sent on the current time. A heartbeat should be
+         * sent if the heartbeat timer has expired, backoff has expired, and there is no request
+         * in-flight.
+         */
         @Override
         public boolean canSendRequest(final long currentTimeMs) {
             update(currentTimeMs);
             return heartbeatTimer.isExpired() && super.canSendRequest(currentTimeMs);
         }
 
-        public long nextHeartbeatMs(final long currentTimeMs) {
+        public long timeToNextHeartbeatMs(final long currentTimeMs) {
             if (heartbeatTimer.remainingMs() == 0) {
                 return this.remainingBackoffMs(currentTimeMs);
             }
