@@ -1266,7 +1266,7 @@ public class ConfigDef {
                 dependents, recommender, internalConfig, null);
         }
 
-        public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
+        private ConfigKey(String name, Type type, Object defaultValue, Validator validator,
                          Importance importance, String documentation, String group,
                          int orderInGroup, Width width, String displayName,
                          List<String> dependents, Recommender recommender,
