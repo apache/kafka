@@ -159,7 +159,7 @@ class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
         for topic_partition in event["partitions"]:
             tp = _create_partition_from_dict(topic_partition)
             assert tp in self.assignment, \
-                "Topic partition %s could not be revoked from %s as it was not previously assigned" % \
+                "Topic partition %s cannot be revoked from %s as it was not previously assigned to that consumer" % \
                 (tp, node.account.hostname)
             self.assignment.remove(tp)
             revoked.append(tp)
