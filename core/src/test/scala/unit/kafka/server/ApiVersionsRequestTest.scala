@@ -27,7 +27,8 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
 
-
+// TODO: Introduce template in ClusterTests https://issues.apache.org/jira/browse/KAFKA-16595
+//  currently we can't apply template in ClusterTests hence we see bunch of duplicate settings in ClusterTests
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(brokers = 1)
 class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {

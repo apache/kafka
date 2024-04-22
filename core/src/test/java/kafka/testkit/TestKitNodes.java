@@ -115,8 +115,7 @@ public class TestKitNodes {
                 if (!brokerNodeBuilders.containsKey(brokerId)) {
                     throw new RuntimeException("Broker id " + brokerId + " does not exist");
                 }
-                Map<String, String> propertiesOverride = new HashMap<>();
-                properties.forEach((key, value) -> propertiesOverride.put(key.toString(), value.toString()));
+                Map<String, String> propertiesOverride = new HashMap<>(properties);
                 brokerNodeBuilders.get(brokerId).setPropertyOverrides(propertiesOverride);
             });
             return this;

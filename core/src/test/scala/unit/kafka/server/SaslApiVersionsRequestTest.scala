@@ -44,17 +44,26 @@ object SaslApiVersionsRequestTest {
   val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
 
   def saslApiVersionsRequestClusterConfig(clusterGenerator: ClusterGenerator): Unit = {
+    val saslServerProperties = new java.util.HashMap[String, String]()
+    saslServerProperties.put(KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, kafkaClientSaslMechanism)
+    saslServerProperties.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, kafkaServerSaslMechanisms.mkString(","))
+
+    val saslClientProperties = new java.util.HashMap[String, String]()
+    saslClientProperties.put(SaslConfigs.SASL_MECHANISM, kafkaClientSaslMechanism)
+
+    // Configure control plane listener to make sure we have separate listeners for testing.
+    val serverProperties =  new java.util.HashMap[String, String]()
+    serverProperties.put(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListenerName)
+    serverProperties.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$controlPlaneListenerName:$securityProtocol,$securityProtocol:$securityProtocol")
+    serverProperties.put("listeners", s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
+    serverProperties.put(KafkaConfig.AdvertisedListenersProp, s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
+
     clusterGenerator.accept(ClusterConfig.defaultBuilder
-      .securityProtocol(securityProtocol)
-      .`type`(Type.ZK)
-      .putSaslServerProperty(KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, kafkaClientSaslMechanism)
-      .putSaslServerProperty(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, kafkaServerSaslMechanisms.mkString(","))
-      .putSaslClientProperty(SaslConfigs.SASL_MECHANISM, kafkaClientSaslMechanism)
-      // Configure control plane listener to make sure we have separate listeners for testing.
-      .putServerProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListenerName)
-      .putServerProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"$controlPlaneListenerName:$securityProtocol,$securityProtocol:$securityProtocol")
-      .putServerProperty("listeners", s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
-      .putServerProperty(KafkaConfig.AdvertisedListenersProp, s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
+      .setSecurityProtocol(securityProtocol)
+      .setType(Type.ZK)
+      .setSaslServerProperties(saslServerProperties)
+      .setSaslClientProperties(saslClientProperties)
+      .setServerProperties(serverProperties)
       .build())
   }
 }

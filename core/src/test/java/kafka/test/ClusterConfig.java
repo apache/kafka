@@ -31,7 +31,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * Represents a requested configuration of a Kafka cluster for integration testing
+ * Represents an immutable requested configuration of a Kafka cluster for integration testing.
  */
 public class ClusterConfig {
 
@@ -55,7 +55,7 @@ public class ClusterConfig {
     private final Map<Integer, Map<String, String>> perBrokerOverrideProperties;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
-    ClusterConfig(Type type, int brokers, int controllers, String name, boolean autoStart,
+    private ClusterConfig(Type type, int brokers, int controllers, String name, boolean autoStart,
                   SecurityProtocol securityProtocol, String listenerName, File trustStoreFile,
                   MetadataVersion metadataVersion, Map<String, String> serverProperties, Map<String, String> producerProperties,
                   Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
@@ -69,16 +69,13 @@ public class ClusterConfig {
         this.listenerName = listenerName;
         this.trustStoreFile = trustStoreFile;
         this.metadataVersion = metadataVersion;
-        this.serverProperties = Collections.unmodifiableMap(serverProperties);
-        this.producerProperties = Collections.unmodifiableMap(producerProperties);
-        this.consumerProperties = Collections.unmodifiableMap(consumerProperties);
-        this.adminClientProperties = Collections.unmodifiableMap(adminClientProperties);
-        this.saslServerProperties = Collections.unmodifiableMap(saslServerProperties);
-        this.saslClientProperties = Collections.unmodifiableMap(saslClientProperties);
-        this.perBrokerOverrideProperties = Collections.unmodifiableMap(
-                perBrokerOverrideProperties.entrySet().stream()
-                        .map(e -> new AbstractMap.SimpleEntry<>(e.getKey(), Collections.unmodifiableMap(e.getValue())))
-                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+        this.serverProperties = serverProperties;
+        this.producerProperties = producerProperties;
+        this.consumerProperties = consumerProperties;
+        this.adminClientProperties = adminClientProperties;
+        this.saslServerProperties = saslServerProperties;
+        this.saslClientProperties = saslClientProperties;
+        this.perBrokerOverrideProperties = perBrokerOverrideProperties;
     }
 
     public Type clusterType() {
@@ -160,12 +157,12 @@ public class ClusterConfig {
 
     public static Builder defaultBuilder() {
         return new Builder()
-                .type(Type.ZK)
-                .brokers(1)
-                .controllers(1)
-                .autoStart(true)
-                .securityProtocol(SecurityProtocol.PLAINTEXT)
-                .metadataVersion(MetadataVersion.latestTesting());
+                .setType(Type.ZK)
+                .setBrokers(1)
+                .setControllers(1)
+                .setAutoStart(true)
+                .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
+                .setMetadataVersion(MetadataVersion.latestTesting());
     }
 
     public static Builder builder() {
@@ -173,7 +170,23 @@ public class ClusterConfig {
     }
 
     public static Builder builder(ClusterConfig clusterConfig) {
-        return new Builder(clusterConfig);
+        return new Builder()
+                .setType(clusterConfig.type)
+                .setBrokers(clusterConfig.brokers)
+                .setControllers(clusterConfig.controllers)
+                .setName(clusterConfig.name)
+                .setAutoStart(clusterConfig.autoStart)
+                .setSecurityProtocol(clusterConfig.securityProtocol)
+                .setListenerName(clusterConfig.listenerName)
+                .setTrustStoreFile(clusterConfig.trustStoreFile)
+                .setMetadataVersion(clusterConfig.metadataVersion)
+                .setServerProperties(clusterConfig.serverProperties)
+                .setProducerProperties(clusterConfig.producerProperties)
+                .setConsumerProperties(clusterConfig.consumerProperties)
+                .setAdminClientProperties(clusterConfig.adminClientProperties)
+                .setSaslServerProperties(clusterConfig.saslServerProperties)
+                .setSaslClientProperties(clusterConfig.saslClientProperties)
+                .setPerBrokerProperties(clusterConfig.perBrokerOverrideProperties);
     }
 
     public static class Builder {
@@ -186,114 +199,96 @@ public class ClusterConfig {
         private String listenerName;
         private File trustStoreFile;
         private MetadataVersion metadataVersion;
-        private Map<String, String> serverProperties = new HashMap<>();
-        private Map<String, String> producerProperties = new HashMap<>();
-        private Map<String, String> consumerProperties = new HashMap<>();
-        private Map<String, String> adminClientProperties = new HashMap<>();
-        private Map<String, String> saslServerProperties = new HashMap<>();
-        private Map<String, String> saslClientProperties = new HashMap<>();
-        private Map<Integer, Map<String, String>> perBrokerOverrideProperties = new HashMap<>();
+        private Map<String, String> serverProperties = Collections.unmodifiableMap(new HashMap<>());
+        private Map<String, String> producerProperties = Collections.unmodifiableMap(new HashMap<>());
+        private Map<String, String> consumerProperties = Collections.unmodifiableMap(new HashMap<>());
+        private Map<String, String> adminClientProperties = Collections.unmodifiableMap(new HashMap<>());
+        private Map<String, String> saslServerProperties = Collections.unmodifiableMap(new HashMap<>());
+        private Map<String, String> saslClientProperties = Collections.unmodifiableMap(new HashMap<>());
+        private Map<Integer, Map<String, String>> perBrokerOverrideProperties = Collections.unmodifiableMap(new HashMap<>());
 
-        Builder() {}
+        private Builder() {}
 
-        Builder(ClusterConfig clusterConfig) {
-            this.type = clusterConfig.type;
-            this.brokers = clusterConfig.brokers;
-            this.controllers = clusterConfig.controllers;
-            this.name = clusterConfig.name;
-            this.autoStart = clusterConfig.autoStart;
-            this.securityProtocol = clusterConfig.securityProtocol;
-            this.listenerName = clusterConfig.listenerName;
-            this.trustStoreFile = clusterConfig.trustStoreFile;
-            this.metadataVersion = clusterConfig.metadataVersion;
-            this.serverProperties = new HashMap<>(clusterConfig.serverProperties);
-            this.producerProperties = new HashMap<>(clusterConfig.producerProperties);
-            this.consumerProperties = new HashMap<>(clusterConfig.consumerProperties);
-            this.adminClientProperties = new HashMap<>(clusterConfig.adminClientProperties);
-            this.saslServerProperties = new HashMap<>(clusterConfig.saslServerProperties);
-            this.saslClientProperties = new HashMap<>(clusterConfig.saslClientProperties);
-            Map<Integer, Map<String, String>> perBrokerOverrideProps = new HashMap<>();
-            clusterConfig.perBrokerOverrideProperties.forEach((k, v) -> perBrokerOverrideProps.put(k, new HashMap<>(v)));
-            this.perBrokerOverrideProperties = perBrokerOverrideProps;
-        }
-
-        public Builder type(Type type) {
+        public Builder setType(Type type) {
             this.type = type;
             return this;
         }
 
-        public Builder brokers(int brokers) {
+        public Builder setBrokers(int brokers) {
             this.brokers = brokers;
             return this;
         }
 
-        public Builder controllers(int controllers) {
+        public Builder setControllers(int controllers) {
             this.controllers = controllers;
             return this;
         }
 
-        public Builder name(String name) {
+        public Builder setName(String name) {
             this.name = name;
             return this;
         }
 
-        public Builder autoStart(boolean autoStart) {
+        public Builder setAutoStart(boolean autoStart) {
             this.autoStart = autoStart;
             return this;
         }
 
-        public Builder securityProtocol(SecurityProtocol securityProtocol) {
+        public Builder setSecurityProtocol(SecurityProtocol securityProtocol) {
             this.securityProtocol = securityProtocol;
             return this;
         }
 
-        public Builder listenerName(String listenerName) {
+        public Builder setListenerName(String listenerName) {
             this.listenerName = listenerName;
             return this;
         }
 
-        public Builder trustStoreFile(File trustStoreFile) {
+        public Builder setTrustStoreFile(File trustStoreFile) {
             this.trustStoreFile = trustStoreFile;
             return this;
         }
 
-        public Builder metadataVersion(MetadataVersion metadataVersion) {
+        public Builder setMetadataVersion(MetadataVersion metadataVersion) {
             this.metadataVersion = metadataVersion;
             return this;
         }
 
-        public Builder putServerProperty(String key, String value) {
-            serverProperties.put(key, value);
+        public Builder setServerProperties(Map<String, String> serverProperties) {
+            this.serverProperties = Collections.unmodifiableMap(serverProperties);
             return this;
         }
 
-        public Builder putConsumerProperty(String key, String value) {
-            consumerProperties.put(key, value);
+        public Builder setConsumerProperties(Map<String, String> consumerProperties) {
+            this.consumerProperties = Collections.unmodifiableMap(consumerProperties);
             return this;
         }
 
-        public Builder putProducerProperty(String key, String value) {
-            producerProperties.put(key, value);
+        public Builder setProducerProperties(Map<String, String> producerProperties) {
+            this.producerProperties = Collections.unmodifiableMap(producerProperties);
             return this;
         }
 
-        public Builder putAdminClientProperty(String key, String value) {
-            adminClientProperties.put(key, value);
+        public Builder setAdminClientProperties(Map<String, String> adminClientProperties) {
+            this.adminClientProperties = Collections.unmodifiableMap(adminClientProperties);
             return this;
         }
 
-        public Builder putSaslServerProperty(String key, String value) {
-            saslServerProperties.put(key, value);
+        public Builder setSaslServerProperties(Map<String, String> saslServerProperties) {
+            this.saslServerProperties = Collections.unmodifiableMap(saslServerProperties);
             return this;
         }
 
-        public Builder putSaslClientProperty(String key, String value) {
-            saslClientProperties.put(key, value);
+        public Builder setSaslClientProperties(Map<String, String> saslClientProperties) {
+            this.saslClientProperties = Collections.unmodifiableMap(saslClientProperties);
             return this;
         }
 
-        public Builder putPerBrokerProperty(int id, String key, String value) {
-            perBrokerOverrideProperties.computeIfAbsent(id, ignored -> new HashMap<>()).put(key, value);
+        public Builder setPerBrokerProperties(Map<Integer, Map<String, String>> perBrokerOverrideProperties) {
+            this.perBrokerOverrideProperties = Collections.unmodifiableMap(
+                    perBrokerOverrideProperties.entrySet().stream()
+                            .map(e -> new AbstractMap.SimpleEntry<>(e.getKey(), Collections.unmodifiableMap(e.getValue())))
+                            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
             return this;
         }
 

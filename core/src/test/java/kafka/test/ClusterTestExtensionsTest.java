@@ -31,6 +31,10 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 
 @ClusterTestDefaults(clusterType = Type.ZK, serverProperties = {
     @ClusterConfigProperty(key = "default.key", value = "default.value"),
@@ -48,9 +52,11 @@ public class ClusterTestExtensionsTest {
 
     // Static methods can generate cluster configurations
     static void generate1(ClusterGenerator clusterGenerator) {
+        Map<String, String> serverProperties = new HashMap<>();
+        serverProperties.put("foo", "bar");
         clusterGenerator.accept(ClusterConfig.defaultBuilder()
-                .name("Generated Test")
-                .putServerProperty("foo", "bar")
+                .setName("Generated Test")
+                .setServerProperties(Collections.unmodifiableMap(serverProperties))
                 .build());
     }
 

@@ -32,7 +32,9 @@ import org.junit.platform.commons.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -180,25 +182,27 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         }
 
         ClusterConfig.Builder configBuilder = ClusterConfig.builder()
-                .type(type)
-                .brokers(brokers)
-                .controllers(controllers)
-                .autoStart(autoStart)
-                .securityProtocol(annot.securityProtocol())
-                .metadataVersion(annot.metadataVersion());
+                .setType(type)
+                .setBrokers(brokers)
+                .setControllers(controllers)
+                .setAutoStart(autoStart)
+                .setSecurityProtocol(annot.securityProtocol())
+                .setMetadataVersion(annot.metadataVersion());
         if (!annot.name().isEmpty()) {
-            configBuilder.name(annot.name());
+            configBuilder.setName(annot.name());
         }
         if (!annot.listener().isEmpty()) {
-            configBuilder.listenerName(annot.listener());
+            configBuilder.setListenerName(annot.listener());
         }
 
+        Map<String, String> serverProperties = new HashMap<>();
         for (ClusterConfigProperty property : defaults.serverProperties()) {
-            configBuilder.putServerProperty(property.key(), property.value());
+            serverProperties.put(property.key(), property.value());
         }
         for (ClusterConfigProperty property : annot.serverProperties()) {
-            configBuilder.putServerProperty(property.key(), property.value());
+            serverProperties.put(property.key(), property.value());
         }
+        configBuilder.setServerProperties(serverProperties);
         type.invocationContexts(context.getRequiredTestMethod().getName(), configBuilder.build(), testInvocations);
     }
 
