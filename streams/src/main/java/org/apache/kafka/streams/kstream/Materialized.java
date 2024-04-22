@@ -187,8 +187,7 @@ public class Materialized<K, V, S extends StateStore> {
      * @param supplier the {@link SessionBytesStoreSupplier} used to materialize the store
      * @param <K>      key type of the store
      * @param <V>      value type of the store
-     * @return a new {@link Materialized} instance with the given sup
-     * plier
+     * @return a new {@link Materialized} instance with the given supplier
      */
     public static <K, V> Materialized<K, V, SessionStore<Bytes, byte[]>> as(final SessionBytesStoreSupplier supplier) {
         Objects.requireNonNull(supplier, "supplier can't be null");
@@ -240,7 +239,7 @@ public class Materialized<K, V, S extends StateStore> {
     }
 
     /**
-     * Set the keySerde the materialize {@link StateStore} will use.
+     * Set the keySerde the materialized {@link StateStore} will use.
      * @param keySerde  the key {@link Serde} to use. If the {@link Serde} is null, then the default key
      *                  serde from configs will be used
      * @return itself

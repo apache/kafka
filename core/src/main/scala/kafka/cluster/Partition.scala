@@ -1590,8 +1590,8 @@ class Partition(val topicPartition: TopicPartition,
       "unknown epoch"
     }
 
-    // Only consider throwing an error if we get a client request (isolationLevel is defined) and the start offset
-    // is lagging behind the high watermark
+    // Only consider throwing an error if we get a client request (isolationLevel is defined) and the high watermark
+    // is lagging behind the start offset
     val maybeOffsetsError: Option[ApiException] = leaderEpochStartOffsetOpt
       .filter(epochStart => isolationLevel.isDefined && epochStart > localLog.highWatermark)
       .map(epochStart => Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
