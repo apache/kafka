@@ -1298,10 +1298,6 @@ public class GroupMetadataManager {
             .setClientHost(clientHost)
             .build();
 
-        /**
-         * INPUT:   member, updatedMember, currentTimeMs
-         * OUTPUT:  groupEpoch, subscriptionMetadata
-         */
         boolean bumpGroupEpoch = false;
         if (!updatedMember.equals(member)) {
             records.add(newMemberSubscriptionRecord(groupId, updatedMember));
@@ -1349,12 +1345,6 @@ public class GroupMetadataManager {
 
         // 2. Update the target assignment if the group epoch is larger than the target assignment epoch or a static member
         // replaces an existing static member. The delta between the existing and the new target assignment is persisted to the partition.
-
-        /**
-         * INPUT:   group, groupEpoch, staticMemberReplaced, member, updatedMember, records
-         * OUTPUT:  targetAssignmentEpoch, targetAssignment
-         */
-
         int targetAssignmentEpoch = group.assignmentEpoch();
         Assignment targetAssignment = group.targetAssignment(memberId);
         if (groupEpoch > targetAssignmentEpoch || staticMemberReplaced) {
