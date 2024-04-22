@@ -28,11 +28,21 @@ public class AssignmentSpec {
      */
     private final Map<String, AssignmentMemberSpec> members;
 
+    /**
+     * Is the subscription model followed by the group homogeneous.
+     *
+     * A homogeneous subscription model means that all the members
+     * of the group are subscribed to the same set of topics.
+     */
+    private final boolean isSubscriptionHomogeneous;
+
     public AssignmentSpec(
-        Map<String, AssignmentMemberSpec> members
+        Map<String, AssignmentMemberSpec> members,
+        boolean isSubscriptionHomogeneous
     ) {
         Objects.requireNonNull(members);
         this.members = members;
+        this.isSubscriptionHomogeneous = isSubscriptionHomogeneous;
     }
 
     /**
@@ -47,16 +57,16 @@ public class AssignmentSpec {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         AssignmentSpec that = (AssignmentSpec) o;
-        return members.equals(that.members);
+        return isSubscriptionHomogeneous == that.isSubscriptionHomogeneous &&
+            members.equals(that.members);
     }
 
     @Override
     public int hashCode() {
-        return members.hashCode();
+        return Objects.hash(members, isSubscriptionHomogeneous);
     }
 
-    @Override
     public String toString() {
-        return "AssignmentSpec(members=" + members + ')';
+        return "AssignmentSpec(members=" + members + ", isSubscriptionHomogeneous=" + isSubscriptionHomogeneous + ')';
     }
 }
