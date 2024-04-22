@@ -16,14 +16,10 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import org.apache.kafka.common.Uuid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * The Uniform Assignor distributes topic partitions among group members for a
@@ -73,7 +69,7 @@ public class UniformAssignor implements PartitionAssignor {
         if (assignmentSpec.members().isEmpty())
             return new GroupAssignment(Collections.emptyMap());
 
-        if (allSubscriptionsEqual(assignmentSpec.members())) {
+        if (assignmentSpec.isSubscriptionHomogeneous()) {
             LOG.debug("Detected that all members are subscribed to the same set of topics, invoking the "
                 + "optimized assignment algorithm");
             assignmentBuilder = new OptimizedUniformAssignmentBuilder(assignmentSpec, subscribedTopicDescriber);
@@ -84,23 +80,5 @@ public class UniformAssignor implements PartitionAssignor {
         }
 
         return assignmentBuilder.buildAssignment();
-    }
-
-    /**
-     * Determines if all members are subscribed to the same list of topic Ids.
-     *
-     * @param members       Members mapped to their respective {@code AssignmentMemberSpec}.
-     * @return true if all members have the same subscription list of topic Ids,
-     *         false otherwise.
-     */
-    private boolean allSubscriptionsEqual(Map<String, AssignmentMemberSpec> members) {
-        Set<Uuid> firstSubscriptionSet = new HashSet<>(members.values().iterator().next().subscribedTopicIds());
-        for (AssignmentMemberSpec memberSpec : members.values()) {
-            if (firstSubscriptionSet.size() != memberSpec.subscribedTopicIds().size() ||
-                !firstSubscriptionSet.containsAll(memberSpec.subscribedTopicIds())) {
-                return false;
-            }
-        }
-        return true;
     }
 }
