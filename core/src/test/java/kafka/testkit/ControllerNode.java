@@ -24,6 +24,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 
 import java.io.File;
 import java.nio.file.Paths;
+import java.util.Objects;
 import java.util.Optional;
 
 public class ControllerNode implements TestKitNode {
@@ -33,9 +34,9 @@ public class ControllerNode implements TestKitNode {
 
     public static class Builder {
         private int id = -1;
-        private String baseDirectory = null;
-        private String metadataDirectory = null;
-        private Uuid clusterId = null;
+        private String baseDirectory;
+        private String metadataDirectory;
+        private Uuid clusterId;
         private boolean combined;
 
         private Builder() {}
@@ -107,7 +108,7 @@ public class ControllerNode implements TestKitNode {
         MetaPropertiesEnsemble initialMetaPropertiesEnsemble,
         boolean combined
     ) {
-        this.initialMetaPropertiesEnsemble = initialMetaPropertiesEnsemble;
+        this.initialMetaPropertiesEnsemble = Objects.requireNonNull(initialMetaPropertiesEnsemble);
         this.combined = combined;
     }
 

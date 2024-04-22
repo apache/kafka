@@ -22,11 +22,11 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.io.File;
-import java.util.AbstractMap;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -60,22 +60,22 @@ public class ClusterConfig {
                   MetadataVersion metadataVersion, Map<String, String> serverProperties, Map<String, String> producerProperties,
                   Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
                   Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perBrokerOverrideProperties) {
-        this.type = type;
+        this.type = Objects.requireNonNull(type);
         this.brokers = brokers;
         this.controllers = controllers;
         this.name = name;
         this.autoStart = autoStart;
-        this.securityProtocol = securityProtocol;
+        this.securityProtocol = Objects.requireNonNull(securityProtocol);
         this.listenerName = listenerName;
         this.trustStoreFile = trustStoreFile;
-        this.metadataVersion = metadataVersion;
-        this.serverProperties = serverProperties;
-        this.producerProperties = producerProperties;
-        this.consumerProperties = consumerProperties;
-        this.adminClientProperties = adminClientProperties;
-        this.saslServerProperties = saslServerProperties;
-        this.saslClientProperties = saslClientProperties;
-        this.perBrokerOverrideProperties = perBrokerOverrideProperties;
+        this.metadataVersion = Objects.requireNonNull(metadataVersion);
+        this.serverProperties = Objects.requireNonNull(serverProperties);
+        this.producerProperties = Objects.requireNonNull(producerProperties);
+        this.consumerProperties = Objects.requireNonNull(consumerProperties);
+        this.adminClientProperties = Objects.requireNonNull(adminClientProperties);
+        this.saslServerProperties = Objects.requireNonNull(saslServerProperties);
+        this.saslClientProperties = Objects.requireNonNull(saslClientProperties);
+        this.perBrokerOverrideProperties = Objects.requireNonNull(perBrokerOverrideProperties);
     }
 
     public Type clusterType() {
@@ -199,13 +199,13 @@ public class ClusterConfig {
         private String listenerName;
         private File trustStoreFile;
         private MetadataVersion metadataVersion;
-        private Map<String, String> serverProperties = Collections.unmodifiableMap(new HashMap<>());
-        private Map<String, String> producerProperties = Collections.unmodifiableMap(new HashMap<>());
-        private Map<String, String> consumerProperties = Collections.unmodifiableMap(new HashMap<>());
-        private Map<String, String> adminClientProperties = Collections.unmodifiableMap(new HashMap<>());
-        private Map<String, String> saslServerProperties = Collections.unmodifiableMap(new HashMap<>());
-        private Map<String, String> saslClientProperties = Collections.unmodifiableMap(new HashMap<>());
-        private Map<Integer, Map<String, String>> perBrokerOverrideProperties = Collections.unmodifiableMap(new HashMap<>());
+        private Map<String, String> serverProperties = Collections.emptyMap();
+        private Map<String, String> producerProperties = Collections.emptyMap();
+        private Map<String, String> consumerProperties = Collections.emptyMap();
+        private Map<String, String> adminClientProperties = Collections.emptyMap();
+        private Map<String, String> saslServerProperties = Collections.emptyMap();
+        private Map<String, String> saslClientProperties = Collections.emptyMap();
+        private Map<Integer, Map<String, String>> perBrokerOverrideProperties = Collections.emptyMap();
 
         private Builder() {}
 
@@ -287,8 +287,7 @@ public class ClusterConfig {
         public Builder setPerBrokerProperties(Map<Integer, Map<String, String>> perBrokerOverrideProperties) {
             this.perBrokerOverrideProperties = Collections.unmodifiableMap(
                     perBrokerOverrideProperties.entrySet().stream()
-                            .map(e -> new AbstractMap.SimpleEntry<>(e.getKey(), Collections.unmodifiableMap(e.getValue())))
-                            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+                            .collect(Collectors.toMap(Map.Entry::getKey, e -> Collections.unmodifiableMap(new HashMap<>(e.getValue())))));
             return this;
         }
 

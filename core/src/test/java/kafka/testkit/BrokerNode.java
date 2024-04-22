@@ -26,9 +26,9 @@ import java.io.File;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -40,12 +40,12 @@ public class BrokerNode implements TestKitNode {
 
     public static class Builder {
         private int id = -1;
-        private String baseDirectory = null;
-        private Uuid clusterId = null;
-        private Uuid incarnationId = null;
+        private String baseDirectory;
+        private Uuid clusterId;
+        private Uuid incarnationId;
         private int numLogDirectories = 1;
-        private String metadataDirectory = null;
-        private Map<String, String> propertyOverrides = new HashMap<>();
+        private String metadataDirectory;
+        private Map<String, String> propertyOverrides = Collections.emptyMap();
         private boolean combined;
 
         private Builder() {}
@@ -90,7 +90,7 @@ public class BrokerNode implements TestKitNode {
         }
 
         public Builder setPropertyOverrides(Map<String, String> propertyOverrides) {
-            this.propertyOverrides = new HashMap<>(propertyOverrides);
+            this.propertyOverrides = Collections.unmodifiableMap(propertyOverrides);
             return this;
         }
 
@@ -151,10 +151,10 @@ public class BrokerNode implements TestKitNode {
         boolean combined,
         Map<String, String> propertyOverrides
     ) {
-        this.incarnationId = incarnationId;
-        this.initialMetaPropertiesEnsemble = initialMetaPropertiesEnsemble;
+        this.incarnationId = Objects.requireNonNull(incarnationId);
+        this.initialMetaPropertiesEnsemble = Objects.requireNonNull(initialMetaPropertiesEnsemble);
         this.combined = combined;
-        this.propertyOverrides = Collections.unmodifiableMap(propertyOverrides);
+        this.propertyOverrides = Objects.requireNonNull(propertyOverrides);
     }
 
     public Uuid incarnationId() {
