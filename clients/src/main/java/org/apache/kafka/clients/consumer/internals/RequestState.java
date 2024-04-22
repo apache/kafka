@@ -156,7 +156,7 @@ class RequestState {
     }
 
     @Override
-    public final String toString() {
+    public String toString() {
         return getClass().getSimpleName() + "{" + toStringBase() + '}';
     }
 }
