@@ -70,19 +70,20 @@ public class RequestStateTest {
                 1000,
                 0);
 
-        // This is just being paranoid...
+        // Just to be safe, let's make sure a new RequestState object doesn't think it has
+        // an in-flight request.
         assertFalse(state.requestInFlight());
 
-        // When we've sent a request, the flag should update from false to true.
+        // When we've sent a request, the inflight flag should update from false to true.
         state.onSendAttempt(202);
         assertTrue(state.requestInFlight());
 
         // Now we've received the response.
         onCompletedAttempt.accept(state, 236);
-
-        // When we've sent a second request with THE SAME TIMESTAMP as the previous response,
-        // the flag should update from false to true.
         assertFalse(state.requestInFlight());
+
+        // Even when we send a request with the same timestamp as the previous response's timestamp,
+        // the flag should update from false to true.
         state.onSendAttempt(236);
         assertTrue(state.requestInFlight());
     }
