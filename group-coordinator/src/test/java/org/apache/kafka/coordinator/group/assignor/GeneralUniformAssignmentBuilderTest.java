@@ -49,6 +49,7 @@ public class GeneralUniformAssignmentBuilderTest {
     private final String memberA = "A";
     private final String memberB = "B";
     private final String memberC = "C";
+    private final boolean isSubscriptionHomogenous = false;
 
     @Test
     public void testTwoMembersNoTopicSubscription() {
@@ -78,7 +79,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         GroupAssignment groupAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         assertEquals(Collections.emptyMap(), groupAssignment.members());
@@ -112,7 +113,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
 
         assertThrows(PartitionAssignorException.class,
             () -> assignor.assign(assignmentSpec, subscribedTopicMetadata));
@@ -148,7 +149,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
@@ -207,7 +208,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
@@ -271,7 +272,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
@@ -332,7 +333,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
@@ -388,7 +389,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
@@ -471,7 +472,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForC
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
@@ -542,7 +543,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForB
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
@@ -617,7 +618,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForB
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
@@ -692,7 +693,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForB
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
@@ -759,7 +760,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
@@ -829,7 +830,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
@@ -896,7 +897,7 @@ public class GeneralUniformAssignmentBuilderTest {
 
         // Member C was removed
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
@@ -954,7 +955,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForB
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
@@ -1015,7 +1016,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForB
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);

@@ -197,9 +197,10 @@ public class TargetAssignmentBuilderTest {
 
             // Prepare the expected subscription topic metadata.
             SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadataMap);
+            boolean isSubscriptionHomogeneous = true;
 
             // Prepare the expected assignment spec.
-            AssignmentSpec assignmentSpec = new AssignmentSpec(memberSpecs);
+            AssignmentSpec assignmentSpec = new AssignmentSpec(memberSpecs, isSubscriptionHomogeneous);
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.
@@ -211,6 +212,7 @@ public class TargetAssignmentBuilderTest {
                 .withMembers(members)
                 .withStaticMembers(staticMembers)
                 .withSubscriptionMetadata(subscriptionMetadata)
+                .withSubscriptionModel(isSubscriptionHomogeneous)
                 .withTargetAssignment(targetAssignment);
 
             // Add the updated members or delete the deleted members.

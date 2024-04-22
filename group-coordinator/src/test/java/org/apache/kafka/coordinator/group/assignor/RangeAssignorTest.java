@@ -72,7 +72,7 @@ public class RangeAssignorTest {
             )
         );
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, true);
         GroupAssignment groupAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         assertEquals(Collections.emptyMap(), groupAssignment.members());
@@ -102,7 +102,7 @@ public class RangeAssignorTest {
             )
         );
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, true);
 
         assertThrows(PartitionAssignorException.class,
             () -> assignor.assign(assignmentSpec, subscribedTopicMetadata));
@@ -127,6 +127,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        boolean isSubscriptionHomogenous = true;
 
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
@@ -142,7 +143,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -185,6 +186,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        boolean isSubscriptionHomogenous = false;
 
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
@@ -207,7 +209,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -248,6 +250,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        boolean isSubscriptionHomogenous = true;
 
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
@@ -270,7 +273,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -311,6 +314,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        boolean isSubscriptionHomogenous = true;
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
             mkTopicAssignment(topic1Uuid, 0),
@@ -344,7 +348,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -384,6 +388,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        boolean isSubscriptionHomogenous = true;
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1),
@@ -409,7 +414,7 @@ public class RangeAssignorTest {
             currentAssignmentForB
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -446,6 +451,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        boolean isSubscriptionHomogenous = true;
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1),
@@ -479,7 +485,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -522,6 +528,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        boolean isSubscriptionHomogenous = true;
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1),
@@ -555,7 +562,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -596,6 +603,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        boolean isSubscriptionHomogenous = true;
         // Consumer A was removed
 
         Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
@@ -610,7 +618,7 @@ public class RangeAssignorTest {
             currentAssignmentForB
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -648,6 +656,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        boolean isSubscriptionHomogenous = false;
 
         // Let initial subscriptions be A -> T1, T2 // B -> T2 // C -> T2, T3
         // Change the subscriptions to A -> T1 // B -> T1, T2, T3 // C -> T2
@@ -687,7 +696,7 @@ public class RangeAssignorTest {
             currentAssignmentForC
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, isSubscriptionHomogenous);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
