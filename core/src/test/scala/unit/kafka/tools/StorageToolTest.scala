@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -44,7 +45,7 @@ class StorageToolTest {
 
   private def newSelfManagedProperties() = {
     val properties = new Properties()
-    properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo,/tmp/bar")
+    properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, "/tmp/foo,/tmp/bar")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
     properties.setProperty(KafkaConfig.NodeIdProp, "2")
     properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9092")
@@ -407,7 +408,7 @@ Found problem:
     val propsFile = TestUtils.tempFile()
     val propsStream = Files.newOutputStream(propsFile.toPath)
     // This test does format the directory specified so use a tempdir
-    properties.setProperty(KafkaConfig.LogDirsProp, TestUtils.tempDir().toString)
+    properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDir().toString)
     properties.store(propsStream, "config.props")
     propsStream.close()
 
@@ -461,7 +462,7 @@ Found problem:
     val propsFile = TestUtils.tempFile()
     val propsStream = Files.newOutputStream(propsFile.toPath)
     try {
-      properties.setProperty(KafkaConfig.LogDirsProp, TestUtils.tempDir().toString)
+      properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDir().toString)
       properties.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, enableUnstable.toString)
       properties.store(propsStream, "config.props")
     } finally {

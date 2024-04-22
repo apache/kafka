@@ -721,7 +721,7 @@ public class RecordCollectorTest {
         collector.send(topic, "999", "0", null, 1, null, stringSerializer, stringSerializer, null, context);
         collector.send(topic, "999", "0", null, 2, null, stringSerializer, stringSerializer, null, context);
 
-        assertEquals(Collections.<TopicPartition, Long>emptyMap(), offsets);
+        assertEquals(Collections.emptyMap(), offsets);
 
         collector.flush();
 

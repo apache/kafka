@@ -30,7 +30,7 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.api.Assertions._
@@ -50,7 +50,7 @@ class RaftManagerTest {
   ): KafkaConfig = {
     val props = new Properties
     logDir.foreach { value =>
-      props.setProperty(KafkaConfig.LogDirProp, value.toString)
+      props.setProperty(ServerLogConfigs.LOG_DIR_CONFIG, value.toString)
     }
     if (migrationEnabled) {
       metadataDir.foreach { value =>
@@ -74,7 +74,7 @@ class RaftManagerTest {
   ): KafkaConfig = {
     val props = new Properties
     logDir.foreach { value =>
-      props.setProperty(KafkaConfig.LogDirProp, value.toString)
+      props.setProperty(ServerLogConfigs.LOG_DIR_CONFIG, value.toString)
     }
     metadataDir.foreach { value =>
       props.setProperty(KafkaConfig.MetadataLogDirProp, value.toString)
