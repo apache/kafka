@@ -56,7 +56,7 @@ class RaftManagerTest {
         props.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, value.toString)
       }
       props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
-      props.setProperty(KRaftConfigs.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:9093")
+      props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:9093")
       props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     }
 
@@ -85,14 +85,14 @@ class RaftManagerTest {
       props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "PLAINTEXT")
       if (processRoles.contains(ProcessRole.ControllerRole)) { // co-located
         props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
-        props.setProperty(KRaftConfigs.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:9093")
+        props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:9093")
       } else { // broker-only
         val voterId = nodeId + 1
-        props.setProperty(KRaftConfigs.QUORUM_VOTERS_CONFIG, s"${voterId}@localhost:9093")
+        props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${voterId}@localhost:9093")
       }
     } else if (processRoles.contains(ProcessRole.ControllerRole)) { // controller-only
       props.setProperty(KafkaConfig.ListenersProp, "SSL://localhost:9093")
-      props.setProperty(KRaftConfigs.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:9093")
+      props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:9093")
     }
 
     new KafkaConfig(props)

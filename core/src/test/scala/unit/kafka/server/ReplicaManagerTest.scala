@@ -6451,7 +6451,7 @@ class ReplicaManagerTest {
       aliveBrokerIds = Seq(0, 1, 2),
       propsModifier = props => {
         props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
-        props.setProperty(KRaftConfigs.QUORUM_VOTERS_CONFIG, "1000@localhost:9093")
+        props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "1000@localhost:9093")
         props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
         props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       },

@@ -73,6 +73,7 @@ import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.metadata.properties.MetaProperties
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
@@ -360,7 +361,7 @@ object TestUtils extends Logging {
       // tests use random port assignment, so the controller ports are not known ahead of
       // time. Therefore, we ignore controller.quorum.voters and use
       // controllerQuorumVotersFuture instead.
-      props.put(KRaftConfigs.QUORUM_VOTERS_CONFIG, "1000@localhost:0")
+      props.put(RaftConfig.QUORUM_VOTERS_CONFIG, "1000@localhost:0")
     } else {
       props.put(ZkConfigs.ZK_CONNECT_CONFIG, zkConnect)
       props.put(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG, "10000")

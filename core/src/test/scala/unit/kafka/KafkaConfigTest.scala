@@ -25,6 +25,7 @@ import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.config.{KRaftConfigs, KafkaSecurityConfigs, ReplicationConfigs, ZkConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
@@ -86,7 +87,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    propertiesFile.setProperty(KRaftConfigs.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
+    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If process.roles contains just the 'broker' role, the node id 1 must not be included in the set of voters")
@@ -102,7 +103,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    propertiesFile.setProperty(KRaftConfigs.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
+    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If process.roles contains the 'controller' role, the node id 1 must be included in the set of voters")
@@ -118,7 +119,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller,broker")
     propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    propertiesFile.setProperty(KRaftConfigs.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
+    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If process.roles contains the 'controller' role, the node id 1 must be included in the set of voters")
@@ -133,7 +134,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller,broker")
     propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    propertiesFile.setProperty(KRaftConfigs.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
+    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
     setListenerProps(propertiesFile)
     val config = KafkaConfig.fromProps(propertiesFile)
     assertTrue(config.isKRaftCombinedMode)
@@ -145,7 +146,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller,broker")
     propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    propertiesFile.setProperty(KRaftConfigs.QUORUM_VOTERS_CONFIG, "")
+    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If using process.roles, controller.quorum.voters must contain a parseable set of voters.")

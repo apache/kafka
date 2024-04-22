@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.config;
 
-import org.apache.kafka.raft.RaftConfig;
 import java.util.concurrent.TimeUnit;
 
 public class KRaftConfigs {
@@ -89,7 +88,6 @@ public class KRaftConfigs {
     public static final String METADATA_MAX_RETENTION_MILLIS_DOC = "The number of milliseconds to keep a metadata log file or snapshot before " +
             "deleting it. Since at least one snapshot must exist before any logs can be deleted, this is a soft limit.";
 
-    public static final String QUORUM_VOTERS_CONFIG = RaftConfig.QUORUM_VOTERS_CONFIG;
     public static final String METADATA_MAX_IDLE_INTERVAL_MS_CONFIG = "metadata.max.idle.interval.ms";
     public static final int METADATA_MAX_IDLE_INTERVAL_MS_DEFAULT = 500;
     public static final String METADATA_MAX_IDLE_INTERVAL_MS_DOC = "This configuration controls how often the active " +
