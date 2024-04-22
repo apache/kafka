@@ -39,6 +39,7 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -64,7 +65,7 @@ public class FileBasedStateStore implements QuorumStateStore {
     private final File stateFile;
 
     static final String DATA_VERSION = "data_version";
-    static final short HIGHEST_SUPPORTED_VERSION = 0;
+    static final short HIGHEST_SUPPORTED_VERSION = 1;
 
     public FileBasedStateStore(final File stateFile) {
         this.stateFile = stateFile;
@@ -97,6 +98,15 @@ public class FileBasedStateStore implements QuorumStateStore {
             }
 
             final short dataVersion = dataVersionNode.shortValue();
+            if (dataVersion >  HIGHEST_SUPPORTED_VERSION) {
+                throw new IllegalStateException(
+                    String.format(
+                        "data_version (%d) is greater than the maximum version (%d) supported",
+                        dataVersion,
+                        HIGHEST_SUPPORTED_VERSION
+                    )
+                );
+            }
             return QuorumStateDataJsonConverter.read(dataObject, dataVersion);
         } catch (IOException e) {
             throw new UncheckedIOException(
@@ -115,31 +125,57 @@ public class FileBasedStateStore implements QuorumStateStore {
 
         QuorumStateData data = readStateFromFile(stateFile);
 
-        return new ElectionState(data.leaderEpoch(),
-            data.leaderId() == UNKNOWN_LEADER_ID ? OptionalInt.empty() :
-                OptionalInt.of(data.leaderId()),
-            data.votedId() == NOT_VOTED ? OptionalInt.empty() :
-                OptionalInt.of(data.votedId()),
-            data.currentVoters()
-                .stream().map(Voter::voterId).collect(Collectors.toSet()));
+        return new ElectionState(
+            data.leaderEpoch(),
+            data.leaderId() == UNKNOWN_LEADER_ID ? OptionalInt.empty() : OptionalInt.of(data.leaderId()),
+            data.votedId() == NOT_VOTED ? OptionalInt.empty() : OptionalInt.of(data.votedId()),
+            data.votedUuid() == NO_VOTED_UUID ? Optional.empty() : Optional.of(data.votedUuid()),
+            data.currentVoters().stream().map(Voter::voterId).collect(Collectors.toSet())
+        );
     }
 
     @Override
-    public void writeElectionState(ElectionState latest) {
+    public void writeElectionState(ElectionState latest, short kraftVersion) {
+        // TODO: not sure if this is correct. For example, current voters should be null/empty if kraft.version is 1
         QuorumStateData data = new QuorumStateData()
-            .setLeaderEpoch(latest.epoch)
-            .setVotedId(latest.hasVoted() ? latest.votedId() : NOT_VOTED)
+            .setLeaderEpoch(latest.epoch())
             .setLeaderId(latest.hasLeader() ? latest.leaderId() : UNKNOWN_LEADER_ID)
+            .setVotedId(latest.hasVoted() ? latest.votedId() : NOT_VOTED)
+            .setVotedUuid(latest.votedUuid().isPresent() ? latest.votedUuid().get() : NO_VOTED_UUID)
             .setCurrentVoters(voters(latest.voters()));
-        writeElectionStateToFile(stateFile, data);
+
+        writeElectionStateToFile(stateFile, data, quorumStateVersionFromKRaftVersion(kraftVersion));
+    }
+
+    private short quorumStateVersionFromKRaftVersion(short kraftVersion) {
+        if (kraftVersion == 0) {
+            return 0;
+        } else if (kraftVersion == 1) {
+            return 1;
+        } else {
+            throw new IllegalArgumentException(
+                String.format("Unknown kraft.version %d", kraftVersion)
+            );
+        }
     }
 
     private List<Voter> voters(Set<Integer> votersId) {
-        return votersId.stream().map(
-            voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList());
+        return votersId
+            .stream()
+            .map(voterId -> new Voter().setVoterId(voterId))
+            .collect(Collectors.toList());
     }
 
-    private void writeElectionStateToFile(final File stateFile, QuorumStateData state) {
+    private void writeElectionStateToFile(final File stateFile, QuorumStateData state, short version) {
+        if (version > HIGHEST_SUPPORTED_VERSION) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Quorum state data version (%d) is greater than the supported version (%d)",
+                    version,
+                    HIGHEST_SUPPORTED_VERSION
+                )
+            );
+        }
         final File temp = new File(stateFile.getAbsolutePath() + ".tmp");
         deleteFileIfExists(temp);
 
@@ -151,8 +187,8 @@ public class FileBasedStateStore implements QuorumStateStore {
                      new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8)
                  )
             ) {
-                ObjectNode jsonState = (ObjectNode) QuorumStateDataJsonConverter.write(state, HIGHEST_SUPPORTED_VERSION);
-                jsonState.set(DATA_VERSION, new ShortNode(HIGHEST_SUPPORTED_VERSION));
+                ObjectNode jsonState = (ObjectNode) QuorumStateDataJsonConverter.write(state, version);
+                jsonState.set(DATA_VERSION, new ShortNode(version));
                 writer.write(jsonState.toString());
                 writer.flush();
                 fileOutputStream.getFD().sync();

@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.Set;
 
 /**
@@ -56,12 +55,7 @@ public class UnattachedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return new ElectionState(
-            epoch,
-            OptionalInt.empty(),
-            OptionalInt.empty(),
-            voters
-        );
+        return ElectionState.withUnknownLeader(epoch, voters);
     }
 
     @Override

@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.Optional;
+import java.util.Set;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
-
-import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.Set;
 
 /**
  * The "voted" state is for voters who have cast their vote for a specific candidate.
@@ -34,6 +33,7 @@ import java.util.Set;
 public class VotedState implements EpochState {
     private final int epoch;
     private final int votedId;
+    private final Optional<Uuid> votedUuid;
     private final Set<Integer> voters;
     private final int electionTimeoutMs;
     private final Timer electionTimer;
@@ -44,6 +44,7 @@ public class VotedState implements EpochState {
         Time time,
         int epoch,
         int votedId,
+        Optional<Uuid> votedUuid,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
         int electionTimeoutMs,
@@ -51,6 +52,7 @@ public class VotedState implements EpochState {
     ) {
         this.epoch = epoch;
         this.votedId = votedId;
+        this.votedUuid = votedUuid;
         this.voters = voters;
         this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
@@ -60,12 +62,7 @@ public class VotedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return new ElectionState(
-            epoch,
-            OptionalInt.empty(),
-            OptionalInt.of(votedId),
-            voters
-        );
+        return ElectionState.withVotedCandidate(epoch, votedId, votedUuid, voters);
     }
 
     public int votedId() {

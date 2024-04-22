@@ -16,16 +16,14 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.Optional;
+import java.util.OptionalLong;
+import java.util.Set;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.slf4j.Logger;
-
-import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.OptionalLong;
-import java.util.Set;
 
 public class FollowerState implements EpochState {
     private final int fetchTimeoutMs;
@@ -63,12 +61,7 @@ public class FollowerState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return new ElectionState(
-            epoch,
-            OptionalInt.of(leaderId),
-            OptionalInt.empty(),
-            voters
-        );
+        return ElectionState.withElectedLeader(epoch, leaderId, voters);
     }
 
     @Override

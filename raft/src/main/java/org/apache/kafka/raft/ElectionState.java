@@ -16,46 +16,38 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import org.apache.kafka.common.Uuid;
 
 /**
  * Encapsulate election state stored on disk after every state change.
  */
-public class ElectionState {
-    public final int epoch;
-    public final OptionalInt leaderIdOpt;
-    public final OptionalInt votedIdOpt;
+final public class ElectionState {
+    private final int epoch;
+    private final OptionalInt leaderId;
+    private final OptionalInt votedId;
+    private final Optional<Uuid> votedUuid;
     private final Set<Integer> voters;
 
-    ElectionState(int epoch,
-                  OptionalInt leaderIdOpt,
-                  OptionalInt votedIdOpt,
-                  Set<Integer> voters) {
+    ElectionState(
+        int epoch,
+        OptionalInt leaderId,
+        OptionalInt votedId,
+        Optional<Uuid> votedUuid,
+        Set<Integer> voters
+    ) {
         this.epoch = epoch;
-        this.leaderIdOpt = leaderIdOpt;
-        this.votedIdOpt = votedIdOpt;
+        this.leaderId = leaderId;
+        this.votedId = votedId;
+        this.votedUuid = votedUuid;
         this.voters = voters;
     }
 
-    public static ElectionState withVotedCandidate(int epoch, int votedId, Set<Integer> voters) {
-        if (votedId < 0)
-            throw new IllegalArgumentException("Illegal voted Id " + votedId + ": must be non-negative");
-        if (!voters.contains(votedId))
-            throw new IllegalArgumentException("Voted candidate with id " + votedId + " is not among the valid voters");
-        return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.of(votedId), voters);
-    }
-
-    public static ElectionState withElectedLeader(int epoch, int leaderId, Set<Integer> voters) {
-        if (leaderId < 0)
-            throw new IllegalArgumentException("Illegal leader Id " + leaderId + ": must be non-negative");
-        if (!voters.contains(leaderId))
-            throw new IllegalArgumentException("Leader with id " + leaderId + " is not among the valid voters");
-        return new ElectionState(epoch, OptionalInt.of(leaderId), OptionalInt.empty(), voters);
-    }
-
-    public static ElectionState withUnknownLeader(int epoch, Set<Integer> voters) {
-        return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.empty(), voters);
+    public int epoch() {
+        return epoch;
     }
 
     public boolean isLeader(int nodeId) {
@@ -67,46 +59,59 @@ public class ElectionState {
     public boolean isVotedCandidate(int nodeId) {
         if (nodeId < 0)
             throw new IllegalArgumentException("Invalid negative nodeId: " + nodeId);
-        return votedIdOpt.orElse(-1) == nodeId;
+        return votedId.orElse(-1) == nodeId;
     }
 
     public int leaderId() {
-        if (!leaderIdOpt.isPresent())
+        if (!leaderId.isPresent())
             throw new IllegalStateException("Attempt to access nil leaderId");
-        return leaderIdOpt.getAsInt();
+        return leaderId.getAsInt();
+    }
+
+    public int leaderIdOrSentinel() {
+        return leaderId.orElse(-1);
+    }
+
+    public OptionalInt optionalLeaderId() {
+        return leaderId;
     }
 
     public int votedId() {
-        if (!votedIdOpt.isPresent())
+        if (!votedId.isPresent())
             throw new IllegalStateException("Attempt to access nil votedId");
-        return votedIdOpt.getAsInt();
+        return votedId.getAsInt();
     }
 
+    public Optional<Uuid> votedUuid() {
+        return votedUuid;
+    }
+
+    // TODO: remove this and see what breaks
     public Set<Integer> voters() {
         return voters;
     }
 
     public boolean hasLeader() {
-        return leaderIdOpt.isPresent();
+        return leaderId.isPresent();
     }
 
     public boolean hasVoted() {
-        return votedIdOpt.isPresent();
+        return votedId.isPresent();
     }
-
-    public int leaderIdOrSentinel() {
-        return leaderIdOpt.orElse(-1);
-    }
-
 
     @Override
     public String toString() {
-        return "Election(epoch=" + epoch +
-                ", leaderIdOpt=" + leaderIdOpt +
-                ", votedIdOpt=" + votedIdOpt +
-                ')';
+        return String.format(
+            "Election(epoch=%d, leaderId=%s, votedId=%s, votedUuid=%s, voters=%s)",
+            epoch,
+            leaderId,
+            votedId,
+            votedUuid,
+            voters
+        );
     }
 
+    // TODO: Since I changed the implementation, confirm that raft/src/main doesn't call ElectionState's equals or hashCode
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -115,15 +120,35 @@ public class ElectionState {
         ElectionState that = (ElectionState) o;
 
         if (epoch != that.epoch) return false;
-        if (!leaderIdOpt.equals(that.leaderIdOpt)) return false;
-        return votedIdOpt.equals(that.votedIdOpt);
+        if (!leaderId.equals(that.leaderId)) return false;
+        if (!votedId.equals(that.votedId)) return false;
+        if (!votedUuid.equals(that.votedUuid)) return false;
+
+        return !voters.equals(that.voters);
     }
 
     @Override
     public int hashCode() {
-        int result = epoch;
-        result = 31 * result + leaderIdOpt.hashCode();
-        result = 31 * result + votedIdOpt.hashCode();
-        return result;
+        return Objects.hash(epoch, leaderId, votedId, votedUuid, voters);
+    }
+
+    public static ElectionState withVotedCandidate(int epoch, int votedId, Optional<Uuid> votedUuid, Set<Integer> voters) {
+        if (votedId < 0) {
+            throw new IllegalArgumentException("Illegal voted Id " + votedId + ": must be non-negative");
+        }
+
+        return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.of(votedId), votedUuid, voters);
+    }
+
+    public static ElectionState withElectedLeader(int epoch, int leaderId, Set<Integer> voters) {
+        if (leaderId < 0) {
+            throw new IllegalArgumentException("Illegal leader Id " + leaderId + ": must be non-negative");
+        }
+
+        return new ElectionState(epoch, OptionalInt.of(leaderId), OptionalInt.empty(), Optional.empty(), voters);
+    }
+
+    public static ElectionState withUnknownLeader(int epoch, Set<Integer> voters) {
+        return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.empty(), Optional.empty(), voters);
     }
 }

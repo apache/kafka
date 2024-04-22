@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Uuid;
+
 /**
  *  Maintain the save and retrieval of quorum state information, so far only supports
  *  read and write of election states.
@@ -24,20 +26,23 @@ public interface QuorumStateStore {
 
     int UNKNOWN_LEADER_ID = -1;
     int NOT_VOTED = -1;
+    Uuid NO_VOTED_UUID = Uuid.ZERO_UUID;
 
     /**
      * Read the latest election state.
      *
-     * @return The latest written election state or `null` if there is none
+     * @return the latest written election state or `null` if there is none
      */
     ElectionState readElectionState();
 
     /**
      * Persist the updated election state. This must be atomic, both writing the full updated state
      * and replacing the old state.
-     * @param latest The latest election state
+     *
+     * @param latest the latest election state
+     * @param kraftVersion the finalized kraft.version 
      */
-    void writeElectionState(ElectionState latest);
+    void writeElectionState(ElectionState latest, short kraftVersion);
 
     /**
      * Clear any state associated to the store for a fresh start

@@ -62,6 +62,25 @@ final public class VoterSet {
             .flatMap(voterNode -> voterNode.address(listener));
     }
 
+    public boolean isVoter(int nodeId, Optional<Uuid> nodeUuid) {
+        VoterNode node = voters.get(nodeId);
+        if (node != null) {
+            if (node.uuid().isPresent()) {
+                return node.uuid().equals(nodeUuid);
+            } else {
+                // configured voter set doesn't an uuid so it is a voter as long as the node id
+                // matches
+                return true;
+            }
+        } else {
+            return false;
+        }
+    }
+    
+    public boolean isOnlyVoter(int nodeId, Optional<Uuid> nodeUuid) {
+        return voters.size() == 1 && isVoter(nodeId, nodeUuid);
+    }
+
     /**
      * Returns all of the voter ids.
      */
