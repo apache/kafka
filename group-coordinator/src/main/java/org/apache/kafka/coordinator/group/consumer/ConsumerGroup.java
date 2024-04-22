@@ -156,7 +156,7 @@ public class ConsumerGroup implements Group {
      *
      * It is true by default when the group is initialized.
      */
-    private boolean isSubscriptionHomogeneous;
+    private final TimelineObject<Boolean> isSubscriptionHomogeneous;
 
     /**
      * The target assignment epoch. An assignment epoch smaller than the group epoch
@@ -218,7 +218,7 @@ public class ConsumerGroup implements Group {
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.isSubscriptionHomogeneous = true;
+        this.isSubscriptionHomogeneous = new TimelineObject<>(snapshotRegistry, true);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -386,7 +386,7 @@ public class ConsumerGroup implements Group {
             throw new IllegalArgumentException("newMember cannot be null.");
         }
         ConsumerGroupMember oldMember = members.put(newMember.memberId(), newMember);
-        maybeUpdateSubscribedTopicNames(oldMember, newMember);
+        maybeUpdateSubscribedTopicNamesAndGroupSubscriptionModel(oldMember, newMember);
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
         updateStaticMember(newMember);
@@ -413,7 +413,7 @@ public class ConsumerGroup implements Group {
      */
     public void removeMember(String memberId) {
         ConsumerGroupMember oldMember = members.remove(memberId);
-        maybeUpdateSubscribedTopicNames(oldMember, null);
+        maybeUpdateSubscribedTopicNamesAndGroupSubscriptionModel(oldMember, null);
         maybeUpdateServerAssignors(oldMember, null);
         maybeRemovePartitionEpoch(oldMember);
         removeStaticMember(oldMember);
@@ -501,7 +501,7 @@ public class ConsumerGroup implements Group {
     /**
      * @return True is the subscription model is homogeneous, false otherwise.
      */
-    public boolean isSubscriptionHomogeneous() { return isSubscriptionHomogeneous; }
+    public boolean isSubscriptionHomogeneous() { return isSubscriptionHomogeneous.get(); }
 
     /**
      * Returns the target assignment of the member.
@@ -638,7 +638,7 @@ public class ConsumerGroup implements Group {
     ) {
         // Copy and update the current subscriptions.
         Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
-        maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
+        maybeUpdateSubscribedTopicNamesAndGroupSubscriptionModel(subscribedTopicNames, oldMember, newMember);
 
         // Create the topic metadata for each subscribed topic.
         Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
@@ -952,22 +952,21 @@ public class ConsumerGroup implements Group {
      * @param oldMember The old member.
      * @param newMember The new member.
      */
-    private void maybeUpdateSubscribedTopicNames(
+    private void maybeUpdateSubscribedTopicNamesAndGroupSubscriptionModel(
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
-        maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
-        maybeUpdateGroupSubscriptionModel();
+        maybeUpdateSubscribedTopicNamesAndGroupSubscriptionModel(subscribedTopicNames, oldMember, newMember);
     }
 
     /**
-     * Updates the subscription count.
+     * Updates the subscription count and the subscription model, if required.
      *
      * @param subscribedTopicCount  The map to update.
      * @param oldMember             The old member.
      * @param newMember             The new member.
      */
-    private static void maybeUpdateSubscribedTopicNames(
+    private void maybeUpdateSubscribedTopicNamesAndGroupSubscriptionModel(
         Map<String, Integer> subscribedTopicCount,
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
@@ -983,6 +982,8 @@ public class ConsumerGroup implements Group {
                 subscribedTopicCount.compute(topicName, ConsumerGroup::incValue)
             );
         }
+
+        maybeUpdateGroupSubscriptionModel();
     }
 
     /**
@@ -993,13 +994,15 @@ public class ConsumerGroup implements Group {
      */
     private void maybeUpdateGroupSubscriptionModel() {
         int numOfMembers = members.size();
+        boolean isSubscriptionHomogeneous = true;
         for (Map.Entry<String, Integer> entry : subscribedTopicNames.entrySet()) {
             if (entry.getValue() != numOfMembers) {
                 isSubscriptionHomogeneous = false;
-                return;
+                break;
             }
         }
-        isSubscriptionHomogeneous = true;
+
+        this.isSubscriptionHomogeneous.set(isSubscriptionHomogeneous);
     }
 
     /**
