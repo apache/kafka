@@ -62,7 +62,7 @@ import scala.runtime.BoxedUnit;
 
 import org.slf4j.LoggerFactory;
 
-public class SharePartitionManager {
+public class SharePartitionManager implements AutoCloseable {
 
     private final static Logger log = LoggerFactory.getLogger(SharePartitionManager.class);
 
@@ -431,6 +431,16 @@ public class SharePartitionManager {
 
     String partitionsToLogString(Collection<TopicIdPartition> partitions) {
         return FetchSession.partitionsToLogString(partitions, log.isTraceEnabled());
+    }
+
+    // Visible for testing.
+    Timer timer() {
+        return timer;
+    }
+
+    @Override
+    public void close() throws Exception {
+        timer.close();
     }
 
     public static class ShareSession {

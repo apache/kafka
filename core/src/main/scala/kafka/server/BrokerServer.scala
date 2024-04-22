@@ -149,6 +149,8 @@ class BrokerServer(
 
   var clientMetricsManager: ClientMetricsManager = _
 
+  var sharePartitionManager: SharePartitionManager = _
+
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
     try {
@@ -393,13 +395,8 @@ class BrokerServer(
 
       val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(config.shareGroupMaxGroups * config.shareGroupMaxSize,
         KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS)
-      val sharePartitionManager = new SharePartitionManager(
-        replicaManager,
-        Time.SYSTEM,
-        shareFetchSessionCache,
-        config.shareGroupRecordLockDurationMs,
-        config.shareGroupDeliveryCountLimit
-      )
+      sharePartitionManager = new SharePartitionManager(replicaManager, Time.SYSTEM, shareFetchSessionCache,
+        config.shareGroupRecordLockDurationMs, config.shareGroupDeliveryCountLimit)
 
       // Create the request processor objects.
       val raftSupport = RaftSupport(forwardingManager, metadataCache)
@@ -717,6 +714,8 @@ class BrokerServer(
         CoreUtils.swallow(socketServer.shutdown(), this)
       if (brokerTopicStats != null)
         CoreUtils.swallow(brokerTopicStats.close(), this)
+      if (sharePartitionManager != null)
+        CoreUtils.swallow(sharePartitionManager.close(), this)
 
       isShuttingDown.set(false)
 
