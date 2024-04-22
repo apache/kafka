@@ -244,7 +244,13 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
             findBrokerOrThrow(brokerId).startup();
         }
 
-        @Override
+        /**
+         * Restart brokers with given cluster config.
+         *
+         * @param clusterConfig clusterConfig is optional. If left Optional.empty(), brokers will restart without
+         *                      reconfiguring configurations. Otherwise, the restart will reconfigure configurations
+         *                      according to the provided cluster config.
+         */
         public void rollingBrokerRestart(Optional<ClusterConfig> clusterConfig) {
             requireNonNull(clusterConfig);
             if (!started.get()) {

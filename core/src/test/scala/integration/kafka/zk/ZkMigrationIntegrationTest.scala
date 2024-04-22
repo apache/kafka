@@ -196,7 +196,7 @@ class ZkMigrationIntegrationTest {
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
         .setServerProperties(serverProperties)
         .build()
-      zkCluster.rollingBrokerRestart(Optional.of(clusterConfig)) // This would throw if authorizers weren't allowed
+      zkCluster.asInstanceOf[ZkClusterInstance].rollingBrokerRestart(Optional.of(clusterConfig)) // This would throw if authorizers weren't allowed
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
 
@@ -333,7 +333,7 @@ class ZkMigrationIntegrationTest {
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
         .setServerProperties(serverProperties)
         .build()
-      zkCluster.rollingBrokerRestart(Optional.of(clusterConfig))
+      zkCluster.asInstanceOf[ZkClusterInstance].rollingBrokerRestart(Optional.of(clusterConfig))
 
       // Emulate a ZK topic deletion
       zkClient.createDeleteTopicPath("test-topic-1")
@@ -472,7 +472,7 @@ class ZkMigrationIntegrationTest {
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
         .setServerProperties(serverProperties)
         .build()
-      zkCluster.rollingBrokerRestart(Optional.of(clusterConfig))
+      zkCluster.asInstanceOf[ZkClusterInstance].rollingBrokerRestart(Optional.of(clusterConfig))
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
 
@@ -541,7 +541,7 @@ class ZkMigrationIntegrationTest {
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
         .setServerProperties(serverProperties)
         .build()
-      zkCluster.rollingBrokerRestart(Optional.of(clusterConfig)) // This would throw if authorizers weren't allowed
+      zkCluster.asInstanceOf[ZkClusterInstance].rollingBrokerRestart(Optional.of(clusterConfig)) // This would throw if authorizers weren't allowed
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
 
@@ -562,7 +562,7 @@ class ZkMigrationIntegrationTest {
       TestUtils.waitUntilTrue(() => hasKRaftController, "Timed out waiting for ZK brokers to see a KRaft controller")
 
       log.info("Restart brokers again")
-      zkCluster.rollingBrokerRestart()
+      zkCluster.asInstanceOf[ZkClusterInstance].rollingBrokerRestart(Optional.empty())
       zkCluster.waitForReadyBrokers()
 
       admin = zkCluster.createAdminClient()
@@ -631,7 +631,7 @@ class ZkMigrationIntegrationTest {
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
         .setServerProperties(serverProperties)
         .build()
-      zkCluster.rollingBrokerRestart(Optional.of(clusterConfig))
+      zkCluster.asInstanceOf[ZkClusterInstance].rollingBrokerRestart(Optional.of(clusterConfig))
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
 
@@ -701,7 +701,7 @@ class ZkMigrationIntegrationTest {
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
         .setServerProperties(serverProperties)
         .build()
-      zkCluster.rollingBrokerRestart(Optional.of(clusterConfig))
+      zkCluster.asInstanceOf[ZkClusterInstance].rollingBrokerRestart(Optional.of(clusterConfig))
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
 
@@ -766,7 +766,7 @@ class ZkMigrationIntegrationTest {
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
         .setServerProperties(serverProperties)
         .build()
-      zkCluster.rollingBrokerRestart(Optional.of(clusterConfig))
+      zkCluster.asInstanceOf[ZkClusterInstance].rollingBrokerRestart(Optional.of(clusterConfig))
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
 
@@ -846,7 +846,7 @@ class ZkMigrationIntegrationTest {
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
         .setServerProperties(serverProperties)
         .build()
-      zkCluster.rollingBrokerRestart(Optional.of(clusterConfig))
+      zkCluster.asInstanceOf[ZkClusterInstance].rollingBrokerRestart(Optional.of(clusterConfig))
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
 

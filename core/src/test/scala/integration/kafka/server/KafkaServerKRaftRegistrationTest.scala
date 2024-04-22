@@ -80,7 +80,7 @@ class KafkaServerKRaftRegistrationTest {
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
         .setServerProperties(serverProperties)
         .build()
-      zkCluster.rollingBrokerRestart(Optional.of(clusterConfig))
+      zkCluster.asInstanceOf[ZkClusterInstance].rollingBrokerRestart(Optional.of(clusterConfig))
       zkCluster.waitForReadyBrokers()
 
       try {
@@ -122,7 +122,7 @@ class KafkaServerKRaftRegistrationTest {
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
         .setServerProperties(serverProperties)
         .build()
-      assertThrows(classOf[IllegalArgumentException], () => zkCluster.rollingBrokerRestart(Optional.of(clusterConfig)))
+      assertThrows(classOf[IllegalArgumentException], () => zkCluster.asInstanceOf[ZkClusterInstance].rollingBrokerRestart(Optional.of(clusterConfig)))
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
     }

@@ -286,11 +286,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             }
         }
 
-        @Override
-        public void rollingBrokerRestart(Optional<ClusterConfig> clusterConfig) {
-            throw new UnsupportedOperationException("Restarting Raft servers is not yet supported.");
-        }
-
         private BrokerServer findBrokerOrThrow(int brokerId) {
             return Optional.ofNullable(clusterReference.get().brokers().get(brokerId))
                 .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
