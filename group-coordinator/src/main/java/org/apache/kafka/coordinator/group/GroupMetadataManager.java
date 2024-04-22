@@ -795,7 +795,7 @@ public class GroupMetadataManager {
                 consumerGroup.groupId());
             return false;
         } else if (consumerGroup.numMembers() <= 1) {
-            log.info("Skip downgrading the consumer group {} to classic group because it's empty.",
+            log.debug("Skip downgrading the consumer group {} to classic group because it's empty.",
                 consumerGroup.groupId());
             return false;
         } else if (consumerGroup.numMembers() - 1 > classicGroupMaxSize) {
@@ -805,8 +805,16 @@ public class GroupMetadataManager {
         return true;
     }
 
+    /**
+     * Creates a ClassicGroup corresponding to the given ConsumerGroup.
+     *
+     * @param consumerGroup     The converted ConsumerGroup.
+     * @param leavingMemberId   The leaving member that triggers the downgrade validation.
+     * @param records           The list of Records.
+     * @return An appendFuture of the conversion.
+     */
     private CompletableFuture<Void> convertToClassicGroup(ConsumerGroup consumerGroup, String leavingMemberId, List<Record> records) {
-        consumerGroup.createGroupTombstoneRecords(records);
+        consumerGroup.createGroupTombstoneRecordsForDowngrade(leavingMemberId, records);
 
         ClassicGroup classicGroup;
         try {
@@ -836,7 +844,7 @@ public class GroupMetadataManager {
         metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
 
         classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
-        prepareRebalance(classicGroup, String.format("Downgrade group %s.", classicGroup.groupId()));
+        prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId()));
 
         CompletableFuture<Void> appendFuture = new CompletableFuture<>();
         appendFuture.exceptionally(__ -> {
@@ -1490,19 +1498,18 @@ public class GroupMetadataManager {
         int memberEpoch
     ) throws ApiException {
         ConsumerGroup group = consumerGroup(groupId);
-        boolean isDynamicMember = instanceId == null;
-        boolean isStaticMemberTemporaryLeave = memberEpoch == LEAVE_GROUP_STATIC_MEMBER_EPOCH;
-
+        Boolean maybeDowngrade = false;
         List<Record> records;
-        if (isDynamicMember) {
+        if (instanceId == null) {
             ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
             log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
             records = consumerGroupFenceMember(group, member);
+            maybeDowngrade = true;
         } else {
             ConsumerGroupMember member = group.staticMember(instanceId);
             throwIfStaticMemberIsUnknown(member, instanceId);
             throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
-            if (isStaticMemberTemporaryLeave) {
+            if (memberEpoch == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
                 log.info("[GroupId {}] Static Member {} with instance id {} temporarily left the consumer group.",
                     group.groupId(), memberId, instanceId);
                 records = consumerGroupStaticMemberGroupLeave(group, member);
@@ -1510,12 +1517,12 @@ public class GroupMetadataManager {
                 log.info("[GroupId {}] Static Member {} with instance id {} left the consumer group.",
                     group.groupId(), memberId, instanceId);
                 records = consumerGroupFenceMember(group, member);
+                maybeDowngrade = true;
             }
         }
 
         CompletableFuture<Void> appendFuture = null;
-        if ((isDynamicMember || !isStaticMemberTemporaryLeave) &&
-            validateOnlineDowngrade(group, memberId)) {
+        if (maybeDowngrade && validateOnlineDowngrade(group, memberId)) {
             appendFuture = convertToClassicGroup(group, memberId, records);
         }
 

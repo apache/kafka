@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
@@ -212,33 +213,36 @@ public class Assertions {
 
             expectedValue.members().sort(Comparator.comparing(GroupMetadataValue.MemberMetadata::memberId));
             actualValue.members().sort(Comparator.comparing(GroupMetadataValue.MemberMetadata::memberId));
+            try {
+                Arrays.asList(expectedValue, actualValue).forEach(value ->
+                    value.members().forEach(memberMetadata -> {
+                        // Sort topics and ownedPartitions in Subscription.
+                        ConsumerPartitionAssignor.Subscription subscription =
+                            ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberMetadata.subscription()));
+                        subscription.topics().sort(String::compareTo);
+                        subscription.ownedPartitions().sort(
+                            Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition)
+                        );
+                        memberMetadata.setSubscription(Utils.toArray(ConsumerProtocol.serializeSubscription(
+                            subscription,
+                            ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(memberMetadata.subscription()))
+                        )));
 
-            Arrays.asList(expectedValue, actualValue).forEach(value ->
-                value.members().forEach(memberMetadata -> {
-                    // Sort topics and ownedPartitions in Subscription.
-                    ConsumerPartitionAssignor.Subscription subscription =
-                        ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberMetadata.subscription()));
-                    subscription.topics().sort(String::compareTo);
-                    subscription.ownedPartitions().sort(
-                        Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition)
-                    );
-                    memberMetadata.setSubscription(Utils.toArray(ConsumerProtocol.serializeSubscription(
-                        subscription,
-                        ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(memberMetadata.subscription()))
-                    )));
-
-                    // Sort partitions in Assignment.
-                    ConsumerPartitionAssignor.Assignment assignment =
-                        ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(memberMetadata.assignment()));
-                    assignment.partitions().sort(
-                        Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition)
-                    );
-                    memberMetadata.setAssignment(Utils.toArray(ConsumerProtocol.serializeAssignment(
-                        assignment,
-                        ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(memberMetadata.assignment()))
-                    )));
-                })
-            );
+                        // Sort partitions in Assignment.
+                        ConsumerPartitionAssignor.Assignment assignment =
+                            ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(memberMetadata.assignment()));
+                        assignment.partitions().sort(
+                            Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition)
+                        );
+                        memberMetadata.setAssignment(Utils.toArray(ConsumerProtocol.serializeAssignment(
+                            assignment,
+                            ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(memberMetadata.assignment()))
+                        )));
+                    })
+                );
+            } catch (SchemaException ex) {
+                System.out.println("Failed deserialization: " + ex.getMessage());
+            }
             assertEquals(expectedValue, actualValue);
         } else {
             assertEquals(expected.message(), actual.message());

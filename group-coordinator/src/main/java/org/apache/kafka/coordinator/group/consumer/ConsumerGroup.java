@@ -776,6 +776,36 @@ public class ConsumerGroup implements Group {
         records.add(RecordHelpers.newGroupEpochTombstoneRecord(groupId()));
     }
 
+    /**
+     * Populates the list of records with tombstone(s) for deleting the group to downgrade it to a ClassicGroup.
+     *
+     * @param leavingMemberId   The leaving member that triggers the downgrade.
+     * @param records           The list of records.
+     */
+    public void createGroupTombstoneRecordsForDowngrade(String leavingMemberId, List<Record> records) {
+        members().forEach((memberId, member) -> {
+            if (!memberId.equals(leavingMemberId)) {
+                records.add(RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId(), memberId));
+            }
+        });
+
+        members().forEach((memberId, member) -> {
+            if (!memberId.equals(leavingMemberId)) {
+                records.add(RecordHelpers.newTargetAssignmentTombstoneRecord(groupId(), memberId));
+            }
+        });
+        records.add(RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
+
+        members().forEach((memberId, member) -> {
+            if (!memberId.equals(leavingMemberId)) {
+                records.add(RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId(), memberId));
+            }
+        });
+
+        records.add(RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(RecordHelpers.newGroupEpochTombstoneRecord(groupId()));
+    }
+
     @Override
     public boolean isEmpty() {
         return state() == ConsumerGroupState.EMPTY;
@@ -1212,8 +1242,9 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @param memberId The member to remove.
+     * Checks whether all the members use the classic protocol except the given member.
      *
+     * @param memberId The member to remove.
      * @return A boolean indicating whether all the members use the classic protocol.
      */
     public boolean allMembersUseClassicProtocolExcept(String memberId) {
