@@ -48,7 +48,7 @@ import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PR
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
-import org.apache.kafka.server.config.{ConfigType, ZkConfigs}
+import org.apache.kafka.server.config.{ConfigType, ServerLogConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue, fail}
 import org.junit.jupiter.api.{Assumptions, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -983,12 +983,12 @@ class ZkMigrationIntegrationTest {
   def alterBrokerConfigs(admin: Admin): Unit = {
     val defaultBrokerResource = new ConfigResource(ConfigResource.Type.BROKER, "")
     val defaultBrokerConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(KafkaConfig.LogRetentionTimeMillisProp, "86400000"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "86400000"), AlterConfigOp.OpType.SET),
     ).asJavaCollection
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
     val broker1Resource = new ConfigResource(ConfigResource.Type.BROKER, "1")
     val specificBrokerConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(KafkaConfig.LogRetentionTimeMillisProp, "43200000"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "43200000"), AlterConfigOp.OpType.SET),
     ).asJavaCollection
 
     TestUtils.retry(60000) {
@@ -1068,13 +1068,13 @@ class ZkMigrationIntegrationTest {
   def verifyBrokerConfigs(zkClient: KafkaZkClient): Unit = {
     TestUtils.retry(10000) {
       val defaultBrokerProps = zkClient.getEntityConfigs(ConfigType.BROKER, "<default>")
-      assertEquals("86400000", defaultBrokerProps.getProperty(KafkaConfig.LogRetentionTimeMillisProp))
+      assertEquals("86400000", defaultBrokerProps.getProperty(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
 
       val broker0Props = zkClient.getEntityConfigs(ConfigType.BROKER, "0")
-      assertEquals("43200000", broker0Props.getProperty(KafkaConfig.LogRetentionTimeMillisProp))
+      assertEquals("43200000", broker0Props.getProperty(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
 
       val broker1Props = zkClient.getEntityConfigs(ConfigType.BROKER, "1")
-      assertEquals("43200000", broker1Props.getProperty(KafkaConfig.LogRetentionTimeMillisProp))
+      assertEquals("43200000", broker1Props.getProperty(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
     }
   }
 
