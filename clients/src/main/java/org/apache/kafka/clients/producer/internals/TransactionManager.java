@@ -372,7 +372,7 @@ public class TransactionManager {
         TxnRequestHandler handler;
         if (coordinatorSupportsTransactionV2) {
             log.debug("Begin adding offsets {} for consumer group {} to transaction with transaction protocol V2", offsets, groupMetadata);
-            handler = txnOffsetCommitHandler(offsets, groupMetadata);
+            handler = txnOffsetCommitHandler(offsets, groupMetadata, Short.MAX_VALUE);
         } else {
             log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
             AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
@@ -417,20 +417,13 @@ public class TransactionManager {
         throwIfPendingState("send");
 
         if (isTransactional() && coordinatorSupportsTransactionV2) {
-            if (!hasProducerId()) {
-                throw new IllegalStateException("Cannot handle added partition " + topicPartition +
-                        " to transaction before completing a call to initTransactions");
-            } else if (currentState != State.IN_TRANSACTION) {
-                throw new IllegalStateException("Cannot handle added partition " + topicPartition +
-                        " to transaction while in state  " + currentState);
-            } else if (isPartitionPendingAdd(topicPartition)) {
+            if (isPartitionPendingAdd(topicPartition)) {
                 throw new IllegalArgumentException("Cannot handle added partition " + topicPartition +
-                        " to transaction because the partition is in pending state");
+                    " to transaction because the partition is in pending state");
             } else if (isPartitionAdded(topicPartition)) {
                 return;
             } else {
                 log.debug("A new partition {} has been added to transaction", topicPartition);
-                txnPartitionMap.getOrCreate(topicPartition);
                 partitionsInTransaction.add(topicPartition);
             }
         }
@@ -1014,7 +1007,8 @@ public class TransactionManager {
         this.coordinatorSupportsBumpingEpoch = initProducerIdVersion != null &&
                 initProducerIdVersion.maxVersion() >= 3;
 
-        // TODO(caliu) use feature version.
+        // TODO(caliu) place holder to use feature version. Also, should add an UT for not using latest api version if
+        // transaction v2 not enabled.
         ApiVersion produceVersion = nodeApiVersions != null ?
                 nodeApiVersions.apiVersion(ApiKeys.PRODUCE) :
                 null;
@@ -1131,7 +1125,8 @@ public class TransactionManager {
 
     private TxnOffsetCommitHandler txnOffsetCommitHandler(TransactionalRequestResult result,
                                                           Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                          ConsumerGroupMetadata groupMetadata) {
+                                                          ConsumerGroupMetadata groupMetadata,
+                                                          short desiredMaximumApiVersion) {
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             OffsetAndMetadata offsetAndMetadata = entry.getValue();
             CommittedOffset committedOffset = new CommittedOffset(offsetAndMetadata.offset(),
@@ -1147,14 +1142,16 @@ public class TransactionManager {
                 pendingTxnOffsetCommits,
                 groupMetadata.memberId(),
                 groupMetadata.generationId(),
-                groupMetadata.groupInstanceId()
+                groupMetadata.groupInstanceId(),
+                desiredMaximumApiVersion
             );
         return new TxnOffsetCommitHandler(result, builder);
     }
 
     private TxnOffsetCommitHandler txnOffsetCommitHandler(
         Map<TopicPartition, OffsetAndMetadata> offsets,
-        ConsumerGroupMetadata groupMetadata
+        ConsumerGroupMetadata groupMetadata,
+        short desiredMaximumApiVersion
     ) {
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             OffsetAndMetadata offsetAndMetadata = entry.getValue();
@@ -1171,7 +1168,8 @@ public class TransactionManager {
                 pendingTxnOffsetCommits,
                 groupMetadata.memberId(),
                 groupMetadata.generationId(),
-                groupMetadata.groupInstanceId()
+                groupMetadata.groupInstanceId(),
+                desiredMaximumApiVersion
             );
         return new TxnOffsetCommitHandler(builder);
     }
@@ -1668,7 +1666,7 @@ public class TransactionManager {
                 log.debug("Successfully added partition for consumer group {} to transaction", builder.data.groupId());
 
                 // note the result is not completed until the TxnOffsetCommit returns
-                pendingRequests.add(txnOffsetCommitHandler(result, offsets, groupMetadata));
+                pendingRequests.add(txnOffsetCommitHandler(result, offsets, groupMetadata, (short) (TxnOffsetCommitRequest.TRANSACTION_V2_MINIMAL_VERSION - 1)));
 
                 transactionStarted = true;
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {

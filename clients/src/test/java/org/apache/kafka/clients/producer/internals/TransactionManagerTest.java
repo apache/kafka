@@ -409,6 +409,11 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertTrue(transactionManager.isPartitionAdded(partition));
         assertFalse(transactionManager.isPartitionPendingAdd(partition));
+
+        transactionManager.maybeHandlePartitionAdded(partition);
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        assertFalse(transactionManager.isPartitionPendingAdd(partition));
+        assertTrue(transactionManager.isPartitionAdded(partition));
     }
 
     @Test
