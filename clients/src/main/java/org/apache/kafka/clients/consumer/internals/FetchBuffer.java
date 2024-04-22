@@ -189,12 +189,19 @@ public class FetchBuffer implements AutoCloseable {
     }
 
     void wakeup() {
+        log.error("wakeup - a");
         wokenup.set(true);
+        log.error("wakeup - b");
         try {
+            log.error("wakeup - c");
             lock.lock();
+            log.error("wakeup - d");
             notEmptyCondition.signalAll();
+            log.error("wakeup - e");
         } finally {
+            log.error("wakeup - f");
             lock.unlock();
+            log.error("wakeup - g");
         }
     }
 
