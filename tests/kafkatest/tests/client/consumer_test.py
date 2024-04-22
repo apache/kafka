@@ -242,16 +242,15 @@ class OffsetValidationTest(VerifiableConsumerTest):
             self.rolling_bounce_consumers(consumer, keep_alive=num_keep_alive, num_bounces=num_bounces)
 
         num_revokes_after_bounce = consumer.num_revokes_for_alive() - num_revokes_before_bounce
-
-        check_condition = num_revokes_after_bounce != 0
+            
         # under static membership, the live consumer shall not revoke any current running partitions,
         # since there is no global rebalance being triggered.
         if static_membership:
-            check_condition = num_revokes_after_bounce == 0
-
-        assert check_condition, \
-            "Total revoked count %d does not match the expectation of having 0 revokes as %d" % \
-            (num_revokes_after_bounce, check_condition)
+            assert num_revokes_after_bounce == 0, \
+                "Unexpected revocation triggered when bouncing static member. Expecting 0 but had %d revocations" % num_revokes_after_bounce
+        elif consumer.is_eager():
+            assert num_revokes_after_bounce != 0, \
+                "Revocations not triggered when bouncing member with eager assignment"
 
         consumer.stop_all()
         if clean_shutdown:
