@@ -34,7 +34,7 @@ import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, MetadataTypeMetric}
 import org.apache.kafka.server.util.Scheduler
 
 import java.time.Duration
@@ -118,4 +118,11 @@ trait KafkaBroker extends Logging {
     metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
     metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
   }
+  metricsGroup.newGauge(MetadataTypeMetric.METRIC_NAME, () => {
+    this match {
+      case _: BrokerServer => MetadataTypeMetric.KRAFT
+      case _: KafkaServer => MetadataTypeMetric.ZOOKEEPER
+      case _ => throw new IllegalStateException("Expected either BrokerServer or KafkaServer")
+    }
+  })
 }

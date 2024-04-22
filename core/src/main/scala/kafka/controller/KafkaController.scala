@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import kafka.api._
 import kafka.common._
 import kafka.cluster.Broker
-import kafka.controller.KafkaController.{ActiveBrokerCountMetricName, ActiveControllerCountMetricName, AlterReassignmentsCallback, ControllerStateMetricName, ElectLeadersCallback, FencedBrokerCountMetricName, GlobalPartitionCountMetricName, GlobalTopicCountMetricName, ListReassignmentsCallback, OfflinePartitionsCountMetricName, PreferredReplicaImbalanceCountMetricName, ReplicasIneligibleToDeleteCountMetricName, ReplicasToDeleteCountMetricName, TopicsIneligibleToDeleteCountMetricName, TopicsToDeleteCountMetricName, UpdateFeaturesCallback, ZkMigrationStateMetricName}
+import kafka.controller.KafkaController.{ActiveBrokerCountMetricName, ActiveControllerCountMetricName, AlterReassignmentsCallback, ControllerStateMetricName, ElectLeadersCallback, FencedBrokerCountMetricName, GlobalPartitionCountMetricName, GlobalTopicCountMetricName, ListReassignmentsCallback, MigratingZkBrokersMetricName, OfflinePartitionsCountMetricName, PreferredReplicaImbalanceCountMetricName, ReplicasIneligibleToDeleteCountMetricName, ReplicasToDeleteCountMetricName, TopicsIneligibleToDeleteCountMetricName, TopicsToDeleteCountMetricName, UpdateFeaturesCallback, ZkMigrationStateMetricName}
 import kafka.coordinator.transaction.ZkProducerIdManager
 import kafka.server._
 import kafka.server.metadata.ZkFinalizedFeatureCache
@@ -46,7 +46,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationState
 import org.apache.kafka.server.common.{AdminOperationException, ProducerIdsBlock}
-import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, MetadataTypeMetric}
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
@@ -83,10 +83,14 @@ object KafkaController extends Logging {
   private val ActiveBrokerCountMetricName = "ActiveBrokerCount"
   private val FencedBrokerCountMetricName = "FencedBrokerCount"
   private val ZkMigrationStateMetricName = "ZkMigrationState"
+  private val MigratingZkBrokersMetricName = "MigratingZkBrokerCount"
+
 
   // package private for testing
   private[controller] val MetricNames = Set(
     ZkMigrationStateMetricName,
+    MigratingZkBrokersMetricName,
+    MetadataTypeMetric.METRIC_NAME,
     ActiveControllerCountMetricName,
     OfflinePartitionsCountMetricName,
     PreferredReplicaImbalanceCountMetricName,
@@ -176,6 +180,7 @@ class KafkaController(val config: KafkaConfig,
   private val tokenCleanScheduler = new KafkaScheduler(1, true, "delegation-token-cleaner")
 
   metricsGroup.newGauge(ZkMigrationStateMetricName, () => ZkMigrationState.ZK.value().intValue())
+  metricsGroup.newGauge(MetadataTypeMetric.METRIC_NAME, () => MetadataTypeMetric.ZOOKEEPER)
   metricsGroup.newGauge(ActiveControllerCountMetricName, () => if (isActive) 1 else 0)
   metricsGroup.newGauge(OfflinePartitionsCountMetricName, () => offlinePartitionCount)
   metricsGroup.newGauge(PreferredReplicaImbalanceCountMetricName, () => preferredReplicaImbalanceCount)
@@ -187,8 +192,9 @@ class KafkaController(val config: KafkaConfig,
   metricsGroup.newGauge(TopicsIneligibleToDeleteCountMetricName, () => ineligibleTopicsToDeleteCount)
   metricsGroup.newGauge(ReplicasIneligibleToDeleteCountMetricName, () => ineligibleReplicasToDeleteCount)
   metricsGroup.newGauge(ActiveBrokerCountMetricName, () => activeBrokerCount)
-  // FencedBrokerCount metric is always 0 in the ZK controller.
+  // FencedBrokerCount and MigratingZkBrokers metrics are always 0 in the ZK controller.
   metricsGroup.newGauge(FencedBrokerCountMetricName, () => 0)
+  metricsGroup.newGauge(MigratingZkBrokersMetricName, () => 0)
 
   /**
    * Returns true if this broker is the current controller.
