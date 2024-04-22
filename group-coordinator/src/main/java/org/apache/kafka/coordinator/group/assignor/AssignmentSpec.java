@@ -52,6 +52,14 @@ public class AssignmentSpec {
         return members;
     }
 
+    /**
+     * @return True if the subscription model is homogeneous.=,
+     *         False otherwise.
+     */
+    public boolean isSubscriptionHomogeneous() {
+        return isSubscriptionHomogeneous;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
