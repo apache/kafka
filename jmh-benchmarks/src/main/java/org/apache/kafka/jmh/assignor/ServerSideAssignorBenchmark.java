@@ -43,6 +43,7 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -136,7 +137,7 @@ public class ServerSideAssignorBenchmark {
         partitionAssignor = assignorType.assignor();
 
         if (assignmentType == AssignmentType.INCREMENTAL) {
-            simulateIncrementalRebalance(topicMetadata);
+            simulateIncrementalRebalance();
         }
     }
 
@@ -238,7 +239,7 @@ public class ServerSideAssignorBenchmark {
         return partitionRacks;
     }
 
-    private void simulateIncrementalRebalance(Map<Uuid, TopicMetadata> topicMetadata) {
+    private void simulateIncrementalRebalance() {
         GroupAssignment initialAssignment = partitionAssignor.assign(assignmentSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
@@ -253,11 +254,18 @@ public class ServerSideAssignorBenchmark {
             ));
         });
 
+        Collection<Uuid> subscribedTopicIdsForNewMember;
+        if (subscriptionModel == SubscriptionModel.HETEROGENEOUS) {
+            subscribedTopicIdsForNewMember = updatedMembers.values().iterator().next().subscribedTopicIds();
+        } else {
+            subscribedTopicIdsForNewMember = allTopicIds;
+        }
+
         Optional<String> rackId = rackId(memberCount - 1);
         updatedMembers.put("newMember", new AssignmentMemberSpec(
             Optional.empty(),
             rackId,
-            topicMetadata.keySet(),
+            subscribedTopicIdsForNewMember,
             Collections.emptyMap()
         ));
 

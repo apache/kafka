@@ -262,9 +262,16 @@ public class ClientSideAssignorBenchmark {
             )
         );
 
+        List<String> subscribedTopicsForNewMember;
+        if (subscriptionModel == SubscriptionModel.HETEROGENEOUS) {
+            subscribedTopicsForNewMember = subscriptions.values().iterator().next().topics();
+        } else {
+            subscribedTopicsForNewMember = allTopicNames;
+        }
+
         // Add new member to trigger a reassignment.
         newSubscriptions.put("newMember", subscription(
-            allTopicNames,
+            subscribedTopicsForNewMember,
             memberCount - 1
         ));
 
