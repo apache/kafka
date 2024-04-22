@@ -413,19 +413,10 @@ public class TransactionManager {
     }
 
     public synchronized void maybeHandlePartitionAdded(TopicPartition topicPartition) {
-        maybeFailWithError();
-        throwIfPendingState("send");
-
         if (isTransactional() && coordinatorSupportsTransactionV2) {
-            if (isPartitionPendingAdd(topicPartition)) {
-                throw new IllegalArgumentException("Cannot handle added partition " + topicPartition +
-                    " to transaction because the partition is in pending state");
-            } else if (isPartitionAdded(topicPartition)) {
-                return;
-            } else {
-                log.debug("A new partition {} has been added to transaction", topicPartition);
-                partitionsInTransaction.add(topicPartition);
-            }
+            if (isPartitionAdded(topicPartition)) return;
+            log.debug("A new partition {} has been added to transaction", topicPartition);
+            partitionsInTransaction.add(topicPartition);
         }
     }
 
@@ -436,7 +427,7 @@ public class TransactionManager {
     synchronized boolean isSendToPartitionAllowed(TopicPartition tp) {
         if (hasFatalError())
             return false;
-        return !isTransactional() || partitionsInTransaction.contains(tp);
+        return !isTransactional() || partitionsInTransaction.contains(tp) || coordinatorSupportsTransactionV2;
     }
 
     public String transactionalId() {

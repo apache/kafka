@@ -119,7 +119,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                 + ", minimum supported request version is 3 which requires brokers to be on version 2.5 or above.");
             }
 
-            return new TxnOffsetCommitRequest(data, (short) Math.max(desiredMaximumVersion, version));
+            return new TxnOffsetCommitRequest(data, (short) Math.min(desiredMaximumVersion, version));
         }
 
         private boolean groupMetadataSet() {
