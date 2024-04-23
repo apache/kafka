@@ -1856,12 +1856,12 @@ public class StreamsConfig extends AbstractConfig {
      * Return an {@link Serde#configure(Map, boolean) configured} instance of {@link #DEFAULT_KEY_SERDE_CLASS_CONFIG key Serde
      * class}.
      *
-     * @return an configured instance of key Serde class
+     * @return a configured instance of key Serde class
      */
     @SuppressWarnings("WeakerAccess")
     public Serde<?> defaultKeySerde() {
         final Object keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
-        if (keySerdeConfigSetting ==  null) {
+        if (keySerdeConfigSetting == null) {
             throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
         }
         try {

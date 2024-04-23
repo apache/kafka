@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
@@ -156,19 +158,31 @@ public class MeteredWindowStore<K, V>
     private void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = new StateSerdes<>(
-            changelogTopic,
-            prepareKeySerde(keySerde, new SerdeGetter(context)),
-            prepareValueSerde(valueSerde, new SerdeGetter(context)));
+        try {
+            serdes = new StateSerdes<>(
+                changelogTopic,
+                prepareKeySerde(keySerde, new SerdeGetter(context)),
+                prepareValueSerde(valueSerde, new SerdeGetter(context)));
+        } catch (final ConfigException e) {
+            throw new ConfigException(String.format("Failed to initialize serdes for store %s", storeName), e);
+        } catch (final StreamsException e) {
+            throw new StreamsException(String.format("Failed to initialize serdes for store %s", storeName), e);
+        }
     }
 
     private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = new StateSerdes<>(
-            changelogTopic,
-            prepareKeySerde(keySerde, new SerdeGetter(context)),
-            prepareValueSerde(valueSerde, new SerdeGetter(context)));
+        try {
+            serdes = new StateSerdes<>(
+                changelogTopic,
+                prepareKeySerde(keySerde, new SerdeGetter(context)),
+                prepareValueSerde(valueSerde, new SerdeGetter(context)));
+        } catch (final ConfigException e) {
+            throw new ConfigException(String.format("Failed to initialize serdes for store %s", storeName), e);
+        } catch (final StreamsException e) {
+            throw new StreamsException(String.format("Failed to initialize serdes for store %s", storeName), e);
+        }
     }
 
     @SuppressWarnings("unchecked")
