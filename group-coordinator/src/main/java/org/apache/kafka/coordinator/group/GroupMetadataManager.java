@@ -1296,6 +1296,7 @@ public class GroupMetadataManager {
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
             .setClientId(clientId)
             .setClientHost(clientHost)
+            .setClassicMemberMetadata(null)
             .build();
 
         boolean bumpGroupEpoch = false;
@@ -1637,6 +1638,7 @@ public class GroupMetadataManager {
             scheduleConsumerGroupSessionTimeout(groupId, memberId);
         }
 
+        // TODO: what will happen to the client if the generation id in response is 0?
         responseFuture.complete(new JoinGroupResponseData()
             .setMemberId(updatedMember.memberId())
             .setGenerationId(updatedMember.memberEpoch())

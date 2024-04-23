@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -83,6 +84,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
+import static org.apache.kafka.coordinator.group.Assertions.assertRecordsEquals;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
@@ -118,6 +120,21 @@ public class GroupMetadataManagerTestContext {
                     Collections.singletonList(topicNames.get(i % topicNames.size())))).array())
             );
         }
+        return protocols;
+    }
+
+    public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toRangeProtocol(List<String> topicNames, List<TopicPartition> ownedPartitions) {
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(0);
+        protocols.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(ConsumerProtocol.serializeSubscription(
+                new ConsumerPartitionAssignor.Subscription(
+                    topicNames,
+                    null,
+                    ownedPartitions
+                )
+            ).array())
+        );
         return protocols;
     }
 
@@ -716,6 +733,47 @@ public class GroupMetadataManagerTestContext {
         assertTrue(secondJoinResult.records.isEmpty());
         List<MockCoordinatorTimer.ExpiredTimeout<Void, Record>> timeouts = sleep(classicGroupInitialRebalanceDelayMs);
         assertEquals(1, timeouts.size());
+        assertTrue(secondJoinResult.joinFuture.isDone());
+        assertEquals(Errors.NONE.code(), secondJoinResult.joinFuture.get().errorCode());
+
+        return secondJoinResult.joinFuture.get();
+    }
+
+    public JoinGroupResponseData joinConsumerGroupAsDynamicMemberAndCompleteJoinWithClassicProtocol(
+        JoinGroupRequestData request,
+        List<Record> expectedRecords
+    ) throws ExecutionException, InterruptedException {
+        boolean requireKnownMemberId = true;
+        String newMemberId = request.memberId();
+
+        if (request.memberId().equals(UNKNOWN_MEMBER_ID)) {
+            // Since member id is required, we need another round to get the successful join group result.
+            JoinResult firstJoinResult = sendClassicGroupJoin(
+                request,
+                requireKnownMemberId
+            );
+            assertTrue(firstJoinResult.records.isEmpty());
+            assertTrue(firstJoinResult.joinFuture.isDone());
+            assertEquals(Errors.MEMBER_ID_REQUIRED.code(), firstJoinResult.joinFuture.get().errorCode());
+            newMemberId = firstJoinResult.joinFuture.get().memberId();
+        }
+
+        // Second round
+        JoinGroupRequestData secondRequest = new JoinGroupRequestData()
+            .setGroupId(request.groupId())
+            .setMemberId(newMemberId)
+            .setProtocolType(request.protocolType())
+            .setProtocols(request.protocols())
+            .setSessionTimeoutMs(request.sessionTimeoutMs())
+            .setRebalanceTimeoutMs(request.rebalanceTimeoutMs())
+            .setReason(request.reason());
+
+        JoinResult secondJoinResult = sendClassicGroupJoin(
+            secondRequest,
+            requireKnownMemberId
+        );
+
+        assertRecordsEquals(expectedRecords, secondJoinResult.records);
         assertTrue(secondJoinResult.joinFuture.isDone());
         assertEquals(Errors.NONE.code(), secondJoinResult.joinFuture.get().errorCode());
 
