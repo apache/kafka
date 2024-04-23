@@ -1498,17 +1498,12 @@ public class GroupMetadataManager {
         int memberEpoch
     ) throws ApiException {
         ConsumerGroup group = consumerGroup(groupId);
-        List<Record> records;
+        List<Record> records = new ArrayList<>();
         CompletableFuture<Void> appendFuture = null;
         if (instanceId == null) {
             ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
             log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
-            if (validateOnlineDowngrade(group, memberId)) {
-                records = new ArrayList<>();
-                appendFuture = convertToClassicGroup(group, memberId, records);
-            } else {
-                records = consumerGroupFenceMember(group, member);
-            }
+            appendFuture = consumerGroupFenceMember(group, member, records);
         } else {
             ConsumerGroupMember member = group.staticMember(instanceId);
             throwIfStaticMemberIsUnknown(member, instanceId);
@@ -1520,12 +1515,7 @@ public class GroupMetadataManager {
             } else {
                 log.info("[GroupId {}] Static Member {} with instance id {} left the consumer group.",
                     group.groupId(), memberId, instanceId);
-                if (validateOnlineDowngrade(group, memberId)) {
-                    records = new ArrayList<>();
-                    appendFuture = convertToClassicGroup(group, memberId, records);
-                } else {
-                    records = consumerGroupFenceMember(group, member);
-                }
+                appendFuture = consumerGroupFenceMember(group, member, records);
             }
         }
 
@@ -1563,42 +1553,45 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Fences a member from a consumer group.
+     * Fences a member from a consumer group and maybe downgrade the consumer group to a classic group.
      *
-     * @param group       The group.
-     * @param member      The member.
-     *
-     * @return A list of records to be applied to the state.
+     * @param group     The group.
+     * @param member    The member.
+     * @param records   The list of records to be applied to the state.
+     * @return The append future to be applied.
      */
-    private List<Record> consumerGroupFenceMember(
+    private CompletableFuture<Void> consumerGroupFenceMember(
         ConsumerGroup group,
-        ConsumerGroupMember member
+        ConsumerGroupMember member,
+        List<Record> records
     ) {
-        List<Record> records = new ArrayList<>();
+        if (validateOnlineDowngrade(group, member.memberId())) {
+            return convertToClassicGroup(group, member.memberId(), records);
+        } else {
+            removeMember(records, group.groupId(), member.memberId());
 
-        removeMember(records, group.groupId(), member.memberId());
+            // We update the subscription metadata without the leaving member.
+            Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+                member,
+                null,
+                metadataImage.topics(),
+                metadataImage.cluster()
+            );
 
-        // We update the subscription metadata without the leaving member.
-        Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
-            member,
-            null,
-            metadataImage.topics(),
-            metadataImage.cluster()
-        );
+            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+                log.info("[GroupId {}] Computed new subscription metadata: {}.",
+                    group.groupId(), subscriptionMetadata);
+                records.add(newGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
+            }
 
-        if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-            log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                group.groupId(), subscriptionMetadata);
-            records.add(newGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
+            // We bump the group epoch.
+            int groupEpoch = group.groupEpoch() + 1;
+            records.add(newGroupEpochRecord(group.groupId(), groupEpoch));
+
+            cancelTimers(group.groupId(), member.memberId());
+
+            return null;
         }
-
-        // We bump the group epoch.
-        int groupEpoch = group.groupEpoch() + 1;
-        records.add(newGroupEpochRecord(group.groupId(), groupEpoch));
-
-        cancelTimers(group.groupId(), member.memberId());
-
-        return records;
     }
 
     /**
@@ -1643,13 +1636,9 @@ public class GroupMetadataManager {
                 log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
                     groupId, memberId);
 
-                if (validateOnlineDowngrade(group, memberId)) {
-                    List<Record> records = new ArrayList<>();
-                    CompletableFuture<Void> appendFuture = convertToClassicGroup(group, memberId, records);
-                    return new CoordinatorResult<>(records, appendFuture);
-                } else {
-                    return new CoordinatorResult<>(consumerGroupFenceMember(group, member));
-                }
+                List<Record> records = new ArrayList<>();
+                CompletableFuture<Void> appendFuture = consumerGroupFenceMember(group, member, records);
+                return new CoordinatorResult<>(records, appendFuture);
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
@@ -1700,13 +1689,9 @@ public class GroupMetadataManager {
                             "it failed to transition from epoch {} within {}ms.",
                         groupId, memberId, memberEpoch, rebalanceTimeoutMs);
 
-                    if (validateOnlineDowngrade(group, memberId)) {
-                        List<Record> records = new ArrayList<>();
-                        CompletableFuture<Void> appendFuture = convertToClassicGroup(group, memberId, records);
-                        return new CoordinatorResult<>(records, appendFuture);
-                    } else {
-                        return new CoordinatorResult<>(consumerGroupFenceMember(group, member));
-                    }
+                    List<Record> records = new ArrayList<>();
+                    CompletableFuture<Void> appendFuture = consumerGroupFenceMember(group, member, records);
+                    return new CoordinatorResult<>(records, appendFuture);
                 } else {
                     log.debug("[GroupId {}] Ignoring rebalance timeout for {} because the member " +
                         "left the epoch {}.", groupId, memberId, memberEpoch);
