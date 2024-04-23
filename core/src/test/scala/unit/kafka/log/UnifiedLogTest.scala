@@ -3735,13 +3735,13 @@ class UnifiedLogTest {
     }
 
     log.updateHighWatermark(80L)
-    val newLogStartOffset = 40L;
+    val newLogStartOffset = 40L
     log.maybeIncrementLogStartOffset(newLogStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
     assertEquals(newLogStartOffset, log.logStartOffset)
     assertEquals(log.logStartOffset, log.localLogStartOffset())
 
     // Truncate the local log and verify that the offsets are updated to expected values
-    val newLocalLogStartOffset = 60L;
+    val newLocalLogStartOffset = 60L
     log.truncateFullyAndStartAt(newLocalLogStartOffset, Option.apply(newLogStartOffset))
     assertEquals(newLogStartOffset, log.logStartOffset)
     assertEquals(newLocalLogStartOffset, log.localLogStartOffset())

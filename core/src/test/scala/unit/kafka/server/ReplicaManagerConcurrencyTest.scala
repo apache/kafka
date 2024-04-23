@@ -491,7 +491,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       setLeaderRecoveryState(leaderRecoveryState).
       setLeaderEpoch(leaderEpoch).
       setPartitionEpoch(partitionEpoch).
-      build();
+      build()
   }
 
   private def defaultBrokerEpoch(brokerId: Int): Long = {

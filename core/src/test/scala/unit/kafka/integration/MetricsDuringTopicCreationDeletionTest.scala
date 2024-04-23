@@ -110,14 +110,14 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
         }
       }
     })
-    thread.start
+    thread.start()
 
     // breakable loop that creates and deletes topics
     createDeleteTopics()
 
     // if the thread checking the gauge is still run, stop it
-    running = false;
-    thread.join
+    running = false
+    thread.join()
 
     assert(offlinePartitionsCount==0, s"Expect offlinePartitionsCount to be 0, but got: $offlinePartitionsCount")
     assert(preferredReplicaImbalanceCount==0, s"Expect PreferredReplicaImbalanceCount to be 0, but got: $preferredReplicaImbalanceCount")
@@ -138,7 +138,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
         try {
           createTopic(t, partitionNum, replicationFactor)
         } catch {
-          case e: Exception => e.printStackTrace
+          case e: Exception => e.printStackTrace()
         }
       }
 
@@ -148,7 +148,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
             adminZkClient.deleteTopic(t)
             TestUtils.verifyTopicDeletion(zkClient, t, partitionNum, servers)
           } catch {
-          case e: Exception => e.printStackTrace
+          case e: Exception => e.printStackTrace()
           }
       }
     }

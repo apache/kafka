@@ -682,7 +682,7 @@ class ControllerApisTest {
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
         setErrorMessage("Authorization failed."))
     assertEquals(expectedResponse, controllerApis.createTopics(ANONYMOUS_CONTEXT, request,
-      false,
+      hasClusterAuth = false,
       _ => Set("baz", "indescribable"),
       _ => Set("baz")).get().topics().asScala.toSet)
   }
@@ -731,7 +731,7 @@ class ControllerApisTest {
       new DeletableTopicResult().setName("foo").setTopicId(fooId))
     assertEquals(expectedResponse, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-      true,
+      hasClusterAuth = true,
       _ => Set.empty,
       _ => Set.empty).get().asScala.toSet)
   }
@@ -757,7 +757,7 @@ class ControllerApisTest {
       new DeletableTopicResult().setName("foo").setTopicId(fooId))
     assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-      true,
+      hasClusterAuth = true,
       _ => Set.empty,
       _ => Set.empty).get().asScala.toSet)
   }
@@ -799,7 +799,7 @@ class ControllerApisTest {
         setErrorMessage("Duplicate topic id."))
     assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-      false,
+      hasClusterAuth = false,
       names => names.toSet,
       names => names.toSet).get().asScala.toSet)
   }
@@ -835,7 +835,7 @@ class ControllerApisTest {
         setErrorMessage(TOPIC_AUTHORIZATION_FAILED.message))
     assertEquals(response, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-      false,
+      hasClusterAuth = false,
       _ => Set("foo", "baz"),
       _ => Set.empty).get().asScala.toSet)
   }
@@ -860,7 +860,7 @@ class ControllerApisTest {
         setErrorMessage(UNKNOWN_TOPIC_ID.message))
     assertEquals(expectedResponse, controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-      false,
+      hasClusterAuth = false,
       _ => Set("foo"),
       _ => Set.empty).get().asScala.toSet)
   }
@@ -879,7 +879,7 @@ class ControllerApisTest {
     assertEquals(classOf[NotControllerException], assertThrows(
       classOf[ExecutionException], () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
         ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-        false,
+        hasClusterAuth = false,
         _ => Set("foo", "bar"),
         _ => Set("foo", "bar")).get()).getCause.getClass)
   }
@@ -897,13 +897,13 @@ class ControllerApisTest {
     assertThrows(classOf[TopicDeletionDisabledException],
       () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
         ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-        false,
+        hasClusterAuth = false,
         _ => Set("foo", "bar"),
         _ => Set("foo", "bar")))
     assertThrows(classOf[InvalidRequestException],
       () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
         1,
-        false,
+        hasClusterAuth = false,
         _ => Set("foo", "bar"),
         _ => Set("foo", "bar")))
   }

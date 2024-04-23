@@ -34,7 +34,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import java.io.File
 import java.time.Duration
 import java.util
-import java.util.{Arrays, Collections, Properties}
+import java.util.{Collections, Properties}
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -141,7 +141,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
 
     TestUtils.shutdownServers(_brokers, deleteLogDirs = false)
     _brokers.clear()
-    Arrays.fill(alive, false)
+    util.Arrays.fill(alive, false)
 
     createBrokers(startup)
   }
@@ -329,7 +329,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     } else {
       val topicIdsMap = getController().kafkaController.controllerContext.topicIds.toMap
       names.foreach { name =>
-        if (topicIdsMap.contains(name)) result.put(name, topicIdsMap.get(name).get)
+        if (topicIdsMap.contains(name)) result.put(name, topicIdsMap(name))
       }
     }
     result.asScala.toMap
@@ -360,7 +360,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     // are shutdown cleanly in tearDown even if a subsequent broker fails to start
     val potentiallyRegeneratedConfigs = configs
     alive = new Array[Boolean](potentiallyRegeneratedConfigs.length)
-    Arrays.fill(alive, false)
+    util.Arrays.fill(alive, false)
     for (config <- potentiallyRegeneratedConfigs) {
       val broker = createBrokerFromConfig(config)
       _brokers += broker

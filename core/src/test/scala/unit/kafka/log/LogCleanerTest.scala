@@ -241,7 +241,7 @@ class LogCleanerTest extends Logging {
 
   @Test
   def testSizeTrimmedForPreallocatedAndCompactedTopic(): Unit = {
-    val originalMaxFileSize = 1024;
+    val originalMaxFileSize = 1024
     val cleaner = makeCleaner(2)
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, originalMaxFileSize: java.lang.Integer)

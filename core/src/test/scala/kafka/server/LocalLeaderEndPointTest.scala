@@ -203,7 +203,7 @@ class LocalLeaderEndPointTest extends Logging {
     private var value: Option[T] = None
     private var fun: Option[T => Unit] = None
 
-    def hasFired: Boolean = {
+    private def hasFired: Boolean = {
       value.isDefined
     }
 

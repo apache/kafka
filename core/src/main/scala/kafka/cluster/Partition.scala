@@ -616,7 +616,7 @@ class Partition(val topicPartition: TopicPartition,
   def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): VerificationGuard = {
     leaderLogIfLocal match {
       case Some(log) => log.maybeStartTransactionVerification(producerId, sequence, epoch)
-      case None => throw new NotLeaderOrFollowerException();
+      case None => throw new NotLeaderOrFollowerException()
     }
   }
 

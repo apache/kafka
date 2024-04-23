@@ -505,9 +505,9 @@ class ConnectionQuotasTest {
     val numConnections = 35
     val futures = List(
       executor.submit((() => acceptConnections(connectionQuotas, listener, knownHost, numConnections,
-        0, true)): Callable[Boolean]),
+        0, expectIpThrottle = true)): Callable[Boolean]),
       executor.submit((() => acceptConnections(connectionQuotas, listener, unknownHost, numConnections,
-        0, true)): Callable[Boolean])
+        0, expectIpThrottle = true)): Callable[Boolean])
     )
 
     val ipsThrottledResults = futures.map(_.get(3, TimeUnit.SECONDS))
