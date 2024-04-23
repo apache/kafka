@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
@@ -636,7 +637,7 @@ public class ConsumerGroup implements Group {
         TopicsImage topicsImage,
         ClusterImage clusterImage
     ) {
-        // Copy and update the current subscriptions.
+        // Copy and update the current subscription information.
         Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
         maybeUpdateSubscribedTopicNamesAndGroupSubscriptionModel(subscribedTopicNames, oldMember, newMember);
 
@@ -971,38 +972,28 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
+        int totalMembers = members.size();
+        AtomicBoolean tmpIsSubscriptionHomogeneous = new AtomicBoolean(true);
+
         if (oldMember != null) {
-            oldMember.subscribedTopicNames().forEach(topicName ->
-                subscribedTopicCount.compute(topicName, ConsumerGroup::decValue)
-            );
+            oldMember.subscribedTopicNames().forEach(topicName -> {
+                int subscribersCount = subscribedTopicCount.compute(topicName, (key, value) -> value == null ? 0 : value - 1);
+                if (tmpIsSubscriptionHomogeneous.get() && subscribersCount != totalMembers) {
+                    tmpIsSubscriptionHomogeneous.set(false);
+                }
+            });
         }
 
         if (newMember != null) {
-            newMember.subscribedTopicNames().forEach(topicName ->
-                subscribedTopicCount.compute(topicName, ConsumerGroup::incValue)
-            );
+            newMember.subscribedTopicNames().forEach(topicName -> {
+                int subscribersCount = subscribedTopicCount.compute(topicName, (key, value) -> value == null ? 1 : value + 1);
+                if (tmpIsSubscriptionHomogeneous.get() && subscribersCount != totalMembers) {
+                    tmpIsSubscriptionHomogeneous.set(false);
+                }
+            });
         }
 
-        maybeUpdateGroupSubscriptionModel();
-    }
-
-    /**
-     * Updates the subscription model type, if necessary.
-     *
-     * If all members are subscribed to the same set of topics, the model is homogeneous.
-     * Otherwise, it is heterogeneous.
-     */
-    private void maybeUpdateGroupSubscriptionModel() {
-        int numOfMembers = members.size();
-        boolean isSubscriptionHomogeneous = true;
-        for (Map.Entry<String, Integer> entry : subscribedTopicNames.entrySet()) {
-            if (entry.getValue() != numOfMembers) {
-                isSubscriptionHomogeneous = false;
-                break;
-            }
-        }
-
-        this.isSubscriptionHomogeneous.set(isSubscriptionHomogeneous);
+        this.isSubscriptionHomogeneous.set(tmpIsSubscriptionHomogeneous.get());
     }
 
     /**
