@@ -315,7 +315,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.autoCommitEnabled = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
             LogContext logContext = createLogContext(config, groupRebalanceConfig);
             this.log = logContext.logger(getClass());
-            this.wakeupTrigger = new WakeupTrigger(logContext);
+            this.wakeupTrigger = new WakeupTrigger();
 
             log.debug("Initializing the Kafka consumer");
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
@@ -455,7 +455,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        String groupId,
                        boolean autoCommitEnabled) {
         this.log = logContext.logger(getClass());
-        this.wakeupTrigger = new WakeupTrigger(logContext);
+        this.wakeupTrigger = new WakeupTrigger();
         this.subscriptions = subscriptions;
         this.clientId = clientId;
         this.fetchBuffer = fetchBuffer;
@@ -494,7 +494,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        ConsumerMetadata metadata,
                        List<ConsumerPartitionAssignor> assignors) {
         this.log = logContext.logger(getClass());
-        this.wakeupTrigger = new WakeupTrigger(logContext);
+        this.wakeupTrigger = new WakeupTrigger();
         this.subscriptions = subscriptions;
         this.clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
         this.autoCommitEnabled = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
