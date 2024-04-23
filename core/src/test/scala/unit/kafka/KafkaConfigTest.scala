@@ -25,6 +25,7 @@ import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.{KafkaSecurityConfigs, ZkConfigs}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -171,18 +172,18 @@ class KafkaTest {
     if (hasBrokerRole || hasControllerRole) { // KRaft
       props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SASL_PLAINTEXT")
       if (hasBrokerRole && hasControllerRole) {
-        props.setProperty(KafkaConfig.ListenersProp, s"$brokerListener,$controllerListener")
+        props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"$brokerListener,$controllerListener")
       } else if (hasControllerRole) {
-        props.setProperty(KafkaConfig.ListenersProp, controllerListener)
+        props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, controllerListener)
       } else if (hasBrokerRole) {
-        props.setProperty(KafkaConfig.ListenersProp, brokerListener)
+        props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, brokerListener)
       }
     } else { // ZK-based
-       props.setProperty(KafkaConfig.ListenersProp, brokerListener)
+       props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, brokerListener)
     }
     if (!(hasControllerRole & !hasBrokerRole)) { // not controller-only
       props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "PLAINTEXT")
-      props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092") 
+      props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "PLAINTEXT://localhost:9092")
     }
   }
 

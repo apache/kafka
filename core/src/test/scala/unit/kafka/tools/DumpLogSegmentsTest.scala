@@ -37,6 +37,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
@@ -315,7 +316,7 @@ class DumpLogSegmentsTest {
         retentionMillis = 60 * 1000,
         maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
         maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        fileDeleteDelayMs = LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
+        fileDeleteDelayMs = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
         nodeId = 1
       )
     )
