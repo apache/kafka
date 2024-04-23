@@ -1,0 +1,44 @@
+# This file is managed by ServiceBot plugin - Semaphore. The content in this file is created using a common
+# template and configurations in service.yml.
+# Modifications in this file will be overwritten by generated content in the nightly run.
+# For more information, please refer to the page:
+# https://confluentinc.atlassian.net/wiki/spaces/Foundations/pages/2871296194/Add+SemaphoreCI
+apiVersion: v1alpha
+kind: Project
+metadata:
+  name: kafka
+  description: ""
+spec:
+  visibility: private
+  repository:
+    url: git@github.com:confluentinc/kafka.git
+    run_on:
+    - branches
+    - tags
+    - pull_requests
+    pipeline_file: .semaphore/semaphore.yml
+    integration_type: github_app
+    status:
+      pipeline_files:
+      - path: .semaphore/semaphore.yml
+        level: pipeline
+    whitelist:
+      branches:
+      - master
+      - main
+      - /^v\d+\.\d+\.x$/
+      - /^gh-readonly-queue.*/
+  custom_permissions: true
+  debug_permissions:
+  - empty
+  - default_branch
+  - non_default_branch
+  - pull_request
+  - forked_pull_request
+  - tag
+  attach_permissions:
+  - default_branch
+  - non_default_branch
+  - pull_request
+  - forked_pull_request
+  - tag
