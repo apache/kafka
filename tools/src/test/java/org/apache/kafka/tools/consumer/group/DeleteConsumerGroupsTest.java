@@ -25,32 +25,22 @@ import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -58,8 +48,6 @@ import java.util.stream.IntStream;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 import static org.apache.kafka.common.ConsumerGroupState.EMPTY;
@@ -304,153 +292,5 @@ public class DeleteConsumerGroupsTest {
                 opts,
                 singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
-    }
-
-    static abstract class AbstractConsumerRunnable implements Runnable {
-        final String broker;
-        final String groupId;
-        final Optional<Properties> customPropsOpt;
-        final boolean syncCommit;
-        volatile boolean isShutdown = false;
-
-        final Properties props = new Properties();
-        KafkaConsumer<String, String> consumer;
-
-        boolean configured = false;
-
-        public AbstractConsumerRunnable(String broker, String groupId, Optional<Properties> customPropsOpt, boolean syncCommit) {
-            this.broker = broker;
-            this.groupId = groupId;
-            this.customPropsOpt = customPropsOpt;
-            this.syncCommit = syncCommit;
-        }
-
-        void configure() {
-            configured = true;
-            configure(props);
-            customPropsOpt.ifPresent(props::putAll);
-            consumer = new KafkaConsumer<>(props);
-        }
-
-        void configure(Properties props) {
-            props.put("bootstrap.servers", broker);
-            props.put("group.id", groupId);
-            props.put("key.deserializer", StringDeserializer.class.getName());
-            props.put("value.deserializer", StringDeserializer.class.getName());
-        }
-
-        abstract void subscribe();
-
-        @Override
-        public void run() {
-            assert configured : "Must call configure before use";
-            try {
-                subscribe();
-                while (!isShutdown) {
-                    consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
-                    if (syncCommit)
-                        consumer.commitSync();
-                }
-            } catch (WakeupException e) {
-                // OK
-            } finally {
-                consumer.close();
-            }
-        }
-
-        void shutdown() {
-            isShutdown = true;
-            consumer.wakeup();
-        }
-    }
-
-    static class ConsumerRunnable extends AbstractConsumerRunnable {
-        final String topic;
-        final String groupProtocol;
-        final String strategy;
-        final Optional<String> remoteAssignor;
-
-        public ConsumerRunnable(String broker,
-                                String groupId,
-                                String groupProtocol,
-                                String topic,
-                                String strategy,
-                                Optional<String> remoteAssignor,
-                                Optional<Properties> customPropsOpt,
-                                boolean syncCommit) {
-            super(broker, groupId, customPropsOpt, syncCommit);
-
-            this.topic = topic;
-            this.groupProtocol = groupProtocol;
-            this.strategy = strategy;
-            this.remoteAssignor = remoteAssignor;
-        }
-
-        @Override
-        void configure(Properties props) {
-            super.configure(props);
-            props.put(GROUP_PROTOCOL_CONFIG, groupProtocol);
-            if (Objects.equals(groupProtocol, CONSUMER.toString())) {
-                remoteAssignor.ifPresent(assignor -> props.put(GROUP_REMOTE_ASSIGNOR_CONFIG, assignor));
-            } else {
-                props.put("partition.assignment.strategy", strategy);
-            }
-        }
-
-        @Override
-        void subscribe() {
-            consumer.subscribe(singleton(topic));
-        }
-    }
-
-    static class ConsumerGroupExecutor implements AutoCloseable {
-        final int numThreads;
-        final ExecutorService executor;
-        final List<AbstractConsumerRunnable> consumers = new ArrayList<>();
-
-        public ConsumerGroupExecutor(
-                String broker,
-                int numConsumers,
-                String groupId,
-                String groupProtocol,
-                String topic,
-                String strategy,
-                Optional<String> remoteAssignor,
-                Optional<Properties> customPropsOpt,
-                boolean syncCommit
-        ) {
-            this.numThreads = numConsumers;
-            this.executor = Executors.newFixedThreadPool(numThreads);
-            IntStream.rangeClosed(1, numConsumers).forEach(i -> {
-                ConsumerRunnable th = new ConsumerRunnable(
-                        broker,
-                        groupId,
-                        groupProtocol,
-                        topic,
-                        strategy,
-                        remoteAssignor,
-                        customPropsOpt,
-                        syncCommit
-                );
-                th.configure();
-                submit(th);
-            });
-        }
-
-        void submit(AbstractConsumerRunnable consumerThread) {
-            consumers.add(consumerThread);
-            executor.submit(consumerThread);
-        }
-
-        @Override
-        public void close() throws Exception {
-            consumers.forEach(AbstractConsumerRunnable::shutdown);
-            executor.shutdown();
-            try {
-                executor.awaitTermination(5000, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        }
     }
 }
