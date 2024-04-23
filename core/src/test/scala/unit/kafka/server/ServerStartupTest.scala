@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.config.KRaftConfigs
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.apache.zookeeper.KeeperException.NodeExistsException
 import org.junit.jupiter.api.Assertions._
@@ -146,7 +147,7 @@ class ServerStartupTest extends QuorumTestHarness {
      // Create Controller properties needed when migration is enabled
      props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9093")
      props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
-     props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp,
+     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
        "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
    }
    server = new KafkaServer(KafkaConfig.fromProps(props))

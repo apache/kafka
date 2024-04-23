@@ -18,13 +18,9 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.raft.RaftConfig;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class Defaults {
     /** ********* General Configuration *********/
@@ -37,32 +33,17 @@ public class Defaults {
     public static final int QUEUED_MAX_REQUESTS = 500;
     public static final int QUEUED_MAX_REQUEST_BYTES = -1;
     public static final boolean DELETE_TOPIC_ENABLE = true;
-
-    /** ********* Authorizer Configuration *********/
-    public static final String AUTHORIZER_CLASS_NAME = "";
-
-    /** ********* Socket Server Configuration *********/
-    public static final String LISTENERS = "PLAINTEXT://:9092";
-    //TODO: Replace this with EndPoint.DefaultSecurityProtocolMap once EndPoint is out of core.
-    public static final String LISTENER_SECURITY_PROTOCOL_MAP = Arrays.stream(SecurityProtocol.values())
-            .collect(Collectors.toMap(sp -> ListenerName.forSecurityProtocol(sp), sp -> sp))
-            .entrySet()
-            .stream()
-            .map(entry -> entry.getKey().value() + ":" + entry.getValue().name())
-            .collect(Collectors.joining(","));
-    public static final int SOCKET_SEND_BUFFER_BYTES = 100 * 1024;
-    public static final int SOCKET_RECEIVE_BUFFER_BYTES = 100 * 1024;
-    public static final int SOCKET_REQUEST_MAX_BYTES = 100 * 1024 * 1024;
-    public static final int SOCKET_LISTEN_BACKLOG_SIZE = 50;
-    public static final int MAX_CONNECTIONS_PER_IP = Integer.MAX_VALUE;
-    public static final String MAX_CONNECTIONS_PER_IP_OVERRIDES = "";
-    public static final int MAX_CONNECTIONS = Integer.MAX_VALUE;
-    public static final int MAX_CONNECTION_CREATION_RATE = Integer.MAX_VALUE;
-    public static final long CONNECTIONS_MAX_IDLE_MS = 10 * 60 * 1000L;
     public static final int REQUEST_TIMEOUT_MS = 30000;
     public static final long CONNECTION_SETUP_TIMEOUT_MS = CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS;
     public static final long CONNECTION_SETUP_TIMEOUT_MAX_MS = CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS;
-    public static final int FAILED_AUTHENTICATION_DELAY_MS = 100;
+
+    /** ********* KRaft mode configs *********/
+    public static final int EMPTY_NODE_ID = -1;
+    public static final long SERVER_MAX_STARTUP_TIME_MS = Long.MAX_VALUE;
+    public static final int MIGRATION_METADATA_MIN_BATCH_SIZE = 200;
+
+    /** ********* Authorizer Configuration *********/
+    public static final String AUTHORIZER_CLASS_NAME = "";
 
     /** ********* Controlled shutdown configuration *********/
     public static final int CONTROLLED_SHUTDOWN_MAX_RETRIES = 3;

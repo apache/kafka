@@ -75,6 +75,7 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.util.timer.MockTimer
@@ -2618,7 +2619,7 @@ class ReplicaManagerTest {
       props.put(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "" + zkMigrationEnabled)
       props.put(RaftConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9071")
       props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
-      props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       config = KafkaConfig.fromProps(props)
     }
 
@@ -6453,7 +6454,7 @@ class ReplicaManagerTest {
         props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
         props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "1000@localhost:9093")
         props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
-        props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+        props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       },
       defaultTopicRemoteLogStorageEnable = false)
   }

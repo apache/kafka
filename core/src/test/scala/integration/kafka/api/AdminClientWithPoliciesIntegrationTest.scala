@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, 
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerLogConfigs}
 import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -209,11 +210,11 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     alterResult = client.incrementalAlterConfigs(Map(
       brokerResource ->
         Seq(new AlterConfigOp(
-          new ConfigEntry(KafkaConfig.MaxConnectionsProp, "9999"), OpType.SET)
+          new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "9999"), OpType.SET)
         ).asJavaCollection
     ).asJava)
     alterResult.all.get
-    assertEquals(Set(KafkaConfig.MaxConnectionsProp), validationsForResource(brokerResource).head.configs().keySet().asScala)
+    assertEquals(Set(SocketServerConfigs.MAX_CONNECTIONS_CONFIG), validationsForResource(brokerResource).head.configs().keySet().asScala)
   }
 
 }

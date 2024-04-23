@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.test.TestUtils
@@ -47,7 +48,7 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
     configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
-    configProperties.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
+    configProperties.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
     configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
     configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
 
@@ -274,7 +275,7 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
     configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
-    configProperties.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
+    configProperties.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
     configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
     configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     configProperties.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.3-IV1")
@@ -305,7 +306,7 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
     configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
-    configProperties.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
+    configProperties.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
     configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
     configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     configProperties.put(ServerLogConfigs.LOG_DIR_CONFIG, logDir.getAbsolutePath)
