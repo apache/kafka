@@ -28,7 +28,7 @@ import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
-import org.apache.kafka.coordinator.group.consumer.VersionedMetadata;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -162,7 +162,7 @@ public class TargetAssignmentBuilderBenchmark {
             String memberId = entry.getKey();
             Map<Uuid, Set<Integer>> topicPartitions = entry.getValue().targetPartitions();
 
-            Assignment assignment = new Assignment((byte) 0, topicPartitions, VersionedMetadata.EMPTY);
+            Assignment assignment = new Assignment(topicPartitions);
 
             initialTargetAssignment.put(memberId, assignment);
         }
