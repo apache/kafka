@@ -41,6 +41,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -104,7 +105,7 @@ public class DeleteConsumerGroupsTest {
     }
 
     @ClusterTest
-    public void testDeleteCmdNonEmptyGroup() throws Exception {
+    public void testDeleteNonEmptyGroup() throws Exception {
         try (ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP)) {
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -114,32 +115,21 @@ public class DeleteConsumerGroupsTest {
             );
 
             String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
+            Map<String, Throwable> result = service.deleteGroups();
+
             assertTrue(output.contains("Group '" + GROUP + "' could not be deleted due to:") && output.contains(Errors.NON_EMPTY_GROUP.message()),
                     "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Output was: (" + output + ")");
-        }
-    }
 
-    @ClusterTest
-    public void testDeleteNonEmptyGroup() throws Exception {
-        try (ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP)) {
-            String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
-            ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
-
-            TestUtils.waitForCondition(
-                    () -> service.collectGroupMembers(GROUP, false).getValue().get().size() == 1,
-                    "The group did not initialize as expected."
-            );
-
-            Map<String, Throwable> result = service.deleteGroups();
             assertNotNull(result.get(GROUP),
                     "Group was deleted successfully, but it shouldn't have been. Result was:(" + result + ")");
+
             assertTrue(result.size() == 1 && result.containsKey(GROUP) && result.get(GROUP).getCause() instanceof GroupNotEmptyException,
                     "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Result was:(" + result + ")");
         }
     }
 
     @ClusterTest
-    public void testDeleteCmdEmptyGroup() throws Exception {
+    void testDeleteEmptyGroup() throws Exception {
         try (ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP)) {
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -156,8 +146,12 @@ public class DeleteConsumerGroupsTest {
                     "The group did not become empty as expected."
             );
 
-            String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
+            Map<String, Throwable> result = new HashMap<>();
+            String output = ToolsTestUtils.grabConsoleOutput(() -> result.putAll(service.deleteGroups()));
+
             assertTrue(output.contains("Deletion of requested consumer groups ('" + GROUP + "') was successful."),
+                    "The consumer group could not be deleted as expected");
+            assertTrue(result.size() == 1 && result.containsKey(GROUP) && result.get(GROUP) == null,
                     "The consumer group could not be deleted as expected");
         }
     }
@@ -195,29 +189,6 @@ public class DeleteConsumerGroupsTest {
         assertTrue(output.matches("Deletion of requested consumer groups (.*) was successful.")
                         && Objects.equals(deletedGroupsGrepped, expectedGroupsForDeletion),
                 "The consumer group(s) could not be deleted as expected");
-    }
-
-    @ClusterTest
-    public void testDeleteEmptyGroup() throws Exception {
-        try (ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP)) {
-            String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
-            ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
-
-            TestUtils.waitForCondition(
-                    () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state, "Stable"),
-                    "The group did not initialize as expected.");
-
-            executor.close();
-
-            TestUtils.waitForCondition(
-                    () -> Objects.equals(service.collectGroupState(GROUP).state, "Empty"),
-                    "The group did not become empty as expected.");
-
-            Map<String, Throwable> result = service.deleteGroups();
-            assertTrue(result.size() == 1 && result.containsKey(GROUP) && result.get(GROUP) == null,
-                    "The consumer group could not be deleted as expected");
-
-        }
     }
 
     @ClusterTest
