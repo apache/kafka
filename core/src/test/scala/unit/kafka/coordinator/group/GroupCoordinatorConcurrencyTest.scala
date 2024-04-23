@@ -209,7 +209,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
   class JoinGroupOperation extends GroupOperation[JoinGroupCallbackParams, JoinGroupCallback] {
     override def responseCallback(responsePromise: Promise[JoinGroupCallbackParams]): JoinGroupCallback = {
-      val callback: JoinGroupCallback = responsePromise.success
+      val callback: JoinGroupCallback = responsePromise.success(_)
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: JoinGroupCallback): Unit = {
