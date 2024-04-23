@@ -62,7 +62,8 @@ public class ProducerPerformance {
             String topicName = res.getString("topic");
             long numRecords = res.getLong("numRecords");
             Integer recordSize = res.getInt("recordSize");
-            int throughput = res.getInt("throughput");
+            boolean payloadMonotonic = res.getBoolean("payloadMonotonic");
+            double throughput = res.getDouble("throughput");
             List<String> producerProps = res.getList("producerConfig");
             String producerConfig = res.getString("producerConfigFile");
             String payloadFilePath = res.getString("payloadFile");
@@ -104,7 +105,7 @@ public class ProducerPerformance {
             long transactionStartTime = 0;
             for (long i = 0; i < numRecords; i++) {
 
-                payload = generateRandomPayload(recordSize, payloadByteList, payload, random);
+                payload = generateRandomPayload(recordSize, payloadByteList, payload, random, payloadMonotonic, i);
 
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
@@ -170,14 +171,16 @@ public class ProducerPerformance {
     Stats stats;
 
     static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
-            SplittableRandom random) {
+            SplittableRandom random, Boolean payloadMonotonic, long recordCount) {
         if (!payloadByteList.isEmpty()) {
             payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
         } else if (recordSize != null) {
             for (int j = 0; j < payload.length; ++j)
                 payload[j] = (byte) (random.nextInt(26) + 65);
+        } else if (payloadMonotonic) {
+            payload = Long.toString(recordCount).getBytes(StandardCharsets.UTF_8);
         } else {
-            throw new IllegalArgumentException("no payload File Path or record Size provided");
+            throw new IllegalArgumentException("no payload File Path or record Size or payload-monotonic option provided");
         }
         return payload;
     }
@@ -258,7 +261,8 @@ public class ProducerPerformance {
                 .type(Integer.class)
                 .metavar("RECORD-SIZE")
                 .dest("recordSize")
-                .help("message size in bytes. Note that you must provide exactly one of --record-size or --payload-file.");
+                .help("message size in bytes. Note that you must provide exactly one of --record-size" +
+                        " or --payload-file or --payload-monotonic.");
 
         payloadOptions.addArgument("--payload-file")
                 .action(store())
@@ -268,7 +272,15 @@ public class ProducerPerformance {
                 .dest("payloadFile")
                 .help("file to read the message payloads from. This works only for UTF-8 encoded text files. " +
                         "Payloads will be read from this file and a payload will be randomly selected when sending messages. " +
-                        "Note that you must provide exactly one of --record-size or --payload-file.");
+                        "Note that you must provide exactly one of --record-size or --payload-file or --payload-monotonic.");
+
+        payloadOptions.addArgument("--payload-monotonic")
+                .action(storeTrue())
+                .type(Boolean.class)
+                .metavar("PAYLOAD-MONOTONIC")
+                .dest("payloadMonotonic")
+                .help("payload is monotonically increasing integer. Note that you must provide exactly one of --record-size" +
+                        " or --payload-file or --payload-monotonic.");
 
         parser.addArgument("--payload-delimiter")
                 .action(store())
@@ -284,7 +296,7 @@ public class ProducerPerformance {
         parser.addArgument("--throughput")
                 .action(store())
                 .required(true)
-                .type(Integer.class)
+                .type(Double.class)
                 .metavar("THROUGHPUT")
                 .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec. Set this to -1 to disable throttling.");
 
