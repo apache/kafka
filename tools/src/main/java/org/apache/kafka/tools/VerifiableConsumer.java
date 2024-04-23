@@ -208,18 +208,6 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
     }
 
-    private void printAndLogJson(Object data) {
-        log.warn("printAndLogJson - data: {}", data.getClass().getSimpleName());
-
-        try {
-            String json = mapper.writeValueAsString(data);
-            log.warn("printAndLogJson - json: {}", json);
-            out.println(json);
-        } catch (JsonProcessingException e) {
-            out.println("Bad data can't be written as json: " + e.getMessage());
-        }
-    }
-
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
         try {
             consumer.commitSync(offsets);
@@ -252,96 +240,34 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 }
             }
         } catch (WakeupException e) {
-            runStep("a", "e: " + e);
             // ignore, we are closing
             log.trace("Caught WakeupException because consumer is shutdown, ignore and terminate.", e);
         } catch (Throwable t) {
-            runStep("b", "t: " + t);
             // Log the error so it goes to the service log and not stdout
             log.error("Error during processing, terminating consumer process: ", t);
         } finally {
-            runStep("c");
-
-            try {
-                runStep("d");
-                consumer.close();
-                runStep("e");
-                printAndLogJson(new ShutdownComplete());
-                runStep("f");
-            } catch (Throwable t) {
-                runStep("g", "t: " + t);
-                log.warn("Error closing Consumer", t);
-            }
-
-            runStep("h");
+            consumer.close();
+            printJson(new ShutdownComplete());
             shutdownLatch.countDown();
-            runStep("i");
         }
     }
 
     public void close() {
-        closeStep("a");
-
         boolean interrupted = false;
         try {
-            closeStep("b");
             consumer.wakeup();
-            closeStep("c");
-
-            int loop = 0;
-
             while (true) {
-                loop++;
-                closeStep("d", "loop: " + loop);
-
                 try {
-                    closeStep("e", "loop: " + loop);
                     shutdownLatch.await();
-                    closeStep("f", "loop: " + loop);
                     return;
                 } catch (InterruptedException e) {
-                    closeStep("g", "loop: " + loop + ", e: " + e);
                     interrupted = true;
                 }
             }
         } finally {
-            closeStep("h", "interrupted: " + interrupted);
-
-            if (interrupted) {
-                closeStep("i");
+            if (interrupted)
                 Thread.currentThread().interrupt();
-                closeStep("j");
-            }
-
-            closeStep("k");
         }
-    }
-
-    private void runStep(String step) {
-        emitShutdownStep("run", step, null);
-    }
-
-    private void runStep(String step, String details) {
-        emitShutdownStep("run", step, details);
-    }
-
-    private void closeStep(String step) {
-        emitShutdownStep("close", step, null);
-    }
-
-    private void closeStep(String step, String details) {
-        emitShutdownStep("close", step, details);
-    }
-
-    private void emitShutdownStep(String method, String step, String details) {
-        String message;
-
-        if (details != null)
-            message = String.format("%s - %s - %s", method, step, details);
-        else
-            message = String.format("%s - %s", method, step);
-
-        printAndLogJson(new ShutdownStep(message));
     }
 
     @JsonPropertyOrder({ "timestamp", "name" })
@@ -370,24 +296,6 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         @Override
         public String name() {
             return "shutdown_complete";
-        }
-    }
-
-    private static class ShutdownStep extends ConsumerEvent {
-        private final String message;
-
-        public ShutdownStep(String message) {
-            this.message = message;
-        }
-
-        @JsonProperty
-        public String message() {
-            return message;
-        }
-
-        @Override
-        public String name() {
-            return "kirk_debug_shutdown_step";
         }
     }
 
