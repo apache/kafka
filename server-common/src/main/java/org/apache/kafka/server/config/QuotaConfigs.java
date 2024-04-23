@@ -98,12 +98,12 @@ public class QuotaConfigs {
 
     public static final int IP_CONNECTION_RATE_DEFAULT = Integer.MAX_VALUE;
 
-    private final static Set<String> USER_AND_CLIENT_QUOTA_NAMES = new HashSet<>(Arrays.asList(
+    private final static Set<String> USER_AND_CLIENT_QUOTA_NAMES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             PRODUCER_BYTE_RATE_OVERRIDE_CONFIG,
             CONSUMER_BYTE_RATE_OVERRIDE_CONFIG,
             REQUEST_PERCENTAGE_OVERRIDE_CONFIG,
             CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG
-    ));
+    )));
 
     private static void buildUserClientQuotaConfigDef(ConfigDef configDef) {
         configDef.define(PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, ConfigDef.Type.LONG, Long.MAX_VALUE,
@@ -119,10 +119,6 @@ public class QuotaConfigs {
         configDef.define(CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG, ConfigDef.Type.DOUBLE,
                 Integer.valueOf(Integer.MAX_VALUE).doubleValue(),
                 ConfigDef.Importance.MEDIUM, CONTROLLER_MUTATION_RATE_DOC);
-    }
-
-    public static boolean isClientOrUserConfig(String name) {
-        return USER_AND_CLIENT_QUOTA_NAMES.contains(name);
     }
 
     public static ConfigDef userAndClientQuotaConfigs() {
@@ -149,6 +145,6 @@ public class QuotaConfigs {
     }
 
     public static Boolean isClientOrUserQuotaConfig(String name) {
-        return isClientOrUserConfig(name);
+        return USER_AND_CLIENT_QUOTA_NAMES.contains(name);
     }
 }
