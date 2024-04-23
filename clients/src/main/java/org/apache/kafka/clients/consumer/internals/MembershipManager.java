@@ -98,6 +98,7 @@ public interface MembershipManager extends RequestManager {
      * @return Server-side assignor implementation configured for the member, that will be sent
      * out to the server to be used. If empty, then the server will select the assignor.
      */
+    // TODO: Remove from membership manager (as not used in kstreams)
     Optional<String> serverAssignor();
 
     /**

@@ -57,6 +57,7 @@ import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsInitializeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
@@ -279,9 +280,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     private final AtomicInteger refCount = new AtomicInteger(0);
 
-    AsyncKafkaConsumer(final ConsumerConfig config,
+    public AsyncKafkaConsumer(final ConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
-                       final Deserializer<V> valueDeserializer) {
+                       final Deserializer<V> valueDeserializer,
+                       Optional<StreamsAssignmentMetadata> streamsAssignmentMetadata
+                       ) {
         this(
             config,
             keyDeserializer,
@@ -290,7 +293,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             ApplicationEventHandler::new,
             FetchCollector::new,
             ConsumerMetadata::new,
-            new LinkedBlockingQueue<>()
+            new LinkedBlockingQueue<>(),
+            streamsAssignmentMetadata
         );
     }
 
@@ -302,7 +306,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        final ApplicationEventHandlerFactory applicationEventHandlerFactory,
                        final FetchCollectorFactory<K, V> fetchCollectorFactory,
                        final ConsumerMetadataFactory metadataFactory,
-                       final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue) {
+                       final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue,
+                       final Optional<StreamsAssignmentMetadata> streamsInstanceMetadata
+                       ) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 config,
@@ -371,7 +377,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     clientTelemetryReporter,
                     metrics,
                     offsetCommitCallbackInvoker,
-                    this::updateGroupMetadata
+                    this::updateGroupMetadata,
+                    streamsInstanceMetadata
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
@@ -487,7 +494,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        KafkaClient client,
                        SubscriptionState subscriptions,
                        ConsumerMetadata metadata,
-                       List<ConsumerPartitionAssignor> assignors) {
+                       List<ConsumerPartitionAssignor> assignors,
+                       Optional<StreamsAssignmentMetadata> streamsInstanceMetadata) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
@@ -558,7 +566,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             clientTelemetryReporter,
             metrics,
             offsetCommitCallbackInvoker,
-            this::updateGroupMetadata
+            this::updateGroupMetadata,
+            streamsInstanceMetadata
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
@@ -1717,6 +1726,19 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
         subscribeInternal(pattern, Optional.of(listener));
+    }
+
+    /**
+     * Synchronous (re-)initialization of the streams metadata on the broker side.
+     */
+    public void initializeStreams() {
+        acquireAndEnsureOpen();
+        try {
+            Timer timer = time.timer(defaultApiTimeoutMs);
+            applicationEventHandler.addAndGet(new StreamsInitializeEvent(timer), timer);
+        } finally {
+            release();
+        }
     }
 
     /**

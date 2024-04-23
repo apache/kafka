@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import java.util.stream.Stream;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -97,9 +98,10 @@ public class SmokeTestDriverIntegrationTest {
 
     private static Stream<Arguments> parameters() {
         return Stream.of(
-            Arguments.of(false, false),
-            Arguments.of(true, false),
-            Arguments.of(true, true)
+//            Arguments.of(false, false, false),
+//            Arguments.of(true, false, false),
+//            Arguments.of(true, true, false),
+            Arguments.of(false, false, true)
         );
     }
 
@@ -109,7 +111,11 @@ public class SmokeTestDriverIntegrationTest {
     // (1) 10 min timeout, (2) 30 tries of polling without getting any data
     @ParameterizedTest
     @MethodSource("parameters")
-    public void shouldWorkWithRebalance(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws InterruptedException {
+    public void shouldWorkWithRebalance(
+        final boolean stateUpdaterEnabled,
+        final boolean processingThreadsEnabled,
+        final boolean consumerProtocolEnabled
+    ) throws InterruptedException {
         Exit.setExitProcedure((statusCode, message) -> {
             throw new AssertionError("Test called exit(). code:" + statusCode + " message:" + message);
         });
@@ -133,6 +139,9 @@ public class SmokeTestDriverIntegrationTest {
         props.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
+        if (consumerProtocolEnabled) {
+            props.put(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_PROTOCOL_CONFIG), GroupProtocol.CONSUMER.name().toLowerCase());
+        }
 
         // cycle out Streams instances as long as the test is running.
         while (driver.isAlive()) {

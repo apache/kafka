@@ -1,0 +1,99 @@
+{
+  "apiKey": 79,
+  "type": "response",
+  "name": "StreamsPrepareAssignmentResponse",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  // Supported errors:
+  // - GROUP_AUTHORIZATION_FAILED
+  // - NOT_COORDINATOR
+  // - COORDINATOR_NOT_AVAILABLE
+  // - COORDINATOR_LOAD_IN_PROGRESS
+  // - INVALID_REQUEST
+  // - INVALID_GROUP_ID
+  // - GROUP_ID_NOT_FOUND
+  // - UNKNOWN_MEMBER_ID
+  // - STALE_MEMBER_EPOCH
+  // - STREAMS_GROUP_UNITIALIZED TODO: NEW
+  "fields": [
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "ErrorCode", "type": "int16", "versions": "0+",
+      "about": "The top-level error code, or 0 if there was no error" },
+    { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "The top-level error message, or null if there was no error." },
+    { "name": "GroupEpoch", "type": "int32", "versions": "0+",
+      "about": "The group epoch." },
+    { "name": "AssignorName", "type": "string", "versions": "0+",
+      "about": "The selected assignor." },
+    { "name": "Members", "type": "[]Member", "versions": "0+",
+      "about": "The members.", "fields": [
+      { "name": "MemberId", "type": "string", "versions": "0+",
+        "about": "The member ID." },
+      { "name": "MemberEpoch", "type": "int32", "versions": "0+",
+        "about": "The member epoch." },
+      { "name": "InstanceId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+        "about": "The member instance ID." },
+      { "name": "RackId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+        "about": "The rack ID." },
+      { "name": "SubscribedTopicIds", "type": "[]uuid", "versions": "0+",
+        "about": "The subscribed topic IDs." },
+      { "name": "ProcessId", "type": "uuid", "versions": "0+",
+        "about": "Identity of the streams instance that may have multiple consumers. " },
+      { "name": "UserEndPoint", "type": "bytes", "versions": "0+",
+        "about": "Used for cross-client communication." },
+      { "name": "ClientTags", "type": "[]string", "versions": "0+",
+        "about": "Used for rack-aware assignment algorithm." },
+      { "name": "TopologyHash", "type": "bytes", "versions": "0+",
+        "about": "" },
+      { "name": "TaskLag", "type": "[]TaskLag", "versions": "0+",
+        "about": "Only updatable when reason is not zero",
+        "fields": [
+          { "name": "TaskId", "type": "Task", "versions": "0+",
+            "about": "The task ID" },
+          { "name": "Lag", "type": "int64", "versions": "0+",
+            "about": "The cumulative lag for the task" }
+        ]
+      },
+
+      // TODO: in principle, the client already has those configs.
+      { "name": "AssignmentConfigs", "type": "[]AssignmentConfig", "versions": "0+",
+        "about": "Generic array of assignment configuration strings",
+        "fields": [
+          { "name": "Key", "type": "string", "versions": "0+",
+            "about": "key of the config" },
+          { "name": "Value", "type": "string", "versions": "0+",
+            "about": "value of the config" }
+        ]
+      },
+
+      // Current Assignment
+      { "name": "ActiveTasks", "type": "[]TaskId", "versions": "0+",
+        "about": "Local assignment for this consumer. Null if unchanged since last heartbeat." },
+      { "name": "StandbyTasks", "type": "[]TaskId", "versions": "0+",
+        "about": "Local standby tasks for this consumer. Null if unchanged since last heartbeat." },
+      { "name": "WarmupTasks", "type": "[]TaskId", "versions": "0+",
+        "about": "Local warming up tasks for this consumer. Null if unchanged since last heartbeat." }
+    ]},
+    { "name": "Topics", "type": "[]TopicMetadata", "versions": "0+",
+      "about": "The topic-partition metadata.",
+      "fields": [
+        { "name": "TopicId", "type": "uuid", "versions": "0+",
+          "about": "The topic ID." },
+        { "name": "TopicName", "type": "string", "versions": "0+",
+          "about": "The topic name." },
+        { "name": "NumPartitions", "type": "int32", "versions": "0+",
+          "about": "The number of partitions." }
+      ]}
+  ],
+  "commonStructs": [
+    { "name": "TaskId", "versions": "0+", "fields": [
+      // We are using strings here, to avoid fixing a structure on task IDs which will
+      // allow introducing stable naming for subtopologies in the future.
+      { "name": "Subtopology", "type": "string", "versions": "0+",
+        "about": "subtopology ID" },
+      { "name": "Partitions", "type": "[]int32", "versions": "0+",
+        "about": "partitions" }
+    ]}
+  ]
+}

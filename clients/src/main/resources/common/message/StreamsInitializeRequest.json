@@ -1,0 +1,50 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 77,
+  "type": "request",
+  "listeners": ["zkBroker", "broker"],
+  "name": "StreamsInitializeRequest",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
+      "about": "The group identifier." },
+    { "name": "TopologyVersion", "type": "bool", "versions": "0+",
+      "about": "The version of the topology information that is being sent here. Null to disable topology versioning."
+    },
+    // TODO: We should allow sending only a topology hash, to check if the topology has changed.
+    // TODO: We could define the whole graph of the topology here, but not sure if it's worth it.
+    // TODO: We may want to have something like a topology epoch, to avoid that old clients downgrade the topology after an upgrade.
+    { "name":  "Topology", "type": "[]Subtopology", "versions": "0+",
+      "about": "The sub-topologies of the streams application.",
+      "fields": [
+        { "name": "Name", "type": "string", "versions": "0+",
+          "about": "" },
+        { "name": "Partitions", "type": "int32", "versions": "0+",
+          "about": "" },
+        { "name": "SourceTopics", "type": "[]string", "versions": "0+",
+          "about": "" },
+        { "name": "SinkTopics", "type": "[]string", "versions": "0+",
+          "about": "" },
+        { "name": "StateChangelogTopics", "type": "[]string", "versions": "0+",
+          "about": "" },
+        { "name": "RepartitionSourceTopics", "type": "[]string", "versions": "0+",
+          "about": "The set of source topics that are internally created repartition topics. Created automatically." }
+      ]
+    }
+  ]
+}

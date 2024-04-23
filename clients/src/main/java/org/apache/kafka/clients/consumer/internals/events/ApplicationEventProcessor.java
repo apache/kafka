@@ -135,8 +135,18 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 process((LeaveOnCloseEvent) event);
                 return;
 
+            case STREAMS_INIT_EVENT:
+                process((StreamsInitializeEvent) event);
+                return;
+
             default:
                 log.warn("Application event type " + event.type() + " was not expected");
+        }
+    }
+
+    private void process(final StreamsInitializeEvent event) {
+        if (!requestManagers.streamsInitializeRequestManager.isPresent()) {
+            requestManagers.streamsInitializeRequestManager.get().initialize();
         }
     }
 

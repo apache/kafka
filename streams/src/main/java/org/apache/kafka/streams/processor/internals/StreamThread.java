@@ -22,8 +22,12 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
+import org.apache.kafka.clients.consumer.internals.StreamsAssignmentMetadata;
+import org.apache.kafka.clients.consumer.internals.StreamsAssignmentMetadata.SubTopology;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
@@ -51,12 +55,15 @@ import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager.DefaultTaskExecutorCreator;
+import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.HashMap;
@@ -468,7 +475,30 @@ public class StreamThread extends Thread implements ProcessingThread {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
-        final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
+        final Consumer<byte[], byte[]> mainConsumer;
+        if (consumerConfigs.containsKey(ConsumerConfig.GROUP_PROTOCOL_CONFIG) &&
+            consumerConfigs.get(ConsumerConfig.GROUP_PROTOCOL_CONFIG).toString().equalsIgnoreCase(GroupProtocol.CONSUMER.name)) {
+            if (topologyMetadata.hasNamedTopologies()) {
+                throw new IllegalStateException("Named topologies and the CONSUMER protocol cannot be used at the same time.");
+            }
+            log.info("Consumer group protocol enabled");
+
+            StreamsAssignmentMetadata streamsAssignmentMetadata =
+                initStreamsMetadata(processId,
+                config,
+                parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)),
+                topologyMetadata);
+            log.info(streamsAssignmentMetadata.toString());
+
+            mainConsumer = clientSupplier.getConsumer(consumerConfigs, streamsAssignmentMetadata);
+            AsyncKafkaConsumer<byte[], byte[]> asyncKafkaConsumer = (AsyncKafkaConsumer<byte[], byte[]>) mainConsumer;
+            asyncKafkaConsumer.initializeStreams();
+            // TODO: maybe we can do that inside the consumer itself, and only control whether to force initialization or not via streams
+            //       instance metadata
+        } else {
+            mainConsumer = clientSupplier.getConsumer(consumerConfigs);
+        }
+
         taskManager.setMainConsumer(mainConsumer);
         referenceContainer.mainConsumer = mainConsumer;
 
@@ -495,6 +525,58 @@ public class StreamThread extends Thread implements ProcessingThread {
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
+    }
+
+    private static HostInfo parseHostInfo(final String endPoint) {
+        final HostInfo hostInfo = HostInfo.buildFromEndpoint(endPoint);
+        if (hostInfo == null) {
+            return StreamsMetadataState.UNKNOWN_HOST;
+        } else {
+            return hostInfo;
+        }
+    }
+
+    private static StreamsAssignmentMetadata initStreamsMetadata(UUID processId,
+                                                                 StreamsConfig config,
+                                                                 HostInfo hostInfo,
+                                                                 final TopologyMetadata topologyMetadata) {
+        final InternalTopologyBuilder internalTopologyBuilder = topologyMetadata.lookupBuilderForNamedTopology(null);
+        // TODO: initialize the metadata with the correct values
+
+        Map<Integer, SubTopology> subtopologyMap = new HashMap<>();
+        for (Map.Entry<Subtopology, TopicsInfo> topicsInfoEntry: internalTopologyBuilder.subtopologyToTopicsInfo().entrySet()) {
+            subtopologyMap.put(
+                topicsInfoEntry.getKey().nodeGroupId,
+                new SubTopology(
+                    topicsInfoEntry.getValue().sourceTopics,
+                    topicsInfoEntry.getValue().repartitionSourceTopics.keySet(),
+                    topicsInfoEntry.getValue().stateChangelogTopics.keySet(),
+                    topicsInfoEntry.getValue().sinkTopics
+                )
+            );
+        }
+
+        // TODO: Which of these are actually needed?
+        // TODO: Maybe we want to split this into assignment properties and internal topic conifguration properties
+        HashMap<String, Object> assignmentProperties = new HashMap<>();
+        assignmentProperties.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, config.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG));
+        assignmentProperties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG));
+        assignmentProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, config.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG));
+        assignmentProperties.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, config.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG));
+        assignmentProperties.put(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, config.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG));
+        assignmentProperties.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, config.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
+        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG, config.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG));
+        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, config.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
+        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, config.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
+        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG, config.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG));
+
+        return new StreamsAssignmentMetadata(
+            processId,
+            hostInfo.host(),
+            hostInfo.port(),
+            subtopologyMap,
+            assignmentProperties
+        );
     }
 
     private static DefaultTaskManager maybeCreateSchedulingTaskManager(final boolean processingThreadsEnabled,

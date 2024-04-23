@@ -33,18 +33,14 @@
       "about": "null if not provided or if it didn't change since the last heartbeat; the rack ID of consumer otherwise." },
     { "name": "RebalanceTimeoutMs", "type": "int32", "versions": "0+", "default": -1,
       "about": "-1 if it didn't change since the last heartbeat; the maximum time in milliseconds that the coordinator will wait on the member to revoke its partitions otherwise." },
-    { "name": "SubscribedTopicNames", "type": "[]string", "versions": "0+", "nullableVersions": "0+", "default": "null", "entityType": "topicName",
-      "about": "null if it didn't change since the last heartbeat; the subscribed topic names otherwise." },
-    { "name": "ServerAssignor", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "null if not used or if it didn't change since the last heartbeat; the server side assignor to use otherwise." },
 
     // The coordinator knows which partitions to fetch from given this information
-    { "name": "ActiveTasks", "type": "[]string", "versions": "0+",
-      "about": "Local assignment for this consumer." },
-    { "name": "StandbyTasks", "type": "[]string", "versions": "0+",
-      "about": "Local standby tasks for this consumer." },
-    { "name": "WarmupTasks", "type": "[]string", "versions": "0+",
-      "about": "Local warming up tasks for this consumer." },
+    { "name": "ActiveTasks", "type": "[]TaskId", "versions": "0+",
+      "about": "Local assignment for this consumer. Null if unchanged since last heartbeat." },
+    { "name": "StandbyTasks", "type": "[]TaskId", "versions": "0+",
+      "about": "Local standby tasks for this consumer. Null if unchanged since last heartbeat." },
+    { "name": "WarmupTasks", "type": "[]TaskId", "versions": "0+",
+      "about": "Local warming up tasks for this consumer. Null if unchanged since last heartbeat." },
 
     { "name": "ProcessId", "type": "uuid", "versions": "0+",
       "about": "Identity of the streams instance that may have multiple consumers. " },
@@ -57,7 +53,7 @@
     { "name": "TaskLag", "type": "[]TaskLag", "versions": "0+",
       "about": "Only updatable when reason is not zero",
       "fields": [
-        { "name": "TaskId", "type": "string", "versions": "0+",
+        { "name": "TaskId", "type": "TaskId", "versions": "0+",
           "about": "The task ID" },
         { "name": "Lag", "type": "int64", "versions": "0+",
           "about": "The cumulative lag for the task" }
@@ -72,5 +68,21 @@
           "about": "value of the config" }
       ]
     }
+  ],
+  "commonStructs": [
+    { "name": "TopicPartition", "versions": "0+", "fields": [
+      { "name": "Topic", "type": "string", "versions": "0+",
+        "about": "topic name" },
+      { "name": "Partitions", "type": "[]int32", "versions": "0+",
+        "about": "partitions" }
+    ]},
+    { "name": "TaskId", "versions": "0+", "fields": [
+      // We are using strings here, to avoid fixing a structure on task IDs which will
+      // allow introducing stable naming for subtopologies in the future.
+      { "name": "Subtopology", "type": "string", "versions": "0+",
+        "about": "subtopology ID" },
+      { "name": "Partitions", "type": "[]int32", "versions": "0+",
+        "about": "partitions" }
+    ]}
   ]
 }
