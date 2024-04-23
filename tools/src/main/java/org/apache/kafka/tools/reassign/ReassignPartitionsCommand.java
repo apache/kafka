@@ -98,22 +98,15 @@ public class ReassignPartitionsCommand {
      */
     static final int EARLIEST_TOPICS_JSON_VERSION = 1;
 
-    // Throttles that are set at the level of an individual broker.
-    static final String BROKER_LEVEL_LEADER_THROTTLE = QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG;
-    static final String BROKER_LEVEL_FOLLOWER_THROTTLE = QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG;
-    static final String BROKER_LEVEL_LOG_DIR_THROTTLE = QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG;
     static final List<String> BROKER_LEVEL_THROTTLES = Arrays.asList(
-        BROKER_LEVEL_LEADER_THROTTLE,
-        BROKER_LEVEL_FOLLOWER_THROTTLE,
-        BROKER_LEVEL_LOG_DIR_THROTTLE
+            QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
+            QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
+            QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG
     );
 
-    // Throttles that are set at the level of an individual topic.
-    static final String TOPIC_LEVEL_LEADER_THROTTLE = QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
-    static final String TOPIC_LEVEL_FOLLOWER_THROTTLE = QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
     private static final List<String> TOPIC_LEVEL_THROTTLES = Arrays.asList(
-        TOPIC_LEVEL_LEADER_THROTTLE,
-        TOPIC_LEVEL_FOLLOWER_THROTTLE
+            QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
+            QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     );
 
     private static final String CANNOT_EXECUTE_BECAUSE_OF_EXISTING_MESSAGE = "Cannot execute because " +
@@ -1101,10 +1094,10 @@ public class ReassignPartitionsCommand {
         topicNames.forEach(topicName -> {
             List<AlterConfigOp> ops = new ArrayList<>();
             if (leaderThrottles.containsKey(topicName)) {
-                ops.add(new AlterConfigOp(new ConfigEntry(TOPIC_LEVEL_LEADER_THROTTLE, leaderThrottles.get(topicName)), AlterConfigOp.OpType.SET));
+                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, leaderThrottles.get(topicName)), AlterConfigOp.OpType.SET));
             }
             if (followerThrottles.containsKey(topicName)) {
-                ops.add(new AlterConfigOp(new ConfigEntry(TOPIC_LEVEL_FOLLOWER_THROTTLE, followerThrottles.get(topicName)), AlterConfigOp.OpType.SET));
+                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, followerThrottles.get(topicName)), AlterConfigOp.OpType.SET));
             }
             if (!ops.isEmpty()) {
                 configs.put(new ConfigResource(ConfigResource.Type.TOPIC, topicName), ops);
@@ -1140,9 +1133,9 @@ public class ReassignPartitionsCommand {
             Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
             reassigningBrokers.forEach(brokerId -> {
                 List<AlterConfigOp> ops = new ArrayList<>();
-                ops.add(new AlterConfigOp(new ConfigEntry(BROKER_LEVEL_LEADER_THROTTLE,
+                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
                     Long.toString(interBrokerThrottle)), AlterConfigOp.OpType.SET));
-                ops.add(new AlterConfigOp(new ConfigEntry(BROKER_LEVEL_FOLLOWER_THROTTLE,
+                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
                     Long.toString(interBrokerThrottle)), AlterConfigOp.OpType.SET));
                 configs.put(new ConfigResource(ConfigResource.Type.BROKER, Long.toString(brokerId)), ops);
             });
@@ -1165,7 +1158,7 @@ public class ReassignPartitionsCommand {
             Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
             movingBrokers.forEach(brokerId -> {
                 List<AlterConfigOp> ops = new ArrayList<>();
-                ops.add(new AlterConfigOp(new ConfigEntry(BROKER_LEVEL_LOG_DIR_THROTTLE, Long.toString(logDirThrottle)), AlterConfigOp.OpType.SET));
+                ops.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, Long.toString(logDirThrottle)), AlterConfigOp.OpType.SET));
                 configs.put(new ConfigResource(ConfigResource.Type.BROKER, Long.toString(brokerId)), ops);
             });
             admin.incrementalAlterConfigs(configs).all().get();
