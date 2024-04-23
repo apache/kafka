@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.SaslHandshakeRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, SaslHandshakeRequest, SaslHandshakeResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
@@ -53,10 +54,10 @@ object SaslApiVersionsRequestTest {
 
     // Configure control plane listener to make sure we have separate listeners for testing.
     val serverProperties =  new java.util.HashMap[String, String]()
-    serverProperties.put(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListenerName)
-    serverProperties.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$controlPlaneListenerName:$securityProtocol,$securityProtocol:$securityProtocol")
+    serverProperties.put(SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG, controlPlaneListenerName)
+    serverProperties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"$controlPlaneListenerName:$securityProtocol,$securityProtocol:$securityProtocol")
     serverProperties.put("listeners", s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
-    serverProperties.put(KafkaConfig.AdvertisedListenersProp, s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
+    serverProperties.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
 
     clusterGenerator.accept(ClusterConfig.defaultBuilder
       .setSecurityProtocol(securityProtocol)
