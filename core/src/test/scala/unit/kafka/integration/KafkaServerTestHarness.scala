@@ -369,6 +369,15 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         alive(_brokers.length - 1) = true
       }
     }
+
+    // Some tests will try to set some config in ZK before the controller is elected. As of KAFKA-16539,
+    // in order for KafkaZkClient#setOrCreateEntityConfigs to succeed, a controller ZNode must exist.
+    if (startup && !isKRaftTest()) {
+      TestUtils.waitUntilTrue(
+        () => getController().kafkaController.activeControllerId != -1,
+        "Timed out waiting for a controller to be elected"
+      )
+    }
   }
 
   private def createBrokerFromConfig(config: KafkaConfig): KafkaBroker = {

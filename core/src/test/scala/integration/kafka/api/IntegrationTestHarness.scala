@@ -159,12 +159,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     if (createOffsetsTopic) {
       super.createOffsetsTopic(listenerName, superuserClientConfig)
     }
-
-    // Many tests will try to set some config in ZK before the controller is elected. Need to seed ZK with a bogus
-    // controller in order to allow KafkaZkClient#setOrCreateEntityConfigs to succeed.
-    if (!isKRaftTest()) {
-      TestUtils.createControllerInZk(zkClient, 0)
-    }
   }
 
   def clientSecurityProps(certAlias: String): Properties = {
