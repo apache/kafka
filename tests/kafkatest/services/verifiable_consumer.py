@@ -270,7 +270,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                 with self.lock:
                     name = event["name"]
                     if name == "shutdown_complete":
-                        handler.handle_shutdown_complete(True)
+                        handler.handle_shutdown_complete()
                     elif name == "startup_complete":
                         handler.handle_startup_complete()
                     elif name == "offsets_committed":

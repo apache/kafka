@@ -1,6 +1,0 @@
-test_suite:
-
-  - 'kafkatest/tests/client/consumer_test.py::OffsetValidationTest.test_consumer_bounce@{"clean_shutdown": true, "bounce_mode": "all", "metadata_quorum": "ISOLATED_KRAFT", "use_new_coordinator": true, "group_protocol": "classic"}'
-  - 'kafkatest/tests/client/consumer_test.py::OffsetValidationTest.test_consumer_bounce@{"clean_shutdown": true, "bounce_mode": "all", "metadata_quorum": "ISOLATED_KRAFT", "use_new_coordinator": true, "group_protocol": "consumer"}'
-  - 'kafkatest/tests/client/consumer_test.py::OffsetValidationTest.test_consumer_bounce@{"clean_shutdown": true, "bounce_mode": "rolling", "metadata_quorum": "ISOLATED_KRAFT", "use_new_coordinator": true, "group_protocol": "classic"}'
-  - 'kafkatest/tests/client/consumer_test.py::OffsetValidationTest.test_consumer_bounce@{"clean_shutdown": true, "bounce_mode": "rolling", "metadata_quorum": "ISOLATED_KRAFT", "use_new_coordinator": true, "group_protocol": "consumer"}'
