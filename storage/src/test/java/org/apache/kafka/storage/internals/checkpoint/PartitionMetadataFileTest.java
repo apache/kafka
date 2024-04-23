@@ -53,6 +53,10 @@ class PartitionMetadataFileTest  {
         Uuid topicId = Uuid.randomUuid();
         partitionMetadataFile.record(topicId);
         assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
+
+        Uuid sameTopicId = Uuid.fromString(topicId.toString());
+        partitionMetadataFile.record(sameTopicId);
+        assertDoesNotThrow(() -> partitionMetadataFile.record(topicId));
     }
 
     @Test
