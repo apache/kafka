@@ -1,0 +1,10 @@
+name: kafka
+semaphore:
+  enable: true
+  pipeline_enable: false
+git:
+  enable: true
+lang: java
+lang_version: unknown
+github:
+  enable: true
