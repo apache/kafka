@@ -121,7 +121,7 @@ public class ClientSideAssignorBenchmark {
 
     private Cluster metadata;
 
-    private final List<String> allTopicNames = new ArrayList<>(topicCount);
+    private final List<String> allTopicNames = new ArrayList<>();
 
     @Setup(Level.Trial)
     public void setup() {

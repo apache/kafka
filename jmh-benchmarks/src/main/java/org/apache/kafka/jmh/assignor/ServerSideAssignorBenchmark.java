@@ -125,7 +125,7 @@ public class ServerSideAssignorBenchmark {
 
     private SubscribedTopicDescriber subscribedTopicDescriber;
 
-    private final List<Uuid> allTopicIds = new ArrayList<>(topicCount);
+    private final List<Uuid> allTopicIds = new ArrayList<>();
 
     @Setup(Level.Trial)
     public void setup() {

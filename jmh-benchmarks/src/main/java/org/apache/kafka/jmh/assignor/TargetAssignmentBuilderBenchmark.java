@@ -81,9 +81,9 @@ public class TargetAssignmentBuilderBenchmark {
 
     private AssignmentSpec assignmentSpec;
 
-    private final List<String> allTopicNames = new ArrayList<>(topicCount);
+    private final List<String> allTopicNames = new ArrayList<>();
 
-    private final List<Uuid> allTopicIds = new ArrayList<>(topicCount);
+    private final List<Uuid> allTopicIds = new ArrayList<>();
 
     @Setup(Level.Trial)
     public void setup() {
