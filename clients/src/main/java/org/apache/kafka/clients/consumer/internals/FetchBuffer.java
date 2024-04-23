@@ -166,59 +166,35 @@ public class FetchBuffer implements AutoCloseable {
      * @param timer Timer that provides time to wait
      */
     void awaitNotEmpty(Timer timer) {
-        log.error("awaitNotEmpty - a, timer: {}, this: {}", timer.remainingMs(), this);
-
         try {
-            log.error("awaitNotEmpty - b, timer: {}, this: {}", timer.remainingMs(), this);
             lock.lock();
-            log.error("awaitNotEmpty - c, timer: {}, this: {}", timer.remainingMs(), this);
 
             while (isEmpty() && !wokenup.compareAndSet(true, false)) {
-                log.error("awaitNotEmpty - d, timer: {}, this: {}", timer.remainingMs(), this);
                 // Update the timer before we head into the loop in case it took a while to get the lock.
                 timer.update();
-                log.error("awaitNotEmpty - e, timer: {}, this: {}", timer.remainingMs(), this);
 
-                if (timer.isExpired()) {
-                    log.error("awaitNotEmpty - f, timer: {}, this: {}", timer.remainingMs(), this);
+                if (timer.isExpired())
                     break;
-                }
-
-                log.error("awaitNotEmpty - g, timer: {}, this: {}", timer.remainingMs(), this);
 
                 if (!notEmptyCondition.await(timer.remainingMs(), TimeUnit.MILLISECONDS)) {
-                    log.error("awaitNotEmpty - h, timer: {}, this: {}", timer.remainingMs(), this);
                     break;
                 }
-
-                log.error("awaitNotEmpty - i, timer: {}, this: {}", timer.remainingMs(), this);
             }
         } catch (InterruptedException e) {
-            log.error("awaitNotEmpty - j, timer: {}, this: {}", timer.remainingMs(), this);
             throw new InterruptException("Timeout waiting for results from fetching records", e);
         } finally {
-            log.error("awaitNotEmpty - k, timer: {}, this: {}", timer.remainingMs(), this);
             lock.unlock();
-            log.error("awaitNotEmpty - l, timer: {}, this: {}", timer.remainingMs(), this);
             timer.update();
-            log.error("awaitNotEmpty - m, timer: {}, this: {}", timer.remainingMs(), this);
         }
     }
 
     void wakeup() {
-        log.error("wakeup - a, this: {}", this);
         wokenup.set(true);
-        log.error("wakeup - b, this: {}", this);
         try {
-            log.error("wakeup - c, this: {}", this);
             lock.lock();
-            log.error("wakeup - d, this: {}", this);
             notEmptyCondition.signalAll();
-            log.error("wakeup - e, this: {}", this);
         } finally {
-            log.error("wakeup - f, this: {}", this);
             lock.unlock();
-            log.error("wakeup - g, this: {}", this);
         }
     }
 
@@ -289,17 +265,5 @@ public class FetchBuffer implements AutoCloseable {
         } finally {
             lock.unlock();
         }
-    }
-
-    @Override
-    public String toString() {
-        return "FetchBuffer{" +
-                "completedFetches=" + completedFetches +
-                ", lock=" + lock +
-                ", notEmptyCondition=" + notEmptyCondition +
-                ", idempotentCloser=" + idempotentCloser +
-                ", wokenup=" + wokenup +
-                ", nextInLineFetch=" + nextInLineFetch +
-                '}';
     }
 }
