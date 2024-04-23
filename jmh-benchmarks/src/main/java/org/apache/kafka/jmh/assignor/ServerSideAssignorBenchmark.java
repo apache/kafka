@@ -269,7 +269,7 @@ public class ServerSideAssignorBenchmark {
             Collections.emptyMap()
         ));
 
-        this.assignmentSpec = new AssignmentSpec(updatedMembers);
+        assignmentSpec = new AssignmentSpec(updatedMembers);
     }
 
     @Benchmark
