@@ -59,7 +59,6 @@ import java.util.stream.Stream;
  * <ul>
  *     <li>ClusterConfig (the same instance passed to the constructor)</li>
  *     <li>ClusterInstance (includes methods to expose underlying SocketServer-s)</li>
- *     <li>IntegrationTestHelper (helper methods)</li>
  * </ul>
  */
 public class RaftClusterInvocationContext implements TestTemplateInvocationContext {
@@ -264,6 +263,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         public void stop() {
             if (stopped.compareAndSet(false, true)) {
                 admins.forEach(admin -> Utils.closeQuietly(admin, "admin"));
+                admins.clear();
                 Utils.closeQuietly(clusterReference.get(), "cluster");
                 if (zkReference.get() != null) {
                     Utils.closeQuietly(zkReference.get(), "zk");

@@ -567,7 +567,7 @@ public class KRaftMigrationDriverTest {
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
                 "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
 
-            // Modify topics in a KRaft snapshot -- delete foo, modify bar, add baz
+            // Modify topics in a KRaft snapshot -- delete foo, modify bar, add baz, add new foo, add bam, delete bam
             provenance = new MetadataProvenance(200, 1, 1);
             delta = new MetadataDelta(image);
             RecordTestUtils.replayAll(delta, DELTA1_RECORDS);
@@ -577,10 +577,11 @@ public class KRaftMigrationDriverTest {
 
             assertEquals(1, topicClient.deletedTopics.size());
             assertEquals("foo", topicClient.deletedTopics.get(0));
-            assertEquals(1, topicClient.createdTopics.size());
-            assertEquals("baz", topicClient.createdTopics.get(0));
+            assertEquals(2, topicClient.createdTopics.size());
+            assertTrue(topicClient.createdTopics.contains("foo"));
+            assertTrue(topicClient.createdTopics.contains("baz"));
             assertTrue(topicClient.updatedTopicPartitions.get("bar").contains(0));
-            assertEquals(new ConfigResource(ConfigResource.Type.TOPIC, "foo"), configClient.deletedResources.get(0));
+            assertEquals(0, configClient.deletedResources.size());
         });
     }
 
@@ -621,7 +622,7 @@ public class KRaftMigrationDriverTest {
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
                     "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
 
-            // Modify topics in a KRaft snapshot -- delete foo, modify bar, add baz
+            // Modify topics in a KRaft snapshot -- delete foo, modify bar, add baz, add new foo, add bam, delete bam
             provenance = new MetadataProvenance(200, 1, 1);
             delta = new MetadataDelta(image);
             RecordTestUtils.replayAll(delta, DELTA1_RECORDS);
@@ -631,10 +632,11 @@ public class KRaftMigrationDriverTest {
 
             assertEquals(1, topicClient.deletedTopics.size());
             assertEquals("foo", topicClient.deletedTopics.get(0));
-            assertEquals(1, topicClient.createdTopics.size());
-            assertEquals("baz", topicClient.createdTopics.get(0));
+            assertEquals(2, topicClient.createdTopics.size());
+            assertTrue(topicClient.createdTopics.contains("foo"));
+            assertTrue(topicClient.createdTopics.contains("baz"));
             assertTrue(topicClient.updatedTopicPartitions.get("bar").contains(0));
-            assertEquals(new ConfigResource(ConfigResource.Type.TOPIC, "foo"), configClient.deletedResources.get(0));
+            assertEquals(0, configClient.deletedResources.size());
         });
     }
 
@@ -730,7 +732,7 @@ public class KRaftMigrationDriverTest {
             migrationClient.setMigrationRecoveryState(
                 ZkMigrationLeadershipState.EMPTY.withKRaftMetadataOffsetAndEpoch(100, 1));
 
-            // Modify topics in a KRaft -- delete foo, modify bar, add baz
+            // Modify topics in a KRaft -- delete foo, modify bar, add baz, add new foo, add bam, delete bam
             provenance = new MetadataProvenance(200, 1, 1);
             delta = new MetadataDelta(image);
             RecordTestUtils.replayAll(delta, DELTA1_RECORDS);
@@ -746,10 +748,11 @@ public class KRaftMigrationDriverTest {
                 "");
             assertEquals(1, topicClient.deletedTopics.size());
             assertEquals("foo", topicClient.deletedTopics.get(0));
-            assertEquals(1, topicClient.createdTopics.size());
-            assertEquals("baz", topicClient.createdTopics.get(0));
+            assertEquals(2, topicClient.createdTopics.size());
+            assertTrue(topicClient.createdTopics.contains("foo"));
+            assertTrue(topicClient.createdTopics.contains("baz"));
             assertTrue(topicClient.updatedTopicPartitions.get("bar").contains(0));
-            assertEquals(new ConfigResource(ConfigResource.Type.TOPIC, "foo"), configClient.deletedResources.get(0));
+            assertEquals(0, configClient.deletedResources.size());
         });
     }
 
@@ -807,21 +810,26 @@ public class KRaftMigrationDriverTest {
     }
 
     static Stream<Arguments> batchSizes() {
+        int defaultBatchSize = 200;
         return Stream.of(
-            Arguments.of(Arrays.asList(0, 0, 0, 0), 0, 0),
-            Arguments.of(Arrays.asList(0, 0, 1, 0), 1, 1),
-            Arguments.of(Arrays.asList(1, 1, 1, 1), 1, 4),
-            Arguments.of(Collections.singletonList(KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE - 1), 1, 999),
-            Arguments.of(Collections.singletonList(KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE), 1, 1000),
-            Arguments.of(Collections.singletonList(KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE + 1), 1, 1001),
-            Arguments.of(Arrays.asList(KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE, 1), 2, 1001),
-            Arguments.of(Arrays.asList(0, 0, 0, 0), 0, 0),
-            Arguments.of(Arrays.asList(KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE, KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE, KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE), 3, 3000)
+            Arguments.of(Optional.of(defaultBatchSize), Arrays.asList(0, 0, 0, 0), 0, 0),
+            Arguments.of(Optional.of(defaultBatchSize), Arrays.asList(0, 0, 1, 0), 1, 1),
+            Arguments.of(Optional.of(defaultBatchSize), Arrays.asList(1, 1, 1, 1), 1, 4),
+            Arguments.of(Optional.of(1000), Collections.singletonList(999), 1, 999),
+            Arguments.of(Optional.of(1000), Collections.singletonList(1000), 1, 1000),
+            Arguments.of(Optional.of(1000), Collections.singletonList(1001), 1, 1001),
+            Arguments.of(Optional.of(1000), Arrays.asList(1000, 1), 2, 1001),
+            Arguments.of(Optional.of(defaultBatchSize), Arrays.asList(0, 0, 0, 0), 0, 0),
+            Arguments.of(Optional.of(1000), Arrays.asList(1000, 1000, 1000), 3, 3000),
+            Arguments.of(Optional.of(defaultBatchSize), Collections.singletonList(defaultBatchSize + 1), 1, 201),
+            Arguments.of(Optional.of(defaultBatchSize), Arrays.asList(defaultBatchSize, 1), 2, 201),
+            Arguments.of(Optional.empty(), Collections.singletonList(defaultBatchSize + 1), 1, 201),
+            Arguments.of(Optional.empty(), Arrays.asList(defaultBatchSize, 1), 2, 201)
         );
     }
     @ParameterizedTest
     @MethodSource("batchSizes")
-    public void testCoalesceMigrationRecords(List<Integer> batchSizes, int expectedBatchCount, int expectedRecordCount) throws Exception {
+    public void testCoalesceMigrationRecords(Optional<Integer> configBatchSize, List<Integer> batchSizes, int expectedBatchCount, int expectedRecordCount) throws Exception {
         List<List<ApiMessageAndVersion>> batchesPassedToController = new ArrayList<>();
         NoOpRecordConsumer recordConsumer = new NoOpRecordConsumer() {
             @Override
@@ -851,6 +859,7 @@ public class KRaftMigrationDriverTest {
                 .setZkRecordConsumer(recordConsumer)
                 .setPropagator(metadataPropagator)
                 .setFaultHandler(faultHandler);
+        configBatchSize.ifPresent(builder::setMinMigrationBatchSize);
         try (KRaftMigrationDriver driver = builder.build()) {
             MetadataImage image = MetadataImage.EMPTY;
             MetadataDelta delta = new MetadataDelta(image);

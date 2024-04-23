@@ -41,7 +41,7 @@ import java.util.Map;
 
 import static java.util.Collections.singletonList;
 
-public class UpdateMetadataRequest extends AbstractControlRequest {
+public final class UpdateMetadataRequest extends AbstractControlRequest {
 
     public static class Builder extends AbstractControlRequest.Builder<UpdateMetadataRequest> {
         private final List<UpdateMetadataPartitionState> partitionStates;
@@ -149,7 +149,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
     private final UpdateMetadataRequestData data;
 
-    UpdateMetadataRequest(UpdateMetadataRequestData data, short version) {
+    public UpdateMetadataRequest(UpdateMetadataRequestData data, short version) {
         super(ApiKeys.UPDATE_METADATA, version);
         this.data = data;
         // Do this from the constructor to make it thread-safe (even though it's only needed when some methods are called)

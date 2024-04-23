@@ -127,6 +127,7 @@ public final class AssignorConfiguration {
                 case UPGRADE_FROM_34:
                 case UPGRADE_FROM_35:
                 case UPGRADE_FROM_36:
+                case UPGRADE_FROM_37:
                     // we need to add new version when new "upgrade.from" values become available
 
                     // This config is for explicitly sending FK response to a requested partition
@@ -154,7 +155,7 @@ public final class AssignorConfiguration {
             switch (UpgradeFromValues.getValueFromString(upgradeFrom)) {
                 case UPGRADE_FROM_0100:
                     log.info(
-                        "Downgrading metadata version from {} to 1 for upgrade from 0.10.0.x.",
+                        "Downgrading metadata.version from {} to 1 for upgrade from 0.10.0.x.",
                         LATEST_SUPPORTED_VERSION
                     );
                     return 1;
@@ -164,7 +165,7 @@ public final class AssignorConfiguration {
                 case UPGRADE_FROM_10:
                 case UPGRADE_FROM_11:
                     log.info(
-                        "Downgrading metadata version from {} to 2 for upgrade from {}.x.",
+                        "Downgrading metadata.version from {} to 2 for upgrade from {}.x.",
                         LATEST_SUPPORTED_VERSION,
                         upgradeFrom
                     );
@@ -187,6 +188,7 @@ public final class AssignorConfiguration {
                 case UPGRADE_FROM_34:
                 case UPGRADE_FROM_35:
                 case UPGRADE_FROM_36:
+                case UPGRADE_FROM_37:
                     // we need to add new version when new "upgrade.from" values become available
 
                     // This config is for explicitly sending FK response to a requested partition

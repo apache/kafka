@@ -337,7 +337,8 @@ def command_release_announcement_email():
     release_announcement_data = {
         'number_of_contributors': number_of_contributors,
         'contributors': ', '.join(str(x) for x in filter(None, contributors.split('\n'))),
-        'release_version': release_version_num
+        'release_version': release_version_num,
+        'release_version_wihtout_dot': release_version_num.replace(".", "")
     }
 
     release_announcement_email = """
@@ -347,6 +348,9 @@ Subject: [ANNOUNCE] Apache Kafka %(release_version)s
 The Apache Kafka community is pleased to announce the release for Apache Kafka %(release_version)s
 
 <DETAILS OF THE CHANGES>
+
+An overview of the release and its notable changes can be found in the
+release blog post: https://kafka.apache.org/blog#apache_kafka_%(release_version_wihtout_dot)s_release_announcement
 
 All of the changes in this release can be found in the release notes:
 https://www.apache.org/dist/kafka/%(release_version)s/RELEASE_NOTES.html
@@ -598,6 +602,8 @@ regexReplace("streams/quickstart/java/src/main/resources/archetype-resources/pom
 print("updating ducktape version.py")
 regexReplace("./tests/kafkatest/version.py", "^DEV_VERSION =.*",
     "DEV_VERSION = KafkaVersion(\"%s-SNAPSHOT\")" % release_version)
+print("updating docs/js/templateData.js")
+regexReplace("docs/js/templateData.js", "-SNAPSHOT", "")
 # Command in explicit list due to messages with spaces
 cmd("Committing version number updates", ["git", "commit", "-a", "-m", "Bump version to %s" % release_version])
 # Command in explicit list due to messages with spaces
@@ -730,7 +736,31 @@ if not user_ok("Have you successfully deployed the artifacts (y/n)?: "):
     fail("Ok, giving up")
 if not user_ok("Ok to push RC tag %s (y/n)?: " % rc_tag):
     fail("Ok, giving up")
-cmd("Pushing RC tag", "git push %s %s" % (PUSH_REMOTE_NAME, rc_tag))
+
+print(f"Pushing RC tag {rc_tag} to {PUSH_REMOTE_NAME}")
+try:
+    push_command = f"git push {PUSH_REMOTE_NAME} {rc_tag}".split()
+    output = subprocess.check_output(push_command, stderr=subprocess.STDOUT)
+    print_output(output.decode('utf-8'))
+    if "error" in output.decode('utf-8'):
+        print("*********************************************")
+        print("*** ERROR when trying to perform git push ***")
+        print("*********************************************")
+        print(output)
+        print("")
+        print("Due the failure of git push, the program will exit here. Please note that: ")
+        print(f"1) You are still at branch {release_version}, not {starting_branch}")
+        print(f"2) Tag {rc_tag} is still present locally")
+        print("")
+        print(f"In order to restart the workflow, you will have to manually switch back to the original branch and delete the branch {release_version} and tag {rc_tag}")
+        sys.exit(1)
+except Exception as e:
+    print(f"Failed when trying to git push {rc_tag}. Error: {e}")
+    print("You may need to clean up branches/tags yourself before retrying.")
+    print("Due the failure of git push, the program will exit here. Please note that: ")
+    print(f"1) You are still at branch {release_version}, not {starting_branch}")
+    print(f"2) Tag {rc_tag} is still present locally")
+    sys.exit(1)
 
 # Move back to starting branch and clean out the temporary release branch (e.g. 1.0.0) we used to generate everything
 cmd("Resetting repository working state", "git reset --hard HEAD && git checkout %s" % starting_branch, shell=True)

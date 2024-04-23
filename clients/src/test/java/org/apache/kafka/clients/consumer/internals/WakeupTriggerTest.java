@@ -28,12 +28,13 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
@@ -133,16 +134,46 @@ public class WakeupTriggerTest {
         }
     }
 
+    @Test
+    public void testDisableWakeupWithoutPendingTask() {
+        wakeupTrigger.disableWakeups();
+        wakeupTrigger.wakeup();
+        assertDoesNotThrow(() -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
+    @Test
+    public void testDisableWakeupWithPendingTask() {
+        final CompletableFuture<Void> future = new CompletableFuture<>();
+        wakeupTrigger.disableWakeups();
+        wakeupTrigger.setActiveTask(future);
+        wakeupTrigger.wakeup();
+        assertFalse(future.isCompletedExceptionally());
+        assertDoesNotThrow(() -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
+    @Test
+    public void testDisableWakeupWithFetchAction() {
+        try (final FetchBuffer fetchBuffer = mock(FetchBuffer.class)) {
+            wakeupTrigger.disableWakeups();
+            wakeupTrigger.setFetchAction(fetchBuffer);
+            wakeupTrigger.wakeup();
+            verify(fetchBuffer, never()).wakeup();
+        }
+    }
+
+    @Test
+    public void testDisableWakeupPreservedByClearTask() {
+        final CompletableFuture<Void> future = new CompletableFuture<>();
+        wakeupTrigger.disableWakeups();
+        wakeupTrigger.setActiveTask(future);
+        wakeupTrigger.clearTask();
+        wakeupTrigger.wakeup();
+        assertDoesNotThrow(() -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
     private void assertWakeupExceptionIsThrown(final CompletableFuture<?> future) {
         assertTrue(future.isCompletedExceptionally());
-        try {
-            future.get(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof WakeupException);
-            return;
-        } catch (Exception e) {
-            fail("The task should throw an ExecutionException but got:" + e);
-        }
-        fail("The task should throw an ExecutionException");
+        assertInstanceOf(WakeupException.class,
+            assertThrows(ExecutionException.class, () -> future.get(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)).getCause());
     }
 }

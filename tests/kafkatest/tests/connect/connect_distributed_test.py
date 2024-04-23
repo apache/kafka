@@ -20,7 +20,7 @@ from ducktape.mark import matrix, parametrize
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService, config_property, quorum
+from kafkatest.services.kafka import KafkaService, config_property, quorum, consumer_group
 from kafkatest.services.connect import ConnectDistributedService, VerifiableSource, VerifiableSink, ConnectRestError, MockSink, MockSource
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
@@ -108,9 +108,10 @@ class ConnectDistributedTest(Test):
             self.zk.start()
         self.kafka.start()
 
-    def _start_connector(self, config_file):
+    def _start_connector(self, config_file, extra_config={}):
         connector_props = self.render(config_file)
         connector_config = dict([line.strip().split('=', 1) for line in connector_props.split('\n') if line.strip() and not line.strip().startswith('#')])
+        connector_config.update(extra_config)
         self.cc.create_connector(connector_config)
             
     def _connector_status(self, connector, node=None):
@@ -174,16 +175,17 @@ class ConnectDistributedTest(Test):
     @matrix(
         exactly_once_source=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         exactly_once_source=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_restart_failed_connector(self, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_restart_failed_connector(self, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         self.EXACTLY_ONCE_SOURCE_SUPPORT = 'enabled' if exactly_once_source else 'disabled'
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
@@ -193,7 +195,7 @@ class ConnectDistributedTest(Test):
         if exactly_once_source:
             self.connector = MockSource(self.cc, mode='connector-failure', delay_sec=5)
         else:
-            self.connector = MockSink(self.cc, self.topics.keys(), mode='connector-failure', delay_sec=5)
+            self.connector = MockSink(self.cc, self.topics.keys(), mode='connector-failure', delay_sec=5, consumer_group_protocol=group_protocol)
         self.connector.start()
 
         wait_until(lambda: self.connector_is_failed(self.connector), timeout_sec=15,
@@ -208,16 +210,17 @@ class ConnectDistributedTest(Test):
     @matrix(
         connector_type=['source', 'exactly-once source', 'sink'],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         connector_type=['source', 'exactly-once source', 'sink'],
         connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_restart_failed_task(self, connector_type, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_restart_failed_task(self, connector_type, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         self.EXACTLY_ONCE_SOURCE_SUPPORT = 'enabled' if connector_type == 'exactly-once source' else 'disabled'
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
@@ -226,7 +229,7 @@ class ConnectDistributedTest(Test):
 
         connector = None
         if connector_type == "sink":
-            connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5)
+            connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5, consumer_group_protocol=group_protocol)
         else:
             connector = MockSource(self.cc, mode='task-failure', delay_sec=5)
             
@@ -244,21 +247,22 @@ class ConnectDistributedTest(Test):
     @cluster(num_nodes=5)
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_restart_connector_and_tasks_failed_connector(self, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_restart_connector_and_tasks_failed_connector(self, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
         self.cc.start()
 
-        self.sink = MockSink(self.cc, self.topics.keys(), mode='connector-failure', delay_sec=5)
+        self.sink = MockSink(self.cc, self.topics.keys(), mode='connector-failure', delay_sec=5, consumer_group_protocol=group_protocol)
         self.sink.start()
 
         wait_until(lambda: self.connector_is_failed(self.sink), timeout_sec=15,
@@ -273,16 +277,17 @@ class ConnectDistributedTest(Test):
     @matrix(
         connector_type=['source', 'sink'],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         connector_type=['source', 'sink'],
         connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_restart_connector_and_tasks_failed_task(self, connector_type, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_restart_connector_and_tasks_failed_task(self, connector_type, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -290,7 +295,7 @@ class ConnectDistributedTest(Test):
 
         connector = None
         if connector_type == "sink":
-            connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5)
+            connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5, consumer_group_protocol=group_protocol)
         else:
             connector = MockSource(self.cc, mode='task-failure', delay_sec=5)
 
@@ -361,15 +366,16 @@ class ConnectDistributedTest(Test):
     @cluster(num_nodes=5)
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_pause_and_resume_sink(self, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_pause_and_resume_sink(self, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Verify that sink connectors stop consuming records when paused and begin again after
         being resumed.
@@ -387,7 +393,7 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: len(self.source.committed_messages()) > 0, timeout_sec=30,
                    err_msg="Timeout expired waiting for source task to produce a message")
 
-        self.sink = VerifiableSink(self.cc, topics=[self.TOPIC])
+        self.sink = VerifiableSink(self.cc, topics=[self.TOPIC], consumer_group_protocol=group_protocol)
         self.sink.start()
 
         wait_until(lambda: self.is_running(self.sink), timeout_sec=30,
@@ -637,7 +643,7 @@ class ConnectDistributedTest(Test):
         security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL],
         exactly_once_source=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -645,9 +651,10 @@ class ConnectDistributedTest(Test):
         exactly_once_source=[True, False], 
         connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_file_source_and_sink(self, security_protocol, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_file_source_and_sink(self, security_protocol, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Tests that a basic file connector works across clean rolling bounces. This validates that the connector is
         correctly created, tasks instantiated, and as nodes restart the work is rebalanced across nodes.
@@ -662,7 +669,10 @@ class ConnectDistributedTest(Test):
 
         self.logger.info("Creating connectors")
         self._start_connector("connect-file-source.properties")
-        self._start_connector("connect-file-sink.properties")
+        if group_protocol is not None:
+            self._start_connector("connect-file-sink.properties", {"consumer.override.group.protocol" : group_protocol})
+        else:
+            self._start_connector("connect-file-sink.properties")
         
         # Generating data on the source node should generate new records and create new output on the sink node. Timeouts
         # here need to be more generous than they are for standalone mode because a) it takes longer to write configs,
@@ -683,16 +693,17 @@ class ConnectDistributedTest(Test):
     @matrix(
         clean=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         clean=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_bounce(self, clean, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_bounce(self, clean, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Validates that source and sink tasks that run continuously and produce a predictable sequence of messages
         run correctly and deliver messages exactly once when Kafka Connect workers undergo clean rolling bounces,
@@ -707,7 +718,7 @@ class ConnectDistributedTest(Test):
 
         self.source = VerifiableSource(self.cc, topic=self.TOPIC, tasks=num_tasks, throughput=100)
         self.source.start()
-        self.sink = VerifiableSink(self.cc, tasks=num_tasks, topics=[self.TOPIC])
+        self.sink = VerifiableSink(self.cc, tasks=num_tasks, topics=[self.TOPIC], consumer_group_protocol=group_protocol)
         self.sink.start()
 
         for i in range(3):
@@ -804,7 +815,8 @@ class ConnectDistributedTest(Test):
         if not success:
             self.mark_for_collect(self.cc)
             # Also collect the data in the topic to aid in debugging
-            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, consumer_timeout_ms=1000, print_key=True)
+            consumer_properties = consumer_group.maybe_set_group_protocol(group_protocol)
+            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, consumer_timeout_ms=1000, print_key=True, consumer_properties=consumer_properties)
             consumer_validator.run()
             self.mark_for_collect(consumer_validator, "consumer_stdout")
 
@@ -921,15 +933,16 @@ class ConnectDistributedTest(Test):
     @cluster(num_nodes=6)
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_transformations(self, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_transformations(self, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services(timestamp_type='CreateTime', include_filestream_connectors=True)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -959,7 +972,8 @@ class ConnectDistributedTest(Test):
         for node in self.cc.nodes:
             node.account.ssh("echo -e -n " + repr(self.FIRST_INPUTS) + " >> " + self.INPUT_FILE)
 
-        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=15000, print_timestamp=True)
+        consumer_properties = consumer_group.maybe_set_group_protocol(group_protocol)
+        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=15000, print_timestamp=True, consumer_properties=consumer_properties)
         consumer.run()
 
         assert len(consumer.messages_consumed[1]) == len(self.FIRST_INPUT_LIST)

@@ -19,10 +19,10 @@ package kafka.network
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
-import kafka.network.RequestChannel.Session
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.requests._
+import org.apache.kafka.network.Session
 
 object RequestConvertToJson {
   def request(request: AbstractRequest): JsonNode = {

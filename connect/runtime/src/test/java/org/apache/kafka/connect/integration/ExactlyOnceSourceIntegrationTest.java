@@ -104,6 +104,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 @Category(IntegrationTest.class)
 public class ExactlyOnceSourceIntegrationTest {
@@ -500,7 +501,7 @@ public class ExactlyOnceSourceIntegrationTest {
         connectorHandle.expectedCommits(MINIMUM_MESSAGES);
 
         // make sure the worker is actually up (otherwise, it may fence out our simulated zombie leader, instead of the other way around)
-        assertEquals(404, connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus());
+        connect.assertions().assertExactlyNumWorkersAreUp(1, "Connect worker did not complete startup in time");
 
         // fence out the leader of the cluster
         Producer<?, ?> zombieLeader = transactionalProducer(
@@ -1078,7 +1079,7 @@ public class ExactlyOnceSourceIntegrationTest {
     @SuppressWarnings("unchecked")
     private static <T> T assertAndCast(Object o, Class<T> klass, String objectDescription) {
         String className = o == null ? "null" : o.getClass().getName();
-        assertTrue(objectDescription + " should be " + klass.getName() + "; was " + className + " instead", klass.isInstance(o));
+        assertInstanceOf(klass, o, objectDescription + " should be " + klass.getName() + "; was " + className + " instead");
         return (T) o;
     }
 

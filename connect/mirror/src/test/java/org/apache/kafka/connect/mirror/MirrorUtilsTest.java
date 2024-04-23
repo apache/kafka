@@ -32,8 +32,8 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -121,7 +121,7 @@ public class MirrorUtilsTest {
         when(admin.createTopics(any(), any())).thenReturn(ctr);
         Throwable ce = assertThrows(ConnectException.class, () -> MirrorUtils.createCompactedTopic(TOPIC, (short) 1, (short) 1, admin), "Should have exception thrown");
 
-        assertTrue(ce.getCause() instanceof InvalidConfigurationException);
+        assertInstanceOf(InvalidConfigurationException.class, ce.getCause());
         verify(future).get();
         verify(ctr).values();
         verify(admin).createTopics(any(), any());
@@ -135,7 +135,7 @@ public class MirrorUtilsTest {
         when(admin.createTopics(any(), any())).thenReturn(ctr);
         Throwable ce = assertThrows(ConnectException.class, () -> MirrorUtils.createCompactedTopic(TOPIC, (short) 1, (short) 1, admin), "Should have exception thrown");
 
-        assertTrue(ce.getCause() instanceof TimeoutException);
+        assertInstanceOf(TimeoutException.class, ce.getCause());
         verify(future).get();
         verify(ctr).values();
         verify(admin).createTopics(any(), any());

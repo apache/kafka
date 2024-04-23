@@ -107,7 +107,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -389,13 +388,21 @@ public class Worker {
             if (workerConnector == null)
                 throw new ConnectException("Connector " + connName + " not found in this worker.");
 
-            int maxTasks = connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG);
+            int maxTasks = connConfig.tasksMax();
             Map<String, String> connOriginals = connConfig.originalsStrings();
 
             Connector connector = workerConnector.connector();
             try (LoaderSwap loaderSwap = plugins.withClassLoader(workerConnector.loader())) {
                 String taskClassName = connector.taskClass().getName();
-                for (Map<String, String> taskProps : connector.taskConfigs(maxTasks)) {
+                List<Map<String, String>> taskConfigs = connector.taskConfigs(maxTasks);
+                try {
+                    checkTasksMax(connName, taskConfigs.size(), maxTasks, connConfig.enforceTasksMax());
+                } catch (TooManyTasksException e) {
+                    // TODO: This control flow is awkward. Push task config generation into WorkerConnector class?
+                    workerConnector.fail(e);
+                    throw e;
+                }
+                for (Map<String, String> taskProps : taskConfigs) {
                     // Ensure we don't modify the connector's copy of the config
                     Map<String, String> taskConfig = new HashMap<>(taskProps);
                     taskConfig.put(TaskConfig.TASK_CLASS_CONFIG, taskClassName);
@@ -411,6 +418,26 @@ public class Worker {
         }
 
         return result;
+    }
+
+    private void checkTasksMax(String connName, int numTasks, int maxTasks, boolean enforce) {
+        if (numTasks > maxTasks) {
+            if (enforce) {
+                throw new TooManyTasksException(connName, numTasks, maxTasks);
+            } else {
+                log.warn(
+                        "The connector {} has generated {} tasks, which is greater than {}, "
+                                + "the maximum number of tasks it is configured to create. "
+                                + "This behavior should be considered a bug and will be disallowed "
+                                + "in future releases of Kafka Connect. Please report this to the "
+                                + "maintainers of the connector and request that they adjust their "
+                                + "connector's taskConfigs() method to respect the maxTasks parameter.",
+                        connName,
+                        numTasks,
+                        maxTasks
+                );
+            }
+        }
     }
 
     /**
@@ -522,12 +549,12 @@ public class Worker {
     /**
      * Start a sink task managed by this worker.
      *
-     * @param id the task ID.
-     * @param configState the most recent {@link ClusterConfigState} known to the worker
-     * @param connProps the connector properties.
-     * @param taskProps the tasks properties.
+     * @param id             the task ID.
+     * @param configState    the most recent {@link ClusterConfigState} known to the worker
+     * @param connProps      the connector properties.
+     * @param taskProps      the tasks properties.
      * @param statusListener a listener for the runtime status transitions of the task.
-     * @param initialState the initial state of the connector.
+     * @param initialState   the initial state of the connector.
      * @return true if the task started successfully.
      */
     public boolean startSinkTask(
@@ -538,19 +565,19 @@ public class Worker {
             TaskStatus.Listener statusListener,
             TargetState initialState
     ) {
-        return startTask(id, connProps, taskProps, statusListener,
+        return startTask(id, connProps, taskProps, configState, statusListener,
                 new SinkTaskBuilder(id, configState, statusListener, initialState));
     }
 
     /**
      * Start a source task managed by this worker using older behavior that does not provide exactly-once support.
      *
-     * @param id the task ID.
-     * @param configState the most recent {@link ClusterConfigState} known to the worker
-     * @param connProps the connector properties.
-     * @param taskProps the tasks properties.
+     * @param id             the task ID.
+     * @param configState    the most recent {@link ClusterConfigState} known to the worker
+     * @param connProps      the connector properties.
+     * @param taskProps      the tasks properties.
      * @param statusListener a listener for the runtime status transitions of the task.
-     * @param initialState the initial state of the connector.
+     * @param initialState   the initial state of the connector.
      * @return true if the task started successfully.
      */
     public boolean startSourceTask(
@@ -561,20 +588,20 @@ public class Worker {
             TaskStatus.Listener statusListener,
             TargetState initialState
     ) {
-        return startTask(id, connProps, taskProps, statusListener,
+        return startTask(id, connProps, taskProps, configState, statusListener,
                 new SourceTaskBuilder(id, configState, statusListener, initialState));
     }
 
     /**
      * Start a source task with exactly-once support managed by this worker.
      *
-     * @param id the task ID.
-     * @param configState the most recent {@link ClusterConfigState} known to the worker
-     * @param connProps the connector properties.
-     * @param taskProps the tasks properties.
-     * @param statusListener a listener for the runtime status transitions of the task.
-     * @param initialState the initial state of the connector.
-     * @param preProducerCheck a preflight check that should be performed before the task initializes its transactional producer.
+     * @param id                the task ID.
+     * @param configState       the most recent {@link ClusterConfigState} known to the worker
+     * @param connProps         the connector properties.
+     * @param taskProps         the tasks properties.
+     * @param statusListener    a listener for the runtime status transitions of the task.
+     * @param initialState      the initial state of the connector.
+     * @param preProducerCheck  a preflight check that should be performed before the task initializes its transactional producer.
      * @param postProducerCheck a preflight check that should be performed after the task initializes its transactional producer,
      *                          but before producing any source records or offsets.
      * @return true if the task started successfully.
@@ -589,7 +616,7 @@ public class Worker {
             Runnable preProducerCheck,
             Runnable postProducerCheck
     ) {
-        return startTask(id, connProps, taskProps, statusListener,
+        return startTask(id, connProps, taskProps, configState, statusListener,
                 new ExactlyOnceSourceTaskBuilder(id, configState, statusListener, initialState, preProducerCheck, postProducerCheck));
     }
 
@@ -599,6 +626,7 @@ public class Worker {
      * @param id the task ID.
      * @param connProps the connector properties.
      * @param taskProps the tasks properties.
+     * @param configState the most recent {@link ClusterConfigState} known to the worker
      * @param statusListener a listener for the runtime status transitions of the task.
      * @param taskBuilder the {@link TaskBuilder} used to create the {@link WorkerTask} that manages the lifecycle of the task.
      * @return true if the task started successfully.
@@ -607,6 +635,7 @@ public class Worker {
             ConnectorTaskId id,
             Map<String, String> connProps,
             Map<String, String> taskProps,
+            ClusterConfigState configState,
             TaskStatus.Listener statusListener,
             TaskBuilder<?, ?> taskBuilder
     ) {
@@ -624,6 +653,11 @@ public class Worker {
 
             try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
                 final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
+
+                int maxTasks = connConfig.tasksMax();
+                int numTasks = configState.taskCount(id.connector());
+                checkTasksMax(id.connector(), numTasks, maxTasks, connConfig.enforceTasksMax());
+
                 final TaskConfig taskConfig = new TaskConfig(taskProps);
                 final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
                 final Task task = plugins.newTask(taskClass);
@@ -820,7 +854,7 @@ public class Worker {
                 connName, defaultClientId, config, connConfig, connectorClass,
                 connectorClientConfigOverridePolicy, clusterId, ConnectorType.SOURCE);
         ConnectUtils.ensureProperty(
-                result, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                result, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString(),
                 "for source connectors' offset consumers when exactly-once source support is enabled",
                 false
         );
@@ -840,7 +874,7 @@ public class Worker {
         // Users can disable this if they want to since the task isn't exactly-once anyways
         result.putIfAbsent(
                 ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT));
+                IsolationLevel.READ_COMMITTED.toString());
         return result;
     }
 

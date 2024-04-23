@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
+import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -32,9 +33,9 @@ import org.slf4j.Logger;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 /**
@@ -66,19 +67,24 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         return process((event, error) -> error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e)));
     }
 
+    @SuppressWarnings({"CyclomaticComplexity"})
     @Override
     public void process(ApplicationEvent event) {
         switch (event.type()) {
-            case COMMIT:
-                process((CommitApplicationEvent) event);
+            case COMMIT_ASYNC:
+                process((AsyncCommitEvent) event);
+                return;
+
+            case COMMIT_SYNC:
+                process((SyncCommitEvent) event);
                 return;
 
             case POLL:
-                process((PollApplicationEvent) event);
+                process((PollEvent) event);
                 return;
 
             case FETCH_COMMITTED_OFFSETS:
-                process((FetchCommittedOffsetsApplicationEvent) event);
+                process((FetchCommittedOffsetsEvent) event);
                 return;
 
             case NEW_TOPICS_METADATA_UPDATE:
@@ -86,31 +92,35 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 return;
 
             case ASSIGNMENT_CHANGE:
-                process((AssignmentChangeApplicationEvent) event);
+                process((AssignmentChangeEvent) event);
                 return;
 
             case TOPIC_METADATA:
-                process((TopicMetadataApplicationEvent) event);
+                process((TopicMetadataEvent) event);
+                return;
+
+            case ALL_TOPICS_METADATA:
+                process((AllTopicsMetadataEvent) event);
                 return;
 
             case LIST_OFFSETS:
-                process((ListOffsetsApplicationEvent) event);
+                process((ListOffsetsEvent) event);
                 return;
 
             case RESET_POSITIONS:
-                process((ResetPositionsApplicationEvent) event);
+                process((ResetPositionsEvent) event);
                 return;
 
             case VALIDATE_POSITIONS:
-                process((ValidatePositionsApplicationEvent) event);
+                process((ValidatePositionsEvent) event);
                 return;
 
             case SUBSCRIPTION_CHANGE:
-                process((SubscriptionChangeApplicationEvent) event);
+                process((SubscriptionChangeEvent) event);
                 return;
 
             case UNSUBSCRIBE:
-                process((UnsubscribeApplicationEvent) event);
+                process((UnsubscribeEvent) event);
                 return;
 
             case CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED:
@@ -118,11 +128,11 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 return;
 
             case COMMIT_ON_CLOSE:
-                process((CommitOnCloseApplicationEvent) event);
+                process((CommitOnCloseEvent) event);
                 return;
 
             case LEAVE_ON_CLOSE:
-                process((LeaveOnCloseApplicationEvent) event);
+                process((LeaveOnCloseEvent) event);
                 return;
 
             default:
@@ -130,7 +140,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
     }
 
-    private void process(final PollApplicationEvent event) {
+    private void process(final PollEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             return;
         }
@@ -139,54 +149,61 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         requestManagers.heartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
     }
 
-    private void process(final CommitApplicationEvent event) {
+    private void process(final AsyncCommitEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
-            // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
-            // upfront, so we should never get to this block.
-            Exception exception = new KafkaException("Unable to commit offset. Most likely because the group.id wasn't set");
-            event.future().completeExceptionally(exception);
             return;
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        Optional<Long> expirationTimeMs = event.retryTimeoutMs().map(this::getExpirationTimeForTimeout);
-        event.chain(manager.addOffsetCommitRequest(event.offsets(), expirationTimeMs, false));
+        CompletableFuture<Void> future = manager.commitAsync(event.offsets());
+        future.whenComplete(complete(event.future()));
     }
 
-    private void process(final FetchCommittedOffsetsApplicationEvent event) {
+    private void process(final SyncCommitEvent event) {
+        if (!requestManagers.commitRequestManager.isPresent()) {
+            return;
+        }
+
+        CommitRequestManager manager = requestManagers.commitRequestManager.get();
+        CompletableFuture<Void> future = manager.commitSync(event.offsets(), event.deadlineMs());
+        future.whenComplete(complete(event.future()));
+    }
+
+    private void process(final FetchCommittedOffsetsEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             event.future().completeExceptionally(new KafkaException("Unable to fetch committed " +
                     "offset because the CommittedRequestManager is not available. Check if group.id was set correctly"));
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        long expirationTimeMs = getExpirationTimeForTimeout(event.timeout());
-        event.chain(manager.addOffsetFetchRequest(event.partitions(), expirationTimeMs));
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), event.deadlineMs());
+        future.whenComplete(complete(event.future()));
     }
 
     private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
         metadata.requestUpdateForNewTopics();
     }
 
-
     /**
      * Commit all consumed if auto-commit is enabled. Note this will trigger an async commit,
      * that will not be retried if the commit request fails.
      */
-    private void process(final AssignmentChangeApplicationEvent event) {
+    private void process(final AssignmentChangeEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         manager.updateAutoCommitTimer(event.currentTimeMs());
-        manager.maybeAutoCommitAllConsumedAsync();
+        manager.maybeAutoCommitAsync();
     }
 
-    private void process(final ListOffsetsApplicationEvent event) {
-        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
-                requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
-                        event.requireTimestamps());
-        event.chain(future);
+    /**
+     * Handles ListOffsetsEvent by fetching the offsets for the given partitions and timestamps.
+     */
+    private void process(final ListOffsetsEvent event) {
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> future =
+            requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(), event.requireTimestamps());
+        future.whenComplete(complete(event.future()));
     }
 
     /**
@@ -194,7 +211,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * consumer join the group if it is not part of it yet, or send the updated subscription if
      * it is already a member.
      */
-    private void process(final SubscriptionChangeApplicationEvent ignored) {
+    private void process(final SubscriptionChangeEvent ignored) {
         if (!requestManagers.heartbeatRequestManager.isPresent()) {
             log.warn("Group membership manager not present when processing a subscribe event");
             return;
@@ -211,38 +228,37 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      *              execution for releasing the assignment completes, and the request to leave
      *              the group is sent out.
      */
-    private void process(final UnsubscribeApplicationEvent event) {
+    private void process(final UnsubscribeEvent event) {
         if (!requestManagers.heartbeatRequestManager.isPresent()) {
             KafkaException error = new KafkaException("Group membership manager not present when processing an unsubscribe event");
             event.future().completeExceptionally(error);
             return;
         }
         MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
-        CompletableFuture<Void> result = membershipManager.leaveGroup();
-        event.chain(result);
+        CompletableFuture<Void> future = membershipManager.leaveGroup();
+        future.whenComplete(complete(event.future()));
     }
 
-    private void process(final ResetPositionsApplicationEvent event) {
-        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
-        event.chain(result);
+    private void process(final ResetPositionsEvent event) {
+        CompletableFuture<Void> future = requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
+        future.whenComplete(complete(event.future()));
     }
 
-    private void process(final ValidatePositionsApplicationEvent event) {
-        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
-        event.chain(result);
+    private void process(final ValidatePositionsEvent event) {
+        CompletableFuture<Void> future = requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
+        future.whenComplete(complete(event.future()));
     }
 
-    private void process(final TopicMetadataApplicationEvent event) {
-        final CompletableFuture<Map<String, List<PartitionInfo>>> future;
+    private void process(final TopicMetadataEvent event) {
+        final CompletableFuture<Map<String, List<PartitionInfo>>> future =
+                requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), event.deadlineMs());
+        future.whenComplete(complete(event.future()));
+    }
 
-        long expirationTimeMs = getExpirationTimeForTimeout(event.getTimeoutMs());
-        if (event.isAllTopics()) {
-            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
-        } else {
-            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), expirationTimeMs);
-        }
-
-        event.chain(future);
+    private void process(final AllTopicsMetadataEvent event) {
+        final CompletableFuture<Map<String, List<PartitionInfo>>> future =
+                requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(event.deadlineMs());
+        future.whenComplete(complete(event.future()));
     }
 
     private void process(final ConsumerRebalanceListenerCallbackCompletedEvent event) {
@@ -257,14 +273,14 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         manager.consumerRebalanceListenerCallbackCompleted(event);
     }
 
-    private void process(final CommitOnCloseApplicationEvent event) {
+    private void process(final CommitOnCloseEvent event) {
         if (!requestManagers.commitRequestManager.isPresent())
             return;
         log.debug("Signal CommitRequestManager closing");
         requestManagers.commitRequestManager.get().signalClose();
     }
 
-    private void process(final LeaveOnCloseApplicationEvent event) {
+    private void process(final LeaveOnCloseEvent event) {
         if (!requestManagers.heartbeatRequestManager.isPresent()) {
             event.future().complete(null);
             return;
@@ -275,20 +291,16 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         log.debug("Leaving group before closing");
         CompletableFuture<Void> future = membershipManager.leaveGroup();
         // The future will be completed on heartbeat sent
-        event.chain(future);
+        future.whenComplete(complete(event.future()));
     }
 
-    /**
-     * @return Expiration time in milliseconds calculated with the current time plus the given
-     * timeout. Returns Long.MAX_VALUE if the expiration overflows it.
-     * Visible for testing.
-     */
-    long getExpirationTimeForTimeout(final long timeoutMs) {
-        long expiration = System.currentTimeMillis() + timeoutMs;
-        if (expiration < 0) {
-            return Long.MAX_VALUE;
-        }
-        return expiration;
+    private <T> BiConsumer<? super T, ? super Throwable> complete(final CompletableFuture<T> b) {
+        return (value, exception) -> {
+            if (exception != null)
+                b.completeExceptionally(exception);
+            else
+                b.complete(value);
+        };
     }
 
     /**

@@ -301,7 +301,6 @@ public class SnapshottableHashTableTest {
             remaining.put(object, true);
         }
         List<Object> extraObjects = new ArrayList<>();
-        int i = 0;
         while (iter.hasNext()) {
             Object object = iter.next();
             assertNotNull(object);
@@ -310,10 +309,8 @@ public class SnapshottableHashTableTest {
             }
         }
         if (!extraObjects.isEmpty() || !remaining.isEmpty()) {
-            throw new RuntimeException("Found extra object(s): [" + String.join(", ",
-                extraObjects.stream().map(e -> e.toString()).collect(Collectors.toList())) +
-                "] and didn't find object(s): [" + String.join(", ",
-                remaining.keySet().stream().map(e -> e.toString()).collect(Collectors.toList())) + "]");
+            throw new RuntimeException("Found extra object(s): [" + extraObjects.stream().map(Object::toString).collect(Collectors.joining(", ")) +
+                "] and didn't find object(s): [" + remaining.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "]");
         }
     }
 }

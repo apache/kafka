@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,12 +38,11 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(value = 600, unit = TimeUnit.SECONDS)
+@Timeout(value = 600)
 public class StreamsResetterTest {
     private static final String TOPIC = "topic1";
     private final StreamsResetter streamsResetter = new StreamsResetter();
@@ -256,7 +254,7 @@ public class StreamsResetterTest {
     public void shouldDeleteTopic() throws InterruptedException, ExecutionException {
         final Cluster cluster = createCluster(1);
         try (final MockAdminClient adminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            final TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            final TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             adminClient.addTopic(false, TOPIC, Collections.singletonList(topicPartitionInfo), null);
             streamsResetter.doDelete(Collections.singletonList(TOPIC), adminClient);
             assertEquals(Collections.emptySet(), adminClient.listTopics().names().get());
@@ -300,8 +298,8 @@ public class StreamsResetterTest {
             nodes.put(i, new Node(i, "localhost", 8121 + i));
         }
         return new Cluster("mockClusterId", nodes.values(),
-            Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
-            Collections.<String>emptySet(), nodes.get(0));
+            Collections.emptySet(), Collections.emptySet(),
+            Collections.emptySet(), nodes.get(0));
     }
 
     private static class EmptyPartitionConsumer<K, V> extends MockConsumer<K, V> {

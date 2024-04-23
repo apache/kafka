@@ -24,6 +24,7 @@ import org.apache.log4j.spi.LoggingEvent;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseable {
     private final List<LoggingEvent> events = new LinkedList<>();
@@ -98,6 +99,13 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
         synchronized (events) {
             events.add(event);
         }
+    }
+
+    public List<String> getMessages(String level) {
+        return getEvents().stream()
+                .filter(e -> level.equals(e.getLevel()))
+                .map(Event::getMessage)
+                .collect(Collectors.toList());
     }
 
     public List<String> getMessages() {

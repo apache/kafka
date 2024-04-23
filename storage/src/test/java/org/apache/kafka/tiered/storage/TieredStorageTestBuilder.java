@@ -70,12 +70,12 @@ public final class TieredStorageTestBuilder {
     private final int defaultProducedBatchSize = 1;
     private final long defaultEarliestLocalOffsetExpectedInLogDirectory = 0;
 
+    private final Map<TopicPartition, List<DeletableSpec>> deletables = new HashMap<>();
+    private final List<TieredStorageTestAction> actions = new ArrayList<>();
     private Map<TopicPartition, ProducableSpec> producables = new HashMap<>();
     private Map<TopicPartition, List<OffloadableSpec>> offloadables = new HashMap<>();
     private Map<TopicPartition, ConsumableSpec> consumables = new HashMap<>();
     private Map<TopicPartition, FetchableSpec> fetchables = new HashMap<>();
-    private Map<TopicPartition, List<DeletableSpec>> deletables = new HashMap<>();
-    private List<TieredStorageTestAction> actions = new ArrayList<>();
 
     public TieredStorageTestBuilder() {
     }

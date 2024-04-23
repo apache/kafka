@@ -40,7 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class LeaderAndIsrRequest extends AbstractControlRequest {
+public final class LeaderAndIsrRequest extends AbstractControlRequest {
 
     public static class Builder extends AbstractControlRequest.Builder<LeaderAndIsrRequest> {
 
@@ -129,7 +129,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
 
     private final LeaderAndIsrRequestData data;
 
-    LeaderAndIsrRequest(LeaderAndIsrRequestData data, short version) {
+    public LeaderAndIsrRequest(LeaderAndIsrRequestData data, short version) {
         super(ApiKeys.LEADER_AND_ISR, version);
         this.data = data;
         // Do this from the constructor to make it thread-safe (even though it's only needed when some methods are called)

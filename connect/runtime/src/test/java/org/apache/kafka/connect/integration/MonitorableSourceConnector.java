@@ -51,6 +51,7 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
     private static final Logger log = LoggerFactory.getLogger(MonitorableSourceConnector.class);
 
     public static final String TOPIC_CONFIG = "topic";
+    public static final String NUM_TASKS = "num.tasks";
     public static final String MESSAGES_PER_POLL_CONFIG = "messages.per.poll";
     public static final String MAX_MESSAGES_PER_SECOND_CONFIG = "throughput";
     public static final String MAX_MESSAGES_PRODUCED_CONFIG = "max.messages";
@@ -93,14 +94,25 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
 
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
+        String numTasksProp = commonConfigs.get(NUM_TASKS);
+        int numTasks = numTasksProp != null ? Integer.parseInt(numTasksProp) : maxTasks;
         List<Map<String, String>> configs = new ArrayList<>();
-        for (int i = 0; i < maxTasks; i++) {
-            Map<String, String> config = new HashMap<>(commonConfigs);
-            config.put("connector.name", connectorName);
-            config.put("task.id", taskId(connectorName, i));
+        for (int i = 0; i < numTasks; i++) {
+            Map<String, String> config = taskConfig(commonConfigs, connectorName, i);
             configs.add(config);
         }
         return configs;
+    }
+
+    public static Map<String, String> taskConfig(
+            Map<String, String> connectorProps,
+            String connectorName,
+            int taskNum
+    ) {
+        Map<String, String> result = new HashMap<>(connectorProps);
+        result.put("connector.name", connectorName);
+        result.put("task.id", taskId(connectorName, taskNum));
+        return result;
     }
 
     @Override

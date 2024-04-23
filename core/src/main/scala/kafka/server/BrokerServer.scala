@@ -24,12 +24,12 @@ import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
-import kafka.security.CredentialProvider
 import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
@@ -41,6 +41,7 @@ import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorCon
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
@@ -52,10 +53,11 @@ import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 
+import java.time.Duration
 import java.util
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
 import scala.compat.java8.OptionConverters.RichOptionForJava8
@@ -68,9 +70,9 @@ import scala.jdk.CollectionConverters._
 class BrokerServer(
   val sharedServer: SharedServer
 ) extends KafkaBroker {
-  val config = sharedServer.brokerConfig
-  val time = sharedServer.time
-  def metrics = sharedServer.metrics
+  val config: KafkaConfig = sharedServer.brokerConfig
+  val time: Time = sharedServer.time
+  def metrics: Metrics = sharedServer.metrics
 
   // Get raftManager from SharedServer. It will be initialized during startup.
   def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager
@@ -86,16 +88,15 @@ class BrokerServer(
 
   @volatile var lifecycleManager: BrokerLifecycleManager = _
 
-  var assignmentsManager: AssignmentsManager = _
+  private var assignmentsManager: AssignmentsManager = _
 
   private val isShuttingDown = new AtomicBoolean(false)
 
-  val lock = new ReentrantLock()
-  val awaitShutdownCond = lock.newCondition()
+  val lock: ReentrantLock = new ReentrantLock()
+  val awaitShutdownCond: Condition = lock.newCondition()
   var status: ProcessStatus = SHUTDOWN
 
   @volatile var dataPlaneRequestProcessor: KafkaApis = _
-  var controlPlaneRequestProcessor: KafkaApis = _
 
   var authorizer: Option[Authorizer] = None
   @volatile var socketServer: SocketServer = _
@@ -295,11 +296,13 @@ class BrokerServer(
         time,
         assignmentsChannelManager,
         config.brokerId,
-        () => lifecycleManager.brokerEpoch
+        () => lifecycleManager.brokerEpoch,
+        (directoryId: Uuid) => logManager.directoryPath(directoryId).asJava,
+        (topicId: Uuid) => Optional.ofNullable(metadataCache.topicIdsToNames().get(topicId))
       )
       val directoryEventHandler = new DirectoryEventHandler {
-        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, callback: Runnable): Unit =
-          assignmentsManager.onAssignment(partition, directoryId, callback)
+        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, reason: String, callback: Runnable): Unit =
+          assignmentsManager.onAssignment(partition, directoryId, reason, callback)
 
         override def handleFailure(directoryId: Uuid): Unit =
           lifecycleManager.propagateDirectoryFailure(directoryId)
@@ -568,7 +571,8 @@ class BrokerServer(
         config.groupMaxSessionTimeoutMs,
         config.offsetsRetentionCheckIntervalMs,
         config.offsetsRetentionMinutes * 60 * 1000L,
-        config.offsetCommitTimeoutMs
+        config.offsetCommitTimeoutMs,
+        config.consumerGroupMigrationPolicy
       )
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",
@@ -607,7 +611,7 @@ class BrokerServer(
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
       if (config.logDirs.size > 1) {
-        throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
+        throw new KafkaException("Tiered storage is not supported with multiple log dirs.")
       }
 
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
@@ -623,9 +627,10 @@ class BrokerServer(
     }
   }
 
-  override def shutdown(): Unit = {
+  override def shutdown(timeout: Duration): Unit = {
     if (!maybeChangeStatus(STARTED, SHUTTING_DOWN)) return
     try {
+      val deadline = time.milliseconds() + timeout.toMillis;
       info("shutting down")
 
       if (config.controlledShutdownEnable) {
@@ -634,7 +639,8 @@ class BrokerServer(
 
         lifecycleManager.beginControlledShutdown()
         try {
-          lifecycleManager.controlledShutdownFuture.get(5L, TimeUnit.MINUTES)
+          val controlledShutdownTimeoutMs = deadline - time.milliseconds()
+          lifecycleManager.controlledShutdownFuture.get(controlledShutdownTimeoutMs, TimeUnit.MILLISECONDS)
         } catch {
           case _: TimeoutException =>
             error("Timed out waiting for the controller to approve controlled shutdown")
@@ -654,8 +660,6 @@ class BrokerServer(
         CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
       if (dataPlaneRequestProcessor != null)
         CoreUtils.swallow(dataPlaneRequestProcessor.close(), this)
-      if (controlPlaneRequestProcessor != null)
-        CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
       CoreUtils.swallow(authorizer.foreach(_.close()), this)
 
       /**
@@ -710,6 +714,7 @@ class BrokerServer(
 
       CoreUtils.swallow(lifecycleManager.close(), this)
       CoreUtils.swallow(config.dynamicConfig.clear(), this)
+      CoreUtils.swallow(clientMetricsManager.close(), this)
       sharedServer.stopForBroker()
       info("shut down completed")
     } catch {

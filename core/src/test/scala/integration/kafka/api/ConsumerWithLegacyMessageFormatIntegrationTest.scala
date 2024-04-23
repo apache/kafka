@@ -16,11 +16,10 @@
  */
 package kafka.api
 
-import kafka.server.KafkaConfig
-import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -35,12 +34,12 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
   override protected def brokerPropertyOverrides(properties: Properties): Unit = {
     // legacy message formats are only supported with IBP < 3.0
     // KRaft mode is not supported for inter.broker.protocol.version = 2.8, The minimum version required is 3.0-IV1"
-    if(!isKRaftTest())
-      properties.put(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
+    if (!isKRaftTest())
+      properties.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
   }
 
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetsForTimes(quorum: String): Unit = {
     val numParts = 2
@@ -91,7 +90,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     assertEquals(20, timestampTopic1P1.timestamp)
     assertEquals(Optional.of(0), timestampTopic1P1.leaderEpoch)
 
-    if(!isKRaftTest()) {
+    if (!isKRaftTest()) {
       assertNull(timestampOffsets.get(new TopicPartition(topic2, 0)), "null should be returned when message format is 0.9.0")
       assertNull(timestampOffsets.get(new TopicPartition(topic2, 1)), "null should be returned when message format is 0.9.0")
     }
@@ -117,7 +116,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
   }
 
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testEarliestOrLatestOffsets(quorum: String): Unit = {
     val topic0 = "topicWithNewMessageFormat"

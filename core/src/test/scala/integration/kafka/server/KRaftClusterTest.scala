@@ -17,21 +17,24 @@
 
 package kafka.server
 
+import kafka.log.UnifiedLog
 import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
+import org.apache.commons.io.FileUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type
-import org.apache.kafka.common.errors.{PolicyViolationException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.{InvalidPartitionsException, PolicyViolationException, UnsupportedVersionException}
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.metadata.{ConfigRecord, FeatureLevelRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors._
+import org.apache.kafka.common.quota.ClientQuotaAlteration.Op
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -40,6 +43,7 @@ import org.apache.kafka.controller.{QuorumController, QuorumControllerIntegratio
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -116,7 +120,7 @@ class KRaftClusterTest {
       controller.shutdown()
       // Rewrite The `listeners` config to avoid controller socket server init using different port
       val config = controller.sharedServer.controllerConfig.props
-      config.asInstanceOf[java.util.HashMap[String,String]].put(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:$port")
+      config.asInstanceOf[java.util.HashMap[String,String]].put(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:$port")
       controller.sharedServer.controllerConfig.updateCurrentConfig(new KafkaConfig(config))
       //  metrics will be set to null when closing a controller, so we should recreate it for testing
       controller.sharedServer.metrics = new Metrics()
@@ -310,7 +314,7 @@ class KRaftClusterTest {
         filter = ClientQuotaFilter.contains(
           List(ClientQuotaFilterComponent.ofEntity("user", "testkit")).asJava)
 
-        TestUtils.tryUntilNoAssertionError(){
+        TestUtils.tryUntilNoAssertionError() {
           val results = admin.describeClientQuotas(filter).entities().get()
           assertEquals(2, results.size(), "Broker did not see two client quotas")
           assertEquals(9999.0, results.get(entity).get("producer_byte_rate"), 1e-6)
@@ -324,11 +328,73 @@ class KRaftClusterTest {
     }
   }
 
+  def setConsumerByteRate(
+    admin: Admin,
+    entity: ClientQuotaEntity,
+    value: Long
+  ): Unit = {
+    admin.alterClientQuotas(Collections.singletonList(
+      new ClientQuotaAlteration(entity, Collections.singletonList(
+        new Op("consumer_byte_rate", value.doubleValue()))))).
+        all().get()
+  }
+
+  def getConsumerByteRates(admin: Admin): Map[ClientQuotaEntity, Long] = {
+    val allFilter = ClientQuotaFilter.contains(Collections.emptyList())
+    val results = new java.util.HashMap[ClientQuotaEntity, Long]
+    admin.describeClientQuotas(allFilter).entities().get().forEach {
+      case (entity, entityMap) =>
+        Option(entityMap.get("consumer_byte_rate")).foreach {
+          case value => results.put(entity, value.longValue())
+        }
+    }
+    results.asScala.toMap
+  }
+
+  @Test
+  def testDefaultClientQuotas(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
+        "Broker never made it to RUNNING state.")
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val defaultUser = new ClientQuotaEntity(Collections.singletonMap[String, String]("user", null))
+        val bobUser = new ClientQuotaEntity(Collections.singletonMap[String, String]("user", "bob"))
+        TestUtils.retry(30000) {
+          assertEquals(Map(), getConsumerByteRates(admin))
+        }
+        setConsumerByteRate(admin, defaultUser, 100L)
+        TestUtils.retry(30000) {
+          assertEquals(Map(
+              defaultUser -> 100L
+            ), getConsumerByteRates(admin))
+        }
+        setConsumerByteRate(admin, bobUser, 1000L)
+        TestUtils.retry(30000) {
+          assertEquals(Map(
+            defaultUser -> 100L,
+            bobUser -> 1000L
+          ), getConsumerByteRates(admin))
+        }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
   @Test
   def testCreateClusterWithAdvertisedPortZero(): Unit = {
     val brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String] = (nodes, _) => Map(
-      (KafkaConfig.ListenersProp, s"${nodes.externalListenerName.value}://localhost:0"),
-      (KafkaConfig.AdvertisedListenersProp, s"${nodes.externalListenerName.value}://localhost:0"))
+      (SocketServerConfigs.LISTENERS_CONFIG, s"${nodes.externalListenerName.value}://localhost:0"),
+      (SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"${nodes.externalListenerName.value}://localhost:0"))
 
     doOnStartedKafkaCluster(numBrokerNodes = 3, brokerPropertyOverrides = brokerPropertyOverrides) { implicit cluster =>
       sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))
@@ -344,8 +410,8 @@ class KRaftClusterTest {
   @Test
   def testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer(): Unit = {
     val brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String] = (nodes, broker) => Map(
-      (KafkaConfig.ListenersProp, s"${nodes.externalListenerName.value}://localhost:0"),
-      (KafkaConfig.AdvertisedListenersProp, s"${nodes.externalListenerName.value}://advertised-host-${broker.id}:${broker.id + 100}"))
+      (SocketServerConfigs.LISTENERS_CONFIG, s"${nodes.externalListenerName.value}://localhost:0"),
+      (SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"${nodes.externalListenerName.value}://advertised-host-${broker.id}:${broker.id + 100}"))
 
     doOnStartedKafkaCluster(numBrokerNodes = 3, brokerPropertyOverrides = brokerPropertyOverrides) { implicit cluster =>
       sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))
@@ -358,7 +424,7 @@ class KRaftClusterTest {
 
   @Test
   def testCreateClusterInvalidMetadataVersion(): Unit = {
-    assertEquals("Bootstrap metadata versions before 3.3-IV0 are not supported. Can't load " +
+    assertEquals("Bootstrap metadata.version before 3.3-IV0 are not supported. Can't load " +
       "metadata from testkit", assertThrows(classOf[RuntimeException], () => {
         new KafkaClusterTestKit.Builder(
           new TestKitNodes.Builder().
@@ -792,6 +858,39 @@ class KRaftClusterTest {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("3.7-IV0", "3.7-IV2"))
+  def testCreatePartitions(metadataVersionString: String): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(4).
+        setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString)).
+        setNumControllerNodes(3).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val createResults = admin.createTopics(Arrays.asList(
+          new NewTopic("foo", 1, 3.toShort),
+          new NewTopic("bar", 2, 3.toShort))).values()
+        createResults.get("foo").get()
+        createResults.get("bar").get()
+        val increaseResults = admin.createPartitions(Map(
+          "foo" -> NewPartitions.increaseTo(3),
+          "bar" -> NewPartitions.increaseTo(2)).asJava).values()
+        increaseResults.get("foo").get()
+        assertEquals(classOf[InvalidPartitionsException], assertThrows(
+          classOf[ExecutionException], () => increaseResults.get("bar").get()).getCause.getClass)
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
   private def clusterImage(
     cluster: KafkaClusterTestKit,
     brokerId: Int
@@ -930,7 +1029,7 @@ class KRaftClusterTest {
         admin.close()
       }
       TestUtils.waitUntilTrue(() => cluster.brokers().get(1).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latestTesting()),
-        "Timed out waiting for metadata version update.")
+        "Timed out waiting for metadata.version update.")
     } finally {
       cluster.close()
     }
@@ -1298,6 +1397,129 @@ class KRaftClusterTest {
           val info = broker1.metadataCache.getPartitionInfo("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
+        }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testAbandonedFutureReplicaRecovered_mainReplicaInOfflineLogDir(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
+        setBrokerNodes(3, 2).
+        setNumControllerNodes(1).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val broker0 = cluster.brokers().get(0)
+        val broker1 = cluster.brokers().get(1)
+        val foo0 = new TopicPartition("foo", 0)
+
+        admin.createTopics(Arrays.asList(
+          new NewTopic("foo", 3, 3.toShort))).all().get()
+
+        // Wait until foo-0 is created on broker0.
+        TestUtils.retry(60000) {
+          assertTrue(broker0.logManager.getLog(foo0).isDefined)
+        }
+
+        // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
+        broker0.shutdown()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          assertTrue(info.isDefined)
+          assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
+        }
+
+        // Modify foo-0 so that it refers to a future replica.
+        // This is equivalent to a failure during the promotion of the future replica and a restart with directory for
+        // the main replica being offline
+        val log = broker0.logManager.getLog(foo0).get
+        log.renameDir(UnifiedLog.logFutureDirName(foo0), shouldReinitialize = false)
+
+        // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
+        broker0.startup()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          assertTrue(info.isDefined)
+          assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
+          assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
+        }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testAbandonedFutureReplicaRecovered_mainReplicaInOnlineLogDir(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
+        setBrokerNodes(3, 2).
+        setNumControllerNodes(1).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val broker0 = cluster.brokers().get(0)
+        val broker1 = cluster.brokers().get(1)
+        val foo0 = new TopicPartition("foo", 0)
+
+        admin.createTopics(Arrays.asList(
+          new NewTopic("foo", 3, 3.toShort))).all().get()
+
+        // Wait until foo-0 is created on broker0.
+        TestUtils.retry(60000) {
+          assertTrue(broker0.logManager.getLog(foo0).isDefined)
+        }
+
+        // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
+        broker0.shutdown()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          assertTrue(info.isDefined)
+          assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
+        }
+
+        val log = broker0.logManager.getLog(foo0).get
+
+        // Copy foo-0 to targetParentDir
+        // This is so that we can rename the main replica to a future down below
+        val parentDir = log.parentDir
+        val targetParentDir = broker0.config.logDirs.filter(_ != parentDir).head
+        val targetDirFile = new File(targetParentDir, log.dir.getName)
+        FileUtils.copyDirectory(log.dir, targetDirFile)
+        assertTrue(targetDirFile.exists())
+
+        // Rename original log to a future
+        // This is equivalent to a failure during the promotion of the future replica and a restart with directory for
+        // the main replica being online
+        val originalLogFile = log.dir
+        log.renameDir(UnifiedLog.logFutureDirName(foo0), shouldReinitialize = false)
+        assertFalse(originalLogFile.exists())
+
+        // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
+        broker0.startup()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          assertTrue(info.isDefined)
+          assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
+          assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
+          assertFalse(targetDirFile.exists())
+          assertTrue(originalLogFile.exists())
         }
       } finally {
         admin.close()

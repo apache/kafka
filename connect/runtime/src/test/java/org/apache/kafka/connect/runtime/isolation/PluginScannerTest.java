@@ -40,7 +40,7 @@ import static org.junit.Assert.assertFalse;
 @RunWith(Parameterized.class)
 public class PluginScannerTest {
 
-    private enum ScannerType { Reflection, ServiceLoader };
+    private enum ScannerType { Reflection, ServiceLoader }
 
     @Rule
     public TemporaryFolder pluginDir = new TemporaryFolder();

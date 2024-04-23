@@ -76,7 +76,7 @@ public class BuiltInPartitioner {
             // We don't have stats to do adaptive partitioning (or it's disabled), just switch to the next
             // partition based on uniform distribution.
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
-            if (availablePartitions.size() > 0) {
+            if (!availablePartitions.isEmpty()) {
                 partition = availablePartitions.get(random % availablePartitions.size()).partition();
             } else {
                 // We don't have available partitions, just pick one among all partitions.

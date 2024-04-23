@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -69,6 +70,7 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -192,7 +194,7 @@ public class OffsetMetadataManagerTest {
                         true
                     );
                 case CONSUMER:
-                    return groupMetadataManager.getOrMaybeCreateConsumerGroup(
+                    return groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
                         groupId,
                         true
                     );
@@ -272,6 +274,14 @@ public class OffsetMetadataManagerTest {
             ));
 
             return result;
+        }
+
+        public List<Record> deletePartitions(
+            List<TopicPartition> topicPartitions
+        ) {
+            List<Record> records = offsetMetadataManager.onPartitionsDeleted(topicPartitions);
+            records.forEach(this::replay);
+            return records;
         }
 
         public CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsets(
@@ -1069,7 +1079,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
@@ -1098,7 +1108,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
@@ -1106,7 +1116,6 @@ public class OffsetMetadataManagerTest {
         // Add member.
         group.updateMember(new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .build()
         );
@@ -1144,7 +1153,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
@@ -1152,7 +1161,6 @@ public class OffsetMetadataManagerTest {
         // Add member.
         group.updateMember(new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .build()
         );
@@ -1182,7 +1190,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
@@ -1238,7 +1246,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
@@ -1246,7 +1254,6 @@ public class OffsetMetadataManagerTest {
         // Add member.
         group.updateMember(new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .build()
         );
@@ -1309,7 +1316,7 @@ public class OffsetMetadataManagerTest {
             .build();
 
         // Create an empty group.
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
@@ -1317,7 +1324,6 @@ public class OffsetMetadataManagerTest {
         // Add member.
         group.updateMember(new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .build()
         );
@@ -1387,7 +1393,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
@@ -1395,7 +1401,6 @@ public class OffsetMetadataManagerTest {
         // Add member.
         group.updateMember(new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .build()
         );
@@ -1478,7 +1483,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
@@ -1507,7 +1512,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
@@ -1515,7 +1520,6 @@ public class OffsetMetadataManagerTest {
         // Add member.
         group.updateMember(new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .build()
         );
@@ -1771,7 +1775,7 @@ public class OffsetMetadataManagerTest {
     public void testFetchOffsetsAtDifferentCommittedOffset() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
-        context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
 
         assertEquals(0, context.lastWrittenOffset);
         context.commitOffset("group", "foo", 0, 100L, 1);
@@ -1912,7 +1916,7 @@ public class OffsetMetadataManagerTest {
     public void testFetchOffsetsWithPendingTransactionalOffsets() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
-        context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
 
         context.commitOffset("group", "foo", 0, 100L, 1);
         context.commitOffset("group", "foo", 1, 110L, 1);
@@ -2017,7 +2021,7 @@ public class OffsetMetadataManagerTest {
     public void testFetchAllOffsetsAtDifferentCommittedOffset() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
-        context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
 
         assertEquals(0, context.lastWrittenOffset);
         context.commitOffset("group", "foo", 0, 100L, 1);
@@ -2104,7 +2108,7 @@ public class OffsetMetadataManagerTest {
     public void testFetchAllOffsetsWithPendingTransactionalOffsets() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
-        context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
 
         context.commitOffset("group", "foo", 0, 100L, 1);
         context.commitOffset("group", "foo", 1, 110L, 1);
@@ -2178,7 +2182,7 @@ public class OffsetMetadataManagerTest {
     public void testConsumerGroupOffsetFetchWithMemberIdAndEpoch() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         // Create consumer group.
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
         // Create member.
         group.getOrMaybeCreateMember("member", true);
         // Commit offset.
@@ -2213,7 +2217,7 @@ public class OffsetMetadataManagerTest {
     public void testConsumerGroupOffsetFetchFromAdminClient() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         // Create consumer group.
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
         // Create member.
         group.getOrMaybeCreateMember("member", true);
         // Commit offset.
@@ -2247,7 +2251,7 @@ public class OffsetMetadataManagerTest {
     @Test
     public void testConsumerGroupOffsetFetchWithUnknownMemberId() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
 
         // Fetch offsets case.
         List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = Collections.singletonList(
@@ -2272,7 +2276,7 @@ public class OffsetMetadataManagerTest {
     @Test
     public void testConsumerGroupOffsetFetchWithStaleMemberEpoch() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
         group.getOrMaybeCreateMember("member", true);
 
         // Fetch offsets case.
@@ -2336,7 +2340,7 @@ public class OffsetMetadataManagerTest {
     @Test
     public void testConsumerGroupOffsetDelete() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
@@ -2348,11 +2352,11 @@ public class OffsetMetadataManagerTest {
     @Test
     public void testConsumerGroupOffsetDeleteWithErrors() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
-        MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
+        MetadataImage image = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .addRacks()
             .build();
@@ -2378,7 +2382,7 @@ public class OffsetMetadataManagerTest {
     @Test
     public void testConsumerGroupOffsetDeleteWithPendingTransactionalOffsets() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
@@ -2389,7 +2393,7 @@ public class OffsetMetadataManagerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(Group.GroupType.class)
+    @EnumSource(value = Group.GroupType.class, names = {"CLASSIC", "CONSUMER"})
     public void testDeleteGroupAllOffsets(Group.GroupType groupType) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         context.getOrMaybeCreateGroup(groupType, "foo");
@@ -2412,7 +2416,7 @@ public class OffsetMetadataManagerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(Group.GroupType.class)
+    @EnumSource(value = Group.GroupType.class, names = {"CLASSIC", "CONSUMER"})
     public void testDeleteGroupAllOffsetsWithPendingTransactionalOffsets(Group.GroupType groupType) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         context.getOrMaybeCreateGroup(groupType, "foo");
@@ -3048,6 +3052,53 @@ public class OffsetMetadataManagerTest {
         );
 
         verify(context.metrics).record(OFFSET_DELETIONS_SENSOR_NAME, 2);
+    }
+
+    @Test
+    public void testOnPartitionsDeleted() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        // Commit offsets.
+        context.commitOffset("grp-0", "foo", 1, 100, 1, context.time.milliseconds());
+        context.commitOffset("grp-0", "foo", 2, 200, 1, context.time.milliseconds());
+        context.commitOffset("grp-0", "foo", 3, 300, 1, context.time.milliseconds());
+
+        context.commitOffset("grp-1", "bar", 1, 100, 1, context.time.milliseconds());
+        context.commitOffset("grp-1", "bar", 2, 200, 1, context.time.milliseconds());
+        context.commitOffset("grp-1", "bar", 3, 300, 1, context.time.milliseconds());
+
+        context.commitOffset(100L, "grp-2", "foo", 1, 100, 1, context.time.milliseconds());
+        context.commitOffset(100L, "grp-2", "foo", 2, 200, 1, context.time.milliseconds());
+        context.commitOffset(100L, "grp-2", "foo", 3, 300, 1, context.time.milliseconds());
+
+        // Delete partitions.
+        List<Record> records = context.deletePartitions(Arrays.asList(
+            new TopicPartition("foo", 1),
+            new TopicPartition("foo", 2),
+            new TopicPartition("foo", 3),
+            new TopicPartition("bar", 1)
+        ));
+
+        // Verify.
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 1),
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 2),
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 3),
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-1", "bar", 1),
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-2", "foo", 1),
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-2", "foo", 2),
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-2", "foo", 3)
+        );
+
+        assertEquals(new HashSet<>(expectedRecords), new HashSet<>(records));
+
+        assertFalse(context.hasOffset("grp-0", "foo", 1));
+        assertFalse(context.hasOffset("grp-0", "foo", 2));
+        assertFalse(context.hasOffset("grp-0", "foo", 3));
+        assertFalse(context.hasOffset("grp-1", "bar", 1));
+        assertFalse(context.hasOffset("grp-2", "foo", 1));
+        assertFalse(context.hasOffset("grp-2", "foo", 2));
+        assertFalse(context.hasOffset("grp-2", "foo", 3));
     }
 
     private void verifyReplay(

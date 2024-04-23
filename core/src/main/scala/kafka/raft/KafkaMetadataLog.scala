@@ -17,15 +17,21 @@
 package kafka.raft
 
 import kafka.log.UnifiedLog
+import kafka.raft.KafkaMetadataLog.FullTruncation
+import kafka.raft.KafkaMetadataLog.RetentionMsBreach
+import kafka.raft.KafkaMetadataLog.RetentionSizeBreach
+import kafka.raft.KafkaMetadataLog.SnapshotDeletionReason
+import kafka.raft.KafkaMetadataLog.UnknownReason
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMinBytesProp}
-import kafka.server.{BrokerTopicStats, KafkaConfig, RequestLocal}
+import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 import org.apache.kafka.storage.internals
@@ -179,7 +185,7 @@ final class KafkaMetadataLog private (
         (false, mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]])
     }
 
-    removeSnapshots(forgottenSnapshots)
+    removeSnapshots(forgottenSnapshots, FullTruncation)
     truncated
   }
 
@@ -340,6 +346,10 @@ final class KafkaMetadataLog private (
    * This method is thread-safe
    */
   override def deleteBeforeSnapshot(snapshotId: OffsetAndEpoch): Boolean = {
+    deleteBeforeSnapshot(snapshotId, UnknownReason)
+  }
+
+  private def deleteBeforeSnapshot(snapshotId: OffsetAndEpoch, reason: SnapshotDeletionReason): Boolean = {
     val (deleted, forgottenSnapshots) = snapshots synchronized {
       latestSnapshotId().asScala match {
         case Some(latestSnapshotId) if
@@ -348,14 +358,15 @@ final class KafkaMetadataLog private (
           snapshotId.offset <= latestSnapshotId.offset &&
           log.maybeIncrementLogStartOffset(snapshotId.offset, LogStartOffsetIncrementReason.SnapshotGenerated) =>
             // Delete all segments that have a "last offset" less than the log start offset
-            log.deleteOldSegments()
+            val deletedSegments = log.deleteOldSegments()
             // Remove older snapshots from the snapshots cache
-            (true, forgetSnapshotsBefore(snapshotId))
+            val forgottenSnapshots = forgetSnapshotsBefore(snapshotId)
+            (deletedSegments != 0 || forgottenSnapshots.nonEmpty, forgottenSnapshots)
         case _ =>
-            (false, mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]])
+          (false, mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]])
       }
     }
-    removeSnapshots(forgottenSnapshots)
+    removeSnapshots(forgottenSnapshots, reason)
     deleted
   }
 
@@ -404,21 +415,33 @@ final class KafkaMetadataLog private (
    * all cases.
    *
    * For the given predicate, we are testing if the snapshot identified by the first argument should be deleted.
+   * The predicate returns a Some with the reason if the snapshot should be deleted and a None if the snapshot
+   * should not be deleted
    */
-  private def cleanSnapshots(predicate: OffsetAndEpoch => Boolean): Boolean = {
-    if (snapshots.size < 2)
+  private def cleanSnapshots(predicate: OffsetAndEpoch => Option[SnapshotDeletionReason]): Boolean = {
+    if (snapshots.size < 2) {
       return false
+    }
 
     var didClean = false
     snapshots.keys.toSeq.sliding(2).foreach {
       case Seq(snapshot: OffsetAndEpoch, nextSnapshot: OffsetAndEpoch) =>
-        if (predicate(snapshot) && deleteBeforeSnapshot(nextSnapshot)) {
-          didClean = true
-        } else {
-          return didClean
+        predicate(snapshot) match {
+          case Some(reason) =>
+            if (deleteBeforeSnapshot(nextSnapshot, reason)) {
+              didClean = true
+            } else {
+              return didClean
+            }
+
+          case None =>
+            return didClean
+
         }
+
       case _ => false // Shouldn't get here with the sliding window
     }
+
     didClean
   }
 
@@ -427,13 +450,13 @@ final class KafkaMetadataLog private (
       return false
 
     // Keep deleting snapshots as long as the
-    def shouldClean(snapshotId: OffsetAndEpoch): Boolean = {
-      val now = time.milliseconds()
-      readSnapshotTimestamp(snapshotId).exists { timestamp =>
+    def shouldClean(snapshotId: OffsetAndEpoch): Option[SnapshotDeletionReason] = {
+      readSnapshotTimestamp(snapshotId).flatMap { timestamp =>
+        val now = time.milliseconds()
         if (now - timestamp > config.retentionMillis) {
-          true
+          Some(RetentionMsBreach(now, timestamp, config.retentionMillis))
         } else {
-          false
+          None
         }
       }
     }
@@ -450,13 +473,14 @@ final class KafkaMetadataLog private (
     var snapshotTotalSize: Long = snapshotSizes.values.sum
 
     // Keep deleting snapshots and segments as long as we exceed the retention size
-    def shouldClean(snapshotId: OffsetAndEpoch): Boolean = {
-      snapshotSizes.get(snapshotId).exists { snapshotSize =>
+    def shouldClean(snapshotId: OffsetAndEpoch): Option[SnapshotDeletionReason] = {
+      snapshotSizes.get(snapshotId).flatMap { snapshotSize =>
         if (log.size + snapshotTotalSize > config.retentionMaxBytes) {
+          val oldSnapshotTotalSize = snapshotTotalSize
           snapshotTotalSize -= snapshotSize
-          true
+          Some(RetentionSizeBreach(log.size, oldSnapshotTotalSize, config.retentionMaxBytes))
         } else {
-          false
+          None
         }
       }
     }
@@ -485,10 +509,11 @@ final class KafkaMetadataLog private (
    * given snapshots after some delay.
    */
   private def removeSnapshots(
-    expiredSnapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]]
+    expiredSnapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]],
+    reason: SnapshotDeletionReason,
   ): Unit = {
     expiredSnapshots.foreach { case (snapshotId, _) =>
-      info(s"Marking snapshot $snapshotId for deletion")
+      info(reason.reason(snapshotId))
       Snapshots.markForDelete(log.dir.toPath, snapshotId)
     }
 
@@ -516,32 +541,6 @@ final class KafkaMetadataLog private (
   }
 }
 
-object MetadataLogConfig {
-  def apply(config: AbstractConfig, maxBatchSizeInBytes: Int, maxFetchSizeInBytes: Int): MetadataLogConfig = {
-    new MetadataLogConfig(
-      config.getInt(KafkaConfig.MetadataLogSegmentBytesProp),
-      config.getInt(KafkaConfig.MetadataLogSegmentMinBytesProp),
-      config.getLong(KafkaConfig.MetadataLogSegmentMillisProp),
-      config.getLong(KafkaConfig.MetadataMaxRetentionBytesProp),
-      config.getLong(KafkaConfig.MetadataMaxRetentionMillisProp),
-      maxBatchSizeInBytes,
-      maxFetchSizeInBytes,
-      LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
-      config.getInt(KafkaConfig.NodeIdProp)
-    )
-  }
-}
-
-case class MetadataLogConfig(logSegmentBytes: Int,
-                             logSegmentMinBytes: Int,
-                             logSegmentMillis: Long,
-                             retentionMaxBytes: Long,
-                             retentionMillis: Long,
-                             maxBatchSizeInBytes: Int,
-                             maxFetchSizeInBytes: Int,
-                             fileDeleteDelayMs: Long,
-                             nodeId: Int)
-
 object KafkaMetadataLog extends Logging {
   def apply(
     topicPartition: TopicPartition,
@@ -555,7 +554,7 @@ object KafkaMetadataLog extends Logging {
     props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, config.maxBatchSizeInBytes.toString)
     props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
     props.setProperty(TopicConfig.SEGMENT_MS_CONFIG, config.logSegmentMillis.toString)
-    props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, LogConfig.DEFAULT_FILE_DELETE_DELAY_MS.toString)
+    props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT.toString)
 
     // Disable time and byte retention when deleting segments
     props.setProperty(TopicConfig.RETENTION_MS_CONFIG, "-1")
@@ -675,6 +674,40 @@ object KafkaMetadataLog extends Logging {
         CoreUtils.swallow(reader.close(), logging)
       }
       Snapshots.deleteIfExists(logDir, snapshotId)
+    }
+  }
+
+  private sealed trait SnapshotDeletionReason {
+    def reason(snapshotId: OffsetAndEpoch): String
+  }
+
+  private final case class RetentionMsBreach(now: Long, timestamp: Long, retentionMillis: Long) extends SnapshotDeletionReason {
+    override def reason(snapshotId: OffsetAndEpoch): String = {
+      s"""Marking snapshot $snapshotId for deletion because its timestamp ($timestamp) is now ($now) older than the
+          |retention ($retentionMillis)""".stripMargin
+    }
+  }
+
+  private final case class RetentionSizeBreach(
+    logSize: Long,
+    snapshotsSize: Long,
+    retentionMaxBytes: Long
+  ) extends SnapshotDeletionReason {
+    override def reason(snapshotId: OffsetAndEpoch): String = {
+      s"""Marking snapshot $snapshotId for deletion because the log size ($logSize) and snapshots size ($snapshotsSize)
+          |is greater than $retentionMaxBytes""".stripMargin
+    }
+  }
+
+  private final object FullTruncation extends SnapshotDeletionReason {
+    override def reason(snapshotId: OffsetAndEpoch): String = {
+      s"Marking snapshot $snapshotId for deletion because the partition was fully truncated"
+    }
+  }
+
+  private final object UnknownReason extends SnapshotDeletionReason {
+    override def reason(snapshotId: OffsetAndEpoch): String = {
+      s"Marking snapshot $snapshotId for deletion for unknown reason"
     }
   }
 }

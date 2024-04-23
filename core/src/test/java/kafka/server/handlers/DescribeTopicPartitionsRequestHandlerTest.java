@@ -76,6 +76,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -464,6 +465,21 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2)
                 ))
             .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName("Non-existing").setPartitionIndex(0))
+        );
+
+        try {
+            handler.handleDescribeTopicPartitionsRequest(buildRequest(describeTopicPartitionsRequest, plaintextListener));
+        } catch (Exception e) {
+            assertInstanceOf(InvalidRequestException.class, e, e.getMessage());
+        }
+
+        // 3.4 With cursor point to a negative partition id. Exception should be thrown if not querying all the topics.
+        describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
+            .setTopics(Arrays.asList(
+                new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
+                new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2)
+            ))
+            .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedTopic).setPartitionIndex(-1))
         );
 
         try {

@@ -144,12 +144,11 @@ class ControllerApis(
       }
     } catch {
       case e: FatalExitError => throw e
-      case t: Throwable => {
+      case t: Throwable =>
         // This catches exceptions in the blocking parts of the request handlers
         error(s"Unexpected error handling request ${request.requestDesc(true)} " +
           s"with context ${request.context}", t)
         requestHelper.handleError(request, t)
-      }
     } finally {
       // Only record local completion time if it is unset.
       if (request.apiLocalCompleteTimeNanos < 0) {
@@ -192,7 +191,7 @@ class ControllerApis(
     handleRaftRequest(request, response => new FetchSnapshotResponse(response.asInstanceOf[FetchSnapshotResponseData]))
   }
 
-  def handleDeleteTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  private def handleDeleteTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val deleteTopicsRequest = request.body[DeleteTopicsRequest]
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 5)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
@@ -356,7 +355,7 @@ class ControllerApis(
     }
   }
 
-  def handleCreateTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  private def handleCreateTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val createTopicsRequest = request.body[CreateTopicsRequest]
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
@@ -465,8 +464,8 @@ class ControllerApis(
     CompletableFuture.completedFuture[Unit](())
   }
 
-  def authorizeAlterResource(requestContext: RequestContext,
-                             resource: ConfigResource): ApiError = {
+  private def authorizeAlterResource(requestContext: RequestContext,
+                                     resource: ConfigResource): ApiError = {
     resource.`type` match {
       case ConfigResource.Type.BROKER | ConfigResource.Type.CLIENT_METRICS =>
         if (authHelper.authorize(requestContext, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
@@ -648,7 +647,7 @@ class ControllerApis(
     }
   }
 
-  def handleBrokerRegistration(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  private def handleBrokerRegistration(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val registrationRequest = request.body[BrokerRegistrationRequest]
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
@@ -730,7 +729,7 @@ class ControllerApis(
           setResourceName(resource.resourceName()).
           setResourceType(resource.resourceType()).
           setErrorCode(apiError.error().code()).
-          setErrorMessage(if (apiError.isFailure()) apiError.messageWithFallback() else null))
+          setErrorMessage(if (apiError.isFailure) apiError.messageWithFallback() else null))
       } else if (configResource.`type`().equals(ConfigResource.Type.UNKNOWN)) {
         response.responses().add(new AlterConfigsResourceResponse().
           setErrorCode(UNSUPPORTED_VERSION.code()).
@@ -785,7 +784,7 @@ class ControllerApis(
       }
   }
 
-  def handleCreatePartitions(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  private def handleCreatePartitions(request: RequestChannel.Request): CompletableFuture[Unit] = {
     def filterAlterAuthorizedTopics(topics: Iterable[String]): Set[String] = {
       authHelper.filterByAuthorized(request.context, ALTER, TOPIC, topics)(n => n)
     }
@@ -879,7 +878,7 @@ class ControllerApis(
       }
   }
 
-  def handleAlterUserScramCredentials(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  private def handleAlterUserScramCredentials(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val alterRequest = request.body[AlterUserScramCredentialsRequest]
     authHelper.authorizeClusterOperation(request, ALTER)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
@@ -907,7 +906,7 @@ class ControllerApis(
       true
   }
 
-  def handleCreateDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  private def handleCreateDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val createTokenRequest = request.body[CreateDelegationTokenRequest]
 
     val requester = request.context.principal
@@ -955,7 +954,7 @@ class ControllerApis(
     }
   }
 
-  def handleRenewDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  private def handleRenewDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val renewTokenRequest = request.body[RenewDelegationTokenRequest]
 
     if (!allowTokenRequests(request)) {
@@ -979,7 +978,7 @@ class ControllerApis(
     }
   }
 
-  def handleExpireDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  private def handleExpireDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val expireTokenRequest = request.body[ExpireDelegationTokenRequest]
 
     if (!allowTokenRequests(request)) {
@@ -1052,7 +1051,7 @@ class ControllerApis(
   def handleDescribeCluster(request: RequestChannel.Request): CompletableFuture[Unit] = {
     // Nearly all RPCs should check MetadataVersion inside the QuorumController. However, this
     // RPC is consulting a cache which lives outside the QC. So we check MetadataVersion here.
-    if (!apiVersionManager.features.metadataVersion().isControllerRegistrationSupported()) {
+    if (!apiVersionManager.features.metadataVersion().isControllerRegistrationSupported) {
       throw new UnsupportedVersionException("Direct-to-controller communication is not " +
         "supported with the current MetadataVersion.")
     }
@@ -1071,7 +1070,7 @@ class ControllerApis(
     CompletableFuture.completedFuture[Unit](())
   }
 
-  def handleAssignReplicasToDirs(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  private def handleAssignReplicasToDirs(request: RequestChannel.Request): CompletableFuture[Unit] = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     val assignReplicasToDirsRequest = request.body[AssignReplicasToDirsRequest]
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,

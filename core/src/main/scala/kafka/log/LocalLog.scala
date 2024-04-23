@@ -485,7 +485,7 @@ class LocalLog(@volatile private var _dir: File,
             s" =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already exists. Existing " +
             s"segment is ${segments.get(newOffset)}.")
         }
-      } else if (!segments.isEmpty && newOffset < activeSegment.baseOffset) {
+      } else if (segments.nonEmpty && newOffset < activeSegment.baseOffset) {
         throw new KafkaException(
           s"Trying to roll a new log segment for topic partition $topicPartition with " +
             s"start offset $newOffset =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) lower than start offset of the active segment $activeSegment")

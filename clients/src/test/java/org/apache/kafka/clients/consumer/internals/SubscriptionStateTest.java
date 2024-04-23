@@ -39,6 +39,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.LongSupplier;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
@@ -895,4 +896,110 @@ public class SubscriptionStateTest {
         assertNull(state.partitionLag(tp0, IsolationLevel.READ_COMMITTED));
     }
 
+    @Test
+    public void testPositionOrNull() {
+        state.assignFromUser(Collections.singleton(tp0));
+        final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+        state.seek(tp0, 5);
+
+        assertEquals(5, state.positionOrNull(tp0).offset);
+        assertNull(state.positionOrNull(unassignedPartition));
+    }
+
+    @Test
+    public void testTryUpdatingHighWatermark() {
+        state.assignFromUser(Collections.singleton(tp0));
+        final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+
+        final long highWatermark = 10L;
+        assertTrue(state.tryUpdatingHighWatermark(tp0, highWatermark));
+        assertEquals(highWatermark, state.partitionEndOffset(tp0, IsolationLevel.READ_UNCOMMITTED));
+        assertFalse(state.tryUpdatingHighWatermark(unassignedPartition, highWatermark));
+    }
+
+    @Test
+    public void testTryUpdatingLogStartOffset() {
+        state.assignFromUser(Collections.singleton(tp0));
+        final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+        final long position = 25;
+        state.seek(tp0, position);
+
+        final long logStartOffset = 10L;
+        assertTrue(state.tryUpdatingLogStartOffset(tp0, logStartOffset));
+        assertEquals(position - logStartOffset, state.partitionLead(tp0));
+        assertFalse(state.tryUpdatingLogStartOffset(unassignedPartition, logStartOffset));
+    }
+
+    @Test
+    public void testTryUpdatingLastStableOffset() {
+        state.assignFromUser(Collections.singleton(tp0));
+        final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+
+        final long lastStableOffset = 10L;
+        assertTrue(state.tryUpdatingLastStableOffset(tp0, lastStableOffset));
+        assertEquals(lastStableOffset, state.partitionEndOffset(tp0, IsolationLevel.READ_COMMITTED));
+        assertFalse(state.tryUpdatingLastStableOffset(unassignedPartition, lastStableOffset));
+    }
+
+    @Test
+    public void testTryUpdatingPreferredReadReplica() {
+        state.assignFromUser(Collections.singleton(tp0));
+        final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+
+        final int preferredReadReplicaId = 10;
+        final LongSupplier expirationTimeMs = () -> System.currentTimeMillis() + 60000L;
+        assertTrue(state.tryUpdatingPreferredReadReplica(tp0, preferredReadReplicaId, expirationTimeMs));
+        assertEquals(Optional.of(preferredReadReplicaId), state.preferredReadReplica(tp0, System.currentTimeMillis()));
+        assertFalse(state.tryUpdatingPreferredReadReplica(unassignedPartition, preferredReadReplicaId, expirationTimeMs));
+        assertEquals(Optional.empty(), state.preferredReadReplica(unassignedPartition, System.currentTimeMillis()));
+    }
+
+    @Test
+    public void testRequestOffsetResetIfPartitionAssigned() {
+        state.assignFromUser(Collections.singleton(tp0));
+        final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+
+        state.requestOffsetResetIfPartitionAssigned(tp0);
+
+        assertTrue(state.isOffsetResetNeeded(tp0));
+
+        state.requestOffsetResetIfPartitionAssigned(unassignedPartition);
+
+        assertThrows(IllegalStateException.class, () -> state.isOffsetResetNeeded(unassignedPartition));
+    }
+
+    /**
+     * This test checks that we will not attempt to prematurely reset position of partitions that are pending.
+     *
+     * See KAFKA-16556.
+     */
+    @Test
+    public void testPendingPartitionsDoNotResetPositions() {
+        Optional<ConsumerRebalanceListener> listener = Optional.of(new CounterConsumerRebalanceListener());
+        Set<String> topics = Collections.singleton(topic);
+        Collection<TopicPartition> assignedPartitions = Collections.singleton(tp0);
+
+        // User subscribes to a topic and the group coordinator assigns a partitions to our consumer.
+        state.subscribe(topics, listener);
+        state.assignFromSubscribedAwaitingCallback(assignedPartitions, assignedPartitions);
+
+        // The logic in initializingPartitions will filter out the pending partition and it will
+        // not be considered fetchable.
+        assertFalse(state.initializingPartitions().contains(tp0));
+        assertFalse(state.isFetchable(tp0));
+        assertFalse(state.hasAllFetchPositions());
+
+        // Let's pretend this code is being executed by the Consumer.poll() code on the application thread.
+        assertFalse(state.isOffsetResetNeeded(tp0));
+        state.resetInitializingPositions();
+        assertFalse(state.isOffsetResetNeeded(tp0));
+
+        // Shortly after, on the next loop of the poll() method, we complete the callback.
+        state.enablePartitionsAwaitingCallback(Collections.singleton(tp0));
+
+        // THEN, we can reset the partition (if needed).
+        assertFalse(state.isOffsetResetNeeded(tp0));
+        state.resetInitializingPositions();
+        assertTrue(state.isOffsetResetNeeded(tp0));
+    }
 }

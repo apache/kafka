@@ -23,11 +23,14 @@
   // Version 3 is the first flexible version.
   //
   // Version 4 adds the StatesFilter field (KIP-518).
-  "validVersions": "0-4",
+  //
+  // Version 5 adds the TypesFilter field (KIP-848).
+  "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "StatesFilter", "type": "[]string", "versions": "4+",
-      "about": "The states of the groups we want to list. If empty all groups are returned with their state."
-    }
+      "about": "The states of the groups we want to list. If empty, all groups are returned with their state." },
+    { "name": "TypesFilter", "type": "[]string", "versions": "5+",
+      "about": "The types of the groups we want to list. If empty, all groups are returned with their type." }
   ]
 }

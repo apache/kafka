@@ -72,16 +72,6 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABL
 public class ClassicGroup implements Group {
 
     /**
-     * Empty generation.
-     */
-    public static final int NO_GENERATION = -1;
-
-    /**
-     * Protocol with empty name.
-     */
-    public static final String NO_PROTOCOL_NAME = "";
-
-    /**
      * No leader.
      */
     public static final String NO_LEADER = "";
@@ -376,6 +366,13 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * @return the current supportedProtocols.
+     */
+    public Map<String, Integer> supportedProtocols() {
+        return supportedProtocols;
+    }
+
+    /**
      * Sets newMemberAdded.
      *
      * @param value the value to set.
@@ -391,6 +388,15 @@ public class ClassicGroup implements Group {
      */
     public void setSubscribedTopics(Optional<Set<String>> subscribedTopics) {
         this.subscribedTopics = subscribedTopics;
+    }
+
+    /**
+     * Sets protocolName.
+     *
+     * @param protocolName the value to set.
+     */
+    public void setProtocolName(Optional<String> protocolName) {
+        this.protocolName = protocolName;
     }
 
     /**
@@ -545,7 +551,6 @@ public class ClassicGroup implements Group {
         JoinGroupResponseData joinGroupResponse = new JoinGroupResponseData()
             .setMembers(Collections.emptyList())
             .setMemberId(oldMemberId)
-            .setGenerationId(NO_GENERATION)
             .setProtocolName(null)
             .setProtocolType(null)
             .setLeader(NO_LEADER)
@@ -1143,12 +1148,12 @@ public class ClassicGroup implements Group {
 
     /**
      * Collects the set of topics that the members are subscribed to when the Protocol Type is equal
-     * to 'consumer'. None is returned if
+     * to 'consumer'. Empty is returned if
      * - the protocol type is not equal to 'consumer';
      * - the protocol is not defined yet; or
      * - the protocol metadata does not comply with the schema.
      *
-     * @return the subscribed topics or None based on the condition above.
+     * @return the subscribed topics or Empty based on the condition above.
      */
     public Optional<Set<String>> computeSubscribedTopics() {
         if (!protocolType.isPresent()) {
@@ -1237,6 +1242,22 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * Complete all the awaiting join future with the given error.
+     *
+     * @param error  the error to complete the future with.
+     */
+    public void completeAllJoinFutures(
+        Errors error
+    ) {
+        members.forEach((memberId, member) -> completeJoinFuture(
+            member,
+            new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setErrorCode(error.code())
+        ));
+    }
+
+    /**
      * Complete a member's sync future.
      *
      * @param member    the member.
@@ -1256,16 +1277,31 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * Complete all the awaiting sync future with the give error.
+     *
+     * @param error  the error to complete the future with.
+     */
+    public void completeAllSyncFutures(
+        Errors error
+    ) {
+        members.forEach((__, member) -> completeSyncFuture(
+            member,
+            new SyncGroupResponseData()
+                .setErrorCode(error.code())
+        ));
+    }
+
+    /**
      * Initiate the next generation for the group.
      */
     public void initNextGeneration() {
         generationId++;
         if (!members.isEmpty()) {
-            protocolName = Optional.of(selectProtocol());
+            setProtocolName(Optional.of(selectProtocol()));
             subscribedTopics = computeSubscribedTopics();
             transitionTo(COMPLETING_REBALANCE);
         } else {
-            protocolName = Optional.empty();
+            setProtocolName(Optional.empty());
             subscribedTopics = computeSubscribedTopics();
             transitionTo(EMPTY);
         }
@@ -1298,7 +1334,8 @@ public class ClassicGroup implements Group {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
             .setProtocolType(protocolType.orElse(""))
-            .setGroupState(state.toString());
+            .setGroupState(state.toString())
+            .setGroupType(type().toString());
     }
 
     /**

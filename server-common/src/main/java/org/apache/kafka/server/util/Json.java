@@ -33,11 +33,11 @@ public final class Json {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /**
-     * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
+     * Parse a JSON string into a JsonValue if possible. `Empty` is returned if `input` is not valid JSON.
      */
     public static Optional<JsonValue> parseFull(String input) {
         try {
-            return Optional.ofNullable(tryParseFull(input));
+            return Optional.of(tryParseFull(input));
         } catch (JsonProcessingException e) {
             return Optional.empty();
         }
@@ -52,7 +52,7 @@ public final class Json {
     }
 
     /**
-     * Parse a JSON byte array into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
+     * Parse a JSON byte array into a JsonValue if possible. `Empty` is returned if `input` is not valid JSON.
      */
     public static Optional<JsonValue> parseBytes(byte[] input) throws IOException {
         try {

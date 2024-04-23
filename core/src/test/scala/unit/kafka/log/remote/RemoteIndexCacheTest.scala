@@ -340,6 +340,8 @@ class RemoteIndexCacheTest {
     val spyEntry = generateSpyCacheEntry()
     cache.internalCache.put(rlsMetadata.remoteLogSegmentId().id(), spyEntry)
 
+    TestUtils.waitUntilTrue(() => cache.cleanerThread().isStarted, "Cleaner thread should be started")
+
     // close the cache
     cache.close()
 

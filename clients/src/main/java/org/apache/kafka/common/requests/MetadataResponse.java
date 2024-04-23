@@ -112,7 +112,7 @@ public class MetadataResponse extends AbstractResponse {
     public Map<Uuid, Errors> errorsByTopicId() {
         Map<Uuid, Errors> errors = new HashMap<>();
         for (MetadataResponseTopic metadata : data.topics()) {
-            if (metadata.topicId() == Uuid.ZERO_UUID) {
+            if (metadata.topicId().equals(Uuid.ZERO_UUID)) {
                 throw new IllegalStateException("Use errors() when managing topic using topic name");
             }
             if (metadata.errorCode() != Errors.NONE.code())
@@ -172,9 +172,9 @@ public class MetadataResponse extends AbstractResponse {
         return new PartitionInfo(metadata.topic(),
                 metadata.partition(),
                 metadata.leaderId.map(nodesById::get).orElse(null),
-                convertToNodeArray(metadata.replicaIds, nodesById),
-                convertToNodeArray(metadata.inSyncReplicaIds, nodesById),
-                convertToNodeArray(metadata.offlineReplicaIds, nodesById));
+                (metadata.replicaIds == null) ? null : convertToNodeArray(metadata.replicaIds, nodesById),
+                (metadata.inSyncReplicaIds == null) ? null : convertToNodeArray(metadata.inSyncReplicaIds, nodesById),
+                (metadata.offlineReplicaIds == null) ? null : convertToNodeArray(metadata.offlineReplicaIds, nodesById));
     }
 
     private static Node[] convertToNodeArray(List<Integer> replicaIds, Map<Integer, Node> nodesById) {

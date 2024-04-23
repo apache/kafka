@@ -77,7 +77,9 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -187,6 +189,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 .withClassicGroupNewMemberJoinTimeoutMs(config.classicGroupNewMemberJoinTimeoutMs)
                 .withClassicGroupMinSessionTimeoutMs(config.classicGroupMinSessionTimeoutMs)
                 .withClassicGroupMaxSessionTimeoutMs(config.classicGroupMaxSessionTimeoutMs)
+                .withConsumerGroupMigrationPolicy(config.consumerGroupMigrationPolicy)
                 .withGroupCoordinatorMetricsShard(metricsShard)
                 .build();
 
@@ -386,7 +389,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             try {
                 groupMetadataManager.validateDeleteGroup(groupId);
                 numDeletedOffsets += offsetMetadataManager.deleteAllOffsets(groupId, records);
-                groupMetadataManager.deleteGroup(groupId, records);
+                groupMetadataManager.createGroupTombstoneRecords(groupId, records);
                 deletedGroups.add(groupId);
 
                 resultCollection.add(
@@ -476,16 +479,25 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     /**
      * Handles a ListGroups request.
      *
-     * @param statesFilter    The states of the groups we want to list.
-     *                        If empty all groups are returned with their state.
-     * @param committedOffset A specified committed offset corresponding to this shard
+     * @param statesFilter      The states of the groups we want to list.
+     *                          If empty, all groups are returned with their state.
+     *                          If invalid, no groups are returned.
+     * @param typesFilter       The types of the groups we want to list.
+     *                          If empty, all groups are returned with their type.
+     *                          If invalid, no groups are returned.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
      * @return A list containing the ListGroupsResponseData.ListedGroup
      */
     public List<ListGroupsResponseData.ListedGroup> listGroups(
         List<String> statesFilter,
+        List<String> typesFilter,
         long committedOffset
     ) throws ApiException {
-        return groupMetadataManager.listGroups(statesFilter, committedOffset);
+
+        Set<String> statesFilterSet = new HashSet<>(statesFilter);
+        Set<String> typesFilterSet = new HashSet<>(typesFilter);
+
+        return groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, committedOffset);
     }
 
     /**
@@ -589,6 +601,23 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         );
     }
 
+    /**
+     * Remove offsets of the partitions that have been deleted.
+     *
+     * @param topicPartitions   The partitions that have been deleted.
+     * @return The list of tombstones (offset commit) to append.
+     */
+    public CoordinatorResult<Void, Record> onPartitionsDeleted(
+        List<TopicPartition> topicPartitions
+    ) {
+        final long startTimeMs = time.milliseconds();
+        final List<Record> records = offsetMetadataManager.onPartitionsDeleted(topicPartitions);
+
+        log.info("Generated {} tombstone records in {} milliseconds while deleting offsets for partitions {}.",
+            records.size(), time.milliseconds() - startTimeMs, topicPartitions);
+
+        return new CoordinatorResult<>(records);
+    }
 
     /**
      * The coordinator has been loaded. This is used to apply any
@@ -611,6 +640,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     public void onUnloaded() {
         timer.cancel(GROUP_EXPIRATION_KEY);
         coordinatorMetrics.deactivateMetricsShard(metricsShard);
+        groupMetadataManager.onUnloaded();
     }
 
     /**

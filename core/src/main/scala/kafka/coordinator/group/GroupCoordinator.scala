@@ -32,7 +32,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.coordinator.group.OffsetConfig
+import org.apache.kafka.coordinator.group.{Group, OffsetConfig}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.VerificationGuard
 
@@ -905,7 +905,8 @@ private[group] class GroupCoordinator(
                              generationId: Int,
                              offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                              responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
-                             requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                             requestLocal: RequestLocal = RequestLocal.NoCaching,
+                             apiVersion: Short): Unit = {
     validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
       case None =>
@@ -928,7 +929,7 @@ private[group] class GroupCoordinator(
               offsetTopicPartition, offsetMetadata, newRequestLocal, responseCallback, Some(verificationGuard))
           }
         }
-
+        val supportedOperation = if (apiVersion >= 4) genericError else defaultError
         groupManager.replicaManager.maybeStartTransactionVerificationForPartition(
           topicPartition = offsetTopicPartition,
           transactionalId,
@@ -941,7 +942,8 @@ private[group] class GroupCoordinator(
           KafkaRequestHandler.wrapAsyncCallback(
             postVerificationCallback,
             requestLocal
-          )
+          ),
+          supportedOperation
         )
     }
   }
@@ -1111,17 +1113,23 @@ private[group] class GroupCoordinator(
     }
   }
 
-  def handleListGroups(states: Set[String]): (Errors, List[GroupOverview]) = {
+  def handleListGroups(states: Set[String], groupTypes: Set[String]): (Errors, List[GroupOverview]) = {
     if (!isActive.get) {
       (Errors.COORDINATOR_NOT_AVAILABLE, List[GroupOverview]())
     } else {
       val errorCode = if (groupManager.isLoading) Errors.COORDINATOR_LOAD_IN_PROGRESS else Errors.NONE
-      // if states is empty, return all groups
-      val groups = if (states.isEmpty)
-        groupManager.currentGroups
-      else {
-        val caseInsensitiveStates = states.map(_.toLowerCase)
-        groupManager.currentGroups.filter(g => g.isInStates(caseInsensitiveStates))
+
+      // Convert state filter strings to lower case and group type strings to the corresponding enum type.
+      // This is done to ensure a case-insensitive comparison.
+      val caseInsensitiveStates = states.map(_.toLowerCase)
+      val enumTypesFilter: Set[Group.GroupType] = groupTypes.map(Group.GroupType.parse)
+
+      // Filter groups based on states and groupTypes. If either is empty, it won't filter on that criterion.
+      // While using the old group coordinator, all groups are considered classic groups by default.
+      // An empty list is returned for any other type filter.
+      val groups = groupManager.currentGroups.filter { g =>
+        (states.isEmpty || g.isInStates(caseInsensitiveStates)) &&
+          (enumTypesFilter.isEmpty || enumTypesFilter.contains(Group.GroupType.CLASSIC))
       }
       (errorCode, groups.map(_.overview).toList)
     }

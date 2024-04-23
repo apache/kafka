@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft._
 import org.apache.kafka.raft.internals.BatchBuilder
 import org.apache.kafka.server.common.serialization.RecordSerde
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 import org.apache.kafka.storage.internals.log.{LogConfig, LogStartOffsetIncrementReason}
@@ -842,14 +843,14 @@ final class KafkaMetadataLogTest {
       retentionMillis = 60 * 1000,
       maxBatchSizeInBytes = 512,
       maxFetchSizeInBytes = DefaultMetadataLogConfig.maxFetchSizeInBytes,
-      fileDeleteDelayMs = LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
+      fileDeleteDelayMs = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
       nodeId = 1
     )
     config.copy()
     val log = buildMetadataLog(tempDir, mockTime, config)
 
     // Generate some segments
-    for(_ <- 0 to 100) {
+    for (_ <- 0 to 100) {
       append(log, 47, 1) // An odd number of records to avoid offset alignment
     }
     assertFalse(log.maybeClean(), "Should not clean since HW was still 0")
@@ -889,12 +890,12 @@ final class KafkaMetadataLogTest {
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
-    for(_ <- 0 to 1000) {
+    for (_ <- 0 to 1000) {
       append(log, 1, 1)
     }
     log.updateHighWatermark(new LogOffsetMetadata(1001))
 
-    for(offset <- Seq(100, 200, 300, 400, 500, 600)) {
+    for (offset <- Seq(100, 200, 300, 400, 500, 600)) {
       val snapshotId = new OffsetAndEpoch(offset, 1)
       TestUtils.resource(log.storeSnapshot(snapshotId).get()) { snapshot =>
         append(snapshot, 10)
@@ -924,7 +925,7 @@ final class KafkaMetadataLogTest {
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
-    for(_ <- 0 to 2000) {
+    for (_ <- 0 to 2000) {
       append(log, 1, 1)
     }
     log.updateHighWatermark(new LogOffsetMetadata(2000))
@@ -1024,7 +1025,7 @@ object KafkaMetadataLogTest {
     retentionMillis = 60 * 1000,
     maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
     maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-    fileDeleteDelayMs = LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
+    fileDeleteDelayMs = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
     nodeId = 1
   )
 

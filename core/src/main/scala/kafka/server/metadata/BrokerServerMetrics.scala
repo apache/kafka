@@ -60,31 +60,31 @@ final class BrokerServerMetrics private (
   val metadataLoadErrorCount: AtomicLong = new AtomicLong(0)
   val metadataApplyErrorCount: AtomicLong = new AtomicLong(0)
 
-  val lastAppliedRecordOffsetName = metrics.metricName(
+  val lastAppliedRecordOffsetName: MetricName = metrics.metricName(
     "last-applied-record-offset",
     metricGroupName,
     "The offset of the last record from the cluster metadata partition that was applied by the broker"
   )
 
-  val lastAppliedRecordTimestampName = metrics.metricName(
+  val lastAppliedRecordTimestampName: MetricName = metrics.metricName(
     "last-applied-record-timestamp",
     metricGroupName,
     "The timestamp of the last record from the cluster metadata partition that was applied by the broker"
   )
 
-  val lastAppliedRecordLagMsName = metrics.metricName(
+  val lastAppliedRecordLagMsName: MetricName = metrics.metricName(
     "last-applied-record-lag-ms",
     metricGroupName,
     "The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the broker"
   )
 
-  val metadataLoadErrorCountName = metrics.metricName(
+  val metadataLoadErrorCountName: MetricName = metrics.metricName(
     "metadata-load-error-count",
     metricGroupName,
     "The number of errors encountered by the BrokerMetadataListener while loading the metadata log and generating a new MetadataDelta based on it."
   )
 
-  val metadataApplyErrorCountName = metrics.metricName(
+  val metadataApplyErrorCountName: MetricName = metrics.metricName(
     "metadata-apply-error-count",
     metricGroupName,
     "The number of errors encountered by the BrokerMetadataPublisher while applying a new MetadataImage based on the latest MetadataDelta."

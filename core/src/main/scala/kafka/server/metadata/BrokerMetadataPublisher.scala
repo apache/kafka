@@ -289,13 +289,18 @@ class BrokerMetadataPublisher(
     try {
       // Start log manager, which will perform (potentially lengthy)
       // recovery-from-unclean-shutdown if required.
-      logManager.startup(metadataCache.getAllTopics())
+      logManager.startup(
+        metadataCache.getAllTopics(),
+        isStray = log => LogManager.isStrayKraftReplica(brokerId, newImage.topics(), log)
+      )
 
-      // Delete partition directories which we're not supposed to have. We have
-      // to do this before starting ReplicaManager, so that the stray replicas
-      // don't block creation of new ones with different IDs but the same names.
-      // See KAFKA-14616 for details.
-      logManager.deleteStrayKRaftReplicas(brokerId, newImage.topics())
+      // Rename all future replicas which are in the same directory as the
+      // one assigned by the controller. This can only happen due to a disk
+      // failure and broker shutdown after the directory assignment has been
+      // updated in the controller but before the future replica could be
+      // promoted.
+      // See KAFKA-16082 for details.
+      logManager.recoverAbandonedFutureLogs(brokerId, newImage.topics())
 
       // Make the LogCleaner available for reconfiguration. We can't do this prior to this
       // point because LogManager#startup creates the LogCleaner object, if

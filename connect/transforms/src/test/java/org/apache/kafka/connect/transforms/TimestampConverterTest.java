@@ -97,7 +97,7 @@ public class TimestampConverterTest {
 
     @Test
     public void testConfigNoTargetType() {
-        assertThrows(ConfigException.class, () -> xformValue.configure(Collections.<String, String>emptyMap()));
+        assertThrows(ConfigException.class, () -> xformValue.configure(Collections.emptyMap()));
     }
 
     @Test

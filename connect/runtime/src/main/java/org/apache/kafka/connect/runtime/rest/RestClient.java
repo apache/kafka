@@ -61,7 +61,7 @@ public class RestClient {
     }
 
     // VisibleForTesting
-    HttpClient httpClient(SslContextFactory sslContextFactory) {
+    HttpClient httpClient(SslContextFactory.Client sslContextFactory) {
         return sslContextFactory != null ? new HttpClient(sslContextFactory) : new HttpClient();
     }
 
@@ -120,7 +120,7 @@ public class RestClient {
         Objects.requireNonNull(method, "method must be non-null");
         Objects.requireNonNull(responseFormat, "response format must be non-null");
         // Only try to load SSL configs if we have to (see KAFKA-14816)
-        SslContextFactory sslContextFactory = url.startsWith("https://")
+        SslContextFactory.Client sslContextFactory = url.startsWith("https://")
                 ? SSLUtils.createClientSideSslContextFactory(config)
                 : null;
         HttpClient client = httpClient(sslContextFactory);

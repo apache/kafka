@@ -194,7 +194,7 @@ public class JmxReporter implements MetricsReporter {
         mBeanName.append(":type=");
         mBeanName.append(metricName.group());
         for (Map.Entry<String, String> entry : metricName.tags().entrySet()) {
-            if (entry.getKey().length() <= 0 || entry.getValue().length() <= 0)
+            if (entry.getKey().isEmpty() || entry.getValue().isEmpty())
                 continue;
             mBeanName.append(",");
             mBeanName.append(entry.getKey());

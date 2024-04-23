@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.IntSupplier;
 
 /**
@@ -321,7 +322,7 @@ public interface GroupCoordinator {
     void onPartitionsDeleted(
         List<TopicPartition> topicPartitions,
         BufferSupplier bufferSupplier
-    );
+    ) throws ExecutionException, InterruptedException;
 
     /**
      * Group coordinator is now the leader for the given partition at the

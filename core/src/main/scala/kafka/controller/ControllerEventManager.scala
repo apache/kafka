@@ -109,7 +109,7 @@ class ControllerEventManager(controllerId: Int,
     queuedEvent
   }
 
-  def clearAndPut(event: ControllerEvent): QueuedEvent = inLock(putLock){
+  def clearAndPut(event: ControllerEvent): QueuedEvent = inLock(putLock) {
     val preemptedEvents = new ArrayList[QueuedEvent]()
     queue.drainTo(preemptedEvents)
     preemptedEvents.forEach(_.preempt(processor))
