@@ -1287,8 +1287,10 @@ public class Selector implements Selectable, AutoCloseable {
         @Deprecated
         private Meter createIOThreadRatioMeterLegacy(Metrics metrics, String groupName,  Map<String, String> metricTags,
                 String baseName, String action) {
+            // this name remains relevant, non-deprecated descendant method uses the same 
             MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
-                    String.format("*Deprecated* The fraction of time the I/O thread spent %s", action), metricTags);
+                    String.format("The fraction of time the I/O thread spent %s", action), metricTags);
+            // this name is deprecated
             MetricName totalMetricName = metrics.metricName(baseName + "time-total", groupName,
                     String.format("*Deprecated* The total time the I/O thread spent %s", action), metricTags);
             return new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName);

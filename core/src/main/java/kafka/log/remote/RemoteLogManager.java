@@ -36,7 +36,9 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RemoteLogInputStream;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ChildFirstClassLoader;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -231,6 +233,7 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
+    @SuppressWarnings("removal")
     RemoteStorageManager createRemoteStorageManager() {
         return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteStorageManager>() {
             private final String classPath = rlmConfig.remoteStorageManagerClassPath();
@@ -253,6 +256,7 @@ public class RemoteLogManager implements Closeable {
         remoteLogStorageManager.configure(rsmProps);
     }
 
+    @SuppressWarnings("removal")
     RemoteLogMetadataManager createRemoteLogMetadataManager() {
         return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteLogMetadataManager>() {
             private final String classPath = rlmConfig.remoteLogMetadataManagerClassPath();
@@ -463,9 +467,12 @@ public class RemoteLogManager implements Closeable {
                 RecordBatch batch = remoteLogInputStream.nextBatch();
                 if (batch == null) break;
                 if (batch.maxTimestamp() >= timestamp && batch.lastOffset() >= startingOffset) {
-                    for (Record record : batch) {
-                        if (record.timestamp() >= timestamp && record.offset() >= startingOffset)
-                            return Optional.of(new FileRecords.TimestampAndOffset(record.timestamp(), record.offset(), maybeLeaderEpoch(batch.partitionLeaderEpoch())));
+                    try (CloseableIterator<Record> recordStreamingIterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                        while (recordStreamingIterator.hasNext()) {
+                            Record record = recordStreamingIterator.next();
+                            if (record.timestamp() >= timestamp && record.offset() >= startingOffset)
+                                return Optional.of(new FileRecords.TimestampAndOffset(record.timestamp(), record.offset(), maybeLeaderEpoch(batch.partitionLeaderEpoch())));
+                        }
                     }
                 }
             }
