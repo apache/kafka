@@ -956,7 +956,7 @@ class ZkAdminManager(val config: KafkaConfig,
       ).toMap ++ illegalUpsertions.map(requestStatus =>
         if (requestStatus.user.isEmpty) {
           (requestStatus.user, usernameMustNotBeEmptyMsg)
-        } else if (requestStatus.mechanism == Some(ScramMechanism.UNKNOWN)) {
+        } else if (requestStatus.mechanism.contains(ScramMechanism.UNKNOWN)) {
           (requestStatus.user, unknownScramMechanismMsg)
         } else {
           (requestStatus.user, if (requestStatus.iterations > maxIterations) {tooManyIterationsMsg} else tooFewIterationsMsg)

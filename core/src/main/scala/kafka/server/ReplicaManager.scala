@@ -141,9 +141,6 @@ case class LogReadResult(info: FetchDataInfo,
     if (this.preferredReadReplica.isDefined) OptionalInt.of(this.preferredReadReplica.get) else OptionalInt.empty(),
     isReassignmentFetch)
 
-  def withEmptyFetchInfo: LogReadResult =
-    copy(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY))
-
   override def toString: String = {
     "LogReadResult(" +
       s"info=$info, " +
