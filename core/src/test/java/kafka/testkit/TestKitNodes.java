@@ -28,6 +28,7 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Function;
@@ -185,11 +186,11 @@ public class TestKitNodes {
         NavigableMap<Integer, ControllerNode> controllerNodes,
         NavigableMap<Integer, BrokerNode> brokerNodes
     ) {
-        this.baseDirectory = baseDirectory;
-        this.clusterId = clusterId;
-        this.bootstrapMetadata = bootstrapMetadata;
-        this.controllerNodes = controllerNodes;
-        this.brokerNodes = brokerNodes;
+        this.baseDirectory = Objects.requireNonNull(baseDirectory);
+        this.clusterId = Objects.requireNonNull(clusterId);
+        this.bootstrapMetadata = Objects.requireNonNull(bootstrapMetadata);
+        this.controllerNodes = Objects.requireNonNull(controllerNodes);
+        this.brokerNodes = Objects.requireNonNull(brokerNodes);
     }
 
     public boolean isCombined(int node) {
