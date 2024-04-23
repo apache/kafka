@@ -26,21 +26,23 @@ import org.apache.kafka.test.TestUtils;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.TreeMap;
-import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class TestKitNodes {
     public static class Builder {
-        private boolean combined = false;
-        private Uuid clusterId = null;
+        private boolean combined;
+        private Uuid clusterId;
+        private int numControllerNodes;
+        private int numBrokerNodes;
+        private int numDisksPerBroker = 1;
+        private Map<Integer, Map<String, String>> perBrokerProperties = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
             fromVersion(MetadataVersion.latestTesting(), "testkit");
-        private final NavigableMap<Integer, ControllerNode.Builder> controllerNodeBuilders = new TreeMap<>();
-        private final NavigableMap<Integer, BrokerNode.Builder> brokerNodeBuilders = new TreeMap<>();
 
         public Builder setClusterId(Uuid clusterId) {
             this.clusterId = clusterId;
@@ -63,88 +65,64 @@ public class TestKitNodes {
         }
 
         public Builder setNumControllerNodes(int numControllerNodes) {
-            if (numControllerNodes < 0) {
-                throw new RuntimeException("Invalid negative value for numControllerNodes");
-            }
-
-            while (controllerNodeBuilders.size() > numControllerNodes) {
-                controllerNodeBuilders.pollFirstEntry();
-            }
-            while (controllerNodeBuilders.size() < numControllerNodes) {
-                int nextId = startControllerId();
-                if (!controllerNodeBuilders.isEmpty()) {
-                    nextId = controllerNodeBuilders.lastKey() + 1;
-                }
-                controllerNodeBuilders.put(nextId, ControllerNode.builder().setId(nextId));
-            }
+            this.numControllerNodes = numControllerNodes;
             return this;
         }
 
         public Builder setNumBrokerNodes(int numBrokerNodes) {
-            return setBrokerNodes(numBrokerNodes, 1, ignored -> Collections.emptyMap());
+            this.numBrokerNodes = numBrokerNodes;
+            return this;
         }
 
-        /**
-         * Set broker nodes
-         *
-         * @param numBrokerNodes number of broker nodes
-         * @param disksPerBroker number of disk per broker.
-         * @param perBrokerProperties a function that accept broker id and returns corresponding broker properties
-         * @return Builder
-         */
-        public Builder setBrokerNodes(int numBrokerNodes, int disksPerBroker, Function<Integer, Map<String, String>> perBrokerProperties) {
-            if (numBrokerNodes < 0) {
-                throw new RuntimeException("Invalid negative value for numBrokerNodes");
-            }
-            if (disksPerBroker <= 0) {
-                throw new RuntimeException("Invalid value for disksPerBroker");
-            }
-            while (brokerNodeBuilders.size() > numBrokerNodes) {
-                brokerNodeBuilders.pollFirstEntry();
-            }
-            while (brokerNodeBuilders.size() < numBrokerNodes) {
-                int nextId = startBrokerId();
-                if (!brokerNodeBuilders.isEmpty()) {
-                    nextId = brokerNodeBuilders.lastKey() + 1;
-                }
-                Map<String, String> brokerProperties = Optional.ofNullable(perBrokerProperties.apply(nextId))
-                        .orElseGet(Collections::emptyMap);
-                BrokerNode.Builder brokerNodeBuilder = BrokerNode.builder()
-                        .setId(nextId)
-                        .setNumLogDirectories(disksPerBroker)
-                        .setPropertyOverrides(brokerProperties);
-                brokerNodeBuilders.put(nextId, brokerNodeBuilder);
-            }
+        public Builder setNumDisksPerBroker(int numDisksPerBroker) {
+            this.numDisksPerBroker = numDisksPerBroker;
+            return this;
+        }
+
+        public Builder setPerBrokerProperties(Map<Integer, Map<String, String>> perBrokerProperties) {
+            this.perBrokerProperties = Collections.unmodifiableMap(
+                perBrokerProperties.entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> Collections.unmodifiableMap(new HashMap<>(e.getValue())))));
             return this;
         }
 
         public TestKitNodes build() {
+            if (numControllerNodes < 0) {
+                throw new RuntimeException("Invalid negative value for numControllerNodes");
+            }
+            if (numBrokerNodes < 0) {
+                throw new RuntimeException("Invalid negative value for numBrokerNodes");
+            }
+            if (numDisksPerBroker <= 0) {
+                throw new RuntimeException("Invalid value for numDisksPerBroker");
+            }
+
             String baseDirectory = TestUtils.tempDirectory().getAbsolutePath();
             try {
                 if (clusterId == null) {
                     clusterId = Uuid.randomUuid();
                 }
                 TreeMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
-                for (ControllerNode.Builder builder : controllerNodeBuilders.values()) {
-                    ControllerNode node = builder
+                for (int id = startControllerId(); id < startControllerId() + numControllerNodes; id++) {
+                    ControllerNode node = ControllerNode.builder()
+                        .setId(id)
                         .setBaseDirectory(baseDirectory)
                         .setClusterId(clusterId)
-                        .setCombined(brokerNodeBuilders.containsKey(builder.id()))
+                        .setCombined(combined)
                         .build();
-                    if (controllerNodes.put(node.id(), node) != null) {
-                        throw new RuntimeException("Duplicate builder for controller " + node.id());
-                    }
+                    controllerNodes.put(node.id(), node);
                 }
                 TreeMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
-                for (BrokerNode.Builder builder : brokerNodeBuilders.values()) {
-                    BrokerNode node = builder
+                for (int id = startBrokerId(); id < startBrokerId() + numBrokerNodes; id++) {
+                    BrokerNode node = BrokerNode.builder()
+                        .setId(id)
+                        .setNumLogDirectories(numDisksPerBroker)
                         .setBaseDirectory(baseDirectory)
                         .setClusterId(clusterId)
-                        .setCombined(controllerNodeBuilders.containsKey(builder.id()))
+                        .setCombined(combined)
+                        .setPropertyOverrides(perBrokerProperties.getOrDefault(id, Collections.emptyMap()))
                         .build();
-                    if (brokerNodes.put(node.id(), node) != null) {
-                        throw new RuntimeException("Duplicate builder for broker " + node.id());
-                    }
+                    brokerNodes.put(node.id(), node);
                 }
                 return new TestKitNodes(baseDirectory,
                     clusterId,
@@ -189,8 +167,8 @@ public class TestKitNodes {
         this.baseDirectory = Objects.requireNonNull(baseDirectory);
         this.clusterId = Objects.requireNonNull(clusterId);
         this.bootstrapMetadata = Objects.requireNonNull(bootstrapMetadata);
-        this.controllerNodes = Objects.requireNonNull(controllerNodes);
-        this.brokerNodes = Objects.requireNonNull(brokerNodes);
+        this.controllerNodes = new TreeMap<>(Objects.requireNonNull(controllerNodes));
+        this.brokerNodes = new TreeMap<>(Objects.requireNonNull(brokerNodes));
     }
 
     public boolean isCombined(int node) {
@@ -203,10 +181,6 @@ public class TestKitNodes {
 
     public Uuid clusterId() {
         return clusterId;
-    }
-
-    public MetadataVersion bootstrapMetadataVersion() {
-        return bootstrapMetadata.metadataVersion();
     }
 
     public Map<Integer, ControllerNode> controllerNodes() {

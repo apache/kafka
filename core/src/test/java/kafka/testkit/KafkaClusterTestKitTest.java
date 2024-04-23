@@ -17,12 +17,12 @@
 
 package kafka.testkit;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -37,11 +37,34 @@ public class KafkaClusterTestKitTest {
     public void testCreateClusterWithBadNumDisksThrows(int disks) {
         RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder()
-                        .setBrokerNodes(1, disks, ignored -> Collections.emptyMap())
+                        .setNumBrokerNodes(1)
+                        .setNumDisksPerBroker(disks)
                         .setNumControllerNodes(1)
                         .build())
         );
-        assertEquals("Invalid value for disksPerBroker", e.getMessage());
+        assertEquals("Invalid value for numDisksPerBroker", e.getMessage());
+    }
+
+    @Test
+    public void testCreateClusterWithBadNumOfControllers() {
+        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(-1)
+                .build())
+        );
+        assertEquals("Invalid negative value for numControllerNodes", e.getMessage());
+    }
+
+    @Test
+    public void testCreateClusterWithBadNumOfBrokers() {
+        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(-1)
+                .setNumControllerNodes(1)
+                .build())
+        );
+        assertEquals("Invalid negative value for numBrokerNodes", e.getMessage());
     }
 
     @ParameterizedTest
@@ -49,7 +72,8 @@ public class KafkaClusterTestKitTest {
     public void testCreateClusterAndCloseWithMultipleLogDirs(boolean combined) {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder().
-                        setBrokerNodes(5, 2, ignored -> Collections.emptyMap()).
+                        setNumBrokerNodes(5).
+                        setNumDisksPerBroker(2).
                         setCombined(combined).
                         setNumControllerNodes(3).build()).build()) {
 

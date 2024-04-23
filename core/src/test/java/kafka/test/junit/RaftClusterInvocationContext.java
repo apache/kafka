@@ -38,7 +38,6 @@ import scala.compat.java8.OptionConverters;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -94,8 +93,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 TestKitNodes nodes = new TestKitNodes.Builder().
                         setBootstrapMetadataVersion(clusterConfig.metadataVersion()).
                         setCombined(isCombined).
-                        setBrokerNodes(clusterConfig.numBrokers(), 1,
-                                id -> clusterConfig.perBrokerOverrideProperties().getOrDefault(id, Collections.emptyMap())).
+                        setNumBrokerNodes(clusterConfig.numBrokers()).
+                        setPerBrokerProperties(clusterConfig.perBrokerOverrideProperties()).
                         setNumControllerNodes(clusterConfig.numControllers()).build();
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
 
