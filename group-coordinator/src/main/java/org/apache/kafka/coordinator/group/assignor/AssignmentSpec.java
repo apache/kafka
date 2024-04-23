@@ -53,7 +53,7 @@ public class AssignmentSpec {
     }
 
     /**
-     * @return True if the subscription model is homogeneous.=,
+     * @return True if the subscription model is homogeneous,
      *         False otherwise.
      */
     public boolean isSubscriptionHomogeneous() {
