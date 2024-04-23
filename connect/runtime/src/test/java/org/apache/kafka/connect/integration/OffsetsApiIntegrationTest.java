@@ -283,7 +283,7 @@ public class OffsetsApiIntegrationTest {
     }
 
     @Test
-    public void testAlterOffsetsNonExistentConnector() throws Exception {
+    public void testAlterOffsetsNonExistentConnector() {
         ConnectRestException e = assertThrows(ConnectRestException.class,
                 () -> connect.alterConnectorOffsets("non-existent-connector", new ConnectorOffsets(Collections.singletonList(
                         new ConnectorOffset(Collections.emptyMap(), Collections.emptyMap())))));

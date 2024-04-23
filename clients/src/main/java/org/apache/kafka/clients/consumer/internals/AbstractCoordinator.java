@@ -1627,7 +1627,6 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    @SuppressWarnings("serial")
     private static class UnjoinedGroupException extends RetriableException {
 
     }

@@ -104,7 +104,7 @@ public final class Utils {
 
     private static final String[] BYTE_SCALE_SUFFIXES = new String[] {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
 
-    public static final String NL = System.getProperty("line.separator");
+    public static final String NL = System.lineSeparator();
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
@@ -1196,7 +1196,7 @@ public final class Utils {
     // changing the signature to `public <R> List<R> tryAll(all: List[Callable<R>])`
     public static void tryAll(List<Callable<Void>> all) throws Throwable {
         Throwable exception = null;
-        for (Callable call : all) {
+        for (Callable<Void> call : all) {
             try {
                 call.call();
             } catch (Throwable t) {
