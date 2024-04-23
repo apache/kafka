@@ -28,7 +28,6 @@ import java.util.concurrent.atomic.AtomicReference;
  * Ensures blocking APIs can be woken up by the consumer.wakeup().
  */
 public class WakeupTrigger {
-
     private final AtomicReference<Wakeupable> pendingTask = new AtomicReference<>(null);
 
     /**
