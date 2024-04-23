@@ -25,11 +25,12 @@ import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class BrokerNode implements TestKitNode {
     public static class Builder {
@@ -37,7 +38,7 @@ public class BrokerNode implements TestKitNode {
         private String baseDirectory = null;
         private Uuid clusterId = null;
         private Uuid incarnationId = null;
-        private List<String> logDataDirectories = null;
+        private int numLogDirectories = 1;
         private String metadataDirectory = null;
         private Map<String, String> propertyOverrides = new HashMap<>();
 
@@ -60,8 +61,8 @@ public class BrokerNode implements TestKitNode {
             return this;
         }
 
-        public Builder setLogDirectories(List<String> logDataDirectories) {
-            this.logDataDirectories = logDataDirectories;
+        public Builder setNumLogDirectories(int numLogDirectories) {
+            this.numLogDirectories = numLogDirectories;
             return this;
         }
 
@@ -76,24 +77,21 @@ public class BrokerNode implements TestKitNode {
             if (incarnationId == null) {
                 incarnationId = Uuid.randomUuid();
             }
-            if (logDataDirectories == null) {
-                if (combined) {
-                    logDataDirectories = Collections.
-                        singletonList(String.format("combined_%d", id));
-                } else {
-                    logDataDirectories = Collections.
-                        singletonList(String.format("broker_%d_data0", id));
-                }
-            }
-            List<String> absoluteLogDataDirectories = new ArrayList<>();
-            for (String logDir : logDataDirectories) {
-                if (Paths.get(logDir).isAbsolute()) {
-                    absoluteLogDataDirectories.add(logDir);
-                } else {
-                    absoluteLogDataDirectories.add(new File(baseDirectory, logDir).getAbsolutePath());
-                }
-            }
-            this.logDataDirectories = absoluteLogDataDirectories;
+            List<String> logDataDirectories = IntStream
+                .range(0, numLogDirectories)
+                .mapToObj(i -> {
+                    if (combined) {
+                        return String.format("combined_%d_%d", id, i);
+                    }
+                    return String.format("broker_%d_data%d", id, i);
+                })
+                .map(logDir -> {
+                    if (Paths.get(logDir).isAbsolute()) {
+                        return logDir;
+                    }
+                    return new File(baseDirectory, logDir).getAbsolutePath();
+                })
+                .collect(Collectors.toList());
             if (metadataDirectory == null) {
                 metadataDirectory = logDataDirectories.get(0);
             } else if (!Paths.get(metadataDirectory).isAbsolute()) {

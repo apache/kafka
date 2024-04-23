@@ -43,8 +43,10 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.{Defaults, KafkaSecurityConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
@@ -424,9 +426,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(brokers(1).config.nonInternalValues.size + numInternalConfigsSet,
       configs.get(brokerResource1).entries.size)
     assertEquals(brokers(1).config.brokerId.toString, configs.get(brokerResource1).get(KafkaConfig.BrokerIdProp).value)
-    val listenerSecurityProtocolMap = configs.get(brokerResource1).get(KafkaConfig.ListenerSecurityProtocolMapProp)
-    assertEquals(brokers(1).config.getString(KafkaConfig.ListenerSecurityProtocolMapProp), listenerSecurityProtocolMap.value)
-    assertEquals(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityProtocolMap.name)
+    val listenerSecurityProtocolMap = configs.get(brokerResource1).get(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)
+    assertEquals(brokers(1).config.getString(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG), listenerSecurityProtocolMap.value)
+    assertEquals(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, listenerSecurityProtocolMap.name)
     assertFalse(listenerSecurityProtocolMap.isDefault)
     assertFalse(listenerSecurityProtocolMap.isSensitive)
     assertFalse(listenerSecurityProtocolMap.isReadOnly)
@@ -1353,7 +1355,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
       // Increase timeouts to avoid having a rebalance during the test
       newConsumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Integer.MAX_VALUE.toString)
-      newConsumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Defaults.GROUP_MAX_SESSION_TIMEOUT_MS.toString)
+      newConsumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT.toString)
       val consumer = createConsumer(configOverrides = newConsumerConfig)
 
       try {
@@ -2221,7 +2223,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       assertEquals(compressionType, logConfig.originals.get(TopicConfig.COMPRESSION_TYPE_CONFIG))
       assertNull(logConfig.originals.get(TopicConfig.RETENTION_BYTES_CONFIG))
-      assertEquals(LogConfig.DEFAULT_RETENTION_BYTES, logConfig.retentionSize)
+      assertEquals(ServerLogConfigs.LOG_RETENTION_BYTES_DEFAULT, logConfig.retentionSize)
     }
 
     client = Admin.create(createConfig)
@@ -2527,7 +2529,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = Admin.create(super.createConfig)
 
     val newLogRetentionProperties = new Properties
-    newLogRetentionProperties.put(KafkaConfig.LogRetentionTimeMillisProp, "10800000")
+    newLogRetentionProperties.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "10800000")
     TestUtils.incrementalAlterConfigs(null, client, newLogRetentionProperties, perBrokerConfig = false)
       .all().get(15, TimeUnit.SECONDS)
 
@@ -2554,8 +2556,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       waitTimeMs = 60000L)
 
     waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
-      KafkaConfig.LogRetentionTimeMillisProp, "").toString.equals("10800000")),
-      s"Timed out waiting for change to ${KafkaConfig.LogRetentionTimeMillisProp}",
+      ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "").toString.equals("10800000")),
+      s"Timed out waiting for change to ${ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG}",
       waitTimeMs = 60000L)
 
     val newTopics = Seq(new NewTopic("foo", Map((0: Integer) -> Seq[Integer](1, 2).asJava,

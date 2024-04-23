@@ -21,8 +21,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static java.util.concurrent.TimeUnit.HOURS;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -33,7 +31,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Timeout(value = 120)
 public class DeadlineTest {
-    private static final Logger log = LoggerFactory.getLogger(FutureUtilsTest.class);
 
     private static Time monoTime(long monotonicTime) {
         return new MockTime(0, 0, monotonicTime);

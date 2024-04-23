@@ -60,7 +60,7 @@ public class ControllerNode implements TestKitNode {
             }
             if (metadataDirectory == null) {
                 if (combined) {
-                    metadataDirectory = String.format("combined_%d", id);
+                    metadataDirectory = String.format("combined_%d_0", id);
                 } else {
                     metadataDirectory = String.format("controller_%d", id);
                 }
