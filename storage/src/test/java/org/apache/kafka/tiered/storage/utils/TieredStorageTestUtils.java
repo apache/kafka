@@ -38,6 +38,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorage.DELETE_ON_CLOSE_CONFIG;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorage.STORAGE_DIR_CONFIG;
@@ -52,12 +53,9 @@ import static org.apache.kafka.server.config.ServerLogConfigs.LOG_CLEANUP_INTERV
 
 public class TieredStorageTestUtils {
 
-    /**
-     * InitialTaskDelayMs is set to 30 seconds for the delete-segment scheduler in Apache Kafka.
-     * Hence, we need to wait at least that amount of time before segments eligible for deletion
-     * gets physically removed.
-     */
-    public static final Integer STORAGE_WAIT_TIMEOUT_SEC = 35;
+    // Log cleanup interval is configured to be 500 ms. We need to wait at least that amount of time before
+    // segments eligible for deletion gets physically removed.
+    public static final Integer STORAGE_WAIT_TIMEOUT_SEC = 5;
     // The default value of log cleanup interval is 30 secs, and it increases the test execution time.
     private static final Integer LOG_CLEANUP_INTERVAL_MS = 500;
     private static final Integer RLM_TASK_INTERVAL_MS = 500;
@@ -133,10 +131,11 @@ public class TieredStorageTestUtils {
         overridingProps.setProperty(
                 metadataConfigPrefix(testClassName, TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP),
                 String.valueOf(brokerCount));
-        // This configuration ensures inactive log segments are deleted fast enough so that
+        // The below two configurations ensures inactive log segments are deleted fast enough so that
         // the integration tests can confirm a given log segment is present only in the second-tier storage.
         // Note that this does not impact the eligibility of a log segment to be offloaded to the
         // second-tier storage.
+        overridingProps.setProperty(LOG_INITIAL_TASK_DELAY_MS_CONFIG, LOG_CLEANUP_INTERVAL_MS.toString());
         overridingProps.setProperty(LOG_CLEANUP_INTERVAL_MS_CONFIG, LOG_CLEANUP_INTERVAL_MS.toString());
         // The directory of the second-tier storage needs to be constant across all instances of storage managers
         // in every broker and throughout the test. Indeed, as brokers are restarted during the test.
