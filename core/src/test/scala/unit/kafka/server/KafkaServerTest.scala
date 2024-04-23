@@ -19,6 +19,7 @@ package kafka.server
 
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
@@ -179,14 +180,14 @@ class KafkaServerTest extends QuorumTestHarness {
 
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
-    props.put(KafkaConfig.AdvertisedListenersProp, s"PLAINTEXT://$hostName:$port")
+    props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"PLAINTEXT://$hostName:$port")
     val kafkaConfig = KafkaConfig.fromProps(props)
     TestUtils.createServer(kafkaConfig)
   }
 
   def createServerWithListenerOnPort(port: Int): KafkaServer = {
     val props = TestUtils.createBrokerConfig(0, zkConnect)
-    props.put(KafkaConfig.ListenersProp, s"PLAINTEXT://localhost:$port")
+    props.put(SocketServerConfigs.LISTENERS_CONFIG, s"PLAINTEXT://localhost:$port")
     val kafkaConfig = KafkaConfig.fromProps(props)
     TestUtils.createServer(kafkaConfig)
   }

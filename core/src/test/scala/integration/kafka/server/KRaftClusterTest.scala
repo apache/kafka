@@ -43,6 +43,7 @@ import org.apache.kafka.controller.{QuorumController, QuorumControllerIntegratio
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -119,7 +120,7 @@ class KRaftClusterTest {
       controller.shutdown()
       // Rewrite The `listeners` config to avoid controller socket server init using different port
       val config = controller.sharedServer.controllerConfig.props
-      config.asInstanceOf[java.util.HashMap[String,String]].put(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:$port")
+      config.asInstanceOf[java.util.HashMap[String,String]].put(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:$port")
       controller.sharedServer.controllerConfig.updateCurrentConfig(new KafkaConfig(config))
       //  metrics will be set to null when closing a controller, so we should recreate it for testing
       controller.sharedServer.metrics = new Metrics()
@@ -394,8 +395,8 @@ class KRaftClusterTest {
     val brokerPropertyOverrides: util.Map[Integer, util.Map[String, String]] = new util.HashMap[Integer, util.Map[String, String]]()
     Seq.range(0, 3).asJava.forEach(brokerId => {
       val props = new util.HashMap[String, String]()
-      props.put(KafkaConfig.ListenersProp, "EXTERNAL://localhost:0")
-      props.put(KafkaConfig.AdvertisedListenersProp, "EXTERNAL://localhost:0")
+      props.put(SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:0")
+      props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "EXTERNAL://localhost:0")
       brokerPropertyOverrides.put(brokerId, props)
     })
 
@@ -421,8 +422,8 @@ class KRaftClusterTest {
     val brokerPropertyOverrides: util.Map[Integer, util.Map[String, String]] = new util.HashMap[Integer, util.Map[String, String]]()
     Seq.range(0, 3).asJava.forEach(brokerId => {
       val props = new util.HashMap[String, String]()
-      props.put(KafkaConfig.ListenersProp, "EXTERNAL://localhost:0")
-      props.put(KafkaConfig.AdvertisedListenersProp, s"EXTERNAL://advertised-host-$brokerId:${brokerId + 100}")
+      props.put(SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:0")
+      props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"EXTERNAL://advertised-host-$brokerId:${brokerId + 100}")
       brokerPropertyOverrides.put(brokerId, props)
     })
 

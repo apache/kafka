@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.config.ZkConfigs;
@@ -114,7 +115,7 @@ public class EmbeddedKafkaCluster {
         log.debug("ZooKeeper instance is running at {}", zKConnectString());
 
         brokerConfig.put(ZkConfigs.ZK_CONNECT_CONFIG, zKConnectString());
-        putIfAbsent(brokerConfig, KafkaConfig.ListenersProp(), "PLAINTEXT://localhost:" + DEFAULT_BROKER_PORT);
+        putIfAbsent(brokerConfig, SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:" + DEFAULT_BROKER_PORT);
         putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
         putIfAbsent(brokerConfig, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
         putIfAbsent(brokerConfig, GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 0);
@@ -126,7 +127,7 @@ public class EmbeddedKafkaCluster {
 
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
-            log.debug("Starting a Kafka instance on {} ...", brokerConfig.get(KafkaConfig.ListenersProp()));
+            log.debug("Starting a Kafka instance on {} ...", brokerConfig.get(SocketServerConfigs.LISTENERS_CONFIG));
 
             final Properties effectiveConfig = new Properties();
             effectiveConfig.putAll(brokerConfig);

@@ -73,6 +73,7 @@ import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.metadata.properties.MetaProperties
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
@@ -336,14 +337,14 @@ object TestUtils extends Logging {
       props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
       props.put(KafkaConfig.NodeIdProp, nodeId.toString)
       props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
-      props.put(KafkaConfig.AdvertisedListenersProp, listeners)
-      props.put(KafkaConfig.ListenersProp, listeners)
+      props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, listeners)
+      props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners)
       props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      props.put(KafkaConfig.ListenerSecurityProtocolMapProp, protocolAndPorts.
+      props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, protocolAndPorts.
         map(p => "%s:%s".format(p._1, p._1)).mkString(",") + ",CONTROLLER:PLAINTEXT")
     } else {
       if (nodeId >= 0) props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
-      props.put(KafkaConfig.ListenersProp, listeners)
+      props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners)
     }
     if (logDirCount > 1) {
       val logDirs = (1 to logDirCount).toList.map(i =>
