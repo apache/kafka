@@ -161,7 +161,9 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     node.vm.provider :aws do |aws|
       aws.tags = {
         'Name' => ec2_instance_name_prefix + "-" + Socket.gethostname + "-" + name,
-        'JenkinsBuildUrl' => ENV['BUILD_URL']
+        'JenkinsBuildUrl' => ENV['BUILD_URL'],
+        'SemaphoreWorkflowUrl' => ENV['SEMAPHORE_WORKFLOW_URL'],
+        'SemaphoreJobId' => ENV['SEMAPHORE_JOB_ID']
       }
     end
   end
