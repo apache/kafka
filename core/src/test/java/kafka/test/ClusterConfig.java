@@ -138,10 +138,6 @@ public class ClusterConfig {
         return metadataVersion;
     }
 
-    public Map<String, String> brokerServerProperties(int brokerId) {
-        return perBrokerOverrideProperties.getOrDefault(brokerId, Collections.emptyMap());
-    }
-
     public Map<Integer, Map<String, String>> perBrokerOverrideProperties() {
         return perBrokerOverrideProperties;
     }
@@ -255,32 +251,32 @@ public class ClusterConfig {
         }
 
         public Builder setServerProperties(Map<String, String> serverProperties) {
-            this.serverProperties = Collections.unmodifiableMap(serverProperties);
+            this.serverProperties = Collections.unmodifiableMap(new HashMap<>(serverProperties));
             return this;
         }
 
         public Builder setConsumerProperties(Map<String, String> consumerProperties) {
-            this.consumerProperties = Collections.unmodifiableMap(consumerProperties);
+            this.consumerProperties = Collections.unmodifiableMap(new HashMap<>(consumerProperties));
             return this;
         }
 
         public Builder setProducerProperties(Map<String, String> producerProperties) {
-            this.producerProperties = Collections.unmodifiableMap(producerProperties);
+            this.producerProperties = Collections.unmodifiableMap(new HashMap<>(producerProperties));
             return this;
         }
 
         public Builder setAdminClientProperties(Map<String, String> adminClientProperties) {
-            this.adminClientProperties = Collections.unmodifiableMap(adminClientProperties);
+            this.adminClientProperties = Collections.unmodifiableMap(new HashMap<>(adminClientProperties));
             return this;
         }
 
         public Builder setSaslServerProperties(Map<String, String> saslServerProperties) {
-            this.saslServerProperties = Collections.unmodifiableMap(saslServerProperties);
+            this.saslServerProperties = Collections.unmodifiableMap(new HashMap<>(saslServerProperties));
             return this;
         }
 
         public Builder setSaslClientProperties(Map<String, String> saslClientProperties) {
-            this.saslClientProperties = Collections.unmodifiableMap(saslClientProperties);
+            this.saslClientProperties = Collections.unmodifiableMap(new HashMap<>(saslClientProperties));
             return this;
         }
 

@@ -402,8 +402,7 @@ class KRaftClusterTest {
 
     val nodes = new TestKitNodes.Builder()
       .setNumControllerNodes(1)
-      .setNumBrokerNodes(3)
-      .setPerBrokerPropertiesOverrides(brokerPropertyOverrides)
+      .setBrokerNodes(3, 1, id => brokerPropertyOverrides.get(id))
       .build()
 
     doOnStartedKafkaCluster(nodes) { implicit cluster =>
@@ -429,8 +428,7 @@ class KRaftClusterTest {
 
     val nodes = new TestKitNodes.Builder()
       .setNumControllerNodes(1)
-      .setNumBrokerNodes(3)
-      .setPerBrokerPropertiesOverrides(brokerPropertyOverrides)
+      .setBrokerNodes(3, 1, id => brokerPropertyOverrides.get(id))
       .build()
 
     doOnStartedKafkaCluster(nodes) { implicit cluster =>
@@ -1422,7 +1420,7 @@ class KRaftClusterTest {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
-        setBrokerNodes(3, 2).
+        setBrokerNodes(3, 2, _ => Collections.emptyMap()).
         setNumControllerNodes(1).build()).
       build()
     try {
@@ -1477,7 +1475,7 @@ class KRaftClusterTest {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
-        setBrokerNodes(3, 2).
+        setBrokerNodes(3, 2, _ => Collections.emptyMap()).
         setNumControllerNodes(1).build()).
       build()
     try {

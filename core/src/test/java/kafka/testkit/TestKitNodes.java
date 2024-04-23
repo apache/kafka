@@ -25,10 +25,12 @@ import org.apache.kafka.test.TestUtils;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Optional;
 import java.util.TreeMap;
+import java.util.function.Function;
 
 public class TestKitNodes {
     public static class Builder {
@@ -78,10 +80,18 @@ public class TestKitNodes {
         }
 
         public Builder setNumBrokerNodes(int numBrokerNodes) {
-            return setBrokerNodes(numBrokerNodes, 1);
+            return setBrokerNodes(numBrokerNodes, 1, ignored -> Collections.emptyMap());
         }
 
-        public Builder setBrokerNodes(int numBrokerNodes, int disksPerBroker) {
+        /**
+         * Set broker nodes
+         *
+         * @param numBrokerNodes number of broker nodes
+         * @param disksPerBroker number of disk per broker.
+         * @param perBrokerProperties a function that accept broker id and returns corresponding broker properties
+         * @return Builder
+         */
+        public Builder setBrokerNodes(int numBrokerNodes, int disksPerBroker, Function<Integer, Map<String, String>> perBrokerProperties) {
             if (numBrokerNodes < 0) {
                 throw new RuntimeException("Invalid negative value for numBrokerNodes");
             }
@@ -96,28 +106,14 @@ public class TestKitNodes {
                 if (!brokerNodeBuilders.isEmpty()) {
                     nextId = brokerNodeBuilders.lastKey() + 1;
                 }
+                Map<String, String> brokerProperties = Optional.ofNullable(perBrokerProperties.apply(nextId))
+                        .orElseGet(Collections::emptyMap);
                 BrokerNode.Builder brokerNodeBuilder = BrokerNode.builder()
                         .setId(nextId)
-                        .setNumLogDirectories(disksPerBroker);
+                        .setNumLogDirectories(disksPerBroker)
+                        .setPropertyOverrides(brokerProperties);
                 brokerNodeBuilders.put(nextId, brokerNodeBuilder);
             }
-            return this;
-        }
-
-        /**
-         * Set per broker properties overrides, this setter must be invoked after setBrokerNodes which
-         * setup broker id and broker builder.
-         * @param perBrokerPropertiesOverrides properties to override in each broker
-         * @return Builder
-         */
-        public Builder setPerBrokerPropertiesOverrides(Map<Integer, Map<String, String>> perBrokerPropertiesOverrides) {
-            perBrokerPropertiesOverrides.forEach((brokerId, properties) -> {
-                if (!brokerNodeBuilders.containsKey(brokerId)) {
-                    throw new RuntimeException("Broker id " + brokerId + " does not exist");
-                }
-                Map<String, String> propertiesOverride = new HashMap<>(properties);
-                brokerNodeBuilders.get(brokerId).setPropertyOverrides(propertiesOverride);
-            });
             return this;
         }
 

@@ -26,6 +26,7 @@ import java.io.File;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -90,7 +91,7 @@ public class BrokerNode implements TestKitNode {
         }
 
         public Builder setPropertyOverrides(Map<String, String> propertyOverrides) {
-            this.propertyOverrides = Collections.unmodifiableMap(propertyOverrides);
+            this.propertyOverrides = Collections.unmodifiableMap(new HashMap<>(propertyOverrides));
             return this;
         }
 

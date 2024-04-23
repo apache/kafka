@@ -22,6 +22,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -36,7 +37,7 @@ public class KafkaClusterTestKitTest {
     public void testCreateClusterWithBadNumDisksThrows(int disks) {
         RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder()
-                        .setBrokerNodes(1, disks)
+                        .setBrokerNodes(1, disks, ignored -> Collections.emptyMap())
                         .setNumControllerNodes(1)
                         .build())
         );
@@ -48,7 +49,7 @@ public class KafkaClusterTestKitTest {
     public void testCreateClusterAndCloseWithMultipleLogDirs(boolean combined) {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder().
-                        setBrokerNodes(5, 2).
+                        setBrokerNodes(5, 2, ignored -> Collections.emptyMap()).
                         setCombined(combined).
                         setNumControllerNodes(3).build()).build()) {
 
