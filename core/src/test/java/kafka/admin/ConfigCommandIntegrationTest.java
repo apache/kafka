@@ -18,7 +18,6 @@ package kafka.admin;
 
 import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
-import kafka.server.KafkaConfig;
 import kafka.server.QuorumTestHarness;
 import kafka.zk.AdminZkClient;
 import kafka.zk.BrokerInfo;
@@ -27,6 +26,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.security.PasswordEncoder;
+import org.apache.kafka.security.PasswordEncoderConfigs;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ZooKeeperInternals;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -171,10 +171,10 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
         Map<String, String> configs = new HashMap<>();
         configs.put("listener.name.external.ssl.keystore.password", "secret");
         configs.put("log.cleaner.threads", "2");
-        Map<String, String> encoderConfigs = Collections.singletonMap(KafkaConfig.PasswordEncoderSecretProp(), "encoder-secret");
+        Map<String, String> encoderConfigs = Collections.singletonMap(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG, "encoder-secret");
         alterConfigWithZk(configs, Optional.of(brokerId), encoderConfigs);
         Properties brokerConfigs = zkClient().getEntityConfigs("brokers", brokerId);
-        assertFalse(brokerConfigs.contains(KafkaConfig.PasswordEncoderSecretProp()), "Encoder secret stored in ZooKeeper");
+        assertFalse(brokerConfigs.contains(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG), "Encoder secret stored in ZooKeeper");
         assertEquals("2", brokerConfigs.getProperty("log.cleaner.threads")); // not encoded
         String encodedPassword = brokerConfigs.getProperty("listener.name.external.ssl.keystore.password");
         PasswordEncoder passwordEncoder = ConfigCommand.createPasswordEncoder(JavaConverters.mapAsScalaMap(encoderConfigs));
@@ -184,11 +184,11 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
         // Password config update with overrides for encoder parameters
         Map<String, String> configs2 = Collections.singletonMap("listener.name.internal.ssl.keystore.password", "secret2");
         Map<String, String> encoderConfigs2 = new HashMap<>();
-        encoderConfigs2.put(KafkaConfig.PasswordEncoderSecretProp(), "encoder-secret");
-        encoderConfigs2.put(KafkaConfig.PasswordEncoderCipherAlgorithmProp(), "DES/CBC/PKCS5Padding");
-        encoderConfigs2.put(KafkaConfig.PasswordEncoderIterationsProp(), "1024");
-        encoderConfigs2.put(KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp(), "PBKDF2WithHmacSHA1");
-        encoderConfigs2.put(KafkaConfig.PasswordEncoderKeyLengthProp(), "64");
+        encoderConfigs2.put(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG, "encoder-secret");
+        encoderConfigs2.put(PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG, "DES/CBC/PKCS5Padding");
+        encoderConfigs2.put(PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG, "1024");
+        encoderConfigs2.put(PasswordEncoderConfigs.PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_CONFIG, "PBKDF2WithHmacSHA1");
+        encoderConfigs2.put(PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_CONFIG, "64");
         alterConfigWithZk(configs2, Optional.of(brokerId), encoderConfigs2);
         Properties brokerConfigs2 = zkClient().getEntityConfigs("brokers", brokerId);
         String encodedPassword2 = brokerConfigs2.getProperty("listener.name.internal.ssl.keystore.password");
