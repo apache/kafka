@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
-
-import java.util.Optional;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -41,6 +37,11 @@ import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Optional;
+
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
+
 abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements ProcessorSupplier<K, VThis, K, VOut> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
     private final boolean outer;
@@ -56,9 +57,9 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
     private final long windowsAfterMs;
 
     KStreamKStreamJoin(final String otherWindowName, final TimeTrackerSupplier sharedTimeTrackerSupplier,
-            final Optional<String> outerJoinWindowName, final long joinBeforeMs,
-            final long joinAfterMs, final JoinWindowsInternal windows, final boolean outer,
-            final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner) {
+                       final Optional<String> outerJoinWindowName, final long joinBeforeMs,
+                       final long joinAfterMs, final JoinWindowsInternal windows, final boolean outer,
+                       final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner) {
         this.otherWindowName = otherWindowName;
         this.sharedTimeTrackerSupplier = sharedTimeTrackerSupplier;
         this.enableSpuriousResultFix = windows.spuriousResultFixEnabled();
@@ -275,7 +276,7 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
         }
 
         private void emitInnerJoin(final Record<K, VThis> thisRecord, final KeyValue<Long, VOther> otherRecord,
-                final long inputRecordTimestamp) {
+                                   final long inputRecordTimestamp) {
             outerJoinStore.ifPresent(store -> {
                 // use putIfAbsent to first read and see if there's any values for the key,
                 // if yes delete the key, otherwise do not issue a put;

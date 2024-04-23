@@ -16,21 +16,22 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.Optional;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTrackerSupplier;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 
+import java.util.Optional;
+
 class KStreamKStreamRightJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL, VR, VOut, VR, VL> {
 
     KStreamKStreamRightJoin(final String otherWindowName,
-            final JoinWindowsInternal windows,
-            final ValueJoinerWithKey<? super K, ? super VR, ? super VL, ? extends VOut> joiner,
-            final boolean outer,
-            final Optional<String> outerJoinWindowName,
-            final TimeTrackerSupplier sharedTimeTrackerSupplier) {
+                            final JoinWindowsInternal windows,
+                            final ValueJoinerWithKey<? super K, ? super VR, ? super VL, ? extends VOut> joiner,
+                            final boolean outer,
+                            final Optional<String> outerJoinWindowName,
+                            final TimeTrackerSupplier sharedTimeTrackerSupplier) {
         super(otherWindowName, sharedTimeTrackerSupplier, outerJoinWindowName,
                 windows.afterMs, windows.beforeMs, windows, outer, joiner);
     }
