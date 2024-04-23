@@ -45,19 +45,13 @@ class ConsumerEventHandler(object):
         self.total_consumed = 0
         self.verify_offsets = verify_offsets
 
-    def handle_shutdown_complete(self, node, logger, clean_shutdown):
+    def handle_shutdown_complete(self):
         self.state = ConsumerState.Dead
         self.assignment = []
         self.position = {}
 
-        if clean_shutdown:
-            logger.debug("Shut down %s cleanly" % node.account.hostname)
-        else:
-            logger.debug("Shut down %s uncleanly" % node.account.hostname)
-
-    def handle_startup_complete(self, node, logger):
+    def handle_startup_complete(self):
         self.state = ConsumerState.Started
-        logger.debug("Started %s" % node.account.hostname)
 
     def handle_offsets_committed(self, event, node, logger):
         if event["success"]:
@@ -120,11 +114,11 @@ class ConsumerEventHandler(object):
             assignment.append(TopicPartition(topic, partition))
         self.assignment = assignment
 
-    def handle_kill_process(self, clean_shutdown, node, logger):
+    def handle_kill_process(self, clean_shutdown):
         # if the shutdown was clean, then we expect the explicit
         # shutdown event from the consumer
         if not clean_shutdown:
-            self.handle_shutdown_complete(node, logger, False)
+            self.handle_shutdown_complete()
 
     def current_assignment(self):
         return list(self.assignment)
@@ -276,9 +270,9 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                 with self.lock:
                     name = event["name"]
                     if name == "shutdown_complete":
-                        handler.handle_shutdown_complete(node, self.logger, True)
+                        handler.handle_shutdown_complete(True)
                     elif name == "startup_complete":
-                        handler.handle_startup_complete(node, self.logger)
+                        handler.handle_startup_complete()
                     elif name == "offsets_committed":
                         handler.handle_offsets_committed(event, node, self.logger)
                         self._update_global_committed(event)
@@ -395,7 +389,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             node.account.signal(pid, sig, allow_fail)
 
         with self.lock:
-            self.event_handlers[node].handle_kill_process(clean_shutdown, node, self.logger)
+            self.event_handlers[node].handle_kill_process(clean_shutdown)
 
     def stop_node(self, node, clean_shutdown=True):
         self.kill_node(node, clean_shutdown=clean_shutdown)
