@@ -23,15 +23,13 @@ import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.Objects;
-import java.util.TreeMap;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class TestKitNodes {
     public static class Builder {
@@ -98,45 +96,33 @@ public class TestKitNodes {
             }
 
             String baseDirectory = TestUtils.tempDirectory().getAbsolutePath();
-            try {
-                if (clusterId == null) {
-                    clusterId = Uuid.randomUuid();
-                }
-                TreeMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
-                for (int id = startControllerId(); id < startControllerId() + numControllerNodes; id++) {
-                    ControllerNode node = ControllerNode.builder()
-                        .setId(id)
-                        .setBaseDirectory(baseDirectory)
-                        .setClusterId(clusterId)
-                        .setCombined(combined)
-                        .build();
-                    controllerNodes.put(node.id(), node);
-                }
-                TreeMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
-                for (int id = startBrokerId(); id < startBrokerId() + numBrokerNodes; id++) {
-                    BrokerNode node = BrokerNode.builder()
-                        .setId(id)
-                        .setNumLogDirectories(numDisksPerBroker)
-                        .setBaseDirectory(baseDirectory)
-                        .setClusterId(clusterId)
-                        .setCombined(combined)
-                        .setPropertyOverrides(perBrokerProperties.getOrDefault(id, Collections.emptyMap()))
-                        .build();
-                    brokerNodes.put(node.id(), node);
-                }
-                return new TestKitNodes(baseDirectory,
-                    clusterId,
-                    bootstrapMetadata,
-                    controllerNodes,
-                    brokerNodes);
-            } catch (Exception e) {
-                try {
-                    Files.delete(Paths.get(baseDirectory));
-                } catch (Exception x) {
-                    throw new RuntimeException("Failed to delete base directory " + baseDirectory, x);
-                }
-                throw e;
+            if (clusterId == null) {
+                clusterId = Uuid.randomUuid();
             }
+
+            Map<Integer, ControllerNode> controllerNodes = IntStream.range(startControllerId(), startControllerId() + numControllerNodes)
+                .boxed().collect(Collectors.toMap(Function.identity(), id -> ControllerNode.builder()
+                    .setId(id)
+                    .setBaseDirectory(baseDirectory)
+                    .setClusterId(clusterId)
+                    .setCombined(combined)
+                    .build()));
+
+            Map<Integer, BrokerNode> brokerNodes = IntStream.range(startBrokerId(), startBrokerId() + numBrokerNodes)
+                .boxed().collect(Collectors.toMap(Function.identity(), id -> BrokerNode.builder()
+                    .setId(id)
+                    .setNumLogDirectories(numDisksPerBroker)
+                    .setBaseDirectory(baseDirectory)
+                    .setClusterId(clusterId)
+                    .setCombined(combined)
+                    .setPropertyOverrides(perBrokerProperties.getOrDefault(id, Collections.emptyMap()))
+                    .build()));
+
+            return new TestKitNodes(baseDirectory,
+                clusterId,
+                bootstrapMetadata,
+                controllerNodes,
+                brokerNodes);
         }
 
         private int startBrokerId() {
@@ -154,21 +140,21 @@ public class TestKitNodes {
     private final String baseDirectory;
     private final Uuid clusterId;
     private final BootstrapMetadata bootstrapMetadata;
-    private final NavigableMap<Integer, ControllerNode> controllerNodes;
-    private final NavigableMap<Integer, BrokerNode> brokerNodes;
+    private final Map<Integer, ControllerNode> controllerNodes;
+    private final Map<Integer, BrokerNode> brokerNodes;
 
     private TestKitNodes(
         String baseDirectory,
         Uuid clusterId,
         BootstrapMetadata bootstrapMetadata,
-        NavigableMap<Integer, ControllerNode> controllerNodes,
-        NavigableMap<Integer, BrokerNode> brokerNodes
+        Map<Integer, ControllerNode> controllerNodes,
+        Map<Integer, BrokerNode> brokerNodes
     ) {
         this.baseDirectory = Objects.requireNonNull(baseDirectory);
         this.clusterId = Objects.requireNonNull(clusterId);
         this.bootstrapMetadata = Objects.requireNonNull(bootstrapMetadata);
-        this.controllerNodes = new TreeMap<>(Objects.requireNonNull(controllerNodes));
-        this.brokerNodes = new TreeMap<>(Objects.requireNonNull(brokerNodes));
+        this.controllerNodes = Collections.unmodifiableMap(Objects.requireNonNull(controllerNodes));
+        this.brokerNodes = Collections.unmodifiableMap(Objects.requireNonNull(brokerNodes));
     }
 
     public boolean isCombined(int node) {
@@ -191,7 +177,7 @@ public class TestKitNodes {
         return bootstrapMetadata;
     }
 
-    public NavigableMap<Integer, BrokerNode> brokerNodes() {
+    public Map<Integer, BrokerNode> brokerNodes() {
         return brokerNodes;
     }
 

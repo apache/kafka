@@ -90,6 +90,8 @@ public class BrokerNode implements TestKitNode {
         }
 
         public BrokerNode build() {
+            Objects.requireNonNull(baseDirectory);
+            Objects.requireNonNull(clusterId);
             if (id == -1) {
                 throw new RuntimeException("You must set the node id.");
             }
