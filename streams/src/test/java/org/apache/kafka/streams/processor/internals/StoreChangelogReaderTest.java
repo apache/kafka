@@ -467,8 +467,7 @@ public class StoreChangelogReaderTest {
         if (type == ACTIVE) {
             assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
         } else {
-            if (!properties.containsKey(InternalConfig.STATE_UPDATER_ENABLED)
-                    || !((boolean) properties.get(InternalConfig.STATE_UPDATER_ENABLED))) {
+            if (!InternalConfig.getStateUpdaterEnabled(config.originals())) {
                 assertEquals(Duration.ZERO, consumer.lastPollTimeout());
             } else {
                 assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
