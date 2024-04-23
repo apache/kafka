@@ -18,22 +18,32 @@ package kafka.admin;
 
 import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
+import kafka.server.KafkaBroker;
+import kafka.server.KafkaConfig;
 import kafka.server.QuorumTestHarness;
+import kafka.utils.TestUtils;
 import kafka.zk.AdminZkClient;
 import kafka.zk.BrokerInfo;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.security.PasswordEncoder;
 import org.apache.kafka.security.PasswordEncoderConfigs;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ZooKeeperInternals;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import scala.None$;
+import scala.Option;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -44,6 +54,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -51,53 +62,76 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 public class ConfigCommandIntegrationTest extends QuorumTestHarness {
+    List<KafkaBroker> servers;
     AdminZkClient adminZkClient;
     List<String> alterOpts;
 
+    @AfterEach
+    @Override
+    public void tearDown() {
+        if (servers != null) {
+            TestUtils.shutdownServers(seq(servers), true);
+            servers = null;
+        }
+        super.tearDown();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
-    public void shouldExitWithNonZeroStatusOnUpdatingUnallowedConfigViaZk(String quorum) {
+    public void shouldExitWithNonZeroStatusOnUpdatingUnallowedConfig(String quorum) {
+        if (isKRaftTest()) {
+            createBrokers();
+        }
+
         assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
             "--entity-name", "1",
             "--entity-type", "brokers",
             "--alter",
-            "--add-config", "security.inter.broker.protocol=PLAINTEXT")));
+            "--add-config", "security.inter.broker.protocol=PLAINTEXT")),
+            errOut ->
+                assertTrue(errOut.contains("Cannot update these configs dynamically: Set(security.inter.broker.protocol)")));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
+    @ValueSource(strings = "zk")
     public void shouldExitWithNonZeroStatusOnZkCommandAlterUserQuota(String quorum) {
         assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
             "--entity-type", "users",
             "--entity-name", "admin",
-            "--alter", "--add-config", "consumer_byte_rate=20000")));
+            "--alter", "--add-config", "consumer_byte_rate=20000")),
+            errOut ->
+                assertTrue(errOut.contains("User configuration updates using ZooKeeper are only supported for SCRAM credential updates.")));
     }
 
-    public static void assertNonZeroStatusExit(Stream<String> args) {
+    public static void assertNonZeroStatusExit(Stream<String> args, Consumer<String> checkErrOut) {
         AtomicReference<Integer> exitStatus = new AtomicReference<>();
         Exit.setExitProcedure((status, __) -> {
             exitStatus.set(status);
             throw new RuntimeException();
         });
 
-        try {
-            ConfigCommand.main(args.toArray(String[]::new));
-        } catch (RuntimeException e) {
-            // do nothing.
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        String errOut = captureStandardErr(() -> {
+            try {
+                ConfigCommand.main(args.toArray(String[]::new));
+            } catch (RuntimeException e) {
+                // do nothing.
+            } finally {
+                Exit.resetExitProcedure();
+            }
+        });
 
+        checkErrOut.accept(errOut);
         assertNotNull(exitStatus.get());
         assertEquals(1, exitStatus.get());
     }
 
     private Stream<String> quorumArgs() {
         return isKRaftTest()
-            ? Stream.of("--bootstrap-server", "127.0.0.1:1234")
+            ? Stream.of("--bootstrap-server", TestUtils.bootstrapServers(seq(servers), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
             : Stream.of("--zookeeper", zkConnect());
     }
 
@@ -135,8 +169,9 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
+    @ValueSource(strings = "zk")
     public void testDynamicBrokerConfigUpdateUsingZooKeeper(String quorum) throws Exception {
+        //TODO: check if it possible to use kraft here.
         String brokerId = "1";
         adminZkClient = new AdminZkClient(zkClient(), scala.None$.empty());
         alterOpts = Arrays.asList("--zookeeper", zkConnect(), "--entity-type", "brokers", "--alter");
@@ -215,6 +250,35 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
         zkClient().registerBroker(brokerInfo);
     }
 
+    private void createBrokers() {
+        servers = new ArrayList<>();
+
+        for (int i = 0; i < 3; i++) {
+            servers.add(createBroker(new KafkaConfig(TestUtils.createBrokerConfig(
+                i,
+                zkConnectOrNull(),
+                false, // shorten test time
+                true,
+                TestUtils.RandomPort(),
+                Option.empty(),
+                Option.empty(),
+                Option.empty(),
+                true,
+                false,
+                TestUtils.RandomPort(),
+                false,
+                TestUtils.RandomPort(),
+                false,
+                TestUtils.RandomPort(),
+                None$.empty(),
+                3,
+                false,
+                1,
+                (short) 1,
+                false)), Time.SYSTEM, true, None$.empty()));
+        }
+    }
+
     @SafeVarargs
     static <T> Seq<T> seq(T...seq) {
         return seq(Arrays.asList(seq));
@@ -228,5 +292,30 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
     @SafeVarargs
     public static String[] toArray(List<String>... lists) {
         return Stream.of(lists).flatMap(List::stream).toArray(String[]::new);
+    }
+
+    public static String captureStandardErr(Runnable runnable) {
+        return captureStandardStream(true, runnable);
+    }
+
+    private static String captureStandardStream(boolean isErr, Runnable runnable) {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        PrintStream currentStream = isErr ? System.err : System.out;
+        PrintStream tempStream = new PrintStream(outputStream);
+        if (isErr)
+            System.setErr(tempStream);
+        else
+            System.setOut(tempStream);
+        try {
+            runnable.run();
+            return outputStream.toString().trim();
+        } finally {
+            if (isErr)
+                System.setErr(currentStream);
+            else
+                System.setOut(currentStream);
+
+            tempStream.close();
+        }
     }
 }
