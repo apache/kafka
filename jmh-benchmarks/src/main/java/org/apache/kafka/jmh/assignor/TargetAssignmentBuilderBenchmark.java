@@ -95,7 +95,7 @@ public class TargetAssignmentBuilderBenchmark {
         Map<String, ConsumerGroupMember> members = generateMockMembers();
         Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignment();
 
-        ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("new-member")
+        ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("newMember")
             .setSubscribedTopicNames(allTopicNames)
             .build();
 
