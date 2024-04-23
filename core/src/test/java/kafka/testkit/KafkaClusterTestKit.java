@@ -37,6 +37,7 @@ import org.apache.kafka.controller.Controller;
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
+import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
@@ -179,9 +180,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 props.put(LOG_DIRS_CONFIG,
                     controllerNode.metadataDirectory());
             }
-            props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
+            props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
                     "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
-            props.put(KafkaConfig$.MODULE$.ListenersProp(), listeners(node.id()));
+            props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners(node.id()));
             props.put(INTER_BROKER_LISTENER_NAME_CONFIG,
                     nodes.interBrokerListenerName().value());
             props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
