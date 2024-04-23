@@ -773,7 +773,7 @@ public abstract class TopicCommand {
                 .withRequiredArg()
                 .describedAs("topic-id")
                 .ofType(String.class);
-            nl = java.lang.System.lineSeparator();
+            nl = System.lineSeparator();
 
             String logConfigNames = LogConfig.configNames().stream().map(config -> "\t" + config).collect(Collectors.joining(nl));
             configOpt = parser.accepts("config",  "A topic configuration override for the topic being created." +
