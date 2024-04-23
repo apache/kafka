@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -56,7 +55,7 @@ public class ClusterTestExtensionsTest {
         serverProperties.put("foo", "bar");
         clusterGenerator.accept(ClusterConfig.defaultBuilder()
                 .setName("Generated Test")
-                .setServerProperties(Collections.unmodifiableMap(serverProperties))
+                .setServerProperties(serverProperties)
                 .build());
     }
 
