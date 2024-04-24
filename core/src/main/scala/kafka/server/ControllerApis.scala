@@ -530,12 +530,12 @@ class ControllerApis(
         if (exception != null) {
           requestHelper.handleError(request, exception)
         } else {
-          controllerResults.entrySet().forEach(entry => response.responses().add(
+          controllerResults.forEach((key, value) => response.responses().add(
             new OldAlterConfigsResourceResponse().
-              setErrorCode(entry.getValue.error().code()).
-              setErrorMessage(entry.getValue.message()).
-              setResourceName(entry.getKey.name()).
-              setResourceType(entry.getKey.`type`().id())))
+              setErrorCode(value.error().code()).
+              setErrorMessage(value.message()).
+              setResourceName(key.name()).
+              setResourceType(key.`type`().id())))
           requestHelper.sendResponseMaybeThrottle(request, throttleMs =>
             new AlterConfigsResponse(response.setThrottleTimeMs(throttleMs)))
         }
@@ -771,12 +771,12 @@ class ControllerApis(
         if (exception != null) {
           requestHelper.handleError(request, exception)
         } else {
-          controllerResults.entrySet().forEach(entry => response.responses().add(
+          controllerResults.forEach((key, value) => response.responses().add(
             new AlterConfigsResourceResponse().
-              setErrorCode(entry.getValue.error().code()).
-              setErrorMessage(entry.getValue.message()).
-              setResourceName(entry.getKey.name()).
-              setResourceType(entry.getKey.`type`().id())))
+              setErrorCode(value.error().code()).
+              setErrorMessage(value.message()).
+              setResourceName(key.name()).
+              setResourceType(key.`type`().id())))
           brokerLoggerResponses.forEach(r => response.responses().add(r))
           requestHelper.sendResponseMaybeThrottle(request, throttleMs =>
             new IncrementalAlterConfigsResponse(response.setThrottleTimeMs(throttleMs)))
