@@ -76,7 +76,7 @@ import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile
@@ -2617,7 +2617,7 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     if (zkMigrationEnabled) {
       props.put(KafkaConfig.MigrationEnabledProp, "" + zkMigrationEnabled)
-      props.put(RaftConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9071")
+      props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9071")
       props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       config = KafkaConfig.fromProps(props)
