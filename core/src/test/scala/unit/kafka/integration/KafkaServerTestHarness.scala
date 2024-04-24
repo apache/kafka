@@ -346,8 +346,8 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   def getTopicNames(): Map[Uuid, String] = {
     if (isKRaftTest()) {
       val result = new util.HashMap[Uuid, String]()
-      controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().entrySet().forEach {
-        e => result.put(e.getValue(), e.getKey())
+      controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().forEach {
+        (key, value) => result.put(value, key)
       }
       result.asScala.toMap
     } else {
