@@ -37,6 +37,7 @@ import org.apache.kafka.controller.Controller;
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
+import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
@@ -73,6 +74,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
 
 
 @SuppressWarnings("deprecation") // Needed for Scala 2.12 compatibility
@@ -170,17 +173,17 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             if (brokerNode != null) {
                 // Set the log.dirs according to the broker node setting (if there is a broker node)
-                props.put(KafkaConfig$.MODULE$.LogDirsProp(),
+                props.put(LOG_DIRS_CONFIG,
                         String.join(",", brokerNode.logDataDirectories()));
             } else {
                 // Set log.dirs equal to the metadata directory if there is just a controller.
-                props.put(KafkaConfig$.MODULE$.LogDirsProp(),
+                props.put(LOG_DIRS_CONFIG,
                     controllerNode.metadataDirectory());
             }
-            props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
+            props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
                     "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
-            props.put(KafkaConfig$.MODULE$.ListenersProp(), listeners(node.id()));
-            props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(),
+            props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners(node.id()));
+            props.put(INTER_BROKER_LISTENER_NAME_CONFIG,
                     nodes.interBrokerListenerName().value());
             props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
                     "CONTROLLER");

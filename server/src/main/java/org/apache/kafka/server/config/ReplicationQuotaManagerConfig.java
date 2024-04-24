@@ -17,10 +17,6 @@
 package org.apache.kafka.server.config;
 
 public class ReplicationQuotaManagerConfig {
-    public static final long DEFAULT_QUOTA_BYTES_PER_SECOND = Long.MAX_VALUE;
-    // Always have 10 whole windows + 1 current window
-    public static final int DEFAULT_NUM_QUOTA_SAMPLES = 11;
-    public static final int DEFAULT_QUOTA_WINDOW_SIZE_SECONDS = 1;
     // Purge sensors after 1 hour of inactivity
     public static final int INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS = 3600;
 
@@ -42,10 +38,10 @@ public class ReplicationQuotaManagerConfig {
     }
 
     public ReplicationQuotaManagerConfig(int numQuotaSamples, int quotaWindowSizeSeconds) {
-        this(DEFAULT_QUOTA_BYTES_PER_SECOND, numQuotaSamples, quotaWindowSizeSeconds);
+        this(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, numQuotaSamples, quotaWindowSizeSeconds);
     }
 
     public ReplicationQuotaManagerConfig() {
-        this(DEFAULT_QUOTA_BYTES_PER_SECOND, DEFAULT_NUM_QUOTA_SAMPLES, DEFAULT_QUOTA_WINDOW_SIZE_SECONDS);
+        this(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, QuotaConfigs.NUM_QUOTA_SAMPLES_DEFAULT, QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT);
     }
 }

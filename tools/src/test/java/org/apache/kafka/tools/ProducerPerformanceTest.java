@@ -228,7 +228,7 @@ public class ProducerPerformanceTest {
     }
 
     @Test
-    public void testStatsInitializationWithLargeNumRecords() throws Exception {
+    public void testStatsInitializationWithLargeNumRecords() {
         long numRecords = Long.MAX_VALUE;
         assertDoesNotThrow(() -> new ProducerPerformance.Stats(numRecords, 5000));
     }

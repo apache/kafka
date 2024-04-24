@@ -50,14 +50,6 @@ public final class LocalTieredStorageOutput<K, V> implements LocalTieredStorageT
         return row(file, offset, record, "    ");
     }
 
-    private String row(String file, Object offset) {
-        return row(file, offset, "");
-    }
-
-    private String row(String file) {
-        return row(file, "", "");
-    }
-
     private String row() {
         return row("", "", "");
     }

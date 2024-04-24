@@ -31,6 +31,8 @@ public class TopicPartitionInfo {
     private final Node leader;
     private final List<Node> replicas;
     private final List<Node> isr;
+    private final List<Node> elr;
+    private final List<Node> lastKnownElr;
 
     /**
      * Create an instance of this class with the provided parameters.
@@ -40,12 +42,32 @@ public class TopicPartitionInfo {
      * @param replicas the replicas of the partition in the same order as the replica assignment (the preferred replica
      *                 is the head of the list)
      * @param isr the in-sync replicas
+     * @param elr the eligible leader replicas
+     * @param lastKnownElr the last known eligible leader replicas.
      */
+    public TopicPartitionInfo(
+        int partition,
+        Node leader,
+        List<Node> replicas,
+        List<Node> isr,
+        List<Node> elr,
+        List<Node> lastKnownElr
+    ) {
+        this.partition = partition;
+        this.leader = leader;
+        this.replicas = Collections.unmodifiableList(replicas);
+        this.isr = Collections.unmodifiableList(isr);
+        this.elr = Collections.unmodifiableList(elr);
+        this.lastKnownElr = Collections.unmodifiableList(lastKnownElr);
+    }
+
     public TopicPartitionInfo(int partition, Node leader, List<Node> replicas, List<Node> isr) {
         this.partition = partition;
         this.leader = leader;
         this.replicas = Collections.unmodifiableList(replicas);
         this.isr = Collections.unmodifiableList(isr);
+        this.elr = null;
+        this.lastKnownElr = null;
     }
 
     /**
@@ -79,9 +101,26 @@ public class TopicPartitionInfo {
         return isr;
     }
 
+    /**
+     * Return the eligible leader replicas of the partition. Note that the ordering of the result is unspecified.
+     */
+    public List<Node> elr() {
+        return elr;
+    }
+
+    /**
+     * Return the last known eligible leader replicas of the partition. Note that the ordering of the result is unspecified.
+     */
+    public List<Node> lastKnownElr() {
+        return lastKnownElr;
+    }
+
     public String toString() {
+        String elrString = elr != null ? Utils.join(elr, ", ") : "N/A";
+        String lastKnownElrString = lastKnownElr != null ? Utils.join(lastKnownElr, ", ") : "N/A";
         return "(partition=" + partition + ", leader=" + leader + ", replicas=" +
-            Utils.join(replicas, ", ") + ", isr=" + Utils.join(isr, ", ") + ")";
+            Utils.join(replicas, ", ") + ", isr=" + Utils.join(isr, ", ") +
+            ", elr=" + elrString + ", lastKnownElr=" + lastKnownElrString + ")";
     }
 
     @Override
@@ -94,7 +133,9 @@ public class TopicPartitionInfo {
         return partition == that.partition &&
             Objects.equals(leader, that.leader) &&
             Objects.equals(replicas, that.replicas) &&
-            Objects.equals(isr, that.isr);
+            Objects.equals(isr, that.isr) &&
+            Objects.equals(elr, that.elr) &&
+            Objects.equals(lastKnownElr, that.lastKnownElr);
     }
 
     @Override
@@ -103,6 +144,8 @@ public class TopicPartitionInfo {
         result = 31 * result + (leader != null ? leader.hashCode() : 0);
         result = 31 * result + (replicas != null ? replicas.hashCode() : 0);
         result = 31 * result + (isr != null ? isr.hashCode() : 0);
+        result = 31 * result + (elr != null ? elr.hashCode() : 0);
+        result = 31 * result + (lastKnownElr != null ? lastKnownElr.hashCode() : 0);
         return result;
     }
 }

@@ -73,9 +73,10 @@
     <subpackage name="storage.internals">
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="com.yammer.metrics.core" />
+        <allow pkg="org.apache.kafka.common" />
         <allow pkg="org.apache.kafka.server"/>
         <allow pkg="org.apache.kafka.storage.internals"/>
-        <allow pkg="org.apache.kafka.common" />
+        <allow pkg="org.apache.kafka.test" />
         <allow pkg="com.github.benmanes.caffeine.cache" />
     </subpackage>
 
@@ -111,6 +112,7 @@
         <allow pkg="org.apache.kafka.server.log" />
         <allow pkg="org.apache.kafka.server.log.remote" />
         <allow pkg="org.apache.kafka.server.log.remote.storage" />
+        <allow pkg="org.apache.kafka.server.config" />
 
         <allow pkg="org.apache.kafka.test" />
         <subpackage name="actions">

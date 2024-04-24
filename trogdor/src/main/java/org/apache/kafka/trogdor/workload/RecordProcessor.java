@@ -25,9 +25,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 /**
  * RecordProcessor allows for acting on data polled from ConsumeBench workloads.
  */
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
-        include = JsonTypeInfo.As.PROPERTY,
-        property = "type")
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes(value = {
         @JsonSubTypes.Type(value = TimestampRecordProcessor.class, name = "timestamp"),
 })

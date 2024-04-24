@@ -39,10 +39,10 @@ import static org.junit.Assert.assertTrue;
 @Category(IntegrationTest.class)
 public class StartAndStopLatchTest {
 
+    private final AtomicBoolean completed = new AtomicBoolean();
     private Time clock;
     private StartAndStopLatch latch;
     private List<StartAndStopLatch> dependents;
-    private AtomicBoolean completed = new AtomicBoolean();
     private ExecutorService waiters;
     private Future<Boolean> future;
 

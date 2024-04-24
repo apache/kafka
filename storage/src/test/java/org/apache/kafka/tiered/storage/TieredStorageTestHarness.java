@@ -19,9 +19,9 @@ package org.apache.kafka.tiered.storage;
 import kafka.api.IntegrationTestHarness;
 import kafka.log.remote.RemoteLogManager;
 import kafka.server.KafkaBroker;
-import kafka.server.KafkaConfig;
 import org.apache.kafka.common.replica.ReplicaSelector;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
@@ -47,7 +47,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.STORAGE_WAIT_TIMEOUT_SEC;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createPropsForRemoteStorage;
-
 /**
  * Base class for integration tests exercising the tiered storage functionality in Apache Kafka.
  * This uses a {@link LocalTieredStorage} instance as the second-tier storage system and
@@ -82,7 +81,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         Properties overridingProps = createPropsForRemoteStorage(testClassName, storageDirPath, brokerCount(),
                 numRemoteLogMetadataPartitions(), new Properties());
         readReplicaSelectorClass()
-                .ifPresent(c -> overridingProps.put(KafkaConfig.ReplicaSelectorClassProp(), c.getName()));
+                .ifPresent(c -> overridingProps.put(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG, c.getName()));
         return overridingProps;
     }
 
