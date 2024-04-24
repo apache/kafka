@@ -46,8 +46,9 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerLogConfigs, QuotaConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KafkaSecurityConfigs, QuotaConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
+import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -61,7 +62,7 @@ import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.jdk.CollectionConverters._
-import scala.util.Random
+import scala.util.{Random, Using}
 
 /**
  * An integration test of the KafkaAdminClient.
@@ -1356,10 +1357,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // Increase timeouts to avoid having a rebalance during the test
       newConsumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Integer.MAX_VALUE.toString)
       newConsumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT.toString)
-      val consumer = createConsumer(configOverrides = newConsumerConfig)
 
-      try {
-        TestUtils.subscribeAndWaitForRecords(testTopicName, consumer)
+      Using(createConsumer(configOverrides = newConsumerConfig)) { consumer =>
+        consumer.subscribe(Collections.singletonList(testTopicName))
+        val records = consumer.poll(JDuration.ofMillis(DEFAULT_MAX_WAIT_MS))
+        assertNotEquals(0, records.count)
         consumer.commitSync()
 
         // Test offset deletion while consuming
@@ -1380,9 +1382,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           classOf[GroupIdNotFoundException])
         assertFutureExceptionTypeEquals(fakeDeleteResult.partitionResult(tp2),
           classOf[GroupIdNotFoundException])
-
-      } finally {
-        Utils.closeQuietly(consumer, "consumer")
       }
 
       // Test offset deletion when group is empty
