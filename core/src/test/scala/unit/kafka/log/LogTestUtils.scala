@@ -56,7 +56,9 @@ object LogTestUtils {
   def createLogConfig(segmentMs: Long = LogConfig.DEFAULT_SEGMENT_MS,
                       segmentBytes: Int = LogConfig.DEFAULT_SEGMENT_BYTES,
                       retentionMs: Long = LogConfig.DEFAULT_RETENTION_MS,
+                      localRetentionMs: Long = LogConfig.DEFAULT_LOCAL_RETENTION_MS,
                       retentionBytes: Long = LogConfig.DEFAULT_RETENTION_BYTES,
+                      localRetentionBytes: Long = LogConfig.DEFAULT_LOCAL_RETENTION_BYTES,
                       segmentJitterMs: Long = LogConfig.DEFAULT_SEGMENT_JITTER_MS,
                       cleanupPolicy: String = LogConfig.DEFAULT_CLEANUP_POLICY,
                       maxMessageBytes: Int = LogConfig.DEFAULT_MAX_MESSAGE_BYTES,
@@ -68,7 +70,9 @@ object LogTestUtils {
     logProps.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs: java.lang.Long)
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentBytes: Integer)
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs: java.lang.Long)
+    logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs: java.lang.Long)
     logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes: java.lang.Long)
+    logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes: java.lang.Long)
     logProps.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, segmentJitterMs: java.lang.Long)
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanupPolicy)
     logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes: Integer)
