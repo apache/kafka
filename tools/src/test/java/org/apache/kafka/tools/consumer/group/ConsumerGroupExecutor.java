@@ -17,6 +17,9 @@
 
 package org.apache.kafka.tools.consumer.group;
 
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.clients.consumer.RangeAssignor;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -31,13 +34,13 @@ public class ConsumerGroupExecutor implements AutoCloseable {
     final ExecutorService executor;
     final List<ConsumerRunnable> consumers = new ArrayList<>();
 
-    public ConsumerGroupExecutor(
+    private ConsumerGroupExecutor(
             String broker,
             int numConsumers,
             String groupId,
             String groupProtocol,
             String topic,
-            String strategy,
+            String assignmentStrategy,
             Optional<String> remoteAssignor,
             Optional<Properties> customPropsOpt,
             boolean syncCommit
@@ -50,7 +53,7 @@ public class ConsumerGroupExecutor implements AutoCloseable {
                     groupId,
                     groupProtocol,
                     topic,
-                    strategy,
+                    assignmentStrategy,
                     remoteAssignor,
                     customPropsOpt,
                     syncCommit
@@ -58,6 +61,47 @@ public class ConsumerGroupExecutor implements AutoCloseable {
             th.configure();
             submit(th);
         });
+    }
+
+    public static ConsumerGroupExecutor buildConsumerGroup(String broker,
+                                                           int numConsumers,
+                                                           String groupId,
+                                                           String topic,
+                                                           String groupProtocol,
+                                                           Optional<String> remoteAssignor,
+                                                           Optional<Properties> customPropsOpt,
+                                                           boolean syncCommit) {
+        return new ConsumerGroupExecutor(
+                broker,
+                numConsumers,
+                groupId,
+                groupProtocol,
+                topic,
+                RangeAssignor.class.getName(),
+                remoteAssignor,
+                customPropsOpt,
+                syncCommit
+        );
+    }
+
+    public static ConsumerGroupExecutor buildClassicGroup(String broker,
+                                                          int numConsumers,
+                                                          String groupId,
+                                                          String topic,
+                                                          String assignmentStrategy,
+                                                          Optional<Properties> customPropsOpt,
+                                                          boolean syncCommit) {
+        return new ConsumerGroupExecutor(
+                broker,
+                numConsumers,
+                groupId,
+                GroupProtocol.CLASSIC.name,
+                topic,
+                assignmentStrategy,
+                Optional.empty(),
+                customPropsOpt,
+                syncCommit
+        );
     }
 
     void submit(ConsumerRunnable consumerThread) {

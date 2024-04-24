@@ -261,15 +261,28 @@ public class DeleteConsumerGroupsTest {
     }
 
     private ConsumerGroupExecutor buildConsumerGroupExecutor(String group, GroupProtocol protocol) {
-        return new ConsumerGroupExecutor(cluster.bootstrapServers(),
-                1,
-                null != group ? group : GROUP,
-                null != protocol ? protocol.name : null,
-                TOPIC,
-                RangeAssignor.class.getName(),
-                Optional.empty(),
-                Optional.empty(),
-                false);
+        if (cluster.isKRaftTest()) {
+            return ConsumerGroupExecutor.buildConsumerGroup(
+                    cluster.bootstrapServers(),
+                    1,
+                    null != group ? group : GROUP,
+                    TOPIC,
+                    protocol.name,
+                    Optional.empty(),
+                    Optional.empty(),
+                    false
+            );
+        } else {
+            return ConsumerGroupExecutor.buildClassicGroup(
+                    cluster.bootstrapServers(),
+                    1,
+                    null != group ? group : GROUP,
+                    TOPIC,
+                    RangeAssignor.class.getName(),
+                    Optional.empty(),
+                    false
+            );
+        }
     }
 
     private Predicate<String> predicateGroupState(ConsumerGroupCommand.ConsumerGroupService service, ConsumerGroupState state) {

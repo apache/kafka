@@ -38,11 +38,10 @@ public class ConsumerRunnable implements Runnable {
     final boolean syncCommit;
     final String topic;
     final String groupProtocol;
-    final String strategy;
+    final String assignmentStrategy;
     final Optional<String> remoteAssignor;
-    volatile boolean isShutdown = false;
-
     final Properties props = new Properties();
+    volatile boolean isShutdown = false;
     KafkaConsumer<String, String> consumer;
 
     boolean configured = false;
@@ -51,7 +50,7 @@ public class ConsumerRunnable implements Runnable {
                             String groupId,
                             String groupProtocol,
                             String topic,
-                            String strategy,
+                            String assignmentStrategy,
                             Optional<String> remoteAssignor,
                             Optional<Properties> customPropsOpt,
                             boolean syncCommit) {
@@ -62,7 +61,7 @@ public class ConsumerRunnable implements Runnable {
 
         this.topic = topic;
         this.groupProtocol = groupProtocol;
-        this.strategy = strategy;
+        this.assignmentStrategy = assignmentStrategy;
         this.remoteAssignor = remoteAssignor;
     }
 
@@ -82,7 +81,7 @@ public class ConsumerRunnable implements Runnable {
         if (Objects.equals(groupProtocol, CONSUMER.toString())) {
             remoteAssignor.ifPresent(assignor -> props.put(GROUP_REMOTE_ASSIGNOR_CONFIG, assignor));
         } else {
-            props.put("partition.assignment.strategy", strategy);
+            props.put("partition.assignment.strategy", assignmentStrategy);
         }
     }
 
@@ -112,4 +111,3 @@ public class ConsumerRunnable implements Runnable {
         consumer.wakeup();
     }
 }
-
