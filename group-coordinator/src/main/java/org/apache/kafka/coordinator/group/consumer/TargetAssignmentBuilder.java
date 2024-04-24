@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupSubscriptionModel;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -119,7 +120,7 @@ public class TargetAssignmentBuilder {
     /**
      * The subscription model followed by the group.
      */
-    private AssignmentSpec.ConsumerGroupSubscriptionModel groupSubscriptionModel;
+    private ConsumerGroupSubscriptionModel groupSubscriptionModel;
 
     /**
      * The existing target assignment.
@@ -196,12 +197,12 @@ public class TargetAssignmentBuilder {
     /**
      * Adds the subscription model in use.
      *
-     * @param groupSubscriptionModel  The flag that depicts whether the subscription
-     *                                   model is homogeneous for the group.
+     * @param groupSubscriptionModel  The value that depicts what the subscription
+     *                                model is for the group.
      * @return This object.
      */
     public TargetAssignmentBuilder withSubscriptionModel(
-        AssignmentSpec.ConsumerGroupSubscriptionModel groupSubscriptionModel
+        ConsumerGroupSubscriptionModel groupSubscriptionModel
     ) {
         this.groupSubscriptionModel = groupSubscriptionModel;
         return this;

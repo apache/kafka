@@ -33,7 +33,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assertAssign
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
-import static org.apache.kafka.coordinator.group.assignor.AssignmentSpec.ConsumerGroupSubscriptionModel.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.ConsumerGroupSubscriptionModel.HETEROGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -50,7 +50,7 @@ public class GeneralUniformAssignmentBuilderTest {
     private final String memberA = "A";
     private final String memberB = "B";
     private final String memberC = "C";
-    private final AssignmentSpec.ConsumerGroupSubscriptionModel groupSubscriptionModel = HETEROGENEOUS;
+    private final ConsumerGroupSubscriptionModel groupSubscriptionModel = HETEROGENEOUS;
 
     @Test
     public void testTwoMembersNoTopicSubscription() {

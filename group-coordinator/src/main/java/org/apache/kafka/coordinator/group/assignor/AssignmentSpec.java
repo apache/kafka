@@ -24,31 +24,13 @@ import java.util.Objects;
  */
 public class AssignmentSpec {
 
-    public enum ConsumerGroupSubscriptionModel {
-        HOMOGENEOUS("Homogeneous"),
-        HETEROGENEOUS("Heterogeneous");
-        private final String name;
-
-        ConsumerGroupSubscriptionModel(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-    }
-
     /**
      * The member metadata keyed by member Id.
      */
     private final Map<String, AssignmentMemberSpec> members;
 
     /**
-     * Is the subscription model followed by the group homogeneous.
-     *
-     * A homogeneous subscription model means that all the members
-     * of the group are subscribed to the same set of topics.
+     * The subscription model followed by the group.
      */
     private final ConsumerGroupSubscriptionModel groupSubscriptionModel;
 

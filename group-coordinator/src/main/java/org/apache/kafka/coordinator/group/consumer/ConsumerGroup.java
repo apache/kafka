@@ -31,7 +31,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
-import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupSubscriptionModel;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.ClusterImage;
@@ -53,8 +53,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.assignor.AssignmentSpec.ConsumerGroupSubscriptionModel.HETEROGENEOUS;
-import static org.apache.kafka.coordinator.group.assignor.AssignmentSpec.ConsumerGroupSubscriptionModel.HOMOGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.ConsumerGroupSubscriptionModel.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.ConsumerGroupSubscriptionModel.HOMOGENEOUS;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.RECONCILING;
@@ -152,14 +152,10 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
 
     /**
-     * The consumer group's subscription model.
-     *
-     * Homogeneous means all the members of the consumer group are subscribed to the same
-     * set of topics. It is heterogeneous otherwise.
-     *
-     * Homogeneous by default.
+     * The consumer groups' subscription model.
+     * This value is set to Homogeneous by default.
      */
-    private final TimelineObject<AssignmentSpec.ConsumerGroupSubscriptionModel> groupSubscriptionModel;
+    private final TimelineObject<ConsumerGroupSubscriptionModel> groupSubscriptionModel;
 
     /**
      * The target assignment epoch. An assignment epoch smaller than the group epoch
@@ -502,9 +498,9 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return True is the subscription model is homogeneous, false otherwise.
+     * @return The groups' subscription model.
      */
-    public AssignmentSpec.ConsumerGroupSubscriptionModel groupSubscriptionModel() { return groupSubscriptionModel.get(); }
+    public ConsumerGroupSubscriptionModel groupSubscriptionModel() { return groupSubscriptionModel.get(); }
 
     /**
      * Returns the target assignment of the member.

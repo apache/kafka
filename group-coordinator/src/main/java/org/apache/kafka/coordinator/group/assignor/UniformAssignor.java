@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 
-import static org.apache.kafka.coordinator.group.assignor.AssignmentSpec.ConsumerGroupSubscriptionModel.HOMOGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.ConsumerGroupSubscriptionModel.HOMOGENEOUS;
 
 /**
  * The Uniform Assignor distributes topic partitions among group members for a
