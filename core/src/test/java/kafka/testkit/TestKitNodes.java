@@ -25,9 +25,12 @@ import org.apache.kafka.test.TestUtils;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Objects;
-import java.util.function.Function;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -100,23 +103,36 @@ public class TestKitNodes {
                 clusterId = Uuid.randomUuid();
             }
 
-            Map<Integer, ControllerNode> controllerNodes = IntStream.range(startControllerId(), startControllerId() + numControllerNodes)
-                .boxed().collect(Collectors.toMap(Function.identity(), id -> ControllerNode.builder()
+            List<Integer> controllerNodeIds = IntStream.range(startControllerId(), startControllerId() + numControllerNodes)
+                .boxed()
+                .collect(Collectors.toList());
+            List<Integer> brokerNodeIds = IntStream.range(startBrokerId(), startBrokerId() + numBrokerNodes)
+                .boxed()
+                .collect(Collectors.toList());
+
+            TreeMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
+            for (int id : controllerNodeIds) {
+                ControllerNode controllerNode = ControllerNode.builder()
                     .setId(id)
                     .setBaseDirectory(baseDirectory)
                     .setClusterId(clusterId)
-                    .setCombined(combined)
-                    .build()));
+                    .setCombined(brokerNodeIds.contains(id))
+                    .build();
+                controllerNodes.put(id, controllerNode);
+            }
 
-            Map<Integer, BrokerNode> brokerNodes = IntStream.range(startBrokerId(), startBrokerId() + numBrokerNodes)
-                .boxed().collect(Collectors.toMap(Function.identity(), id -> BrokerNode.builder()
+            TreeMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
+            for (int id : brokerNodeIds) {
+                BrokerNode brokerNode = BrokerNode.builder()
                     .setId(id)
                     .setNumLogDirectories(numDisksPerBroker)
                     .setBaseDirectory(baseDirectory)
                     .setClusterId(clusterId)
-                    .setCombined(combined)
+                    .setCombined(controllerNodeIds.contains(id))
                     .setPropertyOverrides(perBrokerProperties.getOrDefault(id, Collections.emptyMap()))
-                    .build()));
+                    .build();
+                brokerNodes.put(id, brokerNode);
+            }
 
             return new TestKitNodes(baseDirectory,
                 clusterId,
@@ -140,21 +156,21 @@ public class TestKitNodes {
     private final String baseDirectory;
     private final Uuid clusterId;
     private final BootstrapMetadata bootstrapMetadata;
-    private final Map<Integer, ControllerNode> controllerNodes;
-    private final Map<Integer, BrokerNode> brokerNodes;
+    private final SortedMap<Integer, ControllerNode> controllerNodes;
+    private final SortedMap<Integer, BrokerNode> brokerNodes;
 
     private TestKitNodes(
         String baseDirectory,
         Uuid clusterId,
         BootstrapMetadata bootstrapMetadata,
-        Map<Integer, ControllerNode> controllerNodes,
-        Map<Integer, BrokerNode> brokerNodes
+        SortedMap<Integer, ControllerNode> controllerNodes,
+        SortedMap<Integer, BrokerNode> brokerNodes
     ) {
         this.baseDirectory = Objects.requireNonNull(baseDirectory);
         this.clusterId = Objects.requireNonNull(clusterId);
         this.bootstrapMetadata = Objects.requireNonNull(bootstrapMetadata);
-        this.controllerNodes = Collections.unmodifiableMap(Objects.requireNonNull(controllerNodes));
-        this.brokerNodes = Collections.unmodifiableMap(Objects.requireNonNull(brokerNodes));
+        this.controllerNodes = Collections.unmodifiableSortedMap(Objects.requireNonNull(controllerNodes));
+        this.brokerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(brokerNodes)));
     }
 
     public boolean isCombined(int node) {
@@ -169,7 +185,7 @@ public class TestKitNodes {
         return clusterId;
     }
 
-    public Map<Integer, ControllerNode> controllerNodes() {
+    public SortedMap<Integer, ControllerNode> controllerNodes() {
         return controllerNodes;
     }
 
@@ -177,7 +193,7 @@ public class TestKitNodes {
         return bootstrapMetadata;
     }
 
-    public Map<Integer, BrokerNode> brokerNodes() {
+    public SortedMap<Integer, BrokerNode> brokerNodes() {
         return brokerNodes;
     }
 
