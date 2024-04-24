@@ -604,12 +604,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val transactionV2Requested = produceRequest.isTransactionV2Requested
-    if (!metadataCache.metadataVersion().isTransactionV2Enabled && transactionV2Requested) {
-      requestHelper.sendErrorResponseMaybeThrottle(request, Errors.UNSUPPORTED_VERSION.exception)
-      return
-    }
-
     val unauthorizedTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val nonExistingTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val invalidRequestResponses = mutable.Map[TopicPartition, PartitionResponse]()
@@ -2720,10 +2714,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, txnOffsetCommitRequest.data.groupId)) {
       sendResponse(txnOffsetCommitRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
-      CompletableFuture.completedFuture[Unit](())
-    } else if (!metadataCache.metadataVersion().isTransactionV2Enabled && txnOffsetCommitRequest.isTransactionV2Requested) {
-      // If the client requests to use transaction V2 but server side does not supports it, return unsupported version.
-      sendResponse(txnOffsetCommitRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
       val authorizedTopics = authHelper.filterByAuthorized(
