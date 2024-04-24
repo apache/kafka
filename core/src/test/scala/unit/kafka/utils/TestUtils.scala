@@ -73,11 +73,11 @@ import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.metadata.properties.MetaProperties
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs, QuotaConfigs, ZkConfigs}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.server.util.timer.SystemTimer
@@ -336,14 +336,14 @@ object TestUtils extends Logging {
       props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
       props.put(KafkaConfig.NodeIdProp, nodeId.toString)
       props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
-      props.put(KafkaConfig.AdvertisedListenersProp, listeners)
-      props.put(KafkaConfig.ListenersProp, listeners)
+      props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, listeners)
+      props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners)
       props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      props.put(KafkaConfig.ListenerSecurityProtocolMapProp, protocolAndPorts.
+      props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, protocolAndPorts.
         map(p => "%s:%s".format(p._1, p._1)).mkString(",") + ",CONTROLLER:PLAINTEXT")
     } else {
       if (nodeId >= 0) props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
-      props.put(KafkaConfig.ListenersProp, listeners)
+      props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners)
     }
     if (logDirCount > 1) {
       val logDirs = (1 to logDirCount).toList.map(i =>
@@ -2327,8 +2327,8 @@ object TestUtils extends Logging {
     */
   def throttleAllBrokersReplication(adminClient: Admin, brokerIds: Seq[Int], throttleBytes: Int): Unit = {
     val throttleConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttleBytes.toString), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttleBytes.toString), AlterConfigOp.OpType.SET)
+      new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttleBytes.toString), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, throttleBytes.toString), AlterConfigOp.OpType.SET)
     ).asJavaCollection
 
     adminClient.incrementalAlterConfigs(
@@ -2345,8 +2345,8 @@ object TestUtils extends Logging {
     val throttles = allReplicasByPartition.groupBy(_._1.topic()).map {
       case (topic, replicasByPartition) =>
         new ConfigResource(TOPIC, topic) -> Seq(
-          new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET),
-          new AlterConfigOp(new ConfigEntry(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET)
+          new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET),
+          new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET)
         ).asJavaCollection
     }
     adminClient.incrementalAlterConfigs(throttles.asJava).all().get()
@@ -2356,8 +2356,8 @@ object TestUtils extends Logging {
     val throttles = partitions.map {
       tp =>
         new ConfigResource(TOPIC, tp.topic()) -> Seq(
-          new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), AlterConfigOp.OpType.DELETE),
-          new AlterConfigOp(new ConfigEntry(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), AlterConfigOp.OpType.DELETE)
+          new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), AlterConfigOp.OpType.DELETE),
+          new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), AlterConfigOp.OpType.DELETE)
         ).asJavaCollection
     }.toMap
     adminClient.incrementalAlterConfigs(throttles.asJava).all().get()

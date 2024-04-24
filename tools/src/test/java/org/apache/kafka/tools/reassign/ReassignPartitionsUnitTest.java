@@ -31,6 +31,8 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
+import org.apache.kafka.server.config.QuotaConfigs;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -50,11 +52,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_FOLLOWER_THROTTLE;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_LEADER_THROTTLE;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_LOG_DIR_THROTTLE;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.TOPIC_LEVEL_FOLLOWER_THROTTLE;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.TOPIC_LEVEL_LEADER_THROTTLE;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.alterPartitionReassignments;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.alterReplicaLogDirs;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.calculateFollowerThrottles;
@@ -692,13 +689,13 @@ public class ReassignPartitionsUnitTest {
         config.entries().forEach(entry -> configs.put(entry.name(), entry.value()));
         if (expectedInterBrokerThrottle >= 0) {
             assertEquals(Long.toString(expectedInterBrokerThrottle),
-                configs.getOrDefault(BROKER_LEVEL_LEADER_THROTTLE, ""));
+                configs.getOrDefault(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, ""));
             assertEquals(Long.toString(expectedInterBrokerThrottle),
-                configs.getOrDefault(BROKER_LEVEL_FOLLOWER_THROTTLE, ""));
+                configs.getOrDefault(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, ""));
         }
         if (expectedReplicaAlterLogDirsThrottle >= 0) {
             assertEquals(Long.toString(expectedReplicaAlterLogDirsThrottle),
-                configs.getOrDefault(BROKER_LEVEL_LOG_DIR_THROTTLE, ""));
+                configs.getOrDefault(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, ""));
         }
     }
 
@@ -729,9 +726,9 @@ public class ReassignPartitionsUnitTest {
         Map<String, String> configs = new HashMap<>();
         config.entries().forEach(entry -> configs.put(entry.name(), entry.value()));
         assertEquals(expectedLeaderThrottle,
-            configs.getOrDefault(TOPIC_LEVEL_LEADER_THROTTLE, ""));
+            configs.getOrDefault(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""));
         assertEquals(expectedFollowerThrottle,
-            configs.getOrDefault(TOPIC_LEVEL_FOLLOWER_THROTTLE, ""));
+            configs.getOrDefault(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""));
     }
 
     @Test
