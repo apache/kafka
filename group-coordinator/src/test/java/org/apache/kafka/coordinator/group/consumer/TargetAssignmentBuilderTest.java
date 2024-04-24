@@ -39,6 +39,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssig
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
+import static org.apache.kafka.coordinator.group.assignor.AssignmentSpec.ConsumerGroupSubscriptionModel.HOMOGENEOUS;
 import static org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder.createAssignmentMemberSpec;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -197,10 +198,10 @@ public class TargetAssignmentBuilderTest {
 
             // Prepare the expected subscription topic metadata.
             SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadataMap);
-            boolean isSubscriptionHomogeneous = true;
+            AssignmentSpec.ConsumerGroupSubscriptionModel groupSubscriptionModel = HOMOGENEOUS;
 
             // Prepare the expected assignment spec.
-            AssignmentSpec assignmentSpec = new AssignmentSpec(memberSpecs, isSubscriptionHomogeneous);
+            AssignmentSpec assignmentSpec = new AssignmentSpec(memberSpecs, groupSubscriptionModel);
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.
@@ -212,7 +213,7 @@ public class TargetAssignmentBuilderTest {
                 .withMembers(members)
                 .withStaticMembers(staticMembers)
                 .withSubscriptionMetadata(subscriptionMetadata)
-                .withSubscriptionModel(isSubscriptionHomogeneous)
+                .withSubscriptionModel(groupSubscriptionModel)
                 .withTargetAssignment(targetAssignment);
 
             // Add the updated members or delete the deleted members.

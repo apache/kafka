@@ -23,6 +23,22 @@ import java.util.Objects;
  * The assignment specification for a consumer group.
  */
 public class AssignmentSpec {
+
+    public enum ConsumerGroupSubscriptionModel {
+        HOMOGENEOUS("Homogeneous"),
+        HETEROGENEOUS("Heterogeneous");
+        private final String name;
+
+        ConsumerGroupSubscriptionModel(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String toString() {
+            return name;
+        }
+    }
+
     /**
      * The member metadata keyed by member Id.
      */
@@ -34,15 +50,15 @@ public class AssignmentSpec {
      * A homogeneous subscription model means that all the members
      * of the group are subscribed to the same set of topics.
      */
-    private final boolean isSubscriptionHomogeneous;
+    private final ConsumerGroupSubscriptionModel groupSubscriptionModel;
 
     public AssignmentSpec(
         Map<String, AssignmentMemberSpec> members,
-        boolean isSubscriptionHomogeneous
+        ConsumerGroupSubscriptionModel groupSubscriptionModel
     ) {
         Objects.requireNonNull(members);
         this.members = members;
-        this.isSubscriptionHomogeneous = isSubscriptionHomogeneous;
+        this.groupSubscriptionModel = groupSubscriptionModel;
     }
 
     /**
@@ -56,8 +72,8 @@ public class AssignmentSpec {
      * @return True if the subscription model is homogeneous,
      *         False otherwise.
      */
-    public boolean isSubscriptionHomogeneous() {
-        return isSubscriptionHomogeneous;
+    public ConsumerGroupSubscriptionModel groupSubscriptionModel() {
+        return groupSubscriptionModel;
     }
 
     @Override
@@ -65,16 +81,16 @@ public class AssignmentSpec {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         AssignmentSpec that = (AssignmentSpec) o;
-        return isSubscriptionHomogeneous == that.isSubscriptionHomogeneous &&
+        return groupSubscriptionModel == that.groupSubscriptionModel &&
             members.equals(that.members);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(members, isSubscriptionHomogeneous);
+        return Objects.hash(members, groupSubscriptionModel);
     }
 
     public String toString() {
-        return "AssignmentSpec(members=" + members + ", isSubscriptionHomogeneous=" + isSubscriptionHomogeneous + ')';
+        return "AssignmentSpec(members=" + members + ", groupSubscriptionModel=" + groupSubscriptionModel.toString() + ')';
     }
 }

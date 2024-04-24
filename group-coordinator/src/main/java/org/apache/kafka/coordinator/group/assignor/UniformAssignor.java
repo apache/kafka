@@ -21,6 +21,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 
+import static org.apache.kafka.coordinator.group.assignor.AssignmentSpec.ConsumerGroupSubscriptionModel.HOMOGENEOUS;
+
 /**
  * The Uniform Assignor distributes topic partitions among group members for a
  * balanced and potentially rack aware assignment.
@@ -69,7 +71,7 @@ public class UniformAssignor implements PartitionAssignor {
         if (assignmentSpec.members().isEmpty())
             return new GroupAssignment(Collections.emptyMap());
 
-        if (assignmentSpec.isSubscriptionHomogeneous()) {
+        if (assignmentSpec.groupSubscriptionModel().equals(HOMOGENEOUS)) {
             LOG.debug("Detected that all members are subscribed to the same set of topics, invoking the "
                 + "optimized assignment algorithm");
             assignmentBuilder = new OptimizedUniformAssignmentBuilder(assignmentSpec, subscribedTopicDescriber);

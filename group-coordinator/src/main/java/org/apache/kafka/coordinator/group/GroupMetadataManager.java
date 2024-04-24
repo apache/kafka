@@ -1355,7 +1355,7 @@ public class GroupMetadataManager {
                         .withMembers(group.members())
                         .withStaticMembers(group.staticMembers())
                         .withSubscriptionMetadata(subscriptionMetadata)
-                        .withSubscriptionModel(group.isSubscriptionHomogeneous())
+                        .withSubscriptionModel(group.groupSubscriptionModel())
                         .withTargetAssignment(group.targetAssignment())
                         .addOrUpdateMember(memberId, updatedMember);
                 TargetAssignmentBuilder.TargetAssignmentResult assignmentResult;

@@ -31,6 +31,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.ClusterImage;
@@ -52,6 +53,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.assignor.AssignmentSpec.ConsumerGroupSubscriptionModel.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.AssignmentSpec.ConsumerGroupSubscriptionModel.HOMOGENEOUS;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.RECONCILING;
@@ -149,14 +152,14 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
 
     /**
-     * Keeps track of the consumer group's subscription model.
+     * The consumer group's subscription model.
      *
      * Homogeneous means all the members of the consumer group are subscribed to the same
      * set of topics. It is heterogeneous otherwise.
      *
-     * It is true by default when the group is initialized.
+     * Homogeneous by default.
      */
-    private final TimelineObject<Boolean> isSubscriptionHomogeneous;
+    private final TimelineObject<AssignmentSpec.ConsumerGroupSubscriptionModel> groupSubscriptionModel;
 
     /**
      * The target assignment epoch. An assignment epoch smaller than the group epoch
@@ -218,7 +221,7 @@ public class ConsumerGroup implements Group {
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.isSubscriptionHomogeneous = new TimelineObject<>(snapshotRegistry, true);
+        this.groupSubscriptionModel = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -501,7 +504,7 @@ public class ConsumerGroup implements Group {
     /**
      * @return True is the subscription model is homogeneous, false otherwise.
      */
-    public boolean isSubscriptionHomogeneous() { return isSubscriptionHomogeneous.get(); }
+    public AssignmentSpec.ConsumerGroupSubscriptionModel groupSubscriptionModel() { return groupSubscriptionModel.get(); }
 
     /**
      * Returns the target assignment of the member.
@@ -1002,7 +1005,11 @@ public class ConsumerGroup implements Group {
             }
         }
 
-        this.isSubscriptionHomogeneous.set(isSubscriptionHomogeneous);
+        if (isSubscriptionHomogeneous) {
+            this.groupSubscriptionModel.set(HOMOGENEOUS);
+        } else {
+            this.groupSubscriptionModel.set(HETEROGENEOUS);
+        }
     }
 
     /**

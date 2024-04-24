@@ -119,7 +119,7 @@ public class TargetAssignmentBuilder {
     /**
      * The subscription model followed by the group.
      */
-    private boolean isSubscriptionHomogeneous;
+    private AssignmentSpec.ConsumerGroupSubscriptionModel groupSubscriptionModel;
 
     /**
      * The existing target assignment.
@@ -196,14 +196,14 @@ public class TargetAssignmentBuilder {
     /**
      * Adds the subscription model in use.
      *
-     * @param isSubscriptionHomogeneous  The flag that depicts whether the subscription
+     * @param groupSubscriptionModel  The flag that depicts whether the subscription
      *                                   model is homogeneous for the group.
      * @return This object.
      */
     public TargetAssignmentBuilder withSubscriptionModel(
-        boolean isSubscriptionHomogeneous
+        AssignmentSpec.ConsumerGroupSubscriptionModel groupSubscriptionModel
     ) {
-        this.isSubscriptionHomogeneous = isSubscriptionHomogeneous;
+        this.groupSubscriptionModel = groupSubscriptionModel;
         return this;
     }
 
@@ -300,7 +300,7 @@ public class TargetAssignmentBuilder {
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
-            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs), isSubscriptionHomogeneous),
+            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs), groupSubscriptionModel),
             new SubscribedTopicMetadata(topicMetadataMap)
         );
 

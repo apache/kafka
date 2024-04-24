@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static java.lang.Math.min;
+import static org.apache.kafka.coordinator.group.assignor.AssignmentSpec.ConsumerGroupSubscriptionModel.HOMOGENEOUS;
 
 /**
  * This Range Assignor inherits properties of both the range assignor and the sticky assignor.
@@ -91,7 +92,7 @@ public class RangeAssignor implements PartitionAssignor {
 
         Map<String, AssignmentMemberSpec> membersData = assignmentSpec.members();
 
-        if (assignmentSpec.isSubscriptionHomogeneous()) {
+        if (assignmentSpec.groupSubscriptionModel().equals(HOMOGENEOUS)) {
             List<String> allMembers = new ArrayList<>(membersData.keySet());
             Collection<Uuid> topics = membersData.values().iterator().next().subscribedTopicIds();
 
