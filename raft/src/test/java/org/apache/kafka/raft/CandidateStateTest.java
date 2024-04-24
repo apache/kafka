@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -34,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CandidateStateTest {
     private final int localId = 0;
+    private final Uuid localUuid = Uuid.randomUuid();
     private final int epoch = 5;
     private final MockTime time = new MockTime();
     private final int electionTimeoutMs = 5000;
@@ -46,6 +48,7 @@ public class CandidateStateTest {
         return new CandidateState(
                 time,
                 localId,
+                localUuid,
                 epoch,
                 voters,
                 highWatermark,

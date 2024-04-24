@@ -21,7 +21,6 @@ import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.OptionalInt
-import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import java.util.{Map => JMap}
 import kafka.log.LogManager
@@ -139,6 +138,7 @@ trait RaftManager[T] {
 class KafkaRaftManager[T](
   clusterId: String,
   config: KafkaConfig,
+  metadataLogDirUuid: Uuid,
   recordSerde: RecordSerde[T],
   topicPartition: TopicPartition,
   topicId: Uuid,
@@ -219,7 +219,7 @@ class KafkaRaftManager[T](
   private def buildRaftClient(): KafkaRaftClient[T] = {
     val client = new KafkaRaftClient(
       OptionalInt.of(config.nodeId),
-      Optional.empty(), // TODO: this should be the directory uuid for the metadata.log.dir
+      metadataLogDirUuid,
       recordSerde,
       netChannel,
       replicatedLog,

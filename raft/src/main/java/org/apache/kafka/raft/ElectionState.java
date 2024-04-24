@@ -30,6 +30,7 @@ final public class ElectionState {
     private final OptionalInt leaderId;
     private final OptionalInt votedId;
     private final Optional<Uuid> votedUuid;
+    // This is deprecated. It is only used when writing version 0 of the quorum state file
     private final Set<Integer> voters;
 
     ElectionState(
@@ -56,10 +57,19 @@ final public class ElectionState {
         return leaderIdOrSentinel() == nodeId;
     }
 
-    public boolean isVotedCandidate(int nodeId) {
-        if (nodeId < 0)
+    // TODO: test this method
+    public boolean isVotedCandidate(int nodeId, Optional<Uuid> nodeUuid) {
+        if (nodeId < 0) {
             throw new IllegalArgumentException("Invalid negative nodeId: " + nodeId);
-        return votedId.orElse(-1) == nodeId;
+        } else if (votedId.orElse(-1) != nodeId) {
+            return false;
+        } else if (!votedUuid.isPresent()) {
+            // when the persisted voted uuid is not present assume that we voted for this candidate;
+            // this happends when the kraft version is 0.
+            return true;
+        }
+
+        return votedUuid.equals(nodeUuid);
     }
 
     public int leaderId() {
@@ -80,6 +90,10 @@ final public class ElectionState {
         if (!votedId.isPresent())
             throw new IllegalStateException("Attempt to access nil votedId");
         return votedId.getAsInt();
+    }
+
+    public OptionalInt optionalVotedId() {
+        return votedId;
     }
 
     public Optional<Uuid> votedUuid() {
@@ -124,7 +138,7 @@ final public class ElectionState {
         if (!votedId.equals(that.votedId)) return false;
         if (!votedUuid.equals(that.votedUuid)) return false;
 
-        return !voters.equals(that.voters);
+        return voters.equals(that.voters);
     }
 
     @Override

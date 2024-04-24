@@ -29,7 +29,7 @@ import org.slf4j.Logger;
 
 public class CandidateState implements EpochState {
     private final int localId;
-    private final Optional<Uuid> localUuid;
+    private final Uuid localUuid;
     private final int epoch;
     private final int retries;
     private final Map<Integer, State> voteStates = new HashMap<>();
@@ -52,7 +52,7 @@ public class CandidateState implements EpochState {
     protected CandidateState(
         Time time,
         int localId,
-        Optional<Uuid> localUuid,
+        Uuid localUuid,
         int epoch,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
@@ -230,7 +230,12 @@ public class CandidateState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withVotedCandidate(epoch, localId, localUuid, voteStates.keySet());
+        return ElectionState.withVotedCandidate(
+            epoch,
+            localId,
+            Optional.of(localUuid),
+            voteStates.keySet()
+        );
     }
 
     @Override

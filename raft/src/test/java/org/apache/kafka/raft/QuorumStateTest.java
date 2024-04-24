@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.VoterSetTest;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -37,14 +39,18 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+// TODO: Add tests for kraft.version 1
+// TODO: add test for votedUuid
 public class QuorumStateTest {
     private final int localId = 0;
+    private final Uuid localUuid = Uuid.randomUuid();
     private final int logEndEpoch = 0;
     private final MockQuorumStateStore store = new MockQuorumStateStore();
     private final MockTime time = new MockTime();
     private final int electionTimeoutMs = 5000;
     private final int fetchTimeoutMs = 10000;
     private final MockableRandom random = new MockableRandom(1L);
+    private final short kraftVersion = 0;
 
     private BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
 
@@ -58,7 +64,9 @@ public class QuorumStateTest {
     ) {
         return new QuorumState(
             localId,
-            voters,
+            localUuid,
+            () -> VoterSetTest.voterSet(VoterSetTest.voterMap(voters, false)),
+            () -> kraftVersion,
             electionTimeoutMs,
             fetchTimeoutMs,
             store,
@@ -88,7 +96,7 @@ public class QuorumStateTest {
         int node2 = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
-        store.writeElectionState(ElectionState.withUnknownLeader(epoch, voters));
+        store.writeElectionState(ElectionState.withUnknownLeader(epoch, voters), kraftVersion);
 
         int jitterMs = 2500;
         random.mockNextInt(jitterMs);
@@ -109,7 +117,7 @@ public class QuorumStateTest {
         int node2 = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
-        store.writeElectionState(ElectionState.withElectedLeader(epoch, node1, voters));
+        store.writeElectionState(ElectionState.withElectedLeader(epoch, node1, voters), kraftVersion);
 
         QuorumState state = buildQuorumState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -128,7 +136,7 @@ public class QuorumStateTest {
         int node2 = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
-        store.writeElectionState(ElectionState.withVotedCandidate(epoch, node1, voters));
+        store.writeElectionState(ElectionState.withVotedCandidate(epoch, node1, Optional.empty(), voters), kraftVersion);
 
         int jitterMs = 2500;
         random.mockNextInt(jitterMs);
@@ -151,8 +159,8 @@ public class QuorumStateTest {
         int node2 = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
-        ElectionState election = ElectionState.withVotedCandidate(epoch, localId, voters);
-        store.writeElectionState(election);
+        ElectionState election = ElectionState.withVotedCandidate(epoch, localId, Optional.empty(), voters);
+        store.writeElectionState(election, kraftVersion);
 
         int jitterMs = 2500;
         random.mockNextInt(jitterMs);
@@ -164,12 +172,19 @@ public class QuorumStateTest {
 
         CandidateState candidateState = state.candidateStateOrThrow();
         assertEquals(epoch, candidateState.epoch());
-        assertEquals(election, candidateState.election());
+        // Even though the persisted value doesn't include the VotedUuid the deserialized value will
+        // include the localUuid when the local node is the candidate
+        assertEquals(
+            ElectionState.withVotedCandidate(epoch, localId, Optional.of(localUuid), voters),
+            candidateState.election()
+        );
         assertEquals(Utils.mkSet(node1, node2), candidateState.unrecordedVoters());
         assertEquals(Utils.mkSet(localId), candidateState.grantingVoters());
         assertEquals(Collections.emptySet(), candidateState.rejectingVoters());
-        assertEquals(electionTimeoutMs + jitterMs,
-            candidateState.remainingElectionTimeMs(time.milliseconds()));
+        assertEquals(
+            electionTimeoutMs + jitterMs,
+            candidateState.remainingElectionTimeMs(time.milliseconds())
+        );
     }
 
     @Test
@@ -179,7 +194,7 @@ public class QuorumStateTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
         ElectionState election = ElectionState.withElectedLeader(epoch, localId, voters);
-        store.writeElectionState(election);
+        store.writeElectionState(election, kraftVersion);
 
         // If we were previously a leader, we will start as resigned in order to ensure
         // a new leader gets elected. This ensures that records are always uniquely
@@ -273,7 +288,7 @@ public class QuorumStateTest {
         assertEquals(1, state.epoch());
 
         state.transitionToLeader(0L, accumulator);
-        LeaderState leaderState = state.leaderStateOrThrow();
+        LeaderState<?> leaderState = state.leaderStateOrThrow();
         assertTrue(state.isLeader());
         assertEquals(1, leaderState.epoch());
         assertEquals(Optional.empty(), leaderState.highWatermark());
@@ -330,13 +345,16 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToCandidate();
 
-        state.transitionToVoted(5, otherNodeId);
+        state.transitionToVoted(5, otherNodeId, Optional.empty());
         assertEquals(5, state.epoch());
         assertEquals(OptionalInt.empty(), state.leaderId());
 
         VotedState followerState = state.votedStateOrThrow();
         assertEquals(otherNodeId, followerState.votedId());
-        assertEquals(ElectionState.withVotedCandidate(5, otherNodeId, voters), store.readElectionState());
+        assertEquals(
+            ElectionState.withVotedCandidate(5, otherNodeId, Optional.empty(), voters),
+            store.readElectionState()
+        );
     }
 
     @Test
@@ -348,10 +366,10 @@ public class QuorumStateTest {
         state.transitionToUnattached(5);
         state.transitionToCandidate();
         assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4));
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(4, otherNodeId));
+        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(4, otherNodeId, Optional.empty()));
         assertThrows(IllegalStateException.class, () -> state.transitionToFollower(4, otherNodeId));
         assertEquals(6, state.epoch());
-        assertEquals(ElectionState.withVotedCandidate(6, localId, voters), store.readElectionState());
+        assertEquals(ElectionState.withVotedCandidate(6, localId, Optional.empty(), voters), store.readElectionState());
     }
 
     @Test
@@ -450,13 +468,13 @@ public class QuorumStateTest {
         state.transitionToCandidate();
         state.candidateStateOrThrow().recordGrantedVote(otherNodeId);
         state.transitionToLeader(0L, accumulator);
-        state.transitionToVoted(5, otherNodeId);
+        state.transitionToVoted(5, otherNodeId, Optional.empty());
 
         assertEquals(5, state.epoch());
         assertEquals(OptionalInt.empty(), state.leaderId());
         VotedState votedState = state.votedStateOrThrow();
         assertEquals(otherNodeId, votedState.votedId());
-        assertEquals(ElectionState.withVotedCandidate(5, otherNodeId, voters), store.readElectionState());
+        assertEquals(ElectionState.withVotedCandidate(5, otherNodeId, Optional.empty(), voters), store.readElectionState());
     }
 
     @Test
@@ -470,7 +488,7 @@ public class QuorumStateTest {
         state.candidateStateOrThrow().recordGrantedVote(otherNodeId);
         state.transitionToLeader(0L, accumulator);
         assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4));
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(4, otherNodeId));
+        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(4, otherNodeId, Optional.empty()));
         assertThrows(IllegalStateException.class, () -> state.transitionToFollower(4, otherNodeId));
         assertEquals(6, state.epoch());
         assertEquals(ElectionState.withElectedLeader(6, localId, voters), store.readElectionState());
@@ -483,7 +501,7 @@ public class QuorumStateTest {
         QuorumState state = initializeEmptyState(voters);
 
         assertThrows(IllegalStateException.class, () -> state.transitionToFollower(0, localId));
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(0, localId));
+        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(0, localId, Optional.empty()));
     }
 
     @Test
@@ -491,7 +509,7 @@ public class QuorumStateTest {
         int leaderId = 1;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
-        store.writeElectionState(ElectionState.withVotedCandidate(epoch, leaderId, voters));
+        store.writeElectionState(ElectionState.withVotedCandidate(epoch, leaderId, Optional.empty(), voters), kraftVersion);
         QuorumState state = initializeEmptyState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         assertTrue(state.isUnattached());
@@ -509,12 +527,12 @@ public class QuorumStateTest {
 
         int jitterMs = 2500;
         random.mockNextInt(electionTimeoutMs, jitterMs);
-        state.transitionToVoted(5, otherNodeId);
+        state.transitionToVoted(5, otherNodeId, Optional.empty());
 
         VotedState votedState = state.votedStateOrThrow();
         assertEquals(5, votedState.epoch());
         assertEquals(otherNodeId, votedState.votedId());
-        assertEquals(ElectionState.withVotedCandidate(5, otherNodeId, voters), store.readElectionState());
+        assertEquals(ElectionState.withVotedCandidate(5, otherNodeId, Optional.empty(), voters), store.readElectionState());
 
         // Verify election timeout is reset when we vote for a candidate
         assertEquals(electionTimeoutMs + jitterMs,
@@ -528,12 +546,12 @@ public class QuorumStateTest {
         QuorumState state = initializeEmptyState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToUnattached(5);
-        state.transitionToVoted(8, otherNodeId);
+        state.transitionToVoted(8, otherNodeId, Optional.empty());
 
         VotedState votedState = state.votedStateOrThrow();
         assertEquals(8, votedState.epoch());
         assertEquals(otherNodeId, votedState.votedId());
-        assertEquals(ElectionState.withVotedCandidate(8, otherNodeId, voters), store.readElectionState());
+        assertEquals(ElectionState.withVotedCandidate(8, otherNodeId, Optional.empty(), voters), store.readElectionState());
     }
 
     @Test
@@ -615,7 +633,7 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToUnattached(5);
         assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4));
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(4, otherNodeId));
+        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(4, otherNodeId, Optional.empty()));
         assertThrows(IllegalStateException.class, () -> state.transitionToFollower(4, otherNodeId));
         assertEquals(5, state.epoch());
         assertEquals(ElectionState.withUnknownLeader(5, voters), store.readElectionState());
@@ -628,7 +646,7 @@ public class QuorumStateTest {
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
         QuorumState state = initializeEmptyState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToVoted(5, node1);
+        state.transitionToVoted(5, node1, Optional.empty());
         assertThrows(IllegalStateException.class, () -> state.transitionToLeader(0, accumulator));
         assertThrows(IllegalStateException.class, () -> state.transitionToResigned(Collections.emptyList()));
     }
@@ -640,7 +658,7 @@ public class QuorumStateTest {
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
         QuorumState state = initializeEmptyState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToVoted(5, node1);
+        state.transitionToVoted(5, node1, Optional.empty());
 
         int jitterMs = 2500;
         random.mockNextInt(electionTimeoutMs, jitterMs);
@@ -660,9 +678,9 @@ public class QuorumStateTest {
         QuorumState state = initializeEmptyState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToUnattached(5);
-        state.transitionToVoted(8, node1);
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(8, node1));
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(8, node2));
+        state.transitionToVoted(8, node1, Optional.empty());
+        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(8, node1, Optional.empty()));
+        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(8, node2, Optional.empty()));
     }
 
     @Test
@@ -672,7 +690,7 @@ public class QuorumStateTest {
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
         QuorumState state = initializeEmptyState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToVoted(5, node1);
+        state.transitionToVoted(5, node1, Optional.empty());
         state.transitionToFollower(5, node2);
 
         FollowerState followerState = state.followerStateOrThrow();
@@ -688,7 +706,7 @@ public class QuorumStateTest {
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
         QuorumState state = initializeEmptyState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToVoted(5, node1);
+        state.transitionToVoted(5, node1, Optional.empty());
         state.transitionToFollower(8, node2);
 
         FollowerState followerState = state.followerStateOrThrow();
@@ -704,7 +722,7 @@ public class QuorumStateTest {
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
         QuorumState state = initializeEmptyState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToVoted(5, node1);
+        state.transitionToVoted(5, node1, Optional.empty());
         assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(5));
     }
 
@@ -714,7 +732,7 @@ public class QuorumStateTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToVoted(5, otherNodeId);
+        state.transitionToVoted(5, otherNodeId, Optional.empty());
 
         long remainingElectionTimeMs = state.votedStateOrThrow().remainingElectionTimeMs(time.milliseconds());
         time.sleep(1000);
@@ -734,12 +752,15 @@ public class QuorumStateTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToVoted(5, otherNodeId);
+        state.transitionToVoted(5, otherNodeId, Optional.empty());
         assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4));
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(4, otherNodeId));
+        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(4, otherNodeId, Optional.empty()));
         assertThrows(IllegalStateException.class, () -> state.transitionToFollower(4, otherNodeId));
         assertEquals(5, state.epoch());
-        assertEquals(ElectionState.withVotedCandidate(5, otherNodeId, voters), store.readElectionState());
+        assertEquals(
+            ElectionState.withVotedCandidate(5, otherNodeId, Optional.empty(), voters),
+            store.readElectionState()
+        );
     }
 
     @Test
@@ -845,9 +866,9 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToFollower(8, node2);
 
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(8, node1));
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(8, localId));
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(8, node2));
+        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(8, node1, Optional.empty()));
+        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(8, localId, Optional.empty()));
+        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(8, node2, Optional.empty()));
     }
 
     @Test
@@ -861,7 +882,7 @@ public class QuorumStateTest {
 
         int jitterMs = 2500;
         random.mockNextInt(electionTimeoutMs, jitterMs);
-        state.transitionToVoted(9, node1);
+        state.transitionToVoted(9, node1, Optional.empty());
         assertTrue(state.isVoted());
         VotedState votedState = state.votedStateOrThrow();
         assertEquals(9, votedState.epoch());
@@ -878,25 +899,34 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToFollower(5, otherNodeId);
         assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4));
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(4, otherNodeId));
+        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(4, otherNodeId, Optional.empty()));
         assertThrows(IllegalStateException.class, () -> state.transitionToFollower(4, otherNodeId));
         assertEquals(5, state.epoch());
         assertEquals(ElectionState.withElectedLeader(5, otherNodeId, voters), store.readElectionState());
     }
 
     @Test
-    public void testCannotBecomeFollowerOfNonVoter() throws IOException {
+    public void testCanBecomeFollowerOfNonVoter() throws IOException {
         int otherNodeId = 1;
         int nonVoterId = 2;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(4, nonVoterId));
-        assertThrows(IllegalStateException.class, () -> state.transitionToFollower(4, nonVoterId));
+
+        // Transition to voted
+        state.transitionToVoted(4, nonVoterId, Optional.empty());
+        assertTrue(state.isVoted());
+        VotedState votedState = state.votedStateOrThrow();
+        assertEquals(4, votedState.epoch());
+        assertEquals(nonVoterId, votedState.votedId());
+
+        // Transition to follower
+        state.transitionToFollower(4, nonVoterId);
+        assertEquals(new LeaderAndEpoch(OptionalInt.of(nonVoterId), 4), state.leaderAndEpoch());
     }
 
     @Test
-    public void testObserverCannotBecomeCandidateOrLeaderOrVoted() throws IOException {
+    public void testObserverCannotBecomeCandidateOrLeader() throws IOException {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -904,7 +934,20 @@ public class QuorumStateTest {
         assertTrue(state.isObserver());
         assertThrows(IllegalStateException.class, state::transitionToCandidate);
         assertThrows(IllegalStateException.class, () -> state.transitionToLeader(0L, accumulator));
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(5, otherNodeId));
+    }
+
+    @Test
+    public void testObserverWithIdCanVote() throws IOException {
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(otherNodeId);
+        QuorumState state = initializeEmptyState(voters);
+        state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
+        assertTrue(state.isObserver());
+        state.transitionToVoted(5, otherNodeId, Optional.empty());
+        assertTrue(state.isVoted());
+        VotedState votedState = state.votedStateOrThrow();
+        assertEquals(5, votedState.epoch());
+        assertEquals(otherNodeId, votedState.votedId());
     }
 
     @Test
@@ -959,22 +1002,6 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testInconsistentVotersBetweenConfigAndState() throws IOException {
-        int otherNodeId = 1;
-        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-
-        QuorumState state = initializeEmptyState(voters);
-
-        int unknownVoterId = 2;
-        Set<Integer> stateVoters = Utils.mkSet(localId, otherNodeId, unknownVoterId);
-
-        int epoch = 5;
-        store.writeElectionState(ElectionState.withElectedLeader(epoch, localId, stateVoters));
-        assertThrows(IllegalStateException.class,
-            () -> state.initialize(new OffsetAndEpoch(0L, logEndEpoch)));
-    }
-
-    @Test
     public void testHasRemoteLeader() throws IOException {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
@@ -992,7 +1019,7 @@ public class QuorumStateTest {
         state.transitionToUnattached(state.epoch() + 1);
         assertFalse(state.hasRemoteLeader());
 
-        state.transitionToVoted(state.epoch() + 1, otherNodeId);
+        state.transitionToVoted(state.epoch() + 1, otherNodeId, Optional.empty());
         assertFalse(state.hasRemoteLeader());
 
         state.transitionToFollower(state.epoch() + 1, otherNodeId);
@@ -1016,7 +1043,7 @@ public class QuorumStateTest {
         state.transitionToUnattached(6);
         assertEquals(highWatermark, state.highWatermark());
 
-        state.transitionToVoted(7, otherNodeId);
+        state.transitionToVoted(7, otherNodeId, Optional.empty());
         assertEquals(highWatermark, state.highWatermark());
 
         state.transitionToCandidate();
@@ -1039,7 +1066,7 @@ public class QuorumStateTest {
         assertFalse(state.isVoter());
 
         assertThrows(IllegalStateException.class, state::transitionToCandidate);
-        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(1, 1));
+        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(1, 1, Optional.empty()));
         assertThrows(IllegalStateException.class, () -> state.transitionToLeader(0L, accumulator));
 
         state.transitionToFollower(1, 1);
@@ -1055,7 +1082,10 @@ public class QuorumStateTest {
         int epoch = 5;
         int votedId = 1;
 
-        store.writeElectionState(ElectionState.withVotedCandidate(epoch, votedId, voters));
+        store.writeElectionState(
+            ElectionState.withVotedCandidate(epoch, votedId, Optional.empty(), voters),
+            kraftVersion
+        );
 
         QuorumState state1 = buildQuorumState(OptionalInt.of(2), voters);
         assertThrows(IllegalStateException.class, () -> state1.initialize(new OffsetAndEpoch(0, 0)));
@@ -1066,7 +1096,7 @@ public class QuorumStateTest {
 
     private QuorumState initializeEmptyState(Set<Integer> voters) throws IOException {
         QuorumState state = buildQuorumState(voters);
-        store.writeElectionState(ElectionState.withUnknownLeader(0, voters));
+        store.writeElectionState(ElectionState.withUnknownLeader(0, voters), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         return state;
     }

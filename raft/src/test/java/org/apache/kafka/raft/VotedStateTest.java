@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+// TODO: add tests that include votedUuid
 class VotedStateTest {
 
     private final MockTime time = new MockTime();
@@ -46,6 +47,7 @@ class VotedStateTest {
             time,
             epoch,
             votedId,
+            Optional.empty(),
             voters,
             highWatermark,
             electionTimeoutMs,
@@ -61,7 +63,10 @@ class VotedStateTest {
 
         assertEquals(epoch, state.epoch());
         assertEquals(votedId, state.votedId());
-        assertEquals(ElectionState.withVotedCandidate(epoch, votedId, voters), state.election());
+        assertEquals(
+            ElectionState.withVotedCandidate(epoch, votedId, Optional.empty(), voters),
+            state.election()
+        );
         assertEquals(electionTimeoutMs, state.remainingElectionTimeMs(time.milliseconds()));
         assertFalse(state.hasElectionTimeoutExpired(time.milliseconds()));
 

@@ -62,6 +62,7 @@ final public class VoterSet {
             .flatMap(voterNode -> voterNode.address(listener));
     }
 
+    // TODO: write javad doc
     public boolean isVoter(int nodeId, Optional<Uuid> nodeUuid) {
         VoterNode node = voters.get(nodeId);
         if (node != null) {
@@ -77,6 +78,7 @@ final public class VoterSet {
         }
     }
     
+    // TODO: write javad doc
     public boolean isOnlyVoter(int nodeId, Optional<Uuid> nodeUuid) {
         return voters.size() == 1 && isVoter(nodeId, nodeUuid);
     }

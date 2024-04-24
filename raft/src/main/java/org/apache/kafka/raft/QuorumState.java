@@ -75,7 +75,7 @@ import org.slf4j.Logger;
  */
 public class QuorumState {
     private final OptionalInt localId;
-    private final Optional<Uuid> localUuid;
+    private final Uuid localUuid;
     private final Time time;
     private final Logger log;
     private final QuorumStateStore store;
@@ -90,7 +90,7 @@ public class QuorumState {
 
     public QuorumState(
         OptionalInt localId,
-        Optional<Uuid> localUuid,
+        Uuid localUuid,
         Supplier<VoterSet> latestVoterSet,
         Supplier<Short> latestKraftVersion,
         int electionTimeoutMs,
@@ -170,7 +170,7 @@ public class QuorumState {
                 Collections.emptyList(),
                 logContext
             );
-        } else if (localId.isPresent() && election.isVotedCandidate(localId.getAsInt())) {
+        } else if (localId.isPresent() && election.isVotedCandidate(localId.getAsInt(), Optional.of(localUuid))) {
             initialState = new CandidateState(
                 time,
                 localId.getAsInt(),
@@ -218,7 +218,7 @@ public class QuorumState {
     }
 
     public boolean isOnlyVoter() {
-        return localId.isPresent() && latestVoterSet.get().isOnlyVoter(localId.getAsInt(), localUuid);
+        return localId.isPresent() && latestVoterSet.get().isOnlyVoter(localId.getAsInt(), Optional.of(localUuid));
     }
 
     public int localIdOrSentinel() {
@@ -267,7 +267,7 @@ public class QuorumState {
             return false;
         }
 
-        return latestVoterSet.get().isVoter(localId.getAsInt(), localUuid);
+        return latestVoterSet.get().isVoter(localId.getAsInt(), Optional.of(localUuid));
     }
 
     public boolean isVoter(int nodeId, Optional<Uuid> nodeUuid) {
@@ -344,13 +344,13 @@ public class QuorumState {
         int candidateId,
         Optional<Uuid> candidateUuid
     ) {
+        int currentEpoch = state.epoch();
         if (localId.isPresent() && candidateId == localId.getAsInt()) {
             throw new IllegalStateException("Cannot transition to Voted with votedId=" + candidateId +
                 " and epoch=" + epoch + " since it matches the local broker.id");
-        }
-
-        int currentEpoch = state.epoch();
-        if (epoch < currentEpoch) {
+        } else if (!localId.isPresent()) {
+            throw new IllegalStateException("Cannot transition to voted without a replica id");
+        } else if (epoch < currentEpoch) {
             throw new IllegalStateException("Cannot transition to Voted with votedId=" + candidateId +
                 " and epoch=" + epoch + " since the current epoch " + currentEpoch + " is larger");
         } else if (epoch == currentEpoch && !isUnattached()) {
@@ -360,7 +360,6 @@ public class QuorumState {
 
         // Note that we reset the election timeout after voting for a candidate because we
         // know that the candidate has at least as good of a chance of getting elected as us
-
         durableTransitionTo(
             new VotedState(
                 time,
@@ -382,13 +381,11 @@ public class QuorumState {
         int epoch,
         int leaderId
     ) {
+        int currentEpoch = state.epoch();
         if (localId.isPresent() && leaderId == localId.getAsInt()) {
             throw new IllegalStateException("Cannot transition to Follower with leaderId=" + leaderId +
                 " and epoch=" + epoch + " since it matches the local broker.id=" + localId);
-        }
-
-        int currentEpoch = state.epoch();
-        if (epoch < currentEpoch) {
+        } else if (epoch < currentEpoch) {
             throw new IllegalStateException("Cannot transition to Follower with leaderId=" + leaderId +
                 " and epoch=" + epoch + " since the current epoch " + currentEpoch + " is larger");
         } else if (epoch == currentEpoch
@@ -414,7 +411,7 @@ public class QuorumState {
         if (isObserver()) {
             throw new IllegalStateException(
                 String.format(
-                    "Cannot transition to Candidate since the local id (%d) and uuid (%s) is not one of the voters %s",
+                    "Cannot transition to Candidate since the local id (%s) and uuid (%s) is not one of the voters %s",
                     localId,
                     localUuid,
                     latestVoterSet.get()
@@ -446,7 +443,7 @@ public class QuorumState {
         if (isObserver()) {
             throw new IllegalStateException(
                 String.format(
-                    "Cannot transition to Leader since the local id (%d) and uuid (%s) is not one of the voters %s",
+                    "Cannot transition to Leader since the local id (%s) and uuid (%s) is not one of the voters %s",
                     localId,
                     localUuid,
                     latestVoterSet.get()

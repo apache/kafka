@@ -98,7 +98,7 @@ public class FileBasedStateStore implements QuorumStateStore {
             }
 
             final short dataVersion = dataVersionNode.shortValue();
-            if (dataVersion >  HIGHEST_SUPPORTED_VERSION) {
+            if (dataVersion > HIGHEST_SUPPORTED_VERSION) {
                 throw new IllegalStateException(
                     String.format(
                         "data_version (%d) is greater than the maximum version (%d) supported",

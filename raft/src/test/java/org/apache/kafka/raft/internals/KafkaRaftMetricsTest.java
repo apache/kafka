@@ -17,6 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
@@ -33,6 +34,7 @@ import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
@@ -40,9 +42,11 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+// TODO: Add a test for votedUuid and and a metrics to the KIP for current-vote-uuid
 public class KafkaRaftMetricsTest {
 
     private final int localId = 0;
+    private final Uuid localUuid = Uuid.randomUuid();
     private final int electionTimeoutMs = 5000;
     private final int fetchTimeoutMs = 10000;
 
@@ -64,7 +68,9 @@ public class KafkaRaftMetricsTest {
     private QuorumState buildQuorumState(Set<Integer> voters) {
         return new QuorumState(
             OptionalInt.of(localId),
-            voters,
+            localUuid,
+            () -> VoterSetTest.voterSet(VoterSetTest.voterMap(voters, false)),
+            () -> 0,
             electionTimeoutMs,
             fetchTimeoutMs,
             new MockQuorumStateStore(),
@@ -116,7 +122,7 @@ public class KafkaRaftMetricsTest {
         state.followerStateOrThrow().updateHighWatermark(OptionalLong.of(10L));
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToVoted(3, 2);
+        state.transitionToVoted(3, 2, Optional.empty());
         assertEquals("voted", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) 2, getMetric(metrics, "current-vote").metricValue());

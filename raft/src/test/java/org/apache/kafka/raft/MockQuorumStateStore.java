@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.Collections;
+import java.util.Optional;
+
 public class MockQuorumStateStore implements QuorumStateStore {
     private ElectionState current;
 
@@ -25,8 +28,30 @@ public class MockQuorumStateStore implements QuorumStateStore {
     }
 
     @Override
-    public void writeElectionState(ElectionState update) {
-        this.current = update;
+    public void writeElectionState(ElectionState update, short kraftVersion) {
+        if (kraftVersion == 0) {
+            // kraft.version 0 doesn't support votedUuid
+            this.current = new ElectionState(
+                update.epoch(),
+                update.optionalLeaderId(),
+                update.optionalVotedId(),
+                Optional.empty(),
+                update.voters()
+            );
+        } else if (kraftVersion == 1) {
+            // kraft.version 1 doesn't support voters
+            this.current = new ElectionState(
+                update.epoch(),
+                update.optionalLeaderId(),
+                update.optionalVotedId(),
+                update.votedUuid(),
+                Collections.emptySet()
+            );
+        } else {
+            throw new IllegalArgumentException(
+                String.format("Unknown kraft.version %d", kraftVersion)
+            );
+        }
     }
 
     @Override

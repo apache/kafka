@@ -32,7 +32,7 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.util.OptionalInt;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -41,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+// TODO: write test for kraft.version 1
 public class FileBasedStateStoreTest {
 
     private FileBasedStateStore stateStore;
@@ -55,7 +56,12 @@ public class FileBasedStateStoreTest {
         final int epoch = 2;
         Set<Integer> voters = Utils.mkSet(leaderId);
 
-        stateStore.writeElectionState(ElectionState.withElectedLeader(epoch, leaderId, voters));
+        final short kraftVersion = 0;
+
+        stateStore.writeElectionState(
+            ElectionState.withElectedLeader(epoch, leaderId, voters),
+            kraftVersion
+        );
         assertTrue(stateFile.exists());
         assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), stateStore.readElectionState());
 
@@ -82,20 +88,34 @@ public class FileBasedStateStoreTest {
         final int votedId = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, votedId);
 
-        stateStore.writeElectionState(ElectionState.withElectedLeader(epoch, leaderId, voters));
+        final short kraftVersion = 0;
 
-        assertEquals(stateStore.readElectionState(), new ElectionState(epoch,
-            OptionalInt.of(leaderId), OptionalInt.empty(), voters));
+        stateStore.writeElectionState(
+            ElectionState.withElectedLeader(epoch, leaderId, voters),
+            kraftVersion
+        );
 
-        stateStore.writeElectionState(ElectionState.withVotedCandidate(epoch, votedId, voters));
+        assertEquals(
+            stateStore.readElectionState(),
+            ElectionState.withElectedLeader(epoch, leaderId, voters)
+        );
 
-        assertEquals(stateStore.readElectionState(), new ElectionState(epoch,
-            OptionalInt.empty(), OptionalInt.of(votedId), voters));
+        stateStore.writeElectionState(
+            ElectionState.withVotedCandidate(epoch, votedId, Optional.empty(), voters),
+            kraftVersion
+        );
+
+        assertEquals(
+            stateStore.readElectionState(),
+            ElectionState.withVotedCandidate(epoch, votedId, Optional.empty(), voters)
+        );
 
         final FileBasedStateStore rebootStateStore = new FileBasedStateStore(stateFile);
 
-        assertEquals(rebootStateStore.readElectionState(), new ElectionState(epoch,
-            OptionalInt.empty(), OptionalInt.of(votedId), voters));
+        assertEquals(
+            rebootStateStore.readElectionState(),
+            ElectionState.withVotedCandidate(epoch, votedId, Optional.empty(), voters)
+        );
 
         stateStore.clear();
         assertFalse(stateFile.exists());
@@ -116,10 +136,10 @@ public class FileBasedStateStoreTest {
         // Check that FileBasedStateStore supports the latest version
         assertEquals(FileBasedStateStore.HIGHEST_SUPPORTED_VERSION, QuorumStateData.HIGHEST_SUPPORTED_VERSION);
         // Check that the supported versions haven't changed
-        assertEquals(0, QuorumStateData.HIGHEST_SUPPORTED_VERSION);
+        assertEquals(1, QuorumStateData.HIGHEST_SUPPORTED_VERSION);
         assertEquals(0, QuorumStateData.LOWEST_SUPPORTED_VERSION);
         // For the latest version check that the number of tagged fields hasn't changed
-        TaggedFields taggedFields = (TaggedFields) QuorumStateData.SCHEMA_0.get(6).def.type;
+        TaggedFields taggedFields = (TaggedFields) QuorumStateData.SCHEMA_1.get(4).def.type;
         assertEquals(0, taggedFields.numFields());
     }
 
@@ -130,15 +150,9 @@ public class FileBasedStateStoreTest {
         // We initialized a state from the metadata log
         assertTrue(stateFile.exists());
 
-        final int epoch = 3012;
-        final int leaderId = 9990;
-        final int follower1 = leaderId + 1;
-        final int follower2 = follower1 + 1;
-        Set<Integer> voters = Utils.mkSet(leaderId, follower1, follower2);
         writeToStateFile(stateFile, jsonString);
 
-        assertThrows(UnsupportedVersionException.class, () -> {
-            stateStore.readElectionState(); });
+        assertThrows(UnsupportedVersionException.class, stateStore::readElectionState);
 
         stateStore.clear();
         assertFalse(stateFile.exists());

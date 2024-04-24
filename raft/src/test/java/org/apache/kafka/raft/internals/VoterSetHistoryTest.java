@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 final public class VoterSetHistoryTest {
     @Test
     void testStaicVoterSet() {
-        VoterSet staticVoterSet = new VoterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)));
+        VoterSet staticVoterSet = new VoterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true));
         VoterSetHistory votersHistory = new VoterSetHistory(Optional.of(staticVoterSet));
 
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(0));
@@ -58,17 +58,17 @@ final public class VoterSetHistoryTest {
 
     @Test
     void testAddAt() {
-        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3));
+        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true);
         VoterSet staticVoterSet = new VoterSet(new HashMap<>(voterMap));
         VoterSetHistory votersHistory = new VoterSetHistory(Optional.of(staticVoterSet));
 
         assertThrows(
             IllegalArgumentException.class,
-            () -> votersHistory.addAt(-1, new VoterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3))))
+            () -> votersHistory.addAt(-1, new VoterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true)))
         );
         assertEquals(staticVoterSet, votersHistory.lastValue());
 
-        voterMap.put(4, VoterSetTest.voterNode(4));
+        voterMap.put(4, VoterSetTest.voterNode(4, true));
         VoterSet addedVoterSet = new VoterSet(new HashMap<>(voterMap));
         votersHistory.addAt(100, addedVoterSet);
 
@@ -87,17 +87,17 @@ final public class VoterSetHistoryTest {
 
     @Test
     void testTruncateTo() {
-        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3));
+        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true);
         VoterSet staticVoterSet = new VoterSet(new HashMap<>(voterMap));
         VoterSetHistory votersHistory = new VoterSetHistory(Optional.of(staticVoterSet));
 
         // Add voter 4 to the voter set and voter set history
-        voterMap.put(4, VoterSetTest.voterNode(4));
+        voterMap.put(4, VoterSetTest.voterNode(4, true));
         VoterSet voterSet1234 = new VoterSet(new HashMap<>(voterMap));
         votersHistory.addAt(100, voterSet1234);
 
         // Add voter 5 to the voter set and voter set history
-        voterMap.put(5, VoterSetTest.voterNode(5));
+        voterMap.put(5, VoterSetTest.voterNode(5, true));
         VoterSet voterSet12345 = new VoterSet(new HashMap<>(voterMap));
         votersHistory.addAt(200, voterSet12345);
 
@@ -113,17 +113,17 @@ final public class VoterSetHistoryTest {
 
     @Test
     void testTrimPrefixTo() {
-        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3));
+        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true);
         VoterSet staticVoterSet = new VoterSet(new HashMap<>(voterMap));
         VoterSetHistory votersHistory = new VoterSetHistory(Optional.of(staticVoterSet));
 
         // Add voter 4 to the voter set and voter set history
-        voterMap.put(4, VoterSetTest.voterNode(4));
+        voterMap.put(4, VoterSetTest.voterNode(4, true));
         VoterSet voterSet1234 = new VoterSet(new HashMap<>(voterMap));
         votersHistory.addAt(100, voterSet1234);
 
         // Add voter 5 to the voter set and voter set history
-        voterMap.put(5, VoterSetTest.voterNode(5));
+        voterMap.put(5, VoterSetTest.voterNode(5, true));
         VoterSet voterSet12345 = new VoterSet(new HashMap<>(voterMap));
         votersHistory.addAt(200, voterSet12345);
 
@@ -146,17 +146,17 @@ final public class VoterSetHistoryTest {
 
     @Test
     void testClear() {
-        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3));
+        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true);
         VoterSet staticVoterSet = new VoterSet(new HashMap<>(voterMap));
         VoterSetHistory votersHistory = new VoterSetHistory(Optional.of(staticVoterSet));
 
         // Add voter 4 to the voter set and voter set history
-        voterMap.put(4, VoterSetTest.voterNode(4));
+        voterMap.put(4, VoterSetTest.voterNode(4, true));
         VoterSet voterSet1234 = new VoterSet(new HashMap<>(voterMap));
         votersHistory.addAt(100, voterSet1234);
 
         // Add voter 5 to the voter set and voter set history
-        voterMap.put(5, VoterSetTest.voterNode(5));
+        voterMap.put(5, VoterSetTest.voterNode(5, true));
         VoterSet voterSet12345 = new VoterSet(new HashMap<>(voterMap));
         votersHistory.addAt(200, voterSet12345);
 

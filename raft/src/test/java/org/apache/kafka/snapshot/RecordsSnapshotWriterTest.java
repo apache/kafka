@@ -96,7 +96,9 @@ final class RecordsSnapshotWriterTest {
     void testBuilderKRaftVersion0WithVoterSet() {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100, 10);
         int maxBatchSize = 1024;
-        VoterSet voterSet = VoterSetTest.voterSet(new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3))));
+        VoterSet voterSet = VoterSetTest.voterSet(
+            new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true))
+        );
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setKraftVersion((short) 0)
@@ -114,7 +116,9 @@ final class RecordsSnapshotWriterTest {
     void testKBuilderRaftVersion1WithVoterSet() {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100, 10);
         int maxBatchSize = 1024;
-        VoterSet voterSet = VoterSetTest.voterSet(new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3))));
+        VoterSet voterSet = VoterSetTest.voterSet(
+            new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true))
+        );
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setKraftVersion((short) 1)

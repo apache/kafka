@@ -432,6 +432,8 @@ class KafkaServer(
           raftManager = new KafkaRaftManager[ApiMessageAndVersion](
             metaPropsEnsemble.clusterId().get(),
             config,
+            // metadata log dir and directory.id must exist because migration is enabled
+            metaPropsEnsemble.logDirProps.get(metaPropsEnsemble.metadataLogDir.get).directoryId.get,
             new MetadataRecordSerde,
             KafkaRaftServer.MetadataPartition,
             KafkaRaftServer.MetadataTopicId,

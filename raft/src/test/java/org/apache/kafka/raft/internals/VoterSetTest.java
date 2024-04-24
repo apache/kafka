@@ -18,10 +18,10 @@ package org.apache.kafka.raft.internals;
 
 import java.net.InetSocketAddress;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
@@ -40,7 +40,7 @@ final public class VoterSetTest {
 
     @Test
     void testVoterAddress() {
-        VoterSet voterSet = new VoterSet(voterMap(Arrays.asList(1, 2, 3)));
+        VoterSet voterSet = new VoterSet(voterMap(Arrays.asList(1, 2, 3), true));
         assertEquals(Optional.of(new InetSocketAddress("replica-1", 1234)), voterSet.voterAddress(1, "LISTENER"));
         assertEquals(Optional.empty(), voterSet.voterAddress(1, "MISSING"));
         assertEquals(Optional.empty(), voterSet.voterAddress(4, "LISTENER"));
@@ -48,25 +48,25 @@ final public class VoterSetTest {
 
     @Test
     void testVoterIds() {
-        VoterSet voterSet = new VoterSet(voterMap(Arrays.asList(1, 2, 3)));
+        VoterSet voterSet = new VoterSet(voterMap(Arrays.asList(1, 2, 3), true));
         assertEquals(new HashSet<>(Arrays.asList(1, 2, 3)), voterSet.voterIds());
     }
 
     @Test
     void testAddVoter() {
-        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2, 3));
+        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2, 3), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
-        assertEquals(Optional.empty(), voterSet.addVoter(voterNode(1)));
+        assertEquals(Optional.empty(), voterSet.addVoter(voterNode(1, true)));
 
-        VoterSet.VoterNode voter4 = voterNode(4);
+        VoterSet.VoterNode voter4 = voterNode(4, true);
         aVoterMap.put(voter4.id(), voter4);
         assertEquals(Optional.of(new VoterSet(new HashMap<>(aVoterMap))), voterSet.addVoter(voter4));
     }
 
     @Test
     void testRemoveVoter() {
-        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2, 3));
+        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2, 3), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
         assertEquals(Optional.empty(), voterSet.removeVoter(4, Optional.empty()));
@@ -81,26 +81,29 @@ final public class VoterSetTest {
 
     @Test
     void testRecordRoundTrip() {
-        VoterSet voterSet = new VoterSet(voterMap(Arrays.asList(1, 2, 3)));
+        VoterSet voterSet = new VoterSet(voterMap(Arrays.asList(1, 2, 3), true));
 
         assertEquals(voterSet, VoterSet.fromVotersRecord(voterSet.toVotersRecord((short) 0)));
     }
 
-    public static Map<Integer, VoterSet.VoterNode> voterMap(List<Integer> replicas) {
+    public static Map<Integer, VoterSet.VoterNode> voterMap(
+        Collection<Integer> replicas,
+        boolean withUuid
+    ) {
         return replicas
             .stream()
             .collect(
                 Collectors.toMap(
                     Function.identity(),
-                    VoterSetTest::voterNode
+                    id -> VoterSetTest.voterNode(id, withUuid)
                 )
             );
     }
 
-    static VoterSet.VoterNode voterNode(int id) {
+    static VoterSet.VoterNode voterNode(int id, boolean withUuid) {
         return new VoterSet.VoterNode(
             id,
-            Optional.of(Uuid.randomUuid()),
+            withUuid ? Optional.of(Uuid.randomUuid()) : Optional.empty(),
             Collections.singletonMap(
                 "LISTENER",
                 InetSocketAddress.createUnresolved(String.format("replica-%d", id), 1234)

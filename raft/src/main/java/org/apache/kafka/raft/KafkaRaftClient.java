@@ -151,7 +151,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
 
     private final OptionalInt nodeId;
-    private final Optional<Uuid> nodeUuid;
+    private final Uuid nodeUuid;
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
     private final LogContext logContext;
     private final Logger logger;
@@ -194,7 +194,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
      */
     public KafkaRaftClient(
         OptionalInt nodeId,
-        Optional<Uuid> nodeUuid,
+        Uuid nodeUuid,
         RecordSerde<T> serde,
         NetworkChannel channel,
         ReplicatedLog log,
@@ -224,7 +224,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
     KafkaRaftClient(
         OptionalInt nodeId,
-        Optional<Uuid> nodeUuid,
+        Uuid nodeUuid,
         RecordSerde<T> serde,
         NetworkChannel channel,
         RaftMessageQueue messageQueue,

@@ -137,6 +137,8 @@ public final class RaftClientTestContext {
         private final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID, logContext);
         private final Set<Integer> voters;
         private final OptionalInt localId;
+        private final Uuid localUuid = Uuid.randomUuid();
+        private final short kraftVersion = 0;
 
         private Uuid clusterId = Uuid.randomUuid();
         private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
@@ -154,17 +156,27 @@ public final class RaftClientTestContext {
         }
 
         Builder withElectedLeader(int epoch, int leaderId) throws IOException {
-            quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, leaderId, voters));
+            quorumStateStore.writeElectionState(
+                ElectionState.withElectedLeader(epoch, leaderId, voters),
+                kraftVersion
+            );
             return this;
         }
 
         Builder withUnknownLeader(int epoch) throws IOException {
-            quorumStateStore.writeElectionState(ElectionState.withUnknownLeader(epoch, voters));
+            quorumStateStore.writeElectionState(
+                ElectionState.withUnknownLeader(epoch, voters),
+                kraftVersion
+            );
             return this;
         }
 
         Builder withVotedCandidate(int epoch, int votedId) throws IOException {
-            quorumStateStore.writeElectionState(ElectionState.withVotedCandidate(epoch, votedId, voters));
+            // TODO: should votedUuid be configurable now? Or implement this later?
+            quorumStateStore.writeElectionState(
+                ElectionState.withVotedCandidate(epoch, votedId, Optional.empty(), voters),
+                kraftVersion
+            );
             return this;
         }
 
@@ -252,6 +264,7 @@ public final class RaftClientTestContext {
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
                 localId,
+                localUuid,
                 SERDE,
                 channel,
                 messageQueue,
@@ -398,7 +411,7 @@ public final class RaftClientTestContext {
 
     LeaderAndEpoch currentLeaderAndEpoch() {
         ElectionState election = quorumStateStore.readElectionState();
-        return new LeaderAndEpoch(election.leaderIdOpt, election.epoch);
+        return new LeaderAndEpoch(election.optionalLeaderId(), election.epoch());
     }
 
     void expectAndGrantVotes(int epoch) throws Exception {
@@ -445,7 +458,10 @@ public final class RaftClientTestContext {
     }
 
     void assertVotedCandidate(int epoch, int leaderId) throws IOException {
-        assertEquals(ElectionState.withVotedCandidate(epoch, leaderId, voters), quorumStateStore.readElectionState());
+        assertEquals(
+            ElectionState.withVotedCandidate(epoch, leaderId, Optional.empty(), voters),
+            quorumStateStore.readElectionState()
+        );
     }
 
     public void assertElectedLeader(int epoch, int leaderId) throws IOException {
@@ -501,9 +517,7 @@ public final class RaftClientTestContext {
         return voteRequests.iterator().next().correlationId();
     }
 
-    void assertSentVoteResponse(
-            Errors error
-    ) {
+    void assertSentVoteResponse(Errors error) {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.VOTE);
         assertEquals(1, sentMessages.size());
         RaftMessage raftMessage = sentMessages.get(0);

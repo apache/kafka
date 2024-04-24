@@ -510,6 +510,7 @@ public class RaftEventSimulationTest {
 
     private static class PersistentState {
         final MockQuorumStateStore store = new MockQuorumStateStore();
+        final Uuid nodeUuid = Uuid.randomUuid();
         final MockLog log;
 
         PersistentState(int nodeId) {
@@ -739,6 +740,7 @@ public class RaftEventSimulationTest {
 
             KafkaRaftClient<Integer> client = new KafkaRaftClient<>(
                 OptionalInt.of(nodeId),
+                persistentState.nodeUuid,
                 serde,
                 channel,
                 messageQueue,
@@ -777,10 +779,7 @@ public class RaftEventSimulationTest {
         final MockNetworkChannel channel;
         final MockMessageQueue messageQueue;
         final MockQuorumStateStore store;
-        final LogContext logContext;
         final ReplicatedCounter counter;
-        final Time time;
-        final Random random;
         final RecordSerde<Integer> intSerde;
 
         private RaftNode(
@@ -801,9 +800,6 @@ public class RaftEventSimulationTest {
             this.channel = channel;
             this.messageQueue = messageQueue;
             this.store = store;
-            this.logContext = logContext;
-            this.time = time;
-            this.random = random;
             this.counter = new ReplicatedCounter(nodeId, client, logContext);
             this.intSerde = intSerde;
         }
@@ -850,14 +846,10 @@ public class RaftEventSimulationTest {
     }
 
     private static class InflightRequest {
-        final int correlationId;
         final int sourceId;
-        final int destinationId;
 
         private InflightRequest(int correlationId, int sourceId, int destinationId) {
-            this.correlationId = correlationId;
             this.sourceId = sourceId;
-            this.destinationId = destinationId;
         }
     }
 
@@ -939,7 +931,7 @@ public class RaftEventSimulationTest {
                     continue;
                 }
 
-                Integer newEpoch = electionState.epoch;
+                Integer newEpoch = electionState.epoch();
                 if (oldEpoch > newEpoch) {
                     fail("Non-monotonic update of epoch detected on node " + nodeId + ": " +
                             oldEpoch + " -> " + newEpoch);
@@ -988,11 +980,11 @@ public class RaftEventSimulationTest {
                 PersistentState state = nodeEntry.getValue();
                 ElectionState electionState = state.store.readElectionState();
 
-                if (electionState != null && electionState.epoch >= epoch && electionState.hasLeader()) {
-                    if (epoch == electionState.epoch && leaderId.isPresent()) {
+                if (electionState != null && electionState.epoch() >= epoch && electionState.hasLeader()) {
+                    if (epoch == electionState.epoch() && leaderId.isPresent()) {
                         assertEquals(leaderId.getAsInt(), electionState.leaderId());
                     } else {
-                        epoch = electionState.epoch;
+                        epoch = electionState.epoch();
                         leaderId = OptionalInt.of(electionState.leaderId());
                     }
                 }
