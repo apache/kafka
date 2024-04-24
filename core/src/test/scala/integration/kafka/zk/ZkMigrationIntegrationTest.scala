@@ -866,7 +866,7 @@ class ZkMigrationIntegrationTest {
     zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
     zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9999")
     zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-    zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+    zkCluster.config().serverProperties().put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
     zkCluster.rollingBrokerRestart()
     zkCluster.waitForReadyBrokers()
 
