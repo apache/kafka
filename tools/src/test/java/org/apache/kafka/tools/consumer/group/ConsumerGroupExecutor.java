@@ -18,16 +18,26 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.RangeAssignor;
+import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.serialization.StringDeserializer;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
+
+import static java.util.Collections.singleton;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG;
+import static org.apache.kafka.common.GroupType.CONSUMER;
 
 public class ConsumerGroupExecutor implements AutoCloseable {
     final int numThreads;
@@ -58,7 +68,6 @@ public class ConsumerGroupExecutor implements AutoCloseable {
                     customPropsOpt,
                     syncCommit
             );
-            th.configure();
             submit(th);
         });
     }
@@ -106,7 +115,7 @@ public class ConsumerGroupExecutor implements AutoCloseable {
 
     void submit(ConsumerRunnable consumerThread) {
         consumers.add(consumerThread);
-        executor.submit(consumerThread);
+        executor.execute(consumerThread);
     }
 
     @Override
@@ -119,5 +128,83 @@ public class ConsumerGroupExecutor implements AutoCloseable {
             throw new RuntimeException(e);
         }
     }
-}
 
+    static class ConsumerRunnable implements Runnable {
+        final String broker;
+        final String groupId;
+        final Optional<Properties> customPropsOpt;
+        final boolean syncCommit;
+        final String topic;
+        final String groupProtocol;
+        final String assignmentStrategy;
+        final Optional<String> remoteAssignor;
+        final Properties props = new Properties();
+        volatile boolean isShutdown = false;
+        KafkaConsumer<String, String> consumer;
+
+        boolean configured = false;
+
+        public ConsumerRunnable(String broker,
+                                String groupId,
+                                String groupProtocol,
+                                String topic,
+                                String assignmentStrategy,
+                                Optional<String> remoteAssignor,
+                                Optional<Properties> customPropsOpt,
+                                boolean syncCommit) {
+            this.broker = broker;
+            this.groupId = groupId;
+            this.customPropsOpt = customPropsOpt;
+            this.syncCommit = syncCommit;
+            this.topic = topic;
+            this.groupProtocol = groupProtocol;
+            this.assignmentStrategy = assignmentStrategy;
+            this.remoteAssignor = remoteAssignor;
+
+            this.configure();
+        }
+
+        private void configure() {
+            configured = true;
+            configure(props);
+            customPropsOpt.ifPresent(props::putAll);
+            consumer = new KafkaConsumer<>(props);
+        }
+
+        private void configure(Properties props) {
+            props.put("bootstrap.servers", broker);
+            props.put("group.id", groupId);
+            props.put("key.deserializer", StringDeserializer.class.getName());
+            props.put("value.deserializer", StringDeserializer.class.getName());
+            props.put(GROUP_PROTOCOL_CONFIG, groupProtocol);
+            if (Objects.equals(groupProtocol, CONSUMER.toString())) {
+                remoteAssignor.ifPresent(assignor -> props.put(GROUP_REMOTE_ASSIGNOR_CONFIG, assignor));
+            } else {
+                props.put("partition.assignment.strategy", assignmentStrategy);
+            }
+        }
+
+        @Override
+        public void run() {
+            assert configured : "Must call configure before use";
+            try {
+                consumer.subscribe(singleton(topic));
+                while (!isShutdown) {
+                    consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+                    if (syncCommit)
+                        consumer.commitSync();
+                }
+            } catch (WakeupException e) {
+                // OK
+            } finally {
+                consumer.close();
+            }
+        }
+
+        void shutdown() {
+            isShutdown = true;
+            consumer.wakeup();
+        }
+    }
+
+}
