@@ -271,6 +271,8 @@ public class StreamTaskTest {
         consumer.assign(asList(partition1, partition2));
         consumer.updateBeginningOffsets(mkMap(mkEntry(partition1, 0L), mkEntry(partition2, 0L)));
         stateDirectory = new StateDirectory(createConfig("100"), new MockTime(), true, false);
+        // Unless we initialise a lock on the state directory we cannot unlock it successfully during teardown
+        stateDirectory.initializeProcessId();
     }
 
     @After
@@ -288,11 +290,14 @@ public class StreamTaskTest {
             task.closeDirty();
             task = null;
         }
+        stateDirectory.close();
         Utils.delete(BASE_DIR);
     }
 
     @Test
     public void shouldThrowLockExceptionIfFailedToLockStateDirectory() {
+        // Clean up state directory created as part of setup
+        stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
@@ -303,6 +308,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotAttemptToLockIfNoStores() {
+        // Clean up state directory created as part of setup
+        stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
 
         task = createStatelessTask(createConfig("100"));
@@ -315,6 +322,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAttemptToDeleteStateDirectoryWhenCloseDirtyAndEosEnabled() {
+        // Clean up state directory created as part of setup
+        stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
 
         when(stateDirectory.lock(taskId)).thenReturn(true);
@@ -408,6 +417,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReadCommittedStreamTimeAndProcessorMetadataOnInitialize() {
+        // Clean up state directory created as part of setup
+        stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
 
         final ProcessorMetadata processorMetadata = new ProcessorMetadata(mkMap(
@@ -432,6 +443,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReadCommittedStreamTimeAndMergeProcessorMetadataOnInitialize() {
+        // Clean up state directory created as part of setup
+        stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
 
         final ProcessorMetadata processorMetadata1 = new ProcessorMetadata(mkMap(
@@ -472,6 +485,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldTransitToRestoringThenRunningAfterCreation() {
+        // Clean up state directory created as part of setup
+        stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(true);
         when(stateManager.changelogOffsets()).thenReturn(singletonMap(changelogPartition, 10L));
@@ -1569,6 +1584,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReadCommittedOffsetAndRethrowTimeoutWhenCompleteRestoration() {
+        // Clean up state directory created as part of setup
+        stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(true);
 
@@ -1581,6 +1598,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReInitializeTopologyWhenResuming() {
+        // Clean up state directory created as part of setup
+        stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(true);
 
