@@ -739,47 +739,6 @@ public class GroupMetadataManagerTestContext {
         return secondJoinResult.joinFuture.get();
     }
 
-    public JoinGroupResponseData joinConsumerGroupAsDynamicMemberAndCompleteJoinWithClassicProtocol(
-        JoinGroupRequestData request,
-        List<Record> expectedRecords
-    ) throws ExecutionException, InterruptedException {
-        boolean requireKnownMemberId = true;
-        String newMemberId = request.memberId();
-
-        if (request.memberId().equals(UNKNOWN_MEMBER_ID)) {
-            // Since member id is required, we need another round to get the successful join group result.
-            JoinResult firstJoinResult = sendClassicGroupJoin(
-                request,
-                requireKnownMemberId
-            );
-            assertTrue(firstJoinResult.records.isEmpty());
-            assertTrue(firstJoinResult.joinFuture.isDone());
-            assertEquals(Errors.MEMBER_ID_REQUIRED.code(), firstJoinResult.joinFuture.get().errorCode());
-            newMemberId = firstJoinResult.joinFuture.get().memberId();
-        }
-
-        // Second round
-        JoinGroupRequestData secondRequest = new JoinGroupRequestData()
-            .setGroupId(request.groupId())
-            .setMemberId(newMemberId)
-            .setProtocolType(request.protocolType())
-            .setProtocols(request.protocols())
-            .setSessionTimeoutMs(request.sessionTimeoutMs())
-            .setRebalanceTimeoutMs(request.rebalanceTimeoutMs())
-            .setReason(request.reason());
-
-        JoinResult secondJoinResult = sendClassicGroupJoin(
-            secondRequest,
-            requireKnownMemberId
-        );
-
-        assertRecordsEquals(expectedRecords, secondJoinResult.records);
-        assertTrue(secondJoinResult.joinFuture.isDone());
-        assertEquals(Errors.NONE.code(), secondJoinResult.joinFuture.get().errorCode());
-
-        return secondJoinResult.joinFuture.get();
-    }
-
     public JoinGroupResponseData joinClassicGroupAndCompleteJoin(
         JoinGroupRequestData request,
         boolean requireKnownMemberId,
