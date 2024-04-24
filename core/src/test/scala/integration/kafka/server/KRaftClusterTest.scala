@@ -43,6 +43,7 @@ import org.apache.kafka.controller.{QuorumController, QuorumControllerIntegratio
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -119,7 +120,7 @@ class KRaftClusterTest {
       controller.shutdown()
       // Rewrite The `listeners` config to avoid controller socket server init using different port
       val config = controller.sharedServer.controllerConfig.props
-      config.asInstanceOf[java.util.HashMap[String,String]].put(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:$port")
+      config.asInstanceOf[java.util.HashMap[String,String]].put(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:$port")
       controller.sharedServer.controllerConfig.updateCurrentConfig(new KafkaConfig(config))
       //  metrics will be set to null when closing a controller, so we should recreate it for testing
       controller.sharedServer.metrics = new Metrics()
@@ -392,8 +393,8 @@ class KRaftClusterTest {
   @Test
   def testCreateClusterWithAdvertisedPortZero(): Unit = {
     val brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String] = (nodes, _) => Map(
-      (KafkaConfig.ListenersProp, s"${nodes.externalListenerName.value}://localhost:0"),
-      (KafkaConfig.AdvertisedListenersProp, s"${nodes.externalListenerName.value}://localhost:0"))
+      (SocketServerConfigs.LISTENERS_CONFIG, s"${nodes.externalListenerName.value}://localhost:0"),
+      (SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"${nodes.externalListenerName.value}://localhost:0"))
 
     doOnStartedKafkaCluster(numBrokerNodes = 3, brokerPropertyOverrides = brokerPropertyOverrides) { implicit cluster =>
       sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))
@@ -409,8 +410,8 @@ class KRaftClusterTest {
   @Test
   def testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer(): Unit = {
     val brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String] = (nodes, broker) => Map(
-      (KafkaConfig.ListenersProp, s"${nodes.externalListenerName.value}://localhost:0"),
-      (KafkaConfig.AdvertisedListenersProp, s"${nodes.externalListenerName.value}://advertised-host-${broker.id}:${broker.id + 100}"))
+      (SocketServerConfigs.LISTENERS_CONFIG, s"${nodes.externalListenerName.value}://localhost:0"),
+      (SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"${nodes.externalListenerName.value}://advertised-host-${broker.id}:${broker.id + 100}"))
 
     doOnStartedKafkaCluster(numBrokerNodes = 3, brokerPropertyOverrides = brokerPropertyOverrides) { implicit cluster =>
       sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))

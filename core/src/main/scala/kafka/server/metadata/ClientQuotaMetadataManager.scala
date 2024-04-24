@@ -20,14 +20,13 @@ package kafka.server.metadata
 import kafka.network.ConnectionQuotas
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.utils.Sanitizer
 
 import java.net.{InetAddress, UnknownHostException}
 import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
-import org.apache.kafka.server.config.ZooKeeperInternals
+import org.apache.kafka.server.config.{QuotaConfigs, ZooKeeperInternals}
 
 import scala.compat.java8.OptionConverters._
 
