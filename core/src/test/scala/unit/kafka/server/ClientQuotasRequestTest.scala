@@ -25,12 +25,11 @@ import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
-import org.apache.kafka.server.config.ZooKeeperInternals
+import org.apache.kafka.server.config.{QuotaConfigs, ZooKeeperInternals}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.extension.ExtendWith
@@ -41,11 +40,6 @@ import scala.jdk.CollectionConverters._
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @Tag("integration")
 class ClientQuotasRequestTest(cluster: ClusterInstance) {
-  private val ConsumerByteRateProp = QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG
-  private val ProducerByteRateProp = QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG
-  private val RequestPercentageProp = QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG
-  private val IpConnectionRateProp = QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG
-
   @ClusterTest
   def testAlterClientQuotasRequest(): Unit = {
 
@@ -56,63 +50,63 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
     // Add two configuration entries.
     alterEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> Some(10000.0)),
-      (ConsumerByteRateProp -> Some(20000.0))
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(10000.0)),
+      (QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> Some(20000.0))
     ), validateOnly = false)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> 10000.0),
-      (ConsumerByteRateProp -> 20000.0)
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 10000.0),
+      (QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0)
     ))
 
     // Update an existing entry.
     alterEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> Some(15000.0))
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(15000.0))
     ), validateOnly = false)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> 15000.0),
-      (ConsumerByteRateProp -> 20000.0)
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 15000.0),
+      (QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0)
     ))
 
     // Remove an existing configuration entry.
     alterEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> None)
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> None)
     ), validateOnly = false)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ConsumerByteRateProp -> 20000.0)
+      (QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0)
     ))
 
     // Remove a non-existent configuration entry.  This should make no changes.
     alterEntityQuotas(entity, Map(
-      (RequestPercentageProp -> None)
+      (QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> None)
     ), validateOnly = false)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ConsumerByteRateProp -> 20000.0)
+      (QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0)
     ))
 
     // Add back a deleted configuration entry.
     alterEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> Some(5000.0))
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(5000.0))
     ), validateOnly = false)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> 5000.0),
-      (ConsumerByteRateProp -> 20000.0)
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 5000.0),
+      (QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0)
     ))
 
     // Perform a mixed update.
     alterEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> Some(20000.0)),
-      (ConsumerByteRateProp -> None),
-      (RequestPercentageProp -> Some(12.3))
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(20000.0)),
+      (QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> None),
+      (QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> Some(12.3))
     ), validateOnly = false)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> 20000.0),
-      (RequestPercentageProp -> 12.3)
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0),
+      (QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> 12.3)
     ))
   }
 
@@ -122,55 +116,55 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
     // Set up a configuration.
     alterEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> Some(20000.0)),
-      (RequestPercentageProp -> Some(23.45))
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(20000.0)),
+      (QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> Some(23.45))
     ), validateOnly = false)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> 20000.0),
-      (RequestPercentageProp -> 23.45)
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0),
+      (QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> 23.45)
     ))
 
     // Validate-only addition.
     alterEntityQuotas(entity, Map(
-      (ConsumerByteRateProp -> Some(50000.0))
+      (QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> Some(50000.0))
     ), validateOnly = true)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> 20000.0),
-      (RequestPercentageProp -> 23.45)
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0),
+      (QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> 23.45)
     ))
 
     // Validate-only modification.
     alterEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> Some(10000.0))
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(10000.0))
     ), validateOnly = true)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> 20000.0),
-      (RequestPercentageProp -> 23.45)
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0),
+      (QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> 23.45)
     ))
 
     // Validate-only removal.
     alterEntityQuotas(entity, Map(
-      (RequestPercentageProp -> None)
+      (QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> None)
     ), validateOnly = true)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> 20000.0),
-      (RequestPercentageProp -> 23.45)
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0),
+      (QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> 23.45)
     ))
 
     // Validate-only mixed update.
     alterEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> Some(10000.0)),
-      (ConsumerByteRateProp -> Some(50000.0)),
-      (RequestPercentageProp -> None)
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(10000.0)),
+      (QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> Some(50000.0)),
+      (QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> None)
     ), validateOnly = true)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> 20000.0),
-      (RequestPercentageProp -> 23.45)
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0),
+      (QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> 23.45)
     ))
   }
 
@@ -187,13 +181,13 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     verifyDescribeEntityQuotas(entity, Map.empty)
 
     alterEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> Some(10000.0)),
-      (ConsumerByteRateProp -> Some(20000.0))
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(10000.0)),
+      (QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> Some(20000.0))
     ), validateOnly = false)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> 10000.0),
-      (ConsumerByteRateProp -> 20000.0)
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 10000.0),
+      (QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0)
     ))
   }
 
@@ -212,8 +206,8 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
         val result = describeClientQuotas(ClientQuotaFilter.containsOnly(List(entityFilter).asJava))
         assertEquals(expectedMatches.keySet, result.asScala.keySet)
         result.asScala.foreach { case (entity, props) =>
-          assertEquals(Set(IpConnectionRateProp), props.asScala.keySet)
-          assertEquals(expectedMatches(entity), props.get(IpConnectionRateProp))
+          assertEquals(Set(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG), props.asScala.keySet)
+          assertEquals(expectedMatches(entity), props.get(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG))
           val entityName = entity.entries.get(ClientQuotaEntity.IP)
           // ClientQuotaEntity with null name maps to default entity
           val entityIp = if (entityName == null)
@@ -232,48 +226,48 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     verifyIpQuotas(allIpEntityFilter, Map.empty)
 
     // Add a configuration entry.
-    alterEntityQuotas(entity, Map(IpConnectionRateProp -> Some(100.0)), validateOnly = false)
+    alterEntityQuotas(entity, Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(100.0)), validateOnly = false)
     verifyIpQuotas(entityFilter, Map(entity -> 100.0))
 
     // update existing entry
-    alterEntityQuotas(entity, Map(IpConnectionRateProp -> Some(150.0)), validateOnly = false)
+    alterEntityQuotas(entity, Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(150.0)), validateOnly = false)
     verifyIpQuotas(entityFilter, Map(entity -> 150.0))
 
     // update default value
-    alterEntityQuotas(defaultEntity, Map(IpConnectionRateProp -> Some(200.0)), validateOnly = false)
+    alterEntityQuotas(defaultEntity, Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(200.0)), validateOnly = false)
     verifyIpQuotas(defaultEntityFilter, Map(defaultEntity -> 200.0))
 
     // describe all IP quotas
     verifyIpQuotas(allIpEntityFilter, Map(entity -> 150.0, defaultEntity -> 200.0))
 
     // remove entry
-    alterEntityQuotas(entity, Map(IpConnectionRateProp -> None), validateOnly = false)
+    alterEntityQuotas(entity, Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> None), validateOnly = false)
     verifyIpQuotas(entityFilter, Map.empty)
 
     // remove default value
-    alterEntityQuotas(defaultEntity, Map(IpConnectionRateProp -> None), validateOnly = false)
+    alterEntityQuotas(defaultEntity, Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> None), validateOnly = false)
     verifyIpQuotas(allIpEntityFilter, Map.empty)
   }
 
   @ClusterTest
   def testAlterClientQuotasInvalidRequests(): Unit = {
     var entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "")).asJava)
-    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map((RequestPercentageProp -> Some(12.34))), validateOnly = true))
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map((QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> Some(12.34))), validateOnly = true))
 
     entity = new ClientQuotaEntity(Map((ClientQuotaEntity.CLIENT_ID -> "")).asJava)
-    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map((RequestPercentageProp -> Some(12.34))), validateOnly = true))
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map((QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> Some(12.34))), validateOnly = true))
 
     entity = new ClientQuotaEntity(Map(("" -> "name")).asJava)
-    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map((RequestPercentageProp -> Some(12.34))), validateOnly = true))
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map((QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> Some(12.34))), validateOnly = true))
 
     entity = new ClientQuotaEntity(Map.empty.asJava)
-    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map((ProducerByteRateProp -> Some(10000.5))), validateOnly = true))
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map((QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(10000.5))), validateOnly = true))
 
     entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "user")).asJava)
     assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(("bad" -> Some(1.0))), validateOnly = true))
 
     entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "user")).asJava)
-    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map((ProducerByteRateProp -> Some(10000.5))), validateOnly = true))
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map((QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(10000.5))), validateOnly = true))
   }
 
   private def expectInvalidRequestWithMessage(runnable: => Unit, expectedMessage: String): Unit = {
@@ -286,9 +280,9 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     val userAndIpEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> "user", ClientQuotaEntity.IP -> "1.2.3.4").asJava)
     val clientAndIpEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> "client", ClientQuotaEntity.IP -> "1.2.3.4").asJava)
     val expectedExceptionMessage = "Invalid quota entity combination"
-    expectInvalidRequestWithMessage(alterEntityQuotas(userAndIpEntity, Map(RequestPercentageProp -> Some(12.34)),
+    expectInvalidRequestWithMessage(alterEntityQuotas(userAndIpEntity, Map(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> Some(12.34)),
       validateOnly = true), expectedExceptionMessage)
-    expectInvalidRequestWithMessage(alterEntityQuotas(clientAndIpEntity, Map(RequestPercentageProp -> Some(12.34)),
+    expectInvalidRequestWithMessage(alterEntityQuotas(clientAndIpEntity, Map(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG -> Some(12.34)),
       validateOnly = true), expectedExceptionMessage)
   }
 
@@ -297,9 +291,9 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     val invalidHostPatternEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "not a valid host because it has spaces").asJava)
     val unresolvableHostEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP ->  "RFC2606.invalid").asJava)
     val expectedExceptionMessage = "not a valid IP"
-    expectInvalidRequestWithMessage(alterEntityQuotas(invalidHostPatternEntity, Map(IpConnectionRateProp -> Some(50.0)),
+    expectInvalidRequestWithMessage(alterEntityQuotas(invalidHostPatternEntity, Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(50.0)),
       validateOnly = true), expectedExceptionMessage)
-    expectInvalidRequestWithMessage(alterEntityQuotas(unresolvableHostEntity, Map(IpConnectionRateProp -> Some(50.0)),
+    expectInvalidRequestWithMessage(alterEntityQuotas(unresolvableHostEntity, Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(50.0)),
       validateOnly = true), expectedExceptionMessage)
   }
 
@@ -337,10 +331,10 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
   private def setupDescribeClientQuotasMatchTest() = {
     val userClientQuotas = matchUserClientEntities.map { case (e, v) =>
-      e -> Map((RequestPercentageProp, Some(v)))
+      e -> Map((QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, Some(v)))
     }.toMap
     val ipQuotas = matchIpEntities.map { case (e, v) =>
-      e -> Map((IpConnectionRateProp, Some(v)))
+      e -> Map((QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, Some(v)))
     }.toMap
     val result = alterClientQuotas(userClientQuotas ++ ipQuotas, validateOnly = false)
     (matchUserClientEntities ++ matchIpEntities).foreach(e => result(e._1).get(10, TimeUnit.SECONDS))
@@ -366,7 +360,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
         val result = matchEntity(e)
         assertEquals(1, result.size)
         assertTrue(result.get(e) != null)
-        val value = result.get(e).get(RequestPercentageProp)
+        val value = result.get(e).get(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG)
         assertNotNull(value)
         assertEquals(value, v, 1e-6)
       }
@@ -408,7 +402,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
           if (expectedMatchesMap.contains(entity)) {
             val config = result.get(entity)
             assertNotNull(config)
-            val value = config.get(RequestPercentageProp)
+            val value = config.get(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG)
             assertNotNull(value)
             assertEquals(expectedValue, value, 1e-6)
           } else {
@@ -419,7 +413,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
           if (expectedMatchesMap.contains(entity)) {
             val config = result.get(entity)
             assertNotNull(config)
-            val value = config.get(IpConnectionRateProp)
+            val value = config.get(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG)
             assertNotNull(value)
             assertEquals(expectedValue, value, 1e-6)
           } else {
@@ -514,11 +508,11 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "user with spaces")).asJava)
 
     alterEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> Some(20000.0)),
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(20000.0)),
     ), validateOnly = false)
 
     verifyDescribeEntityQuotas(entity, Map(
-      (ProducerByteRateProp -> 20000.0),
+      (QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0),
     ))
   }
 
@@ -527,8 +521,8 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     // An entity using the name associated with the default entity name. The entity's name should be sanitized so
     // that it does not conflict with the default entity name.
     val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.CLIENT_ID -> ZooKeeperInternals.DEFAULT_STRING)).asJava)
-    alterEntityQuotas(entity, Map((ProducerByteRateProp -> Some(20000.0))), validateOnly = false)
-    verifyDescribeEntityQuotas(entity, Map((ProducerByteRateProp -> 20000.0)))
+    alterEntityQuotas(entity, Map((QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(20000.0))), validateOnly = false)
+    verifyDescribeEntityQuotas(entity, Map((QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0)))
 
     // This should not match.
     val result = describeClientQuotas(

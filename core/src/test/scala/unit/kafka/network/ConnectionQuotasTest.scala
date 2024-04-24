@@ -27,13 +27,12 @@ import kafka.server.KafkaConfig
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.config.{ReplicationConfigs, QuotaConfigs}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
@@ -73,8 +72,8 @@ class ConnectionQuotasTest {
     // ConnectionQuotas does not limit inter-broker listener even when broker-wide connection limit is reached
     props.put(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "REPLICATION")
     props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT,ADMIN:PLAINTEXT")
-    props.put(KafkaConfig.NumQuotaSamplesProp, numQuotaSamples.toString)
-    props.put(KafkaConfig.QuotaWindowSizeSecondsProp, quotaWindowSizeSeconds.toString)
+    props.put(QuotaConfigs.NUM_QUOTA_SAMPLES_CONFIG, numQuotaSamples.toString)
+    props.put(QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_CONFIG, quotaWindowSizeSeconds.toString)
     props
   }
 

@@ -20,7 +20,6 @@ import java.util
 import java.util.Properties
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.server.ConfigAdminManager.{prepareIncrementalConfigs, toLoggableProps}
-import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.metadata.ZkConfigRepository
 import kafka.utils._
 import kafka.utils.Implicits._
@@ -48,7 +47,7 @@ import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.common.AdminOperationException
-import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals}
+import org.apache.kafka.server.config.{ConfigType, QuotaConfigs, ZooKeeperInternals}
 import org.apache.kafka.server.config.ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG
 import org.apache.kafka.server.config.ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG
 import org.apache.kafka.storage.internals.log.LogConfig
