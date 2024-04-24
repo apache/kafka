@@ -29,8 +29,9 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
-import org.apache.kafka.server.config.{ReplicationConfigs, KafkaSecurityConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KafkaSecurityConfigs, ReplicationConfigs, ZkConfigs}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.network.SocketServerConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -75,9 +76,9 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
 
       val props = TestUtils.createBrokerConfig(brokerId, zkConnect, trustStoreFile = Some(trustStoreFile))
       // Ensure that we can support multiple listeners per security protocol and multiple security protocols
-      props.put(KafkaConfig.ListenersProp, s"$SecureInternal://localhost:0, $Internal://localhost:0, " +
+      props.put(SocketServerConfigs.LISTENERS_CONFIG, s"$SecureInternal://localhost:0, $Internal://localhost:0, " +
         s"$SecureExternal://localhost:0, $External://localhost:0")
-      props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$Internal:PLAINTEXT, $SecureInternal:SASL_SSL," +
+      props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"$Internal:PLAINTEXT, $SecureInternal:SASL_SSL," +
         s"$External:PLAINTEXT, $SecureExternal:SASL_SSL")
       props.put(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, Internal)
       props.put(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")

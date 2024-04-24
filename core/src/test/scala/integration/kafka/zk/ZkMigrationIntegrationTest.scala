@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.authorizer.StandardAcl
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
 import org.apache.kafka.security.PasswordEncoder
@@ -189,7 +190,7 @@ class ZkMigrationIntegrationTest {
       zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart() // This would throw if authorizers weren't allowed
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
@@ -321,7 +322,7 @@ class ZkMigrationIntegrationTest {
       zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart()
 
       // Emulate a ZK topic deletion
@@ -455,7 +456,7 @@ class ZkMigrationIntegrationTest {
       zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart()
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
@@ -519,7 +520,7 @@ class ZkMigrationIntegrationTest {
       zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart() // This would throw if authorizers weren't allowed
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
@@ -604,7 +605,7 @@ class ZkMigrationIntegrationTest {
       zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart()
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
@@ -672,7 +673,7 @@ class ZkMigrationIntegrationTest {
       zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart()
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
@@ -732,7 +733,7 @@ class ZkMigrationIntegrationTest {
       zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart()
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
@@ -807,7 +808,7 @@ class ZkMigrationIntegrationTest {
       zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart()
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
