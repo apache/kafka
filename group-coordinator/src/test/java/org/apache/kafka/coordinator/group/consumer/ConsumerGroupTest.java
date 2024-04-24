@@ -52,6 +52,8 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
+import static org.apache.kafka.coordinator.group.assignor.ConsumerGroupSubscriptionModel.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.ConsumerGroupSubscriptionModel.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -736,6 +738,73 @@ public class ConsumerGroupTest {
                 image.topics(),
                 image.cluster()
             )
+        );
+    }
+
+    @Test
+    public void testUpdateSubscribedTopicNamesAndSubscriptionModel() {
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+            .setSubscribedTopicNames(Arrays.asList("bar", "foo"))
+            .build();
+        ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
+            .setSubscribedTopicNames(Arrays.asList("bar", "foo"))
+            .build();
+
+        ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
+
+        // It should be empty by default.
+        assertEquals(
+            Collections.emptySet(),
+            consumerGroup.subscribedTopicNames()
+        );
+
+        // It should be Homogeneous by default.
+        assertEquals(
+            HOMOGENEOUS,
+            consumerGroup.groupSubscriptionModel()
+        );
+
+        consumerGroup.updateMember(member1);
+
+        // It should be Homogeneous since there is just 1 member
+        assertEquals(
+            HOMOGENEOUS,
+            consumerGroup.groupSubscriptionModel()
+        );
+
+        consumerGroup.updateMember(member2);
+
+        assertEquals(
+            HETEROGENEOUS,
+            consumerGroup.groupSubscriptionModel()
+        );
+
+        consumerGroup.updateMember(member3);
+
+        assertEquals(
+            HETEROGENEOUS,
+            consumerGroup.groupSubscriptionModel()
+        );
+
+        consumerGroup.removeMember(member1.memberId());
+
+        assertEquals(
+            HOMOGENEOUS,
+            consumerGroup.groupSubscriptionModel()
+        );
+
+        ConsumerGroupMember member4 = new ConsumerGroupMember.Builder("member2")
+            .setSubscribedTopicNames(Arrays.asList("bar", "foo", "zar"))
+            .build();
+
+        consumerGroup.updateMember(member4);
+
+        assertEquals(
+            HETEROGENEOUS,
+            consumerGroup.groupSubscriptionModel()
         );
     }
 
