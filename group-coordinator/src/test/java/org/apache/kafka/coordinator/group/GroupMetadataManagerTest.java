@@ -3589,7 +3589,7 @@ public class GroupMetadataManagerTest {
         assertTrue(joinResult.joinFuture.isDone());
         assertEquals(Errors.GROUP_MAX_SIZE_REACHED.code(), joinResult.joinFuture.get().errorCode());
     }
-//todo
+
     @Test
     public void testDynamicMembersJoinGroupWithMaxSizeAndRequiredKnownMember() {
         boolean requiredKnownMemberId = true;
@@ -10271,7 +10271,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testConsumerGroupJoinThrowsExceptionIfGroupOverMaxSize() throws Exception {
+    public void testConsumerGroupJoinThrowsExceptionIfGroupOverMaxSize() {
         String groupId = "group-id";
         String memberId = Uuid.randomUuid().toString();
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -10288,7 +10288,6 @@ public class GroupMetadataManagerTest {
             .withGroupId(groupId)
             .withMemberId(UNKNOWN_MEMBER_ID)
             .withDefaultProtocolTypeAndProtocols()
-            .withReason("exceed max group size")
             .build();
 
         Exception ex = assertThrows(GroupMaxSizeReachedException.class, () -> context.sendClassicGroupJoin(request));
@@ -10296,7 +10295,44 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testConsumerGroupJoinThrowsExceptionIfProtocolIsNotSupported() throws Exception {
+    public void testConsumerGroupJoinInvalidSessionTimeout() throws Exception {
+        int minSessionTimeout = 50;
+        int maxSessionTimeout = 100;
+        String groupId = "group-id";
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withClassicGroupMinSessionTimeoutMs(minSessionTimeout)
+            .withClassicGroupMaxSessionTimeoutMs(maxSessionTimeout)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10))
+            .build();
+
+        JoinGroupRequestData requestWithSmallSessionTimeout = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withSessionTimeoutMs(minSessionTimeout - 1)
+            .build();
+        GroupMetadataManagerTestContext.JoinResult joinResultWithSmallSessionTimeout =
+            context.sendClassicGroupJoin(requestWithSmallSessionTimeout);
+
+        assertTrue(joinResultWithSmallSessionTimeout.joinFuture.isDone());
+        assertTrue(joinResultWithSmallSessionTimeout.records.isEmpty());
+        assertEquals(Errors.INVALID_SESSION_TIMEOUT.code(), joinResultWithSmallSessionTimeout.joinFuture.get().errorCode());
+
+        JoinGroupRequestData requestWithLargeSessionTimeout = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withSessionTimeoutMs(maxSessionTimeout + 1)
+            .build();
+        GroupMetadataManagerTestContext.JoinResult joinResultWithLargeSessionTimeout =
+            context.sendClassicGroupJoin(requestWithLargeSessionTimeout);
+
+        assertTrue(joinResultWithLargeSessionTimeout.joinFuture.isDone());
+        assertTrue(joinResultWithLargeSessionTimeout.records.isEmpty());
+        assertEquals(Errors.INVALID_SESSION_TIMEOUT.code(), joinResultWithLargeSessionTimeout.joinFuture.get().errorCode());
+    }
+
+    @Test
+    public void testConsumerGroupJoinThrowsExceptionIfProtocolIsNotSupported() {
         String groupId = "group-id";
         String memberId = Uuid.randomUuid().toString();
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -10309,14 +10345,21 @@ public class GroupMetadataManagerTest {
                     .build()))
             .build();
 
-        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+        JoinGroupRequestData requestWithEmptyProtocols = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
             .withMemberId(UNKNOWN_MEMBER_ID)
+            .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
             .withDefaultProtocolTypeAndProtocols()
-            .withReason("exceed max group size")
             .build();
+        assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(requestWithEmptyProtocols));
 
-        assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(request));
+        JoinGroupRequestData requestWithInvalidProtocolType = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withProtocolType("connect")
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+        assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(requestWithInvalidProtocolType));
     }
 
     @Test
@@ -10583,6 +10626,7 @@ public class GroupMetadataManagerTest {
                 Collections.emptyList()))
             .build();
 
+        // The static member joins with UNKNOWN_MEMBER_ID.
         GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
             request,
             true
@@ -10696,6 +10740,7 @@ public class GroupMetadataManagerTest {
             .withProtocols(protocols)
             .build();
 
+        // The member rejoins with the same member id and protocols.
         GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
             request,
             true
