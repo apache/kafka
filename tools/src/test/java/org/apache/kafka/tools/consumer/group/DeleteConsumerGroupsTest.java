@@ -52,6 +52,9 @@ import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 import static org.apache.kafka.common.ConsumerGroupState.EMPTY;
 import static org.apache.kafka.common.ConsumerGroupState.STABLE;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -59,9 +62,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
 @ClusterTestDefaults(clusterType = Type.ALL, serverProperties = {
-        @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-        @ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true")
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true")
 })
 public class DeleteConsumerGroupsTest {
     private static final String TOPIC = "foo";
@@ -260,12 +263,12 @@ public class DeleteConsumerGroupsTest {
         assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
     }
 
-    private ConsumerGroupExecutor buildConsumerGroupExecutor(String group, GroupProtocol protocol) {
+    private ConsumerGroupExecutor buildConsumerGroupExecutor(String groupId, GroupProtocol protocol) {
         if (cluster.isKRaftTest()) {
             return ConsumerGroupExecutor.buildConsumerGroup(
                     cluster.bootstrapServers(),
                     1,
-                    null != group ? group : GROUP,
+                    null != groupId ? groupId : GROUP,
                     TOPIC,
                     protocol.name,
                     Optional.empty(),
@@ -276,7 +279,7 @@ public class DeleteConsumerGroupsTest {
             return ConsumerGroupExecutor.buildClassicGroup(
                     cluster.bootstrapServers(),
                     1,
-                    null != group ? group : GROUP,
+                    null != groupId ? groupId : GROUP,
                     TOPIC,
                     RangeAssignor.class.getName(),
                     Optional.empty(),

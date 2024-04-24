@@ -35,80 +35,83 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.common.GroupType.CONSUMER;
 
 public class ConsumerGroupExecutor implements AutoCloseable {
-    final int numThreads;
-    final ExecutorService executor;
-    final List<ConsumerRunnable> consumers = new ArrayList<>();
+    private final ExecutorService executor;
+    private final List<ConsumerRunnable> consumers = new ArrayList<>();
 
     private ConsumerGroupExecutor(
-            String broker,
-            int numConsumers,
+            String brokerAddress,
+            int numberOfConsumers,
             String groupId,
             String groupProtocol,
             String topic,
             String assignmentStrategy,
             Optional<String> remoteAssignor,
-            Optional<Properties> customPropsOpt,
+            Optional<Properties> customConfigs,
             boolean syncCommit
     ) {
-        this.numThreads = numConsumers;
-        this.executor = Executors.newFixedThreadPool(numThreads);
-        IntStream.rangeClosed(1, numConsumers).forEach(i -> {
-            ConsumerRunnable th = new ConsumerRunnable(
-                    broker,
+        this.executor = Executors.newFixedThreadPool(numberOfConsumers);
+        IntStream.rangeClosed(1, numberOfConsumers).forEach(i -> {
+            ConsumerRunnable consumerThread = new ConsumerRunnable(
+                    brokerAddress,
                     groupId,
                     groupProtocol,
                     topic,
                     assignmentStrategy,
                     remoteAssignor,
-                    customPropsOpt,
+                    customConfigs,
                     syncCommit
             );
-            submit(th);
+            submit(consumerThread);
         });
     }
 
-    public static ConsumerGroupExecutor buildConsumerGroup(String broker,
+    public static ConsumerGroupExecutor buildConsumerGroup(String brokerAddress,
                                                            int numConsumers,
                                                            String groupId,
                                                            String topic,
                                                            String groupProtocol,
                                                            Optional<String> remoteAssignor,
-                                                           Optional<Properties> customPropsOpt,
+                                                           Optional<Properties> customConfigs,
                                                            boolean syncCommit) {
         return new ConsumerGroupExecutor(
-                broker,
+                brokerAddress,
                 numConsumers,
                 groupId,
                 groupProtocol,
                 topic,
                 RangeAssignor.class.getName(),
                 remoteAssignor,
-                customPropsOpt,
+                customConfigs,
                 syncCommit
         );
     }
 
-    public static ConsumerGroupExecutor buildClassicGroup(String broker,
+    public static ConsumerGroupExecutor buildClassicGroup(String brokerAddress,
                                                           int numConsumers,
                                                           String groupId,
                                                           String topic,
                                                           String assignmentStrategy,
-                                                          Optional<Properties> customPropsOpt,
+                                                          Optional<Properties> customConfigs,
                                                           boolean syncCommit) {
         return new ConsumerGroupExecutor(
-                broker,
+                brokerAddress,
                 numConsumers,
                 groupId,
                 GroupProtocol.CLASSIC.name,
                 topic,
                 assignmentStrategy,
                 Optional.empty(),
-                customPropsOpt,
+                customConfigs,
                 syncCommit
         );
     }
@@ -130,31 +133,30 @@ public class ConsumerGroupExecutor implements AutoCloseable {
     }
 
     static class ConsumerRunnable implements Runnable {
-        final String broker;
-        final String groupId;
-        final Optional<Properties> customPropsOpt;
-        final boolean syncCommit;
-        final String topic;
-        final String groupProtocol;
-        final String assignmentStrategy;
-        final Optional<String> remoteAssignor;
-        final Properties props = new Properties();
-        volatile boolean isShutdown = false;
-        KafkaConsumer<String, String> consumer;
+        private final String brokerAddress;
+        private final String groupId;
+        private final Properties customConfigs;
+        private final boolean syncCommit;
+        private final String topic;
+        private final String groupProtocol;
+        private final String assignmentStrategy;
+        private final Optional<String> remoteAssignor;
+        private final Properties props = new Properties();
+        private KafkaConsumer<String, String> consumer;
+        private boolean configured = false;
+        private volatile boolean isShutdown = false;
 
-        boolean configured = false;
-
-        public ConsumerRunnable(String broker,
+        public ConsumerRunnable(String brokerAddress,
                                 String groupId,
                                 String groupProtocol,
                                 String topic,
                                 String assignmentStrategy,
                                 Optional<String> remoteAssignor,
-                                Optional<Properties> customPropsOpt,
+                                Optional<Properties> customConfigs,
                                 boolean syncCommit) {
-            this.broker = broker;
+            this.brokerAddress = brokerAddress;
             this.groupId = groupId;
-            this.customPropsOpt = customPropsOpt;
+            this.customConfigs = customConfigs.orElse(new Properties());
             this.syncCommit = syncCommit;
             this.topic = topic;
             this.groupProtocol = groupProtocol;
@@ -167,20 +169,20 @@ public class ConsumerGroupExecutor implements AutoCloseable {
         private void configure() {
             configured = true;
             configure(props);
-            customPropsOpt.ifPresent(props::putAll);
+            props.putAll(customConfigs);
             consumer = new KafkaConsumer<>(props);
         }
 
         private void configure(Properties props) {
-            props.put("bootstrap.servers", broker);
-            props.put("group.id", groupId);
-            props.put("key.deserializer", StringDeserializer.class.getName());
-            props.put("value.deserializer", StringDeserializer.class.getName());
+            props.put(BOOTSTRAP_SERVERS_CONFIG, brokerAddress);
+            props.put(GROUP_ID_CONFIG, groupId);
+            props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+            props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
             props.put(GROUP_PROTOCOL_CONFIG, groupProtocol);
             if (Objects.equals(groupProtocol, CONSUMER.toString())) {
                 remoteAssignor.ifPresent(assignor -> props.put(GROUP_REMOTE_ASSIGNOR_CONFIG, assignor));
             } else {
-                props.put("partition.assignment.strategy", assignmentStrategy);
+                props.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, assignmentStrategy);
             }
         }
 
@@ -206,5 +208,4 @@ public class ConsumerGroupExecutor implements AutoCloseable {
             consumer.wakeup();
         }
     }
-
 }
