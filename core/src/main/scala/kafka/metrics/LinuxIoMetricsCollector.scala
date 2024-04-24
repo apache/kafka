@@ -29,9 +29,9 @@ import scala.jdk.CollectionConverters._
  */
 class LinuxIoMetricsCollector(procRoot: String, val time: Time, val logger: Logger) {
   import LinuxIoMetricsCollector._
-  private var lastUpdateMs: Long = -1L
-  private var cachedReadBytes:Long = 0L
-  private var cachedWriteBytes:Long = 0L
+  private var lastUpdateMs = -1L
+  private var cachedReadBytes = 0L
+  private var cachedWriteBytes = 0L
   val path: Path = Paths.get(procRoot, "self", "io")
 
   def readBytes(): Long = this.synchronized {
