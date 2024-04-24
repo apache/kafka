@@ -1256,7 +1256,17 @@ public class ConfigDef {
         public final boolean internalConfig;
         public final String alternativeString;
 
+        // This constructor is present for backward compatibility reasons.
         public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
+                         Importance importance, String documentation, String group,
+                         int orderInGroup, Width width, String displayName,
+                         List<String> dependents, Recommender recommender,
+                         boolean internalConfig) {
+            this(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName,
+                dependents, recommender, internalConfig, null);
+        }
+
+        private ConfigKey(String name, Type type, Object defaultValue, Validator validator,
                          Importance importance, String documentation, String group,
                          int orderInGroup, Width width, String displayName,
                          List<String> dependents, Recommender recommender,
