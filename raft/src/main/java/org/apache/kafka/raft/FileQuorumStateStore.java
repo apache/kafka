@@ -20,7 +20,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.ShortNode;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.generated.QuorumStateData;
 import org.apache.kafka.raft.generated.QuorumStateData.Voter;
@@ -59,15 +58,15 @@ import java.util.stream.Collectors;
  *   "data_version":0}
  * </pre>
  * */
-public class FileBasedStateStore implements QuorumStateStore {
-    private static final Logger log = LoggerFactory.getLogger(FileBasedStateStore.class);
+public class FileQuorumStateStore implements QuorumStateStore {
+    private static final Logger log = LoggerFactory.getLogger(FileQuorumStateStore.class);
 
     private final File stateFile;
 
     static final String DATA_VERSION = "data_version";
     static final short HIGHEST_SUPPORTED_VERSION = 1;
 
-    public FileBasedStateStore(final File stateFile) {
+    public FileQuorumStateStore(final File stateFile) {
         this.stateFile = stateFile;
     }
 
@@ -93,8 +92,8 @@ public class FileBasedStateStore implements QuorumStateStore {
                     " does not have " + DATA_VERSION + " field");
             }
 
-            if (dataVersionNode.asInt() != 0) {
-                throw new UnsupportedVersionException("Unknown data version of " + dataVersionNode.toString());
+            if (dataVersionNode.asInt() < 0 || dataVersionNode.asInt() > 1) {
+                throw new IllegalStateException("Unknown quorum state version of " + dataVersionNode.toString());
             }
 
             final short dataVersion = dataVersionNode.shortValue();
@@ -129,7 +128,7 @@ public class FileBasedStateStore implements QuorumStateStore {
             data.leaderEpoch(),
             data.leaderId() == UNKNOWN_LEADER_ID ? OptionalInt.empty() : OptionalInt.of(data.leaderId()),
             data.votedId() == NOT_VOTED ? OptionalInt.empty() : OptionalInt.of(data.votedId()),
-            data.votedUuid() == NO_VOTED_UUID ? Optional.empty() : Optional.of(data.votedUuid()),
+            data.votedUuid().equals(NO_VOTED_UUID) ? Optional.empty() : Optional.of(data.votedUuid()),
             data.currentVoters().stream().map(Voter::voterId).collect(Collectors.toSet())
         );
     }
@@ -137,14 +136,25 @@ public class FileBasedStateStore implements QuorumStateStore {
     @Override
     public void writeElectionState(ElectionState latest, short kraftVersion) {
         // TODO: not sure if this is correct. For example, current voters should be null/empty if kraft.version is 1
+        short quorumStateVersion = quorumStateVersionFromKRaftVersion(kraftVersion);
         QuorumStateData data = new QuorumStateData()
             .setLeaderEpoch(latest.epoch())
             .setLeaderId(latest.hasLeader() ? latest.leaderId() : UNKNOWN_LEADER_ID)
-            .setVotedId(latest.hasVoted() ? latest.votedId() : NOT_VOTED)
-            .setVotedUuid(latest.votedUuid().isPresent() ? latest.votedUuid().get() : NO_VOTED_UUID)
-            .setCurrentVoters(voters(latest.voters()));
+            .setVotedId(latest.hasVoted() ? latest.votedId() : NOT_VOTED);
 
-        writeElectionStateToFile(stateFile, data, quorumStateVersionFromKRaftVersion(kraftVersion));
+        if (quorumStateVersion == 0) {
+            data.setCurrentVoters(voters(latest.voters()));
+        } else if (quorumStateVersion == 1) {
+            data.setVotedUuid(latest.votedUuid().isPresent() ? latest.votedUuid().get() : NO_VOTED_UUID);
+        } else {
+            throw new IllegalStateException(
+                String.format(
+                    "File quorum state store doesn't handle supported version %d", quorumStateVersion
+                )
+            );
+        }
+
+        writeElectionStateToFile(stateFile, data, quorumStateVersion);
     }
 
     private short quorumStateVersionFromKRaftVersion(short kraftVersion) {
