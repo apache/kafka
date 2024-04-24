@@ -396,6 +396,7 @@ public class Sender implements Runnable {
                 // Update both readyTimeMs and drainTimeMs, this would "reset" the node
                 // latency.
                 this.accumulator.updateNodeLatencyStats(node.id(), now, true);
+                if (transactionManager != null) this.transactionManager.handleCoordinatorReady();
             }
         }
 
