@@ -23,6 +23,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.field.FieldSyntaxVersion;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -192,11 +193,12 @@ public class ExtractFieldTest {
     }
 
     @Test
+    @DisplayName("Null key value instead of default must be used")
     public void whenKeyConverterReplaceNullWithDefaultIsFalseExtractFieldWithNullValueMustReturnNull() {
 
         Map<String, Object> config = new HashMap<>();
         config.put("field", "optional_with_default");
-        config.put("key.converter.replace.null.with.default", false);
+        config.put("replace.null.with.default", false);
 
         xformKey.configure(config);
 
@@ -214,11 +216,11 @@ public class ExtractFieldTest {
     }
 
     @Test
+    @DisplayName("Default key value must be used")
     public void whenKeyConverterReplaceNullWithDefaultIsTrueExtractFieldWithNullValueMustReturnDefaultValueWhenPresent() {
 
         Map<String, Object> config = new HashMap<>();
         config.put("field", "optional_with_default");
-        config.put("key.converter.replace.null.with.default", true);
 
         xformKey.configure(config);
 
@@ -237,11 +239,12 @@ public class ExtractFieldTest {
 
 
     @Test
+    @DisplayName("Null value instead of default must be used")
     public void whenValueConverterReplaceNullWithDefaultIsFalseExtractFieldWithNullValueMustReturnNull() {
 
         Map<String, Object> config = new HashMap<>();
         config.put("field", "optional_with_default");
-        config.put("value.converter.replace.null.with.default", false);
+        config.put("replace.null.with.default", false);
 
         xformValue.configure(config);
 
@@ -259,11 +262,11 @@ public class ExtractFieldTest {
     }
 
     @Test
+    @DisplayName("Default key value must be used")
     public void whenValueConverterReplaceNullWithDefaultIsTrueExtractFieldWithNullValueMustReturnDefaultValueWhenPresent() {
 
         Map<String, Object> config = new HashMap<>();
         config.put("field", "optional_with_default");
-        config.put("value.converter.replace.null.with.default", true);
 
         xformValue.configure(config);
 

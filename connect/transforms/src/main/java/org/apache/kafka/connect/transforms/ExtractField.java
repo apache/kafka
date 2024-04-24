@@ -41,6 +41,7 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
                     + "or value (<code>" + Value.class.getName() + "</code>).";
 
     private static final String FIELD_CONFIG = "field";
+    private static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
 
     public static final ConfigDef CONFIG_DEF = FieldSyntaxVersion.appendConfigTo(
         new ConfigDef()
@@ -50,16 +51,13 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
                 ConfigDef.NO_DEFAULT_VALUE,
                 ConfigDef.Importance.MEDIUM,
                 "Field name to extract."
-            ));
+            ).define(REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, Boolean.TRUE, ConfigDef.Importance.MEDIUM, "Determine if null field value must be replaced with its default value or not."));
 
     private static final String PURPOSE = "field extraction";
-    private static final String KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG = "key.converter.replace.null.with.default";
-    private static final String VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG = "value.converter.replace.null.with.default";
 
     private SingleFieldPath fieldPath;
     private String originalPath;
-    protected boolean keyConverterReplaceNullWithDefault;
-    protected boolean valueConverterReplaceNullWithDefault;
+    private boolean replaceNullWithDefault;
 
     @Override
     public String version() {
@@ -71,8 +69,7 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         originalPath = config.getString(FIELD_CONFIG);
         fieldPath = new SingleFieldPath(originalPath, FieldSyntaxVersion.fromConfig(config));
-        keyConverterReplaceNullWithDefault = props.get(KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG) == null || (Boolean) props.get(KEY_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG);
-        valueConverterReplaceNullWithDefault = props.get(VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG) == null || (Boolean) props.get(VALUE_CONVERTER_REPLACE_NULL_WITH_DEFAULT_CONFIG);
+        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
     }
 
     @Override
@@ -89,7 +86,7 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
                 throw new IllegalArgumentException("Unknown field: " + originalPath);
             }
 
-            if (replaceNullWithDefault()) {
+            if (replaceNullWithDefault) {
                 return newRecord(record, field.schema(), value == null ? null : fieldPath.valueFrom(value));
             }
 
@@ -112,8 +109,6 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
 
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue);
 
-    protected abstract boolean replaceNullWithDefault();
-
     public static class Key<R extends ConnectRecord<R>> extends ExtractField<R> {
         @Override
         protected Schema operatingSchema(R record) {
@@ -128,11 +123,6 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
         @Override
         protected R newRecord(R record, Schema updatedSchema, Object updatedValue) {
             return record.newRecord(record.topic(), record.kafkaPartition(), updatedSchema, updatedValue, record.valueSchema(), record.value(), record.timestamp());
-        }
-
-        @Override
-        protected boolean replaceNullWithDefault() {
-            return keyConverterReplaceNullWithDefault;
         }
     }
 
@@ -150,11 +140,6 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
         @Override
         protected R newRecord(R record, Schema updatedSchema, Object updatedValue) {
             return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), updatedSchema, updatedValue, record.timestamp());
-        }
-
-        @Override
-        protected boolean replaceNullWithDefault() {
-            return valueConverterReplaceNullWithDefault;
         }
     }
 

@@ -24,6 +24,7 @@ import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -211,6 +212,7 @@ public class InsertFieldTest {
     }
 
     @Test
+    @DisplayName("Null value fields copied as null instead of default")
     public void whenValueConverterReplaceNullWithDefaultIsFalseNullCopiedFieldsWithNullValueMustRemainNull() {
 
         final Map<String, Object> props = new HashMap<>();
@@ -219,7 +221,7 @@ public class InsertFieldTest {
         props.put("timestamp.field", "timestamp_field?");
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
-        props.put("value.converter.replace.null.with.default", false);
+        props.put("replace.null.with.default", false);
 
         xformValue.configure(props);
 
@@ -240,6 +242,7 @@ public class InsertFieldTest {
     }
 
     @Test
+    @DisplayName("Use default value when coping fields with null value")
     public void whenValueConverterReplaceNullWithDefaultIsTrueCopiedFieldsWithNullValueMustUseDefault() {
 
         final Map<String, Object> props = new HashMap<>();
@@ -248,7 +251,6 @@ public class InsertFieldTest {
         props.put("timestamp.field", "timestamp_field?");
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
-        props.put("value.converter.replace.null.with.default", true);
 
         xformValue.configure(props);
 
