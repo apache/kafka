@@ -199,7 +199,7 @@ public class ServerSideAssignorBenchmark {
 
                 // Assign topics to each member in the current bucket
                 for (int i = memberStartIndex; i < memberEndIndex; i++) {
-                    addMemberSpec(members, i, new HashSet<>(bucketTopics));
+                    addMemberSpec(members, i, bucketTopics);
                 }
             }
         }
@@ -256,7 +256,7 @@ public class ServerSideAssignorBenchmark {
 
         Collection<Uuid> subscribedTopicIdsForNewMember;
         if (subscriptionModel == SubscriptionModel.HETEROGENEOUS) {
-            subscribedTopicIdsForNewMember = updatedMembers.values().iterator().next().subscribedTopicIds();
+            subscribedTopicIdsForNewMember = updatedMembers.get("member" + (memberCount - 2)).subscribedTopicIds();
         } else {
             subscribedTopicIdsForNewMember = allTopicIds;
         }

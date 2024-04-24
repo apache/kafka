@@ -264,7 +264,7 @@ public class ClientSideAssignorBenchmark {
 
         List<String> subscribedTopicsForNewMember;
         if (subscriptionModel == SubscriptionModel.HETEROGENEOUS) {
-            subscribedTopicsForNewMember = subscriptions.values().iterator().next().topics();
+            subscribedTopicsForNewMember = subscriptions.get("member" + (memberCount - 2)).topics();
         } else {
             subscribedTopicsForNewMember = allTopicNames;
         }
