@@ -241,7 +241,7 @@ public class Assertions {
                     })
                 );
             } catch (SchemaException ex) {
-                System.out.println("Failed deserialization: " + ex.getMessage());
+                fail("Failed deserialization: " + ex.getMessage());
             }
             assertEquals(expectedValue, actualValue);
         } else {
