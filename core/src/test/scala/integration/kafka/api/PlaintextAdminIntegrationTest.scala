@@ -27,7 +27,7 @@ import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.metadata.KRaftMetadataCache
-import kafka.server.{DynamicConfig, KafkaConfig}
+import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestUtils}
 import org.apache.kafka.clients.HostResolver
@@ -46,7 +46,7 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerLogConfigs, QuotaConfigs, ZkConfigs}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
@@ -1878,7 +1878,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // verify subtract operation, including from an empty property
     topic1AlterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT), AlterConfigOp.OpType.SUBTRACT),
-      new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0"), AlterConfigOp.OpType.SUBTRACT)
+      new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0"), AlterConfigOp.OpType.SUBTRACT)
     ).asJava
 
     // subtract all from this list property
@@ -1903,7 +1903,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     assertEquals("delete", configs.get(topic1Resource).get(TopicConfig.CLEANUP_POLICY_CONFIG).value)
     assertEquals("1000", configs.get(topic1Resource).get(TopicConfig.FLUSH_MS_CONFIG).value) // verify previous change is still intact
-    assertEquals("", configs.get(topic1Resource).get(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG).value)
+    assertEquals("", configs.get(topic1Resource).get(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG).value)
     assertEquals("", configs.get(topic2Resource).get(TopicConfig.CLEANUP_POLICY_CONFIG).value )
 
     // Alter topics with validateOnly=true
@@ -1954,12 +1954,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertNotEquals("", subtractValues)
 
     val topicCreateConfigs = new Properties
-    topicCreateConfigs.setProperty(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, appendValues)
+    topicCreateConfigs.setProperty(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, appendValues)
     createTopic(topic, numPartitions = 1, replicationFactor = 1, topicCreateConfigs)
 
     // Append value that is already present
     val topicAppendConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, appendValues), AlterConfigOp.OpType.APPEND),
+      new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, appendValues), AlterConfigOp.OpType.APPEND),
     ).asJavaCollection
 
     val appendResult = client.incrementalAlterConfigs(Map(topicResource -> topicAppendConfigs).asJava)
@@ -1967,7 +1967,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // Subtract values that are not present
     val topicSubtractConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, subtractValues), AlterConfigOp.OpType.SUBTRACT)
+      new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, subtractValues), AlterConfigOp.OpType.SUBTRACT)
     ).asJavaCollection
     val subtractResult = client.incrementalAlterConfigs(Map(topicResource -> topicSubtractConfigs).asJava)
     subtractResult.all.get
@@ -1978,7 +1978,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val describeResult = client.describeConfigs(Seq(topicResource).asJava)
     val configs = describeResult.all.get
 
-    assertEquals(appendValues, configs.get(topicResource).get(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG).value)
+    assertEquals(appendValues, configs.get(topicResource).get(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG).value)
   }
 
   @ParameterizedTest
@@ -1987,31 +1987,31 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = Admin.create(createConfig)
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
     client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "123"),
+      Seq(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "123"),
           AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "456"),
+        new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "456"),
           AlterConfigOp.OpType.SET)
       ).asJavaCollection).asJava).all().get()
     TestUtils.waitUntilTrue(() => {
       val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
         all().get().get(broker0Resource).entries().asScala.map(entry => (entry.name, entry.value)).toMap
-      ("123".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
-        "456".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")))
+      ("123".equals(broker0Configs.getOrElse(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
+        "456".equals(broker0Configs.getOrElse(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "")))
     }, "Expected to see the broker properties we just set", pause=25)
     client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, ""),
+      Seq(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, ""),
         AlterConfigOp.OpType.DELETE),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "654"),
+        new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "654"),
           AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "987"),
+        new AlterConfigOp(new ConfigEntry(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, "987"),
           AlterConfigOp.OpType.SET)
       ).asJavaCollection).asJava).all().get()
     TestUtils.waitUntilTrue(() => {
       val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
         all().get().get(broker0Resource).entries().asScala.map(entry => (entry.name, entry.value)).toMap
-      ("".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
-        "654".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")) &&
-        "987".equals(broker0Configs.getOrElse(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "")))
+      ("".equals(broker0Configs.getOrElse(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
+        "654".equals(broker0Configs.getOrElse(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
+        "987".equals(broker0Configs.getOrElse(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, "")))
     }, "Expected to see the broker properties we just modified", pause=25)
   }
 
@@ -2021,34 +2021,34 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = Admin.create(createConfig)
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
     client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "123"),
+      Seq(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "123"),
         AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "456"),
+        new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "456"),
           AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "789"),
+        new AlterConfigOp(new ConfigEntry(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, "789"),
           AlterConfigOp.OpType.SET)
       ).asJavaCollection).asJava).all().get()
     TestUtils.waitUntilTrue(() => {
       val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
         all().get().get(broker0Resource).entries().asScala.map(entry => (entry.name, entry.value)).toMap
-      ("123".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
-        "456".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")) &&
-        "789".equals(broker0Configs.getOrElse(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "")))
+      ("123".equals(broker0Configs.getOrElse(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
+        "456".equals(broker0Configs.getOrElse(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
+        "789".equals(broker0Configs.getOrElse(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, "")))
     }, "Expected to see the broker properties we just set", pause=25)
     client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, ""),
+      Seq(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, ""),
         AlterConfigOp.OpType.DELETE),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, ""),
+        new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, ""),
           AlterConfigOp.OpType.DELETE),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, ""),
+        new AlterConfigOp(new ConfigEntry(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, ""),
           AlterConfigOp.OpType.DELETE)
       ).asJavaCollection).asJava).all().get()
     TestUtils.waitUntilTrue(() => {
       val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
         all().get().get(broker0Resource).entries().asScala.map(entry => (entry.name, entry.value)).toMap
-      ("".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
-        "".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")) &&
-        "".equals(broker0Configs.getOrElse(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "")))
+      ("".equals(broker0Configs.getOrElse(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
+        "".equals(broker0Configs.getOrElse(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
+        "".equals(broker0Configs.getOrElse(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, "")))
     }, "Expected to see the broker properties we just removed to be deleted", pause=25)
   }
 
@@ -2495,7 +2495,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testAppendConfigToExistentValue(ignored: String): Unit = {
     val props = new Properties();
-    props.setProperty(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "1:1")
+    props.setProperty(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "1:1")
     testAppendConfig(props, "0:0", "1:1,0:0")
   }
 
@@ -2504,7 +2504,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     createTopic(topic, topicConfig = props)
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
     val topicAlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, append), AlterConfigOp.OpType.APPEND),
+      new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, append), AlterConfigOp.OpType.APPEND),
     ).asJavaCollection
 
     val alterResult = client.incrementalAlterConfigs(Map(
@@ -2513,7 +2513,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     alterResult.all().get(15, TimeUnit.SECONDS)
 
     ensureConsistentKRaftMetadata()
-    val config = client.describeConfigs(List(topicResource).asJava).all().get().get(topicResource).get(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
+    val config = client.describeConfigs(List(topicResource).asJava).all().get().get(topicResource).get(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
     assertEquals(expected, config.value())
   }
 
