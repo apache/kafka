@@ -132,16 +132,14 @@ public class CompletableEventReaper<T extends CompletableEvent<?>> {
             f.completeExceptionally(new CancellationException("Canceling event since the consumer is closing"));
         };
 
-        tracked
-                .stream()
-                .filter(e -> !e.future().isDone())
-                .forEach(cancelEvent);
+        tracked.stream()
+            .filter(e -> !e.future().isDone())
+            .forEach(cancelEvent);
         tracked.clear();
 
-        events
-                .stream()
-                .filter(e -> !e.future().isDone())
-                .forEach(cancelEvent);
+        events.stream()
+            .filter(e -> !e.future().isDone())
+            .forEach(cancelEvent);
 
         log.trace("Finished reaping incomplete events");
     }
