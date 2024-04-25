@@ -316,12 +316,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return A Result containing the JoinGroup response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<Void, Record> groupJoin(
+    public CoordinatorResult<Void, Record> classicGroupJoin(
         RequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
-        return groupMetadataManager.groupJoin(
+        return groupMetadataManager.classicGroupJoin(
             context,
             request,
             responseFuture

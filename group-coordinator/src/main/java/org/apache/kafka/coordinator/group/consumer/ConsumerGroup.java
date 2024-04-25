@@ -1214,7 +1214,7 @@ public class ConsumerGroup implements Group {
      */
     public boolean supportsClassicProtocols(String memberProtocolType, Set<String> memberProtocols) {
         if (isEmpty()) {
-            return !memberProtocolType.isEmpty() && !memberProtocols.isEmpty();
+            return ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType) && !memberProtocols.isEmpty();
         } else {
             return ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType) &&
                 memberProtocols.stream().anyMatch(

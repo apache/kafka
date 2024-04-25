@@ -49,10 +49,7 @@ public class MockPartitionAssignor implements PartitionAssignor {
         return prepareGroupAssignment;
     }
 
-    /**
-     * Package private for testing.
-     */
-    Map<Uuid, Set<Integer>> targetPartitions(String memberId) {
+    public Map<Uuid, Set<Integer>> targetPartitions(String memberId) {
         Objects.requireNonNull(prepareGroupAssignment);
         return prepareGroupAssignment.members().get(memberId).targetPartitions();
     }

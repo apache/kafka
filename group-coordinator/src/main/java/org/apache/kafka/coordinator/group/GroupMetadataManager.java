@@ -28,6 +28,8 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
+import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
@@ -1193,6 +1195,29 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Throws an exception if the dynamic member joins with an unknown member id and the member id is required.
+     *
+     * @param groupId           The group id.
+     * @param memberId          The created member id.
+     * @param isUnknownMember   The boolean indicating whether the join request has an unknown member id.
+     * @param context           The join request context.
+     */
+    private void throwIfRequireKnownMemberId(
+        String groupId,
+        String memberId,
+        boolean isUnknownMember,
+        RequestContext context
+    ) {
+        if (isUnknownMember && JoinGroupRequest.requiresKnownMemberId(context.apiVersion())) {
+            // If member id required, send back a response to call for another join group request with allocated member id.
+            log.info("[GroupId {}] Dynamic member with unknown member id joins the consumer group. " +
+                "Created a new member id {} and requesting the member to rejoin with this id.", groupId, memberId);
+
+            throw new MemberIdRequiredException("Member id is required for joining dynamic member.");
+        }
+    }
+
+    /**
      * Deserialize the subscription in JoinGroupRequestProtocolCollection.
      * All the protocols have the same subscription, so the method picks a random one.
      *
@@ -1226,16 +1251,14 @@ public class GroupMetadataManager {
             toTopicPartitions(subscription.ownedPartitions(), metadataImage.topics());
         if (subscription.generationId().isPresent() && subscription.generationId().get() == member.memberEpoch()) {
             return ownedPartitions;
-        } else {
+        } else if (isSubset(ownedPartitions, member.assignedPartitions())) {
             // If the generation id is not provided or doesn't match the member epoch, it's still safe to
             // accept the ownedPartitions that is a subset of the assigned partition. Otherwise, set the
             // ownedPartition to be null. When a new assignment is provided, the consumer will stop fetching
             // from and revoke the partitions it does not own.
-            if (isSubset(ownedPartitions, member.assignedPartitions())) {
-                return ownedPartitions;
-            } else {
-                return null;
-            }
+            return ownedPartitions;
+        } else {
+            return null;
         }
     }
 
@@ -1345,8 +1368,9 @@ public class GroupMetadataManager {
                     staticMemberReplaced = true;
                     updatedMemberBuilder = new ConsumerGroupMember.Builder(memberId)
                         .setAssignedPartitions(member.assignedPartitions());
-                    removeMemberAndCancelTimers(records, group.groupId(), member.memberId());
-                    log.info("[GroupId {}] Static member {} with instance id {} re-joins the consumer group.", groupId, memberId, instanceId);
+                    removeMember(records, groupId, member.memberId());
+                    log.info("[GroupId {}] Static member with unknown member id and instance id {} re-joins the consumer group. " +
+                        "Created a new member {} to replace the existing member {}.", groupId, instanceId, memberId, member.memberId());
                 }
             } else {
                 throwIfStaticMemberIsUnknown(member, instanceId);
@@ -1375,23 +1399,7 @@ public class GroupMetadataManager {
             .setClassicMemberMetadata(null)
             .build();
 
-        boolean bumpGroupEpoch = false;
-        if (!updatedMember.equals(member)) {
-            records.add(newMemberSubscriptionRecord(groupId, updatedMember));
-
-            if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
-                log.info("[GroupId {}] Member {} updated its subscribed topics to: {}.",
-                    groupId, memberId, updatedMember.subscribedTopicNames());
-                bumpGroupEpoch = true;
-            }
-
-            if (!updatedMember.subscribedTopicRegex().equals(member.subscribedTopicRegex())) {
-                log.info("[GroupId {}] Member {} updated its subscribed regex to: {}.",
-                    groupId, memberId, updatedMember.subscribedTopicRegex());
-                bumpGroupEpoch = true;
-            }
-        }
-
+        boolean bumpGroupEpoch = updateMemberSubscription(groupId, memberId, member, updatedMember, records);
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
@@ -1508,7 +1516,7 @@ public class GroupMetadataManager {
      *
      * @return The result that contains records to append if the join group phase completes.
      */
-    private CoordinatorResult<Void, Record> consumerGroupJoin(
+    private CoordinatorResult<Void, Record> classicGroupJoinToConsumerGroup(
         ConsumerGroup group,
         RequestContext context,
         JoinGroupRequestData request,
@@ -1520,15 +1528,10 @@ public class GroupMetadataManager {
         String memberId = request.memberId();
         final String instanceId = request.groupInstanceId();
         final JoinGroupRequestProtocolCollection protocols = request.protocols();
-
         final boolean isUnknownMember = memberId.equals(UNKNOWN_MEMBER_ID);
-        final ConsumerPartitionAssignor.Subscription subscription = deserializeSubscription(protocols);
-        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions = null;
 
-        if (!validateClassicGroupSessionTimeout(memberId, request.sessionTimeoutMs(), responseFuture)) {
-            return EMPTY_RESULT;
-        }
         throwIfConsumerGroupIsFull(group, memberId);
+        throwIfClassicProtocolIsNotSupported(group, memberId, request.protocolType(), protocols);
         // TODO: need to throw an exception if group is dead?
 
         // Get or create the member.
@@ -1538,29 +1541,13 @@ public class GroupMetadataManager {
         boolean staticMemberReplaced = false;
         boolean newMemberCreated = false;
         if (instanceId == null) {
-            if (isUnknownMember && JoinGroupRequest.requiresKnownMemberId(context.apiVersion())) {
-                // If member id required, send back a response to call for another join group request with allocated member id.
-                log.info("Dynamic member with unknown member id joins group {}. " +
-                        "Created a new member id {} and requesting the member to rejoin with this id.",
-                    group.groupId(), memberId);
-
-                responseFuture.complete(new JoinGroupResponseData()
-                    .setMemberId(memberId)
-                    .setErrorCode(Errors.MEMBER_ID_REQUIRED.code())
-                );
-                return EMPTY_RESULT;
-            } else {
-                // A dynamic member (re-)joins.
-                throwIfClassicProtocolIsNotSupported(group, memberId, request.protocolType(), protocols);
-                newMemberCreated = !group.hasMember(memberId);
-
-                member = group.getOrMaybeCreateMember(memberId, true);
-                if (!newMemberCreated) ownedTopicPartitions = validateGenerationIdAndGetOwnedPartition(member, subscription);
-                log.info("[GroupId {}] Member {} joins the consumer group.", groupId, memberId);
-                updatedMemberBuilder = new ConsumerGroupMember.Builder(member);
-            }
+            // A dynamic member (re-)joins.
+            throwIfRequireKnownMemberId(groupId, memberId, isUnknownMember, context);
+            newMemberCreated = !group.hasMember(memberId);
+            member = group.getOrMaybeCreateMember(memberId, true);
+            log.info("[GroupId {}] Member {} joins the consumer group.", groupId, memberId);
+            updatedMemberBuilder = new ConsumerGroupMember.Builder(member);
         } else {
-            throwIfClassicProtocolIsNotSupported(group, memberId, request.protocolType(), protocols);
             member = group.staticMember(instanceId);
             // A new static member joins or the existing static member rejoins.
             if (isUnknownMember) {
@@ -1575,16 +1562,14 @@ public class GroupMetadataManager {
                     staticMemberReplaced = true;
                     updatedMemberBuilder = new ConsumerGroupMember.Builder(memberId)
                         .setAssignedPartitions(member.assignedPartitions());
-                    ownedTopicPartitions = validateGenerationIdAndGetOwnedPartition(member, subscription);
-                    removeMemberAndCancelTimers(records, group.groupId(), member.memberId());
-                    log.info("[GroupId {}] Static member {} with instance id {} re-joins the consumer group.", groupId, memberId, instanceId);
+                    removeMember(records, groupId, member.memberId());
+                    log.info("[GroupId {}] Static member with unknown member id and instance id {} re-joins the consumer group. " +
+                        "Created a new member {} to replace the existing member {}.", groupId, instanceId, memberId, member.memberId());
                 }
             } else {
                 // Rejoining static member. Fence the static group with unmatched member id.
                 throwIfStaticMemberIsUnknown(member, instanceId);
                 throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
-
-                ownedTopicPartitions = validateGenerationIdAndGetOwnedPartition(member, subscription);
                 updatedMemberBuilder = new ConsumerGroupMember.Builder(member);
                 log.info("[GroupId {}] Static member {} with instance id {} re-joins the consumer group.", groupId, memberId, instanceId);
             }
@@ -1592,6 +1577,9 @@ public class GroupMetadataManager {
 
         int groupEpoch = group.groupEpoch();
         Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
+        final ConsumerPartitionAssignor.Subscription subscription = deserializeSubscription(protocols);
+        final List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions =
+            validateGenerationIdAndGetOwnedPartition(member, subscription);
 
         // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue
         // record is written to the __consumer_offsets partition to persist the change. If the subscriptions have
@@ -1609,23 +1597,7 @@ public class GroupMetadataManager {
             .setSupportedClassicProtocols(protocols)
             .build();
 
-        boolean bumpGroupEpoch = false;
-        if (!updatedMember.equals(member)) {
-            records.add(newMemberSubscriptionRecord(groupId, updatedMember));
-
-            if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
-                log.info("[GroupId {}] Member {} updated its subscribed topics to: {}.",
-                    groupId, memberId, updatedMember.subscribedTopicNames());
-                bumpGroupEpoch = true;
-            }
-
-            if (!updatedMember.subscribedTopicRegex().equals(member.subscribedTopicRegex())) {
-                log.info("[GroupId {}] Member {} updated its subscribed regex to: {}.",
-                    groupId, memberId, updatedMember.subscribedTopicRegex());
-                bumpGroupEpoch = true;
-            }
-        }
-
+        boolean bumpGroupEpoch = updateMemberSubscription(groupId, memberId, member, updatedMember, records);
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
@@ -1713,16 +1685,55 @@ public class GroupMetadataManager {
         if (newMemberCreated) {
             scheduleConsumerGroupSessionTimeout(groupId, memberId);
         }
+        // TODO: scheduleConsumerGroupSyncTimeout(groupId, memberId);
 
-        // TODO: what will happen to the client if the generation id in response is 0?
+
         responseFuture.complete(new JoinGroupResponseData()
             .setMemberId(updatedMember.memberId())
             .setGenerationId(updatedMember.memberEpoch())
             .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-            .setProtocolName(protocols.stream().findAny().get().name())
+            .setProtocolName(protocols.iterator().next().name())
         );
 
-        return new CoordinatorResult<>(records, null);
+        return new CoordinatorResult<>(records);
+    }
+
+    /**
+     * Creates the member subscription record if the updatedMember is different from
+     * the old member. Returns true if the subscribedTopicNames/subscribedTopicRegex
+     * has changed.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     * @param member        The old member.
+     * @param updatedMember The updated member.
+     * @param records       The list to accumulate any new records.
+     * @return A boolean indicating whether the updatedMember has a different
+     *         subscribedTopicNames/subscribedTopicRegex from the old member.
+     */
+    private boolean updateMemberSubscription(
+        String groupId,
+        String memberId,
+        ConsumerGroupMember member,
+        ConsumerGroupMember updatedMember,
+        List<Record> records
+    ) {
+        if (!updatedMember.equals(member)) {
+            records.add(newMemberSubscriptionRecord(groupId, updatedMember));
+
+            if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
+                log.info("[GroupId {}] Member {} updated its subscribed topics to: {}.",
+                    groupId, memberId, updatedMember.subscribedTopicNames());
+                return true;
+            }
+
+            if (!updatedMember.subscribedTopicRegex().equals(member.subscribedTopicRegex())) {
+                log.info("[GroupId {}] Member {} updated its subscribed regex to: {}.",
+                    groupId, memberId, updatedMember.subscribedTopicRegex());
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1781,17 +1792,6 @@ public class GroupMetadataManager {
         }
 
         return updatedMember;
-    }
-
-    private void removeMemberAndCancelTimers(
-        List<Record> records,
-        String groupId,
-        String memberId
-    ) {
-        // Write tombstones for the departed static member.
-        removeMember(records, groupId, memberId);
-        // Cancel all the timers of the departed static member.
-        cancelTimers(groupId, memberId);
     }
 
     /**
@@ -2527,29 +2527,18 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Complete the responseFuture with INVALID_SESSION_TIMEOUT error if session timeout doesn't
-     * fall in the interval (classicGroupMinSessionTimeoutMs, classicGroupMaxSessionTimeoutMs).
+     * Throw an InvalidSessionTimeoutException if session timeout doesn't fall in
+     * the interval (classicGroupMinSessionTimeoutMs, classicGroupMaxSessionTimeoutMs).
      *
-     * @param memberId          The member id.
      * @param sessionTimeoutMs  The session timeout.
-     * @param responseFuture    The response future.
-     * @return A boolean indicating whether the session timeout is valid.
      */
-    private boolean validateClassicGroupSessionTimeout(
-        String memberId,
-        int sessionTimeoutMs,
-        CompletableFuture<JoinGroupResponseData> responseFuture
+    private void throwIfClassicGroupSessionTimeoutInvalid(
+        int sessionTimeoutMs
     ) {
-        if (sessionTimeoutMs < classicGroupMinSessionTimeoutMs ||
-            sessionTimeoutMs > classicGroupMaxSessionTimeoutMs
-        ) {
-            responseFuture.complete(new JoinGroupResponseData()
-                .setMemberId(memberId)
-                .setErrorCode(Errors.INVALID_SESSION_TIMEOUT.code())
-            );
-            return false;
-        } else {
-            return true;
+        if (sessionTimeoutMs < classicGroupMinSessionTimeoutMs) {
+            throw new InvalidSessionTimeoutException("The session timeout is smaller than the min value.");
+        } else if (sessionTimeoutMs > classicGroupMaxSessionTimeoutMs) {
+            throw new InvalidSessionTimeoutException("The session timeout is larger than the max value.");
         }
     }
 
@@ -2562,16 +2551,18 @@ public class GroupMetadataManager {
      *
      * @return The result that contains records to append if the join group phase completes.
      */
-    public CoordinatorResult<Void, Record> groupJoin(
+    public CoordinatorResult<Void, Record> classicGroupJoin(
         RequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
+        throwIfClassicGroupSessionTimeoutInvalid(request.sessionTimeoutMs());
+
         Group group = groups.get(request.groupId(), Long.MAX_VALUE);
         if (group != null && group.type() == CONSUMER && !group.isEmpty()) {
-            return consumerGroupJoin((ConsumerGroup) group, context, request, responseFuture);
+            return classicGroupJoinToConsumerGroup((ConsumerGroup) group, context, request, responseFuture);
         } else {
-            return classicGroupJoin(context, request, responseFuture);
+            return classicGroupJoinToClassicGroup(context, request, responseFuture);
         }
     }
 
@@ -2584,7 +2575,7 @@ public class GroupMetadataManager {
      *
      * @return The result that contains records to append if the join group phase completes.
      */
-    CoordinatorResult<Void, Record> classicGroupJoin(
+    CoordinatorResult<Void, Record> classicGroupJoinToClassicGroup(
         RequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture
@@ -2594,68 +2585,65 @@ public class GroupMetadataManager {
 
         String groupId = request.groupId();
         String memberId = request.memberId();
-        int sessionTimeoutMs = request.sessionTimeoutMs();
 
-        if (validateClassicGroupSessionTimeout(memberId, sessionTimeoutMs, responseFuture)) {
-            boolean isUnknownMember = memberId.equals(UNKNOWN_MEMBER_ID);
-            // Group is created if it does not exist and the member id is UNKNOWN. if member
-            // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND
-            ClassicGroup group;
-            maybeDeleteEmptyConsumerGroup(groupId, records);
-            boolean isNewGroup = !groups.containsKey(groupId);
-            try {
-                group = getOrMaybeCreateClassicGroup(groupId, isUnknownMember);
-            } catch (Throwable t) {
-                responseFuture.complete(new JoinGroupResponseData()
-                    .setMemberId(memberId)
-                    .setErrorCode(Errors.forException(t).code())
-                );
-                return EMPTY_RESULT;
-            }
+        boolean isUnknownMember = memberId.equals(UNKNOWN_MEMBER_ID);
+        // Group is created if it does not exist and the member id is UNKNOWN. if member
+        // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND
+        ClassicGroup group;
+        maybeDeleteEmptyConsumerGroup(groupId, records);
+        boolean isNewGroup = !groups.containsKey(groupId);
+        try {
+            group = getOrMaybeCreateClassicGroup(groupId, isUnknownMember);
+        } catch (Throwable t) {
+            responseFuture.complete(new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setErrorCode(Errors.forException(t).code())
+            );
+            return EMPTY_RESULT;
+        }
 
-            if (!acceptJoiningMember(group, memberId)) {
-                group.remove(memberId);
-                responseFuture.complete(new JoinGroupResponseData()
-                    .setMemberId(UNKNOWN_MEMBER_ID)
-                    .setErrorCode(Errors.GROUP_MAX_SIZE_REACHED.code())
-                );
-            } else if (isUnknownMember) {
-                result = classicGroupJoinNewMember(
-                    context,
-                    request,
-                    group,
-                    responseFuture
-                );
-            } else {
-                result = classicGroupJoinExistingMember(
-                    context,
-                    request,
-                    group,
-                    responseFuture
-                );
-            }
+        if (!acceptJoiningMember(group, memberId)) {
+            group.remove(memberId);
+            responseFuture.complete(new JoinGroupResponseData()
+                .setMemberId(UNKNOWN_MEMBER_ID)
+                .setErrorCode(Errors.GROUP_MAX_SIZE_REACHED.code())
+            );
+        } else if (isUnknownMember) {
+            result = classicGroupJoinNewMember(
+                context,
+                request,
+                group,
+                responseFuture
+            );
+        } else {
+            result = classicGroupJoinExistingMember(
+                context,
+                request,
+                group,
+                responseFuture
+            );
+        }
 
-            if (isNewGroup && result == EMPTY_RESULT) {
-                // If there are no records to append and if a group was newly created, we need to append
-                // records to the log to commit the group to the timeline data structure.
-                CompletableFuture<Void> appendFuture = new CompletableFuture<>();
-                appendFuture.whenComplete((__, t) -> {
-                    if (t != null) {
-                        // We failed to write the empty group metadata. This will revert the snapshot, removing
-                        // the newly created group.
-                        log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), t.getMessage());
+        if (isNewGroup && result == EMPTY_RESULT) {
+            // If there are no records to append and if a group was newly created, we need to append
+            // records to the log to commit the group to the timeline data structure.
+            CompletableFuture<Void> appendFuture = new CompletableFuture<>();
+            appendFuture.whenComplete((__, t) -> {
+                if (t != null) {
+                    // We failed to write the empty group metadata. This will revert the snapshot, removing
+                    // the newly created group.
+                    log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), t.getMessage());
 
-                        responseFuture.complete(new JoinGroupResponseData()
-                            .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
-                    }
-                });
+                    responseFuture.complete(new JoinGroupResponseData()
+                        .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
+                }
+            });
 
-                records.add(
-                    RecordHelpers.newEmptyGroupMetadataRecord(group, metadataImage.features().metadataVersion())
-                );
+            records.add(
+                RecordHelpers.newEmptyGroupMetadataRecord(group, metadataImage.features().metadataVersion())
+            );
 
-                return new CoordinatorResult<>(records, appendFuture);
-            }
+            return new CoordinatorResult<>(records, appendFuture);
         }
         return result;
     }

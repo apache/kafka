@@ -28,6 +28,8 @@ import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
+import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -3889,10 +3891,7 @@ public class GroupMetadataManagerTest {
             .withSessionTimeoutMs(minSessionTimeout - 1)
             .build();
 
-        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request);
-        assertTrue(joinResult.joinFuture.isDone());
-        assertTrue(joinResult.records.isEmpty());
-        assertEquals(Errors.INVALID_SESSION_TIMEOUT.code(), joinResult.joinFuture.get().errorCode());
+        assertThrows(InvalidSessionTimeoutException.class, () -> context.sendClassicGroupJoin(request));
     }
 
     @Test
@@ -3908,11 +3907,7 @@ public class GroupMetadataManagerTest {
             .withSessionTimeoutMs(maxSessionTimeout + 1)
             .build();
 
-        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request);
-
-        assertTrue(joinResult.records.isEmpty());
-        assertTrue(joinResult.joinFuture.isDone());
-        assertEquals(Errors.INVALID_SESSION_TIMEOUT.code(), joinResult.joinFuture.get().errorCode());
+        assertThrows(InvalidSessionTimeoutException.class, () -> context.sendClassicGroupJoin(request));
     }
 
     @Test
@@ -10901,24 +10896,14 @@ public class GroupMetadataManagerTest {
             .withMemberId(UNKNOWN_MEMBER_ID)
             .withSessionTimeoutMs(minSessionTimeout - 1)
             .build();
-        GroupMetadataManagerTestContext.JoinResult joinResultWithSmallSessionTimeout =
-            context.sendClassicGroupJoin(requestWithSmallSessionTimeout);
-
-        assertTrue(joinResultWithSmallSessionTimeout.joinFuture.isDone());
-        assertTrue(joinResultWithSmallSessionTimeout.records.isEmpty());
-        assertEquals(Errors.INVALID_SESSION_TIMEOUT.code(), joinResultWithSmallSessionTimeout.joinFuture.get().errorCode());
+        assertThrows(InvalidSessionTimeoutException.class, () -> context.sendClassicGroupJoin(requestWithSmallSessionTimeout));
 
         JoinGroupRequestData requestWithLargeSessionTimeout = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
             .withMemberId(UNKNOWN_MEMBER_ID)
             .withSessionTimeoutMs(maxSessionTimeout + 1)
             .build();
-        GroupMetadataManagerTestContext.JoinResult joinResultWithLargeSessionTimeout =
-            context.sendClassicGroupJoin(requestWithLargeSessionTimeout);
-
-        assertTrue(joinResultWithLargeSessionTimeout.joinFuture.isDone());
-        assertTrue(joinResultWithLargeSessionTimeout.records.isEmpty());
-        assertEquals(Errors.INVALID_SESSION_TIMEOUT.code(), joinResultWithLargeSessionTimeout.joinFuture.get().errorCode());
+        assertThrows(InvalidSessionTimeoutException.class, () -> context.sendClassicGroupJoin(requestWithLargeSessionTimeout));
     }
 
     @Test
@@ -10992,16 +10977,10 @@ public class GroupMetadataManagerTest {
                 Arrays.asList(fooTopicName, barTopicName),
                 Collections.emptyList()))
             .build();
+        assertThrows(MemberIdRequiredException.class, () -> context.sendClassicGroupJoin(request, true));
 
-        // The first round of join request gets the new member id.
-        GroupMetadataManagerTestContext.JoinResult firstJoinResult = context.sendClassicGroupJoin(
-            request,
-            true
-        );
-        assertTrue(firstJoinResult.records.isEmpty());
-        assertTrue(firstJoinResult.joinFuture.isDone());
-        assertEquals(Errors.MEMBER_ID_REQUIRED.code(), firstJoinResult.joinFuture.get().errorCode());
-        String newMemberId = firstJoinResult.joinFuture.get().memberId();
+        // Simulate getting the new member id from the error response.
+        String newMemberId = Uuid.randomUuid().toString();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
@@ -11119,10 +11098,7 @@ public class GroupMetadataManagerTest {
                 Collections.emptyList()))
             .build();
 
-        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
-            request,
-            true
-        );
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request);
         String newMemberId = joinResult.joinFuture.get().memberId();
 
         ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(newMemberId)
@@ -11331,10 +11307,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         // The member rejoins with the same member id and protocols.
-        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(
-            request,
-            true
-        );
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request);
         assertEquals(Collections.emptyList(), joinResult.records);
         assertEquals(
             new JoinGroupResponseData()
@@ -11344,6 +11317,76 @@ public class GroupMetadataManagerTest {
                 .setProtocolName("range"),
             joinResult.joinFuture.get()
         );
+    }
+
+    @Test
+    public void testConsumerGroupJoinStaticMemberWithUnknownInstanceId() throws Exception {
+        String groupId = "group-id";
+        String instanceId = "instance-id";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String fooTopicName = "foo";
+        String barTopicName = "bar";
+
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
+            GroupMetadataManagerTestContext.toRangeProtocol(
+                Arrays.asList(fooTopicName, barTopicName),
+                Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(fooTopicName, 1))
+            );
+        // Set up a ConsumerGroup with no static member.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setSupportedClassicProtocols(protocols)
+                    .build())
+                .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .build()))
+            .build();
+
+        // The member joins with an instance id.
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(memberId1)
+            .withGroupInstanceId(instanceId)
+            .withProtocols(protocols)
+            .build();
+
+        assertThrows(UnknownMemberIdException.class, () -> context.sendClassicGroupJoin(request));
+    }
+
+    @Test
+    public void testConsumerGroupJoinStaticMemberWithUnmatchedMemberId() throws Exception {
+        String groupId = "group-id";
+        String instanceId = "instance-id";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String fooTopicName = "foo";
+        String barTopicName = "bar";
+
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
+            GroupMetadataManagerTestContext.toRangeProtocol(
+                Arrays.asList(fooTopicName, barTopicName),
+                Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(fooTopicName, 1))
+            );
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setInstanceId(instanceId)
+                    .setSupportedClassicProtocols(protocols)
+                    .build())
+                .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .build()))
+            .build();
+
+        // The member joins with the same instance id and a different member id.
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(Uuid.randomUuid().toString())
+            .withGroupInstanceId(instanceId)
+            .withProtocols(protocols)
+            .build();
+
+        assertThrows(FencedInstanceIdException.class, () -> context.sendClassicGroupJoin(request));
     }
 
     private static void checkJoinGroupResponse(
