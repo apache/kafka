@@ -1202,7 +1202,7 @@ public class GroupMetadataManager {
      * @param isUnknownMember   The boolean indicating whether the join request has an unknown member id.
      * @param context           The join request context.
      */
-    private void throwIfRequireKnownMemberId(
+    private void throwIfRequiresKnownMemberId(
         String groupId,
         String memberId,
         boolean isUnknownMember,
@@ -1542,7 +1542,7 @@ public class GroupMetadataManager {
         boolean newMemberCreated = false;
         if (instanceId == null) {
             // A dynamic member (re-)joins.
-            throwIfRequireKnownMemberId(groupId, memberId, isUnknownMember, context);
+            throwIfRequiresKnownMemberId(groupId, memberId, isUnknownMember, context);
             newMemberCreated = !group.hasMember(memberId);
             member = group.getOrMaybeCreateMember(memberId, true);
             log.info("[GroupId {}] Member {} joins the consumer group.", groupId, memberId);
@@ -1672,6 +1672,14 @@ public class GroupMetadataManager {
 
         // 3. Reconcile the member's assignment with the target assignment if the member is not
         // fully reconciled yet.
+
+        /**
+         * TODO:
+         *      joinGroup - sync timeout
+         *      syncGroup - (join timeout)
+         *      heartbeat - (join timeout)
+         *      => scheduleConsumerGroupRebalanceTimeout is not necessary
+         */
         updatedMember = maybeReconcile(
             groupId,
             updatedMember,
@@ -1685,8 +1693,7 @@ public class GroupMetadataManager {
         if (newMemberCreated) {
             scheduleConsumerGroupSessionTimeout(groupId, memberId);
         }
-        // TODO: scheduleConsumerGroupSyncTimeout(groupId, memberId);
-
+        scheduleConsumerGroupSyncTimeout(groupId, memberId, request.rebalanceTimeoutMs());
 
         responseFuture.complete(new JoinGroupResponseData()
             .setMemberId(updatedMember.memberId())
@@ -1928,6 +1935,7 @@ public class GroupMetadataManager {
     private void cancelTimers(String groupId, String memberId) {
         cancelConsumerGroupSessionTimeout(groupId, memberId);
         cancelConsumerGroupRebalanceTimeout(groupId, memberId);
+        cancelConsumerGroupSyncTimeout(groupId, memberId);
     }
 
     /**
@@ -2032,6 +2040,54 @@ public class GroupMetadataManager {
         String memberId
     ) {
         timer.cancel(consumerGroupRebalanceTimeoutKey(groupId, memberId));
+    }
+
+    /**
+     * Schedules a sync timeout for the member.
+     *
+     * @param groupId               The group id.
+     * @param memberId              The member id.
+     * @param rebalanceTimeoutMs    The rebalance timeout.
+     */
+    private void scheduleConsumerGroupSyncTimeout(
+        String groupId,
+        String memberId,
+        int rebalanceTimeoutMs
+    ) {
+        String key = consumerGroupSyncKey(groupId, memberId);
+        timer.schedule(key, rebalanceTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
+            try {
+                ConsumerGroup group = consumerGroup(groupId);
+                ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+                log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
+                    groupId, memberId);
+
+                List<Record> records = new ArrayList<>();
+                CompletableFuture<Void> appendFuture = consumerGroupFenceMember(group, member, records);
+                return new CoordinatorResult<>(records, appendFuture);
+            } catch (GroupIdNotFoundException ex) {
+                log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
+                    groupId, memberId);
+            } catch (UnknownMemberIdException ex) {
+                log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
+                    groupId, memberId);
+            }
+
+            return new CoordinatorResult<>(Collections.emptyList());
+        });
+    }
+
+    /**
+     * Cancels the sync timeout of the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void cancelConsumerGroupSyncTimeout(
+        String groupId,
+        String memberId
+    ) {
+        timer.cancel(consumerGroupSyncKey(groupId, memberId));
     }
 
     /**
@@ -4312,5 +4368,19 @@ public class GroupMetadataManager {
      */
     static String classicGroupSyncKey(String groupId) {
         return "sync-" + groupId;
+    }
+
+    /**
+     * Generate a consumer group sync key for the timer.
+     *
+     * Package private for testing.
+     *
+     * @param groupId   The group id.
+     * @param memberId  The member id.
+     *
+     * @return the sync key.
+     */
+    static String consumerGroupSyncKey(String groupId, String memberId) {
+        return "sync-" + groupId + "-" + memberId;
     }
 }
