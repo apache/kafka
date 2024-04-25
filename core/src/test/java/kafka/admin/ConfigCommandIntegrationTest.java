@@ -171,7 +171,6 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
     @ParameterizedTest
     @ValueSource(strings = "zk")
     public void testDynamicBrokerConfigUpdateUsingZooKeeper(String quorum) throws Exception {
-        //TODO: check if it possible to use kraft here.
         String brokerId = "1";
         adminZkClient = new AdminZkClient(zkClient(), scala.None$.empty());
         alterOpts = Arrays.asList("--zookeeper", zkConnect(), "--entity-type", "brokers", "--alter");
