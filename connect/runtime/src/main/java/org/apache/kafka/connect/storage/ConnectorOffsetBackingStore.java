@@ -19,7 +19,6 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
-import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
@@ -41,6 +40,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.Supplier;
 
 /**
@@ -311,46 +311,16 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         });
 
         if (secondaryStore != null && !tombstoneOffsets.isEmpty()) {
-            AtomicReference<Throwable> primaryWriteError = new AtomicReference<>();
-            FutureCallback<Void> secondaryWriteCallback = new FutureCallback<Void>() {
-                @Override
-                public void onCompletion(Throwable tombstoneWriteError, Void ignored) {
-                    super.onCompletion(tombstoneWriteError, ignored);
-                    if (tombstoneWriteError != null) {
-                        log.trace("Skipping offsets write to primary store because secondary tombstone write has failed", tombstoneWriteError);
-                        try (LoggingContext context = loggingContext()) {
-                            callback.onCompletion(tombstoneWriteError, ignored);
-                        }
-                        return;
-                    }
-                    setPrimaryThenSecondary(primaryStore, secondaryStore, values, regularOffsets, callback, primaryWriteError);
-                }
-
-                @Override
-                public Void get() throws InterruptedException, ExecutionException {
-                    super.get();
-                    if (primaryWriteError.get() != null) {
-                        throw new ExecutionException(primaryWriteError.get());
-                    }
-                    return null;
-                }
-
-                @Override
-                public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-                    super.get(timeout, unit);
-                    if (primaryWriteError.get() != null) {
-                        if (primaryWriteError.get() instanceof TimeoutException) {
-                            throw (TimeoutException) primaryWriteError.get();
-                        }
-                        throw new ExecutionException(primaryWriteError.get());
-                    }
-                    return null;
-                }
-            };
-            secondaryStore.set(tombstoneOffsets, secondaryWriteCallback);
-            return secondaryWriteCallback;
+            return new ChainedOffsetWriteFuture(
+                primaryStore,
+                secondaryStore,
+                values,
+                regularOffsets,
+                tombstoneOffsets,
+                callback
+            );
         } else {
-            return setPrimaryThenSecondary(primaryStore, secondaryStore, values, regularOffsets, callback, null);
+            return setPrimaryThenSecondary(primaryStore, secondaryStore, values, regularOffsets, callback);
         }
     }
 
@@ -359,8 +329,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         OffsetBackingStore secondaryStore,
         Map<ByteBuffer, ByteBuffer> completeOffsets,
         Map<ByteBuffer, ByteBuffer> nonTombstoneOffsets,
-        Callback<Void> callback,
-        AtomicReference<Throwable> writeError
+        Callback<Void> callback
     ) {
         return primaryStore.set(completeOffsets, (primaryWriteError, ignored) -> {
             if (secondaryStore != null) {
@@ -385,9 +354,6 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                 }
             }
             try (LoggingContext context = loggingContext()) {
-                if (writeError != null) {
-                    writeError.set(primaryWriteError);
-                }
                 callback.onCompletion(primaryWriteError, ignored);
             }
         });
@@ -432,6 +398,90 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
 
     private static Future<Map<ByteBuffer, ByteBuffer>> getFromStore(Optional<? extends OffsetBackingStore> store, Collection<ByteBuffer> keys) {
         return store.map(s -> s.get(keys)).orElseGet(() -> CompletableFuture.completedFuture(Collections.emptyMap()));
+    }
+
+    private class ChainedOffsetWriteFuture implements Future<Void> {
+
+        private final OffsetBackingStore primaryStore;
+        private final OffsetBackingStore secondaryStore;
+        private final Map<ByteBuffer, ByteBuffer> completeOffsets;
+        private final Map<ByteBuffer, ByteBuffer> regularOffsets;
+        private final Callback<Void> callback;
+        private final AtomicReference<Throwable> writeError;
+        private final CountDownLatch completed;
+
+        public ChainedOffsetWriteFuture(
+            OffsetBackingStore primaryStore,
+            OffsetBackingStore secondaryStore,
+            Map<ByteBuffer, ByteBuffer> completeOffsets,
+            Map<ByteBuffer, ByteBuffer> regularOffsets,
+            Map<ByteBuffer, ByteBuffer> tombstoneOffsets,
+            Callback<Void> callback
+        ) {
+            this.primaryStore = primaryStore;
+            this.secondaryStore = secondaryStore;
+            this.completeOffsets = completeOffsets;
+            this.regularOffsets = regularOffsets;
+            this.callback = callback;
+            this.writeError = new AtomicReference<>();
+            this.completed = new CountDownLatch(1);
+
+            secondaryStore.set(tombstoneOffsets, this::onFirstWrite);
+        }
+
+        private void onFirstWrite(Throwable error, Void ignored) {
+            if (error != null) {
+                log.trace("Skipping offsets write to primary store because secondary tombstone write has failed", error);
+                try (LoggingContext context = loggingContext()) {
+                    callback.onCompletion(error, ignored);
+                    writeError.compareAndSet(null, error);
+                    completed.countDown();
+                }
+                return;
+            }
+            setPrimaryThenSecondary(primaryStore, secondaryStore, completeOffsets, regularOffsets, this::onSecondWrite);
+        }
+
+        private void onSecondWrite(Throwable error, Void ignored) {
+            callback.onCompletion(error, ignored);
+            writeError.compareAndSet(null, error);
+            completed.countDown();
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            return false;
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return false;
+        }
+
+        @Override
+        public boolean isDone() {
+            return completed.getCount() == 0;
+        }
+
+        @Override
+        public Void get() throws InterruptedException, ExecutionException {
+            completed.await();
+            if (writeError.get() != null) {
+                throw new ExecutionException(writeError.get());
+            }
+            return null;
+        }
+
+        @Override
+        public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+            if (!completed.await(timeout, unit)) {
+                throw new TimeoutException("Failed to complete offset write in time");
+            }
+            if (writeError.get() != null) {
+                throw new ExecutionException(writeError.get());
+            }
+            return null;
+        }
     }
 
 }
