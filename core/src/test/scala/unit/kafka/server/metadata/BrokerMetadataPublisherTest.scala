@@ -55,14 +55,14 @@ class BrokerMetadataPublisherTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    Exit.setExitProcedure((code, _) => exitException.set(new RuntimeException(s"Exit ${code}")))
-    Exit.setHaltProcedure((code, _) => exitException.set(new RuntimeException(s"Halt ${code}")))
+    Exit.setExitProcedure((code, _) => exitException.set(new RuntimeException(s"Exit $code")))
+    Exit.setHaltProcedure((code, _) => exitException.set(new RuntimeException(s"Halt $code")))
   }
 
   @AfterEach
   def tearDown(): Unit = {
-    Exit.resetExitProcedure();
-    Exit.resetHaltProcedure();
+    Exit.resetExitProcedure()
+    Exit.resetHaltProcedure()
     val exception = exitException.get()
     if (exception != null) {
       throw exception
@@ -171,7 +171,7 @@ class BrokerMetadataPublisherTest {
       }
       TestUtils.retry(60000) {
         assertTrue(Option(cluster.nonFatalFaultHandler().firstException()).
-          flatMap(e => Option(e.getMessage())).getOrElse("(none)").contains("injected failure"))
+          flatMap(e => Option(e.getMessage)).getOrElse("(none)").contains("injected failure"))
       }
     } finally {
       cluster.nonFatalFaultHandler().setIgnore(true)
@@ -217,7 +217,7 @@ class BrokerMetadataPublisherTest {
         .numBatches(1)
         .elapsedNs(100)
         .numBytes(42)
-        .build());
+        .build())
 
     verify(groupCoordinator).onNewMetadataImage(image, delta)
   }
@@ -267,7 +267,7 @@ class BrokerMetadataPublisherTest {
         .numBatches(1)
         .elapsedNs(100)
         .numBytes(42)
-        .build());
+        .build())
 
     // This should NOT trigger broker reregistration
     verifyNoInteractions(brokerLifecycleManager)
@@ -289,7 +289,7 @@ class BrokerMetadataPublisherTest {
         .numBatches(1)
         .elapsedNs(100)
         .numBytes(42)
-        .build());
+        .build())
 
     // This SHOULD trigger a broker registration
     verify(brokerLifecycleManager, times(1)).handleKraftJBODMetadataVersionUpdate()
@@ -312,7 +312,7 @@ class BrokerMetadataPublisherTest {
         .numBatches(1)
         .elapsedNs(100)
         .numBytes(42)
-        .build());
+        .build())
 
     // This should NOT trigger broker reregistration
     verify(brokerLifecycleManager, times(0)).handleKraftJBODMetadataVersionUpdate()

@@ -1199,7 +1199,7 @@ public class RemoteLogManager implements Closeable {
         }
 
         public String toString() {
-            return this.getClass().toString() + "[" + topicIdPartition + "]";
+            return this.getClass() + "[" + topicIdPartition + "]";
         }
     }
 

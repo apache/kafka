@@ -56,7 +56,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
       properties.setProperty(SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG, controlPlaneListenerName)
       properties.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"$controlPlaneListenerName:$securityProtocol,$securityProtocol:$securityProtocol")
       properties.setProperty("listeners", s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
-      properties.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"$securityProtocol://localhost:0,${controlPlaneListenerName}://localhost:0")
+      properties.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
     }
   }
 

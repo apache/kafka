@@ -123,7 +123,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
       .setName(tp0.topic)
       .setPartitions(Collections.singletonList(tp0.partition)))
 
-    val (coordinatorId, txn1) = setUpTransactions(transactionalId1, false, Set(tp0))
+    val (coordinatorId, txn1) = setUpTransactions(transactionalId1, verifyOnly = false, Set(tp0))
 
     val transactions = new AddPartitionsToTxnTransactionCollection()
     transactions.add(txn1)
@@ -153,7 +153,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     val tp0 = new TopicPartition(topic1, 0)
 
     val transactionalId = "foobar"
-    val (coordinatorId, txn) = setUpTransactions(transactionalId, true, Set(tp0))
+    val (coordinatorId, txn) = setUpTransactions(transactionalId, verifyOnly = true, Set(tp0))
 
     val transactions = new AddPartitionsToTxnTransactionCollection()
     transactions.add(txn)

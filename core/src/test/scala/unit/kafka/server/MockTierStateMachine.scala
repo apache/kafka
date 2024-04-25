@@ -24,7 +24,7 @@ import java.util.Optional
 
 class MockTierStateMachine(leader: LeaderEndPoint) extends ReplicaFetcherTierStateMachine(leader, null) {
 
-  var fetcher: MockFetcherThread = null
+  var fetcher: MockFetcherThread = _
 
   override def start(topicPartition: TopicPartition,
                      currentFetchState: PartitionFetchState,
