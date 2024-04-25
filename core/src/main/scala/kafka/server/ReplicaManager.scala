@@ -862,13 +862,17 @@ class ReplicaManager(val config: KafkaConfig,
 
     val errorResults = (unverifiedEntries ++ errorsPerPartition).map {
       case (topicPartition, error) =>
-        // translate transaction coordinator errors to known producer response errors
+        // Transaction verification can fail with a retriable error that older clients may not
+        // retry correctly. Translate these to an error which will cause such clients to retry
+        // the produce request. We pick `NOT_ENOUGH_REPLICAS` because it does not trigger a
+        // metadata refresh.
         val customException =
           error match {
             case Errors.INVALID_TXN_STATE => Some(error.exception("Partition was not added to the transaction"))
             case Errors.CONCURRENT_TRANSACTIONS |
                  Errors.COORDINATOR_LOAD_IN_PROGRESS |
                  Errors.COORDINATOR_NOT_AVAILABLE |
+                 Errors.NETWORK_EXCEPTION |
                  Errors.NOT_COORDINATOR => Some(new NotEnoughReplicasException(
               s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
             case _ => None
