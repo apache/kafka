@@ -22,7 +22,6 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -34,7 +33,6 @@ import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
-import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.LogCaptureAppender;
@@ -575,15 +573,12 @@ public class WorkerCoordinatorTest {
             coordinator.ensureActiveGroup();
             coordinator.poll(0, () -> null);
 
-            // The heartbeat thread is running and keeps sending heartbeat requests.
-            TestUtils.waitForCondition(() -> {
-                // Rebalance timeout elapses while poll is never invoked causing a poll timeout expiry
-                coordinator.sendHeartbeatRequest();
-                client.prepareResponse(new HeartbeatResponse(new HeartbeatResponseData()));
-                time.sleep(1);
-                return logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
-                    logCaptureAppender.getEvents().stream().anyMatch(e -> e.getMessage().startsWith("worker poll timeout has expired"));
-            }, "Coordinator did not poll for rebalance.timeout.ms");
+            time.sleep(smallRebalanceTimeout + 1);
+
+            // Rebalance timeout elapses while poll is never invoked causing a poll timeout expiry
+            TestUtils.waitForCondition(() -> logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
+                logCaptureAppender.getEvents().stream().anyMatch(e -> e.getMessage().startsWith("worker poll timeout has expired")),
+                "Coordinator did not poll for rebalance.timeout.ms");
         }
     }
 
