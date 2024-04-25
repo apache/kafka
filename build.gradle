@@ -784,6 +784,7 @@ subprojects {
   dependencyCheck {
     suppressionFile = "$rootDir/gradle/resources/dependencycheck-suppressions.xml"
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
+    skipConfigurations = [ "zinc" ]
   }
 }
 
