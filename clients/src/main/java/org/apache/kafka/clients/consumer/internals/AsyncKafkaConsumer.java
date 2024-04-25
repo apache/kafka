@@ -730,8 +730,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
-            Timer timer = time.timer(Long.MAX_VALUE);
-            AsyncCommitEvent asyncCommitEvent = new AsyncCommitEvent(offsets, timer);
+            AsyncCommitEvent asyncCommitEvent = new AsyncCommitEvent(offsets);
             lastPendingAsyncCommit = commit(asyncCommitEvent).whenComplete((r, t) -> {
 
                 if (t == null) {
