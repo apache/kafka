@@ -607,8 +607,7 @@ public final class MetaPropertiesEnsemble {
         TreeMap<String, String> outputMap = new TreeMap<>();
         emptyLogDirs.forEach(e -> outputMap.put(e, "EMPTY"));
         errorLogDirs.forEach(e -> outputMap.put(e, "ERROR"));
-        logDirProps.entrySet().forEach(
-            e -> outputMap.put(e.getKey(), e.getValue().toString()));
+        logDirProps.forEach((key, value) -> outputMap.put(key, value.toString()));
         return "MetaPropertiesEnsemble" +
             "(metadataLogDir=" + metadataLogDir +
             ", dirs={" + outputMap.entrySet().stream().
