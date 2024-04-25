@@ -631,13 +631,13 @@ public class RaftEventSimulationTest {
                 return false;
 
             RaftNode first = iter.next();
-            ElectionState election = first.store.readElectionState();
+            ElectionState election = first.store.readElectionState().get();
             if (!election.hasLeader())
                 return false;
 
             while (iter.hasNext()) {
                 RaftNode next = iter.next();
-                if (!election.equals(next.store.readElectionState()))
+                if (!election.equals(next.store.readElectionState().get()))
                     return false;
             }
 
@@ -926,12 +926,12 @@ public class RaftEventSimulationTest {
                 PersistentState state = nodeStateEntry.getValue();
                 Integer oldEpoch = nodeEpochs.get(nodeId);
 
-                ElectionState electionState = state.store.readElectionState();
-                if (electionState == null) {
+                Optional<ElectionState> electionState = state.store.readElectionState();
+                if (!electionState.isPresent()) {
                     continue;
                 }
 
-                Integer newEpoch = electionState.epoch();
+                Integer newEpoch = electionState.get().epoch();
                 if (oldEpoch > newEpoch) {
                     fail("Non-monotonic update of epoch detected on node " + nodeId + ": " +
                             oldEpoch + " -> " + newEpoch);
@@ -978,16 +978,18 @@ public class RaftEventSimulationTest {
         public void verify() {
             for (Map.Entry<Integer, PersistentState> nodeEntry : cluster.nodes.entrySet()) {
                 PersistentState state = nodeEntry.getValue();
-                ElectionState electionState = state.store.readElectionState();
+                Optional<ElectionState> electionState = state.store.readElectionState();
 
-                if (electionState != null && electionState.epoch() >= epoch && electionState.hasLeader()) {
-                    if (epoch == electionState.epoch() && leaderId.isPresent()) {
-                        assertEquals(leaderId.getAsInt(), electionState.leaderId());
-                    } else {
-                        epoch = electionState.epoch();
-                        leaderId = OptionalInt.of(electionState.leaderId());
+                electionState.ifPresent(election -> {
+                    if (election.epoch() >= epoch && election.hasLeader()) {
+                        if (epoch == election.epoch() && leaderId.isPresent()) {
+                            assertEquals(leaderId.getAsInt(), election.leaderId());
+                        } else {
+                            epoch = election.epoch();
+                            leaderId = OptionalInt.of(election.leaderId());
+                        }
                     }
-                }
+                });
             }
         }
     }

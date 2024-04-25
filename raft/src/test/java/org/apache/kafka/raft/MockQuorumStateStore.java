@@ -16,46 +16,38 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.Collections;
 import java.util.Optional;
+import org.apache.kafka.raft.generated.QuorumStateData;
 
 public class MockQuorumStateStore implements QuorumStateStore {
-    private ElectionState current;
+    private Optional<QuorumStateData> current = Optional.empty();
 
     @Override
-    public ElectionState readElectionState() {
-        return current;
+    public Optional<ElectionState> readElectionState() {
+        return current.map(ElectionState::fromQuorumStateData);
     }
 
     @Override
     public void writeElectionState(ElectionState update, short kraftVersion) {
+        current = Optional.of(
+            update.toQourumStateData(quorumStateVersionFromKRaftVersion(kraftVersion))
+        );
+    }
+
+    @Override
+    public void clear() {
+        current = Optional.empty();
+    }
+
+    private short quorumStateVersionFromKRaftVersion(short kraftVersion) {
         if (kraftVersion == 0) {
-            // kraft.version 0 doesn't support votedUuid
-            this.current = new ElectionState(
-                update.epoch(),
-                update.optionalLeaderId(),
-                update.optionalVotedId(),
-                Optional.empty(),
-                update.voters()
-            );
+            return 0;
         } else if (kraftVersion == 1) {
-            // kraft.version 1 doesn't support voters
-            this.current = new ElectionState(
-                update.epoch(),
-                update.optionalLeaderId(),
-                update.optionalVotedId(),
-                update.votedUuid(),
-                Collections.emptySet()
-            );
+            return 1;
         } else {
             throw new IllegalArgumentException(
                 String.format("Unknown kraft.version %d", kraftVersion)
             );
         }
-    }
-
-    @Override
-    public void clear() {
-        current = null;
     }
 }

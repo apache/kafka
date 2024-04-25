@@ -16,16 +16,23 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.raft.generated.QuorumStateData;
 
 /**
  * Encapsulate election state stored on disk after every state change.
  */
 final public class ElectionState {
+    private static int unknownLeaderId = -1;
+    private static int notVoted = -1;
+    private static Uuid noVotedUuid = Uuid.ZERO_UUID;
+
     private final int epoch;
     private final OptionalInt leaderId;
     private final OptionalInt votedId;
@@ -57,7 +64,17 @@ final public class ElectionState {
         return leaderIdOrSentinel() == nodeId;
     }
 
-    // TODO: test this method
+    /**
+     * Return if the replica has voted for the given candidate.
+     *
+     * A replica has voted for a candidate if all of the following are true:
+     * 1. the nodeId and votedId match and
+     * 2. if the votedUuid is set, it matches the nodeUuid
+     *
+     * @param nodeId id of the replica
+     * @param nodeUuid uuid of the replica if it exist
+     * @return true when the arguments match, otherwise false
+     */
     public boolean isVotedCandidate(int nodeId, Optional<Uuid> nodeUuid) {
         if (nodeId < 0) {
             throw new IllegalArgumentException("Invalid negative nodeId: " + nodeId);
@@ -100,17 +117,37 @@ final public class ElectionState {
         return votedUuid;
     }
 
-    // TODO: remove this and see what breaks
-    public Set<Integer> voters() {
-        return voters;
-    }
-
     public boolean hasLeader() {
         return leaderId.isPresent();
     }
 
     public boolean hasVoted() {
         return votedId.isPresent();
+    }
+
+    public QuorumStateData toQourumStateData(short version) {
+        QuorumStateData data = new QuorumStateData()
+            .setLeaderEpoch(epoch)
+            .setLeaderId(hasLeader() ? leaderId() : unknownLeaderId)
+            .setVotedId(hasVoted() ? votedId() : notVoted);
+
+        if (version == 0) {
+            List<QuorumStateData.Voter> dataVoters = voters
+                .stream()
+                .map(voterId -> new QuorumStateData.Voter().setVoterId(voterId))
+                .collect(Collectors.toList());
+            data.setCurrentVoters(dataVoters);
+        } else if (version == 1) {
+            data.setVotedUuid(votedUuid().isPresent() ? votedUuid().get() : noVotedUuid);
+        } else {
+            throw new IllegalStateException(
+                String.format(
+                    "File quorum state store doesn't handle supported version %d", version
+                )
+            );
+        }
+
+        return data;
     }
 
     @Override
@@ -164,5 +201,15 @@ final public class ElectionState {
 
     public static ElectionState withUnknownLeader(int epoch, Set<Integer> voters) {
         return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.empty(), Optional.empty(), voters);
+    }
+
+    public static ElectionState fromQuorumStateData(QuorumStateData data) {
+        return new ElectionState(
+            data.leaderEpoch(),
+            data.leaderId() == unknownLeaderId ? OptionalInt.empty() : OptionalInt.of(data.leaderId()),
+            data.votedId() == notVoted ? OptionalInt.empty() : OptionalInt.of(data.votedId()),
+            data.votedUuid().equals(noVotedUuid) ? Optional.empty() : Optional.of(data.votedUuid()),
+            data.currentVoters().stream().map(QuorumStateData.Voter::voterId).collect(Collectors.toSet())
+        );
     }
 }

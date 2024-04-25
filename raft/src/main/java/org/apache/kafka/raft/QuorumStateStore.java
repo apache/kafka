@@ -16,24 +16,19 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.Uuid;
+import java.util.Optional;
 
 /**
  *  Maintain the save and retrieval of quorum state information, so far only supports
  *  read and write of election states.
  */
 public interface QuorumStateStore {
-
-    int UNKNOWN_LEADER_ID = -1;
-    int NOT_VOTED = -1;
-    Uuid NO_VOTED_UUID = Uuid.ZERO_UUID;
-
     /**
      * Read the latest election state.
      *
      * @return the latest written election state or `null` if there is none
      */
-    ElectionState readElectionState();
+    Optional<ElectionState> readElectionState();
 
     /**
      * Persist the updated election state. This must be atomic, both writing the full updated state

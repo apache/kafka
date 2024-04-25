@@ -120,10 +120,9 @@ public class QuorumState {
 
         ElectionState election;
         try {
-            election = store.readElectionState();
-            if (election == null) {
-                election = ElectionState.withUnknownLeader(0, latestVoterSet.get().voterIds());
-            }
+            election = store
+                .readElectionState()
+                .orElseGet(() -> ElectionState.withUnknownLeader(0, latestVoterSet.get().voterIds()));
         } catch (final UncheckedIOException e) {
             // TODO: is this correct? I think the code should fail to start if qourum-state is present but it cannot read it
             // For exceptions during state file loading (missing or not readable),

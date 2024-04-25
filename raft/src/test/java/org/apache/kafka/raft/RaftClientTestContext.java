@@ -410,7 +410,7 @@ public final class RaftClientTestContext {
     }
 
     LeaderAndEpoch currentLeaderAndEpoch() {
-        ElectionState election = quorumStateStore.readElectionState();
+        ElectionState election = quorumStateStore.readElectionState().get();
         return new LeaderAndEpoch(election.optionalLeaderId(), election.epoch());
     }
 
@@ -460,21 +460,30 @@ public final class RaftClientTestContext {
     void assertVotedCandidate(int epoch, int leaderId) throws IOException {
         assertEquals(
             ElectionState.withVotedCandidate(epoch, leaderId, Optional.empty(), voters),
-            quorumStateStore.readElectionState()
+            quorumStateStore.readElectionState().get()
         );
     }
 
     public void assertElectedLeader(int epoch, int leaderId) throws IOException {
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), quorumStateStore.readElectionState());
+        assertEquals(
+            ElectionState.withElectedLeader(epoch, leaderId, voters),
+            quorumStateStore.readElectionState().get()
+        );
     }
 
     void assertUnknownLeader(int epoch) throws IOException {
-        assertEquals(ElectionState.withUnknownLeader(epoch, voters), quorumStateStore.readElectionState());
+        assertEquals(
+            ElectionState.withUnknownLeader(epoch, voters),
+            quorumStateStore.readElectionState().get()
+        );
     }
 
     void assertResignedLeader(int epoch, int leaderId) throws IOException {
         assertTrue(client.quorum().isResigned());
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), quorumStateStore.readElectionState());
+        assertEquals(
+            ElectionState.withElectedLeader(epoch, leaderId, voters),
+            quorumStateStore.readElectionState().get()
+        );
     }
 
     DescribeQuorumResponseData collectDescribeQuorumResponse() {
