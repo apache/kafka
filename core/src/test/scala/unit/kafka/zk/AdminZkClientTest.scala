@@ -49,7 +49,6 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    TestUtils.createControllerInZk(zkClient, 0)
   }
 
   @AfterEach
@@ -197,8 +196,6 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
    */
   @Test
   def testTopicConfigChange(): Unit = {
-    TestUtils.deleteControllerFromZk(zkClient)
-
     val partitions = 3
     val topic = "my-topic"
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))

@@ -84,7 +84,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
     zkClient.createControllerEpochRaw(1)
     otherZkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient",
-      zkClientConfig = new ZKClientConfig)
+      zkClientConfig = new ZKClientConfig, enableEntityConfigNoController = true)
     expiredSessionZkClient = ExpiredKafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled),
       zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
   }
@@ -1490,7 +1490,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
   }
 
   class ExpiredKafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time)
-    extends KafkaZkClient(zooKeeperClient, isSecure, time) {
+    extends KafkaZkClient(zooKeeperClient, isSecure, time, false) {
     // Overwriting this method from the parent class to force the client to re-register the Broker.
     override def shouldReCreateEphemeralZNode(ephemeralOwnerId: Long): Boolean = {
       true

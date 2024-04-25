@@ -201,7 +201,7 @@ trait SaslSetup {
     val zkClientConfig = new ZKClientConfig()
     TestUtils.resource(KafkaZkClient(
       zkConnect, JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig), 30000, 30000,
-      Int.MaxValue, Time.SYSTEM, name = "SaslSetup", zkClientConfig = zkClientConfig)) { zkClient =>
+      Int.MaxValue, Time.SYSTEM, name = "SaslSetup", zkClientConfig = zkClientConfig, enableEntityConfigNoController = true)) { zkClient =>
       val adminZkClient = new AdminZkClient(zkClient)
 
       val entityType = ConfigType.USER
