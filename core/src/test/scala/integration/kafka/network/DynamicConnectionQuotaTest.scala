@@ -22,10 +22,9 @@ import java.io.IOException
 import java.net.{InetAddress, Socket}
 import java.util.concurrent._
 import java.util.{Collections, Properties}
-import kafka.server.{BaseRequestTest, KafkaConfig}
+import kafka.server.BaseRequestTest
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.Admin
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -35,6 +34,7 @@ import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, requests}
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.server.config.QuotaConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -55,7 +55,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   var admin: Admin = _
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.NumQuotaSamplesProp, "2")
+    properties.put(QuotaConfigs.NUM_QUOTA_SAMPLES_CONFIG, "2")
     properties.put("listener.name.plaintext.max.connection.creation.rate", plaintextListenerDefaultQuota.toString)
   }
 

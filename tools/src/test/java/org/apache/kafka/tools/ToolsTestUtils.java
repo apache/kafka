@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.server.DynamicConfig;
 import kafka.utils.TestInfoUtils;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
@@ -25,7 +24,7 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.storage.internals.log.LogConfig;
+import org.apache.kafka.server.config.QuotaConfigs;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -132,9 +131,9 @@ public class ToolsTestUtils {
      */
     public static void throttleAllBrokersReplication(Admin adminClient, List<Integer> brokerIds, int throttleBytes) throws ExecutionException, InterruptedException {
         List<AlterConfigOp> throttleConfigs = new ArrayList<>();
-        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker$.MODULE$.LeaderReplicationThrottledRateProp(),
+        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
             Integer.toString(throttleBytes)), AlterConfigOp.OpType.SET));
-        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker$.MODULE$.FollowerReplicationThrottledRateProp(),
+        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
             Integer.toString(throttleBytes)), AlterConfigOp.OpType.SET));
 
         Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
@@ -168,10 +167,10 @@ public class ToolsTestUtils {
                     Map<TopicPartition, List<Integer>> replicaThrottle =
                         entry.getValue().stream().collect(Collectors.toMap(Entry::getKey, Entry::getValue));
                     alterConfigOps.add(new AlterConfigOp(
-                        new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
+                        new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
                         AlterConfigOp.OpType.SET));
                     alterConfigOps.add(new AlterConfigOp(
-                        new ConfigEntry(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
+                        new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
                         AlterConfigOp.OpType.SET));
                     return alterConfigOps;
                 }
@@ -187,9 +186,9 @@ public class ToolsTestUtils {
         Map<ConfigResource, Collection<AlterConfigOp>> throttles = partitions.stream().collect(Collectors.toMap(
             tp -> new ConfigResource(ConfigResource.Type.TOPIC, tp.topic()),
             tp -> Arrays.asList(
-                    new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
+                    new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
                         AlterConfigOp.OpType.DELETE),
-                    new AlterConfigOp(new ConfigEntry(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
+                    new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
                         AlterConfigOp.OpType.DELETE))
             ));
 

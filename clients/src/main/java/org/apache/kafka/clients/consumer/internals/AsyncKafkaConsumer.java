@@ -732,8 +732,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
-            Timer timer = time.timer(Long.MAX_VALUE);
-            AsyncCommitEvent asyncCommitEvent = new AsyncCommitEvent(offsets, timer);
+            AsyncCommitEvent asyncCommitEvent = new AsyncCommitEvent(offsets);
             lastPendingAsyncCommit = commit(asyncCommitEvent).whenComplete((r, t) -> {
 
                 if (t == null) {
@@ -1233,6 +1232,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
         closeTimer.update();
 
+        // close() can be called from inside one of the constructors. In that case, it's possible that neither
+        // the reaper nor the background event queue were constructed, so check them first to avoid NPE.
         if (backgroundEventReaper != null && backgroundEventQueue != null) {
             // Copy over the completable events to a separate list, then reap any incomplete
             // events on that list.

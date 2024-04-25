@@ -48,10 +48,10 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     val topic3 = "part-test-topic-3"
     val props = new Properties()
     props.setProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.9.0")
-    createTopic(topic1, numParts, 1)
+    createTopic(topic1, numParts)
     // Topic2 is in old message format.
     createTopic(topic2, numParts, 1, props)
-    createTopic(topic3, numParts, 1)
+    createTopic(topic3, numParts)
 
     val consumer = createConsumer()
 
@@ -73,7 +73,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     }
     // The timestampToSearch map should contain:
     // (topic1Partition0 -> 0,
-    //  topic1Partitoin1 -> 20,
+    //  topic1Partition1 -> 20,
     //  topic2Partition0 -> 40,
     //  topic2Partition1 -> 60,
     //  topic3Partition0 -> 80,

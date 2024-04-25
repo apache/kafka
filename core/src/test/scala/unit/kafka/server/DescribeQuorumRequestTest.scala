@@ -82,10 +82,10 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
       assertTrue(leaderState.logEndOffset > 0)
 
       val voterData = partitionData.currentVoters.asScala
-      assertEquals(cluster.controllerIds().asScala, voterData.map(_.replicaId).toSet);
+      assertEquals(cluster.controllerIds().asScala, voterData.map(_.replicaId).toSet)
 
       val observerData = partitionData.observers.asScala
-      assertEquals(cluster.brokerIds().asScala, observerData.map(_.replicaId).toSet);
+      assertEquals(cluster.brokerIds().asScala, observerData.map(_.replicaId).toSet)
 
       (voterData ++ observerData).foreach { state =>
         assertTrue(0 < state.logEndOffset)

@@ -31,7 +31,11 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Void> {
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
     protected CommitEvent(final Type type, final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
-        super(type, timer);
+        this(type, offsets, CompletableEvent.calculateDeadlineMs(timer));
+    }
+
+    public CommitEvent(final Type type, Map<TopicPartition, OffsetAndMetadata> offsets, final long deadlineMs) {
+        super(type, deadlineMs);
         this.offsets = validate(offsets);
     }
 

@@ -32,15 +32,10 @@ import java.util.concurrent.BlockingQueue;
  * events are shuffled around the consumer subsystem by means of {@link BlockingQueue shared queues}, it should
  * be considered an anti-pattern to need to know how it arrived or what happens after its is processed.
  */
-public interface EventProcessor<T> extends AutoCloseable {
+public interface EventProcessor<T> {
 
     /**
      * Process an event that is received.
      */
     void process(T event);
-
-    @Override
-    default void close() {
-        // Do nothing by default...
-    }
 }

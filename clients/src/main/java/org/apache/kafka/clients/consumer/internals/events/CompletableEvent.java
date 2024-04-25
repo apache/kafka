@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.utils.Timer;
+
+import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
@@ -72,4 +75,24 @@ public interface CompletableEvent<T> {
      * @see CompletableEventReaper
      */
     long deadlineMs();
+
+    /**
+     * Calculate the deadline timestamp based on the given timer.
+     *
+     * @param timer Timer from which to use the {@link Timer#currentTimeMs()} and {@link Timer#remainingMs()}} to
+     *              calculate the deadline
+     *
+     * @return Absolute time for event to be completed
+     */
+    static long calculateDeadlineMs(final Timer timer) {
+        Objects.requireNonNull(timer);
+
+        long currentTimeMs = timer.currentTimeMs();
+        long remainingMs = timer.remainingMs();
+
+        if (currentTimeMs > Long.MAX_VALUE - remainingMs)
+            return Long.MAX_VALUE;
+        else
+            return currentTimeMs + remainingMs;
+    }
 }
