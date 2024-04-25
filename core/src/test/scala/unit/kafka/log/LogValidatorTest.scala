@@ -370,7 +370,7 @@ class LogValidatorTest {
     val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
       producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional, recordList: _*)
 
-    val offsetCounter = PrimitiveRef.ofLong(0);
+    val offsetCounter = PrimitiveRef.ofLong(0)
     val validatingResults = new LogValidator(records,
       topicPartition,
       time,
@@ -410,7 +410,7 @@ class LogValidatorTest {
       }
     }
 
-    assertEquals(i, offsetCounter.value);
+    assertEquals(i, offsetCounter.value)
     assertEquals(now + 1, validatingResults.maxTimestampMs,
       s"Max timestamp should be ${now + 1}")
 

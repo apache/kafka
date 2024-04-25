@@ -48,6 +48,7 @@ import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time,
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.config.QuotaConfigs
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
@@ -94,7 +95,7 @@ class SocketServerTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager);
+    server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
     server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     // Run the tests with TRACE logging to exercise request logging path
     logLevelToRestore = kafkaLogger.getLevel
@@ -173,13 +174,13 @@ class SocketServerTest {
       s.boundPort(listenerName)
     } catch {
       case e: Throwable => throw new RuntimeException("Unable to find bound port for listener " +
-        s"${listenerName}", e)
+        s"$listenerName", e)
     }
     val socket = try {
       new Socket("localhost", boundPort, localAddr, port)
     } catch {
-      case e: Throwable => throw new RuntimeException(s"Unable to connect to remote port ${boundPort} " +
-        s"with local port ${port} on listener ${listenerName}", e)
+      case e: Throwable => throw new RuntimeException(s"Unable to connect to remote port $boundPort " +
+        s"with local port $port on listener $listenerName", e)
     }
     sockets += socket
     socket
@@ -963,7 +964,7 @@ class SocketServerTest {
     val defaultTimeoutMs = 2000
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     overrideProps.remove(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG)
-    overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
+    overrideProps.put(QuotaConfigs.NUM_QUOTA_SAMPLES_CONFIG, String.valueOf(2))
     val connectionRate = 5
     val time = new MockTime()
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(),
@@ -1014,7 +1015,7 @@ class SocketServerTest {
   def testThrottledSocketsClosedOnShutdown(): Unit = {
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     overrideProps.remove("max.connections.per.ip")
-    overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
+    overrideProps.put(QuotaConfigs.NUM_QUOTA_SAMPLES_CONFIG, String.valueOf(2))
     val connectionRate = 5
     val time = new MockTime()
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(),
@@ -2024,8 +2025,8 @@ class SocketServerTest {
       val enableFuture = newServer.enableRequestProcessing(
         newServer.dataPlaneAcceptors.keys().asScala.
           map(_.toJava).map(k => k -> authorizerFuture).toMap)
-      assertFalse(authorizerFuture.isDone())
-      assertFalse(enableFuture.isDone())
+      assertFalse(authorizerFuture.isDone)
+      assertFalse(enableFuture.isDone)
       newServer.dataPlaneAcceptors.values().forEach(a => assertNull(a.serverChannel))
       authorizerFuture.complete(null)
       enableFuture.get(1, TimeUnit.MINUTES)
@@ -2157,7 +2158,7 @@ class SocketServerTest {
                     connectionQueueSize,
                     isPrivilegedListener,
                     apiVersionManager,
-                    s"TestableProcessor${id}") {
+                    s"TestableProcessor$id") {
     private var connectionId: Option[String] = None
     private var conn: Option[Socket] = None
 
@@ -2455,12 +2456,12 @@ class SocketServerTest {
    * channel's `netReadBuffer` to simulate scenarios with SSL buffered data.
    */
   private class ProxyServer(socketServer: SocketServer) {
-    val serverSocket = new ServerSocket(0)
+    private val serverSocket = new ServerSocket(0)
     val localPort = serverSocket.getLocalPort
     val serverConnSocket = new Socket("localhost", socketServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SSL)))
-    val executor = Executors.newFixedThreadPool(2)
+    private val executor = Executors.newFixedThreadPool(2)
     @volatile var clientConnSocket: Socket = _
-    @volatile var buffer: Option[ByteBuffer] = None
+    @volatile private var buffer: Option[ByteBuffer] = None
 
     executor.submit((() => {
       try {

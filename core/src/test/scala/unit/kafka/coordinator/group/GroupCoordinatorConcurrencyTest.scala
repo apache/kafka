@@ -85,7 +85,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     metrics = new Metrics
     groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, timer.time, metrics)
     groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
-      false)
+      enableMetadataExpiration = false)
 
     // Transactional appends attempt to schedule to the request handler thread using
     // a non request handler thread. Set this to avoid error.
@@ -156,7 +156,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory,
       rebalancePurgatory, timer.time, new Metrics())
     groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
-      false)
+      enableMetadataExpiration = false)
 
     val members = new Group(s"group", nMembersPerGroup, groupCoordinator, replicaManager)
       .members

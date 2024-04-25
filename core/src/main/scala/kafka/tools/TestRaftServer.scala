@@ -35,7 +35,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
-import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
+import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, QuorumConfig}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
@@ -91,7 +91,7 @@ class TestRaftServer(
       time,
       metrics,
       Some(threadNamePrefix),
-      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
+      CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
       new ProcessTerminatingFaultHandler.Builder().build()
     )
 

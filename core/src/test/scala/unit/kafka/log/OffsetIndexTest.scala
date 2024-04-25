@@ -19,9 +19,9 @@ package kafka.log
 
 import java.io._
 import java.nio.file.Files
+import java.util
+import java.util.{Collections, Optional}
 import org.junit.jupiter.api.Assertions._
-
-import java.util.{Arrays, Collections, Optional}
 import org.junit.jupiter.api._
 
 import scala.collection._
@@ -29,6 +29,7 @@ import scala.util.Random
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
 import org.apache.kafka.storage.internals.log.{OffsetIndex, OffsetPosition}
+
 
 import scala.annotation.nowarn
 
@@ -69,7 +70,7 @@ class OffsetIndexTest {
     // for non-present values we should find the offset of the largest value less than or equal to this 
     val valMap = new immutable.TreeMap[Long, (Long, Int)]() ++ vals.map(p => (p._1, p))
     val offsets = (idx.baseOffset until vals.last._1.toInt).toArray
-    Collections.shuffle(Arrays.asList(offsets))
+    Collections.shuffle(util.Arrays.asList(offsets))
     for (offset <- offsets.take(30)) {
       val rightAnswer = 
         if (offset < valMap.firstKey)

@@ -29,9 +29,9 @@ import scala.jdk.CollectionConverters._
  */
 class LinuxIoMetricsCollector(procRoot: String, val time: Time, val logger: Logger) {
   import LinuxIoMetricsCollector._
-  var lastUpdateMs: Long = -1L
-  var cachedReadBytes:Long = 0L
-  var cachedWriteBytes:Long = 0L
+  private var lastUpdateMs = -1L
+  private var cachedReadBytes = 0L
+  private var cachedWriteBytes = 0L
   val path: Path = Paths.get(procRoot, "self", "io")
 
   def readBytes(): Long = this.synchronized {
@@ -71,9 +71,9 @@ class LinuxIoMetricsCollector(procRoot: String, val time: Time, val logger: Logg
       val lines = Files.readAllLines(path, StandardCharsets.UTF_8).asScala
       lines.foreach(line => {
         if (line.startsWith(READ_BYTES_PREFIX)) {
-          cachedReadBytes = line.substring(READ_BYTES_PREFIX.size).toLong
+          cachedReadBytes = line.substring(READ_BYTES_PREFIX.length).toLong
         } else if (line.startsWith(WRITE_BYTES_PREFIX)) {
-          cachedWriteBytes = line.substring(WRITE_BYTES_PREFIX.size).toLong
+          cachedWriteBytes = line.substring(WRITE_BYTES_PREFIX.length).toLong
         }
       })
       lastUpdateMs = now

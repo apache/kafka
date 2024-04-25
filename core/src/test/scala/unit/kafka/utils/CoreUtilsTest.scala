@@ -17,16 +17,17 @@
 
 package kafka.utils
 
-import java.util.{Arrays, Base64, UUID}
+import java.util
+import java.util.{Base64, UUID}
 import java.util.concurrent.{ConcurrentHashMap, Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
 import java.util.regex.Pattern
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.KafkaException
-import org.junit.jupiter.api.Test
 import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
@@ -75,7 +76,7 @@ class CoreUtilsTest extends Logging {
   def testReadBytes(): Unit = {
     for (testCase <- List("", "a", "abcd")) {
       val bytes = testCase.getBytes
-      assertTrue(Arrays.equals(bytes, Utils.readBytes(ByteBuffer.wrap(bytes))))
+      assertTrue(util.Arrays.equals(bytes, Utils.readBytes(ByteBuffer.wrap(bytes))))
     }
   }
 

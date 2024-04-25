@@ -30,7 +30,7 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.ZkConfigs
@@ -58,7 +58,7 @@ class RaftManagerTest {
         props.setProperty(KafkaConfig.MetadataLogDirProp, value.toString)
       }
       props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
-      props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
+      props.setProperty(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9093")
       props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
     }
 
@@ -87,14 +87,14 @@ class RaftManagerTest {
       props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "PLAINTEXT")
       if (processRoles.contains(ProcessRole.ControllerRole)) { // co-located
         props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
-        props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
+        props.setProperty(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9093")
       } else { // broker-only
         val voterId = nodeId + 1
-        props.setProperty(KafkaConfig.QuorumVotersProp, s"${voterId}@localhost:9093")
+        props.setProperty(KafkaConfig.QuorumVotersProp, s"$voterId@localhost:9093")
       }
     } else if (processRoles.contains(ProcessRole.ControllerRole)) { // controller-only
       props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "SSL://localhost:9093")
-      props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
+      props.setProperty(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9093")
     }
 
     new KafkaConfig(props)
@@ -115,7 +115,7 @@ class RaftManagerTest {
       Time.SYSTEM,
       new Metrics(Time.SYSTEM),
       Option.empty,
-      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
+      CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
       mock(classOf[FaultHandler])
     )
   }
