@@ -144,7 +144,7 @@ class RequestState {
      *
      * @return String version of instance variables.
      */
-    protected String toStringBase() {
+    protected String toStringDetails() {
         return "owner='" + owner + '\'' +
                 ", exponentialBackoff=" + exponentialBackoff +
                 ", lastSentMs=" + lastSentMs +
@@ -155,6 +155,6 @@ class RequestState {
 
     @Override
     public String toString() {
-        return getClass().getSimpleName() + '{' + toStringBase() + '}';
+        return getClass().getSimpleName() + '{' + toStringDetails() + '}';
     }
 }
