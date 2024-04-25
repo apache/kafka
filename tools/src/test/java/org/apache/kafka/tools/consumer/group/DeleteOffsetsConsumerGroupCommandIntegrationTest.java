@@ -38,7 +38,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
@@ -51,9 +50,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -196,13 +195,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     }
 
     private void produceRecord() {
-        KafkaProducer<byte[], byte[]> producer = createProducer();
-        try {
-            producer.send(new ProducerRecord<>(TOPIC, 0, null, null)).get();
-        } catch (ExecutionException | InterruptedException e) {
-            throw new RuntimeException(e);
-        } finally {
-            Utils.closeQuietly(producer, "producer");
+        try (KafkaProducer<byte[], byte[]> producer = createProducer()) {
+            assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(TOPIC, 0, null, null)).get());
         }
     }
 
