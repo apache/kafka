@@ -169,9 +169,7 @@ public class AssignmentsManagerTest {
     public void testAssignmentAggregation() throws InterruptedException {
         CountDownLatch readyToAssert = new CountDownLatch(1);
         doAnswer(invocation -> {
-            if (readyToAssert.getCount() > 0) {
-                readyToAssert.countDown();
-            }
+            readyToAssert.countDown();
             return null;
         }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class),
             any(ControllerRequestCompletionHandler.class));
@@ -181,10 +179,11 @@ public class AssignmentsManagerTest {
         manager.onAssignment(new TopicIdPartition(TOPIC_1, 3), DIR_3, "testAssignmentAggregation", () -> { });
         manager.onAssignment(new TopicIdPartition(TOPIC_1, 4), DIR_1, "testAssignmentAggregation", () -> { });
         manager.onAssignment(new TopicIdPartition(TOPIC_2, 5), DIR_2, "testAssignmentAggregation", () -> { });
-        while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
+        TestUtils.waitForCondition(() -> {
             time.sleep(100);
             manager.wakeup();
-        }
+            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
+        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
 
         ArgumentCaptor<AssignReplicasToDirsRequest.Builder> captor =
             ArgumentCaptor.forClass(AssignReplicasToDirsRequest.Builder.class);
@@ -210,9 +209,7 @@ public class AssignmentsManagerTest {
     void testRequeuesFailedAssignmentPropagations() throws InterruptedException {
         CountDownLatch readyToAssert = new CountDownLatch(5);
         doAnswer(invocation -> {
-            if (readyToAssert.getCount() > 0) {
-                readyToAssert.countDown();
-            }
+            readyToAssert.countDown();
             if (readyToAssert.getCount() == 4) {
                 invocation.getArgument(1, ControllerRequestCompletionHandler.class).onTimeout();
                 manager.onAssignment(new TopicIdPartition(TOPIC_1, 2), DIR_3, "testRequeuesFailedAssignmentPropagations", () -> { });
@@ -253,10 +250,11 @@ public class AssignmentsManagerTest {
             any(ControllerRequestCompletionHandler.class));
 
         manager.onAssignment(new TopicIdPartition(TOPIC_1, 1), DIR_1, "testRequeuesFailedAssignmentPropagations", () -> { });
-        while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
+        TestUtils.waitForCondition(() -> {
             time.sleep(TimeUnit.SECONDS.toMillis(1));
             manager.wakeup();
-        }
+            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
+        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
 
         ArgumentCaptor<AssignReplicasToDirsRequest.Builder> captor =
             ArgumentCaptor.forClass(AssignReplicasToDirsRequest.Builder.class);
@@ -304,10 +302,11 @@ public class AssignmentsManagerTest {
             manager.onAssignment(new TopicIdPartition(TOPIC_1, i % 5), DIR_1, "testOnCompletion", readyToAssert::countDown);
         }
 
-        while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
+        TestUtils.waitForCondition(() -> {
             time.sleep(TimeUnit.SECONDS.toMillis(1));
             manager.wakeup();
-        }
+            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
+        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
     }
 
     private static ClientResponse buildSuccessfulResponse(AssignReplicasToDirsRequestData request) {
@@ -321,10 +320,9 @@ public class AssignmentsManagerTest {
             }
         }
         AssignReplicasToDirsResponseData responseData = AssignmentsHelper.buildResponseData(Errors.NONE.code(), 0, errors);
-        ClientResponse response = new ClientResponse(null, null, null,
+        return new ClientResponse(null, null, null,
                 0L, 0L, false, false, null, null,
                 new AssignReplicasToDirsResponse(responseData));
-        return response;
     }
 
     @Test
@@ -394,9 +392,10 @@ public class AssignmentsManagerTest {
         for (int i = 0; i < 4; i++) {
             manager.onAssignment(new TopicIdPartition(TOPIC_1, i), DIR_1, "testQueuedReplicaToDirAssignmentsMetric", () -> { });
         }
-        while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
+        TestUtils.waitForCondition(() -> {
             time.sleep(100);
-        }
+            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
+        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
         assertEquals(4, queuedReplicaToDirAssignments.value());
 
         for (int i = 4; i < 8; i++) {

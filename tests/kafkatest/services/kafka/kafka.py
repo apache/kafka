@@ -1396,6 +1396,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 continue
 
             fields = line.split("\t")
+
+            # There are additional fields on the end of the 'describe topic' output related to eligible leader
+            # replicas. We don't want or need those, so drop them before we attempt to parse.
+            assert len(fields) >= 4, "Not enough fields in describe topic output line: %s" % line
+            fields = fields[:4]
+
             # ["Partition: 4", "Leader: 0"] -> ["4", "0"]
             fields = list(map(lambda x: x.split(" ")[1], fields))
             partitions.append(

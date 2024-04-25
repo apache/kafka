@@ -87,7 +87,7 @@ public class AlterPartitionRequest extends AbstractRequest {
                     topicData.partitions().forEach(partitionData -> {
                         // The newIsrWithEpochs will be empty after build. Then we can skip the conversion if the build
                         // is called again.
-                        if (partitionData.newIsrWithEpochs().size() > 0) {
+                        if (!partitionData.newIsrWithEpochs().isEmpty()) {
                             List<Integer> newIsr = new ArrayList<>(partitionData.newIsrWithEpochs().size());
                             partitionData.newIsrWithEpochs().forEach(brokerState -> {
                                 newIsr.add(brokerState.brokerId());

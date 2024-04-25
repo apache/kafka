@@ -28,6 +28,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.ListOffsetsResponse
 import org.apache.kafka.common.utils.{MockTime, Time, Utils}
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -345,8 +346,8 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
       }
      // We use mock timer so the records can get removed if the test env is too busy to complete
      // tests before kafka-log-retention. Hence, we disable the retention to avoid failed tests
-     props.setProperty(KafkaConfig.LogRetentionTimeMillisProp, "-1")
-     props.setProperty(KafkaConfig.LogDirProp, dataFolder(index))
+     props.setProperty(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "-1")
+     props.setProperty(ServerLogConfigs.LOG_DIR_CONFIG, dataFolder(index))
       props
     }.map(KafkaConfig.fromProps)
   }

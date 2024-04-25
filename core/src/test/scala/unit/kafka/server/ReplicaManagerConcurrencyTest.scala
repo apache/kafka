@@ -40,6 +40,7 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesVersion}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel}
@@ -169,8 +170,8 @@ class ReplicaManagerConcurrencyTest extends Logging {
     props.put(KafkaConfig.ProcessRolesProp, "broker")
     props.put(KafkaConfig.NodeIdProp, localId.toString)
     props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
-    props.put(KafkaConfig.LogDirProp, logDir.getAbsolutePath)
-    props.put(KafkaConfig.ReplicaLagTimeMaxMsProp, 5000.toString)
+    props.put(ServerLogConfigs.LOG_DIR_CONFIG, logDir.getAbsolutePath)
+    props.put(ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG, 5000.toString)
 
     val config = new KafkaConfig(props, doLog = false)
 

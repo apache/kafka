@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.telemetry.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -38,7 +37,6 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -131,17 +129,6 @@ public class KafkaMetricsCollector implements MetricsCollector {
     private final MetricNamingStrategy<MetricName> metricNamingStrategy;
     private final Set<String> excludeLabels;
 
-    private static final Field METRIC_VALUE_PROVIDER_FIELD;
-
-    static {
-        try {
-            METRIC_VALUE_PROVIDER_FIELD = KafkaMetric.class.getDeclaredField("metricValueProvider");
-            METRIC_VALUE_PROVIDER_FIELD.setAccessible(true);
-        } catch (Exception e) {
-            throw new KafkaException(e);
-        }
-    }
-
     public KafkaMetricsCollector(MetricNamingStrategy<MetricName> metricNamingStrategy, Set<String> excludeLabels) {
         this(metricNamingStrategy, Time.SYSTEM, excludeLabels);
     }
@@ -211,7 +198,7 @@ public class KafkaMetricsCollector implements MetricsCollector {
         }
 
         Instant now = Instant.ofEpochMilli(time.milliseconds());
-        if (isMeasurable(metric)) {
+        if (metric.isMeasurable()) {
             Measurable measurable = metric.measurable();
             Double value = (Double) metricValue;
 
@@ -260,21 +247,6 @@ public class KafkaMetricsCollector implements MetricsCollector {
         metricsEmitter.emitMetric(
             SinglePointMetric.gauge(metricKey, value, timestamp, excludeLabels)
         );
-    }
-
-    private static boolean isMeasurable(KafkaMetric metric) {
-        // KafkaMetric does not expose the internal MetricValueProvider and throws an IllegalStateException
-        // exception, if measurable() is called for a Gauge.
-        // There are 2 ways to find the type of internal MetricValueProvider for a KafkaMetric - use reflection or
-        // get the information based on whether a IllegalStateException exception is thrown.
-        // We use reflection so that we can avoid the cost of generating the stack trace when it's
-        // not a measurable.
-        try {
-            Object provider = METRIC_VALUE_PROVIDER_FIELD.get(metric);
-            return provider instanceof Measurable;
-        } catch (Exception e) {
-            throw new KafkaException(e);
-        }
     }
 
     /**

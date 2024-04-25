@@ -37,7 +37,7 @@
   <allow pkg="kafka.serializer" />
   <allow pkg="org.apache.kafka.common" />
   <allow pkg="org.mockito" class="AssignmentsManagerTest"/>
-
+  <allow pkg="org.apache.kafka.server"/>
   <!-- see KIP-544 for why KafkaYammerMetrics should be used instead of the global default yammer metrics registry
        https://cwiki.apache.org/confluence/display/KAFKA/KIP-544%3A+Make+metrics+exposed+via+JMX+configurable -->
   <disallow class="com.yammer.metrics.Metrics" />
@@ -57,6 +57,7 @@
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.fault" />
     <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
+    <allow class="org.apache.kafka.network.SocketServerConfigs" />
   </subpackage>
 
   <subpackage name="tools">

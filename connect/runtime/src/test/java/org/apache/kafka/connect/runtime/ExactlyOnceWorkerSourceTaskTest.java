@@ -80,7 +80,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -1027,11 +1026,11 @@ public class ExactlyOnceWorkerSourceTaskTest {
         ConcurrencyUtils.awaitLatch(pollLatch.get(), "task was not polled " + minimum + " time(s) quickly enough");
     }
 
-    private void awaitEmptyPolls(int minimum) throws InterruptedException {
+    private void awaitEmptyPolls(int minimum) {
         awaitPolls(minimum, Collections.emptyList());
     }
 
-    private void awaitPolls(int minimum) throws InterruptedException {
+    private void awaitPolls(int minimum) {
         awaitPolls(minimum, RECORDS);
     }
 
@@ -1051,7 +1050,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         workerTaskFuture = executor.submit(workerTask);
     }
 
-    private void expectSuccessfulFlushes() throws InterruptedException, TimeoutException {
+    private void expectSuccessfulFlushes() {
         when(offsetWriter.beginFlush()).thenReturn(true);
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
             Callback<Void> cb = invocation.getArgument(0);

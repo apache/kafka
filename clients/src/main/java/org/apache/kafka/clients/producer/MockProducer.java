@@ -119,7 +119,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     /**
      * Create a new mock producer with invented metadata the given autoComplete setting and key\value serializers.
      *
-     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer)}
+     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(Cluster.empty(), autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer)}
      */
     @SuppressWarnings("deprecation")
     public MockProducer(final boolean autoComplete,
@@ -131,7 +131,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     /**
      * Create a new mock producer with invented metadata the given autoComplete setting and key\value serializers.
      *
-     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(cluster, autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer)}
+     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(cluster, autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer)}
      */
     @SuppressWarnings("deprecation")
     public MockProducer(final Cluster cluster,
@@ -144,7 +144,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     /**
      * Create a new mock producer with invented metadata the given autoComplete setting, partitioner and key\value serializers.
      *
-     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer)}
+     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer)}
      */
     public MockProducer(final boolean autoComplete,
                         final Partitioner partitioner,
@@ -156,7 +156,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     /**
      * Create a new mock producer with invented metadata.
      *
-     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), false, null, null, null)}
+     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(Cluster.empty(), false, null, null, null)}
      */
     public MockProducer() {
         this(Cluster.empty(), false, null, null, null);
@@ -220,7 +220,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
             throw this.sendOffsetsToTransactionException;
         }
 
-        if (offsets.size() == 0) {
+        if (offsets.isEmpty()) {
             return;
         }
         Map<TopicPartition, OffsetAndMetadata> uncommittedOffsets =

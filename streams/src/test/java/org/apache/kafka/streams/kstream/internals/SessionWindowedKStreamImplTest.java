@@ -93,9 +93,6 @@ public class SessionWindowedKStreamImplTest {
         final EmitStrategy emitStrategy = EmitStrategy.StrategyType.forType(type);
         emitFinal = type.equals(EmitStrategy.StrategyType.ON_WINDOW_CLOSE);
 
-        // Set interval to 0 so that it always tries to emit
-        props.setProperty(StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
-
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         this.stream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(500)))

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.server.DynamicConfig;
 import kafka.utils.TestInfoUtils;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
@@ -25,7 +24,7 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.storage.internals.log.LogConfig;
+import org.apache.kafka.server.config.QuotaConfigs;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -48,7 +47,7 @@ public class ToolsTestUtils {
     /** @see TestInfoUtils#TestWithParameterizedQuorumAndGroupProtocolNames()  */
     public static final String TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES = "{displayName}.quorum={0}.groupProtocol={1}";
 
-    private static int randomPort = 0;
+    private static final int RANDOM_PORT = 0;
 
     public static String captureStandardOut(Runnable runnable) {
         return captureStandardStream(false, runnable);
@@ -68,7 +67,7 @@ public class ToolsTestUtils {
             System.setOut(tempStream);
         try {
             runnable.run();
-            return new String(outputStream.toByteArray()).trim();
+            return outputStream.toString().trim();
         } finally {
             if (isErr)
                 System.setErr(currentStream);
@@ -100,11 +99,11 @@ public class ToolsTestUtils {
         List<Properties> result = new ArrayList<>();
         int endingIdNumber = startingIdNumber + numConfigs - 1;
         for (int node = startingIdNumber; node <= endingIdNumber; node++) {
-            result.add(TestUtils.createBrokerConfig(node, zkConnect, true, true, randomPort,
+            result.add(TestUtils.createBrokerConfig(node, zkConnect, true, true, RANDOM_PORT,
                 scala.Option.empty(),
                 scala.Option.empty(),
                 scala.Option.empty(),
-                true, false, randomPort, false, randomPort, false, randomPort,
+                true, false, RANDOM_PORT, false, RANDOM_PORT, false, RANDOM_PORT,
                 scala.Option.apply(rackInfo.get(node)),
                 logDirCount, enableToken, numPartitions, defaultReplicationFactor, false));
         }
@@ -132,9 +131,9 @@ public class ToolsTestUtils {
      */
     public static void throttleAllBrokersReplication(Admin adminClient, List<Integer> brokerIds, int throttleBytes) throws ExecutionException, InterruptedException {
         List<AlterConfigOp> throttleConfigs = new ArrayList<>();
-        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker$.MODULE$.LeaderReplicationThrottledRateProp(),
+        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
             Integer.toString(throttleBytes)), AlterConfigOp.OpType.SET));
-        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker$.MODULE$.FollowerReplicationThrottledRateProp(),
+        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
             Integer.toString(throttleBytes)), AlterConfigOp.OpType.SET));
 
         Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
@@ -168,10 +167,10 @@ public class ToolsTestUtils {
                     Map<TopicPartition, List<Integer>> replicaThrottle =
                         entry.getValue().stream().collect(Collectors.toMap(Entry::getKey, Entry::getValue));
                     alterConfigOps.add(new AlterConfigOp(
-                        new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
+                        new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
                         AlterConfigOp.OpType.SET));
                     alterConfigOps.add(new AlterConfigOp(
-                        new ConfigEntry(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
+                        new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
                         AlterConfigOp.OpType.SET));
                     return alterConfigOps;
                 }
@@ -187,9 +186,9 @@ public class ToolsTestUtils {
         Map<ConfigResource, Collection<AlterConfigOp>> throttles = partitions.stream().collect(Collectors.toMap(
             tp -> new ConfigResource(ConfigResource.Type.TOPIC, tp.topic()),
             tp -> Arrays.asList(
-                    new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
+                    new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
                         AlterConfigOp.OpType.DELETE),
-                    new AlterConfigOp(new ConfigEntry(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
+                    new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
                         AlterConfigOp.OpType.DELETE))
             ));
 

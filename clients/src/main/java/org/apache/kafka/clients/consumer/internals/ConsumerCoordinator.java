@@ -1554,24 +1554,23 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private class ConsumerCoordinatorMetrics {
-        private final String metricGrpName;
         private final Sensor commitSensor;
 
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            this.metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
+            String metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
 
             this.commitSensor = metrics.sensor("commit-latency");
             this.commitSensor.add(metrics.metricName("commit-latency-avg",
-                this.metricGrpName,
+                metricGrpName,
                 "The average time taken for a commit request"), new Avg());
             this.commitSensor.add(metrics.metricName("commit-latency-max",
-                this.metricGrpName,
+                metricGrpName,
                 "The max time taken for a commit request"), new Max());
             this.commitSensor.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
 
             Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
             metrics.addMetric(metrics.metricName("assigned-partitions",
-                this.metricGrpName,
+                metricGrpName,
                 "The number of partitions currently assigned to this consumer"), numParts);
         }
     }
