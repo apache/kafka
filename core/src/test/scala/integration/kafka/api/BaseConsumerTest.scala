@@ -160,14 +160,14 @@ object BaseConsumerTest {
 
   class TestClusterResourceListenerSerializer extends Serializer[Array[Byte]] with ClusterResourceListener {
 
-    override def onUpdate(clusterResource: ClusterResource): Unit = updateProducerCount.incrementAndGet();
+    override def onUpdate(clusterResource: ClusterResource): Unit = updateProducerCount.incrementAndGet()
 
     override def serialize(topic: String, data: Array[Byte]): Array[Byte] = data
   }
 
   class TestClusterResourceListenerDeserializer extends Deserializer[Array[Byte]] with ClusterResourceListener {
 
-    override def onUpdate(clusterResource: ClusterResource): Unit = updateConsumerCount.incrementAndGet();
+    override def onUpdate(clusterResource: ClusterResource): Unit = updateConsumerCount.incrementAndGet()
     override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = data
   }
 }

@@ -34,7 +34,7 @@ case class DeleteRecordsPartitionStatus(requiredOffset: Long,
                                         responseStatus: DeleteRecordsResponseData.DeleteRecordsPartitionResult) {
   @volatile var acksPending = false
 
-  override def toString = "[acksPending: %b, error: %s, lowWatermark: %d, requiredOffset: %d]"
+  override def toString: String = "[acksPending: %b, error: %s, lowWatermark: %d, requiredOffset: %d]"
     .format(acksPending, Errors.forCode(responseStatus.errorCode).toString, responseStatus.lowWatermark, requiredOffset)
 }
 

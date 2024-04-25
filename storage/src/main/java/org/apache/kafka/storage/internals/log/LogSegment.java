@@ -29,6 +29,8 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.Timer;
@@ -63,6 +65,9 @@ import static java.util.Arrays.asList;
 public class LogSegment implements Closeable {
     private static final Logger LOGGER = LoggerFactory.getLogger(LogSegment.class);
     private static final Timer LOG_FLUSH_TIMER;
+    /* a directory that is used for future partition */
+    private static final String FUTURE_DIR_SUFFIX = "-future";
+    private static final Pattern FUTURE_DIR_PATTERN = Pattern.compile("^(\\S+)-(\\S+)\\.(\\S+)" + FUTURE_DIR_SUFFIX);
 
     static {
         KafkaMetricsGroup logFlushStatsMetricsGroup = new KafkaMetricsGroup(LogSegment.class) {
@@ -801,8 +806,22 @@ public class LogSegment implements Closeable {
         try {
             if (delete.execute())
                 LOGGER.info("Deleted {} {}.", fileType, file.getAbsolutePath());
-            else if (logIfMissing)
-                LOGGER.info("Failed to delete {} {} because it does not exist.", fileType, file.getAbsolutePath());
+            else {
+                if (logIfMissing) {
+                    LOGGER.info("Failed to delete {} {} because it does not exist.", fileType, file.getAbsolutePath());
+                }
+
+                // During alter log dir, the log segment may be moved to a new directory, so async delete may fail.
+                // Fallback to delete the file in the new directory to avoid orphan file.
+                Matcher dirMatcher = FUTURE_DIR_PATTERN.matcher(file.getParent());
+                if (dirMatcher.matches()) {
+                    String topicPartitionAbsolutePath = dirMatcher.group(1) + "-" + dirMatcher.group(2);
+                    File fallbackFile = new File(topicPartitionAbsolutePath, file.getName());
+                    if (fallbackFile.exists() && file.getName().endsWith(LogFileUtils.DELETED_FILE_SUFFIX) && fallbackFile.delete()) {
+                        LOGGER.info("Fallback to delete {} {}.", fileType, fallbackFile.getAbsolutePath());
+                    }
+                }
+            }
             return null;
         } catch (IOException e) {
             throw new IOException("Delete of " + fileType + " " + file.getAbsolutePath() + " failed.", e);

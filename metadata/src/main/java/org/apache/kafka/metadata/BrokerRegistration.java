@@ -43,15 +43,15 @@ import java.util.stream.Collectors;
  */
 public class BrokerRegistration {
     public static class Builder {
-        private int id = 0;
-        private long epoch = -1;
-        private Uuid incarnationId = null;
+        private int id;
+        private long epoch;
+        private Uuid incarnationId;
         private Map<String, Endpoint> listeners;
         private Map<String, VersionRange> supportedFeatures;
-        private Optional<String> rack = Optional.empty();
-        private boolean fenced = false;
-        private boolean inControlledShutdown = false;
-        private boolean isMigratingZkBroker = false;
+        private Optional<String> rack;
+        private boolean fenced;
+        private boolean inControlledShutdown;
+        private boolean isMigratingZkBroker;
         private List<Uuid> directories;
 
         public Builder() {

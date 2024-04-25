@@ -266,6 +266,15 @@ public class AsyncKafkaConsumerTest {
         assertEquals(offsets, commitEvent.offsets());
         assertDoesNotThrow(() -> commitEvent.future().complete(null));
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, null));
+
+        // Clean-up. Close the consumer here as we know it will cause a TimeoutException to be thrown.
+        // If we get an error *other* than the TimeoutException, we'll fail the test.
+        try {
+            Exception e = assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
+            assertInstanceOf(TimeoutException.class, e.getCause());
+        } finally {
+            consumer = null;
+        }
     }
 
     @Test
@@ -570,6 +579,15 @@ public class AsyncKafkaConsumerTest {
         verify(metadata).updateLastSeenEpochIfNewer(t0, 2);
         verify(metadata).updateLastSeenEpochIfNewer(t1, 1);
         verify(applicationEventHandler).add(ArgumentMatchers.isA(AsyncCommitEvent.class));
+
+        // Clean-Up. Close the consumer here as we know it will cause a TimeoutException to be thrown.
+        // If we get an error *other* than the TimeoutException, we'll fail the test.
+        try {
+            Exception e = assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
+            assertInstanceOf(TimeoutException.class, e.getCause());
+        } finally {
+            consumer = null;
+        }
     }
 
     @Test
@@ -614,6 +632,80 @@ public class AsyncKafkaConsumerTest {
 
         Exception e =  assertThrows(FencedInstanceIdException.class, () -> consumer.commitSync());
         assertEquals("Get fenced exception for group.instance.id groupInstanceId1", e.getMessage());
+    }
+
+    @Test
+    public void testCommitSyncAwaitsCommitAsyncCompletionWithEmptyOffsets() {
+        final TopicPartition tp = new TopicPartition("foo", 0);
+        final CompletableFuture<Void> asyncCommitFuture = setUpConsumerWithIncompleteAsyncCommit(tp);
+
+        // Commit async is not completed yet, so commit sync should wait for it to complete (time out)
+        assertThrows(TimeoutException.class, () -> consumer.commitSync(Collections.emptyMap(), Duration.ofMillis(100)));
+
+        // Complete exceptionally async commit event
+        asyncCommitFuture.completeExceptionally(new KafkaException("Test exception"));
+
+        // Commit async is completed, so commit sync completes immediately (since offsets are empty)
+        assertDoesNotThrow(() -> consumer.commitSync(Collections.emptyMap(), Duration.ofMillis(100)));
+    }
+
+    @Test
+    public void testCommitSyncAwaitsCommitAsyncCompletionWithNonEmptyOffsets() {
+        final TopicPartition tp = new TopicPartition("foo", 0);
+        final CompletableFuture<Void> asyncCommitFuture = setUpConsumerWithIncompleteAsyncCommit(tp);
+
+        // Mock to complete sync event
+        completeCommitSyncApplicationEventSuccessfully();
+
+        // Commit async is not completed yet, so commit sync should wait for it to complete (time out)
+        assertThrows(TimeoutException.class, () -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
+
+        // Complete async commit event
+        asyncCommitFuture.complete(null);
+
+        // Commit async is completed, so commit sync does not need to wait before committing its offsets
+        assertDoesNotThrow(() -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
+    }
+
+    @Test
+    public void testCommitSyncAwaitsCommitAsyncButDoesNotFail() {
+        final TopicPartition tp = new TopicPartition("foo", 0);
+        final CompletableFuture<Void> asyncCommitFuture = setUpConsumerWithIncompleteAsyncCommit(tp);
+
+        // Mock to complete sync event
+        completeCommitSyncApplicationEventSuccessfully();
+
+        // Commit async is not completed yet, so commit sync should wait for it to complete (time out)
+        assertThrows(TimeoutException.class, () -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
+
+        // Complete exceptionally async commit event
+        asyncCommitFuture.completeExceptionally(new KafkaException("Test exception"));
+
+        // Commit async is completed exceptionally, but this will be handled by commit callback - commit sync should not fail.
+        assertDoesNotThrow(() -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
+    }
+
+    private CompletableFuture<Void> setUpConsumerWithIncompleteAsyncCommit(TopicPartition tp) {
+        time = new MockTime(1);
+        consumer = newConsumer();
+
+        // Commit async (incomplete)
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        consumer.assign(Collections.singleton(tp));
+        consumer.seek(tp, 20);
+        consumer.commitAsync();
+
+        return getLastEnqueuedEventFuture();
+    }
+
+    // ArgumentCaptor's type-matching does not work reliably with Java 8, so we cannot directly capture the AsyncCommitEvent
+    // Instead, we capture the super-class CompletableApplicationEvent and fetch the last captured event.
+    private CompletableFuture<Void> getLastEnqueuedEventFuture() {
+        final ArgumentCaptor<CompletableApplicationEvent<Void>> eventArgumentCaptor = ArgumentCaptor.forClass(CompletableApplicationEvent.class);
+        verify(applicationEventHandler, atLeast(1)).add(eventArgumentCaptor.capture());
+        final List<CompletableApplicationEvent<Void>> allValues = eventArgumentCaptor.getAllValues();
+        final CompletableApplicationEvent<Void> lastEvent = allValues.get(allValues.size() - 1);
+        return lastEvent.future();
     }
 
     @Test
@@ -1004,6 +1096,41 @@ public class AsyncKafkaConsumerTest {
         assertNotNull(capturedEvent.get());
         assertFalse(capturedEvent.get().future().isCompletedExceptionally());
     }
+
+    @Test
+    public void testCloseAwaitPendingAsyncCommitIncomplete() {
+        time = new MockTime(1);
+        consumer = newConsumer();
+
+        // Commit async (incomplete)
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        final TopicPartition tp = new TopicPartition("foo", 0);
+        consumer.assign(Collections.singleton(tp));
+        consumer.seek(tp, 20);
+
+        consumer.commitAsync();
+        Exception e = assertThrows(KafkaException.class, () -> consumer.close(Duration.ofMillis(10)));
+        assertInstanceOf(TimeoutException.class, e.getCause());
+    }
+
+    @Test
+    public void testCloseAwaitPendingAsyncCommitComplete() {
+        time = new MockTime(1);
+        consumer = newConsumer();
+        MockCommitCallback cb = new MockCommitCallback();
+
+        // Commit async (complete)
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        final TopicPartition tp = new TopicPartition("foo", 0);
+        consumer.assign(Collections.singleton(tp));
+        consumer.seek(tp, 20);
+        completeCommitAsyncApplicationEventSuccessfully();
+        consumer.commitAsync(cb);
+
+        assertDoesNotThrow(() -> consumer.close(Duration.ofMillis(10)));
+        assertEquals(1, cb.invoked);
+    }
+
 
     @Test
     public void testInterceptorAutoCommitOnClose() {
