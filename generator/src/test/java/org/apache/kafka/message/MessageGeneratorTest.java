@@ -21,35 +21,35 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(120)
 public class MessageGeneratorTest {
 
     @Test
-    public void testCapitalizeFirst() throws Exception {
+    public void testCapitalizeFirst() {
         assertEquals("", MessageGenerator.capitalizeFirst(""));
         assertEquals("AbC", MessageGenerator.capitalizeFirst("abC"));
     }
 
     @Test
-    public void testLowerCaseFirst() throws Exception {
+    public void testLowerCaseFirst() {
         assertEquals("", MessageGenerator.lowerCaseFirst(""));
         assertEquals("fORTRAN", MessageGenerator.lowerCaseFirst("FORTRAN"));
         assertEquals("java", MessageGenerator.lowerCaseFirst("java"));
     }
 
     @Test
-    public void testFirstIsCapitalized() throws Exception {
+    public void testFirstIsCapitalized() {
         assertFalse(MessageGenerator.firstIsCapitalized(""));
         assertTrue(MessageGenerator.firstIsCapitalized("FORTRAN"));
         assertFalse(MessageGenerator.firstIsCapitalized("java"));
     }
 
     @Test
-    public void testToSnakeCase() throws Exception {
+    public void testToSnakeCase() {
         assertEquals("", MessageGenerator.toSnakeCase(""));
         assertEquals("foo_bar_baz", MessageGenerator.toSnakeCase("FooBarBaz"));
         assertEquals("foo_bar_baz", MessageGenerator.toSnakeCase("fooBarBaz"));
@@ -57,15 +57,11 @@ public class MessageGeneratorTest {
     }
 
     @Test
-    public void stripSuffixTest() throws Exception {
+    public void stripSuffixTest() {
         assertEquals("FooBa", MessageGenerator.stripSuffix("FooBar", "r"));
         assertEquals("", MessageGenerator.stripSuffix("FooBar", "FooBar"));
         assertEquals("Foo", MessageGenerator.stripSuffix("FooBar", "Bar"));
-        try {
-            MessageGenerator.stripSuffix("FooBar", "Baz");
-            fail("expected exception");
-        } catch (RuntimeException e) {
-        }
+        assertThrows(RuntimeException.class, () -> MessageGenerator.stripSuffix("FooBar", "Baz"));
     }
 
     @Test
