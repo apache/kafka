@@ -824,19 +824,19 @@ class RemoteIndexCacheTest {
     val remoteIndexCacheDir = cache.cacheDir()
     val tempSuffix = ".tmptest"
 
-    def renameRemoteCacheIndexFileFromDisk(suffix: String) = {
+    def renameRemoteCacheIndexFileFromDisk(suffix: String): Unit = {
       Files.walk(remoteIndexCacheDir.toPath)
         .filter(Files.isRegularFile(_))
         .filter(path => path.getFileName.toString.endsWith(suffix))
-        .forEach(f => Utils.atomicMoveWithFallback(f, f.resolveSibling(f.getFileName().toString().stripSuffix(tempSuffix))))
+        .forEach(f => Utils.atomicMoveWithFallback(f, f.resolveSibling(f.getFileName.toString.stripSuffix(tempSuffix))))
     }
 
     val entry = cache.getIndexEntry(rlsMetadata)
     verifyFetchIndexInvocation(count = 1)
     // copy files with temporary name
-    Files.copy(entry.offsetIndex().file().toPath(), Paths.get(Utils.replaceSuffix(entry.offsetIndex().file().getPath(), "", tempSuffix)))
-    Files.copy(entry.txnIndex().file().toPath(), Paths.get(Utils.replaceSuffix(entry.txnIndex().file().getPath(), "", tempSuffix)))
-    Files.copy(entry.timeIndex().file().toPath(), Paths.get(Utils.replaceSuffix(entry.timeIndex().file().getPath(), "", tempSuffix)))
+    Files.copy(entry.offsetIndex().file().toPath, Paths.get(Utils.replaceSuffix(entry.offsetIndex().file().getPath, "", tempSuffix)))
+    Files.copy(entry.txnIndex().file().toPath, Paths.get(Utils.replaceSuffix(entry.txnIndex().file().getPath, "", tempSuffix)))
+    Files.copy(entry.timeIndex().file().toPath, Paths.get(Utils.replaceSuffix(entry.timeIndex().file().getPath, "", tempSuffix)))
 
     cache.remove(rlsMetadata.remoteLogSegmentId().id())
 
@@ -899,9 +899,9 @@ class RemoteIndexCacheTest {
     // The new deleted file created should be replaced by existing deleted file.
 
     // create deleted suffix file
-    Files.copy(entry.offsetIndex().file().toPath(), Paths.get(Utils.replaceSuffix(entry.offsetIndex().file().getPath(), "", LogFileUtils.DELETED_FILE_SUFFIX)))
-    Files.copy(entry.txnIndex().file().toPath(), Paths.get(Utils.replaceSuffix(entry.txnIndex().file().getPath(), "", LogFileUtils.DELETED_FILE_SUFFIX)))
-    Files.copy(entry.timeIndex().file().toPath(), Paths.get(Utils.replaceSuffix(entry.timeIndex().file().getPath(), "", LogFileUtils.DELETED_FILE_SUFFIX)))
+    Files.copy(entry.offsetIndex().file().toPath, Paths.get(Utils.replaceSuffix(entry.offsetIndex().file().getPath, "", LogFileUtils.DELETED_FILE_SUFFIX)))
+    Files.copy(entry.txnIndex().file().toPath, Paths.get(Utils.replaceSuffix(entry.txnIndex().file().getPath, "", LogFileUtils.DELETED_FILE_SUFFIX)))
+    Files.copy(entry.timeIndex().file().toPath, Paths.get(Utils.replaceSuffix(entry.timeIndex().file().getPath, "", LogFileUtils.DELETED_FILE_SUFFIX)))
 
     // verify deleted file exists on disk
     assertTrue(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isPresent, s"Deleted Offset index file should be present on disk at ${remoteIndexCacheDir.toPath}")
@@ -978,7 +978,7 @@ class RemoteIndexCacheTest {
     txnIndex.close()
 
     // open the index with a different starting offset to fake invalid data
-    return new TransactionIndex(100L, txnIdxFile)
+    new TransactionIndex(100L, txnIdxFile)
   }
 
   private def createTimeIndexForSegmentMetadata(metadata: RemoteLogSegmentMetadata, dir: File): TimeIndex = {
@@ -1078,7 +1078,7 @@ class RemoteIndexCacheTest {
 
   private def getIndexFileFromRemoteCacheDir(cache: RemoteIndexCache, suffix: String) = {
     try {
-      Files.walk(cache.cacheDir().toPath())
+      Files.walk(cache.cacheDir().toPath)
         .filter(Files.isRegularFile(_))
         .filter(path => path.getFileName.toString.endsWith(suffix))
         .findAny()

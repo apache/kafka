@@ -328,9 +328,9 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
   private def verifyRemoteStorageMetrics(shouldContainMetrics: Boolean): Unit = {
     val metrics = RemoteStorageMetrics.allMetrics().asScala.filter(name =>
-      KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.find(metric => {
-        metric._1.getMBeanName().equals(name.getMBeanName)
-      }).isDefined
+      KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.exists(metric => {
+        metric._1.getMBeanName.equals(name.getMBeanName)
+      })
     ).toList
     val aggregatedBrokerTopicStats = Set(
       RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName,
@@ -341,9 +341,9 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
       RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName,
       RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName)
     val aggregatedBrokerTopicMetrics = aggregatedBrokerTopicStats.filter(name =>
-      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.find(metric => {
-        metric._1.getMBeanName().equals(fromNameToBrokerTopicStatsMBean(name))
-      }).isDefined
+      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.exists(metric => {
+        metric._1.getMBeanName.equals(fromNameToBrokerTopicStatsMBean(name))
+      })
     ).toList
     if (shouldContainMetrics) {
       assertEquals(RemoteStorageMetrics.allMetrics().size(), metrics.size, s"Only $metrics appear in the metrics")

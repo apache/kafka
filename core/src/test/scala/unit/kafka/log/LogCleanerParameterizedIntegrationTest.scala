@@ -121,9 +121,8 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     // Set the last modified time to an old value to force deletion of old segments
     val endOffset = log.logEndOffset
     log.logSegments.forEach(_.setLastModified(time.milliseconds - (2 * retentionMs)))
-    TestUtils.waitUntilTrue(() => log.logStartOffset == endOffset,
+    TestUtils.waitUntilTrue(() => log.logStartOffset == endOffset && log.numberOfSegments == 1,
       "Timed out waiting for deletion of old segments")
-    assertEquals(1, log.numberOfSegments)
 
     cleaner.shutdown()
     closeLog(log)

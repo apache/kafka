@@ -630,7 +630,7 @@ class BrokerServer(
   override def shutdown(timeout: Duration): Unit = {
     if (!maybeChangeStatus(STARTED, SHUTTING_DOWN)) return
     try {
-      val deadline = time.milliseconds() + timeout.toMillis;
+      val deadline = time.milliseconds() + timeout.toMillis
       info("shutting down")
 
       if (config.controlledShutdownEnable) {

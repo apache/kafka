@@ -41,7 +41,7 @@ object ZkFourLetterWords {
     } catch {
       case e: SocketTimeoutException => throw new IOException("Exception while sending 4lw", e)
     } finally {
-      sock.close
+      sock.close()
     }
   }
 }

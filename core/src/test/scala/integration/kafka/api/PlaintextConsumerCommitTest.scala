@@ -147,12 +147,12 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
     val testConsumer = createConsumer(keyDeserializer = new StringDeserializer, valueDeserializer = new StringDeserializer)
     val rebalanceListener = new ConsumerRebalanceListener {
-      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         // keep partitions paused in this test so that we can verify the commits based on specific seeks
         testConsumer.pause(partitions)
       }
 
-      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {}
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {}
     }
     changeConsumerSubscriptionAndValidateAssignment(testConsumer, List(topic), Set(tp, tp2), rebalanceListener)
     testConsumer.seek(tp, 10)
@@ -173,7 +173,7 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     // However, in the CONSUMER protocol, the assignment may be changed outside of a poll, so
     // we need to poll once to ensure the interceptor is called.
     if (groupProtocol.toUpperCase == GroupProtocol.CONSUMER.name) {
-      testConsumer.poll(Duration.ZERO);
+      testConsumer.poll(Duration.ZERO)
     }
 
     assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance)
@@ -230,12 +230,12 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     sendRecords(producer, numRecords, tp)
 
     val rebalanceListener = new ConsumerRebalanceListener {
-      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         // keep partitions paused in this test so that we can verify the commits based on specific seeks
         consumer.pause(partitions)
       }
 
-      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {}
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {}
     }
 
     consumer.subscribe(List(topic).asJava, rebalanceListener)
