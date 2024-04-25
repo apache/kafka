@@ -89,9 +89,6 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         ClusterTemplate clusterTemplateAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTemplate.class);
         if (clusterTemplateAnnot != null) {
             processClusterTemplate(context, clusterTemplateAnnot, generatedContexts::add);
-            if (generatedContexts.size() == 0) {
-                throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
-            }
         }
 
         // Process single @ClusterTest annotation
@@ -120,12 +117,10 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                                         Consumer<TestTemplateInvocationContext> testInvocations) {
         // If specified, call cluster config generated method (must be static)
         List<ClusterConfig> generatedClusterConfigs = new ArrayList<>();
-        if (!annot.value().isEmpty()) {
-            generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
-        } else {
-            // Ensure we have at least one cluster config
-            generatedClusterConfigs.add(ClusterConfig.defaultClusterBuilder().build());
+        if (annot.value().isEmpty()) {
+            throw new IllegalStateException("Annotation value can't be empty string.");
         }
+        generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
 
         String baseDisplayName = context.getRequiredTestMethod().getName();
         generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(baseDisplayName, config, testInvocations));
