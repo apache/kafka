@@ -230,13 +230,15 @@ public class ShareFetchBuffer implements AutoCloseable {
     void awaitNotEmpty(Timer timer) {
         lock.lock();
         try {
-
             while (completedFetches.isEmpty() && !wokenUp.compareAndSet(true, false)) {
                 // Update the timer before we head into the loop in case it took a while to get the lock.
                 timer.update();
 
-                if (timer.isExpired())
+                if (timer.isExpired()) {
+                    if (Thread.interrupted())
+                        throw new InterruptException("Thread interrupted.");
                     break;
+                }
 
                 if (!notEmptyCondition.await(timer.remainingMs(), TimeUnit.MILLISECONDS)) {
                     break;

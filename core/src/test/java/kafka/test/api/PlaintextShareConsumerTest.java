@@ -31,7 +31,9 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.TimestampType;
@@ -64,6 +66,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -1081,5 +1084,69 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
         public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
             throw new org.apache.kafka.common.errors.OutOfOrderSequenceException("Hello from TestableAcknowledgeCommitCallbackThrows.onComplete");
         }
+    }
+
+    /**
+     * Test to verify that calling Thread.interrupt before KafkaShareConsumer.poll(Duration)
+     * causes it to throw InterruptException
+     */
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testPollThrowsInterruptExceptionIfInterrupted(String quorum) {
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+
+        // interrupt the thread and call poll
+        try {
+            Thread.currentThread().interrupt();
+            assertThrows(InterruptException.class, () -> shareConsumer.poll(Duration.ZERO));
+        } finally {
+            // clear interrupted state again since this thread may be reused by JUnit
+            Thread.interrupted();
+        }
+
+        assertDoesNotThrow(() -> shareConsumer.poll(Duration.ZERO));
+        shareConsumer.close();
+    }
+
+    /**
+     * Test to verify that InvalidTopicException is thrown if the consumer subscribes
+     * to an invalid topic.
+     */
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testSubscribeOnInvalidTopicThrowsInvalidTopicException(String quorum) {
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.subscribe(Collections.singleton("topic abc"));
+
+        // The exception depends upon a metadata response which arrives asynchronously. If the delay is
+        // too short, the poll might return before the error is known.
+        assertThrows(InvalidTopicException.class, () -> shareConsumer.poll(Duration.ofMillis(2000)));
+        shareConsumer.close();
+    }
+
+    /**
+     * Test to ensure that a wakeup when records are buffered doesn't prevent the records
+     * being returned on the next poll.
+     */
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testWakeupWithFetchedRecordsAvailable(String quorum) {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        producer.send(record);
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+
+        shareConsumer.wakeup();
+        assertThrows(WakeupException.class, () -> shareConsumer.poll(Duration.ZERO));
+
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
+        assertEquals(1, records.count());
+
+        shareConsumer.close();
     }
 }

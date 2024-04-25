@@ -152,9 +152,7 @@ public class ShareCompletedFetch {
 
         if (cachedRecordException != null) {
             inFlightBatch.addAcknowledgement(lastRecord.offset(), AcknowledgeType.RELEASE);
-            inFlightBatch.setException(
-                    new KafkaException("Received exception when fetching the next record from " + partition +
-                            ". The record has been released.", cachedRecordException));
+            inFlightBatch.setException(cachedRecordException);
             cachedRecordException = null;
             return inFlightBatch;
         }
@@ -207,6 +205,7 @@ public class ShareCompletedFetch {
                 inFlightBatch.setException(se);
             } else {
                 cachedRecordException = se;
+                inFlightBatch.setHasCachedException(true);
             }
         } catch (CorruptRecordException e) {
             if (inFlightBatch.isEmpty()) {
@@ -215,6 +214,7 @@ public class ShareCompletedFetch {
                 inFlightBatch.setException(e);
             } else {
                 cachedBatchException = e;
+                inFlightBatch.setHasCachedException(true);
             }
         }
 

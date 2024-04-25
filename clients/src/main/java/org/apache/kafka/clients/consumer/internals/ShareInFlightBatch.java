@@ -30,6 +30,7 @@ public class ShareInFlightBatch<K, V> {
     private final Acknowledgements acknowledgements;
     private final List<ConsumerRecord<K, V>> inFlightRecords;
     private KafkaException exception;
+    private boolean hasCachedException = false;
 
     public ShareInFlightBatch(TopicIdPartition partition) {
         this.partition = partition;
@@ -90,5 +91,13 @@ public class ShareInFlightBatch<K, V> {
 
     public KafkaException getException() {
         return exception;
+    }
+
+    public void setHasCachedException(boolean hasCachedException) {
+        this.hasCachedException = hasCachedException;
+    }
+
+    public boolean hasCachedException() {
+        return hasCachedException;
     }
 }

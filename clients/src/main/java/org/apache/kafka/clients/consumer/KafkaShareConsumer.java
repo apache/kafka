@@ -16,7 +16,12 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
+import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegate;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegateCreator;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -28,7 +33,10 @@ import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -327,7 +335,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
 
     private final static ShareConsumerDelegateCreator CREATOR = new ShareConsumerDelegateCreator();
 
-    private final ShareConsumer<K, V> delegate;
+    private final ShareConsumerDelegate<K, V> delegate;
 
     /**
      * A consumer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -402,6 +410,21 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
                               Deserializer<K> keyDeserializer,
                               Deserializer<V> valueDeserializer) {
         delegate = CREATOR.create(config, keyDeserializer, valueDeserializer);
+    }
+
+    KafkaShareConsumer(final LogContext logContext,
+                       final String clientId,
+                       final String groupId,
+                       final ConsumerConfig config,
+                       final Deserializer<K> keyDeserializer,
+                       final Deserializer<V> valueDeserializer,
+                       final Time time,
+                       final KafkaClient client,
+                       final SubscriptionState subscriptions,
+                       final ConsumerMetadata metadata) {
+        delegate = CREATOR.create(
+                logContext, clientId, groupId, config, keyDeserializer, valueDeserializer,
+                time, client, subscriptions, metadata);
     }
 
     /**
@@ -663,5 +686,18 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     @Override
     public void wakeup() {
         delegate.wakeup();
+    }
+
+    // Functions below are for testing only
+    String clientId() {
+        return delegate.clientId();
+    }
+
+    Metrics metricsRegistry() {
+        return delegate.metricsRegistry();
+    }
+
+    KafkaConsumerMetrics kafkaConsumerMetrics() {
+        return delegate.kafkaConsumerMetrics();
     }
 }

@@ -113,6 +113,8 @@ public class ShareFetchCollector<K, V> {
 
                     if (batch.getException() != null) {
                         throw batch.getException();
+                    } else if (batch.hasCachedException()) {
+                        break;
                     }
                 }
             }

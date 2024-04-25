@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
 import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 
 /**
  * {@code ShareConsumerDelegateCreator} implements a quasi-factory pattern to allow the caller to remain unaware of the
@@ -34,11 +37,41 @@ import org.apache.kafka.common.serialization.Deserializer;
  * the {@link ShareConsumer} API contract that should serve as the caller's interface.
  */
 public class ShareConsumerDelegateCreator {
-    public <K, V> ShareConsumer<K, V> create(ConsumerConfig config,
-                                             Deserializer<K> keyDeserializer,
-                                             Deserializer<V> valueDeserializer) {
+    public <K, V> ShareConsumerDelegate<K, V> create(final ConsumerConfig config,
+                                                     final Deserializer<K> keyDeserializer,
+                                                     final Deserializer<V> valueDeserializer) {
         try {
             return new ShareConsumerImpl<>(config, keyDeserializer, valueDeserializer);
+        } catch (KafkaException e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new KafkaException("Failed to construct Kafka share consumer", t);
+        }
+    }
+
+    public <K, V> ShareConsumerDelegate<K, V> create(final LogContext logContext,
+                                                     final String clientId,
+                                                     final String groupId,
+                                                     final ConsumerConfig config,
+                                                     final Deserializer<K> keyDeserializer,
+                                                     final Deserializer<V> valueDeserializer,
+                                                     final Time time,
+                                                     final KafkaClient client,
+                                                     final SubscriptionState subscriptions,
+                                                     final ConsumerMetadata metadata) {
+        try {
+            return new ShareConsumerImpl<>(
+                    logContext,
+                    clientId,
+                    groupId,
+                    config,
+                    keyDeserializer,
+                    valueDeserializer,
+                    time,
+                    client,
+                    subscriptions,
+                    metadata
+            );
         } catch (KafkaException e) {
             throw e;
         } catch (Throwable t) {

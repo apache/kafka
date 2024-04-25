@@ -124,6 +124,9 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
     }
 
     private Map<Node, ShareSessionHandler.ShareFetchRequestData> prepareShareFetchRequests() {
+        // Update metrics in case there was an assignment change
+        metricsManager.maybeUpdateAssignment(subscriptions);
+
         Map<Node, ShareSessionHandler.Builder> requestBuilderMap = new HashMap<>();
         Map<String, Uuid> topicIds = metadata.topicIds();
 
