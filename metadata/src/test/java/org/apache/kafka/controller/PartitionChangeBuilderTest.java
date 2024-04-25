@@ -49,8 +49,10 @@ import static org.apache.kafka.controller.PartitionChangeBuilder.changeRecordIsN
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
@@ -844,8 +846,8 @@ public class PartitionChangeBuilderTest {
         assertEquals(Optional.of(expectedRecord), builder.build());
         partition = partition.merge((PartitionChangeRecord) builder.build().get().message());
         if (version >= 2) {
-            assertTrue(Arrays.equals(new int[]{3, 4}, partition.elr), partition.toString());
-            assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
+            assertArrayEquals(new int[]{3, 4}, partition.elr, partition.toString());
+            assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
         } else {
             assertEquals(0, partition.elr.length);
             assertEquals(0, partition.lastKnownElr.length);
@@ -942,11 +944,11 @@ public class PartitionChangeBuilderTest {
         assertEquals(Optional.of(expectedRecord), builder.build());
         partition = partition.merge((PartitionChangeRecord) builder.build().get().message());
         if (version >= 2) {
-            assertTrue(Arrays.equals(new int[]{3}, partition.elr), partition.toString());
-            assertTrue(Arrays.equals(new int[]{2}, partition.lastKnownElr), partition.toString());
+            assertArrayEquals(new int[]{3}, partition.elr, partition.toString());
+            assertArrayEquals(new int[]{2}, partition.lastKnownElr, partition.toString());
         } else {
-            assertTrue(Arrays.equals(new int[]{}, partition.elr), partition.toString());
-            assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
+            assertArrayEquals(new int[]{}, partition.elr, partition.toString());
+            assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
         }
     }
 
@@ -995,11 +997,11 @@ public class PartitionChangeBuilderTest {
         assertEquals(Optional.of(expectedRecord), builder.build());
         partition = partition.merge((PartitionChangeRecord) builder.build().get().message());
         if (version >= 2) {
-            assertTrue(Arrays.equals(new int[]{2}, partition.elr), partition.toString());
-            assertTrue(Arrays.equals(new int[]{3}, partition.lastKnownElr), partition.toString());
+            assertArrayEquals(new int[]{2}, partition.elr, partition.toString());
+            assertArrayEquals(new int[]{3}, partition.lastKnownElr, partition.toString());
         } else {
-            assertTrue(Arrays.equals(new int[]{}, partition.elr), partition.toString());
-            assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
+            assertArrayEquals(new int[]{}, partition.elr, partition.toString());
+            assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
         }
     }
 
@@ -1115,9 +1117,9 @@ public class PartitionChangeBuilderTest {
         );
         assertEquals(Optional.of(expectedRecord), builder.build());
         partition = partition.merge((PartitionChangeRecord) builder.build().get().message());
-        assertTrue(Arrays.equals(new int[]{1}, partition.elr), partition.toString());
-        assertTrue(Arrays.equals(lastKnownLeaderEnabled ? new int[]{} : new int[]{2}, partition.lastKnownElr), partition.toString());
-        assertTrue(Arrays.equals(new int[]{3}, partition.isr), partition.toString());
+        assertArrayEquals(new int[]{1}, partition.elr, partition.toString());
+        assertArrayEquals(lastKnownLeaderEnabled ? new int[]{} : new int[]{2}, partition.lastKnownElr, partition.toString());
+        assertArrayEquals(new int[]{3}, partition.isr, partition.toString());
     }
 
     @ParameterizedTest
@@ -1167,9 +1169,9 @@ public class PartitionChangeBuilderTest {
         ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(record, version);
         assertEquals(Optional.of(expectedRecord), builder.build());
         partition = partition.merge((PartitionChangeRecord) builder.build().get().message());
-        assertTrue(Arrays.equals(new int[]{1, 2, 3, 4}, partition.elr), partition.toString());
+        assertArrayEquals(new int[]{1, 2, 3, 4}, partition.elr, partition.toString());
         if (lastKnownLeaderEnabled) {
-            assertTrue(Arrays.equals(new int[]{1}, partition.lastKnownElr), partition.toString());
+            assertArrayEquals(new int[]{1}, partition.lastKnownElr, partition.toString());
             builder = new PartitionChangeBuilder(partition, topicId, 0, r -> false,
                     metadataVersionForPartitionChangeRecordVersion(version), 3)
                 .setElection(Election.PREFERRED)
@@ -1178,11 +1180,11 @@ public class PartitionChangeBuilderTest {
                 .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
                 .setUseLastKnownLeaderInBalancedRecovery(lastKnownLeaderEnabled);
             PartitionChangeRecord changeRecord = (PartitionChangeRecord) builder.build().get().message();
-            assertTrue(changeRecord.lastKnownElr() == null, changeRecord.toString());
+            assertNull(changeRecord.lastKnownElr(), changeRecord.toString());
         } else {
-            assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
+            assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
         }
-        assertTrue(Arrays.equals(new int[]{}, partition.isr), partition.toString());
+        assertArrayEquals(new int[]{}, partition.isr, partition.toString());
     }
 
     @Test
@@ -1222,9 +1224,9 @@ public class PartitionChangeBuilderTest {
         );
         assertEquals(Optional.of(expectedRecord), builder.build());
         partition = partition.merge((PartitionChangeRecord) builder.build().get().message());
-        assertTrue(Arrays.equals(new int[]{}, partition.elr), partition.toString());
-        assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
-        assertTrue(Arrays.equals(new int[]{1}, partition.isr), partition.toString());
+        assertArrayEquals(new int[]{}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
+        assertArrayEquals(new int[]{1}, partition.isr, partition.toString());
     }
 
     @Test
