@@ -481,7 +481,7 @@ public class HeartbeatRequestManager implements RequestManager {
         }
 
         public long timeToNextHeartbeatMs(final long currentTimeMs) {
-            if (heartbeatTimer.remainingMs() == 0) {
+            if (heartbeatTimer.isExpired()) {
                 return this.remainingBackoffMs(currentTimeMs);
             }
             return heartbeatTimer.remainingMs();
