@@ -15,25 +15,18 @@
 
 // KIP-932 is in development. This schema is subject to non-backwards-compatible changes.
 
+
 {
   "type": "data",
-  "name": "ShareDeltaValue",
+  "name": "ShareSnapshotKey",
   "validVersions": "0",
-  "flexibleVersions": "0+",
+  "flexibleVersions": "none",
   "fields": [
-    { "name": "CheckpointEpoch", "type": "uint16", "versions": "0",
-      "about": "The checkpoint epoch." },
-    { "name": "StartOffset", "type": "int64", "versions": "0",
-      "about": "The share-partition start offset, or -1 if the start offset is not being updated." },
-    { "name": "StateBatches", "type": "[]StateBatch", "versions": "0", "fields": [
-      { "name": "BaseOffset", "type": "int64", "versions": "0",
-        "about": "The base offset of this state batch." },
-      { "name": "LastOffset", "type": "int64", "versions": "0",
-        "about": "The last offset of this state batch." },
-      { "name": "State", "type": "int8", "versions": "0",
-        "about": "The state - 0:Available,2:Acked,4:Archived" },
-      { "name": "DeliveryCount", "type": "int16", "versions": "0",
-        "about": "The delivery count." }
-    ]}
+    { "name": "GroupId", "type": "string", "versions": "0",
+      "about": "The group id." },
+    { "name": "TopicId", "type": "uuid", "versions": "0",
+      "about": "The topic id." },
+    { "name": "Partition", "type": "int32", "versions": "0",
+      "about": "The partition index." }
   ]
 }

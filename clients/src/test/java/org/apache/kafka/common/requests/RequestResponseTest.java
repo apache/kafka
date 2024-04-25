@@ -3864,9 +3864,9 @@ public class RequestResponseTest {
                     .setStateEpoch(0)
                     .setStartOffset(0)
                     .setStateBatches(Collections.singletonList(new ReadShareGroupStateResponseData.StateBatch()
-                        .setBaseOffset(0)
+                        .setFirstOffset(0)
                         .setLastOffset(0)
-                        .setState((byte) 0x0)
+                        .setDeliveryState((byte) 0x0)
                         .setDeliveryCount((short) 0)))))));
         return new ReadShareGroupStateResponse(data);
     }
@@ -3881,9 +3881,9 @@ public class RequestResponseTest {
                     .setStateEpoch(0)
                     .setStartOffset(0)
                     .setStateBatches(singletonList(new WriteShareGroupStateRequestData.StateBatch()
-                        .setBaseOffset(0)
+                        .setFirstOffset(0)
                         .setLastOffset(0)
-                        .setState((byte) 0x0)
+                        .setDeliveryState((byte) 0x0)
                         .setDeliveryCount((short) 0)))))));
         return new WriteShareGroupStateRequest.Builder(data).build(version);
     }

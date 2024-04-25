@@ -23,28 +23,28 @@ import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import java.util.Objects;
 
 public class PersisterStateBatch {
-  private final long baseOffset;
+  private final long firstOffset;
   private final long lastOffset;
-  private final byte state;
+  private final byte deliveryState;
   private final short deliveryCount;
 
-  public PersisterStateBatch(long baseOffset, long lastOffset, byte state, short deliveryCount) {
-    this.baseOffset = baseOffset;
+  public PersisterStateBatch(long firstOffset, long lastOffset, byte deliveryState, short deliveryCount) {
+    this.firstOffset = firstOffset;
     this.lastOffset = lastOffset;
-    this.state = state;
+    this.deliveryState = deliveryState;
     this.deliveryCount = deliveryCount;
   }
 
-  public long baseOffset() {
-    return baseOffset;
+  public long firstOffset() {
+    return firstOffset;
   }
 
   public long lastOffset() {
     return lastOffset;
   }
 
-  public byte state() {
-    return state;
+  public byte deliveryState() {
+    return deliveryState;
   }
 
   public short deliveryCount() {
@@ -53,17 +53,17 @@ public class PersisterStateBatch {
 
   public static PersisterStateBatch from(ReadShareGroupStateResponseData.StateBatch batch) {
     return new PersisterStateBatch(
-        batch.baseOffset(),
+        batch.firstOffset(),
         batch.lastOffset(),
-        batch.state(),
+        batch.deliveryState(),
         batch.deliveryCount());
   }
 
   public static PersisterStateBatch from(WriteShareGroupStateRequestData.StateBatch batch) {
     return new PersisterStateBatch(
-        batch.baseOffset(),
+        batch.firstOffset(),
         batch.lastOffset(),
-        batch.state(),
+        batch.deliveryState(),
         batch.deliveryCount());
   }
 
@@ -72,11 +72,11 @@ public class PersisterStateBatch {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     PersisterStateBatch that = (PersisterStateBatch) o;
-    return baseOffset == that.baseOffset && lastOffset == that.lastOffset && state == that.state && deliveryCount == that.deliveryCount;
+    return firstOffset == that.firstOffset && lastOffset == that.lastOffset && deliveryState == that.deliveryState && deliveryCount == that.deliveryCount;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(baseOffset, lastOffset, state, deliveryCount);
+    return Objects.hash(firstOffset, lastOffset, deliveryState, deliveryCount);
   }
 }

@@ -17,21 +17,23 @@
 
 {
   "type": "data",
-  "name": "ShareCheckpointValue",
+  "name": "ShareSnapshotValue",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "CheckpointEpoch", "type": "uint16", "versions": "0",
-      "about": "The checkpoint epoch." },
+    { "name": "SnapshotEpoch", "type": "uint16", "versions": "0",
+      "about": "The snapshot epoch." },
+    { "name": "StateEpoch", "type": "int32", "versions": "0+",
+      "about": "The state epoch for this share-partition." },
     { "name": "StartOffset", "type": "int64", "versions": "0",
       "about": "The share-partition start offset." },
     { "name": "StateBatches", "type": "[]StateBatch", "versions": "0", "fields": [
-      { "name": "BaseOffset", "type": "int64", "versions": "0",
-        "about": "The base offset of this state batch." },
+      { "name": "FirstOffset", "type": "int64", "versions": "0",
+        "about": "The first offset of this state batch." },
       { "name": "LastOffset", "type": "int64", "versions": "0",
         "about": "The last offset of this state batch." },
-      { "name": "State", "type": "int8", "versions": "0",
-        "about": "The state - 0:Available,2:Acked,4:Archived" },
+      { "name": "DeliveryState", "type": "int8", "versions": "0",
+        "about": "The delivery state - 0:Available,2:Acked,4:Archived" },
       { "name": "DeliveryCount", "type": "int16", "versions": "0",
         "about": "The delivery count." }
     ]}

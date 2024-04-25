@@ -15,11 +15,10 @@
 
 // KIP-932 is in development. This schema is subject to non-backwards-compatible changes.
 
-
 {
   "type": "data",
-  "name": "ShareCheckpointKey",
-  "validVersions": "0",
+  "name": "ShareUpdateKey",
+  "validVersions": "1",
   "flexibleVersions": "none",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0",
