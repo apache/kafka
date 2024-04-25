@@ -88,6 +88,7 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESU
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSyncKey;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
@@ -599,6 +600,27 @@ public class GroupMetadataManagerTestContext {
     ) {
         MockCoordinatorTimer.ScheduledTimeout<Void, Record> timeout =
             timer.timeout(consumerGroupRebalanceTimeoutKey(groupId, memberId));
+        assertNull(timeout);
+    }
+
+    public MockCoordinatorTimer.ScheduledTimeout<Void, Record> assertSyncTimeout(
+        String groupId,
+        String memberId,
+        long delayMs
+    ) {
+        MockCoordinatorTimer.ScheduledTimeout<Void, Record> timeout =
+            timer.timeout(consumerGroupSyncKey(groupId, memberId));
+        assertNotNull(timeout);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        return timeout;
+    }
+
+    public void assertNoSyncTimeout(
+        String groupId,
+        String memberId
+    ) {
+        MockCoordinatorTimer.ScheduledTimeout<Void, Record> timeout =
+            timer.timeout(consumerGroupSyncKey(groupId, memberId));
         assertNull(timeout);
     }
 

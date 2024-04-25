@@ -11052,6 +11052,7 @@ public class GroupMetadataManagerTest {
         );
 
         context.assertSessionTimeout(groupId, newMemberId, 45000);
+        context.assertSyncTimeout(groupId, newMemberId, request.rebalanceTimeoutMs());
     }
 
     @Test
@@ -11144,6 +11145,7 @@ public class GroupMetadataManagerTest {
         );
 
         context.assertSessionTimeout(groupId, newMemberId, 45000);
+        context.assertSyncTimeout(groupId, newMemberId, request.rebalanceTimeoutMs());
     }
 
     @Test
@@ -11238,6 +11240,7 @@ public class GroupMetadataManagerTest {
         );
 
         context.assertSessionTimeout(groupId, newMemberId, 45000);
+        context.assertSyncTimeout(groupId, newMemberId, request.rebalanceTimeoutMs());
     }
 
     @ParameterizedTest
@@ -11317,6 +11320,7 @@ public class GroupMetadataManagerTest {
                 .setProtocolName("range"),
             joinResult.joinFuture.get()
         );
+        context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
     }
 
     @Test
