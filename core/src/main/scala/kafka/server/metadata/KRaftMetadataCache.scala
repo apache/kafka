@@ -488,9 +488,9 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     val internalTopics = new util.HashSet[String]
 
     image.topics().topicsByName().values().forEach { topic =>
-      topic.partitions().entrySet().forEach { entry =>
-        val partitionId = entry.getKey
-        val partition = entry.getValue
+      topic.partitions().forEach { (key, value) =>
+        val partitionId = key
+        val partition = value
         partitionInfos.add(new PartitionInfo(topic.name(),
           partitionId,
           node(partition.leader),

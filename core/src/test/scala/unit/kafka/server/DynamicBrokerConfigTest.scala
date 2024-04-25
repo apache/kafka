@@ -33,6 +33,7 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.PasswordEncoderConfigs
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.config.{Defaults, KafkaSecurityConfigs, ZkConfigs}
@@ -300,31 +301,31 @@ class DynamicBrokerConfigTest {
 
   @Test
   def testConnectionQuota(): Unit = {
-    verifyConfigUpdate(KafkaConfig.MaxConnectionsPerIpProp, "100", perBrokerConfig = true, expectFailure = false)
-    verifyConfigUpdate(KafkaConfig.MaxConnectionsPerIpProp, "100", perBrokerConfig = false, expectFailure = false)
+    verifyConfigUpdate(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, "100", perBrokerConfig = true, expectFailure = false)
+    verifyConfigUpdate(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, "100", perBrokerConfig = false, expectFailure = false)
     //MaxConnectionsPerIpProp can be set to zero only if MaxConnectionsPerIpOverridesProp property is set
-    verifyConfigUpdate(KafkaConfig.MaxConnectionsPerIpProp, "0", perBrokerConfig = false, expectFailure = true)
+    verifyConfigUpdate(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, "0", perBrokerConfig = false, expectFailure = true)
 
-    verifyConfigUpdate(KafkaConfig.MaxConnectionsPerIpOverridesProp, "hostName1:100,hostName2:0", perBrokerConfig = true,
+    verifyConfigUpdate(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, "hostName1:100,hostName2:0", perBrokerConfig = true,
       expectFailure = false)
-    verifyConfigUpdate(KafkaConfig.MaxConnectionsPerIpOverridesProp, "hostName1:100,hostName2:0", perBrokerConfig = false,
+    verifyConfigUpdate(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, "hostName1:100,hostName2:0", perBrokerConfig = false,
       expectFailure = false)
     //test invalid address
-    verifyConfigUpdate(KafkaConfig.MaxConnectionsPerIpOverridesProp, "hostName#:100", perBrokerConfig = true,
+    verifyConfigUpdate(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, "hostName#:100", perBrokerConfig = true,
       expectFailure = true)
 
-    verifyConfigUpdate(KafkaConfig.MaxConnectionsProp, "100", perBrokerConfig = true, expectFailure = false)
-    verifyConfigUpdate(KafkaConfig.MaxConnectionsProp, "100", perBrokerConfig = false, expectFailure = false)
-    val listenerMaxConnectionsProp = s"listener.name.external.${KafkaConfig.MaxConnectionsProp}"
+    verifyConfigUpdate(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "100", perBrokerConfig = true, expectFailure = false)
+    verifyConfigUpdate(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "100", perBrokerConfig = false, expectFailure = false)
+    val listenerMaxConnectionsProp = s"listener.name.external.${SocketServerConfigs.MAX_CONNECTIONS_CONFIG}"
     verifyConfigUpdate(listenerMaxConnectionsProp, "10", perBrokerConfig = true, expectFailure = false)
     verifyConfigUpdate(listenerMaxConnectionsProp, "10", perBrokerConfig = false, expectFailure = false)
   }
 
   @Test
   def testConnectionRateQuota(): Unit = {
-    verifyConfigUpdate(KafkaConfig.MaxConnectionCreationRateProp, "110", perBrokerConfig = true, expectFailure = false)
-    verifyConfigUpdate(KafkaConfig.MaxConnectionCreationRateProp, "120", perBrokerConfig = false, expectFailure = false)
-    val listenerMaxConnectionsProp = s"listener.name.external.${KafkaConfig.MaxConnectionCreationRateProp}"
+    verifyConfigUpdate(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, "110", perBrokerConfig = true, expectFailure = false)
+    verifyConfigUpdate(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, "120", perBrokerConfig = false, expectFailure = false)
+    val listenerMaxConnectionsProp = s"listener.name.external.${SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG}"
     verifyConfigUpdate(listenerMaxConnectionsProp, "20", perBrokerConfig = true, expectFailure = false)
     verifyConfigUpdate(listenerMaxConnectionsProp, "30", perBrokerConfig = false, expectFailure = false)
   }
@@ -442,7 +443,7 @@ class DynamicBrokerConfigTest {
     val kafkaServer: KafkaServer = mock(classOf[kafka.server.KafkaServer])
     when(kafkaServer.config).thenReturn(oldConfig)
 
-    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://hostname:9092,SASL_PLAINTEXT://hostname:9093")
+    props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://hostname:9092,SASL_PLAINTEXT://hostname:9093")
     new DynamicListenerConfig(kafkaServer).validateReconfiguration(KafkaConfig(props))
 
     // it is illegal to update non-reconfiguable configs of existent listeners
@@ -519,7 +520,7 @@ class DynamicBrokerConfigTest {
       port)
     retval.put(KafkaConfig.ProcessRolesProp, "broker,controller")
     retval.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-    retval.put(KafkaConfig.ListenersProp, s"${retval.get(KafkaConfig.ListenersProp)},CONTROLLER://localhost:0")
+    retval.put(SocketServerConfigs.LISTENERS_CONFIG, s"${retval.get(SocketServerConfigs.LISTENERS_CONFIG)},CONTROLLER://localhost:0")
     retval.put(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
     retval
   }
@@ -562,10 +563,10 @@ class DynamicBrokerConfigTest {
       port
     )
     retval.put(KafkaConfig.ProcessRolesProp, "controller")
-    retval.remove(KafkaConfig.AdvertisedListenersProp)
+    retval.remove(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
 
     retval.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-    retval.put(KafkaConfig.ListenersProp, "CONTROLLER://localhost:0")
+    retval.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://localhost:0")
     retval.put(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
     retval
   }
@@ -633,11 +634,11 @@ class DynamicBrokerConfigTest {
     val config = KafkaConfig(props)
     config.dynamicConfig.initialize(None, None)
 
-    assertEquals(Defaults.MAX_CONNECTIONS, config.maxConnections)
+    assertEquals(SocketServerConfigs.MAX_CONNECTIONS_DEFAULT, config.maxConnections)
     assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, config.messageMaxBytes)
 
     var newProps = new Properties()
-    newProps.put(KafkaConfig.MaxConnectionsProp, "9999")
+    newProps.put(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "9999")
     newProps.put(KafkaConfig.MessageMaxBytesProp, "2222")
 
     config.dynamicConfig.updateDefaultConfig(newProps)
@@ -645,12 +646,12 @@ class DynamicBrokerConfigTest {
     assertEquals(2222, config.messageMaxBytes)
 
     newProps = new Properties()
-    newProps.put(KafkaConfig.MaxConnectionsProp, "INVALID_INT")
+    newProps.put(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "INVALID_INT")
     newProps.put(KafkaConfig.MessageMaxBytesProp, "1111")
 
     config.dynamicConfig.updateDefaultConfig(newProps)
     // Invalid value should be skipped and reassigned as default value
-    assertEquals(Defaults.MAX_CONNECTIONS, config.maxConnections)
+    assertEquals(SocketServerConfigs.MAX_CONNECTIONS_DEFAULT, config.maxConnections)
     // Even if One property is invalid, the below should get correctly updated.
     assertEquals(1111, config.messageMaxBytes)
   }

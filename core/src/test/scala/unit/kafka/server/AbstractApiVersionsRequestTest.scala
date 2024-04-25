@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.RecordVersion
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, RequestUtils}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -52,10 +53,10 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     if (!cluster.isKRaftTest) {
       val controlPlaneListenerName = "CONTROL_PLANE"
       val securityProtocol = cluster.config().securityProtocol()
-      properties.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListenerName)
-      properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"$controlPlaneListenerName:$securityProtocol,$securityProtocol:$securityProtocol")
+      properties.setProperty(SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG, controlPlaneListenerName)
+      properties.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"$controlPlaneListenerName:$securityProtocol,$securityProtocol:$securityProtocol")
       properties.setProperty("listeners", s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
-      properties.setProperty(KafkaConfig.AdvertisedListenersProp, s"$securityProtocol://localhost:0,${controlPlaneListenerName}://localhost:0")
+      properties.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"$securityProtocol://localhost:0,${controlPlaneListenerName}://localhost:0")
     }
   }
 

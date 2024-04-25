@@ -304,9 +304,12 @@ public class ReplicationControlManagerTest {
                 topic.assignments().add(new CreatableReplicaAssignment().
                     setPartitionIndex(i).setBrokerIds(Replicas.toList(replicas[i])));
             }
-            configs.entrySet().forEach(e -> topic.configs().add(
-                new CreateTopicsRequestData.CreateableTopicConfig().setName(e.getKey()).
-                    setValue(e.getValue())));
+            configs.forEach((key, value) -> topic.configs().add(
+                    new CreateTopicsRequestData.CreateableTopicConfig()
+                            .setName(key)
+                            .setValue(value)
+                    )
+            );
             request.topics().add(topic);
             ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
             ControllerResult<CreateTopicsResponseData> result =

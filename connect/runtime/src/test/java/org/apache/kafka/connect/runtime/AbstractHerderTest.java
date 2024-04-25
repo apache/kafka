@@ -1117,9 +1117,10 @@ public class AbstractHerderTest {
     }
 
     protected void addConfigKey(Map<String, ConfigDef.ConfigKey> keys, String name, String group) {
-        keys.put(name, new ConfigDef.ConfigKey(name, ConfigDef.Type.STRING, null, null,
+        ConfigDef configDef = new ConfigDef().define(name, ConfigDef.Type.STRING, null, null,
                 ConfigDef.Importance.HIGH, "doc", group, 10,
-                ConfigDef.Width.MEDIUM, "display name", Collections.emptyList(), null, false, null));
+                ConfigDef.Width.MEDIUM, "display name", Collections.emptyList(), null, null);
+        keys.putAll(configDef.configKeys());
     }
 
     protected void addValue(List<ConfigValue> values, String name, String value, String...errors) {

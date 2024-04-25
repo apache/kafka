@@ -645,7 +645,10 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         // command line arguments are passed in by the system test framework.
         if (groupProtocol.equalsIgnoreCase(GroupProtocol.CONSUMER.name())) {
             consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
-            consumerProps.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, res.getString("groupRemoteAssignor"));
+            String groupRemoteAssignor = res.getString("groupRemoteAssignor");
+
+            if (groupRemoteAssignor != null)
+                consumerProps.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, groupRemoteAssignor);
         } else {
             // This means we're using the old consumer group protocol.
             consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, res.getString("assignmentStrategy"));
