@@ -20,12 +20,16 @@ import kafka.log.LogManager
 import kafka.server.MetadataCache
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.MockConfigRepository
-import kafka.utils.TestUtils.{MockAlterPartitionListener, MockAlterPartitionManager}
 import kafka.utils.TestUtils
+import kafka.utils.TestUtils.{MockAlterPartitionListener, MockAlterPartitionManager}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.ArgumentMatchers
@@ -33,11 +37,6 @@ import org.mockito.Mockito.{mock, when}
 
 import java.io.File
 import java.util.Properties
-import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.config.ReplicationConfigs
-import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
-
 import scala.jdk.CollectionConverters._
 
 object AbstractPartitionTest {
@@ -79,7 +78,7 @@ class AbstractPartitionTest {
     logManager.startup(Set.empty)
 
     alterPartitionManager = TestUtils.createAlterIsrManager()
-    alterPartitionListener = TestUtils.createIsrChangeListener()
+    alterPartitionListener = createIsrChangeListener()
     partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
       interBrokerProtocolVersion = interBrokerProtocolVersion,
@@ -152,5 +151,9 @@ class AbstractPartitionTest {
 
   def defaultBrokerEpoch(brokerId: Int): Long = {
     brokerId + 1000L
+  }
+
+  private def createIsrChangeListener(): MockAlterPartitionListener = {
+    new MockAlterPartitionListener()
   }
 }
