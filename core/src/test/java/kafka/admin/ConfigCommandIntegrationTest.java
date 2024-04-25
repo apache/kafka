@@ -19,7 +19,6 @@ package kafka.admin;
 import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
 import kafka.test.ClusterInstance;
-import kafka.test.annotation.AutoStart;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
@@ -129,7 +128,7 @@ public class ConfigCommandIntegrationTest {
     private Stream<String> quorumArgs() {
         return cluster.isKRaftTest()
             ? Stream.of("--bootstrap-server", cluster.bootstrapServers())
-            : Stream.of("--zookeeper", ((ZkClusterInvocationContext.ZkClusterInstance)cluster).getUnderlying().zkConnect());
+            : Stream.of("--zookeeper", ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect());
     }
 
     public List<String> entityOp(Optional<String> brokerId) {
@@ -168,8 +167,8 @@ public class ConfigCommandIntegrationTest {
     @ClusterTest(clusterType = Type.ZK)
     public void testDynamicBrokerConfigUpdateUsingZooKeeper() throws Exception {
         cluster.shutdownBroker(0);
-        String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance)cluster).getUnderlying().zkConnect();
-        KafkaZkClient zkClient = ((ZkClusterInvocationContext.ZkClusterInstance)cluster).getUnderlying().zkClient();
+        String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
+        KafkaZkClient zkClient = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkClient();
 
         String brokerId = "1";
         adminZkClient = new AdminZkClient(zkClient, scala.None$.empty());

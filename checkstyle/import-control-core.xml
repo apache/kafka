@@ -123,5 +123,8 @@
     <allow pkg="kafka.zk"/>
     <allow pkg="org.apache.kafka.security"/>
     <allow pkg="org.apache.kafka.server"/>
+    <allow pkg="kafka.test"/>
+    <allow pkg="kafka.test.annotation"/>
+    <allow pkg="kafka.test.junit"/>
   </subpackage>
 </import-control>
