@@ -28,7 +28,6 @@ import java.util.Locale;
  *
  * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-821%3A+Connect+Transforms+support+for+nested+structures">KIP-821</a>
  * @see SingleFieldPath
- * @see MultiFieldPaths
  */
 public enum FieldSyntaxVersion {
     /**

@@ -37,12 +37,6 @@ class SingleFieldPathTest {
         assertEquals(schema.field("foo"), pathV2("foo").fieldFrom(schema));
     }
 
-    @Test void shouldBuildPathByAppend() {
-        SingleFieldPath p1 = new SingleFieldPath("foo.bar.baz", FieldSyntaxVersion.V2);
-        SingleFieldPath p2 = new SingleFieldPath("foo", FieldSyntaxVersion.V2).append("bar").append("baz");
-        assertEquals(p1, p2);
-    }
-
     @Test void shouldReturnNullFieldWhenFieldNotFound() {
         SchemaBuilder barSchema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA);
         Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();

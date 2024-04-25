@@ -33,13 +33,10 @@ import static org.apache.kafka.connect.transforms.util.Requirements.requireMapOr
  * A SingleFieldPath is composed of one or more field names, known as path steps,
  * to access values within a data object (either {@code Struct} or {@code Map<String, Object>}).
  *
- * <p>If the SMT requires accessing multiple fields on the same data object, use {@link MultiFieldPaths} instead.
- *
  * <p>The field path semantics are defined by the {@link FieldSyntaxVersion syntax version}.
  *
  * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-821%3A+Connect+Transforms+support+for+nested+structures">KIP-821</a>
  * @see FieldSyntaxVersion
- * @see MultiFieldPaths
  */
 public class SingleFieldPath {
     // Invariants:
@@ -48,12 +45,10 @@ public class SingleFieldPath {
     private static final char DOT = '.';
     private static final char BACKSLASH = '\\';
 
-    private final String originalPath;
     private final FieldSyntaxVersion version;
     private final List<String> steps;
 
     public SingleFieldPath(String pathText, FieldSyntaxVersion version) {
-        this.originalPath = Objects.requireNonNull(pathText, "Field path cannot be null");
         this.version = version;
         switch (version) {
             case V1: // backward compatibility
@@ -65,12 +60,6 @@ public class SingleFieldPath {
             default:
                 throw new IllegalArgumentException("Unknown syntax version: " + version);
         }
-    }
-
-    private SingleFieldPath(String originalPath, List<String> steps, FieldSyntaxVersion version) {
-        this.originalPath = originalPath;
-        this.steps = Collections.unmodifiableList(steps);
-        this.version = version;
     }
 
     private static List<String> buildFieldPathV2(String path) {
@@ -151,14 +140,6 @@ public class SingleFieldPath {
         throw new ConfigException("Incomplete backtick pair in path: [" + path + "],"
                 + " consider adding a backslash before backtick at position " + backtickAt
                 + " to escape it");
-    }
-
-    public String originalPath() {
-        return this.originalPath;
-    }
-
-    FieldSyntaxVersion fieldSyntaxVersion() {
-        return this.version;
     }
 
     /**
@@ -255,12 +236,5 @@ public class SingleFieldPath {
             "version=" + version +
             ", path=" + String.join(".", steps) +
             '}';
-    }
-
-    public SingleFieldPath append(String step) {
-        String currentPath = String.join(".", steps);
-        List<String> newSteps = new ArrayList<>(steps);
-        newSteps.add(step);
-        return new SingleFieldPath(currentPath, newSteps, version);
     }
 }
