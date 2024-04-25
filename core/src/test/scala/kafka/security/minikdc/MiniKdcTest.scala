@@ -28,7 +28,7 @@ class MiniKdcTest {
   def shouldNotStopImmediatelyWhenStarted(): Unit = {
     val config = new Properties()
     config.setProperty("kdc.bind.address", "0.0.0.0")
-    config.setProperty("transport", "TCP");
+    config.setProperty("transport", "TCP")
     config.setProperty("max.ticket.lifetime", "86400000")
     config.setProperty("org.name", "Example")
     config.setProperty("kdc.port", "0")

@@ -149,7 +149,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     checkAutoCreatedTopic(topic3, response2)
 
     // V3 doesn't support a configurable allowAutoTopicCreation, so disabling auto-creation is not supported
-    assertThrows(classOf[UnsupportedVersionException], () => sendMetadataRequest(new MetadataRequest(requestData(List(topic4), false), 3.toShort)))
+    assertThrows(classOf[UnsupportedVersionException], () => sendMetadataRequest(new MetadataRequest(requestData(List(topic4), allowAutoTopicCreation = false), 3.toShort)))
 
     // V4 and higher support a configurable allowAutoTopicCreation
     val response3 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic4, topic5).asJava, false, 4.toShort).build)
@@ -219,7 +219,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     createTopic("t2", 3, 2)
 
     // v0, Empty list represents all topics
-    val metadataResponseV0 = sendMetadataRequest(new MetadataRequest(requestData(List(), true), 0.toShort))
+    val metadataResponseV0 = sendMetadataRequest(new MetadataRequest(requestData(List(), allowAutoTopicCreation = true), 0.toShort))
     assertTrue(metadataResponseV0.errors.isEmpty, "V0 Response should have no errors")
     assertEquals(2, metadataResponseV0.topicMetadata.size(), "V0 Response should have 2 (all) topics")
 
@@ -309,7 +309,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     }, "Replica was not found down", 50000)
 
     // Validate version 0 still filters unavailable replicas and contains error
-    val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(requestData(List(replicaDownTopic), true), 0.toShort))
+    val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(requestData(List(replicaDownTopic), allowAutoTopicCreation = true), 0.toShort))
     val v0BrokerIds = v0MetadataResponse.brokers().asScala.map(_.id).toSeq
     assertTrue(v0MetadataResponse.errors.isEmpty, "Response should have no errors")
     assertFalse(v0BrokerIds.contains(downNode.config.brokerId), s"The downed broker should not be in the brokers list")

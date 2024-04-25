@@ -38,15 +38,15 @@ import scala.collection.mutable
  * Object used to encode and decode TokenInformation to Zk
  */
 object DelegationTokenManagerZk {
-  val OwnerKey ="owner"
-  val TokenRequesterKey = "tokenRequester"
-  val RenewersKey = "renewers"
-  val IssueTimestampKey = "issueTimestamp"
-  val MaxTimestampKey = "maxTimestamp"
-  val ExpiryTimestampKey = "expiryTimestamp"
-  val TokenIdKey = "tokenId"
-  val VersionKey = "version"
-  val CurrentVersion = 3
+  private val OwnerKey ="owner"
+  private val TokenRequesterKey = "tokenRequester"
+  private val RenewersKey = "renewers"
+  private val IssueTimestampKey = "issueTimestamp"
+  private val MaxTimestampKey = "maxTimestamp"
+  private val ExpiryTimestampKey = "expiryTimestamp"
+  private val TokenIdKey = "tokenId"
+  private val VersionKey = "version"
+  private val CurrentVersion = 3
 
   def toJsonCompatibleMap(tokenInfo: TokenInformation):  Map[String, Any] = {
     val tokenInfoMap = mutable.Map[String, Any]()
@@ -334,7 +334,7 @@ class DelegationTokenManagerZk(config: KafkaConfig,
     }
   }
 
-  object TokenChangedNotificationHandler extends NotificationHandler {
+  private object TokenChangedNotificationHandler extends NotificationHandler {
     override def processNotification(tokenIdBytes: Array[Byte]): Unit = {
       lock.synchronized {
         val tokenId = new String(tokenIdBytes, StandardCharsets.UTF_8)

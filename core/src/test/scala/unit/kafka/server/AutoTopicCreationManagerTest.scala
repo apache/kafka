@@ -84,18 +84,18 @@ class AutoTopicCreationManagerTest {
   @Test
   def testCreateOffsetTopic(): Unit = {
     Mockito.when(groupCoordinator.groupMetadataTopicConfigs).thenReturn(new Properties)
-    testCreateTopic(GROUP_METADATA_TOPIC_NAME, true, internalTopicPartitions, internalTopicReplicationFactor)
+    testCreateTopic(GROUP_METADATA_TOPIC_NAME, isInternal = true, internalTopicPartitions, internalTopicReplicationFactor)
   }
 
   @Test
   def testCreateTxnTopic(): Unit = {
     Mockito.when(transactionCoordinator.transactionTopicConfigs).thenReturn(new Properties)
-    testCreateTopic(TRANSACTION_STATE_TOPIC_NAME, true, internalTopicPartitions, internalTopicReplicationFactor)
+    testCreateTopic(TRANSACTION_STATE_TOPIC_NAME, isInternal = true, internalTopicPartitions, internalTopicReplicationFactor)
   }
 
   @Test
   def testCreateNonInternalTopic(): Unit = {
-    testCreateTopic("topic", false)
+    testCreateTopic("topic", isInternal = false)
   }
 
   private def testCreateTopic(topicName: String,
@@ -142,7 +142,7 @@ class AutoTopicCreationManagerTest {
 
     Mockito.when(controller.isActive).thenReturn(false)
 
-    createTopicAndVerifyResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicName, false)
+    createTopicAndVerifyResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicName, isInternal = false)
 
     Mockito.verify(adminManager).createTopics(
       ArgumentMatchers.eq(0),

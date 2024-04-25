@@ -20,14 +20,13 @@ package kafka.server.metadata
 import kafka.network.ConnectionQuotas
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.utils.Sanitizer
 
 import java.net.{InetAddress, UnknownHostException}
 import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
-import org.apache.kafka.server.config.ZooKeeperInternals
+import org.apache.kafka.server.config.{QuotaConfigs, ZooKeeperInternals}
 
 import scala.compat.java8.OptionConverters._
 
@@ -52,8 +51,8 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
                                  private[metadata] val connectionQuotas: ConnectionQuotas) extends Logging {
 
   def update(quotasDelta: ClientQuotasDelta): Unit = {
-    quotasDelta.changes().entrySet().forEach { e =>
-      update(e.getKey, e.getValue)
+    quotasDelta.changes().forEach { (key, value) =>
+      update(key, value)
     }
   }
 
@@ -97,8 +96,8 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
           ClientIdEntity(clientIdVal)
         }
       }
-      quotaDelta.changes().entrySet().forEach { e =>
-        handleUserClientQuotaChange(userClientEntity, e.getKey, e.getValue.asScala)
+      quotaDelta.changes().forEach { (key, value) =>
+        handleUserClientQuotaChange(userClientEntity, key, value.asScala)
       }
     } else {
       warn(s"Ignoring unsupported quota entity $entity.")
@@ -117,10 +116,10 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       case _ => throw new IllegalStateException("Should only handle IP quota entities here")
     }
 
-    quotaDelta.changes().entrySet().forEach { e =>
+    quotaDelta.changes().forEach { (key, value) =>
       // The connection quota only understands the connection rate limit
-      val quotaName = e.getKey
-      val quotaValue = e.getValue
+      val quotaName = key
+      val quotaValue = value
       if (!quotaName.equals(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG)) {
         warn(s"Ignoring unexpected quota key $quotaName for entity $ipEntity")
       } else {

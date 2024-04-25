@@ -141,10 +141,7 @@ case class LogReadResult(info: FetchDataInfo,
     if (this.preferredReadReplica.isDefined) OptionalInt.of(this.preferredReadReplica.get) else OptionalInt.empty(),
     isReassignmentFetch)
 
-  def withEmptyFetchInfo: LogReadResult =
-    copy(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY))
-
-  override def toString = {
+  override def toString: String = {
     "LogReadResult(" +
       s"info=$info, " +
       s"divergingEpoch=$divergingEpoch, " +
@@ -225,7 +222,7 @@ object ReplicaManager {
   def createLogReadResult(highWatermark: Long,
                           leaderLogStartOffset: Long,
                           leaderLogEndOffset: Long,
-                          e: Throwable) = {
+                          e: Throwable): LogReadResult = {
     LogReadResult(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
       divergingEpoch = None,
       highWatermark,
@@ -300,7 +297,7 @@ class ReplicaManager(val config: KafkaConfig,
   protected val allPartitions = new Pool[TopicPartition, HostedPartition](
     valueFactory = Some(tp => HostedPartition.Online(Partition(tp, time, this)))
   )
-  protected val replicaStateChangeLock = new Object
+  private val replicaStateChangeLock = new Object
   val replicaFetcherManager = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManagers.follower)
   private[server] val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
@@ -339,7 +336,7 @@ class ReplicaManager(val config: KafkaConfig,
   metricsGroup.newGauge(PartitionsWithLateTransactionsCountMetricName, () => lateTransactionsCount)
   metricsGroup.newGauge(ProducerIdCountMetricName, () => producerIdCount)
 
-  def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
+  private def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
 
   private def lateTransactionsCount: Int = {
     val currentTimeMs = time.milliseconds()
@@ -363,7 +360,7 @@ class ReplicaManager(val config: KafkaConfig,
   // remove the partition from the partition state map. But it will not close itself even if the
   // partition state map is empty. Thus we need to call shutdownIdleReplicaAlterDirThread() periodically
   // to shutdown idle ReplicaAlterDirThread
-  def shutdownIdleReplicaAlterLogDirsThread(): Unit = {
+  private def shutdownIdleReplicaAlterLogDirsThread(): Unit = {
     replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
   }
 
@@ -411,7 +408,7 @@ class ReplicaManager(val config: KafkaConfig,
     warn(s"Found stray partitions ${strayPartitions.mkString(",")}")
 
     // First, stop the partitions. This will shutdown the fetchers and other managers
-    val partitionsToStop = strayPartitions.map(tp => StopPartition(tp, false)).toSet
+    val partitionsToStop = strayPartitions.map(tp => StopPartition(tp, deleteLocalLog = false)).toSet
     stopPartitions(partitionsToStop).forKeyValue { (topicPartition, exception) =>
       error(s"Unable to stop stray partition $topicPartition", exception)
     }
@@ -440,7 +437,7 @@ class ReplicaManager(val config: KafkaConfig,
     })
   }
 
-  protected def completeDelayedFetchOrProduceRequests(topicPartition: TopicPartition): Unit = {
+  private def completeDelayedFetchOrProduceRequests(topicPartition: TopicPartition): Unit = {
     val topicPartitionOperationKey = TopicPartitionOperationKey(topicPartition)
     delayedProducePurgatory.checkAndComplete(topicPartitionOperationKey)
     delayedFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
@@ -1288,7 +1285,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   // See: https://bugs.openjdk.java.net/browse/JDK-8162520
-  def adjustForLargeFileSystems(space: Long): Long = {
+  private def adjustForLargeFileSystems(space: Long): Long = {
     if (space < 0)
       return Long.MaxValue
     space
@@ -2099,7 +2096,7 @@ class ReplicaManager(val config: KafkaConfig,
    * those topics. Note that this means the broker stops being either a replica or a leader of
    * partitions of said topics
    */
-  protected def updateLeaderAndFollowerMetrics(newFollowerTopics: Set[String]): Unit = {
+  private def updateLeaderAndFollowerMetrics(newFollowerTopics: Set[String]): Unit = {
     val leaderTopicSet = leaderPartitionsIterator.map(_.topic).toSet
     newFollowerTopics.diff(leaderTopicSet).foreach(brokerTopicStats.removeOldLeaderMetrics)
 
@@ -2540,7 +2537,7 @@ class ReplicaManager(val config: KafkaConfig,
     new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats, directoryEventHandler)
   }
 
-  protected def createReplicaSelector(): Option[ReplicaSelector] = {
+  private def createReplicaSelector(): Option[ReplicaSelector] = {
     config.replicaSelectorClassName.map { className =>
       val tmpReplicaSelector: ReplicaSelector = CoreUtils.createObject[ReplicaSelector](className)
       tmpReplicaSelector.configure(config.originals())
@@ -2740,7 +2737,7 @@ class ReplicaManager(val config: KafkaConfig,
         remoteLogManager.foreach(rlm => rlm.onLeadershipChange(leaderChangedPartitions.asJava, followerChangedPartitions.asJava, localChanges.topicIds()))
       }
 
-      if (metadataVersion.isDirectoryAssignmentSupported()) {
+      if (metadataVersion.isDirectoryAssignmentSupported) {
         // We only want to update the directoryIds if DirectoryAssignment is supported!
         localChanges.directoryIds.forEach(maybeUpdateTopicAssignment)
       }
@@ -2883,7 +2880,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def maybeUpdateTopicAssignment(partition: TopicIdPartition, partitionDirectoryId: Uuid): Unit = {
     for {
-      topicPartitionActualLog <- logManager.getLog(partition.topicPartition(), false)
+      topicPartitionActualLog <- logManager.getLog(partition.topicPartition())
       topicPartitionActualDirectoryId <- logManager.directoryId(topicPartitionActualLog.dir.getParent)
       if partitionDirectoryId != topicPartitionActualDirectoryId
     } directoryEventHandler.handleAssignment(

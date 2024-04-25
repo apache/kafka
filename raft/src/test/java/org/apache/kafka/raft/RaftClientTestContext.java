@@ -236,9 +236,9 @@ public final class RaftClientTestContext {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel(voters);
             MockListener listener = new MockListener(localId);
-            Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
+            Map<Integer, QuorumConfig.AddressSpec> voterAddressMap = voters.stream()
                 .collect(Collectors.toMap(id -> id, RaftClientTestContext::mockAddress));
-            RaftConfig raftConfig = new RaftConfig(voterAddressMap, requestTimeoutMs, RETRY_BACKOFF_MS, electionTimeoutMs,
+            QuorumConfig quorumConfig = new QuorumConfig(voterAddressMap, requestTimeoutMs, RETRY_BACKOFF_MS, electionTimeoutMs,
                     ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs);
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
@@ -256,7 +256,7 @@ public final class RaftClientTestContext {
                 localId,
                 logContext,
                 random,
-                raftConfig
+                    quorumConfig
             );
 
             client.register(listener);
@@ -817,8 +817,8 @@ public final class RaftClientTestContext {
         return requests;
     }
 
-    private static RaftConfig.AddressSpec mockAddress(int id) {
-        return new RaftConfig.InetAddressSpec(new InetSocketAddress("localhost", 9990 + id));
+    private static QuorumConfig.AddressSpec mockAddress(int id) {
+        return new QuorumConfig.InetAddressSpec(new InetSocketAddress("localhost", 9990 + id));
     }
 
     EndQuorumEpochResponseData endEpochResponse(
