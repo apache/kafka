@@ -24,22 +24,20 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
 import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
-import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, ArgumentsProvider, ArgumentsSource}
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.Map
 
 class TierStateMachineTest {
 
-  val truncateOnFetch = false
   val topicIds = Map("topic1" -> Uuid.randomUuid(), "topic2" -> Uuid.randomUuid())
   val version = ApiKeys.FETCH.latestVersion()
   private val failedPartitions = new FailedPartitions
 
   @ParameterizedTest
-  @ArgumentsSource(classOf[TierStateMachineTest.Params])
-  def testFollowerFetchMovedToTieredStore(truncateOnFetch: Boolean, useFutureLog: Boolean): Unit = {
+  @ValueSource(booleans = Array(true, false))
+  def testFollowerFetchMovedToTieredStore(truncateOnFetch: Boolean): Unit = {
     val partition = new TopicPartition("topic", 0)
 
     val replicaLog = Seq(
@@ -50,7 +48,7 @@ class TierStateMachineTest {
     val replicaState = PartitionState(replicaLog, leaderEpoch = 5, highWatermark = 0L, rlmEnabled = true)
 
     val mockLeaderEndpoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version)
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, useFutureLog)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     fetcher.setReplicaState(partition, replicaState)
@@ -98,8 +96,8 @@ class TierStateMachineTest {
    * 4. Follower comes online and tries to fetch X from leader.
    */
   @ParameterizedTest
-  @ArgumentsSource(classOf[TierStateMachineTest.Params])
-  def testFollowerFetchOffsetOutOfRangeWithTieredStore(truncateOnFetch: Boolean, useFutureLog: Boolean): Unit = {
+  @ValueSource(booleans = Array(true, false))
+  def testFollowerFetchOffsetOutOfRangeWithTieredStore(truncateOnFetch: Boolean): Unit = {
     val partition = new TopicPartition("topic", 0)
 
     val replicaLog = Seq(
@@ -110,7 +108,7 @@ class TierStateMachineTest {
     val replicaState = PartitionState(replicaLog, leaderEpoch = 7, highWatermark = 0L, rlmEnabled = true)
 
     val mockLeaderEndpoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version)
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, useFutureLog)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
     fetcher.setReplicaState(partition, replicaState)
@@ -158,12 +156,12 @@ class TierStateMachineTest {
   }
 
   @ParameterizedTest
-  @ArgumentsSource(classOf[TierStateMachineTest.Params])
-  def testFencedOffsetResetAfterMovedToRemoteTier(truncateOnFetch: Boolean, useFutureLog: Boolean): Unit = {
+  @ValueSource(booleans = Array(true, false))
+  def testFencedOffsetResetAfterMovedToRemoteTier(truncateOnFetch: Boolean): Unit = {
     val partition = new TopicPartition("topic", 0)
     var isErrorHandled = false
     val mockLeaderEndpoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version)
-    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint, useFutureLog) {
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint) {
       override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
         isErrorHandled = true
         throw new FencedLeaderEpochException(s"Epoch ${currentFetchState.currentLeaderEpoch} is fenced")
@@ -195,16 +193,4 @@ class TierStateMachineTest {
     assertTrue(failedPartitions.contains(partition))
   }
 
-}
-
-object TierStateMachineTest {
-  class Params extends ArgumentsProvider {
-    override def provideArguments(context: ExtensionContext): java.util.stream.Stream[_ <: Arguments] =
-      java.util.stream.Stream.of(
-        Arguments.of(Boolean.box(true), Boolean.box(true)),
-        Arguments.of(Boolean.box(true), Boolean.box(false)),
-        Arguments.of(Boolean.box(false), Boolean.box(true)),
-        Arguments.of(Boolean.box(false), Boolean.box(false))
-      )
-  }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tiered.storage.actions;
 
+import org.apache.kafka.clients.admin.AlterReplicaLogDirsResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.test.TestUtils;
@@ -29,6 +30,8 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public final class AlterLogDirAction implements TieredStorageTestAction {
 
@@ -42,35 +45,36 @@ public final class AlterLogDirAction implements TieredStorageTestAction {
     }
 
     @Override
-    public void doExecute(TieredStorageTestContext context) throws InterruptedException, ExecutionException {
-        Optional<BrokerLocalStorage> localStorage = context.localStorages().stream().filter(storage -> storage.getBrokerId().intValue() == brokerId).findFirst();
+    public void doExecute(TieredStorageTestContext context) throws InterruptedException, ExecutionException, TimeoutException {
+        Optional<BrokerLocalStorage> localStorage = context.localStorages().stream().filter(storage -> storage.getBrokerId() == brokerId).findFirst();
         if (!localStorage.isPresent()) {
             throw new IllegalArgumentException("cannot find local storage for this topic partition:" + topicPartition + " in this broker id:" + brokerId);
         }
 
-        Optional<File> sourceDir = localStorage.get().getBrokerStorageDirectory().stream().filter(dir -> localStorage.get().isTopicPartitionFileExistInDir(topicPartition, dir)).findFirst();
-        Optional<File> targetDir = localStorage.get().getBrokerStorageDirectory().stream().filter(dir -> !localStorage.get().isTopicPartitionFileExistInDir(topicPartition, dir)).findFirst();
+        Optional<File> sourceDir = localStorage.get().getBrokerStorageDirectory().stream().filter(dir -> localStorage.get().dirContainsTopicPartition(topicPartition, dir)).findFirst();
         if (!sourceDir.isPresent()) {
             throw new IllegalArgumentException("No log dir with topic partition:" + topicPartition + " in this broker id:" + brokerId);
         }
-
+        Optional<File> targetDir = localStorage.get().getBrokerStorageDirectory().stream().filter(dir -> !localStorage.get().dirContainsTopicPartition(topicPartition, dir)).findFirst();
         if (!targetDir.isPresent()) {
             throw new IllegalArgumentException("No log dir without topic partition:" + topicPartition + " in this broker id:" + brokerId);
         }
 
         // build alterReplicaLogDirs request content to move from sourceDir to targetDir
-        Map<TopicPartitionReplica, String> logDirs = Collections.singletonMap(new TopicPartitionReplica(topicPartition.topic(), topicPartition.partition(), brokerId), targetDir.get().getAbsolutePath());
+        TopicPartitionReplica topicPartitionReplica = new TopicPartitionReplica(topicPartition.topic(), topicPartition.partition(), brokerId);
+        Map<TopicPartitionReplica, String> logDirs = Collections.singletonMap(topicPartitionReplica, targetDir.get().getAbsolutePath());
 
-        context.admin().alterReplicaLogDirs(logDirs);
+        AlterReplicaLogDirsResult results = context.admin().alterReplicaLogDirs(logDirs);
+        results.values().get(topicPartitionReplica).get(30, TimeUnit.SECONDS);
 
-        // wait until the topic partition folder disappearing from source dir and appearing in the target dir
-        TestUtils.waitForCondition(() -> localStorage.get().isTopicPartitionFileExistInDir(topicPartition, targetDir.get()) &&
-                    !localStorage.get().isTopicPartitionFileExistInDir(topicPartition, sourceDir.get()),
+        // wait until the topic partition folder disappears from source dir and appears in the target dir
+        TestUtils.waitForCondition(() -> localStorage.get().dirContainsTopicPartition(topicPartition, targetDir.get()) &&
+                    !localStorage.get().dirContainsTopicPartition(topicPartition, sourceDir.get()),
                 "Failed to alter dir:" + logDirs);
     }
 
     @Override
     public void describe(PrintStream output) {
-        output.print("alter di for topic partition:" + topicPartition + " in this broker id:" + brokerId);
+        output.print("alter dir for topic partition:" + topicPartition + " in this broker id:" + brokerId);
     }
 }

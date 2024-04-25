@@ -1752,7 +1752,7 @@ class ReplicaManager(val config: KafkaConfig,
       val leaderLogEndOffset = log.logEndOffset
 
       if (params.isFromFollower || params.isFromFuture) {
-        // If it is from a follower then send the offset metadata only as the data is already available in remote
+        // If it is from a follower or from a future replica, then send the offset metadata only as the data is already available in remote
         // storage and throw an error saying that this offset is moved to tiered storage.
         createLogReadResult(highWatermark, leaderLogStartOffset, leaderLogEndOffset,
           new OffsetMovedToTieredStorageException("Given offset" + offset + " is moved to tiered storage"))

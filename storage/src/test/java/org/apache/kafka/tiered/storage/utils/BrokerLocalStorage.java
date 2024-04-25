@@ -39,17 +39,17 @@ import java.util.stream.Collectors;
 public final class BrokerLocalStorage {
 
     private final Integer brokerId;
-    private final Set<File> brokerStorageDirectory;
+    private final Set<File> brokerStorageDirectorys;
     private final Integer storageWaitTimeoutSec;
 
     private final int storagePollPeriodSec = 1;
     private final Time time = Time.SYSTEM;
 
     public BrokerLocalStorage(Integer brokerId,
-                              Set<String> storageDirname,
+                              Set<String> storageDirnames,
                               Integer storageWaitTimeoutSec) {
         this.brokerId = brokerId;
-        this.brokerStorageDirectory = storageDirname.stream().map(File::new).collect(Collectors.toSet());
+        this.brokerStorageDirectorys = storageDirnames.stream().map(File::new).collect(Collectors.toSet());
         this.storageWaitTimeoutSec = storageWaitTimeoutSec;
     }
 
@@ -58,7 +58,7 @@ public final class BrokerLocalStorage {
     }
 
     public Set<File> getBrokerStorageDirectory() {
-        return brokerStorageDirectory;
+        return brokerStorageDirectorys;
     }
 
     /**
@@ -146,8 +146,8 @@ public final class BrokerLocalStorage {
         if (offsetToSearch.equals(firstLogFileBaseOffset)) {
             return true;
         }
-        File partitionDir = brokerStorageDirectory.stream()
-                .filter(dir -> isTopicPartitionFileExistInDir(topicPartition, dir))
+        File partitionDir = brokerStorageDirectorys.stream()
+                .filter(dir -> dirContainsTopicPartition(topicPartition, dir))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(String.format("[BrokerId=%d] Directory for the topic-partition %s " +
                 "was not found", brokerId, topicPartition)));
@@ -166,7 +166,7 @@ public final class BrokerLocalStorage {
     }
 
     public void eraseStorage() throws IOException {
-        for (File brokerDir : brokerStorageDirectory) {
+        for (File brokerDir : brokerStorageDirectorys) {
             for (File file : Objects.requireNonNull(brokerDir.listFiles())) {
                 Utils.delete(file);
             }
@@ -186,22 +186,13 @@ public final class BrokerLocalStorage {
         return new OffsetHolder(LogFileUtils.offsetFromFileName(firstLogFile.get()), partitionFiles);
     }
 
-    public boolean isTopicPartitionFileExistInDir(TopicPartition topicPartition, File logDir) {
+    public boolean dirContainsTopicPartition(TopicPartition topicPartition, File logDir) {
         File[] files = getTopicPartitionFiles(topicPartition, Collections.singleton(logDir));
         return files != null && files.length > 0;
     }
 
-    public Optional<File> getLogDirNotStoringTopicPartition(TopicPartition topicPartition) {
-        for (File brokerDir : brokerStorageDirectory) {
-            if (!isTopicPartitionFileExistInDir(topicPartition, brokerDir)) {
-                return Optional.of(brokerDir);
-            }
-        }
-        return Optional.empty();
-    }
-
     private File[] getTopicPartitionFiles(TopicPartition topicPartition) {
-        return getTopicPartitionFiles(topicPartition, brokerStorageDirectory);
+        return getTopicPartitionFiles(topicPartition, brokerStorageDirectorys);
     }
 
     private File[] getTopicPartitionFiles(TopicPartition topicPartition, Set<File> logDirs) {

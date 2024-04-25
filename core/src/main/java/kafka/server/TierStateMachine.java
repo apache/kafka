@@ -24,6 +24,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.List;
@@ -101,8 +103,15 @@ public class TierStateMachine {
         replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).buildRemoteLogAuxStateRequestRate().mark();
         replicaMgr.brokerTopicStats().allTopicsStats().buildRemoteLogAuxStateRequestRate().mark();
 
+        UnifiedLog unifiedLog;
+        if (useFutureLog) {
+            unifiedLog = replicaMgr.futureLogOrException(topicPartition);
+        } else {
+            unifiedLog = replicaMgr.localLogOrException(topicPartition);
+        }
+
         try {
-            offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.currentLeaderEpoch(), leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset());
+            offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.currentLeaderEpoch(), leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset(), unifiedLog);
         } catch (RemoteStorageException e) {
             replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).failedBuildRemoteLogAuxStateRate().mark();
             replicaMgr.brokerTopicStats().allTopicsStats().failedBuildRemoteLogAuxStateRate().mark();
@@ -115,7 +124,7 @@ public class TierStateMachine {
         long initialLag = leaderEndOffset - offsetToFetch;
 
         return PartitionFetchState.apply(currentFetchState.topicId(), offsetToFetch, Option.apply(initialLag), currentFetchState.currentLeaderEpoch(),
-                Fetching$.MODULE$, replicaMgr.localLogOrException(topicPartition).latestEpoch());
+                Fetching$.MODULE$, unifiedLog.latestEpoch());
 
     }
 
@@ -152,11 +161,11 @@ public class TierStateMachine {
     private void buildProducerSnapshotFile(File snapshotFile,
                                            RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                            RemoteLogManager rlm) throws IOException, RemoteStorageException {
-        File tmpSnapshotFile = new File(snapshotFile.getAbsolutePath() + ".tmp");
+        Path tmpSnapshotFile = Paths.get(snapshotFile.getAbsolutePath() + ".tmp");
         // Copy it to snapshot file in atomic manner.
         Files.copy(rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT),
-                tmpSnapshotFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-        Utils.atomicMoveWithFallback(tmpSnapshotFile.toPath(), snapshotFile.toPath(), false);
+                tmpSnapshotFile, StandardCopyOption.REPLACE_EXISTING);
+        Utils.atomicMoveWithFallback(tmpSnapshotFile, snapshotFile.toPath(), false);
     }
 
     /**
@@ -185,15 +194,8 @@ public class TierStateMachine {
                                         Integer currentLeaderEpoch,
                                         Long leaderLocalLogStartOffset,
                                         Integer epochForLeaderLocalLogStartOffset,
-                                        Long leaderLogStartOffset) throws IOException, RemoteStorageException {
-
-
-        UnifiedLog unifiedLog;
-        if (useFutureLog) {
-            unifiedLog = replicaMgr.futureLogOrException(topicPartition);
-        } else {
-            unifiedLog = replicaMgr.localLogOrException(topicPartition);
-        }
+                                        Long leaderLogStartOffset,
+                                        UnifiedLog unifiedLog) throws IOException, RemoteStorageException {
 
         long nextOffset;
 
