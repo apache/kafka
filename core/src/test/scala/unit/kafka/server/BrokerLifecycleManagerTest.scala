@@ -126,7 +126,7 @@ class BrokerLifecycleManagerTest {
       context.poll()
       manager.eventQueue.wakeup()
       assertEquals(BrokerState.SHUTTING_DOWN, manager.state)
-      assertTrue(manager.initialCatchUpFuture.isCompletedExceptionally())
+      assertTrue(manager.initialCatchUpFuture.isCompletedExceptionally)
       assertEquals(-1L, manager.brokerEpoch)
     }
     manager.close()

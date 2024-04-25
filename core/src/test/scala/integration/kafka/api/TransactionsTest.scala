@@ -39,9 +39,9 @@ import org.junit.jupiter.params.provider.ValueSource
 
 import java.util
 import scala.annotation.nowarn
-import scala.collection.Seq
+import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.{Buffer, ListBuffer}
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionException
 
 class TransactionsTest extends IntegrationTestHarness {
@@ -55,9 +55,9 @@ class TransactionsTest extends IntegrationTestHarness {
   val topic2 = "topic2"
   val numPartitions = 4
 
-  val transactionalProducers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
-  val transactionalConsumers = Buffer[Consumer[Array[Byte], Array[Byte]]]()
-  val nonTransactionalConsumers = Buffer[Consumer[Array[Byte], Array[Byte]]]()
+  val transactionalProducers = mutable.Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
+  val transactionalConsumers = mutable.Buffer[Consumer[Array[Byte], Array[Byte]]]()
+  val nonTransactionalConsumers = mutable.Buffer[Consumer[Array[Byte], Array[Byte]]]()
 
   def overridingProps(): Properties = {
     val props = new Properties()
@@ -321,7 +321,7 @@ class TransactionsTest extends IntegrationTestHarness {
   }
 
   private def sendOffset(commit: (KafkaProducer[Array[Byte], Array[Byte]],
-    String, Consumer[Array[Byte], Array[Byte]]) => Unit) = {
+    String, Consumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
 
     // The basic plan for the test is as follows:
     //  1. Seed topic1 with 500 unique, numbered, messages.
@@ -484,26 +484,26 @@ class TransactionsTest extends IntegrationTestHarness {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testInitTransactionsTimeout(quorum: String): Unit = {
-    testTimeout(false, producer => producer.initTransactions())
+    testTimeout(needInitAndSendMsg = false, producer => producer.initTransactions())
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testSendOffsetsToTransactionTimeout(quorum: String): Unit = {
-    testTimeout(true, producer => producer.sendOffsetsToTransaction(
+    testTimeout(needInitAndSendMsg = true, producer => producer.sendOffsetsToTransaction(
       Map(new TopicPartition(topic1, 0) -> new OffsetAndMetadata(0)).asJava, new ConsumerGroupMetadata("test-group")))
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testCommitTransactionTimeout(quorum: String): Unit = {
-    testTimeout(true, producer => producer.commitTransaction())
+    testTimeout(needInitAndSendMsg = true, producer => producer.commitTransaction())
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testAbortTransactionTimeout(quorum: String): Unit = {
-    testTimeout(true, producer => producer.abortTransaction())
+    testTimeout(needInitAndSendMsg = true, producer => producer.abortTransaction())
   }
 
   private def testTimeout(needInitAndSendMsg: Boolean,

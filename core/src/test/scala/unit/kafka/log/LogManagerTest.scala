@@ -535,7 +535,7 @@ class LogManagerTest {
       true
     }
 
-    logManager.loadLog(log.dir, true, Map.empty, Map.empty, logConfig, Map.empty, new ConcurrentHashMap[String, Int](),  providedIsStray)
+    logManager.loadLog(log.dir, hadCleanShutdown = true, Map.empty, Map.empty, logConfig, Map.empty, new ConcurrentHashMap[String, Int](),  providedIsStray)
     assertEquals(1, invokedCount)
     assertTrue(
       logDir.listFiles().toSet
@@ -1245,7 +1245,7 @@ class LogManagerTest {
   @Test
   def testIsStrayKraftReplicaWithEmptyImage(): Unit = {
     val image: TopicsImage = topicsImage(Seq())
-    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog(_))
+    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog)
     assertTrue(onDisk.forall(log => LogManager.isStrayKraftReplica(0, image, log)))
   }
 
@@ -1260,7 +1260,7 @@ class LogManagerTest {
         bar1 -> Seq(0, 1, 2),
       ))
     ))
-    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog(_))
+    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog)
     val expectedStrays = Set(foo1, quux0).map(_.topicPartition())
 
     onDisk.foreach(log => assertEquals(expectedStrays.contains(log.topicPartition), LogManager.isStrayKraftReplica(0, image, log)))
@@ -1277,7 +1277,7 @@ class LogManagerTest {
         bar1 -> Seq(2, 3, 0),
       ))
     ))
-    val onDisk = Seq(foo0, bar0, bar1).map(mockLog(_))
+    val onDisk = Seq(foo0, bar0, bar1).map(mockLog)
     val expectedStrays = Set(bar0).map(_.topicPartition)
 
     onDisk.foreach(log => assertEquals(expectedStrays.contains(log.topicPartition), LogManager.isStrayKraftReplica(0, image, log)))
@@ -1290,7 +1290,7 @@ class LogManagerTest {
     assertEquals(expected,
       LogManager.findStrayReplicas(0,
         createLeaderAndIsrRequestForStrayDetection(Seq()),
-          onDisk.map(mockLog(_))).toSet)
+          onDisk.map(mockLog)).toSet)
   }
 
   @Test
@@ -1299,7 +1299,7 @@ class LogManagerTest {
     assertEquals(Set(),
       LogManager.findStrayReplicas(0,
       createLeaderAndIsrRequestForStrayDetection(onDisk),
-        onDisk.map(mockLog(_))).toSet)
+        onDisk.map(mockLog)).toSet)
   }
 
   @Test
@@ -1310,7 +1310,7 @@ class LogManagerTest {
     assertEquals(expected,
       LogManager.findStrayReplicas(0,
         createLeaderAndIsrRequestForStrayDetection(present),
-        onDisk.map(mockLog(_))).toSet)
+        onDisk.map(mockLog)).toSet)
   }
 
   @Test
@@ -1321,7 +1321,7 @@ class LogManagerTest {
     assertEquals(expected,
       LogManager.findStrayReplicas(0,
         createLeaderAndIsrRequestForStrayDetection(present),
-        onDisk.map(mockLog(_))).toSet)
+        onDisk.map(mockLog)).toSet)
   }
 
   /**

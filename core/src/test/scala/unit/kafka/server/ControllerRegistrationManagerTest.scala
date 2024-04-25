@@ -129,7 +129,7 @@ class ControllerRegistrationManagerTest {
         numBatches(1).
         elapsedNs(100).
         numBytes(200).
-        build();
+        build()
     }
     manager.onMetadataUpdate(delta, newImage, manifest)
     newImage

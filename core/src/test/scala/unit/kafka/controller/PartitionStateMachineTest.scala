@@ -354,7 +354,7 @@ class PartitionStateMachineTest {
       partition,
       LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch),
       replicaAssignment(Seq(leaderBrokerId, brokerId)),
-      false)
+      isNew = false)
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
     verify(mockZkClient).getTopicPartitionStatesRaw(any())
     verify(mockZkClient).updateLeaderAndIsr(any(), anyInt(), anyInt())

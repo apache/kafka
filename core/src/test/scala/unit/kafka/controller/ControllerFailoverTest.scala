@@ -61,7 +61,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     }
     val initialEpoch = initialController.epoch
     // Create topic with one partition
-    createTopic(topic, 1, 1)
+    createTopic(topic)
     val topicPartition = new TopicPartition("topic1", 0)
     TestUtils.waitUntilTrue(() =>
       initialController.controllerContext.partitionsInState(OnlinePartition).contains(topicPartition),

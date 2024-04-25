@@ -105,7 +105,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             }
         }
 
-        if (generatedContexts.size() == 0) {
+        if (generatedContexts.isEmpty()) {
             throw new IllegalStateException("Please annotate test methods with @ClusterTemplate, @ClusterTest, or " +
                     "@ClusterTests when using the ClusterTestExtensions provider");
         }

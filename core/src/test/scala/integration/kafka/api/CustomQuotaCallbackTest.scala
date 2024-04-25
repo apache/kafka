@@ -114,7 +114,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     user.produceConsume(expectProduceThrottle = false, expectConsumeThrottle = false)
 
     // Make default quota smaller, should throttle
-    user.configureAndWaitForQuota(8000, 2500, divisor = 1, group = None)
+    user.configureAndWaitForQuota(8000, 2500, group = None)
     user.produceConsume(expectProduceThrottle = true, expectConsumeThrottle = true)
 
     // Configure large quota override, should not throttle
@@ -170,7 +170,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   private def createGroupWithOneUser(firstUser: String, brokerId: Int): GroupedUser = {
     val user = addUser(firstUser, brokerId)
     createTopic(user.topic, numPartitions = 1, brokerId)
-    user.configureAndWaitForQuota(defaultProduceQuota, defaultConsumeQuota, divisor = 1, group = None)
+    user.configureAndWaitForQuota(defaultProduceQuota, defaultConsumeQuota, group = None)
     user
   }
 
