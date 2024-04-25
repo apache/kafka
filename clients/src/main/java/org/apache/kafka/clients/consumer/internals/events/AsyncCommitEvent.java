@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Timer;
 
 import java.util.Map;
 
