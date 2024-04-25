@@ -61,7 +61,7 @@ import java.nio.file.{FileSystems, Files, Path}
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage, ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.{Arrays, Collections, Optional, OptionalLong, Properties}
+import java.util.{Collections, Optional, OptionalLong, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
@@ -120,7 +120,7 @@ class KRaftClusterTest {
       controller.shutdown()
       // Rewrite The `listeners` config to avoid controller socket server init using different port
       val config = controller.sharedServer.controllerConfig.props
-      config.asInstanceOf[java.util.HashMap[String,String]].put(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:$port")
+      config.asInstanceOf[util.HashMap[String,String]].put(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:$port")
       controller.sharedServer.controllerConfig.updateCurrentConfig(new KafkaConfig(config))
       //  metrics will be set to null when closing a controller, so we should recreate it for testing
       controller.sharedServer.metrics = new Metrics()
@@ -249,7 +249,7 @@ class KRaftClusterTest {
         def alterThenDescribe(entity: ClientQuotaEntity,
                               quotas: Seq[ClientQuotaAlteration.Op],
                               filter: ClientQuotaFilter,
-                              expectCount: Int): java.util.Map[ClientQuotaEntity, java.util.Map[String, java.lang.Double]] = {
+                              expectCount: Int): util.Map[ClientQuotaEntity, util.Map[String, lang.Double]] = {
           val alterResult = admin.alterClientQuotas(Seq(new ClientQuotaAlteration(entity, quotas.asJava)).asJava)
           try {
             alterResult.all().get()
@@ -257,7 +257,7 @@ class KRaftClusterTest {
             case t: Throwable => fail("AlterClientQuotas request failed", t)
           }
 
-          def describeOrFail(filter: ClientQuotaFilter): java.util.Map[ClientQuotaEntity, java.util.Map[String, java.lang.Double]] = {
+          def describeOrFail(filter: ClientQuotaFilter): util.Map[ClientQuotaEntity, util.Map[String, lang.Double]] = {
             try {
               admin.describeClientQuotas(filter).entities().get()
             } catch {
@@ -266,7 +266,7 @@ class KRaftClusterTest {
           }
 
           val (describeResult, ok) = TestUtils.computeUntilTrue(describeOrFail(filter)) {
-            results => results.getOrDefault(entity, java.util.Collections.emptyMap[String, java.lang.Double]()).size() == expectCount
+            results => results.getOrDefault(entity, util.Collections.emptyMap[String, lang.Double]()).size() == expectCount
           }
           assertTrue(ok, "Broker never saw new client quotas")
           describeResult
@@ -341,12 +341,10 @@ class KRaftClusterTest {
 
   def getConsumerByteRates(admin: Admin): Map[ClientQuotaEntity, Long] = {
     val allFilter = ClientQuotaFilter.contains(Collections.emptyList())
-    val results = new java.util.HashMap[ClientQuotaEntity, Long]
+    val results = new util.HashMap[ClientQuotaEntity, Long]
     admin.describeClientQuotas(allFilter).entities().get().forEach {
       case (entity, entityMap) =>
-        Option(entityMap.get("consumer_byte_rate")).foreach {
-          case value => results.put(entity, value.longValue())
-        }
+        Option(entityMap.get("consumer_byte_rate")).foreach(value => results.put(entity, value.longValue()))
     }
     results.asScala.toMap
   }
@@ -518,10 +516,10 @@ class KRaftClusterTest {
       try {
         // Create the topic.
         val assignments = new util.HashMap[Integer, util.List[Integer]]
-        assignments.put(0, Arrays.asList(0, 1, 2))
-        assignments.put(1, Arrays.asList(1, 2, 3))
-        assignments.put(2, Arrays.asList(2, 3, 0))
-        assignments.put(3, Arrays.asList(3, 2, 1))
+        assignments.put(0, util.Arrays.asList(0, 1, 2))
+        assignments.put(1, util.Arrays.asList(1, 2, 3))
+        assignments.put(2, util.Arrays.asList(2, 3, 0))
+        assignments.put(3, util.Arrays.asList(3, 2, 1))
         val createTopicResult = admin.createTopics(Collections.singletonList(
           new NewTopic("foo", assignments)))
         createTopicResult.all().get()
@@ -531,13 +529,13 @@ class KRaftClusterTest {
         assertEquals(Collections.emptyMap(), admin.listPartitionReassignments().reassignments().get())
         val reassignments = new util.HashMap[TopicPartition, Optional[NewPartitionReassignment]]
         reassignments.put(new TopicPartition("foo", 0),
-          Optional.of(new NewPartitionReassignment(Arrays.asList(2, 1, 0))))
+          Optional.of(new NewPartitionReassignment(util.Arrays.asList(2, 1, 0))))
         reassignments.put(new TopicPartition("foo", 1),
-          Optional.of(new NewPartitionReassignment(Arrays.asList(0, 1, 2))))
+          Optional.of(new NewPartitionReassignment(util.Arrays.asList(0, 1, 2))))
         reassignments.put(new TopicPartition("foo", 2),
-          Optional.of(new NewPartitionReassignment(Arrays.asList(2, 3))))
+          Optional.of(new NewPartitionReassignment(util.Arrays.asList(2, 3))))
         reassignments.put(new TopicPartition("foo", 3),
-          Optional.of(new NewPartitionReassignment(Arrays.asList(3, 2, 0, 1))))
+          Optional.of(new NewPartitionReassignment(util.Arrays.asList(3, 2, 0, 1))))
         admin.alterPartitionReassignments(reassignments).all().get()
         TestUtils.waitUntilTrue(
           () => admin.listPartitionReassignments().reassignments().get().isEmpty,
@@ -553,7 +551,7 @@ class KRaftClusterTest {
             false
           }
         }, "Timed out waiting for replica assignments for topic foo. " +
-          s"Wanted: ${expectedMapping}. Got: ${currentMapping}")
+          s"Wanted: $expectedMapping. Got: $currentMapping")
 
         TestUtils.retry(60000) {
           checkReplicaManager(
@@ -611,7 +609,7 @@ class KRaftClusterTest {
       admin.listTopics().names().get().forEach(name => topicsNotFound.remove(name))
       extraTopics = admin.listTopics().names().get().asScala.filter(expectedAbsent.contains(_))
       topicsNotFound.isEmpty && extraTopics.isEmpty
-    }, s"Failed to find topic(s): ${topicsNotFound.asScala} and NOT find topic(s): ${extraTopics}")
+    }, s"Failed to find topic(s): ${topicsNotFound.asScala} and NOT find topic(s): $extraTopics")
   }
 
   private def incrementalAlter(
@@ -651,7 +649,7 @@ class KRaftClusterTest {
             val actual = new util.TreeMap[String, String]()
             val expected = new util.TreeMap[String, String]()
             config.entries().forEach {
-              case entry =>
+              entry =>
                 actual.put(entry.name(), entry.value())
                 if (!exhaustive) {
                   expected.put(entry.name(), entry.value())
@@ -690,9 +688,9 @@ class KRaftClusterTest {
             new AlterConfigOp(new ConfigEntry("max.connections.per.ip", "60"), OpType.SET))))))
         validateConfigs(admin, Map(new ConfigResource(Type.BROKER, "") -> Seq(
           ("log.roll.ms", "1234567"),
-          ("max.connections.per.ip", "60"))), true)
+          ("max.connections.per.ip", "60"))), exhaustive = true)
 
-        admin.createTopics(Arrays.asList(
+        admin.createTopics(util.Arrays.asList(
           new NewTopic("foo", 2, 3.toShort),
           new NewTopic("bar", 2, 3.toShort))).all().get()
         TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "foo", 2)
@@ -822,16 +820,16 @@ class KRaftClusterTest {
 
         validateConfigs(admin, Map(defaultBroker -> Seq(
           ("log.roll.ms", "1234567"),
-          ("max.connections.per.ip", "6"))), true)
+          ("max.connections.per.ip", "6"))), exhaustive = true)
 
         assertEquals(Seq(ApiError.NONE), legacyAlter(admin, Map(defaultBroker -> Seq(
           new ConfigEntry("log.roll.ms", "1234567")))))
 
         // Since max.connections.per.ip was left out of the previous legacyAlter, it is removed.
         validateConfigs(admin, Map(defaultBroker -> Seq(
-          ("log.roll.ms", "1234567"))), true)
+          ("log.roll.ms", "1234567"))), exhaustive = true)
 
-        admin.createTopics(Arrays.asList(
+        admin.createTopics(util.Arrays.asList(
           new NewTopic("foo", 2, 3.toShort),
           new NewTopic("bar", 2, 3.toShort))).all().get()
         TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "foo", 2)
@@ -873,7 +871,7 @@ class KRaftClusterTest {
       cluster.waitForReadyBrokers()
       val admin = Admin.create(cluster.clientProperties())
       try {
-        val createResults = admin.createTopics(Arrays.asList(
+        val createResults = admin.createTopics(util.Arrays.asList(
           new NewTopic("foo", 1, 3.toShort),
           new NewTopic("bar", 2, 3.toShort))).values()
         createResults.get("foo").get()
@@ -957,8 +955,8 @@ class KRaftClusterTest {
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
-      cluster.format
-      cluster.startup
+      cluster.format()
+      cluster.startup()
       for (i <- 0 to 3) {
         TestUtils.waitUntilTrue(() => cluster.brokers.get(i).brokerState == BrokerState.RUNNING,
           "Broker Never started up")
@@ -992,9 +990,9 @@ class KRaftClusterTest {
           ) { observers =>
             (
               cluster.brokers.asScala.keySet == observers.asScala.map(_.replicaId).toSet
-                && observers.stream.allMatch(observer => (observer.logEndOffset > 0
+                && observers.stream.allMatch(observer => observer.logEndOffset > 0
                 && observer.lastFetchTimestamp() != OptionalLong.empty()
-                && observer.lastCaughtUpTimestamp() != OptionalLong.empty())))
+                && observer.lastCaughtUpTimestamp() != OptionalLong.empty()))
           }
 
         assertTrue(observerResponseValid, s"At least one observer did not return the expected state within timeout." +
@@ -1264,7 +1262,7 @@ class KRaftClusterTest {
         latch.countDown()
         assertEquals(0, controller.sharedServer.controllerServerMetrics.fencedBrokerCount())
         assertTrue(controller.quorumControllerMetrics.timedOutHeartbeats() > 0,
-          "Expected timedOutHeartbeats to be greater than 0.");
+          "Expected timedOutHeartbeats to be greater than 0.")
       }
     } finally {
       cluster.close()
@@ -1286,8 +1284,8 @@ class KRaftClusterTest {
         val registeredControllers = controller.registrationsPublisher.controllers()
         assertEquals(3, registeredControllers.size(), "Expected 3 controller registrations")
         registeredControllers.values().forEach(registration => {
-          assertNotNull(registration.listeners.get("CONTROLLER"));
-          assertNotEquals(0, registration.listeners.get("CONTROLLER").port());
+          assertNotNull(registration.listeners.get("CONTROLLER"))
+          assertNotEquals(0, registration.listeners.get("CONTROLLER").port())
         })
       }
     } finally {
@@ -1369,7 +1367,7 @@ class KRaftClusterTest {
         val broker1 = cluster.brokers().get(1)
         val foo0 = new TopicPartition("foo", 0)
 
-        admin.createTopics(Arrays.asList(
+        admin.createTopics(util.Arrays.asList(
           new NewTopic("foo", 3, 3.toShort))).all().get()
 
         // Wait until foo-0 is created on broker0.
@@ -1389,7 +1387,7 @@ class KRaftClusterTest {
         val logDir = broker0.logManager.getLog(foo0).get.dir
         val partitionMetadataFile = new File(logDir, "partition.metadata")
         Files.write(partitionMetadataFile.toPath,
-          "version: 0\ntopic_id: AAAAAAAAAAAAA7SrBWaJ7g\n".getBytes(StandardCharsets.UTF_8));
+          "version: 0\ntopic_id: AAAAAAAAAAAAA7SrBWaJ7g\n".getBytes(StandardCharsets.UTF_8))
 
         // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
         broker0.startup()
@@ -1423,7 +1421,7 @@ class KRaftClusterTest {
         val broker1 = cluster.brokers().get(1)
         val foo0 = new TopicPartition("foo", 0)
 
-        admin.createTopics(Arrays.asList(
+        admin.createTopics(util.Arrays.asList(
           new NewTopic("foo", 3, 3.toShort))).all().get()
 
         // Wait until foo-0 is created on broker0.
@@ -1478,7 +1476,7 @@ class KRaftClusterTest {
         val broker1 = cluster.brokers().get(1)
         val foo0 = new TopicPartition("foo", 0)
 
-        admin.createTopics(Arrays.asList(
+        admin.createTopics(util.Arrays.asList(
           new NewTopic("foo", 3, 3.toShort))).all().get()
 
         // Wait until foo-0 is created on broker0.
@@ -1530,9 +1528,9 @@ class KRaftClusterTest {
   }
 }
 
-class BadAuthorizer() extends Authorizer {
+class BadAuthorizer extends Authorizer {
 
-  override def start(serverInfo: AuthorizerServerInfo): java.util.Map[Endpoint, _ <: CompletionStage[Void]] = {
+  override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
     throw new IllegalStateException("test authorizer exception")
   }
 
@@ -1553,7 +1551,7 @@ object DummyClientQuotaCallback {
   val dummyClientQuotaCallbackValueConfigKey = "dummy.client.quota.callback.value"
 }
 
-class DummyClientQuotaCallback() extends ClientQuotaCallback with Reconfigurable {
+class DummyClientQuotaCallback extends ClientQuotaCallback with Reconfigurable {
   var value = 0
   override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = Collections.emptyMap()
 
@@ -1592,22 +1590,22 @@ object FakeConfigurableAuthorizer {
     if (result == null) {
       0
     } else {
-      val resultString = result.toString().trim()
+      val resultString = result.toString.trim()
       try {
         Integer.valueOf(resultString)
       } catch {
-        case e: NumberFormatException => throw new ConfigException(s"Bad value of ${foobarConfigKey}: ${resultString}")
+        case _: NumberFormatException => throw new ConfigException(s"Bad value of $foobarConfigKey: $resultString")
       }
     }
   }
 }
 
-class FakeConfigurableAuthorizer() extends Authorizer with Reconfigurable {
+class FakeConfigurableAuthorizer extends Authorizer with Reconfigurable {
   import FakeConfigurableAuthorizer._
 
   val foobar = new AtomicInteger(0)
 
-  override def start(serverInfo: AuthorizerServerInfo): java.util.Map[Endpoint, _ <: CompletionStage[Void]] = {
+  override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
     serverInfo.endpoints().asScala.map(e => e -> {
       val future = new CompletableFuture[Void]
       future.complete(null)
@@ -1615,7 +1613,7 @@ class FakeConfigurableAuthorizer() extends Authorizer with Reconfigurable {
     }).toMap.asJava
   }
 
-  override def reconfigurableConfigs(): java.util.Set[String] = Set(foobarConfigKey).asJava
+  override def reconfigurableConfigs(): util.Set[String] = Set(foobarConfigKey).asJava
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
     fakeConfigurableAuthorizerConfigToInt(configs)

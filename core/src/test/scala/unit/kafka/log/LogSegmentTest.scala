@@ -500,7 +500,7 @@ class LogSegmentTest {
   /* create a segment with   pre allocate, put message to it and verify */
   @Test
   def testCreateWithInitFileSizeAppendMessage(): Unit = {
-    val seg = createSegment(40, false, 512*1024*1024, true)
+    val seg = createSegment(40, fileAlreadyExists = false, 512*1024*1024, preallocate = true)
     val ms = records(50, "hello", "there")
     seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
     val ms2 = records(60, "alpha", "beta")

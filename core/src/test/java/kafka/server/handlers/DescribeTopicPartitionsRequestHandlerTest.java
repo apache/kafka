@@ -78,16 +78,15 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class DescribeTopicPartitionsRequestHandlerTest {
-    private int brokerId = 1;
-    private RequestChannel.Metrics requestChannelMetrics = mock(RequestChannel.Metrics.class);
-    private KafkaPrincipalSerde kafkaPrincipalSerde = new KafkaPrincipalSerde() {
+    private final RequestChannel.Metrics requestChannelMetrics = mock(RequestChannel.Metrics.class);
+    private final KafkaPrincipalSerde kafkaPrincipalSerde = new KafkaPrincipalSerde() {
         @Override
         public byte[] serialize(KafkaPrincipal principal) throws SerializationException {
             return Utils.utf8(principal.toString());
@@ -127,7 +126,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         when(authorizer.authorize(any(RequestContext.class), argThat(t ->
             t.contains(expectedActions1) || t.contains(expectedActions2) || t.contains(expectedActions3))))
             .thenAnswer(invocation -> {
-                List<Action> actions = (List<Action>) invocation.getArgument(1);
+                List<Action> actions = invocation.getArgument(1);
                 return actions.stream().map(action -> {
                     if (action.resourcePattern().name().startsWith("authorized"))
                         return AuthorizationResult.ALLOWED;
@@ -212,7 +211,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         try {
             request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         } catch (Exception e) {
-            assertTrue(false, e.getMessage());
+            fail(e.getMessage());
             return;
         }
         DescribeTopicPartitionsResponseData response = handler.handleDescribeTopicPartitionsRequest(request);
@@ -241,7 +240,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         try {
             request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         } catch (Exception e) {
-            assertTrue(false, e.getMessage());
+            fail(e.getMessage());
             return;
         }
         response = handler.handleDescribeTopicPartitionsRequest(request);
@@ -263,7 +262,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         try {
             request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         } catch (Exception e) {
-            assertTrue(false, e.getMessage());
+            fail(e.getMessage());
             return;
         }
         response = handler.handleDescribeTopicPartitionsRequest(request);
@@ -282,7 +281,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         try {
             request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         } catch (Exception e) {
-            assertTrue(false, e.getMessage());
+            fail(e.getMessage());
             return;
         }
         response = handler.handleDescribeTopicPartitionsRequest(request);
@@ -301,7 +300,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         try {
             request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         } catch (Exception e) {
-            assertTrue(false, e.getMessage());
+            fail(e.getMessage());
             return;
         }
         response = handler.handleDescribeTopicPartitionsRequest(request);
@@ -330,7 +329,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         when(authorizer.authorize(any(RequestContext.class), argThat(t ->
             t.contains(expectedActions1) || t.contains(expectedActions2))))
             .thenAnswer(invocation -> {
-                List<Action> actions = (List<Action>) invocation.getArgument(1);
+                List<Action> actions = invocation.getArgument(1);
                 return actions.stream().map(action -> {
                     if (action.resourcePattern().name().startsWith("authorized"))
                         return AuthorizationResult.ALLOWED;
@@ -416,7 +415,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         try {
             request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         } catch (Exception e) {
-            assertTrue(false, e.getMessage());
+            fail(e.getMessage());
             return;
         }
         DescribeTopicPartitionsResponseData response = handler.handleDescribeTopicPartitionsRequest(request);
@@ -446,7 +445,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         try {
             request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
         } catch (Exception e) {
-            assertTrue(false, e.getMessage());
+            fail(e.getMessage());
             return;
         }
         response = handler.handleDescribeTopicPartitionsRequest(request);
@@ -485,7 +484,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         try {
             handler.handleDescribeTopicPartitionsRequest(buildRequest(describeTopicPartitionsRequest, plaintextListener));
         } catch (Exception e) {
-            assertTrue(e instanceof InvalidRequestException, e.getMessage());
+            assertInstanceOf(InvalidRequestException.class, e, e.getMessage());
         }
     }
 
@@ -528,6 +527,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
     }
 
     KafkaConfig createKafkaDefaultConfig() {
+        int brokerId = 1;
         Properties properties = TestUtils.createBrokerConfig(
             brokerId,
             "",

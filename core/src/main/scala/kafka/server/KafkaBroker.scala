@@ -44,7 +44,7 @@ import scala.jdk.CollectionConverters._
 
 object KafkaBroker {
   //properties for MetricsContext
-  val MetricsTypeName: String = "KafkaServer"
+  private val MetricsTypeName: String = "KafkaServer"
 
   private[server] def notifyClusterListeners(clusterId: String,
                                              clusterListeners: Seq[AnyRef]): Unit = {

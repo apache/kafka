@@ -68,7 +68,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
   @ValueSource(strings = Array("zk", "kraft"))
   def testErrorCreateTopicsRequests(quorum: String): Unit = {
     val existingTopic = "existing-topic"
-    createTopic(existingTopic, 5, 1)
+    createTopic(existingTopic, 5)
 
     // Policy violations
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("policy-topic1",
@@ -153,7 +153,7 @@ object CreateTopicsRequestWithPolicyTest {
         return
       }
       require(!closed, "Policy should not be closed")
-      require(!configs.isEmpty, "configure should have been called with non empty configs")
+      require(configs.nonEmpty, "configure should have been called with non empty configs")
 
       import requestMetadata._
       if (numPartitions != null || replicationFactor != null) {

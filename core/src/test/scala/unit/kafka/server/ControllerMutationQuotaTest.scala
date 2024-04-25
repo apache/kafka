@@ -409,7 +409,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     sendAlterClientQuotasRequest(entries).complete(response)
     val result = response.asScala
     assertEquals(request.size, result.size)
-    request.foreach(e => assertTrue(result.get(e._1).isDefined))
+    request.foreach(e => assertTrue(result.contains(e._1)))
     result.toMap
   }
 

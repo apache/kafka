@@ -74,7 +74,7 @@ object KafkaRaftManager {
   /**
    * Test if the configured metadata log dir is one of the data log dirs.
    */
-  def hasDifferentLogDir(config: KafkaConfig): Boolean = {
+  private def hasDifferentLogDir(config: KafkaConfig): Boolean = {
     !config
       .logDirs
       .map(Paths.get(_).toAbsolutePath)
