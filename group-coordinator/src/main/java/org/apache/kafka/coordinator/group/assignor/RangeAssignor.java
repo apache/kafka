@@ -89,7 +89,6 @@ public class RangeAssignor implements PartitionAssignor {
      */
     private Map<Uuid, List<String>> membersPerTopic(final AssignmentSpec assignmentSpec, final SubscribedTopicDescriber subscribedTopicDescriber) {
         Map<Uuid, List<String>> membersPerTopic = new HashMap<>();
-
         Map<String, AssignmentMemberSpec> membersData = assignmentSpec.members();
 
         if (assignmentSpec.groupSubscriptionModel().equals(HOMOGENEOUS)) {

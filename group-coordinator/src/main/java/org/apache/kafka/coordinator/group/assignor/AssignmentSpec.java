@@ -23,7 +23,6 @@ import java.util.Objects;
  * The assignment specification for a consumer group.
  */
 public class AssignmentSpec {
-
     /**
      * The member metadata keyed by member Id.
      */
@@ -51,8 +50,7 @@ public class AssignmentSpec {
     }
 
     /**
-     * @return True if the subscription model is homogeneous,
-     *         False otherwise.
+     * @return The group's subscription model.
      */
     public ConsumerGroupSubscriptionModel groupSubscriptionModel() {
         return groupSubscriptionModel;

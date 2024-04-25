@@ -152,7 +152,7 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
 
     /**
-     * The consumer groups' subscription model.
+     * The consumer group's subscription model.
      * This value is set to Homogeneous by default.
      */
     private final TimelineObject<ConsumerGroupSubscriptionModel> groupSubscriptionModel;
@@ -498,9 +498,11 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return The groups' subscription model.
+     * @return The group's subscription model.
      */
-    public ConsumerGroupSubscriptionModel groupSubscriptionModel() { return groupSubscriptionModel.get(); }
+    public ConsumerGroupSubscriptionModel groupSubscriptionModel() {
+        return groupSubscriptionModel.get();
+    }
 
     /**
      * Returns the target assignment of the member.
