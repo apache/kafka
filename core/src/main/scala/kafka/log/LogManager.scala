@@ -1644,7 +1644,7 @@ object LogManager {
     request.data().topicStates().forEach(topicState => {
       topicState.partitionStates().forEach(partition => {
         partitions.put(new TopicPartition(topicState.topicName(), partition.partitionIndex()),
-          topicState.topicId());
+          topicState.topicId())
       })
     })
     logs.flatMap { log =>

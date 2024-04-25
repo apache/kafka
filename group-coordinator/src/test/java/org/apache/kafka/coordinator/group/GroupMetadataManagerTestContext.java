@@ -528,7 +528,9 @@ public class GroupMetadataManagerTestContext {
             request
         );
 
-        result.records().forEach(this::replay);
+        if (result.appendFuture() == null) {
+            result.records().forEach(this::replay);
+        }
         return result;
     }
 

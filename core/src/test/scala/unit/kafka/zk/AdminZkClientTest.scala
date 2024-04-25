@@ -122,7 +122,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     val actualReplicaMap = leaderForPartitionMap.keys.map(p => p -> zkClient.getReplicasForPartition(new TopicPartition(topic, p))).toMap
     assertEquals(expectedReplicaAssignment.size, actualReplicaMap.size)
     for (i <- 0 until actualReplicaMap.size)
-      assertEquals(expectedReplicaAssignment.get(i).get, actualReplicaMap(i))
+      assertEquals(expectedReplicaAssignment(i), actualReplicaMap(i))
 
     // shouldn't be able to create a topic that already exists
     assertThrows(classOf[TopicExistsException], () => adminZkClient.createTopicWithAssignment(topic, topicConfig, expectedReplicaAssignment))
@@ -158,7 +158,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     // simulate the ZK interactions that can happen when a topic is concurrently created by multiple processes
     val zkMock: KafkaZkClient = mock(classOf[KafkaZkClient])
     when(zkMock.topicExists(topic)).thenReturn(false)
-    when(zkMock.getAllTopicsInCluster(false)).thenReturn(Set("some.topic", topic, "some.other.topic"))
+    when(zkMock.getAllTopicsInCluster()).thenReturn(Set("some.topic", topic, "some.other.topic"))
     val adminZkClient = new AdminZkClient(zkMock)
 
     assertThrows(classOf[TopicExistsException], () => adminZkClient.validateTopicCreate(topic, Map.empty, new Properties))
@@ -234,12 +234,12 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     adminZkClient.createTopic(topic, partitions, 1, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
 
     //Standard topic configs will be propagated at topic creation time, but the quota manager will not have been updated.
-    checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", false)
+    checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", quotaManagerIsThrottled = false)
 
     //Update dynamically and all properties should be applied
     adminZkClient.changeTopicConfig(topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
 
-    checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", true)
+    checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", quotaManagerIsThrottled = true)
 
     // now double the config values for the topic and check that it is applied
     val newConfig = makeConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*")

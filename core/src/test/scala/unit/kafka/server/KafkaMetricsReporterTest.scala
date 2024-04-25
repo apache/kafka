@@ -48,7 +48,7 @@ object KafkaMetricsReporterTest {
     }
 
     private def contextLabelOrNull(name: String, metricsContext: MetricsContext): String = {
-      Option(metricsContext.contextLabels().get(name)).flatMap(v => Option(v.toString())).orNull
+      Option(metricsContext.contextLabels().get(name)).flatMap(v => Option(v)).orNull
     }
 
     override def configure(configs: util.Map[String, _]): Unit = {}

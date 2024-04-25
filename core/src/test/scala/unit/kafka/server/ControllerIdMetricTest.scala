@@ -28,7 +28,7 @@ class ControllerIdMetricTest extends KafkaServerTestHarness {
   @Override
   def generateConfigs: Seq[KafkaConfig] = {
     TestUtils.createBrokerConfigs(1, zkConnectOrNull, enableControlledShutdown = false).
-      map(KafkaConfig.fromProps(_)).toSeq
+      map(KafkaConfig.fromProps).toSeq
   }
 
   @ParameterizedTest

@@ -28,7 +28,7 @@ import org.junit.jupiter.api.{Test, Timeout}
 @Timeout(120)
 class LinuxIoMetricsCollectorTest extends Logging {
 
-  class TestDirectory() {
+  class TestDirectory {
     val baseDir = TestUtils.tempDirectory()
     val selfDir = Files.createDirectories(baseDir.toPath.resolve("self"))
 

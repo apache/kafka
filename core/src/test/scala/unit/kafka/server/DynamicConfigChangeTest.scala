@@ -82,10 +82,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val admin = createAdminClient()
       try {
         val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
-        val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, newVal.toString()),
+        val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, newVal.toString),
           SET)
         val resource2 = new ConfigResource(ConfigResource.Type.BROKER, "")
-        val op2 = new AlterConfigOp(new ConfigEntry(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG, newVal.toString()),
+        val op2 = new AlterConfigOp(new ConfigEntry(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG, newVal.toString),
           SET)
         admin.incrementalAlterConfigs(Map(
           resource -> List(op).asJavaCollection,
@@ -96,7 +96,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       }
     } else {
       val newProps = new Properties()
-      newProps.setProperty(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, newVal.toString())
+      newProps.setProperty(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, newVal.toString)
       adminZkClient.changeTopicConfig(tp.topic, newProps)
     }
     TestUtils.retry(10000) {
@@ -123,7 +123,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val admin = createAdminClient()
       try {
         val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
-        val op = new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_BYTES_CONFIG, newSegmentSize.toString()),
+        val op = new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_BYTES_CONFIG, newSegmentSize.toString),
           SET)
         admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
       } finally {
@@ -350,7 +350,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
           singletonList(new Op(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, 10))))
       admin.alterClientQuotas(alterations).all().get()
 
-      def verifyConnectionQuota(ip: InetAddress, expectedQuota: Integer) = {
+      def verifyConnectionQuota(ip: InetAddress, expectedQuota: Integer): Unit = {
         val connectionQuotas = brokers.head.socketServer.connectionQuotas
         TestUtils.retry(10000) {
           val quota = connectionQuotas.connectionRateForIp(ip)
