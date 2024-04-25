@@ -459,18 +459,19 @@ public class ClusterControlManager {
         FinalizedControllerFeatures finalizedFeatures,
         BrokerRegistrationRequestData.Feature feature
     ) {
-        Optional<Short> finalized = finalizedFeatures.get(feature.name());
-        if (finalized.isPresent()) {
-            if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized.get())) {
-                throw new UnsupportedVersionException("Unable to register because the broker " +
-                    "does not support version " + finalized.get() + " of " + feature.name() +
-                        ". It wants a version between " + feature.minSupportedVersion() + " and " +
-                        feature.maxSupportedVersion() + ", inclusive.");
-            }
-        } else {
-            log.warn("Broker {} registered with feature {} that is unknown to the controller",
-                    brokerId, feature.name());
+        short finalized = finalizedFeatures.getOrDefault(feature.name(), (short) 0);
+        if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized)) {
+            throw new UnsupportedVersionException("Unable to register because the broker " +
+                "does not support version " + finalized + " of " + feature.name() +
+                    ". It wants a version between " + feature.minSupportedVersion() + " and " +
+                    feature.maxSupportedVersion() + ", inclusive.");
         }
+        // A feature is not found in the finalizedFeature map if it is unknown to the controller or set to 0 (feature not enabled).
+        // As more features roll out, it may be common to leave a feature disabled, so this log is debug level in the case
+        // an intended feature is not being set.
+        if (finalized == 0)
+            log.debug("Broker {} registered with feature {} that is either unknown or version 0 on the controller",
+                    brokerId, feature.name());
         return new BrokerFeature().
                 setName(feature.name()).
                 setMinSupportedVersion(feature.minSupportedVersion()).

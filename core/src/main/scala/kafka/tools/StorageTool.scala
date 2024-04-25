@@ -69,7 +69,7 @@ object StorageTool extends Logging {
           val featureNamesAndLevelsMap = featureNamesAndLevels(Option(specifiedFeatures).getOrElse(Collections.emptyList).asScala.toList)
           val metadataVersion = getMetadataVersion(namespace, featureNamesAndLevelsMap,
             Option(config.get.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).map(_.toString))
-          metadataVersionValidation(metadataVersion, config)
+          validateMetadataVersion(metadataVersion, config)
           // Get all other features, validate, and create records for them
           metadataRecords.appendAll(generateFeatureRecords(metadataVersion, featureNamesAndLevelsMap, FeatureVersion.PRODUCTION_FEATURES.asScala.toList))
           getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
@@ -104,7 +104,7 @@ object StorageTool extends Logging {
     }
   }
 
-  def metadataVersionValidation(metadataVersion: MetadataVersion, config: Option[KafkaConfig]): Unit = {
+  private def validateMetadataVersion(metadataVersion: MetadataVersion, config: Option[KafkaConfig]): Unit = {
     if (!metadataVersion.isKRaftSupported) {
       throw new TerseFailure(s"Must specify a valid KRaft metadata.version of at least ${MetadataVersion.IBP_3_0_IV0}.")
     }
@@ -127,14 +127,19 @@ object StorageTool extends Logging {
         specifiedFeatures.getOrElse(featureName, FeatureVersion.defaultValue(featureName, metadataVersionOpt))
     }
 
+    val records = mutable.ListBuffer.empty[ApiMessageAndVersion]
     try {
-      // In order to validate, we need all feature versions set.
-      allFeaturesAndVersions.map { case feature =>
+      for (feature <- allFeaturesAndVersions) {
+        // In order to validate, we need all feature versions set.
         feature.validateVersion(metadataVersion, allFeaturesAndVersions.asJava)
-        new ApiMessageAndVersion(new FeatureLevelRecord().
-          setName(feature.featureName).
-          setFeatureLevel(feature.featureLevel), 0.toShort)
+        // Only set feature records for levels greater than 0. 0 is assumed if there is no record.
+        if (feature.featureLevel() > 0) {
+          records += new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName(feature.featureName).
+            setFeatureLevel(feature.featureLevel), 0.toShort)
+        }
       }
+      records.toList
     } catch {
       case e: Throwable => throw new TerseFailure(e.getMessage)
     }

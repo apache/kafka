@@ -40,6 +40,10 @@ public class FinalizedControllerFeatures {
         return Optional.ofNullable(featureMap.get(name));
     }
 
+    public short getOrDefault(String name, short defaultValue) {
+        return featureMap.getOrDefault(name, defaultValue);
+    }
+
     public Set<String> featureNames() {
         return featureMap.keySet();
     }
