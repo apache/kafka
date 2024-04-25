@@ -1750,12 +1750,11 @@ public class AsyncKafkaConsumerTest {
             return null;
         }).when(future).get(any(Long.class), any(TimeUnit.class));
 
-        try (EventProcessor<BackgroundEvent> processor = mock(EventProcessor.class)) {
-            consumer.processBackgroundEvents(processor, future, timer);
+        EventProcessor<BackgroundEvent> processor = mock(EventProcessor.class);
+        consumer.processBackgroundEvents(processor, future, timer);
 
-            // 800 is the 1000 ms timeout (above) minus the 200 ms delay for the two incremental timeouts/retries.
-            assertEquals(800, timer.remainingMs());
-        }
+        // 800 is the 1000 ms timeout (above) minus the 200 ms delay for the two incremental timeouts/retries.
+        assertEquals(800, timer.remainingMs());
     }
 
     /**
@@ -1770,13 +1769,12 @@ public class AsyncKafkaConsumerTest {
         // Create a future that is already completed.
         CompletableFuture<?> future = CompletableFuture.completedFuture(null);
 
-        try (EventProcessor<BackgroundEvent> processor = mock(EventProcessor.class)) {
-            consumer.processBackgroundEvents(processor, future, timer);
+        EventProcessor<BackgroundEvent> processor = mock(EventProcessor.class);
+        consumer.processBackgroundEvents(processor, future, timer);
 
-            // Because we didn't need to perform a timed get, we should still have every last millisecond
-            // of our initial timeout.
-            assertEquals(1000, timer.remainingMs());
-        }
+        // Because we didn't need to perform a timed get, we should still have every last millisecond
+        // of our initial timeout.
+        assertEquals(1000, timer.remainingMs());
     }
 
     /**
@@ -1795,12 +1793,11 @@ public class AsyncKafkaConsumerTest {
             throw new java.util.concurrent.TimeoutException("Intentional timeout");
         }).when(future).get(any(Long.class), any(TimeUnit.class));
 
-        try (EventProcessor<BackgroundEvent> processor = mock(EventProcessor.class)) {
-            assertThrows(TimeoutException.class, () -> consumer.processBackgroundEvents(processor, future, timer));
+        EventProcessor<BackgroundEvent> processor = mock(EventProcessor.class);
+        assertThrows(TimeoutException.class, () -> consumer.processBackgroundEvents(processor, future, timer));
 
-            // Because we forced our mocked future to continuously time out, we should have no time remaining.
-            assertEquals(0, timer.remainingMs());
-        }
+        // Because we forced our mocked future to continuously time out, we should have no time remaining.
+        assertEquals(0, timer.remainingMs());
     }
 
     private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
