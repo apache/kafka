@@ -17,19 +17,23 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 /**
- * The subscription model followed by the consumer group.
- *
- * A homogeneous subscription model means that all the members
- * of the group are subscribed to the same set of topics.
- *
- * The model is heterogeneous otherwise.
+ * The subscription type followed by a consumer group.
  */
-public enum ConsumerGroupSubscriptionModel {
+public enum SubscriptionType {
+    /**
+     * A homogeneous subscription type means that all the members
+     * of the group are subscribed to the same set of topics.
+     */
     HOMOGENEOUS("Homogeneous"),
+    /**
+     * A heterogeneous subscription type means that not all the members
+     * of the group are subscribed to the same set of topics.
+     */
     HETEROGENEOUS("Heterogeneous");
+
     private final String name;
 
-    ConsumerGroupSubscriptionModel(String name) {
+    SubscriptionType(String name) {
         this.name = name;
     }
 

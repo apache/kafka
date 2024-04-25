@@ -20,7 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
-import org.apache.kafka.coordinator.group.assignor.ConsumerGroupSubscriptionModel;
+import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -118,9 +118,9 @@ public class TargetAssignmentBuilder {
     private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
 
     /**
-     * The subscription model followed by the group.
+     * The subscription type of the consumer group.
      */
-    private ConsumerGroupSubscriptionModel groupSubscriptionModel;
+    private SubscriptionType subscriptionType;
 
     /**
      * The existing target assignment.
@@ -195,16 +195,15 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds the subscription model in use.
+     * Adds the subscription type in use.
      *
-     * @param groupSubscriptionModel  The value that depicts what the subscription
-     *                                model is for the group.
+     * @param subscriptionType  Subscription type of the group.
      * @return This object.
      */
-    public TargetAssignmentBuilder withSubscriptionModel(
-        ConsumerGroupSubscriptionModel groupSubscriptionModel
+    public TargetAssignmentBuilder withSubscriptionType(
+        SubscriptionType subscriptionType
     ) {
-        this.groupSubscriptionModel = groupSubscriptionModel;
+        this.subscriptionType = subscriptionType;
         return this;
     }
 
@@ -301,7 +300,7 @@ public class TargetAssignmentBuilder {
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
-            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs), groupSubscriptionModel),
+            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs), subscriptionType),
             new SubscribedTopicMetadata(topicMetadataMap)
         );
 

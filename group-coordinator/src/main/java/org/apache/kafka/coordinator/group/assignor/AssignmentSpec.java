@@ -29,17 +29,17 @@ public class AssignmentSpec {
     private final Map<String, AssignmentMemberSpec> members;
 
     /**
-     * The subscription model followed by the group.
+     * The subscription type followed by the group.
      */
-    private final ConsumerGroupSubscriptionModel groupSubscriptionModel;
+    private final SubscriptionType subscriptionType;
 
     public AssignmentSpec(
         Map<String, AssignmentMemberSpec> members,
-        ConsumerGroupSubscriptionModel groupSubscriptionModel
+        SubscriptionType subscriptionType
     ) {
         Objects.requireNonNull(members);
         this.members = members;
-        this.groupSubscriptionModel = groupSubscriptionModel;
+        this.subscriptionType = subscriptionType;
     }
 
     /**
@@ -50,10 +50,10 @@ public class AssignmentSpec {
     }
 
     /**
-     * @return The group's subscription model.
+     * @return The group's subscription type.
      */
-    public ConsumerGroupSubscriptionModel groupSubscriptionModel() {
-        return groupSubscriptionModel;
+    public SubscriptionType subscriptionType() {
+        return subscriptionType;
     }
 
     @Override
@@ -61,16 +61,16 @@ public class AssignmentSpec {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         AssignmentSpec that = (AssignmentSpec) o;
-        return groupSubscriptionModel == that.groupSubscriptionModel &&
+        return subscriptionType == that.subscriptionType &&
             members.equals(that.members);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(members, groupSubscriptionModel);
+        return Objects.hash(members, subscriptionType);
     }
 
     public String toString() {
-        return "AssignmentSpec(members=" + members + ", groupSubscriptionModel=" + groupSubscriptionModel.toString() + ')';
+        return "AssignmentSpec(members=" + members + ", subscriptionType=" + subscriptionType.toString() + ')';
     }
 }

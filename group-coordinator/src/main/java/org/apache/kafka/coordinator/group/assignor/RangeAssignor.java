@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static java.lang.Math.min;
-import static org.apache.kafka.coordinator.group.assignor.ConsumerGroupSubscriptionModel.HOMOGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 
 /**
  * This Range Assignor inherits properties of both the range assignor and the sticky assignor.
@@ -87,12 +87,12 @@ public class RangeAssignor implements PartitionAssignor {
      *
      * @throws PartitionAssignorException If a member is subscribed to a non-existent topic.
      */
-    private Map<Uuid, List<String>> membersPerTopic(final AssignmentSpec assignmentSpec, final SubscribedTopicDescriber subscribedTopicDescriber) {
-        Map<Uuid, List<String>> membersPerTopic = new HashMap<>();
+    private Map<Uuid, Collection<String>> membersPerTopic(final AssignmentSpec assignmentSpec, final SubscribedTopicDescriber subscribedTopicDescriber) {
+        Map<Uuid, Collection<String>> membersPerTopic = new HashMap<>();
         Map<String, AssignmentMemberSpec> membersData = assignmentSpec.members();
 
-        if (assignmentSpec.groupSubscriptionModel().equals(HOMOGENEOUS)) {
-            List<String> allMembers = new ArrayList<>(membersData.keySet());
+        if (assignmentSpec.subscriptionType().equals(HOMOGENEOUS)) {
+            Set<String> allMembers = membersData.keySet();
             Collection<Uuid> topics = membersData.values().iterator().next().subscribedTopicIds();
 
             for (Uuid topicId : topics) {
@@ -139,7 +139,7 @@ public class RangeAssignor implements PartitionAssignor {
         Map<String, MemberAssignment> newAssignment = new HashMap<>();
 
         // Step 1
-        Map<Uuid, List<String>> membersPerTopic = membersPerTopic(assignmentSpec, subscribedTopicDescriber);
+        Map<Uuid, Collection<String>> membersPerTopic = membersPerTopic(assignmentSpec, subscribedTopicDescriber);
 
         membersPerTopic.forEach((topicId, membersForTopic) -> {
             int numPartitionsForTopic = subscribedTopicDescriber.numPartitions(topicId);
