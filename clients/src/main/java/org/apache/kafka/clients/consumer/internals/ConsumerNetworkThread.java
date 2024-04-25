@@ -135,22 +135,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     void runOnce() {
-        // Process the events—if any—that were produced by the application thread. It is possible that when processing
-        // an event generates an error. In such cases, the processor will log an exception, but we do not want those
-        // errors to be propagated to the caller.
-        LinkedList<ApplicationEvent> events = new LinkedList<>();
-        applicationEventQueue.drainTo(events);
-
-        for (ApplicationEvent event : events) {
-            try {
-                if (event instanceof CompletableApplicationEvent)
-                    applicationEventReaper.add((CompletableApplicationEvent<?>) event);
-
-                applicationEventProcessor.process(event);
-            } catch (Throwable t) {
-                log.warn("Error processing event {}", t.getMessage(), t);
-            }
-        }
+        processApplicationEvents();
 
         final long currentTimeMs = time.milliseconds();
         final long pollWaitTimeMs = requestManagers.entries().stream()
@@ -167,10 +152,34 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .map(rm -> rm.maximumTimeToWait(currentTimeMs))
                 .reduce(Long.MAX_VALUE, Math::min);
 
-        // "Complete" any events that have expired. This cleanup step should only be called after the network I/O
-        // thread has made at least one call to poll. This is done to emulate the behavior of the legacy consumer's
-        // handling of timeouts. The legacy consumer makes at least one attempt to satisfy any network requests
-        // before checking if a timeout has expired.
+        reapExpiredApplicationEvents(currentTimeMs);
+    }
+
+    /**
+     * Process the events—if any—that were produced by the application thread.
+     */
+    private void processApplicationEvents() {
+        LinkedList<ApplicationEvent> events = new LinkedList<>();
+        applicationEventQueue.drainTo(events);
+
+        for (ApplicationEvent event : events) {
+            try {
+                if (event instanceof CompletableApplicationEvent)
+                    applicationEventReaper.add((CompletableApplicationEvent<?>) event);
+
+                applicationEventProcessor.process(event);
+            } catch (Throwable t) {
+                log.warn("Error processing event {}", t.getMessage(), t);
+            }
+        }
+    }
+
+    /**
+     * "Complete" any events that have expired. This cleanup step should only be called after the network I/O
+     * thread has made at least one call to {@link NetworkClientDelegate#poll(long, long) poll} so that each event
+     * is given least one attempt to satisfy any network requests <em>before</em> checking if a timeout has expired.
+     */
+    private void reapExpiredApplicationEvents(long currentTimeMs) {
         applicationEventReaper.reapExpiredAndCompleted(currentTimeMs);
     }
 
@@ -302,8 +311,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         } finally {
             sendUnsentRequests(timer);
 
-            // Copy over the completable events to a separate list, then reap any incomplete
-            // events on that list.
             LinkedList<ApplicationEvent> allEvents = new LinkedList<>();
             applicationEventQueue.drainTo(allEvents);
             List<CompletableApplicationEvent<?>> completableEvents = allEvents
