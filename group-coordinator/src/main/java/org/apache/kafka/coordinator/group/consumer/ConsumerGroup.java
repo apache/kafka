@@ -771,7 +771,19 @@ public class ConsumerGroup implements Group {
      */
     @Override
     public void createGroupTombstoneRecords(List<Record> records) {
+        members().forEach((memberId, member) ->
+            records.add(RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId(), memberId))
+        );
+
+        members().forEach((memberId, member) ->
+            records.add(RecordHelpers.newTargetAssignmentTombstoneRecord(groupId(), memberId))
+        );
         records.add(RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
+
+        members().forEach((memberId, member) ->
+            records.add(RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId(), memberId))
+        );
+
         records.add(RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
         records.add(RecordHelpers.newGroupEpochTombstoneRecord(groupId()));
     }
@@ -1212,9 +1224,13 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Checks whether all the members use the classic protocol except the given member.
+     *
+     * @param memberId The member to remove.
      * @return A boolean indicating whether all the members use the classic protocol.
      */
-    public boolean allMembersUseClassicProtocol() {
-        return numClassicProtocolMembers() == members().size();
+    public boolean allMembersUseClassicProtocolExcept(String memberId) {
+        return numClassicProtocolMembers() == members().size() - 1 &&
+            !getOrMaybeCreateMember(memberId, false).useClassicProtocol();
     }
 }

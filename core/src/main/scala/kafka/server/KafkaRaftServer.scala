@@ -123,7 +123,7 @@ object KafkaRaftServer {
 
   /**
    * Initialize the configured log directories, including both [[KafkaConfig.MetadataLogDirProp]]
-   * and [[KafkaConfig.LogDirProp]]. This method performs basic validation to ensure that all
+   * and [[KafkaConfig.LOG_DIR_PROP]]. This method performs basic validation to ensure that all
    * directories are accessible and have been initialized with consistent `meta.properties`.
    *
    * @param config The process configuration
@@ -138,10 +138,10 @@ object KafkaRaftServer {
     // Load and verify the original ensemble.
     val loader = new MetaPropertiesEnsemble.Loader()
     loader.addMetadataLogDir(config.metadataLogDir)
-    config.logDirs.foreach(loader.addLogDir(_))
+    config.logDirs.foreach(loader.addLogDir)
     val initialMetaPropsEnsemble = loader.load()
     val verificationFlags = util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR)
-    initialMetaPropsEnsemble.verify(Optional.empty(), OptionalInt.of(config.nodeId), verificationFlags);
+    initialMetaPropsEnsemble.verify(Optional.empty(), OptionalInt.of(config.nodeId), verificationFlags)
 
     // Check that the __cluster_metadata-0 topic does not appear outside the metadata directory.
     val metadataPartitionDirName = UnifiedLog.logDirName(MetadataPartition)

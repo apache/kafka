@@ -236,8 +236,7 @@ object JaasTestUtils {
         if (ScramMechanism.fromMechanismName(mechanism) != ScramMechanism.UNKNOWN) {
           ScramLoginModule(
             KafkaScramAdmin,
-            KafkaScramAdminPassword,
-            debug = false)
+            KafkaScramAdminPassword)
         } else {
           throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
         }

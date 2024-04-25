@@ -263,6 +263,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         public void stop() {
             if (stopped.compareAndSet(false, true)) {
                 admins.forEach(admin -> Utils.closeQuietly(admin, "admin"));
+                admins.clear();
                 Utils.closeQuietly(clusterReference.get(), "cluster");
                 if (zkReference.get() != null) {
                     Utils.closeQuietly(zkReference.get(), "zk");

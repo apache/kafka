@@ -25,7 +25,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.EmitStrategy;
@@ -99,8 +98,6 @@ public class TimeWindowedKStreamImplTest {
     public void before() {
         emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
         emitStrategy = StrategyType.forType(type);
-        // Set interval to 0 so that it always tries to emit
-        props.setProperty(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         windowedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(500L)));

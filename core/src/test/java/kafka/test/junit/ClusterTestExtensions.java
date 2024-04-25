@@ -89,7 +89,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         ClusterTemplate clusterTemplateAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTemplate.class);
         if (clusterTemplateAnnot != null) {
             processClusterTemplate(context, clusterTemplateAnnot, generatedContexts::add);
-            if (generatedContexts.size() == 0) {
+            if (generatedContexts.isEmpty()) {
                 throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
             }
         }
@@ -108,7 +108,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             }
         }
 
-        if (generatedContexts.size() == 0) {
+        if (generatedContexts.isEmpty()) {
             throw new IllegalStateException("Please annotate test methods with @ClusterTemplate, @ClusterTest, or " +
                     "@ClusterTests when using the ClusterTestExtensions provider");
         }

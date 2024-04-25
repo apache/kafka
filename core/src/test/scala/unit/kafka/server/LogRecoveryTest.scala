@@ -70,7 +70,7 @@ class LogRecoveryTest extends QuorumTestHarness {
 
   // Some tests restart the brokers then produce more data. But since test brokers use random ports, we need
   // to use a new producer that knows the new ports
-  def updateProducer() = {
+  def updateProducer(): Unit = {
     if (producer != null)
       producer.close()
     producer = createProducer(

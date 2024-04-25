@@ -206,7 +206,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     // can claim it. This is because KRaft leadership comes from Raft and we are just synchronizing it to ZK.
     var otherNodeState = ZkMigrationLeadershipState.EMPTY
       .withNewKRaftController(3001, 43)
-      .withKRaftMetadataOffsetAndEpoch(100, 42);
+      .withKRaftMetadataOffsetAndEpoch(100, 42)
     otherNodeState = migrationClient.claimControllerLeadership(otherNodeState)
     assertEquals(2, otherNodeState.zkControllerEpochZkVersion())
     assertEquals(3001, otherNodeState.kraftControllerId())
@@ -474,7 +474,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     // Read the changed partition with zkClient.
     val topicReplicaAssignmentFromZk = zkClient.getReplicaAssignmentAndTopicIdForTopics(Set("test"))
     assertEquals(1, topicReplicaAssignmentFromZk.size)
-    assertEquals(Some(topicId), topicReplicaAssignmentFromZk.head.topicId);
+    assertEquals(Some(topicId), topicReplicaAssignmentFromZk.head.topicId)
     topicReplicaAssignmentFromZk.head.assignment.foreach { case (tp, assignment) =>
       tp.partition() match {
         case p if p <=1 =>

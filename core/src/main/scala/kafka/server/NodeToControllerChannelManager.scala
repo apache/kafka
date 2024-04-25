@@ -125,7 +125,7 @@ class RaftControllerNodeProvider(
   val securityProtocol: SecurityProtocol,
   val saslMechanism: String
 ) extends ControllerNodeProvider with Logging {
-  val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
+  private val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
 
   override def getControllerInfo(): ControllerInformation =
     ControllerInformation(raftManager.leaderAndEpoch.leaderId.asScala.map(idToNode),

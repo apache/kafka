@@ -273,6 +273,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final AtomicBoolean asyncCommitFenced;
+    // Last triggered async commit future. Used to wait until all previous async commits are completed.
+    // We only need to keep track of the last one, since they are guaranteed to complete in order.
+    private CompletableFuture<Void> lastPendingAsyncCommit = null;
 
     // currentThread holds the threadId of the current thread accessing the AsyncKafkaConsumer
     // and is used to prevent multithreaded access
@@ -767,8 +770,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             AsyncCommitEvent asyncCommitEvent = new AsyncCommitEvent(offsets);
-            CompletableFuture<Void> future = commit(asyncCommitEvent);
-            future.whenComplete((r, t) -> {
+            lastPendingAsyncCommit = commit(asyncCommitEvent).whenComplete((r, t) -> {
 
                 if (t == null) {
                     offsetCommitCallbackInvoker.enqueueInterceptorInvocation(offsets);
@@ -793,9 +795,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private CompletableFuture<Void> commit(final CommitEvent commitEvent) {
-        maybeThrowFencedInstanceException();
-        maybeInvokeCommitCallbacks();
         maybeThrowInvalidGroupIdException();
+        maybeThrowFencedInstanceException();
+        offsetCommitCallbackInvoker.executeCallbacks();
 
         Map<TopicPartition, OffsetAndMetadata> offsets = commitEvent.offsets();
         log.debug("Committing offsets: {}", offsets);
@@ -1263,10 +1265,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // Prepare shutting down the network thread
         prepareShutdown(closeTimer, firstException);
         closeTimer.update();
+        swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.",
+            () -> awaitPendingAsyncCommitsAndExecuteCommitCallbacks(closeTimer, false), firstException);
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
-        swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.", this::maybeInvokeCommitCallbacks,
-            firstException);
         closeTimer.update();
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
@@ -1378,6 +1380,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             Timer requestTimer = time.timer(timeout.toMillis());
             SyncCommitEvent syncCommitEvent = new SyncCommitEvent(offsets, requestTimer);
             CompletableFuture<Void> commitFuture = commit(syncCommitEvent);
+
+            awaitPendingAsyncCommitsAndExecuteCommitCallbacks(requestTimer, true);
+
             wakeupTrigger.setActiveTask(commitFuture);
             ConsumerUtils.getResult(commitFuture, requestTimer);
             interceptors.onCommit(offsets);
@@ -1386,6 +1391,31 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
             release();
         }
+    }
+
+    private void awaitPendingAsyncCommitsAndExecuteCommitCallbacks(Timer timer, boolean enableWakeup) {
+        if (lastPendingAsyncCommit == null) {
+            return;
+        }
+
+        try {
+            final CompletableFuture<Void> futureToAwait = new CompletableFuture<>();
+            // We don't want the wake-up trigger to complete our pending async commit future,
+            // so create new future here. Any errors in the pending async commit will be handled
+            // by the async commit future / the commit callback - here, we just want to wait for it to complete.
+            lastPendingAsyncCommit.whenComplete((v, t) -> futureToAwait.complete(null));
+            if (enableWakeup) {
+                wakeupTrigger.setActiveTask(futureToAwait);
+            }
+            ConsumerUtils.getResult(futureToAwait, timer);
+            lastPendingAsyncCommit = null;
+        } finally {
+            if (enableWakeup) {
+                wakeupTrigger.clearTask();
+            }
+            timer.update();
+        }
+        offsetCommitCallbackInvoker.executeCallbacks();
     }
 
     @Override
@@ -1692,7 +1722,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     @Override
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
         maybeThrowFencedInstanceException();
-        maybeInvokeCommitCallbacks();
+        offsetCommitCallbackInvoker.executeCallbacks();
         maybeUpdateSubscriptionMetadata();
         backgroundEventProcessor.process();
 
@@ -1956,10 +1986,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
             throw new FencedInstanceIdException("Get fenced exception for group.instance.id " + groupInstanceId);
         }
-    }
-
-    private void maybeInvokeCommitCallbacks() {
-        offsetCommitCallbackInvoker.executeCallbacks();
     }
 
     // Visible for testing
