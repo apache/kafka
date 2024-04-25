@@ -57,7 +57,7 @@ public class MockNetworkChannel implements NetworkChannel {
     }
 
     @Override
-    public void updateEndpoint(int id, RaftConfig.InetAddressSpec address) {
+    public void updateEndpoint(int id, QuorumConfig.InetAddressSpec address) {
         // empty
     }
 

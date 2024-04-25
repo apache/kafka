@@ -108,7 +108,7 @@ public class KafkaNetworkChannelTest {
     public void testSendToBlackedOutDestination() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
+        channel.updateEndpoint(destinationId, new QuorumConfig.InetAddressSpec(
                 new InetSocketAddress(destinationNode.host(), destinationNode.port())));
         client.backoff(destinationNode, 500);
         assertBrokerNotAvailable(destinationId);
@@ -118,7 +118,7 @@ public class KafkaNetworkChannelTest {
     public void testWakeupClientOnSend() throws InterruptedException, ExecutionException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
+        channel.updateEndpoint(destinationId, new QuorumConfig.InetAddressSpec(
                 new InetSocketAddress(destinationNode.host(), destinationNode.port())));
 
         client.enableBlockingUntilWakeup(1);
@@ -145,7 +145,7 @@ public class KafkaNetworkChannelTest {
     public void testSendAndDisconnect() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
+        channel.updateEndpoint(destinationId, new QuorumConfig.InetAddressSpec(
                 new InetSocketAddress(destinationNode.host(), destinationNode.port())));
 
         for (ApiKeys apiKey : RAFT_APIS) {
@@ -159,7 +159,7 @@ public class KafkaNetworkChannelTest {
     public void testSendAndFailAuthentication() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
+        channel.updateEndpoint(destinationId, new QuorumConfig.InetAddressSpec(
                 new InetSocketAddress(destinationNode.host(), destinationNode.port())));
 
         for (ApiKeys apiKey : RAFT_APIS) {
@@ -181,7 +181,7 @@ public class KafkaNetworkChannelTest {
     public void testSendAndReceiveOutboundRequest() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
+        channel.updateEndpoint(destinationId, new QuorumConfig.InetAddressSpec(
                 new InetSocketAddress(destinationNode.host(), destinationNode.port())));
 
         for (ApiKeys apiKey : RAFT_APIS) {
@@ -197,7 +197,7 @@ public class KafkaNetworkChannelTest {
     public void testUnsupportedVersionError() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
+        channel.updateEndpoint(destinationId, new QuorumConfig.InetAddressSpec(
                 new InetSocketAddress(destinationNode.host(), destinationNode.port())));
 
         for (ApiKeys apiKey : RAFT_APIS) {
@@ -211,7 +211,7 @@ public class KafkaNetworkChannelTest {
     public void testFetchRequestDowngrade(short version) {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
+        channel.updateEndpoint(destinationId, new QuorumConfig.InetAddressSpec(
                 new InetSocketAddress(destinationNode.host(), destinationNode.port())));
         sendTestRequest(ApiKeys.FETCH, destinationId);
         channel.pollOnce();

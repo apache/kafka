@@ -148,7 +148,7 @@ public class KafkaNetworkChannel implements NetworkChannel {
     }
 
     @Override
-    public void updateEndpoint(int id, RaftConfig.InetAddressSpec spec) {
+    public void updateEndpoint(int id, QuorumConfig.InetAddressSpec spec) {
         Node node = new Node(id, spec.address.getHostString(), spec.address.getPort());
         endpoints.put(id, node);
     }
