@@ -258,25 +258,6 @@ public class Assertions {
                 Comparator.comparing(ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId)
             );
             assertEquals(expectedValue, actualValue);
-        } else if (actual.message() instanceof ConsumerGroupCurrentMemberAssignmentValue) {
-            ConsumerGroupCurrentMemberAssignmentValue expectedValue =
-                (ConsumerGroupCurrentMemberAssignmentValue) expected.message().duplicate();
-            ConsumerGroupCurrentMemberAssignmentValue actualValue =
-                (ConsumerGroupCurrentMemberAssignmentValue) actual.message().duplicate();
-
-            expectedValue.assignedPartitions().sort(
-                Comparator.comparing(ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId)
-            );
-            actualValue.assignedPartitions().sort(
-                Comparator.comparing(ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId)
-            );
-            expectedValue.partitionsPendingRevocation().sort(
-                Comparator.comparing(ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId)
-            );
-            actualValue.partitionsPendingRevocation().sort(
-                Comparator.comparing(ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId)
-            );
-            assertEquals(expectedValue, actualValue);
         } else {
             assertEquals(expected.message(), actual.message());
         }
