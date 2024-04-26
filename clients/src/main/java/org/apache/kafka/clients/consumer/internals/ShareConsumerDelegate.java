@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ShareConsumer;
-import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 import org.apache.kafka.common.metrics.Metrics;
 
 /**
@@ -36,5 +36,5 @@ public interface ShareConsumerDelegate<K, V> extends ShareConsumer<K, V> {
 
     Metrics metricsRegistry();
 
-    KafkaConsumerMetrics kafkaConsumerMetrics();
+    KafkaShareConsumerMetrics kafkaShareConsumerMetrics();
 }

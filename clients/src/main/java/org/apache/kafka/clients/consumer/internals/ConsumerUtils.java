@@ -65,6 +65,7 @@ public final class ConsumerUtils {
     public static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
     public static final String CONSUMER_JMX_PREFIX = "kafka.consumer";
     public static final String CONSUMER_METRIC_GROUP_PREFIX = "consumer";
+    public static final String SHARE_CONSUMER_METRIC_GROUP_PREFIX = "share-consumer";
     public static final String COORDINATOR_METRICS_SUFFIX = "-coordinator-metrics";
     public static final String CONSUMER_METRICS_SUFFIX = "-metrics";
 

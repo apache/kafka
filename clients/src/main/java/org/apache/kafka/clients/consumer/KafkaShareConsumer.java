@@ -21,7 +21,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegate;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegateCreator;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
-import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -697,7 +697,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
         return delegate.metricsRegistry();
     }
 
-    KafkaConsumerMetrics kafkaConsumerMetrics() {
-        return delegate.kafkaConsumerMetrics();
+    KafkaShareConsumerMetrics kafkaShareConsumerMetrics() {
+        return delegate.kafkaShareConsumerMetrics();
     }
 }

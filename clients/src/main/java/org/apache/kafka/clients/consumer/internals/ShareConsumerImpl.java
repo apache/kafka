@@ -40,7 +40,7 @@ import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareLeaveOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -86,6 +86,7 @@ import java.util.function.Supplier;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_JMX_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.SHARE_CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
@@ -166,7 +167,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
-    private final KafkaConsumerMetrics kafkaConsumerMetrics;
+    private final KafkaShareConsumerMetrics kafkaShareConsumerMetrics;
     private Logger log;
     private final String clientId;
     private final String groupId;
@@ -320,7 +321,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     new FetchConfig(config),
                     deserializers);
 
-            this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
+            this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, SHARE_CONSUMER_METRIC_GROUP_PREFIX);
 
             config.logUnused();
             AppInfoParser.registerAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -366,7 +367,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 subscriptions,
                 new FetchConfig(config),
                 deserializers);
-        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
+        this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, SHARE_CONSUMER_METRIC_GROUP_PREFIX);
 
         final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         final BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
@@ -521,7 +522,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             // If using implicit acknowledgement, acknowledge the previously fetched records
             maybeSendAcknowledgements();
 
-            kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
+            kafkaShareConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
             if (subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics.");
@@ -553,7 +554,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             return ConsumerRecords.empty();
         } finally {
-            kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
+            kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             wakeupTrigger.clearTask();
             release();
         }
@@ -720,7 +721,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback.", this::handleCompletedAcknowledgements,
                 firstException);
         closeTimer.update();
-        closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
+        closeQuietly(kafkaShareConsumerMetrics, "kafka share consumer metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
         closeQuietly(deserializers, "consumer deserializers", firstException);
         clientTelemetryReporter.ifPresent(reporter -> closeQuietly(reporter, "consumer telemetry reporter", firstException));
@@ -962,7 +963,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     }
 
     @Override
-    public KafkaConsumerMetrics kafkaConsumerMetrics() {
-        return kafkaConsumerMetrics;
+    public KafkaShareConsumerMetrics kafkaShareConsumerMetrics() {
+        return kafkaShareConsumerMetrics;
     }
 }

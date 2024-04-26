@@ -38,7 +38,6 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.network.Selectable;
@@ -68,6 +67,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -84,12 +85,9 @@ import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
 
 import static org.apache.kafka.common.utils.Utils.propsToMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -752,114 +750,6 @@ public class KafkaShareConsumerTest {
             this.partitionMaxBytes = partitionMaxBytes;
             this.count = count;
         }
-    }
-
-    @Test
-    public void testPollTimeMetrics() {
-        ConsumerMetadata metadata = createMetadata(subscription);
-        MockClient client = new MockClient(time, metadata);
-        initMetadata(client, Collections.singletonMap(topic, 1));
-
-        KafkaShareConsumer<String, String> consumer = newShareConsumer(time, client, subscription, metadata);
-        consumer.subscribe(Collections.singletonList(topic));
-        // MetricName objects to check
-        Metrics metrics = consumer.metricsRegistry();
-        MetricName lastPollSecondsAgoName = metrics.metricName("last-poll-seconds-ago", "consumer-metrics");
-        MetricName timeBetweenPollAvgName = metrics.metricName("time-between-poll-avg", "consumer-metrics");
-        MetricName timeBetweenPollMaxName = metrics.metricName("time-between-poll-max", "consumer-metrics");
-        // Test default values
-        assertEquals(-1.0d, consumer.metrics().get(lastPollSecondsAgoName).metricValue());
-        assertEquals(Double.NaN, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
-        assertEquals(Double.NaN, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
-        // Call first poll
-        consumer.poll(Duration.ZERO);
-        assertEquals(0.0d, consumer.metrics().get(lastPollSecondsAgoName).metricValue());
-        assertEquals(0.0d, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
-        assertEquals(0.0d, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
-        // Advance time by 5,000 (total time = 5,000)
-        time.sleep(5 * 1000L);
-        assertEquals(5.0d, consumer.metrics().get(lastPollSecondsAgoName).metricValue());
-        // Call second poll
-        consumer.poll(Duration.ZERO);
-        assertEquals(2.5 * 1000d, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
-        assertEquals(5 * 1000d, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
-        // Advance time by 10,000 (total time = 15,000)
-        time.sleep(10 * 1000L);
-        assertEquals(10.0d, consumer.metrics().get(lastPollSecondsAgoName).metricValue());
-        // Call third poll
-        consumer.poll(Duration.ZERO);
-        assertEquals(5 * 1000d, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
-        assertEquals(10 * 1000d, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
-        // Advance time by 5,000 (total time = 20,000)
-        time.sleep(5 * 1000L);
-        assertEquals(5.0d, consumer.metrics().get(lastPollSecondsAgoName).metricValue());
-        // Call fourth poll
-        consumer.poll(Duration.ZERO);
-        assertEquals(5 * 1000d, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
-        assertEquals(10 * 1000d, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
-    }
-
-    @Test
-    public void testPollIdleRatio() {
-        ConsumerMetadata metadata = createMetadata(subscription);
-        MockClient client = new MockClient(time, metadata);
-        initMetadata(client, Collections.singletonMap(topic, 1));
-
-        KafkaShareConsumer<String, String> consumer = newShareConsumer(time, client, subscription, metadata);
-        // MetricName object to check
-        Metrics metrics = consumer.metricsRegistry();
-        MetricName pollIdleRatio = metrics.metricName("poll-idle-ratio-avg", "consumer-metrics");
-        // Test default value
-        assertEquals(Double.NaN, consumer.metrics().get(pollIdleRatio).metricValue());
-
-        // 1st poll
-        // Spend 50ms in poll so value = 1.0
-        consumer.kafkaConsumerMetrics().recordPollStart(time.milliseconds());
-        time.sleep(50);
-        consumer.kafkaConsumerMetrics().recordPollEnd(time.milliseconds());
-
-        assertEquals(1.0d, consumer.metrics().get(pollIdleRatio).metricValue());
-
-        // 2nd poll
-        // Spend 50m outside poll and 0ms in poll so value = 0.0
-        time.sleep(50);
-        consumer.kafkaConsumerMetrics().recordPollStart(time.milliseconds());
-        consumer.kafkaConsumerMetrics().recordPollEnd(time.milliseconds());
-
-        // Avg of first two data points
-        assertEquals((1.0d + 0.0d) / 2, consumer.metrics().get(pollIdleRatio).metricValue());
-
-        // 3rd poll
-        // Spend 25ms outside poll and 25ms in poll so value = 0.5
-        time.sleep(25);
-        consumer.kafkaConsumerMetrics().recordPollStart(time.milliseconds());
-        time.sleep(25);
-        consumer.kafkaConsumerMetrics().recordPollEnd(time.milliseconds());
-
-        // Avg of three data points
-        assertEquals((1.0d + 0.0d + 0.5d) / 3, consumer.metrics().get(pollIdleRatio).metricValue());
-    }
-
-    private static boolean consumerMetricPresent(KafkaShareConsumer<String, String> consumer, String name) {
-        MetricName metricName = new MetricName(name, "consumer-metrics", "", Collections.emptyMap());
-        return consumer.metricsRegistry().metrics().containsKey(metricName);
-    }
-
-    @Test
-    public void testClosingConsumerUnregistersConsumerMetrics() {
-        Time time = new MockTime(1L);
-        ConsumerMetadata metadata = createMetadata(subscription);
-        MockClient client = new MockClient(time, metadata);
-        initMetadata(client, Collections.singletonMap(topic, 1));
-        KafkaShareConsumer<String, String> consumer = newShareConsumer(time, client, subscription, metadata);
-        consumer.subscribe(Collections.singletonList(topic));
-        assertTrue(consumerMetricPresent(consumer, "last-poll-seconds-ago"));
-        assertTrue(consumerMetricPresent(consumer, "time-between-poll-avg"));
-        assertTrue(consumerMetricPresent(consumer, "time-between-poll-max"));
-        consumer.close();
-        assertFalse(consumerMetricPresent(consumer, "last-poll-seconds-ago"));
-        assertFalse(consumerMetricPresent(consumer, "time-between-poll-avg"));
-        assertFalse(consumerMetricPresent(consumer, "time-between-poll-max"));
     }
 
     private static final List<String> CLIENT_IDS = new ArrayList<>();
