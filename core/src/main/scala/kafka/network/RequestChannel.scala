@@ -601,8 +601,7 @@ class RequestMetrics(name: String) {
   }
 
   private class ErrorMeter(name: String, error: Errors) {
-    private val tags = Map("request" -> name, "error" -> error.name).asJava
-
+    private val tags = Map("request" -> name, "error" -> error.name, "retriable" -> error.isRetriable.toString).asJava
     @volatile private var meter: Meter = _
 
     def getOrCreateMeter(): Meter = {
