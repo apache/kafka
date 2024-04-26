@@ -1126,7 +1126,7 @@ public abstract class AbstractCoordinator implements Closeable {
             // Synchronize after closing the heartbeat thread since heartbeat thread
             // needs this lock to complete and terminate after close flag is set.
             synchronized (this) {
-                if (rebalanceConfig.leaveGroupOnClose) {
+                if (rebalanceConfig.leaveGroupOnClose()) {
                     onLeavePrepare();
                     maybeLeaveGroup("the consumer is being closed");
                 }
