@@ -64,7 +64,7 @@
           "about": "The cumulative lag for the task" }
       ]
     },
-    { "name": "AssignmentConfigs", "type": "[]AssignmentConfig", "versions": "0+","nullableVersions": "0+", "default": "null",
+    { "name": "AssignmentConfigs", "type": "[]AssignmentConfig", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Generic array of assignment configuration strings. Null if unchanged since last heartbeat.",
       "fields": [
         { "name": "Key", "type": "string", "versions": "0+",
@@ -72,7 +72,9 @@
         { "name": "Value", "type": "string", "versions": "0+",
           "about": "value of the config" }
       ]
-    }
+    },
+    { "name": "ShutdownApplication", "type": "bool", "versions": "0+", "default": false,
+      "about": "Whether all Streams clients in the group should shut down. Can only be defined if memberEpoch = -1" }
   ],
   "commonStructs": [
     { "name": "TaskId", "versions": "0+", "fields": [

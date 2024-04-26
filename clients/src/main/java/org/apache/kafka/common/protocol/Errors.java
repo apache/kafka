@@ -20,6 +20,11 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
+import org.apache.kafka.common.errors.StreamsInconsistentTopologyException;
+import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
+import org.apache.kafka.common.errors.StreamsMissingInternalTopicsException;
+import org.apache.kafka.common.errors.StreamsMissingSourceTopicsException;
+import org.apache.kafka.common.errors.StreamsShutdownApplicationException;
 import org.apache.kafka.common.errors.TelemetryTooLargeException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ConcurrentTransactionsException;
@@ -394,7 +399,17 @@ public enum Errors {
     UNKNOWN_SUBSCRIPTION_ID(117, "Client sent a push telemetry request with an invalid or outdated subscription ID.", UnknownSubscriptionIdException::new),
     TELEMETRY_TOO_LARGE(118, "Client sent a push telemetry request larger than the maximum size the broker will accept.", TelemetryTooLargeException::new),
     INVALID_REGISTRATION(119, "The controller has considered the broker registration to be invalid.", InvalidRegistrationException::new),
-    TRANSACTION_ABORTABLE(120, "The server encountered an error with the transaction. The client can abort the transaction to continue using this transactional ID.", TransactionAbortableException::new);
+    TRANSACTION_ABORTABLE(120, "The server encountered an error with the transaction. The client can abort the transaction to continue using this transactional ID.", TransactionAbortableException::new),
+    STREAMS_INVALID_TOPOLOGY(121, "The supplied topology is invalid.",
+        StreamsInvalidTopologyException::new),
+    STREAMS_INCONSISTENT_TOPOLOGY(122, "The topology hash supplied is inconsistent with the topology for this consumer group.",
+        StreamsInconsistentTopologyException::new),
+    STREAMS_MISSING_SOURCE_TOPICS(123, "One or more source topics are missing.",
+        StreamsMissingSourceTopicsException::new),
+    STREAMS_MISSING_INTERNAL_TOPICS(124, "One or more internal topics are missing.",
+        StreamsMissingInternalTopicsException::new),
+    STREAMS_SHUTDOWN_APPLICATION(125, "A client requested the shutdown of the whole application.",
+        StreamsShutdownApplicationException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
