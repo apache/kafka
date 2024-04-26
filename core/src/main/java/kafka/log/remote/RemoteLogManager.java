@@ -1217,25 +1217,40 @@ public class RemoteLogManager implements Closeable {
      * @return true if the remote segment's epoch/offsets are within the leader epoch lineage of the partition.
      */
     // Visible for testing
-    public static boolean isRemoteSegmentWithinLeaderEpochs(RemoteLogSegmentMetadata segmentMetadata,
-                                                            long logEndOffset,
-                                                            NavigableMap<Integer, Long> leaderEpochs) {
+    static boolean isRemoteSegmentWithinLeaderEpochs(RemoteLogSegmentMetadata segmentMetadata,
+                                                     long logEndOffset,
+                                                     NavigableMap<Integer, Long> leaderEpochs) {
         long segmentEndOffset = segmentMetadata.endOffset();
         // Filter epochs that does not have any messages/records associated with them.
         NavigableMap<Integer, Long> segmentLeaderEpochs = buildFilteredLeaderEpochMap(segmentMetadata.segmentLeaderEpochs());
         // Check for out of bound epochs between segment epochs and current leader epochs.
-        Integer segmentFirstEpoch = segmentLeaderEpochs.firstKey();
         Integer segmentLastEpoch = segmentLeaderEpochs.lastKey();
-        if (segmentFirstEpoch < leaderEpochs.firstKey() || segmentLastEpoch > leaderEpochs.lastKey()) {
+        if (segmentLastEpoch < leaderEpochs.firstKey() || segmentLastEpoch > leaderEpochs.lastKey()) {
             LOGGER.debug("Segment {} is not within the partition leader epoch lineage. " +
                             "Remote segment epochs: {} and partition leader epochs: {}",
                     segmentMetadata.remoteLogSegmentId(), segmentLeaderEpochs, leaderEpochs);
             return false;
         }
-
+        // There can be overlapping remote log segments in the remote storage. (eg)
+        // leader-epoch-file-cache: {(5, 10), (7, 15), (8, 100)}
+        // segment1: offset-range = 5-50, Broker = 0, epochs = {(5, 10), (7, 15)}
+        // segment2: offset-range = 14-150, Broker = 1, epochs = {(5, 14), (7, 15), (8, 100)}, after leader-election.
+        // When the segment1 gets deleted, then the leader-epoch-file-cache gets updated to: {(7, 51), (8, 100), (9, 200)}.
+        // While validating the segment2, we should ensure the overlapping remote log segments case.
+        Integer segmentFirstEpoch = segmentLeaderEpochs.ceilingKey(leaderEpochs.firstKey());
+        if (segmentFirstEpoch == null || !leaderEpochs.containsKey(segmentFirstEpoch)) {
+            LOGGER.debug("Segment {} is not within the partition leader epoch lineage. " +
+                            "Remote segment epochs: {} and partition leader epochs: {}",
+                    segmentMetadata.remoteLogSegmentId(), segmentLeaderEpochs, leaderEpochs);
+            return false;
+        }
         for (Map.Entry<Integer, Long> entry : segmentLeaderEpochs.entrySet()) {
             int epoch = entry.getKey();
             long offset = entry.getValue();
+
+            if (epoch < segmentFirstEpoch) {
+                continue;
+            }
 
             // If segment's epoch does not exist in the leader epoch lineage then it is not a valid segment.
             if (!leaderEpochs.containsKey(epoch)) {
@@ -1245,10 +1260,16 @@ public class RemoteLogManager implements Closeable {
                 return false;
             }
 
-            // Segment's first epoch's offset should be more than or equal to the respective leader epoch's offset.
-            if (epoch == segmentFirstEpoch && offset < leaderEpochs.get(epoch)) {
-                LOGGER.debug("Segment {} first epoch {} offset is less than leader epoch offset {}.",
-                        segmentMetadata.remoteLogSegmentId(), epoch, leaderEpochs.get(epoch));
+            // Two cases:
+            // case-1: When the segment-first-epoch equals to the first-epoch in the leader-epoch-lineage, then the
+            // offset value can lie anywhere between 0 to (next-epoch-start-offset - 1) is valid.
+            // case-2: When the segment-first-epoch is not equal to the first-epoch in the leader-epoch-lineage, then
+            // the offset value should be between (current-epoch-start-offset) to (next-epoch-start-offset - 1).
+            if (epoch == segmentFirstEpoch && leaderEpochs.lowerKey(epoch) != null && offset < leaderEpochs.get(epoch)) {
+                LOGGER.debug("Segment {} first-valid epoch {} offset is less than leader epoch offset {}." +
+                                "Remote segment epochs: {} and partition leader epochs: {}",
+                        segmentMetadata.remoteLogSegmentId(), epoch, leaderEpochs.get(epoch),
+                        segmentLeaderEpochs, leaderEpochs);
                 return false;
             }
 
@@ -1256,8 +1277,10 @@ public class RemoteLogManager implements Closeable {
             if (epoch == segmentLastEpoch) {
                 Map.Entry<Integer, Long> nextEntry = leaderEpochs.higherEntry(epoch);
                 if (nextEntry != null && segmentEndOffset > nextEntry.getValue() - 1) {
-                    LOGGER.debug("Segment {} end offset {} is more than leader epoch offset {}.",
-                            segmentMetadata.remoteLogSegmentId(), segmentEndOffset, nextEntry.getValue() - 1);
+                    LOGGER.debug("Segment {} end offset {} is more than leader epoch offset {}." +
+                                    "Remote segment epochs: {} and partition leader epochs: {}",
+                            segmentMetadata.remoteLogSegmentId(), segmentEndOffset, nextEntry.getValue() - 1,
+                            segmentLeaderEpochs, leaderEpochs);
                     return false;
                 }
             }
@@ -1283,7 +1306,6 @@ public class RemoteLogManager implements Closeable {
     /**
      * Returns a map containing the epoch vs start-offset for the given leader epoch map by filtering the epochs that
      * does not contain any messages/records associated with them.
-     *
      * For ex:
      * <pre>
      * {@code
@@ -1298,8 +1320,7 @@ public class RemoteLogManager implements Closeable {
      *  7 - 70
      * }
      * </pre>
-     *
-     *  When the above leaderEpochMap is passed to this method, it returns the following map:
+     * When the above leaderEpochMap is passed to this method, it returns the following map:
      * <pre>
      * {@code
      *  <epoch - start offset>
@@ -1312,27 +1333,26 @@ public class RemoteLogManager implements Closeable {
      *  7 - 70
      * }
      * </pre>
-     *
      * @param leaderEpochs The leader epoch map to be refined.
      */
     // Visible for testing
-    public static NavigableMap<Integer, Long> buildFilteredLeaderEpochMap(NavigableMap<Integer, Long> leaderEpochs) {
-        List<Integer> duplicatedEpochs = new ArrayList<>();
-        Map.Entry<Integer, Long> previousEntry = null;
-        for (Map.Entry<Integer, Long> entry : leaderEpochs.entrySet()) {
-            if (previousEntry != null && previousEntry.getValue().equals(entry.getValue())) {
-                duplicatedEpochs.add(previousEntry.getKey());
+    static NavigableMap<Integer, Long> buildFilteredLeaderEpochMap(NavigableMap<Integer, Long> leaderEpochs) {
+        List<Integer> epochsWithNoMessages = new ArrayList<>();
+        Map.Entry<Integer, Long> previousEpochAndOffset = null;
+        for (Map.Entry<Integer, Long> currentEpochAndOffset : leaderEpochs.entrySet()) {
+            if (previousEpochAndOffset != null && previousEpochAndOffset.getValue().equals(currentEpochAndOffset.getValue())) {
+                epochsWithNoMessages.add(previousEpochAndOffset.getKey());
             }
-            previousEntry = entry;
+            previousEpochAndOffset = currentEpochAndOffset;
         }
 
-        if (duplicatedEpochs.isEmpty()) {
+        if (epochsWithNoMessages.isEmpty()) {
             return leaderEpochs;
         }
 
         TreeMap<Integer, Long> filteredLeaderEpochs = new TreeMap<>(leaderEpochs);
-        for (Integer duplicatedEpoch : duplicatedEpochs) {
-            filteredLeaderEpochs.remove(duplicatedEpoch);
+        for (Integer epochWithNoMessage : epochsWithNoMessages) {
+            filteredLeaderEpochs.remove(epochWithNoMessage);
         }
         return filteredLeaderEpochs;
     }
