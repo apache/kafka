@@ -83,7 +83,6 @@ public class KafkaNetworkChannelTest {
         ApiKeys.FETCH
     );
 
-    private final String clusterId = "clusterId";
     private final int requestTimeoutMs = 30000;
     private final Time time = new MockTime();
     private final MockClient client = new MockClient(time, new StubMetadataUpdater());
@@ -220,11 +219,11 @@ public class KafkaNetworkChannelTest {
         AbstractRequest request = client.requests().peek().requestBuilder().build(version);
 
         if (version < 15) {
-            assertTrue(((FetchRequest) request).data().replicaId() == 1);
-            assertTrue(((FetchRequest) request).data().replicaState().replicaId() == -1);
+            assertEquals(1, ((FetchRequest) request).data().replicaId());
+            assertEquals(-1, ((FetchRequest) request).data().replicaState().replicaId());
         } else {
-            assertTrue(((FetchRequest) request).data().replicaId() == -1);
-            assertTrue(((FetchRequest) request).data().replicaState().replicaId() == 1);
+            assertEquals(-1, ((FetchRequest) request).data().replicaId());
+            assertEquals(1, ((FetchRequest) request).data().replicaState().replicaId());
         }
     }
 
@@ -256,6 +255,7 @@ public class KafkaNetworkChannelTest {
     private ApiMessage buildTestRequest(ApiKeys key) {
         int leaderEpoch = 5;
         int leaderId = 1;
+        String clusterId = "clusterId";
         switch (key) {
             case BEGIN_QUORUM_EPOCH:
                 return BeginQuorumEpochRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId);
