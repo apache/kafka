@@ -30,7 +30,7 @@
   // - UNSUPPORTED_ASSIGNOR (version 0+)
   // - UNRELEASED_INSTANCE_ID (version 0+)
   // - GROUP_MAX_SIZE_REACHED (version 0+)
-  // - STREAMS_GROUP_UNITIALIZED TODO: NEW
+  // - INVALID_TOPOLOGY (version 0+)
   "fields": [
     // Same as consumer group heart beat
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
@@ -45,16 +45,19 @@
       "about": "The member epoch." },
     { "name": "HeartbeatIntervalMs", "type": "int32", "versions": "0+",
       "about": "The heartbeat interval in milliseconds." },
-    { "name": "ShouldComputeAssignment", "type":  "bool", "versions":  "0+", "default": -1,
-      "about": "true if this streams application should compute the next assignment." },
 
+    // Assigning specific roles to the consumer
+    { "name": "ShouldComputeAssignment", "type":  "bool", "versions":  "0+", "default": false,
+      "about": "true if this streams application should compute the next assignment." },
+    { "name": "ShouldInitializeTopology", "type":  "bool", "versions":  "0+", "default": false,
+      "about": "true if this streams application should initialize the topology on the broker" },
 
     // The streams app knows which partitions to fetch from given this information
-    { "name": "ActiveTasks", "type": "[]TaskId", "versions": "0+",
+    { "name": "ActiveTasks", "type": "[]TaskId", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Local assignment for this consumer. Null if unchanged since last heartbeat." },
-    { "name": "StandbyTasks", "type": "[]TaskId", "versions": "0+",
+    { "name": "StandbyTasks", "type": "[]TaskId", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Local standby tasks for this consumer. Null if unchanged since last heartbeat." },
-    { "name": "WarmupTasks", "type": "[]TaskId", "versions": "0+",
+    { "name": "WarmupTasks", "type": "[]TaskId", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Local warming up tasks for this consumer. Null if unchanged since last heartbeat." },
 
     // IQ-related information
