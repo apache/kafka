@@ -43,7 +43,7 @@
     <suppress checks="ClassFanOutComplexity" files="RemoteLogManagerTest.java"/>
     <suppress checks="CyclomaticComplexity" files="(SharePartition).java"/>
     <suppress checks="MethodLength|JavaNCSS|NPath"
-              files="(KafkaClusterTestKit|SharePartition).java"/>
+              files="(KafkaClusterTestKit|SharePartition|SharePartitionTest).java"/>
     <suppress checks="JavaNCSS" files="(SharePartition|SharePartitionTest).java"/>
     <suppress checks="ClassDataAbstractionCoupling"
               files="(SharePartitionManagerTest).java"/>
