@@ -35,7 +35,7 @@
       "about": "-1 if it didn't change since the last heartbeat; the maximum time in milliseconds that the coordinator will wait on the member to revoke its partitions otherwise." },
 
     // If the topology hash does not match the server's topology hash, return INVALID_TOPOLOGY and send ShouldInitializeTopology to one consumer
-    { "name": "TopologyHash", "type": "bytes", "versions": "0+", "default": null,
+    { "name": "TopologyHash", "type": "bytes", "versions": "0+", "nullableVersions": "0+", "default": null,
       "about": "The hash of the topology. Only sent when memberEpoch = 0. Null otherwise. Used to check if topology corresponds to server-topology. " },
 
     // The coordinator knows which partitions to fetch from given this information
@@ -52,8 +52,11 @@
       "about": "End-point a user can use for IQ. Null if unchanged since last heartbeat." },
     { "name": "ClientTags", "type": "[]string", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Used for rack-aware assignment algorithm. Null if unchanged since last heartbeat." },
+
+    { "name": "TaskLagUpdateReason", "type":  "int8", "versions": "0+", "default": 0,
+      "about": "Reason for updating task lag. 0 if no update, 1 if task lag is updated due to warm up being ready, 2 if warm up failed" },
     { "name": "TaskLag", "type": "[]TaskLag", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "Cumulative lags for standby tasks. Only updatable when reason is not zero, only updated when changes are significant. Null if unchanged since last heartbeat.",
+      "about": "Cumulative lags for standby tasks. Only updatable when TaskLagUpdateReason is not zero. Null if unchanged since last heartbeat.",
       "fields": [
         { "name": "TaskId", "type": "TaskId", "versions": "0+",
           "about": "The task ID" },
