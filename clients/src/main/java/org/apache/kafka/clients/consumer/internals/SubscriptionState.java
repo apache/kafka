@@ -997,8 +997,7 @@ public class SubscriptionState {
                 return false;
             }
 
-            if (position != null &&
-                    (!position.currentLeader.equals(currentLeaderAndEpoch) || this.fetchState.equals(FetchStates.AWAIT_UPDATE))) {
+            if (position != null && (!position.currentLeader.equals(currentLeaderAndEpoch) || awaitingUpdate())) {
                 FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeaderAndEpoch);
                 validatePosition(newPosition);
                 preferredReadReplica = null;
