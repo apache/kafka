@@ -19,7 +19,7 @@ import java.util.Properties
 import com.yammer.metrics.core.Gauge
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateAclsResult}
+import org.apache.kafka.clients.admin.CreateAclsResult
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -106,8 +106,6 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   this.serverConfig.setProperty(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
   this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[SslAdminIntegrationTest.TestPrincipalBuilder].getName)
   override protected def securityProtocol = SecurityProtocol.SSL
-  override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
-  private val adminClients = mutable.Buffer.empty[Admin]
   override def kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, SslAdminIntegrationTest.serverUser)
 
   override def setUpSasl(): Unit = {
@@ -125,7 +123,6 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     SslAdminIntegrationTest.semaphore = None
     semaphore.foreach(s => s.release(s.getQueueLength))
 
-    adminClients.foreach(_.close())
     super.tearDown()
   }
 
@@ -274,15 +271,6 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     }.values.toList
     assertTrue(metrics.nonEmpty, s"Unable to find metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}")
     metrics.map(_.asInstanceOf[Gauge[Int]].value).sum
-  }
-
-  override def createAdminClient: Admin = {
-    val config = new Properties()
-    config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000")
-    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
-    val client = createAdminClient(configOverrides = config)
-    adminClients += client
-    client
   }
 
   // Override the CN to create a principal based on it

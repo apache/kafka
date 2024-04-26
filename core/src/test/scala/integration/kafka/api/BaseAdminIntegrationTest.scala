@@ -226,9 +226,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
-    val securityProps: util.Map[Object, Object] =
-      adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
+    config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000")
     config
   }
 
