@@ -622,10 +622,13 @@ class LogSegmentTest {
 
   private def writeNonsenseToFile(fileName: File, position: Long, size: Int): Unit = {
     val file = new RandomAccessFile(fileName, "rw")
-    file.seek(position)
-    for (_ <- 0 until size)
-      file.writeByte(random.nextInt(255))
-    file.close()
+    try {
+      file.seek(position)
+      for (_ <- 0 until size)
+        file.writeByte(random.nextInt(255))
+    } finally {
+      file.close()
+    }
   }
 
 }

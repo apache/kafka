@@ -18,7 +18,6 @@ package kafka.utils
 
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api._
-import kafka.cluster.AlterPartitionListener
 import kafka.controller.{ControllerEventManager, LeaderIsrAndControllerEpoch}
 import kafka.log._
 import kafka.network.RequestChannel
@@ -85,7 +84,7 @@ import java.nio.file.{Files, StandardOpenOption}
 import java.time.Duration
 import java.util
 import java.util.concurrent._
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Arrays, Collections, Optional, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -1295,25 +1294,6 @@ object TestUtils extends Logging {
 
   def createAlterIsrManager(): MockAlterPartitionManager = {
     new MockAlterPartitionManager()
-  }
-
-  class MockAlterPartitionListener extends AlterPartitionListener {
-    val expands: AtomicInteger = new AtomicInteger(0)
-    val shrinks: AtomicInteger = new AtomicInteger(0)
-    val failures: AtomicInteger = new AtomicInteger(0)
-
-    override def markIsrExpand(): Unit = expands.incrementAndGet()
-
-    override def markIsrShrink(): Unit = shrinks.incrementAndGet()
-
-    override def markFailed(): Unit = failures.incrementAndGet()
-
-
-    def reset(): Unit = {
-      expands.set(0)
-      shrinks.set(0)
-      failures.set(0)
-    }
   }
 
   def produceMessages[B <: KafkaBroker](

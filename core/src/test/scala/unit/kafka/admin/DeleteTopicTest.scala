@@ -555,25 +555,17 @@ class DeleteTopicTest extends QuorumTestHarness {
                                            totalPartitionCount: Int,
                                            brokersToValidate: Seq[B]
                                           ): Unit = {
-
-    try {
-      val newPartitionSet: Map[String, NewPartitions] = Map.apply(topic -> NewPartitions.increaseTo(totalPartitionCount))
-      admin.createPartitions(newPartitionSet.asJava)
-    } catch {
-      case e: ExecutionException =>
-        throw e
-    }
+    val newPartitionSet: Map[String, NewPartitions] = Map.apply(topic -> NewPartitions.increaseTo(totalPartitionCount))
+    admin.createPartitions(newPartitionSet.asJava)
 
     if (brokersToValidate.nonEmpty) {
       // wait until we've propagated all partitions metadata to all brokers
       val allPartitionsMetadata = waitForAllPartitionsMetadata(brokersToValidate, topic, totalPartitionCount)
-
-      (0 until totalPartitionCount - 1).map { i =>
-        i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
-          throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
-      }.toMap
-    } else {
-      Map.empty
+      (0 until totalPartitionCount - 1).foreach(i => {
+        allPartitionsMetadata.get(new TopicPartition(topic, i)).foreach { partitionMetadata =>
+          assertEquals(totalPartitionCount, partitionMetadata.replicas.size)
+        }
+      })
     }
   }
 }

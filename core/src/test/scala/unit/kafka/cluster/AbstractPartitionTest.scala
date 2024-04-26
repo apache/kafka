@@ -21,7 +21,7 @@ import kafka.server.MetadataCache
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils.{MockAlterPartitionListener, MockAlterPartitionManager}
+import kafka.utils.TestUtils.MockAlterPartitionManager
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -37,6 +37,7 @@ import org.mockito.Mockito.{mock, when}
 
 import java.io.File
 import java.util.Properties
+import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
 
 object AbstractPartitionTest {
@@ -155,5 +156,24 @@ class AbstractPartitionTest {
 
   private def createIsrChangeListener(): MockAlterPartitionListener = {
     new MockAlterPartitionListener()
+  }
+
+  class MockAlterPartitionListener extends AlterPartitionListener {
+    val expands: AtomicInteger = new AtomicInteger(0)
+    val shrinks: AtomicInteger = new AtomicInteger(0)
+    val failures: AtomicInteger = new AtomicInteger(0)
+
+    override def markIsrExpand(): Unit = expands.incrementAndGet()
+
+    override def markIsrShrink(): Unit = shrinks.incrementAndGet()
+
+    override def markFailed(): Unit = failures.incrementAndGet()
+
+
+    def reset(): Unit = {
+      expands.set(0)
+      shrinks.set(0)
+      failures.set(0)
+    }
   }
 }

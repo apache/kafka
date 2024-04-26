@@ -14,7 +14,6 @@ package kafka.api
 
 import kafka.utils.TestUtils.{isAclUnsecure, secureZkPaths}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.config.ZkConfigs
@@ -56,14 +55,6 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
    */
   @Test
   def testZkAclsDisabled(): Unit = {
-    verifyUnsecureZkAcls(zkClient)
-  }
-
-  /**
-   * Verifies that secure paths in ZK have no access control. This is
-   * the case when zookeeper.set.acl=false and no ACLs have been configured.
-   */
-  private def verifyUnsecureZkAcls(zkClient: KafkaZkClient): Unit = {
     secureZkPaths(zkClient).foreach(path => {
       if (zkClient.pathExists(path)) {
         val acls = zkClient.getAcl(path)

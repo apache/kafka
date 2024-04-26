@@ -19,7 +19,7 @@ package kafka.api
 import kafka.utils.JaasTestUtils._
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.isAclSecure
-import kafka.zk.{KafkaZkClient, ZkData}
+import kafka.zk.ZkData
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.Mode
@@ -150,19 +150,12 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
    */
   @Test
   def testAcls(): Unit = {
-    verifySecureZkAcls(zkClient, 1)
-  }
-
-  /**
-   * Verifies that all secure paths in ZK are created with the expected ACL.
-   */
-  private def verifySecureZkAcls(zkClient: KafkaZkClient, usersWithAccess: Int): Unit = {
     TestUtils.secureZkPaths(zkClient).foreach(path => {
       if (zkClient.pathExists(path)) {
         val sensitive = ZkData.sensitivePath(path)
         // usersWithAccess have ALL access to path. For paths that are
         // not sensitive, world has READ access.
-        val aclCount = if (sensitive) usersWithAccess else usersWithAccess + 1
+        val aclCount = if (sensitive) 1 else 1 + 1
         val acls = zkClient.getAcl(path)
         assertEquals(aclCount, acls.size, s"Invalid ACLs for $path $acls")
         acls.foreach(acl => isAclSecure(acl, sensitive))
