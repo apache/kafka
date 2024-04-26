@@ -23,6 +23,7 @@ import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -35,11 +36,7 @@ public class BrokerToElrsTest {
     };
 
     private static Set<TopicIdPartition> toSet(TopicIdPartition... partitions) {
-        HashSet<TopicIdPartition> set = new HashSet<>();
-        for (TopicIdPartition partition : partitions) {
-            set.add(partition);
-        }
-        return set;
+        return new HashSet<>(Arrays.asList(partitions));
     }
 
     private static Set<TopicIdPartition> toSet(BrokersToIsrs.PartitionsOnReplicaIterator iterator) {

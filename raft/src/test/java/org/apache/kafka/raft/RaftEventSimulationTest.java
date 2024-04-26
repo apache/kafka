@@ -722,7 +722,7 @@ public class RaftEventSimulationTest {
                 .stream()
                 .collect(Collectors.toMap(Function.identity(), Cluster::nodeAddress));
 
-            RaftConfig raftConfig = new RaftConfig(
+            QuorumConfig quorumConfig = new QuorumConfig(
                 REQUEST_TIMEOUT_MS,
                 RETRY_BACKOFF_MS,
                 ELECTION_TIMEOUT_MS,
@@ -750,7 +750,7 @@ public class RaftEventSimulationTest {
                 clusterId.toString(),
                 logContext,
                 random,
-                raftConfig
+                quorumConfig
             );
             RaftNode node = new RaftNode(
                 nodeId,

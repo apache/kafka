@@ -164,7 +164,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     private final RecordSerde<T> serde;
     private final MemoryPool memoryPool;
     private final RaftMessageQueue messageQueue;
-    private final RaftConfig raftConfig;
+    private final QuorumConfig quorumConfig;
     private final RaftMetadataLogCleanerManager snapshotCleaner;
 
     private final Map<Listener<T>, ListenerContext> listenerContexts = new IdentityHashMap<>();
@@ -199,7 +199,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         ExpirationService expirationService,
         LogContext logContext,
         String clusterId,
-        RaftConfig raftConfig
+        QuorumConfig quorumConfig
     ) {
         this(
             nodeId,
@@ -214,7 +214,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             clusterId,
             logContext,
             new Random(),
-            raftConfig
+            quorumConfig
         );
     }
 
@@ -231,7 +231,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         String clusterId,
         LogContext logContext,
         Random random,
-        RaftConfig raftConfig
+        QuorumConfig quorumConfig
     ) {
         this.nodeId = nodeId;
         this.logContext = logContext;
@@ -247,7 +247,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         this.fetchMaxWaitMs = fetchMaxWaitMs;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
-        this.raftConfig = raftConfig;
+        this.quorumConfig = quorumConfig;
         this.snapshotCleaner = new RaftMetadataLogCleanerManager(logger, time, 60000, log::maybeClean);
     }
 
@@ -383,16 +383,16 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
         requestManager = new RequestManager(
             partitionListener.lastVoterSet().voterIds(),
-            raftConfig.retryBackoffMs(),
-            raftConfig.requestTimeoutMs(),
+            quorumConfig.retryBackoffMs(),
+            quorumConfig.requestTimeoutMs(),
             random
         );
 
         quorum = new QuorumState(
             nodeId,
             partitionListener.lastVoterSet().voterIds(),
-            raftConfig.electionTimeoutMs(),
-            raftConfig.fetchTimeoutMs(),
+            quorumConfig.electionTimeoutMs(),
+            quorumConfig.fetchTimeoutMs(),
             quorumStateStore,
             time,
             logContext,
@@ -470,7 +470,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         BatchAccumulator<T> accumulator = new BatchAccumulator<>(
             quorum.epoch(),
             endOffset,
-            raftConfig.appendLingerMs(),
+            quorumConfig.appendLingerMs(),
             MAX_BATCH_SIZE_BYTES,
             memoryPool,
             time,
@@ -699,7 +699,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         }
         // upper limit exponential co-efficients at 20 to avoid overflow
         return Math.min(RETRY_BACKOFF_BASE_MS * random.nextInt(2 << Math.min(20, retries - 1)),
-                raftConfig.electionBackoffMaxMs());
+                quorumConfig.electionBackoffMaxMs());
     }
 
     private int strictExponentialElectionBackoffMs(int positionInSuccessors, int totalNumSuccessors) {
@@ -708,8 +708,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                     " and smaller than total number of successors " + totalNumSuccessors);
         }
 
-        int retryBackOffBaseMs = raftConfig.electionBackoffMaxMs() >> (totalNumSuccessors - 1);
-        return Math.min(raftConfig.electionBackoffMaxMs(), retryBackOffBaseMs << (positionInSuccessors - 1));
+        int retryBackOffBaseMs = quorumConfig.electionBackoffMaxMs() >> (totalNumSuccessors - 1);
+        return Math.min(quorumConfig.electionBackoffMaxMs(), retryBackOffBaseMs << (positionInSuccessors - 1));
     }
 
     private BeginQuorumEpochResponseData buildBeginQuorumEpochResponse(Errors partitionLevelError) {
@@ -1934,12 +1934,10 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             clusterId,
             quorum().localIdOrSentinel(),
             log.topicPartition(),
-            snapshotPartition -> {
-                return snapshotPartition
-                    .setCurrentLeaderEpoch(quorum.epoch())
-                    .setSnapshotId(requestSnapshotId)
-                    .setPosition(snapshotSize);
-            }
+            snapshotPartition -> snapshotPartition
+                .setCurrentLeaderEpoch(quorum.epoch())
+                .setSnapshotId(requestSnapshotId)
+                .setPosition(snapshotSize)
         );
 
         return request.setReplicaId(quorum.localIdOrSentinel());

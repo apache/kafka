@@ -263,7 +263,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     assertEquals(List("first", "second", "third"), consumeAllMessages(topic, 3))
   }
 
-  private def shutdownServer(server: KafkaServer) = {
+  private def shutdownServer(server: KafkaServer): Unit = {
     server.shutdown()
     server.awaitShutdown()
   }

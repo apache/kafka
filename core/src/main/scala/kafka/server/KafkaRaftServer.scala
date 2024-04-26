@@ -29,7 +29,7 @@ import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -70,7 +70,7 @@ class KafkaRaftServer(
     metaPropsEnsemble,
     time,
     metrics,
-    CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
+    CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
     new StandardFaultHandlerFactory(),
   )
 
@@ -135,10 +135,10 @@ object KafkaRaftServer {
     // Load and verify the original ensemble.
     val loader = new MetaPropertiesEnsemble.Loader()
     loader.addMetadataLogDir(config.metadataLogDir)
-    config.logDirs.foreach(loader.addLogDir(_))
+    config.logDirs.foreach(loader.addLogDir)
     val initialMetaPropsEnsemble = loader.load()
     val verificationFlags = util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR)
-    initialMetaPropsEnsemble.verify(Optional.empty(), OptionalInt.of(config.nodeId), verificationFlags);
+    initialMetaPropsEnsemble.verify(Optional.empty(), OptionalInt.of(config.nodeId), verificationFlags)
 
     // Check that the __cluster_metadata-0 topic does not appear outside the metadata directory.
     val metadataPartitionDirName = UnifiedLog.logDirName(MetadataPartition)

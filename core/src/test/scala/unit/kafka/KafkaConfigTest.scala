@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 
-class KafkaTest {
+class KafkaConfigTest {
 
   @BeforeEach
   def setUp(): Unit = Exit.setExitProcedure((status, _) => throw new FatalExitError(status))
@@ -308,7 +308,7 @@ class KafkaTest {
     assertEquals(expectedDefaultValue, emptyConfig.values.get(kafkaPropName)) // but default value appears in the values
     assertEquals(expectedDefaultValue, emptyConfig.ZkSslEndpointIdentificationAlgorithm) // and has the correct default value
     // next set system property alone
-    Map("true" -> "HTTPS", "false" -> "").foreach { case (sysPropValue, expected) => {
+    Map("true" -> "HTTPS", "false" -> "").foreach { case (sysPropValue, expected) =>
       try {
         System.setProperty(sysProp, sysPropValue)
         val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
@@ -318,10 +318,10 @@ class KafkaTest {
       } finally {
         System.clearProperty(sysProp)
       }
-    }}
+    }
     // finally set Kafka config alone
     List("https", "").foreach(expected => {
-      val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=${expected}")))
+      val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=$expected")))
       assertEquals(expected, config.originals.get(kafkaPropName)) // appears in the originals
       assertEquals(expected, config.values.get(kafkaPropName)) // appears in the values
       assertEquals(expected, config.ZkSslEndpointIdentificationAlgorithm) // is the ultimate value
@@ -351,7 +351,7 @@ class KafkaTest {
   def testConnectionsMaxReauthMsExplicit(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     val expected = 3600000
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"sasl_ssl.oauthbearer.connections.max.reauth.ms=${expected}")))
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"sasl_ssl.oauthbearer.connections.max.reauth.ms=$expected")))
     assertEquals(expected, config.valuesWithPrefixOverride("sasl_ssl.oauthbearer.").get(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS).asInstanceOf[Long])
   }
 
@@ -359,7 +359,7 @@ class KafkaTest {
                                  expectedKafkaPropName: String,
                                  sysPropName: String,
                                  propValueToSet: T,
-                                 getPropValueFrom: (KafkaConfig) => Option[T],
+                                 getPropValueFrom: KafkaConfig => Option[T],
                                  expectedPropertyValue: U,
                                  expectedDefaultValue: Option[T] = None): Unit = {
     assertEquals(expectedKafkaPropName, kafkaPropName)
@@ -393,7 +393,7 @@ class KafkaTest {
       System.clearProperty(sysPropName)
     }
     // finally set Kafka config alone
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=${propValueToSet}")))
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=$propValueToSet")))
     assertEquals(expectedPropertyValue, config.values.get(kafkaPropName)) // appears in the values
     assertEquals(Some(expectedPropertyValue), getPropValueFrom(config)) // appears in the property
   }

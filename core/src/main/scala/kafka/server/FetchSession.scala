@@ -83,8 +83,8 @@ class CachedPartition(var topic: String,
                       var lastFetchedEpoch: Optional[Integer])
     extends ImplicitLinkedHashCollection.Element {
 
-  var cachedNext: Int = ImplicitLinkedHashCollection.INVALID_INDEX
-  var cachedPrev: Int = ImplicitLinkedHashCollection.INVALID_INDEX
+  private var cachedNext: Int = ImplicitLinkedHashCollection.INVALID_INDEX
+  private var cachedPrev: Int = ImplicitLinkedHashCollection.INVALID_INDEX
 
   override def next: Int = cachedNext
   override def setNext(next: Int): Unit = this.cachedNext = next
@@ -265,7 +265,7 @@ class FetchSession(val id: Int,
     Option(partitionMap.find(new CachedPartition(topicIdPartition))).map(_.fetchOffset)
   }
 
-  type TL = util.ArrayList[TopicIdPartition]
+  private type TL = util.ArrayList[TopicIdPartition]
 
   // Update the cached partition data based on the request.
   def update(fetchData: FetchSession.REQ_MAP,
@@ -477,7 +477,7 @@ class IncrementalFetchContext(private val time: Time,
   private class PartitionIterator(val iter: FetchSession.RESP_MAP_ITER,
                                   val updateFetchContextAndRemoveUnselected: Boolean)
     extends FetchSession.RESP_MAP_ITER {
-    var nextElement: util.Map.Entry[TopicIdPartition, FetchResponseData.PartitionData] = _
+    private var nextElement: util.Map.Entry[TopicIdPartition, FetchResponseData.PartitionData] = _
 
     override def hasNext: Boolean = {
       while ((nextElement == null) && iter.hasNext) {
@@ -508,7 +508,7 @@ class IncrementalFetchContext(private val time: Time,
       element
     }
 
-    override def remove() = throw new UnsupportedOperationException
+    override def remove(): Unit = throw new UnsupportedOperationException
   }
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
@@ -695,7 +695,7 @@ class FetchSessionCache(private val maxEntries: Int,
     * @param now        The current time in milliseconds.
     * @return           True if an entry was evicted; false otherwise.
     */
-  def tryEvict(privileged: Boolean, key: EvictableKey, now: Long): Boolean = synchronized {
+  private def tryEvict(privileged: Boolean, key: EvictableKey, now: Long): Boolean = synchronized {
     // Try to evict an entry which is stale.
     val lastUsedEntry = lastUsed.firstEntry
     if (lastUsedEntry == null) {
@@ -857,6 +857,6 @@ class FetchManager(private val time: Time,
     context
   }
 
-  def partitionsToLogString(partitions: util.Collection[TopicIdPartition]): String =
+  private def partitionsToLogString(partitions: util.Collection[TopicIdPartition]): String =
     FetchSession.partitionsToLogString(partitions, isTraceEnabled)
 }

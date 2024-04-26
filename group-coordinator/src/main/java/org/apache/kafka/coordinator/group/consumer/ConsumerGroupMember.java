@@ -480,6 +480,22 @@ public class ConsumerGroupMember {
     }
 
     /**
+     * @return The supported classic protocols converted to JoinGroupRequestProtocolCollection.
+     */
+    public JoinGroupRequestData.JoinGroupRequestProtocolCollection supportedJoinGroupRequestProtocols() {
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
+        supportedClassicProtocols().ifPresent(classicProtocols -> classicProtocols.forEach(protocol ->
+            protocols.add(
+                new JoinGroupRequestData.JoinGroupRequestProtocol()
+                    .setName(protocol.name())
+                    .setMetadata(protocol.metadata())
+            )
+        ));
+        return protocols;
+    }
+
+    /**
      * @return The classicMemberMetadata if the consumer uses the classic protocol.
      */
     public Optional<ConsumerGroupMemberMetadataValue.ClassicMemberMetadata> classicMemberMetadata() {
@@ -554,7 +570,7 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * @return The boolean indicating whether the member uses the classic protocol.
+     * @return A boolean indicating whether the member uses the classic protocol.
      */
     public boolean useClassicProtocol() {
         return classicMemberMetadata != null;
