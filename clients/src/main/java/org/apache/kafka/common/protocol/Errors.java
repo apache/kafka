@@ -478,6 +478,14 @@ public enum Errors {
     }
 
     /**
+     * Is error a retriable error
+     * @return true if the error is a retriable error
+     */
+    public boolean isRetriable() {
+        return exception instanceof RetriableException;
+    }
+
+    /**
      * Throw the exception if there is one
      */
     public static Errors forCode(short code) {
@@ -540,7 +548,7 @@ public enum Errors {
             b.append(error.code());
             b.append("</td>");
             b.append("<td>");
-            b.append(error.exception() != null && error.exception() instanceof RetriableException ? "True" : "False");
+            b.append(error.isRetriable() ? "True" : "False");
             b.append("</td>");
             b.append("<td>");
             b.append(error.exception() != null ? error.exception().getMessage() : "");
