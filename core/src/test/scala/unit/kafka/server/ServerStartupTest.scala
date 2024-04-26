@@ -20,6 +20,8 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.apache.zookeeper.KeeperException.NodeExistsException
@@ -140,11 +142,11 @@ class ServerStartupTest extends QuorumTestHarness {
  @ValueSource(booleans = Array(false, true))
  def testDirectoryIdsCreatedOnlyForMigration(migrationEnabled: Boolean): Unit = {
    val props = TestUtils.createBrokerConfig(1, zkConnect)
-   props.setProperty(KafkaConfig.MigrationEnabledProp, migrationEnabled.toString)
+   props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, migrationEnabled.toString)
    if (migrationEnabled) {
      // Create Controller properties needed when migration is enabled
-     props.setProperty(KafkaConfig.QuorumVotersProp, "3000@localhost:9093")
-     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9093")
+     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
      props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
        "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
    }
