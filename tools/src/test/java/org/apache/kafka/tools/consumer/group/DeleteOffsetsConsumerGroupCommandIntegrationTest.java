@@ -94,7 +94,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
             String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
             String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
             createTopic(topic);
-            testWithConsumerGroup(topic, topic, group, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC, true, consumerConfig);
+            Runnable validateRunnable = getValidateRunnable(topic, group, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
+            testWithConsumerGroup(topic, group, consumerConfig, true, validateRunnable);
             removeTopic(topic);
         }
     }
@@ -105,7 +106,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
             String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
             String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
             createTopic(topic);
-            testWithConsumerGroup(topic, topic, group, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC, true, consumerConfig);
+            Runnable validateRunnable = getValidateRunnable(topic, group, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
+            testWithConsumerGroup(topic, group, consumerConfig, true, validateRunnable);
             removeTopic(topic);
         }
     }
@@ -115,7 +117,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         for (Map<String, Object> consumerConfig: consumerConfigs) {
             String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
             String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-            testWithConsumerGroup(topic, "foobar", group, 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, true, consumerConfig);
+            Runnable validateRunnable = getValidateRunnable("foobar", group, 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+            testWithConsumerGroup(topic, group, consumerConfig, true, validateRunnable);
         }
     }
 
@@ -124,7 +127,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         for (Map<String, Object> consumerConfig: consumerConfigs) {
             String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
             String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-            testWithConsumerGroup(topic, "foobar", group, -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION, true, consumerConfig);
+            Runnable validateRunnable = getValidateRunnable("foobar", group, -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+            testWithConsumerGroup(topic, group, consumerConfig, true, validateRunnable);
         }
     }
 
@@ -134,7 +138,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
             String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
             String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
             createTopic(topic);
-            testWithConsumerGroup(topic, topic, group, 0, 0, Errors.NONE, false, consumerConfig);
+            Runnable validateRunnable = getValidateRunnable(topic, group, 0, 0, Errors.NONE);
+            testWithConsumerGroup(topic, group, consumerConfig, false, validateRunnable);
             removeTopic(topic);
         }
     }
@@ -145,7 +150,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
             String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
             String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
             createTopic(topic);
-            testWithConsumerGroup(topic, topic, group, -1, 0, Errors.NONE, false, consumerConfig);
+            Runnable validateRunnable = getValidateRunnable(topic, group, -1, 0, Errors.NONE);
+            testWithConsumerGroup(topic, group, consumerConfig, false, validateRunnable);
             removeTopic(topic);
         }
     }
@@ -155,7 +161,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         for (Map<String, Object> consumerConfig: consumerConfigs) {
             String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
             String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-            testWithConsumerGroup(topic, "foobar", group, 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, false, consumerConfig);
+            Runnable validateRunnable = getValidateRunnable("foobar", group, 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+            testWithConsumerGroup(topic, group, consumerConfig, false, validateRunnable);
         }
     }
 
@@ -164,7 +171,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         for (Map<String, Object> consumerConfig: consumerConfigs) {
             String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
             String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-            testWithConsumerGroup(topic, "foobar", group, -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION, false, consumerConfig);
+            Runnable validateRunnable = getValidateRunnable("foobar", group, -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+            testWithConsumerGroup(topic, group, consumerConfig, false, validateRunnable);
         }
     }
 
@@ -184,22 +192,18 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         );
     }
 
-    private void testWithConsumerGroup(String inputTopicWithData,
-                                       String inputTopicForTest,
-                                       String inputGroup,
-                                       int inputPartition,
-                                       int expectedPartition,
-                                       Errors expectedError,
-                                       boolean isStable,
-                                       Map<String, Object> consumerConfig) {
-        produceRecord(inputTopicWithData);
-        this.withConsumerGroup(() -> {
-            String topic = inputPartition >= 0 ? inputTopicForTest + ":" + inputPartition : inputTopicForTest;
+    private Runnable getValidateRunnable(String inputTopic,
+                                         String inputGroup,
+                                         int inputPartition,
+                                         int expectedPartition,
+                                         Errors expectedError) {
+        return () -> {
+            String topic = inputPartition >= 0 ? inputTopic + ":" + inputPartition : inputTopic;
             try (ConsumerGroupCommand.ConsumerGroupService consumerGroupService = consumerGroupService(getArgs(inputGroup, topic))) {
                 Entry<Errors, Map<TopicPartition, Throwable>> res = consumerGroupService.deleteOffsets(inputGroup, Collections.singletonList(topic));
                 Errors topLevelError = res.getKey();
                 Map<TopicPartition, Throwable> partitions = res.getValue();
-                TopicPartition tp = new TopicPartition(inputTopicForTest, expectedPartition);
+                TopicPartition tp = new TopicPartition(inputTopic, expectedPartition);
                 // Partition level error should propagate to top level, unless this is due to a missed partition attempt.
                 if (inputPartition >= 0) {
                     assertEquals(expectedError, topLevelError);
@@ -209,27 +213,31 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
                 else
                     assertEquals(expectedError.exception(), partitions.get(tp).getCause());
             }
-        }, inputTopicWithData, inputGroup, isStable, consumerConfig);
+        };
+    }
+    private void testWithConsumerGroup(String inputTopic,
+                                       String inputGroup,
+                                       Map<String, Object> consumerConfig,
+                                       boolean isStable,
+                                       Runnable validateRunnable) {
+        produceRecord(inputTopic);
+        try (Consumer<byte[], byte[]> consumer = createConsumer(inputGroup, consumerConfig)) {
+            consumer.subscribe(Collections.singletonList(inputTopic));
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
+            Assertions.assertNotEquals(0, records.count());
+            consumer.commitSync();
+            if (isStable) {
+                validateRunnable.run();
+            }
+        }
+        if (!isStable) {
+            validateRunnable.run();
+        }
     }
 
     private void produceRecord(String topic) {
         try (KafkaProducer<byte[], byte[]> producer = createProducer()) {
             assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(topic, 0, null, null)).get());
-        }
-    }
-
-    private void withConsumerGroup(Runnable body, String topic, String group, boolean isStable, Map<String, Object> consumerConfig) {
-        try (Consumer<byte[], byte[]> consumer = createConsumer(group, consumerConfig)) {
-            consumer.subscribe(Collections.singletonList(topic));
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
-            Assertions.assertNotEquals(0, records.count());
-            consumer.commitSync();
-            if (isStable) {
-                body.run();
-            }
-        }
-        if (!isStable) {
-            body.run();
         }
     }
 
