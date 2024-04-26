@@ -79,7 +79,7 @@ public class ConfigCommandIntegrationTest {
 
     @ClusterTests({
         @ClusterTest(clusterType = Type.ZK),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 1)
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 2)
     })
     public void testExitWithNonZeroStatusOnUpdatingUnallowedConfig() {
         assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
