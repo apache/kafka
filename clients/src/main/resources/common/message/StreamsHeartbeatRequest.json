@@ -48,9 +48,16 @@
 
     { "name": "ProcessId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Identity of the streams instance that may have multiple consumers. Null if unchanged since last heartbeat." },
-    { "name": "UserEndPoint", "type": "bytes", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "End-point a user can use for IQ. Null if unchanged since last heartbeat." },
-    { "name": "ClientTags", "type": "[]string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+    { "name": "HostInfo", "type": "HostInfo", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "Host information for running interactive queries on this instance. Null if unchanged since last heartbeat.",
+      "fields": [
+        { "name": "Host", "type": "string", "versions": "0+",
+          "about": "Host for running interactive queries on this instance." },
+        { "name": "Port", "type": "int32", "versions": "0+",
+          "about": "Port for running interactive queries on this instance." }
+      ]
+    },
+    { "name": "ClientTags", "type": "[]KeyValue", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Used for rack-aware assignment algorithm. Null if unchanged since last heartbeat." },
 
     { "name": "TaskLagUpdateReason", "type":  "int8", "versions": "0+", "default": 0,
@@ -64,15 +71,11 @@
           "about": "The cumulative lag for the task" }
       ]
     },
-    { "name": "AssignmentConfigs", "type": "[]AssignmentConfig", "versions": "0+","nullableVersions": "0+", "default": "null",
-      "about": "Generic array of assignment configuration strings. Null if unchanged since last heartbeat.",
-      "fields": [
-        { "name": "Key", "type": "string", "versions": "0+",
-          "about": "key of the config" },
-        { "name": "Value", "type": "string", "versions": "0+",
-          "about": "value of the config" }
-      ]
-    }
+    { "name": "AssignmentConfigs", "type": "[]KeyValue", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "Generic array of assignment configuration strings. Null if unchanged since last heartbeat."
+    },
+    { "name": "ShutdownApplication", "type": "bool", "versions": "0+", "default": false,
+      "about": "Whether all Streams clients in the group should shut down." }
   ],
   "commonStructs": [
     { "name": "TaskId", "versions": "0+", "fields": [
@@ -82,6 +85,14 @@
         "about": "subtopology ID" },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "partitions" }
-    ]}
+    ]},
+    { "name": "KeyValue", "versions": "0+",
+      "fields": [
+        { "name": "Key", "type": "string", "versions": "0+",
+          "about": "key of the config" },
+        { "name": "Value", "type": "string", "versions": "0+",
+          "about": "value of the config" }
+      ]
+    }
   ]
 }
