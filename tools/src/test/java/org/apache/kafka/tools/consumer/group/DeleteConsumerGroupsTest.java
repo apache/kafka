@@ -109,7 +109,7 @@ public class DeleteConsumerGroupsTest {
     @ClusterTest
     public void testDeleteNonEmptyGroup() throws Exception {
         for (GroupProtocol groupProtocol : groupProtocols) {
-            try (ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP, groupProtocol)) {
+            try (AutoCloseable consumerGroupExecutor = buildConsumerGroupExecutor(GROUP, groupProtocol)) {
                 String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
                 TestUtils.waitForCondition(
@@ -135,7 +135,7 @@ public class DeleteConsumerGroupsTest {
     @ClusterTest
     void testDeleteEmptyGroup() throws Exception {
         for (GroupProtocol groupProtocol : groupProtocols) {
-            try (ConsumerGroupExecutor consumerGroupExecutor = buildConsumerGroupExecutor(GROUP, groupProtocol)) {
+            try (AutoCloseable consumerGroupExecutor = buildConsumerGroupExecutor(GROUP, groupProtocol)) {
                 String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
@@ -166,7 +166,7 @@ public class DeleteConsumerGroupsTest {
     public void testDeleteCmdAllGroups() throws Exception {
         for (GroupProtocol groupProtocol : groupProtocols) {
             // Create 3 groups with 1 consumer per each
-            Map<String, ConsumerGroupExecutor> groupNameToExecutor = IntStream.rangeClosed(1, 3)
+            Map<String, AutoCloseable> groupNameToExecutor = IntStream.rangeClosed(1, 3)
                     .mapToObj(i -> GROUP + i)
                     .collect(Collectors.toMap(Function.identity(), group -> buildConsumerGroupExecutor(group, groupProtocol)));
 
@@ -179,7 +179,7 @@ public class DeleteConsumerGroupsTest {
                     "The group did not initialize as expected.");
 
             // Shutdown consumers to empty out groups
-            for (ConsumerGroupExecutor consumerGroupExecutor : groupNameToExecutor.values()) {
+            for (AutoCloseable consumerGroupExecutor : groupNameToExecutor.values()) {
                 consumerGroupExecutor.close();
             }
 
@@ -202,7 +202,7 @@ public class DeleteConsumerGroupsTest {
     @ClusterTest
     public void testDeleteCmdWithMixOfSuccessAndError() throws Exception {
         for (GroupProtocol groupProtocol : groupProtocols) {
-            try (ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP, groupProtocol)) {
+            try (AutoCloseable executor = buildConsumerGroupExecutor(GROUP, groupProtocol)) {
                 String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
@@ -231,7 +231,7 @@ public class DeleteConsumerGroupsTest {
     @ClusterTest
     public void testDeleteWithMixOfSuccessAndError() throws Exception {
         for (GroupProtocol groupProtocol : groupProtocols) {
-            try (ConsumerGroupExecutor executor = buildConsumerGroupExecutor(GROUP, groupProtocol)) {
+            try (AutoCloseable executor = buildConsumerGroupExecutor(GROUP, groupProtocol)) {
                 String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", GROUP};
                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
@@ -264,7 +264,7 @@ public class DeleteConsumerGroupsTest {
         assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
     }
 
-    private ConsumerGroupExecutor buildConsumerGroupExecutor(String groupId, GroupProtocol protocol) {
+    private AutoCloseable buildConsumerGroupExecutor(String groupId, GroupProtocol protocol) {
         if (cluster.isKRaftTest()) {
             return ConsumerGroupExecutor.buildConsumerGroup(
                     cluster.bootstrapServers(),
