@@ -25,7 +25,6 @@ import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.utils.EmptyTestInfo;
 import kafka.utils.TestUtils;
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -287,11 +286,6 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         @Override
         public IntegrationTestHarness getUnderlying() {
             return clusterReference.get();
-        }
-
-        @Override
-        public Admin createAdminClient(Properties configOverrides) {
-            return clusterReference.get().createAdminClient(clientListener(), configOverrides);
         }
 
         @Override

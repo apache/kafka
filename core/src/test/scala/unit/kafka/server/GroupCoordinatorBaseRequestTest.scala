@@ -20,6 +20,7 @@ import kafka.test.ClusterInstance
 import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.utils.{NotNothing, TestUtils}
+import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
@@ -30,10 +31,11 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
-import java.util.Comparator
+import java.util.{Collections, Comparator}
 import java.util.stream.Collectors
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
+import scala.util.Using
 
 class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   private def brokers(): Seq[KafkaBroker] = {
@@ -53,24 +55,28 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def createOffsetsTopic(): Unit = {
-    TestUtils.createOffsetsTopicWithAdmin(
-      admin = cluster.createAdminClient(),
-      brokers = brokers(),
-      controllers = controllerServers()
-    )
+    Using(Admin.create(cluster.adminConfigs(Collections.emptyMap()))) { admin =>
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = brokers(),
+        controllers = controllerServers()
+      )
+    }
   }
 
   protected def createTopic(
     topic: String,
     numPartitions: Int
   ): Unit = {
-    TestUtils.createTopicWithAdmin(
-      admin = cluster.createAdminClient(),
-      brokers = brokers(),
-      controllers = controllerServers(),
-      topic = topic,
-      numPartitions = numPartitions
-    )
+    Using(Admin.create(cluster.adminConfigs(Collections.emptyMap()))) { admin =>
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
+        brokers = brokers(),
+        controllers = controllerServers(),
+        topic = topic,
+        numPartitions = numPartitions
+      )
+    }
   }
 
   protected def isUnstableApiEnabled: Boolean = {

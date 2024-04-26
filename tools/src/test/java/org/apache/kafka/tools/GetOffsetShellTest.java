@@ -41,6 +41,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
@@ -72,7 +73,7 @@ public class GetOffsetShellTest {
     }
 
     private void setUp() {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = Admin.create(cluster.adminConfigs(Collections.emptyMap()))) {
             List<NewTopic> topics = new ArrayList<>();
 
             IntStream.range(0, topicCount + 1).forEach(i -> topics.add(new NewTopic(getTopicName(i), i, (short) 1)));

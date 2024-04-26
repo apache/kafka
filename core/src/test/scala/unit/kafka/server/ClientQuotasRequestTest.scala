@@ -24,7 +24,7 @@ import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
+import org.apache.kafka.clients.admin.{Admin, ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
@@ -34,7 +34,9 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.extension.ExtendWith
 
+import java.util.Collections
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 @ClusterTestDefaults(clusterType = Type.ALL)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
@@ -172,9 +174,10 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   def testClientQuotasForScramUsers(): Unit = {
     val userName = "user"
 
-    val results = cluster.createAdminClient().alterUserScramCredentials(util.Arrays.asList(
-      new UserScramCredentialUpsertion(userName, new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), "password")))
-    results.all.get
+    Using(Admin.create(cluster.adminConfigs(Collections.emptyMap()))) { admin =>
+      admin.alterUserScramCredentials(util.Arrays.asList(
+        new UserScramCredentialUpsertion(userName, new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), "password"))).all.get
+    }
 
     val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> userName).asJava)
 

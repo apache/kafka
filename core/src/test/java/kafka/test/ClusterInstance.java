@@ -20,13 +20,13 @@ package kafka.test;
 import kafka.network.SocketServer;
 import kafka.server.BrokerFeatures;
 import kafka.test.annotation.ClusterTest;
-import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.network.ListenerName;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 
 public interface ClusterInstance {
@@ -131,10 +131,10 @@ public interface ClusterInstance {
         return asClass.cast(getUnderlying());
     }
 
-    Admin createAdminClient(Properties configOverrides);
-
-    default Admin createAdminClient() {
-        return createAdminClient(new Properties());
+    default Map<String, Object> adminConfigs(Map<String, String> configOverrides) {
+        Map<String, Object> adminConfigs = new HashMap<>(configOverrides);
+        adminConfigs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+        return adminConfigs;
     }
 
     void start();
