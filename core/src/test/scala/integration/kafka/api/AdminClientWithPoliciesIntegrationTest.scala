@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, 
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerLogConfigs}
 import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -93,7 +94,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     val topic2 = "describe-alter-configs-topic-2"
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
-    createTopic(topic2, 1, 1)
+    createTopic(topic2)
 
     PlaintextAdminIntegrationTest.checkValidAlterConfigs(client, this, topicResource1, topicResource2)
   }
@@ -114,15 +115,15 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     // Create topics
     val topic1 = "invalid-alter-configs-due-to-policy-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
-    createTopic(topic1, 1, 1)
+    createTopic(topic1)
 
     val topic2 = "invalid-alter-configs-due-to-policy-topic-2"
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
-    createTopic(topic2, 1, 1)
+    createTopic(topic2)
 
     val topic3 = "invalid-alter-configs-due-to-policy-topic-3"
     val topicResource3 = new ConfigResource(ConfigResource.Type.TOPIC, topic3)
-    createTopic(topic3, 1, 1)
+    createTopic(topic3)
 
     // Set a mutable broker config
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokers.head.config.brokerId.toString)
@@ -209,11 +210,11 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     alterResult = client.incrementalAlterConfigs(Map(
       brokerResource ->
         Seq(new AlterConfigOp(
-          new ConfigEntry(KafkaConfig.MaxConnectionsProp, "9999"), OpType.SET)
+          new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "9999"), OpType.SET)
         ).asJavaCollection
     ).asJava)
     alterResult.all.get
-    assertEquals(Set(KafkaConfig.MaxConnectionsProp), validationsForResource(brokerResource).head.configs().keySet().asScala)
+    assertEquals(Set(SocketServerConfigs.MAX_CONNECTIONS_CONFIG), validationsForResource(brokerResource).head.configs().keySet().asScala)
   }
 
 }

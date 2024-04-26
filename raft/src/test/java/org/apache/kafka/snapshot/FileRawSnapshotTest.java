@@ -85,7 +85,7 @@ public final class FileRawSnapshotTest {
     }
 
     @Test
-    public void testWriteReadSnapshot() throws IOException {
+    public void testWriteReadSnapshot() {
         OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(10L, 3);
         int bufferSize = 256;
         int numberOfBatches = 10;
@@ -129,7 +129,7 @@ public final class FileRawSnapshotTest {
     }
 
     @Test
-    public void testPartialWriteReadSnapshot() throws IOException {
+    public void testPartialWriteReadSnapshot() {
         Path tempDir = TestUtils.tempDirectory().toPath();
         OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(10L, 3);
 
@@ -169,7 +169,7 @@ public final class FileRawSnapshotTest {
     }
 
     @Test
-    public void testBatchWriteReadSnapshot() throws IOException {
+    public void testBatchWriteReadSnapshot() {
         OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(10L, 3);
         int bufferSize = 256;
         int batchSize = 3;

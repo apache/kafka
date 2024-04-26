@@ -76,7 +76,7 @@ class DelayedFuturePurgatory(purgatoryName: String, brokerId: Int) {
     new ThreadFactory {
       override def newThread(r: Runnable): Thread = new KafkaThread(s"DelayedExecutor-$purgatoryName", r, true)
     })
-  val purgatoryKey = new Object
+  private val purgatoryKey = new Object
 
   def tryCompleteElseWatch[T](timeoutMs: Long,
                               futures: Seq[CompletableFuture[T]],

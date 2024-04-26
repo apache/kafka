@@ -86,7 +86,7 @@ public class LeaderElectionCommand {
         ElectionType electionType = commandOptions.getElectionType();
         Optional<Set<TopicPartition>> jsonFileTopicPartitions =
             Optional.ofNullable(commandOptions.getPathToJsonFile())
-                .map(path -> parseReplicaElectionData(path));
+                .map(LeaderElectionCommand::parseReplicaElectionData);
 
         Optional<String> topicOption = Optional.ofNullable(commandOptions.getTopic());
         Optional<Integer> partitionOption = Optional.ofNullable(commandOptions.getPartition());
@@ -144,16 +144,15 @@ public class LeaderElectionCommand {
         Set<TopicPartition> noop = new HashSet<>();
         Map<TopicPartition, Throwable> failed = new HashMap<>();
 
-        electionResults.entrySet().stream().forEach(entry -> {
-            Optional<Throwable> error = entry.getValue();
+        electionResults.forEach((key, error) -> {
             if (error.isPresent()) {
                 if (error.get() instanceof ElectionNotNeededException) {
-                    noop.add(entry.getKey());
+                    noop.add(key);
                 } else {
-                    failed.put(entry.getKey(), error.get());
+                    failed.put(key, error.get());
                 }
             } else {
-                succeeded.add(entry.getKey());
+                succeeded.add(key);
             }
         });
 
@@ -175,10 +174,16 @@ public class LeaderElectionCommand {
         if (!failed.isEmpty()) {
             AdminCommandFailedException rootException =
                 new AdminCommandFailedException(String.format("%s replica(s) could not be elected", failed.size()));
-            failed.entrySet().forEach(entry -> {
-                System.out.println(String.format("Error completing leader election (%s) for partition: %s: %s",
-                    electionType, entry.getKey(), entry.getValue()));
-                rootException.addSuppressed(entry.getValue());
+            failed.forEach((key, value) -> {
+                System.out.println(
+                        String.format(
+                                "Error completing leader election (%s) for partition: %s: %s",
+                                electionType,
+                                key,
+                                value
+                        )
+                );
+                rootException.addSuppressed(value);
             });
             throw rootException;
         }
