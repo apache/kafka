@@ -46,35 +46,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.apache.kafka.common.GroupType.CONSUMER;
 
 class ConsumerGroupExecutor implements AutoCloseable {
-    private final ExecutorService executor;
-    private final List<ConsumerRunnable> consumers = new ArrayList<>();
-
-    private ConsumerGroupExecutor(
-            String brokerAddress,
-            int numberOfConsumers,
-            String groupId,
-            String groupProtocol,
-            String topic,
-            String assignmentStrategy,
-            Optional<String> remoteAssignor,
-            Map<String, Object> customConfigs,
-            boolean syncCommit
-    ) {
-        this.executor = Executors.newFixedThreadPool(numberOfConsumers);
-        IntStream.rangeClosed(1, numberOfConsumers).forEach(i -> {
-            ConsumerRunnable consumerThread = new ConsumerRunnable(
-                    brokerAddress,
-                    groupId,
-                    groupProtocol,
-                    topic,
-                    assignmentStrategy,
-                    remoteAssignor,
-                    customConfigs,
-                    syncCommit
-            );
-            submit(consumerThread);
-        });
-    }
 
     static ConsumerGroupExecutor buildConsumerGroup(String brokerAddress,
                                                     int numberOfConsumers,
@@ -115,6 +86,36 @@ class ConsumerGroupExecutor implements AutoCloseable {
                 customConfigs,
                 syncCommit
         );
+    }
+
+    private final ExecutorService executor;
+    private final List<ConsumerRunnable> consumers = new ArrayList<>();
+
+    private ConsumerGroupExecutor(
+            String brokerAddress,
+            int numberOfConsumers,
+            String groupId,
+            String groupProtocol,
+            String topic,
+            String assignmentStrategy,
+            Optional<String> remoteAssignor,
+            Map<String, Object> customConfigs,
+            boolean syncCommit
+    ) {
+        this.executor = Executors.newFixedThreadPool(numberOfConsumers);
+        IntStream.rangeClosed(1, numberOfConsumers).forEach(i -> {
+            ConsumerRunnable consumerThread = new ConsumerRunnable(
+                    brokerAddress,
+                    groupId,
+                    groupProtocol,
+                    topic,
+                    assignmentStrategy,
+                    remoteAssignor,
+                    customConfigs,
+                    syncCommit
+            );
+            submit(consumerThread);
+        });
     }
 
     void submit(ConsumerRunnable consumerThread) {
