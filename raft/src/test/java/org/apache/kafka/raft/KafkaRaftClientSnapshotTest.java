@@ -1873,12 +1873,10 @@ final public class KafkaRaftClientSnapshotTest {
             clusterId,
             replicaId,
             topicPartition,
-            snapshotPartition -> {
-                return snapshotPartition
-                    .setCurrentLeaderEpoch(epoch)
-                    .setSnapshotId(snapshotId)
-                    .setPosition(position);
-            }
+            snapshotPartition -> snapshotPartition
+                .setCurrentLeaderEpoch(epoch)
+                .setSnapshotId(snapshotId)
+                .setPosition(position)
         );
 
         return request.setMaxBytes(maxBytes);
@@ -1963,8 +1961,8 @@ final public class KafkaRaftClientSnapshotTest {
 
     private final static class MemorySnapshotWriter implements RawSnapshotWriter {
         private final OffsetAndEpoch snapshotId;
+        private final AtomicLong frozenPosition;
         private ByteBuffer data;
-        private AtomicLong frozenPosition;
 
         public MemorySnapshotWriter(OffsetAndEpoch snapshotId) {
             this.snapshotId = snapshotId;
