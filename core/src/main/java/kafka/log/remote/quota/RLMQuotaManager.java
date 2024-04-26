@@ -67,13 +67,11 @@ public class RLMQuotaManager {
 
             Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
             MetricName quotaMetricName = metricName();
-            allMetrics.forEach((metricName, metric) -> {
-                if (metricName.name().equals(quotaMetricName.name()) && metricName.group().equals(quotaMetricName.group())) {
-                    Map<String, String> metricTags = metricName.tags();
-                    LOGGER.info("Sensor for quota-id {} already exists. Setting quota to {} in MetricConfig", metricTags, newQuota);
-                    metric.config(getQuotaMetricConfig(newQuota));
-                }
-            });
+            KafkaMetric metric = allMetrics.get(quotaMetricName);
+            if (metric != null) {
+                LOGGER.warn("Sensor for quota-id {} already exists. Setting quota to {} in MetricConfig", quotaMetricName, newQuota);
+                metric.config(getQuotaMetricConfig(newQuota));
+            }
         } finally {
             lock.writeLock().unlock();
         }

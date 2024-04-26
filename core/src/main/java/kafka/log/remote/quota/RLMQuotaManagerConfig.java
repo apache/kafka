@@ -47,4 +47,13 @@ public class RLMQuotaManagerConfig {
         this.numQuotaSamples = numQuotaSamples;
         this.quotaWindowSizeSeconds = quotaWindowSizeSeconds;
     }
+
+    @Override
+    public String toString() {
+        return "RLMQuotaManagerConfig{" +
+            "quotaBytesPerSecond=" + quotaBytesPerSecond +
+            ", numQuotaSamples=" + numQuotaSamples +
+            ", quotaWindowSizeSeconds=" + quotaWindowSizeSeconds +
+            '}';
+    }
 }

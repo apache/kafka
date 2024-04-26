@@ -91,7 +91,7 @@ public class RLMQuotaManagerTest {
         // Verify quota metrics were updated
         Map<MetricName, MetricConfig> configForQuotaMetricsAfterFirstUpdate = extractMetricConfig(fetchQuotaMetrics);
         assertNotEquals(configForQuotaMetricsBeforeUpdate, configForQuotaMetricsAfterFirstUpdate);
-        fetchQuotaMetrics.values().forEach(metric -> assertEquals(metric.config().quota(), quota60Bytes));
+        fetchQuotaMetrics.values().forEach(metric -> assertEquals(quota60Bytes, metric.config().quota()));
         // Verify non quota metrics are unchanged
         assertEquals(configForNonQuotaMetricsBeforeUpdate, extractMetricConfig(nonQuotaMetrics));
 
@@ -102,7 +102,7 @@ public class RLMQuotaManagerTest {
 
         // Verify quota metrics were updated
         assertNotEquals(configForQuotaMetricsAfterFirstUpdate, extractMetricConfig(fetchQuotaMetrics));
-        fetchQuotaMetrics.values().forEach(metric -> assertEquals(metric.config().quota(), quota40Bytes));
+        fetchQuotaMetrics.values().forEach(metric -> assertEquals(quota40Bytes, metric.config().quota()));
         // Verify non quota metrics are unchanged
         assertEquals(configForNonQuotaMetricsBeforeUpdate, extractMetricConfig(nonQuotaMetrics));
     }
