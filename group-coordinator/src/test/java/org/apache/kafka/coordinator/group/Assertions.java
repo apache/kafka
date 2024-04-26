@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.opentest4j.AssertionFailedError;
@@ -243,6 +244,38 @@ public class Assertions {
             } catch (SchemaException ex) {
                 fail("Failed deserialization: " + ex.getMessage());
             }
+            assertEquals(expectedValue, actualValue);
+        } else if (actual.message() instanceof ConsumerGroupTargetAssignmentMemberValue) {
+            ConsumerGroupTargetAssignmentMemberValue expectedValue =
+                (ConsumerGroupTargetAssignmentMemberValue) expected.message().duplicate();
+            ConsumerGroupTargetAssignmentMemberValue actualValue =
+                (ConsumerGroupTargetAssignmentMemberValue) actual.message().duplicate();
+
+            expectedValue.topicPartitions().sort(
+                Comparator.comparing(ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId)
+            );
+            actualValue.topicPartitions().sort(
+                Comparator.comparing(ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId)
+            );
+            assertEquals(expectedValue, actualValue);
+        } else if (actual.message() instanceof ConsumerGroupCurrentMemberAssignmentValue) {
+            ConsumerGroupCurrentMemberAssignmentValue expectedValue =
+                (ConsumerGroupCurrentMemberAssignmentValue) expected.message().duplicate();
+            ConsumerGroupCurrentMemberAssignmentValue actualValue =
+                (ConsumerGroupCurrentMemberAssignmentValue) actual.message().duplicate();
+
+            expectedValue.assignedPartitions().sort(
+                Comparator.comparing(ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId)
+            );
+            actualValue.assignedPartitions().sort(
+                Comparator.comparing(ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId)
+            );
+            expectedValue.partitionsPendingRevocation().sort(
+                Comparator.comparing(ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId)
+            );
+            actualValue.partitionsPendingRevocation().sort(
+                Comparator.comparing(ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId)
+            );
             assertEquals(expectedValue, actualValue);
         } else {
             assertEquals(expected.message(), actual.message());
