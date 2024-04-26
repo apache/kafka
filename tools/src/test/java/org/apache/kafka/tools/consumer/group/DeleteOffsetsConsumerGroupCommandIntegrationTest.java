@@ -64,8 +64,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 })
 @ExtendWith(ClusterTestExtensions.class)
 public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
-    public static final String TOPIC = "foo";
-    public static final String GROUP = "test.group";
+    public static final String TOPIC_PREFIX = "foo.";
+    public static final String GROUP_PREFIX = "test.group.";
     private final ClusterInstance clusterInstance;
 
     private final Iterable<Map<String, Object>> consumerConfigs;
@@ -90,65 +90,81 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
 
     @ClusterTest
     public void testDeleteOffsetsOfStableConsumerGroupWithTopicPartition() {
-        for (Map<String, Object> consumerConfig : consumerConfigs) {
-            createTopic(TOPIC);
-            testWithConsumerGroup(TOPIC, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC, true, consumerConfig);
-            removeTopic(TOPIC);
+        for (Map<String, Object> consumerConfig: consumerConfigs) {
+            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            createTopic(topic);
+            testWithConsumerGroup(topic, topic, group, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC, true, consumerConfig);
+            removeTopic(topic);
         }
     }
 
     @ClusterTest
     public void testDeleteOffsetsOfStableConsumerGroupWithTopicOnly() {
-        for (Map<String, Object> consumerConfig : consumerConfigs) {
-            createTopic(TOPIC);
-            testWithConsumerGroup(TOPIC, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC, true, consumerConfig);
-            removeTopic(TOPIC);
+        for (Map<String, Object> consumerConfig: consumerConfigs) {
+            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            createTopic(topic);
+            testWithConsumerGroup(topic, topic, group, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC, true, consumerConfig);
+            removeTopic(topic);
         }
     }
 
     @ClusterTest
     public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition() {
-        for (Map<String, Object> consumerConfig : consumerConfigs) {
-            testWithConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, true, consumerConfig);
+        for (Map<String, Object> consumerConfig: consumerConfigs) {
+            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            testWithConsumerGroup(topic, "foobar", group, 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, true, consumerConfig);
         }
     }
 
     @ClusterTest
     public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicOnly() {
-        for (Map<String, Object> consumerConfig : consumerConfigs) {
-            testWithConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION, true, consumerConfig);
+        for (Map<String, Object> consumerConfig: consumerConfigs) {
+            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            testWithConsumerGroup(topic, "foobar", group, -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION, true, consumerConfig);
         }
     }
 
     @ClusterTest
     public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition() {
-        for (Map<String, Object> consumerConfig : consumerConfigs) {
-            createTopic(TOPIC);
-            testWithConsumerGroup(TOPIC, 0, 0, Errors.NONE, false, consumerConfig);
-            removeTopic(TOPIC);
+        for (Map<String, Object> consumerConfig: consumerConfigs) {
+            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            createTopic(topic);
+            testWithConsumerGroup(topic, topic, group, 0, 0, Errors.NONE, false, consumerConfig);
+            removeTopic(topic);
         }
     }
 
     @ClusterTest
     public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly() {
-        for (Map<String, Object> consumerConfig : consumerConfigs) {
-            createTopic(TOPIC);
-            testWithConsumerGroup(TOPIC, -1, 0, Errors.NONE, false, consumerConfig);
-            removeTopic(TOPIC);
+        for (Map<String, Object> consumerConfig: consumerConfigs) {
+            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            createTopic(topic);
+            testWithConsumerGroup(topic, topic, group, -1, 0, Errors.NONE, false, consumerConfig);
+            removeTopic(topic);
         }
     }
 
     @ClusterTest
     public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition() {
-        for (Map<String, Object> consumerConfig : consumerConfigs) {
-            testWithConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, false, consumerConfig);
+        for (Map<String, Object> consumerConfig: consumerConfigs) {
+            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            testWithConsumerGroup(topic, "foobar", group, 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, false, consumerConfig);
         }
     }
 
     @ClusterTest
     public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly() {
-        for (Map<String, Object> consumerConfig : consumerConfigs) {
-            testWithConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION, false, consumerConfig);
+        for (Map<String, Object> consumerConfig: consumerConfigs) {
+            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+            testWithConsumerGroup(topic, "foobar", group, -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION, false, consumerConfig);
         }
     }
 
@@ -168,20 +184,22 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         );
     }
 
-    private void testWithConsumerGroup(String inputTopic,
+    private void testWithConsumerGroup(String inputTopicWithData,
+                                       String inputTopicForTest,
+                                       String inputGroup,
                                        int inputPartition,
                                        int expectedPartition,
                                        Errors expectedError,
                                        boolean isStable,
                                        Map<String, Object> consumerConfig) {
-        produceRecord();
+        produceRecord(inputTopicWithData);
         this.withConsumerGroup(() -> {
-            String topic = inputPartition >= 0 ? inputTopic + ":" + inputPartition : inputTopic;
-            try (ConsumerGroupCommand.ConsumerGroupService consumerGroupService = consumerGroupService(getArgs(GROUP, topic))) {
-                Entry<Errors, Map<TopicPartition, Throwable>> res = consumerGroupService.deleteOffsets(GROUP, Collections.singletonList(topic));
+            String topic = inputPartition >= 0 ? inputTopicForTest + ":" + inputPartition : inputTopicForTest;
+            try (ConsumerGroupCommand.ConsumerGroupService consumerGroupService = consumerGroupService(getArgs(inputGroup, topic))) {
+                Entry<Errors, Map<TopicPartition, Throwable>> res = consumerGroupService.deleteOffsets(inputGroup, Collections.singletonList(topic));
                 Errors topLevelError = res.getKey();
                 Map<TopicPartition, Throwable> partitions = res.getValue();
-                TopicPartition tp = new TopicPartition(inputTopic, expectedPartition);
+                TopicPartition tp = new TopicPartition(inputTopicForTest, expectedPartition);
                 // Partition level error should propagate to top level, unless this is due to a missed partition attempt.
                 if (inputPartition >= 0) {
                     assertEquals(expectedError, topLevelError);
@@ -191,18 +209,18 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
                 else
                     assertEquals(expectedError.exception(), partitions.get(tp).getCause());
             }
-        }, isStable, consumerConfig);
+        }, inputTopicWithData, inputGroup, isStable, consumerConfig);
     }
 
-    private void produceRecord() {
+    private void produceRecord(String topic) {
         try (KafkaProducer<byte[], byte[]> producer = createProducer()) {
-            assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(TOPIC, 0, null, null)).get());
+            assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(topic, 0, null, null)).get());
         }
     }
 
-    private void withConsumerGroup(Runnable body, boolean isStable, Map<String, Object> consumerConfig) {
-        try (Consumer<byte[], byte[]> consumer = createConsumer(consumerConfig)) {
-            consumer.subscribe(Collections.singletonList(TOPIC));
+    private void withConsumerGroup(Runnable body, String topic, String group, boolean isStable, Map<String, Object> consumerConfig) {
+        try (Consumer<byte[], byte[]> consumer = createConsumer(group, consumerConfig)) {
+            consumer.subscribe(Collections.singletonList(topic));
             ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
             Assertions.assertNotEquals(0, records.count());
             consumer.commitSync();
@@ -225,11 +243,11 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         return new KafkaProducer<>(config);
     }
 
-    private Consumer<byte[], byte[]> createConsumer(Map<String, Object> config) {
+    private Consumer<byte[], byte[]> createConsumer(String group, Map<String, Object> config) {
         Map<String, Object> consumerConfig = new HashMap<>(config);
         consumerConfig.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         consumerConfig.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        consumerConfig.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, GROUP);
+        consumerConfig.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, group);
         consumerConfig.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         consumerConfig.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         // Increase timeouts to avoid having a rebalance during the test
