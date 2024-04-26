@@ -1296,12 +1296,16 @@ public class GroupMetadataManager {
             .build();
 
         boolean bumpGroupEpoch = false;
+        Map<String, Integer> subscribedTopicsMemberCount = new HashMap<>();
+
         if (!updatedMember.equals(member)) {
             records.add(newMemberSubscriptionRecord(groupId, updatedMember));
 
             if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
                 log.info("[GroupId {}] Member {} updated its subscribed topics to: {}.",
                     groupId, memberId, updatedMember.subscribedTopicNames());
+
+                ConsumerGroup.maybeUpdateSubscribedTopicNames(subscribedTopicsMemberCount, member, updatedMember);
                 bumpGroupEpoch = true;
             }
 
@@ -1317,8 +1321,7 @@ public class GroupMetadataManager {
             // 1) The member has updated its subscriptions;
             // 2) The refresh deadline has been reached.
             subscriptionMetadata = group.computeSubscriptionMetadata(
-                member,
-                updatedMember,
+                subscribedTopicsMemberCount,
                 metadataImage.topics(),
                 metadataImage.cluster()
             );
@@ -1355,7 +1358,11 @@ public class GroupMetadataManager {
                         .withMembers(group.members())
                         .withStaticMembers(group.staticMembers())
                         .withSubscriptionMetadata(subscriptionMetadata)
-                        .withSubscriptionType(group.subscriptionType())
+                        .withSubscriptionType(ConsumerGroup.maybeUpdateGroupSubscriptionType(
+                            subscribedTopicsMemberCount,
+                            group.numMembers(),
+                            group.subscriptionType()
+                        ))
                         .withTargetAssignment(group.targetAssignment())
                         .addOrUpdateMember(memberId, updatedMember);
                 TargetAssignmentBuilder.TargetAssignmentResult assignmentResult;

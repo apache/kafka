@@ -640,8 +640,53 @@ public class ConsumerGroup implements Group {
         // Copy and update the current subscription information.
         Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
         maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
-        maybeUpdateGroupSubscriptionType();
 
+        // Create the topic metadata for each subscribed topic.
+        Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
+
+        subscribedTopicNames.forEach((topicName, count) -> {
+            TopicImage topicImage = topicsImage.getTopic(topicName);
+            if (topicImage != null) {
+                Map<Integer, Set<String>> partitionRacks = new HashMap<>();
+                topicImage.partitions().forEach((partition, partitionRegistration) -> {
+                    Set<String> racks = new HashSet<>();
+                    for (int replica : partitionRegistration.replicas) {
+                        Optional<String> rackOptional = clusterImage.broker(replica).rack();
+                        // Only add the rack if it is available for the broker/replica.
+                        rackOptional.ifPresent(racks::add);
+                    }
+                    // If rack information is unavailable for all replicas of this partition,
+                    // no corresponding entry will be stored for it in the map.
+                    if (!racks.isEmpty())
+                        partitionRacks.put(partition, racks);
+                });
+
+                newSubscriptionMetadata.put(topicName, new TopicMetadata(
+                    topicImage.id(),
+                    topicImage.name(),
+                    topicImage.partitions().size(),
+                    partitionRacks)
+                );
+            }
+        });
+
+        return Collections.unmodifiableMap(newSubscriptionMetadata);
+    }
+
+    /**
+     * Computes the subscription metadata based on the current subscription info.
+     *
+     * @param subscribedTopicNames      Map of topic name to subscribers count.
+     * @param topicsImage               The current metadata for all available topics.
+     * @param clusterImage              The current metadata for the Kafka cluster.
+     *
+     * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
+     */
+    public Map<String, TopicMetadata> computeSubscriptionMetadata(
+        Map<String, Integer> subscribedTopicNames,
+        TopicsImage topicsImage,
+        ClusterImage clusterImage
+    ) {
         // Create the topic metadata for each subscribed topic.
         Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
 
@@ -959,7 +1004,11 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember newMember
     ) {
         maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
-        maybeUpdateGroupSubscriptionType();
+        subscriptionType.set(maybeUpdateGroupSubscriptionType(
+            subscribedTopicNames,
+            members.size(),
+            subscriptionType()
+        ));
     }
 
     /**
@@ -969,7 +1018,7 @@ public class ConsumerGroup implements Group {
      * @param oldMember             The old member.
      * @param newMember             The new member.
      */
-    private static void maybeUpdateSubscribedTopicNames(
+    public static void maybeUpdateSubscribedTopicNames(
         Map<String, Integer> subscribedTopicCount,
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
@@ -992,16 +1041,26 @@ public class ConsumerGroup implements Group {
      *
      * If all members are subscribed to the same set of topics, the type is homogeneous.
      * Otherwise, it is heterogeneous.
+     *
+     * @param subscribedTopicNames      A map of topic names to the count of members subscribed to each topic.
+     * @param numOfMembers              The total number of members in the group.
+     * @param subscriptionType          The current subscription type of the group.
+     * @return {@link SubscriptionType#HOMOGENEOUS} if all members are subscribed to exactly the same topics;
+     *         otherwise, {@link SubscriptionType#HETEROGENEOUS}.
      */
-    private void maybeUpdateGroupSubscriptionType() {
-        int numOfMembers = members.size();
+    public static SubscriptionType maybeUpdateGroupSubscriptionType(
+        Map<String, Integer> subscribedTopicNames,
+        int numOfMembers,
+        SubscriptionType subscriptionType
+    ) {
+        if (subscribedTopicNames.isEmpty()) return subscriptionType;
+
         for (Map.Entry<String, Integer> entry : subscribedTopicNames.entrySet()) {
             if (entry.getValue() != numOfMembers) {
-                subscriptionType.set(HETEROGENEOUS);
-                return;
+                return HETEROGENEOUS;
             }
         }
-        subscriptionType.set(HOMOGENEOUS);
+        return HOMOGENEOUS;
     }
 
     /**
