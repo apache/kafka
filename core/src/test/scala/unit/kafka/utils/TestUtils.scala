@@ -74,7 +74,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs, QuotaConfigs, ZkConfigs}
@@ -362,7 +362,7 @@ object TestUtils extends Logging {
       // tests use random port assignment, so the controller ports are not known ahead of
       // time. Therefore, we ignore controller.quorum.voters and use
       // controllerQuorumVotersFuture instead.
-      props.put(RaftConfig.QUORUM_VOTERS_CONFIG, "1000@localhost:0")
+      props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1000@localhost:0")
     } else {
       props.put(ZkConfigs.ZK_CONNECT_CONFIG, zkConnect)
       props.put(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG, "10000")
@@ -1122,17 +1122,6 @@ object TestUtils extends Logging {
       val records = consumer.poll(Duration.ofMillis(100))
       action(records)
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
-  }
-
-  def subscribeAndWaitForRecords(topic: String,
-                                 consumer: Consumer[Array[Byte], Array[Byte]],
-                                 waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
-    consumer.subscribe(Collections.singletonList(topic))
-    pollRecordsUntilTrue(
-      consumer,
-      (records: ConsumerRecords[Array[Byte], Array[Byte]]) => !records.isEmpty,
-      "Expected records",
-      waitTimeMs)
   }
 
   /**

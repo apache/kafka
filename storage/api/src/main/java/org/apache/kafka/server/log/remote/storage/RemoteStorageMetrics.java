@@ -27,8 +27,6 @@ import java.util.Set;
 /**
  * This class contains the metrics related to tiered storage feature, which is to have a centralized
  * place to store them, so that we can verify all of them easily.
- *
- * @see kafka.api.MetricsTest
  */
 public class RemoteStorageMetrics {
     private static final String REMOTE_LOG_READER_METRICS_NAME_PREFIX = "RemoteLogReader";

@@ -33,7 +33,7 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.PasswordEncoderConfigs
 import org.apache.kafka.server.authorizer._
@@ -521,7 +521,7 @@ class DynamicBrokerConfigTest {
     retval.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
     retval.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     retval.put(SocketServerConfigs.LISTENERS_CONFIG, s"${retval.get(SocketServerConfigs.LISTENERS_CONFIG)},CONTROLLER://localhost:0")
-    retval.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:0")
+    retval.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:0")
     retval
   }
 
@@ -567,7 +567,7 @@ class DynamicBrokerConfigTest {
 
     retval.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     retval.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://localhost:0")
-    retval.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:0")
+    retval.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:0")
     retval
   }
 

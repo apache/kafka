@@ -51,7 +51,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.REQUIRE_V0
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
@@ -129,7 +129,7 @@ class KafkaServer(
   var metrics: Metrics = _
 
   @volatile var dataPlaneRequestProcessor: KafkaApis = _
-  var controlPlaneRequestProcessor: KafkaApis = _
+  private var controlPlaneRequestProcessor: KafkaApis = _
 
   var authorizer: Option[Authorizer] = None
   @volatile var socketServer: SocketServer = _
@@ -322,8 +322,8 @@ class KafkaServer(
         remoteLogManagerOpt = createRemoteLogManager()
 
         if (config.migrationEnabled) {
-          kraftControllerNodes = RaftConfig.voterConnectionsToNodes(
-            RaftConfig.parseVoterConnections(config.quorumVoters)).asScala
+          kraftControllerNodes = QuorumConfig.voterConnectionsToNodes(
+            QuorumConfig.parseVoterConnections(config.quorumVoters)).asScala
         } else {
           kraftControllerNodes = Seq.empty
         }
@@ -428,7 +428,7 @@ class KafkaServer(
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
           val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
-            RaftConfig.parseVoterConnections(config.quorumVoters))
+            QuorumConfig.parseVoterConnections(config.quorumVoters))
           raftManager = new KafkaRaftManager[ApiMessageAndVersion](
             metaPropsEnsemble.clusterId().get(),
             config,
@@ -441,7 +441,7 @@ class KafkaServer(
             controllerQuorumVotersFuture,
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
-          val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
+          val controllerNodes = QuorumConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
           val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
           val brokerToQuorumChannelManager = new NodeToControllerChannelManagerImpl(
             controllerNodeProvider = quorumControllerNodeProvider,

@@ -24,7 +24,7 @@ import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.common.MetadataVersion
@@ -49,7 +49,7 @@ class KafkaRaftServerTest {
     configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
     configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
     configProperties.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
-    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
+    configProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
     configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
 
     val metaPropertiesEnsemble =
@@ -76,7 +76,7 @@ class KafkaRaftServerTest {
 
     configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     configProperties.put(KRaftConfigs.NODE_ID_CONFIG, configNodeId.toString)
-    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"$configNodeId@localhost:9092")
+    configProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$configNodeId@localhost:9092")
     configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT")
 
     assertThrows(classOf[RuntimeException], () =>
@@ -105,11 +105,11 @@ class KafkaRaftServerTest {
     metaProperties: MetaProperties
   ): Unit = {
     val metaPropertiesFile = new File(logDir.getAbsolutePath, MetaPropertiesEnsemble.META_PROPERTIES_NAME)
-    PropertiesUtils.writePropertiesFile(metaProperties.toProperties(), metaPropertiesFile.getAbsolutePath, false)
+    PropertiesUtils.writePropertiesFile(metaProperties.toProperties, metaPropertiesFile.getAbsolutePath, false)
   }
 
   private def writeBootstrapMetadata(logDir: File, metadataVersion: MetadataVersion): Unit = {
-    val bootstrapDirectory = new BootstrapDirectory(logDir.toString(), Optional.empty())
+    val bootstrapDirectory = new BootstrapDirectory(logDir.toString, Optional.empty())
     bootstrapDirectory.writeBinaryFile(BootstrapMetadata.fromVersion(metadataVersion, "test"))
   }
 
@@ -131,7 +131,7 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
-    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${(nodeId + 1)}@localhost:9092")
+    configProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"${nodeId + 1}@localhost:9092")
     configProperties.put(ServerLogConfigs.LOG_DIR_CONFIG, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
     configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     val config = KafkaConfig.fromProps(configProperties)
@@ -157,7 +157,7 @@ class KafkaRaftServerTest {
     val invalidDir = TestUtils.tempFile("blah")
     val configProperties = new Properties
     configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
-    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${(nodeId + 1)}@localhost:9092")
+    configProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"${nodeId + 1}@localhost:9092")
     configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
     configProperties.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG, invalidDir.getAbsolutePath)
     configProperties.put(ServerLogConfigs.LOG_DIR_CONFIG, validDir.getAbsolutePath)
@@ -188,7 +188,7 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
-    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${(nodeId + 1)}@localhost:9092")
+    configProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"${nodeId + 1}@localhost:9092")
     configProperties.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG, validDir.getAbsolutePath)
     configProperties.put(ServerLogConfigs.LOG_DIR_CONFIG, invalidDir.getAbsolutePath)
     configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
@@ -196,7 +196,7 @@ class KafkaRaftServerTest {
 
     val (metaPropertiesEnsemble, _) =
       KafkaRaftServer.initializeLogDirs(config, MetaPropertiesEnsemble.LOG, "")
-    assertEquals(nodeId, metaPropertiesEnsemble.nodeId().getAsInt())
+    assertEquals(nodeId, metaPropertiesEnsemble.nodeId().getAsInt)
     assertEquals(invalidDir.getAbsolutePath,
       String.join(", ", metaPropertiesEnsemble.errorLogDirs()))
   }
@@ -224,7 +224,7 @@ class KafkaRaftServerTest {
     val configProperties = new Properties
     configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
-    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${(nodeId + 1)}@localhost:9092")
+    configProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"${nodeId + 1}@localhost:9092")
     configProperties.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG, metadataDir.getAbsolutePath)
     configProperties.put(ServerLogConfigs.LOG_DIR_CONFIG, dataDir.getAbsolutePath)
     configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
@@ -251,7 +251,7 @@ class KafkaRaftServerTest {
 
     val configProperties = new Properties
     configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
-    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${(nodeId + 1)}@localhost:9092")
+    configProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"${nodeId + 1}@localhost:9092")
     configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
     configProperties.put(ServerLogConfigs.LOG_DIR_CONFIG, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
     configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
@@ -276,7 +276,7 @@ class KafkaRaftServerTest {
     configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
     configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
     configProperties.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
-    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
+    configProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
     configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     configProperties.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.3-IV1")
 
@@ -284,8 +284,8 @@ class KafkaRaftServerTest {
       invokeLoadMetaProperties(metaProperties, configProperties, None)
 
     assertEquals(metaProperties, metaPropertiesEnsemble.logDirProps().values().iterator().next())
-    assertTrue(metaPropertiesEnsemble.errorLogDirs().isEmpty())
-    assertTrue(metaPropertiesEnsemble.emptyLogDirs().isEmpty())
+    assertTrue(metaPropertiesEnsemble.errorLogDirs().isEmpty)
+    assertTrue(metaPropertiesEnsemble.emptyLogDirs().isEmpty)
     assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.IBP_3_3_IV1)
   }
 
@@ -307,7 +307,7 @@ class KafkaRaftServerTest {
     configProperties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
     configProperties.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
     configProperties.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
-    configProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
+    configProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
     configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     configProperties.put(ServerLogConfigs.LOG_DIR_CONFIG, logDir.getAbsolutePath)
 
@@ -315,8 +315,8 @@ class KafkaRaftServerTest {
       invokeLoadMetaProperties(metaProperties, configProperties, None)
 
     assertEquals(metaProperties, metaPropertiesEnsemble.logDirProps().values().iterator().next())
-    assertTrue(metaPropertiesEnsemble.errorLogDirs().isEmpty())
-    assertTrue(metaPropertiesEnsemble.emptyLogDirs().isEmpty())
+    assertTrue(metaPropertiesEnsemble.errorLogDirs().isEmpty)
+    assertTrue(metaPropertiesEnsemble.emptyLogDirs().isEmpty)
     assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.latestProduction())
   }
 }

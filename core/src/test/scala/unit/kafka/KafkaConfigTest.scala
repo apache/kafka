@@ -26,7 +26,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 
 import org.apache.kafka.server.config.{KRaftConfigs, KafkaSecurityConfigs, ZkConfigs}
 import org.apache.kafka.server.config.ReplicationConfigs
@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 
-class KafkaTest {
+class KafkaConfigTest {
 
   @BeforeEach
   def setUp(): Unit = Exit.setExitProcedure((status, _) => throw new FatalExitError(status))
@@ -90,7 +90,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
+    propertiesFile.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If process.roles contains just the 'broker' role, the node id 1 must not be included in the set of voters")
@@ -106,7 +106,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
+    propertiesFile.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If process.roles contains the 'controller' role, the node id 1 must be included in the set of voters")
@@ -122,7 +122,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller,broker")
     propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
+    propertiesFile.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If process.roles contains the 'controller' role, the node id 1 must be included in the set of voters")
@@ -137,7 +137,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller,broker")
     propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
+    propertiesFile.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
     setListenerProps(propertiesFile)
     val config = KafkaConfig.fromProps(propertiesFile)
     assertTrue(config.isKRaftCombinedMode)
@@ -149,7 +149,7 @@ class KafkaTest {
     val propertiesFile = new Properties
     propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller,broker")
     propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    propertiesFile.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "")
+    propertiesFile.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If using process.roles, controller.quorum.voters must contain a parseable set of voters.")
@@ -310,7 +310,7 @@ class KafkaTest {
     assertEquals(expectedDefaultValue, emptyConfig.values.get(kafkaPropName)) // but default value appears in the values
     assertEquals(expectedDefaultValue, emptyConfig.ZkSslEndpointIdentificationAlgorithm) // and has the correct default value
     // next set system property alone
-    Map("true" -> "HTTPS", "false" -> "").foreach { case (sysPropValue, expected) => {
+    Map("true" -> "HTTPS", "false" -> "").foreach { case (sysPropValue, expected) =>
       try {
         System.setProperty(sysProp, sysPropValue)
         val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
@@ -320,10 +320,10 @@ class KafkaTest {
       } finally {
         System.clearProperty(sysProp)
       }
-    }}
+    }
     // finally set Kafka config alone
     List("https", "").foreach(expected => {
-      val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=${expected}")))
+      val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=$expected")))
       assertEquals(expected, config.originals.get(kafkaPropName)) // appears in the originals
       assertEquals(expected, config.values.get(kafkaPropName)) // appears in the values
       assertEquals(expected, config.ZkSslEndpointIdentificationAlgorithm) // is the ultimate value
@@ -353,7 +353,7 @@ class KafkaTest {
   def testConnectionsMaxReauthMsExplicit(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     val expected = 3600000
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"sasl_ssl.oauthbearer.connections.max.reauth.ms=${expected}")))
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"sasl_ssl.oauthbearer.connections.max.reauth.ms=$expected")))
     assertEquals(expected, config.valuesWithPrefixOverride("sasl_ssl.oauthbearer.").get(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS).asInstanceOf[Long])
   }
 
@@ -361,7 +361,7 @@ class KafkaTest {
                                  expectedKafkaPropName: String,
                                  sysPropName: String,
                                  propValueToSet: T,
-                                 getPropValueFrom: (KafkaConfig) => Option[T],
+                                 getPropValueFrom: KafkaConfig => Option[T],
                                  expectedPropertyValue: U,
                                  expectedDefaultValue: Option[T] = None): Unit = {
     assertEquals(expectedKafkaPropName, kafkaPropName)
@@ -395,7 +395,7 @@ class KafkaTest {
       System.clearProperty(sysPropName)
     }
     // finally set Kafka config alone
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=${propValueToSet}")))
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=$propValueToSet")))
     assertEquals(expectedPropertyValue, config.values.get(kafkaPropName)) // appears in the values
     assertEquals(Some(expectedPropertyValue), getPropValueFrom(config)) // appears in the property
   }

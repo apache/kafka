@@ -15,8 +15,9 @@
 package kafka.api
 
 import java.time.Duration
+import java.util
 import java.util.concurrent.TimeUnit
-import java.util.{Collections, HashMap, Properties}
+import java.util.{Collections, Properties}
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
 import kafka.server.{ClientQuotaManager, KafkaBroker, KafkaConfig, QuotaType}
@@ -322,7 +323,7 @@ abstract class QuotaTestClients(topic: String,
   }
 
   private def verifyProducerClientThrottleTimeMetric(expectThrottle: Boolean): Unit = {
-    val tags = new HashMap[String, String]
+    val tags = new util.HashMap[String, String]
     tags.put("client-id", producerClientId)
     val avgMetric = producer.metrics.get(new MetricName("produce-throttle-time-avg", "producer-metrics", "", tags))
     val maxMetric = producer.metrics.get(new MetricName("produce-throttle-time-max", "producer-metrics", "", tags))
@@ -335,7 +336,7 @@ abstract class QuotaTestClients(topic: String,
   }
 
   def verifyConsumerClientThrottleTimeMetric(expectThrottle: Boolean, maxThrottleTime: Option[Double] = None): Unit = {
-    val tags = new HashMap[String, String]
+    val tags = new util.HashMap[String, String]
     tags.put("client-id", consumerClientId)
     val avgMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-avg", "consumer-fetch-manager-metrics", "", tags))
     val maxMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-max", "consumer-fetch-manager-metrics", "", tags))

@@ -30,8 +30,8 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.server.config.{KRaftConfigs,ReplicationConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.ProcessRole
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -57,7 +57,7 @@ class RaftManagerTest {
         props.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, value.toString)
       }
       props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
-      props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:9093")
+      props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
       props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     }
 
@@ -86,14 +86,14 @@ class RaftManagerTest {
       props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "PLAINTEXT")
       if (processRoles.contains(ProcessRole.ControllerRole)) { // co-located
         props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
-        props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:9093")
+        props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
       } else { // broker-only
         val voterId = nodeId + 1
-        props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${voterId}@localhost:9093")
+        props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$voterId@localhost:9093")
       }
     } else if (processRoles.contains(ProcessRole.ControllerRole)) { // controller-only
       props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "SSL://localhost:9093")
-      props.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:9093")
+      props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
     }
 
     new KafkaConfig(props)
@@ -114,7 +114,7 @@ class RaftManagerTest {
       Time.SYSTEM,
       new Metrics(Time.SYSTEM),
       Option.empty,
-      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
+      CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
       mock(classOf[FaultHandler])
     )
   }

@@ -58,7 +58,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
-import org.apache.kafka.raft.RaftConfig;
+import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
@@ -178,7 +178,7 @@ public class KRaftMetadataRequestBenchmark {
         Properties kafkaProps =  new Properties();
         kafkaProps.put(KRaftConfigs.NODE_ID_CONFIG, brokerId + "");
         kafkaProps.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker");
-        kafkaProps.put(RaftConfig.QUORUM_VOTERS_CONFIG, "9000@foo:8092");
+        kafkaProps.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "9000@foo:8092");
         kafkaProps.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
         KafkaConfig config = new KafkaConfig(kafkaProps);
         return new KafkaApisBuilder().

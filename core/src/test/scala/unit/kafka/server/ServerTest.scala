@@ -17,9 +17,10 @@
 package kafka.server
 
 import java.util.Properties
+
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.MetricsContext
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -36,7 +37,7 @@ class ServerTest {
     val props = new Properties()
     props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
-    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, s"${(nodeId + 1)}@localhost:9093")
+    props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"${nodeId + 1}@localhost:9093")
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     val config = KafkaConfig.fromProps(props)
 

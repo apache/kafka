@@ -38,7 +38,7 @@ import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.raft.RaftConfig;
+import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
@@ -90,7 +90,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
      */
     private static class ControllerQuorumVotersFutureManager implements AutoCloseable {
         private final int expectedControllers;
-        private final CompletableFuture<Map<Integer, RaftConfig.AddressSpec>> future = new CompletableFuture<>();
+        private final CompletableFuture<Map<Integer, QuorumConfig.AddressSpec>> future = new CompletableFuture<>();
         private final Map<Integer, Integer> controllerPorts = new TreeMap<>();
 
         ControllerQuorumVotersFutureManager(int expectedControllers) {
@@ -103,7 +103,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 future.complete(controllerPorts.entrySet().stream().
                     collect(Collectors.toMap(
                         Map.Entry::getKey,
-                        entry -> new RaftConfig.InetAddressSpec(new InetSocketAddress("localhost", entry.getValue()))
+                        entry -> new QuorumConfig.InetAddressSpec(new InetSocketAddress("localhost", entry.getValue()))
                     )));
             }
         }
@@ -194,7 +194,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             String uninitializedQuorumVotersString = nodes.controllerNodes().keySet().stream().
                     map(n -> String.format("%d@0.0.0.0:0", n)).
                     collect(Collectors.joining(","));
-            props.put(RaftConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
+            props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
 
             // reduce log cleaner offset map memory usage
             props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152");
@@ -451,7 +451,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public String quorumVotersConfig() throws ExecutionException, InterruptedException {
-        Collection<Node> controllerNodes = RaftConfig.voterConnectionsToNodes(
+        Collection<Node> controllerNodes = QuorumConfig.voterConnectionsToNodes(
             controllerQuorumVotersFutureManager.future.get());
         StringBuilder bld = new StringBuilder();
         String prefix = "";

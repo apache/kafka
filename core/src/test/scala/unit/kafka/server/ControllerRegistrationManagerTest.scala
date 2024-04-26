@@ -27,7 +27,7 @@ import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ListenerInfo, RecordTestUtils, VersionRange}
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.{LeaderAndEpoch, RaftConfig}
+import org.apache.kafka.raft.{LeaderAndEpoch, QuorumConfig}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.apache.kafka.test.TestUtils
@@ -53,7 +53,7 @@ class ControllerRegistrationManagerTest {
     properties.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:8001")
     properties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    properties.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, s"1@localhost:8000,2@localhost:5000,3@localhost:7000")
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"1@localhost:8000,2@localhost:5000,3@localhost:7000")
     properties
   }
 
@@ -129,7 +129,7 @@ class ControllerRegistrationManagerTest {
         numBatches(1).
         elapsedNs(100).
         numBytes(200).
-        build();
+        build()
     }
     manager.onMetadataUpdate(delta, newImage, manifest)
     newImage

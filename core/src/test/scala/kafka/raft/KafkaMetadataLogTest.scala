@@ -62,7 +62,7 @@ final class KafkaMetadataLogTest {
   def testConfig(): Unit = {
     val props = new Properties()
     props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, util.Arrays.asList("broker"))
-    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9093")
+    props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9093")
     props.put(KRaftConfigs.NODE_ID_CONFIG, Int.box(2))
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     props.put(KRaftConfigs.METADATA_LOG_SEGMENT_BYTES_CONFIG, Int.box(10240))
@@ -717,7 +717,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
     // Simulate log cleaning advancing the LSO
-    log.log.maybeIncrementLogStartOffset(offset, LogStartOffsetIncrementReason.SegmentDeletion);
+    log.log.maybeIncrementLogStartOffset(offset, LogStartOffsetIncrementReason.SegmentDeletion)
 
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset - 1, epoch)
     assertEquals(ValidOffsetAndEpoch.Kind.SNAPSHOT, resultOffsetAndEpoch.kind)

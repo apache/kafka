@@ -183,7 +183,7 @@ object TestLinearWriteSpeed {
     file.deleteOnExit()
     val raf = new RandomAccessFile(file, "rw")
     raf.setLength(size)
-    val buffer = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, raf.length())
+    val buffer = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, raf.length())
     def write(): Int = {
       buffer.put(content)
       content.rewind()

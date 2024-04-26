@@ -40,7 +40,7 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesVersion}
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
@@ -167,7 +167,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
     TestUtils.formatDirectories(immutable.Seq(logDir.getAbsolutePath), metaProperties, MetadataVersion.latestTesting(), None)
 
     val props = new Properties
-    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, "100@localhost:12345")
+    props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "100@localhost:12345")
     props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.put(KRaftConfigs.NODE_ID_CONFIG, localId.toString)
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
@@ -492,7 +492,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       setLeaderRecoveryState(leaderRecoveryState).
       setLeaderEpoch(leaderEpoch).
       setPartitionEpoch(partitionEpoch).
-      build();
+      build()
   }
 
   private def defaultBrokerEpoch(brokerId: Int): Long = {

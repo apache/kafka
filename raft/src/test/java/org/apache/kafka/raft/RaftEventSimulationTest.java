@@ -708,8 +708,8 @@ public class RaftEventSimulationTest {
             nodes.put(nodeId, new PersistentState(nodeId));
         }
 
-        private static RaftConfig.AddressSpec nodeAddress(int id) {
-            return new RaftConfig.InetAddressSpec(new InetSocketAddress("localhost", 9990 + id));
+        private static QuorumConfig.AddressSpec nodeAddress(int id) {
+            return new QuorumConfig.InetAddressSpec(new InetSocketAddress("localhost", 9990 + id));
         }
 
         void start(int nodeId) {
@@ -717,9 +717,9 @@ public class RaftEventSimulationTest {
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter, voters);
             MockMessageQueue messageQueue = new MockMessageQueue();
-            Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
+            Map<Integer, QuorumConfig.AddressSpec> voterAddressMap = voters.stream()
                 .collect(Collectors.toMap(id -> id, Cluster::nodeAddress));
-            RaftConfig raftConfig = new RaftConfig(voterAddressMap, REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
+            QuorumConfig quorumConfig = new QuorumConfig(voterAddressMap, REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
                     ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS);
             Metrics metrics = new Metrics(time);
 
@@ -743,7 +743,7 @@ public class RaftEventSimulationTest {
                 OptionalInt.of(nodeId),
                 logContext,
                 random,
-                raftConfig
+                    quorumConfig
             );
             RaftNode node = new RaftNode(
                 nodeId,

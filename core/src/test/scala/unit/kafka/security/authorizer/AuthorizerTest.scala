@@ -926,7 +926,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
       ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG -> "HTTPS",
       ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG -> "false",
       ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG -> "false")
-    configs.foreach{case (key, value) => props.put(key, value.toString) }
+    configs.foreach{case (key, value) => props.put(key, value) }
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
