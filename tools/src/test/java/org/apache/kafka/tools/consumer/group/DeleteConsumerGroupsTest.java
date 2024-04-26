@@ -46,6 +46,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
@@ -272,7 +273,7 @@ public class DeleteConsumerGroupsTest {
                     TOPIC,
                     protocol.name,
                     Optional.empty(),
-                    Optional.empty(),
+                    emptyMap(),
                     false
             );
         } else {
@@ -282,7 +283,7 @@ public class DeleteConsumerGroupsTest {
                     null != groupId ? groupId : GROUP,
                     TOPIC,
                     RangeAssignor.class.getName(),
-                    Optional.empty(),
+                    emptyMap(),
                     false
             );
         }
