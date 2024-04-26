@@ -44,6 +44,12 @@ public class CoordinatorResult<T, U> {
     private final CompletableFuture<Void> appendFuture;
 
     /**
+     * The boolean indicating whether to replay the records. Without specifying.
+     * The default value is {@code appendFuture == null}.
+     */
+    private final Boolean replayRecords;
+
+    /**
      * Constructs a Result with records and a response.
      *
      * @param records   A non-null list of records.
@@ -53,7 +59,7 @@ public class CoordinatorResult<T, U> {
         List<U> records,
         T response
     ) {
-        this(records, response, null);
+        this(records, response, null, true);
     }
 
     /**
@@ -66,7 +72,7 @@ public class CoordinatorResult<T, U> {
         List<U> records,
         CompletableFuture<Void> appendFuture
     ) {
-        this(records, null, appendFuture);
+        this(records, null, appendFuture, appendFuture == null);
     }
 
     /**
@@ -81,9 +87,27 @@ public class CoordinatorResult<T, U> {
         T response,
         CompletableFuture<Void> appendFuture
     ) {
+        this(records, response, appendFuture, appendFuture == null);
+    }
+
+    /**
+     * Constructs a Result with records, a response, an append-future, and replayRecords.
+     *
+     * @param records
+     * @param response
+     * @param appendFuture
+     * @param replayRecords
+     */
+    public CoordinatorResult(
+        List<U> records,
+        T response,
+        CompletableFuture<Void> appendFuture,
+        boolean replayRecords
+    ) {
         this.records = Objects.requireNonNull(records);
         this.response = response;
         this.appendFuture = appendFuture;
+        this.replayRecords = Objects.requireNonNull(replayRecords);
     }
 
     /**
@@ -94,7 +118,7 @@ public class CoordinatorResult<T, U> {
     public CoordinatorResult(
         List<U> records
     ) {
-        this(records, null, null);
+        this(records, null, null, true);
     }
 
     /**
@@ -119,13 +143,10 @@ public class CoordinatorResult<T, U> {
     }
 
     /**
-     * If the append-future exists, this means
-     * that the in-memory state was already updated.
-     *
      * @return Whether to replay the records.
      */
     public boolean replayRecords() {
-        return appendFuture == null;
+        return replayRecords;
     }
 
     @Override
@@ -137,6 +158,7 @@ public class CoordinatorResult<T, U> {
 
         if (!Objects.equals(records, that.records)) return false;
         if (!Objects.equals(response, that.response)) return false;
+        if (!Objects.equals(replayRecords, that.replayRecords)) return false;
         return Objects.equals(appendFuture, that.appendFuture);
     }
 
@@ -145,6 +167,7 @@ public class CoordinatorResult<T, U> {
         int result = records != null ? records.hashCode() : 0;
         result = 31 * result + (response != null ? response.hashCode() : 0);
         result = 31 * result + (appendFuture != null ? appendFuture.hashCode() : 0);
+        result = 31 * result + replayRecords.hashCode();
         return result;
     }
     @Override
@@ -152,6 +175,7 @@ public class CoordinatorResult<T, U> {
         return "CoordinatorResult(records=" + records +
             ", response=" + response +
             ", appendFuture=" + appendFuture +
+            ", replayRecords=" + replayRecords +
             ")";
     }
 }
