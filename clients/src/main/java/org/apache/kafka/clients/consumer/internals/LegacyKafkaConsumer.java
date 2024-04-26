@@ -1114,6 +1114,10 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.client.wakeup();
     }
 
+    public void setLeaveGroupOnClose(boolean leaveGroupOnClose) {
+        this.coordinator.setLeaveGroupOnClose(leaveGroupOnClose);
+    }
+
     private Timer createTimerForRequest(final Duration timeout) {
         // this.time could be null if an exception occurs in constructor prior to setting the this.time field
         final Time localTime = (time == null) ? Time.SYSTEM : time;

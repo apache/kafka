@@ -1469,6 +1469,10 @@ public class KafkaStreams implements AutoCloseable {
         // save the current thread so that if it is a stream thread
         // we don't attempt to join it and cause a deadlock
         return new Thread(() -> {
+            if (leaveGroup) {
+                processStreamThread(streamThread -> streamThread.setLeaveGroupOnClose(leaveGroup));
+            }
+
             // notify all the threads to stop; avoid deadlocks by stopping any
             // further state reports from the thread since we're shutting down
             int numStreamThreads = processStreamThread(StreamThread::shutdown);

@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.LegacyKafkaConsumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
@@ -685,6 +686,9 @@ public class StreamThread extends Thread implements ProcessingThread {
      */
     @SuppressWarnings("deprecation") // Needed to include StreamsConfig.EXACTLY_ONCE_BETA in error log for UnsupportedVersionException
     boolean runLoop() {
+        final String name = Thread.currentThread().getName();
+        log.info("my name is {}", name);
+
         subscribeConsumer();
 
         // if the thread is still in the middle of a rebalance, we should keep polling
@@ -1428,11 +1432,21 @@ public class StreamThread extends Thread implements ProcessingThread {
      */
     public void shutdown() {
         log.info("Informed to shut down");
+
+
+
         final State oldState = setState(State.PENDING_SHUTDOWN);
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down
             completeShutdown(true);
         }
+    }
+
+    public void setLeaveGroupOnClose(final boolean leaveGroupOnClose) {
+        if (leaveGroupOnClose) {
+            log.info("Leaving consumer group on close");
+        }
+        ((LegacyKafkaConsumer<?, ?>) mainConsumer).setLeaveGroupOnClose(leaveGroupOnClose);
     }
 
     private void completeShutdown(final boolean cleanRun) {

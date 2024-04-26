@@ -1209,6 +1209,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
+    void setLeaveGroupOnClose(boolean leaveGroupOnClose) {
+        this.rebalanceConfig.setLeaveGroupOnClose(leaveGroupOnClose);
+    }
+
     private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
         @Override
         public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
