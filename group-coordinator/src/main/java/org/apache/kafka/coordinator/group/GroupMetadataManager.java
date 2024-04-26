@@ -1296,7 +1296,6 @@ public class GroupMetadataManager {
             .build();
 
         boolean bumpGroupEpoch = false;
-
         if (!updatedMember.equals(member)) {
             records.add(newMemberSubscriptionRecord(groupId, updatedMember));
 

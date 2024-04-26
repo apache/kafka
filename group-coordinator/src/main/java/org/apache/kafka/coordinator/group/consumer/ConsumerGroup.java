@@ -623,7 +623,7 @@ public class ConsumerGroup implements Group {
     /**
      * Computes the subscription metadata based on the current subscription info.
      *
-     * @param subscribedTopicNames      Map of topic name to subscribers count.
+     * @param subscribedTopicNames      Map of topic names to the number of subscribers.
      * @param topicsImage               The current metadata for all available topics.
      * @param clusterImage              The current metadata for the Kafka cluster.
      *
@@ -940,8 +940,7 @@ public class ConsumerGroup implements Group {
 
     /**
      * Updates the subscribed topic names count.
-     * The subscription type may be updated as
-     * a consequence.
+     * The subscription type is updated as a consequence.
      *
      * @param oldMember The old member.
      * @param newMember The new member.
