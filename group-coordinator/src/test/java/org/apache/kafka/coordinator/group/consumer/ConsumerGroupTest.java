@@ -603,8 +603,7 @@ public class ConsumerGroupTest {
         assertEquals(
             Collections.emptyMap(),
             consumerGroup.computeSubscriptionMetadata(
-                null,
-                null,
+                consumerGroup.updateSubscribedTopicNames(null, null),
                 image.topics(),
                 image.cluster()
             )
@@ -616,8 +615,7 @@ public class ConsumerGroupTest {
                 mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
             ),
             consumerGroup.computeSubscriptionMetadata(
-                null,
-                member1,
+                consumerGroup.updateSubscribedTopicNames(null, member1),
                 image.topics(),
                 image.cluster()
             )
@@ -632,8 +630,7 @@ public class ConsumerGroupTest {
                 mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
             ),
             consumerGroup.computeSubscriptionMetadata(
-                null,
-                null,
+                consumerGroup.updateSubscribedTopicNames(null, null),
                 image.topics(),
                 image.cluster()
             )
@@ -643,8 +640,7 @@ public class ConsumerGroupTest {
         assertEquals(
             Collections.emptyMap(),
             consumerGroup.computeSubscriptionMetadata(
-                member1,
-                null,
+                consumerGroup.updateSubscribedTopicNames(member1, null),
                 image.topics(),
                 image.cluster()
             )
@@ -657,8 +653,7 @@ public class ConsumerGroupTest {
                 mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
             ),
             consumerGroup.computeSubscriptionMetadata(
-                null,
-                member2,
+                consumerGroup.updateSubscribedTopicNames(null, member2),
                 image.topics(),
                 image.cluster()
             )
@@ -674,8 +669,7 @@ public class ConsumerGroupTest {
                 mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
             ),
             consumerGroup.computeSubscriptionMetadata(
-                null,
-                null,
+                consumerGroup.updateSubscribedTopicNames(null, null),
                 image.topics(),
                 image.cluster()
             )
@@ -687,8 +681,7 @@ public class ConsumerGroupTest {
                 mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
             ),
             consumerGroup.computeSubscriptionMetadata(
-                member2,
-                null,
+                consumerGroup.updateSubscribedTopicNames(member2, null),
                 image.topics(),
                 image.cluster()
             )
@@ -700,8 +693,7 @@ public class ConsumerGroupTest {
                 mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
             ),
             consumerGroup.computeSubscriptionMetadata(
-                member1,
-                null,
+                consumerGroup.updateSubscribedTopicNames(member1, null),
                 image.topics(),
                 image.cluster()
             )
@@ -715,8 +707,7 @@ public class ConsumerGroupTest {
                 mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
             ),
             consumerGroup.computeSubscriptionMetadata(
-                null,
-                member3,
+                consumerGroup.updateSubscribedTopicNames(null, member3),
                 image.topics(),
                 image.cluster()
             )
@@ -733,8 +724,7 @@ public class ConsumerGroupTest {
                 mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
             ),
             consumerGroup.computeSubscriptionMetadata(
-                null,
-                null,
+                consumerGroup.updateSubscribedTopicNames(null, null),
                 image.topics(),
                 image.cluster()
             )
@@ -1008,8 +998,7 @@ public class ConsumerGroupTest {
                 mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
             ),
             consumerGroup.computeSubscriptionMetadata(
-                null,
-                null,
+                consumerGroup.updateSubscribedTopicNames(null, null),
                 image.topics(),
                 image.cluster()
             )
