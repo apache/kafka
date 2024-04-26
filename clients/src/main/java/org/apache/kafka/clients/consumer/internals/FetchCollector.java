@@ -326,12 +326,14 @@ public class FetchCollector<K, V> {
         final TopicPartition tp = completedFetch.partition;
         final long fetchOffset = completedFetch.nextFetchOffset();
 
-        if (error == Errors.NOT_LEADER_OR_FOLLOWER ||
+        if (error == Errors.REPLICA_NOT_AVAILABLE) {
+            log.debug("Received replica not available error in fetch for partition {}", tp);
+            requestMetadataUpdate(metadata, subscriptions, tp);
+        } else if (error == Errors.NOT_LEADER_OR_FOLLOWER ||
                 error == Errors.FENCED_LEADER_EPOCH) {
             log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
             requestMetadataUpdate(metadata, subscriptions, tp);
-        } else if (error == Errors.REPLICA_NOT_AVAILABLE ||
-                error == Errors.KAFKA_STORAGE_ERROR ||
+        } else if (error == Errors.KAFKA_STORAGE_ERROR ||
                 error == Errors.OFFSET_NOT_AVAILABLE) {
             log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
             requestMetadataUpdate(metadata, subscriptions, tp);

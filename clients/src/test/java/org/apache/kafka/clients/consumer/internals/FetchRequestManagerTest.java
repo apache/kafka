@@ -3426,7 +3426,7 @@ public class FetchRequestManagerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Errors.class, names = {"REPLICA_NOT_AVAILABLE", "KAFKA_STORAGE_ERROR", "OFFSET_NOT_AVAILABLE",
+    @EnumSource(value = Errors.class, names = {"KAFKA_STORAGE_ERROR", "OFFSET_NOT_AVAILABLE",
             "UNKNOWN_TOPIC_OR_PARTITION", "UNKNOWN_TOPIC_ID", "INCONSISTENT_TOPIC_ID"})
     public void testWhenFetchResponseReturnsAErrorCausingRequestingMetadata(Errors error) {
         // The test runs with 2 partitions where 1 partition is fetched without errors, and
