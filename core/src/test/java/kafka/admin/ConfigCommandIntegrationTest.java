@@ -65,7 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.ZK)
+@ClusterTestDefaults
 @Tag("integration")
 public class ConfigCommandIntegrationTest {
     AdminZkClient adminZkClient;
@@ -79,7 +79,7 @@ public class ConfigCommandIntegrationTest {
 
     @ClusterTests({
         @ClusterTest(clusterType = Type.ZK),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 1),
+        @ClusterTest(clusterType = Type.KRAFT, brokers = 1)
     })
     public void testExitWithNonZeroStatusOnUpdatingUnallowedConfig() {
         assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
@@ -88,7 +88,7 @@ public class ConfigCommandIntegrationTest {
             "--alter",
             "--add-config", "security.inter.broker.protocol=PLAINTEXT")),
             errOut ->
-                assertTrue(errOut.contains("Cannot update these configs dynamically: Set(security.inter.broker.protocol)")));
+                assertTrue(errOut.contains("Cannot update these configs dynamically: Set(security.inter.broker.protocol)"), errOut));
     }
 
     @ClusterTests({
@@ -100,7 +100,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "admin",
             "--alter", "--add-config", "consumer_byte_rate=20000")),
             errOut ->
-                assertTrue(errOut.contains("User configuration updates using ZooKeeper are only supported for SCRAM credential updates.")));
+                assertTrue(errOut.contains("User configuration updates using ZooKeeper are only supported for SCRAM credential updates."), errOut));
     }
 
     public static void assertNonZeroStatusExit(Stream<String> args, Consumer<String> checkErrOut) {
