@@ -204,13 +204,15 @@ class OffsetValidationTest(VerifiableConsumerTest):
         num_bounces=[5],
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
-        group_protocol=consumer_group.all_group_protocols
+        group_protocol=consumer_group.classic_group_protocol
     )
-    def test_static_consumer_bounce(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
+    def test_static_consumer_bounce_with_eager_assignment(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
-        Verify correct static consumer behavior when the consumers in the group are restarted. In order to make
+        Verify correct static consumer behavior when the consumers in the group are restarted. In order to make 
         sure the behavior of static members are different from dynamic ones, we take both static and dynamic
-        membership into this test suite.
+        membership into this test suite. This test is based on the eager assignment strategy, where all dynamic consumers 
+        revoke their partitions when a global rebalance takes place (even if they are not being bounced). The test relies
+        on that eager behaviour when making sure that there is no global rebalance when static members are bounced.
 
         Setup: single Kafka cluster with one producer and a set of consumers in one group.
 
@@ -227,7 +229,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.await_produced_messages(producer)
 
         self.session_timeout_sec = 60
-        consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership, group_protocol=group_protocol)
+        consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership, group_protocol=group_protocol, 
+                                       assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor")
 
         consumer.start()
         self.await_all_members(consumer)
@@ -248,9 +251,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
         if static_membership:
             assert num_revokes_after_bounce == 0, \
                 "Unexpected revocation triggered when bouncing static member. Expecting 0 but had %d revocations" % num_revokes_after_bounce
-        elif consumer.is_eager():
+        else:
             assert num_revokes_after_bounce != 0, \
-                "Revocations not triggered when bouncing member with eager assignment"
+                "Revocations not triggered as expected when bouncing member with eager assignment"
 
         consumer.stop_all()
         if clean_shutdown:
