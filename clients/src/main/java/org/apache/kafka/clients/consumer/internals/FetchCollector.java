@@ -333,6 +333,10 @@ public class FetchCollector<K, V> {
                 error == Errors.FENCED_LEADER_EPOCH) {
             log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
             requestMetadataUpdate(metadata, subscriptions, tp);
+            if (completedFetch.partitionData.currentLeader().leaderId() == -1 ||
+                    completedFetch.partitionData.currentLeader().leaderEpoch() == -1) {
+                subscriptions.awaitUpdate(tp);
+            }
         } else if (error == Errors.KAFKA_STORAGE_ERROR ||
                 error == Errors.OFFSET_NOT_AVAILABLE) {
             log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
