@@ -44,7 +44,7 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.authorizer.StandardAcl
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ControllerRequestCompletionHandler
@@ -191,7 +191,7 @@ class ZkMigrationIntegrationTest {
       val serverProperties = new util.HashMap[String, String]()
       serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
-      serverProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       serverProperties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
@@ -328,7 +328,7 @@ class ZkMigrationIntegrationTest {
       val serverProperties = new util.HashMap[String, String]()
       serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
-      serverProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       serverProperties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
@@ -467,7 +467,7 @@ class ZkMigrationIntegrationTest {
       val serverProperties = new util.HashMap[String, String]()
       serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
-      serverProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       serverProperties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
@@ -536,7 +536,7 @@ class ZkMigrationIntegrationTest {
       val serverProperties = new util.HashMap[String, String]()
       serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
-      serverProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       serverProperties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
@@ -626,7 +626,7 @@ class ZkMigrationIntegrationTest {
       val serverProperties = new util.HashMap[String, String]()
       serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
-      serverProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       serverProperties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
@@ -696,7 +696,7 @@ class ZkMigrationIntegrationTest {
       val serverProperties = new util.HashMap[String, String]()
       serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
-      serverProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       serverProperties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
@@ -761,7 +761,7 @@ class ZkMigrationIntegrationTest {
       val serverProperties = new util.HashMap[String, String]()
       serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
-      serverProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       serverProperties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
@@ -841,7 +841,7 @@ class ZkMigrationIntegrationTest {
       val serverProperties = new util.HashMap[String, String]()
       serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
-      serverProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       serverProperties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       val clusterConfig = ClusterConfig.builder(zkCluster.config())

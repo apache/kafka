@@ -90,8 +90,7 @@ class PartitionReassignmentReplicas {
         List<Integer> removingReplicas,
         List<Integer> addingReplicas
     ) {
-        return removingReplicas.size() > 0
-            || addingReplicas.size() > 0;
+        return !removingReplicas.isEmpty() || !addingReplicas.isEmpty();
     }
 
 

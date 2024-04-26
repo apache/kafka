@@ -18,7 +18,7 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.raft.RaftConfig;
+import org.apache.kafka.raft.QuorumConfig;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -87,11 +87,11 @@ public class Defaults {
 
 
     /**  ********* Raft Quorum Configuration *********/
-    public static final List<String> QUORUM_VOTERS = RaftConfig.DEFAULT_QUORUM_VOTERS;
-    public static final int QUORUM_ELECTION_TIMEOUT_MS = RaftConfig.DEFAULT_QUORUM_ELECTION_TIMEOUT_MS;
-    public static final int QUORUM_FETCH_TIMEOUT_MS = RaftConfig.DEFAULT_QUORUM_FETCH_TIMEOUT_MS;
-    public static final int QUORUM_ELECTION_BACKOFF_MS = RaftConfig.DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS;
-    public static final int QUORUM_LINGER_MS = RaftConfig.DEFAULT_QUORUM_LINGER_MS;
-    public static final int QUORUM_REQUEST_TIMEOUT_MS = RaftConfig.DEFAULT_QUORUM_REQUEST_TIMEOUT_MS;
-    public static final int QUORUM_RETRY_BACKOFF_MS = RaftConfig.DEFAULT_QUORUM_RETRY_BACKOFF_MS;
+    public static final List<String> QUORUM_VOTERS = QuorumConfig.DEFAULT_QUORUM_VOTERS;
+    public static final int QUORUM_ELECTION_TIMEOUT_MS = QuorumConfig.DEFAULT_QUORUM_ELECTION_TIMEOUT_MS;
+    public static final int QUORUM_FETCH_TIMEOUT_MS = QuorumConfig.DEFAULT_QUORUM_FETCH_TIMEOUT_MS;
+    public static final int QUORUM_ELECTION_BACKOFF_MS = QuorumConfig.DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS;
+    public static final int QUORUM_LINGER_MS = QuorumConfig.DEFAULT_QUORUM_LINGER_MS;
+    public static final int QUORUM_REQUEST_TIMEOUT_MS = QuorumConfig.DEFAULT_QUORUM_REQUEST_TIMEOUT_MS;
+    public static final int QUORUM_RETRY_BACKOFF_MS = QuorumConfig.DEFAULT_QUORUM_RETRY_BACKOFF_MS;
 }

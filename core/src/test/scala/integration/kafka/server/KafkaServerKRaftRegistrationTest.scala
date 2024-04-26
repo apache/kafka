@@ -24,7 +24,7 @@ import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.api.Assertions.{assertThrows, fail}
@@ -75,7 +75,7 @@ class KafkaServerKRaftRegistrationTest {
       val serverProperties = new java.util.HashMap[String, String]()
       serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
-      serverProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       serverProperties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
@@ -117,7 +117,7 @@ class KafkaServerKRaftRegistrationTest {
       val serverProperties = new java.util.HashMap[String, String]()
       serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
-      serverProperties.put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       serverProperties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       val clusterConfig = ClusterConfig.builder(zkCluster.config())
