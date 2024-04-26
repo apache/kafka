@@ -1181,7 +1181,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                 );
 
                 // Update the internal listener to the new end offset
-                partitionListener.truncateTo(truncationOffset);
+                partitionListener.truncateNewEntries(truncationOffset);
             } else if (partitionResponse.snapshotId().epoch() >= 0 ||
                        partitionResponse.snapshotId().endOffset() >= 0) {
                 // The leader is asking us to fetch a snapshot
@@ -2486,8 +2486,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             long lastContainedLogOffset = snapshotId.offset() - 1;
 
             RawSnapshotWriter wrappedWriter = new NotifyingRawSnapshotWriter(writer, offsetAndEpoch -> {
-                // Trim the state in the internal starting with the new starting offset
-                partitionListener.trimPrefixTo(offsetAndEpoch.offset());
+                // Trim the state in the internal listener up to the new snapshot
+                partitionListener.truncateOldEntries(offsetAndEpoch.offset());
             });
 
             return new RecordsSnapshotWriter.Builder()

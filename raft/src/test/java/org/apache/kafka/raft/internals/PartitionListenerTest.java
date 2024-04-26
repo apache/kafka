@@ -289,13 +289,13 @@ final class PartitionListenerTest {
 
         // Truncate log and listener
         log.truncateTo(voterSetOffset);
-        partitionListener.truncateTo(voterSetOffset);
+        partitionListener.truncateNewEntries(voterSetOffset);
 
         assertEquals(firstVoterSet, partitionListener.lastVoterSet());
 
         // Truncate the entire log
         log.truncateTo(0);
-        partitionListener.truncateTo(0);
+        partitionListener.truncateNewEntries(0);
 
         assertEquals(staticVoterSet, partitionListener.lastVoterSet());
     }
@@ -358,16 +358,16 @@ final class PartitionListenerTest {
         assertEquals(kraftVersion, partitionListener.kraftVersionAtOffset(kraftVersionOffset));
 
         // Trim the prefix for the partition listener up to the kraft.version
-        partitionListener.trimPrefixTo(kraftVersionOffset);
+        partitionListener.truncateOldEntries(kraftVersionOffset);
         assertEquals(kraftVersion, partitionListener.kraftVersionAtOffset(kraftVersionOffset));
 
         // Trim the prefix for the partition listener up to the first voter set
-        partitionListener.trimPrefixTo(firstVoterSetOffset);
+        partitionListener.truncateOldEntries(firstVoterSetOffset);
         assertEquals(kraftVersion, partitionListener.kraftVersionAtOffset(kraftVersionOffset));
         assertEquals(Optional.of(firstVoterSet), partitionListener.voterSetAtOffset(firstVoterSetOffset));
 
         // Trim the prefix for the partition listener up to the second voter set
-        partitionListener.trimPrefixTo(voterSetOffset);
+        partitionListener.truncateOldEntries(voterSetOffset);
         assertEquals(kraftVersion, partitionListener.kraftVersionAtOffset(kraftVersionOffset));
         assertEquals(Optional.empty(), partitionListener.voterSetAtOffset(firstVoterSetOffset));
         assertEquals(Optional.of(voterSet), partitionListener.voterSetAtOffset(voterSetOffset));

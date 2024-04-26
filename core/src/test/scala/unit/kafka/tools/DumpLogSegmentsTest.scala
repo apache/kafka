@@ -20,6 +20,8 @@ package kafka.tools
 import java.io.{ByteArrayOutputStream, File, PrintWriter}
 import java.nio.ByteBuffer
 import java.util
+import java.util.Optional
+import java.util.Arrays
 import java.util.Properties
 import kafka.log.{LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
@@ -35,6 +37,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
+import org.apache.kafka.raft.internals.VoterSetTest
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.util.MockTime
@@ -327,6 +330,8 @@ class DumpLogSegmentsTest {
         .setTime(new MockTime)
         .setLastContainedLogTimestamp(lastContainedLogTimestamp)
         .setRawSnapshotWriter(metadataLog.createNewSnapshot(new OffsetAndEpoch(0, 0)).get)
+        .setKraftVersion(1)
+        .setVoterSet(Optional.of(VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)))))
         .build(MetadataRecordSerde.INSTANCE)
     ) { snapshotWriter =>
       snapshotWriter.append(metadataRecords.asJava)
@@ -334,20 +339,24 @@ class DumpLogSegmentsTest {
     }
 
     var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", snapshotPath))
-    assertTrue(output.contains("Snapshot end offset: 0, epoch: 0"))
-    assertTrue(output.contains("TOPIC_RECORD"))
-    assertTrue(output.contains("BROKER_RECORD"))
-    assertTrue(output.contains("SnapshotHeader"))
-    assertTrue(output.contains("SnapshotFooter"))
-    assertTrue(output.contains(s""""lastContainedLogTimestamp":$lastContainedLogTimestamp"""))
+    assertTrue(output.contains("Snapshot end offset: 0, epoch: 0"), output)
+    assertTrue(output.contains("TOPIC_RECORD"), output)
+    assertTrue(output.contains("BROKER_RECORD"), output)
+    assertTrue(output.contains("SnapshotHeader"), output)
+    assertTrue(output.contains("SnapshotFooter"), output)
+    assertTrue(output.contains("KRaftVersion"), output)
+    assertTrue(output.contains("KRaftVoters"), output)
+    assertTrue(output.contains(s""""lastContainedLogTimestamp":$lastContainedLogTimestamp"""), output)
 
     output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", snapshotPath))
-    assertTrue(output.contains("Snapshot end offset: 0, epoch: 0"))
-    assertTrue(output.contains("TOPIC_RECORD"))
-    assertTrue(output.contains("BROKER_RECORD"))
-    assertFalse(output.contains("SnapshotHeader"))
-    assertFalse(output.contains("SnapshotFooter"))
-    assertFalse(output.contains(s""""lastContainedLogTimestamp": $lastContainedLogTimestamp"""))
+    assertTrue(output.contains("Snapshot end offset: 0, epoch: 0"), output)
+    assertTrue(output.contains("TOPIC_RECORD"), output)
+    assertTrue(output.contains("BROKER_RECORD"), output)
+    assertFalse(output.contains("SnapshotHeader"), output)
+    assertFalse(output.contains("SnapshotFooter"), output)
+    assertFalse(output.contains("KRaftVersion"), output)
+    assertFalse(output.contains("KRaftVoters"), output)
+    assertFalse(output.contains(s""""lastContainedLogTimestamp": $lastContainedLogTimestamp"""), output)
   }
 
   @Test

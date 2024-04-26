@@ -36,18 +36,18 @@ public interface History<T> {
     public void addAt(long offset, T value);
 
     /**
-     * Returns the value that has the largest offset that is less than or equals to the provided
+     * Returns the value that has the largest offset that is less than or equal to the provided
      * offset.
      *
      * @param offset the offset
-     * @return the value if it exist, otherwise {@code Optional.empty()}
+     * @return the value if it exists, otherwise {@code Optional.empty()}
      */
     public Optional<T> valueAtOrBefore(long offset);
 
     /**
      * Returns the value with the largest offset.
      *
-     * @return the value if it exist, otherwise {@code Optional.empty()}
+     * @return the value if it exists, otherwise {@code Optional.empty()}
      */
     public Optional<Entry<T>> lastEntry();
 
@@ -56,10 +56,10 @@ public interface History<T> {
      *
      * @param endOffset the ending offset
      */
-    public void truncateTo(long endOffset);
+    public void truncateNewEntries(long endOffset);
 
     /**
-     * Removes all entries but the largest entry that has an offset that is less than or equal to
+     * Removes all entries but the last entry that has an offset that is less than or equal to
      * {@code startOffset}.
      *
      * This operation does not remove the entry with the largest offset that is less than or equal
@@ -69,7 +69,7 @@ public interface History<T> {
      *
      * @param startOffset the starting offset
      */
-    public void trimPrefixTo(long startOffset);
+    public void truncateOldEntries(long startOffset);
 
     /**
      * Removes all of the values from this object.

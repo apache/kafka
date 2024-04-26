@@ -56,12 +56,12 @@ final public class TreeMapHistory<T> implements History<T> {
     }
 
     @Override
-    public void truncateTo(long endOffset) {
+    public void truncateNewEntries(long endOffset) {
         history.tailMap(endOffset, true).clear();
     }
 
     @Override
-    public void trimPrefixTo(long startOffset) {
+    public void truncateOldEntries(long startOffset) {
         NavigableMap<Long, T> lesserValues = history.headMap(startOffset, true);
         while (lesserValues.size() > 1) {
             // Poll and ignore the entry to remove the first entry

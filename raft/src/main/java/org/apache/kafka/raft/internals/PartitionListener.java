@@ -97,12 +97,12 @@ final public class PartitionListener {
      *
      * @param endOffset the end offset (exclusive)
      */
-    public void truncateTo(long endOffset) {
+    public void truncateNewEntries(long endOffset) {
         synchronized (voterSetHistory) {
-            voterSetHistory.truncateTo(endOffset);
+            voterSetHistory.truncateNewEntries(endOffset);
         }
         synchronized (kraftVersionHistory) {
-            kraftVersionHistory.truncateTo(endOffset);
+            kraftVersionHistory.truncateNewEntries(endOffset);
         }
     }
 
@@ -111,12 +111,12 @@ final public class PartitionListener {
      *
      * @param @startOffset the start offset (inclusive)
      */
-    public void trimPrefixTo(long startOffset) {
+    public void truncateOldEntries(long startOffset) {
         synchronized (voterSetHistory) {
-            voterSetHistory.trimPrefixTo(startOffset);
+            voterSetHistory.truncateOldEntries(startOffset);
         }
         synchronized (kraftVersionHistory) {
-            kraftVersionHistory.trimPrefixTo(startOffset);
+            kraftVersionHistory.truncateOldEntries(startOffset);
         }
     }
 

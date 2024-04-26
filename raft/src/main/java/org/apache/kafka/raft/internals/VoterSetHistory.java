@@ -82,17 +82,19 @@ final public class VoterSetHistory implements History<VoterSet> {
      * Returns the latest set of voters.
      */
     public VoterSet lastValue() {
-        return lastEntry().orElseThrow(() -> new IllegalStateException("No voter set found")).value();
+        return lastEntry()
+            .orElseThrow(() -> new IllegalStateException("No voter set found"))
+            .value();
     }
 
     @Override
-    public void truncateTo(long endOffset) {
-        votersHistory.truncateTo(endOffset);
+    public void truncateNewEntries(long endOffset) {
+        votersHistory.truncateNewEntries(endOffset);
     }
 
     @Override
-    public void trimPrefixTo(long startOffset) {
-        votersHistory.trimPrefixTo(startOffset);
+    public void truncateOldEntries(long startOffset) {
+        votersHistory.truncateOldEntries(startOffset);
     }
 
     @Override

@@ -1338,21 +1338,27 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testValidQuorumVotersParsing(): Unit = {
+  def testValidEmptyQuorumVotersParsing(): Unit = {
+    assertValidQuorumVoters(new util.HashMap[Integer, InetSocketAddress](), "")
+  }
+
+  @Test
+  def testValidQuorumVotersParsingWithIpAddress(): Unit = {
     val expected = new util.HashMap[Integer, InetSocketAddress]()
-    assertValidQuorumVoters("", expected)
-
     expected.put(1, new InetSocketAddress("127.0.0.1", 9092))
-    assertValidQuorumVoters("1@127.0.0.1:9092", expected)
+    assertValidQuorumVoters(expected, "1@127.0.0.1:9092")
+  }
 
-    expected.clear()
+  @Test
+  def testValidQuorumVotersParsingWithMultipleHost(): Unit = {
+    val expected = new util.HashMap[Integer, InetSocketAddress]()
     expected.put(1, new InetSocketAddress("kafka1", 9092))
     expected.put(2, new InetSocketAddress("kafka2", 9092))
     expected.put(3, new InetSocketAddress("kafka3", 9092))
-    assertValidQuorumVoters("1@kafka1:9092,2@kafka2:9092,3@kafka3:9092", expected)
+    assertValidQuorumVoters(expected, "1@kafka1:9092,2@kafka2:9092,3@kafka3:9092")
   }
 
-  private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, InetSocketAddress]): Unit = {
+  private def assertValidQuorumVoters(expectedVoters: util.Map[Integer, InetSocketAddress], value: String): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.setProperty(KafkaConfig.QuorumVotersProp, value)
     val addresses = QuorumConfig.parseVoterConnections(KafkaConfig.fromProps(props).quorumVoters)

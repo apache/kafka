@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.snapshot.RecordsSnapshotReader
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -87,8 +88,10 @@ class RaftClusterSnapshotTest {
           while (snapshot.hasNext) {
             val batch = snapshot.next
             assertTrue(batch.sizeInBytes > 0)
-            assertTrue(
-              batch.records.isEmpty != batch.controlRecords.isEmpty,
+            // A batch must have at least one control records or at least one data records, but not both
+            assertNotEquals(
+              batch.records.isEmpty,
+              batch.controlRecords.isEmpty,
               s"data records = ${batch.records}; control records = ${batch.controlRecords}"
             )
           }

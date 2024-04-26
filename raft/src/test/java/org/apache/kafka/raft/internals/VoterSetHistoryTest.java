@@ -35,13 +35,13 @@ final public class VoterSetHistoryTest {
         assertEquals(staticVoterSet, votersHistory.lastValue());
 
         // Should be a no-op
-        votersHistory.truncateTo(100);
+        votersHistory.truncateNewEntries(100);
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(0));
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(100));
         assertEquals(staticVoterSet, votersHistory.lastValue());
 
         // Should be a no-op
-        votersHistory.trimPrefixTo(100);
+        votersHistory.truncateOldEntries(100);
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(0));
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(100));
         assertEquals(staticVoterSet, votersHistory.lastValue());
@@ -101,13 +101,13 @@ final public class VoterSetHistoryTest {
         VoterSet voterSet12345 = new VoterSet(new HashMap<>(voterMap));
         votersHistory.addAt(200, voterSet12345);
 
-        votersHistory.truncateTo(201);
+        votersHistory.truncateNewEntries(201);
         assertEquals(Optional.of(new History.Entry<>(200, voterSet12345)), votersHistory.lastEntry());
-        votersHistory.truncateTo(200);
+        votersHistory.truncateNewEntries(200);
         assertEquals(Optional.of(new History.Entry<>(100, voterSet1234)), votersHistory.lastEntry());
-        votersHistory.truncateTo(101);
+        votersHistory.truncateNewEntries(101);
         assertEquals(Optional.of(new History.Entry<>(100, voterSet1234)), votersHistory.lastEntry());
-        votersHistory.truncateTo(100);
+        votersHistory.truncateNewEntries(100);
         assertEquals(Optional.of(new History.Entry<>(-1, staticVoterSet)), votersHistory.lastEntry());
     }
 
@@ -127,19 +127,19 @@ final public class VoterSetHistoryTest {
         VoterSet voterSet12345 = new VoterSet(new HashMap<>(voterMap));
         votersHistory.addAt(200, voterSet12345);
 
-        votersHistory.trimPrefixTo(99);
+        votersHistory.truncateOldEntries(99);
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(99));
         assertEquals(Optional.of(voterSet1234), votersHistory.valueAtOrBefore(100));
 
-        votersHistory.trimPrefixTo(100);
+        votersHistory.truncateOldEntries(100);
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(99));
         assertEquals(Optional.of(voterSet1234), votersHistory.valueAtOrBefore(100));
 
-        votersHistory.trimPrefixTo(101);
+        votersHistory.truncateOldEntries(101);
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(99));
         assertEquals(Optional.of(voterSet1234), votersHistory.valueAtOrBefore(100));
 
-        votersHistory.trimPrefixTo(200);
+        votersHistory.truncateOldEntries(200);
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(199));
         assertEquals(Optional.of(voterSet12345), votersHistory.valueAtOrBefore(200));
     }
