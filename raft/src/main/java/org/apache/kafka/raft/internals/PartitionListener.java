@@ -237,7 +237,7 @@ final public class PartitionListener {
         for (ControlRecord record : batch.controlRecords()) {
             long currentOffset = overrideOffset.orElse(batch.baseOffset() + index);
             switch (record.type()) {
-                case VOTERS:
+                case KRAFT_VOTERS:
                     synchronized (voterSetHistory) {
                         voterSetHistory.addAt(currentOffset, VoterSet.fromVotersRecord((VotersRecord) record.message()));
                     }

@@ -253,7 +253,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                             numberOfRecords++;
                             builder.appendVotersMessage(
                                 now,
-                                voterSet.get().toVotersRecord(ControlRecordUtils.VOTERS_CURRENT_VERSION)
+                                voterSet.get().toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
                             );
                         }
                     }

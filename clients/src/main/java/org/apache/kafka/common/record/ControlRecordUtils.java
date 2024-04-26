@@ -33,7 +33,7 @@ public class ControlRecordUtils {
     public static final short LEADER_CHANGE_CURRENT_VERSION = 0;
     public static final short SNAPSHOT_FOOTER_CURRENT_VERSION = 0;
     public static final short SNAPSHOT_HEADER_CURRENT_VERSION = 0;
-    public static final short VOTERS_CURRENT_VERSION = 0;
+    public static final short KRAFT_VOTERS_CURRENT_VERSION = 0;
 
     public static LeaderChangeMessage deserializeLeaderChangeMessage(Record record) {
         ControlRecordType recordType = ControlRecordType.parse(record.key());
@@ -81,13 +81,13 @@ public class ControlRecordUtils {
 
     public static VotersRecord deserializeVotersRecord(Record record) {
         ControlRecordType recordType = ControlRecordType.parse(record.key());
-        validateControlRecordType(ControlRecordType.VOTERS, recordType);
+        validateControlRecordType(ControlRecordType.KRAFT_VOTERS, recordType);
 
         return deserializeVotersRecord(record.value());
     }
 
     public static VotersRecord deserializeVotersRecord(ByteBuffer data) {
-        return new VotersRecord(new ByteBufferAccessor(data.slice()), VOTERS_CURRENT_VERSION);
+        return new VotersRecord(new ByteBufferAccessor(data.slice()), KRAFT_VOTERS_CURRENT_VERSION);
     }
 
     private static void validateControlRecordType(ControlRecordType expected, ControlRecordType actual) {

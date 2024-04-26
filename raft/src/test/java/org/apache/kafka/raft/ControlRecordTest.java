@@ -36,7 +36,7 @@ public final class ControlRecordTest {
         new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord());
         new ControlRecord(ControlRecordType.SNAPSHOT_FOOTER, new SnapshotFooterRecord());
         new ControlRecord(ControlRecordType.KRAFT_VERSION, new KRaftVersionRecord());
-        new ControlRecord(ControlRecordType.VOTERS, new VotersRecord());
+        new ControlRecord(ControlRecordType.KRAFT_VOTERS, new VotersRecord());
 
         // Invalid constructions
         assertThrows(

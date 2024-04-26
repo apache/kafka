@@ -95,15 +95,15 @@ final public class VoterSet {
      *
      * This object is immutable. A new voter set is returned if the voter was removed.
      *
-     * A voter can be removed from the voter set if its id and uuid match.
+     * A voter can be removed from the voter set if its id and directory id match.
      *
      * @param voterId the voter id
-     * @param voterUuid the voter uuid
+     * @param voterDirectoryId the voter directory id
      * @return a new voter set if the voter was remove, otherwise {@code Optional.empty()}
      */
-    public Optional<VoterSet> removeVoter(int voterId, Optional<Uuid> voterUuid) {
+    public Optional<VoterSet> removeVoter(int voterId, Optional<Uuid> voterDirectoryId) {
         VoterNode oldVoter = voters.get(voterId);
-        if (oldVoter != null && Objects.equals(oldVoter.uuid(), voterUuid)) {
+        if (oldVoter != null && Objects.equals(oldVoter.directoryId(), voterDirectoryId)) {
             HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
             newVoters.remove(voterId);
 
@@ -144,7 +144,7 @@ final public class VoterSet {
 
                         return new VotersRecord.Voter()
                             .setVoterId(voter.id())
-                            .setVoterUuid(voter.uuid().orElse(Uuid.ZERO_UUID))
+                            .setVoterDirectoryId(voter.directoryId().orElse(Uuid.ZERO_UUID))
                             .setEndpoints(new VotersRecord.EndpointCollection(endpoints))
                             .setKRaftVersionFeature(kraftVersionFeature);
                     })
@@ -193,18 +193,18 @@ final public class VoterSet {
 
     final static class VoterNode {
         private final int id;
-        private final Optional<Uuid> uuid;
+        private final Optional<Uuid> directoryId;
         private final Map<String, InetSocketAddress> listeners;
         private final SupportedVersionRange supportedKRaftVersion;
 
         VoterNode(
             int id,
-            Optional<Uuid> uuid,
+            Optional<Uuid> directoryId,
             Map<String, InetSocketAddress> listeners,
             SupportedVersionRange supportedKRaftVersion
         ) {
             this.id = id;
-            this.uuid = uuid;
+            this.directoryId = directoryId;
             this.listeners = listeners;
             this.supportedKRaftVersion = supportedKRaftVersion;
         }
@@ -213,8 +213,8 @@ final public class VoterSet {
             return id;
         }
 
-        Optional<Uuid> uuid() {
-            return uuid;
+        Optional<Uuid> directoryId() {
+            return directoryId;
         }
 
         Map<String, InetSocketAddress> listeners() {
@@ -238,7 +238,7 @@ final public class VoterSet {
             VoterNode that = (VoterNode) o;
 
             if (id != that.id) return false;
-            if (!Objects.equals(uuid, that.uuid)) return false;
+            if (!Objects.equals(directoryId, that.directoryId)) return false;
             if (!Objects.equals(supportedKRaftVersion, that.supportedKRaftVersion)) return false;
             if (!Objects.equals(listeners, that.listeners)) return false;
 
@@ -247,15 +247,15 @@ final public class VoterSet {
 
         @Override
         public int hashCode() {
-            return Objects.hash(id, uuid, listeners, supportedKRaftVersion);
+            return Objects.hash(id, directoryId, listeners, supportedKRaftVersion);
         }
 
         @Override
         public String toString() {
             return String.format(
-                "VoterNode(id=%d, uuid=%s, listeners=%s, supportedKRaftVersion=%s)",
+                "VoterNode(id=%d, directoryId=%s, listeners=%s, supportedKRaftVersion=%s)",
                 id,
-                uuid,
+                directoryId,
                 listeners,
                 supportedKRaftVersion
             );
@@ -271,11 +271,11 @@ final public class VoterSet {
     public static VoterSet fromVotersRecord(VotersRecord voters) {
         HashMap<Integer, VoterNode> voterNodes = new HashMap<>(voters.voters().size());
         for (VotersRecord.Voter voter: voters.voters()) {
-            final Optional<Uuid> uuid;
-            if (!voter.voterUuid().equals(Uuid.ZERO_UUID)) {
-                uuid = Optional.of(voter.voterUuid());
+            final Optional<Uuid> directoryId;
+            if (!voter.voterDirectoryId().equals(Uuid.ZERO_UUID)) {
+                directoryId = Optional.of(voter.voterDirectoryId());
             } else {
-                uuid = Optional.empty();
+                directoryId = Optional.empty();
             }
 
             Map<String, InetSocketAddress> listeners = new HashMap<>(voter.endpoints().size());
@@ -287,7 +287,7 @@ final public class VoterSet {
                 voter.voterId(),
                 new VoterNode(
                     voter.voterId(),
-                    uuid,
+                    directoryId,
                     listeners,
                     new SupportedVersionRange(
                         voter.kRaftVersionFeature().minSupportedVersion(),

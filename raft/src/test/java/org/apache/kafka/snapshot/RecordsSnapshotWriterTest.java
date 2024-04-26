@@ -149,7 +149,7 @@ final class RecordsSnapshotWriterTest {
             assertEquals(new KRaftVersionRecord().setKRaftVersion((short) 1), batch.controlRecords().get(1).message());
 
             // Check the voters control record
-            assertEquals(ControlRecordType.VOTERS, batch.controlRecords().get(2).type());
+            assertEquals(ControlRecordType.KRAFT_VOTERS, batch.controlRecords().get(2).type());
             assertEquals(voterSet.toVotersRecord((short) 0), batch.controlRecords().get(2).message());
 
             // Consume the reader until we find a control record

@@ -75,7 +75,7 @@ final public class VoterSetTest {
         VoterSet.VoterNode voter3 = aVoterMap.remove(3);
         assertEquals(
             Optional.of(new VoterSet(new HashMap<>(aVoterMap))),
-            voterSet.removeVoter(voter3.id(), voter3.uuid())
+            voterSet.removeVoter(voter3.id(), voter3.directoryId())
         );
     }
 
