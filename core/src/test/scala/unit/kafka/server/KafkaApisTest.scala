@@ -74,12 +74,12 @@ import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
 import org.apache.kafka.common._
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.ClientMetricsManager
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ConfigType, Defaults, KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
-import org.apache.kafka.server.config.{ConfigType, Defaults}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
@@ -153,11 +153,11 @@ class KafkaApisTest extends Logging {
                       overrideProperties: Map[String, String] = Map.empty): KafkaApis = {
     val properties = if (raftSupport) {
       val properties = TestUtils.createBrokerConfig(brokerId, "")
-      properties.put(KafkaConfig.NodeIdProp, brokerId.toString)
-      properties.put(KafkaConfig.ProcessRolesProp, "broker")
+      properties.put(KRaftConfigs.NODE_ID_CONFIG, brokerId.toString)
+      properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
       val voterId = brokerId + 1
-      properties.put(KafkaConfig.QuorumVotersProp, s"$voterId@localhost:9093")
-      properties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
+      properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$voterId@localhost:9093")
+      properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
       properties
     } else {
       TestUtils.createBrokerConfig(brokerId, "zk")
