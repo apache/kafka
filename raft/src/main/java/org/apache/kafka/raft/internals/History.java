@@ -20,7 +20,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * A object tracks values of {@code T} at different offsets.
+ * An object that tracks values of {@code T} at different offsets.
  */
 public interface History<T> {
     /**
@@ -31,9 +31,9 @@ public interface History<T> {
      *
      * @param offset the offset
      * @param value the value to store
-     * @throws IllegalArgumentException if the offset is not greater that all previous offsets
+     * @throws IllegalArgumentException if the offset is not greater than all previous offsets
      */
-    public void addAt(long offset, T value);
+    void addAt(long offset, T value);
 
     /**
      * Returns the value that has the largest offset that is less than or equal to the provided
@@ -42,21 +42,21 @@ public interface History<T> {
      * @param offset the offset
      * @return the value if it exists, otherwise {@code Optional.empty()}
      */
-    public Optional<T> valueAtOrBefore(long offset);
+    Optional<T> valueAtOrBefore(long offset);
 
     /**
      * Returns the value with the largest offset.
      *
      * @return the value if it exists, otherwise {@code Optional.empty()}
      */
-    public Optional<Entry<T>> lastEntry();
+    Optional<Entry<T>> lastEntry();
 
     /**
      * Removes all entries with an offset greater than or equal to {@code endOffset}.
      *
      * @param endOffset the ending offset
      */
-    public void truncateNewEntries(long endOffset);
+    void truncateNewEntries(long endOffset);
 
     /**
      * Removes all entries but the last entry that has an offset that is less than or equal to
@@ -69,14 +69,14 @@ public interface History<T> {
      *
      * @param startOffset the starting offset
      */
-    public void truncateOldEntries(long startOffset);
+    void truncateOldEntries(long startOffset);
 
     /**
      * Removes all of the values from this object.
      */
-    public void clear();
+    void clear();
 
-    final public static class Entry<T> {
+    final static class Entry<T> {
         private final long offset;
         private final T value;
 

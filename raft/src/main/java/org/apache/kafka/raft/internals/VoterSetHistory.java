@@ -22,10 +22,10 @@ import java.util.Optional;
  * A type for storing the historical value of the set of voters.
  *
  * This type can be use to keep track in-memory the sets for voters stored in the latest snapshot
- * and log. This is useful when both generating a new snapshot at a given offset or when evaulating
+ * and log. This is useful when generating a new snapshot at a given offset or when evaulating
  * the latest set of voters.
  */
-final public class VoterSetHistory implements History<VoterSet> {
+final public class VoterSetHistory {
     private final Optional<VoterSet> staticVoterSet;
     private final History<VoterSet> votersHistory = new TreeMapHistory<>();
 
@@ -33,7 +33,16 @@ final public class VoterSetHistory implements History<VoterSet> {
         this.staticVoterSet = staticVoterSet;
     }
 
-    @Override
+    /**
+     * Add a new value at a given offset.
+     *
+     * The provided {@code offset} must be greater than or equal to 0 and must be greater than the
+     * offset of all previous calls to this method.
+     *
+     * @param offset the offset
+     * @param value the value to store
+     * @throws IllegalArgumentException if the offset is not greater than all previous offsets
+     */
     public void addAt(long offset, VoterSet voters) {
         Optional<History.Entry<VoterSet>> lastEntry = votersHistory.lastEntry();
         if (lastEntry.isPresent() && lastEntry.get().offset() >= 0) {
@@ -65,39 +74,50 @@ final public class VoterSetHistory implements History<VoterSet> {
      * @param offset the offset (inclusive)
      * @return the voter set if one exist, otherwise {@code Optional.empty()}
      */
-    @Override
     public Optional<VoterSet> valueAtOrBefore(long offset) {
         return votersHistory.valueAtOrBefore(offset);
-    }
-
-    @Override
-    public Optional<History.Entry<VoterSet>> lastEntry() {
-        Optional<History.Entry<VoterSet>> result = votersHistory.lastEntry();
-        if (result.isPresent()) return result;
-
-        return staticVoterSet.map(value -> new History.Entry<>(-1, value));
     }
 
     /**
      * Returns the latest set of voters.
      */
     public VoterSet lastValue() {
-        return lastEntry()
-            .orElseThrow(() -> new IllegalStateException("No voter set found"))
-            .value();
+        Optional<History.Entry<VoterSet>> result = votersHistory.lastEntry();
+        if (result.isPresent()) {
+            return result.get().value();
+        }
+
+        return staticVoterSet
+            .orElseThrow(() -> new IllegalStateException("No voter set found"));
     }
 
-    @Override
+    /**
+     * Removes all entries with an offset greater than or equal to {@code endOffset}.
+     *
+     * @param endOffset the ending offset
+     */
     public void truncateNewEntries(long endOffset) {
         votersHistory.truncateNewEntries(endOffset);
     }
 
-    @Override
+    /**
+     * Removes all entries but the last entry that has an offset that is less than or equal to
+     * {@code startOffset}.
+     *
+     * This operation does not remove the entry with the largest offset that is less than or equal
+     * to {@code startOffset}. This is needed so that calls to {@code valueAtOrBefore} and
+     * {@code lastEntry} always return a non-empty value if a value was previously added to this
+     * object.
+     *
+     * @param startOffset the starting offset
+     */
     public void truncateOldEntries(long startOffset) {
         votersHistory.truncateOldEntries(startOffset);
     }
 
-    @Override
+    /**
+     * Removes all of the values from this object.
+     */
     public void clear() {
         votersHistory.clear();
     }

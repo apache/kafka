@@ -102,13 +102,13 @@ final public class VoterSetHistoryTest {
         votersHistory.addAt(200, voterSet12345);
 
         votersHistory.truncateNewEntries(201);
-        assertEquals(Optional.of(new History.Entry<>(200, voterSet12345)), votersHistory.lastEntry());
+        assertEquals(voterSet12345, votersHistory.lastValue());
         votersHistory.truncateNewEntries(200);
-        assertEquals(Optional.of(new History.Entry<>(100, voterSet1234)), votersHistory.lastEntry());
+        assertEquals(voterSet1234, votersHistory.lastValue());
         votersHistory.truncateNewEntries(101);
-        assertEquals(Optional.of(new History.Entry<>(100, voterSet1234)), votersHistory.lastEntry());
+        assertEquals(voterSet1234, votersHistory.lastValue());
         votersHistory.truncateNewEntries(100);
-        assertEquals(Optional.of(new History.Entry<>(-1, staticVoterSet)), votersHistory.lastEntry());
+        assertEquals(staticVoterSet, votersHistory.lastValue());
     }
 
     @Test
@@ -162,6 +162,6 @@ final public class VoterSetHistoryTest {
 
         votersHistory.clear();
 
-        assertEquals(Optional.of(new History.Entry<>(-1, staticVoterSet)), votersHistory.lastEntry());
+        assertEquals(staticVoterSet, votersHistory.lastValue());
     }
 }

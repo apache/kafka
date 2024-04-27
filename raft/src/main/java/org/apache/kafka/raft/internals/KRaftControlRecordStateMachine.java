@@ -36,22 +36,28 @@ import org.slf4j.Logger;
 /**
  * The KRaft state machine for tracking control records in the topic partition.
  *
- * This type keeps track of changes to the finalized kraft.version and the sets of voters.
+ * This type keeps track of changes to the finalized kraft.version and the sets of voters between
+ * the latest snasphot and the log end offset.
+ *
+ * The are two actors/threads for this type. One is the KRaft driver which indirectly call a lot of
+ * the public methods. The other are the callers of {@code RaftClient::createSnapshot} which
+ * indirectly call {@code voterSetAtOffset} and {@code kraftVersionAtOffset} when freezing a snapshot.
  */
-final public class PartitionListener {
+final public class KRaftControlRecordStateMachine {
     private final ReplicatedLog log;
     private final RecordSerde<?> serde;
     private final BufferSupplier bufferSupplier;
     private final Logger logger;
     private final int maxBatchSizeBytes;
 
-    // These are objects are synchronized using the perspective object monitor. The two actors
-    // are the KRaft driver and the RaftClient callers
+    // These objects are synchronized using their respective object monitor. The two actors
+    // are the KRaft driver when calling updateState and the RaftClient callers when freezing
+    // snapshots
     private final VoterSetHistory voterSetHistory;
     private final History<Short> kraftVersionHistory = new TreeMapHistory<>();
 
     // This synchronization is enough because
-    // 1. The write operation updateListener only sets the value without reading and updates to
+    // 1. The write operation updateState only sets the value without reading it and updates to
     // voterSetHistory or kraftVersionHistory are done before setting the nextOffset
     //
     // 2. The read operations lastVoterSet, voterSetAtOffset and kraftVersionAtOffset read
@@ -68,7 +74,7 @@ final public class PartitionListener {
      * @param maxBatchSizeBytes the maximum size of record batch
      * @param logContext the log context
      */
-    public PartitionListener(
+    public KRaftControlRecordStateMachine(
         Optional<VoterSet> staticVoterSet,
         ReplicatedLog log,
         RecordSerde<?> serde,
@@ -87,7 +93,7 @@ final public class PartitionListener {
     /**
      * Must be called whenever the {@code log} has changed.
      */
-    public void updateListener() {
+    public void updateState() {
         maybeLoadSnapshot();
         maybeLoadLog();
     }
@@ -130,22 +136,13 @@ final public class PartitionListener {
     }
 
     /**
-     * Rturns the voter set at a given offset.
+     * Returns the voter set at a given offset.
      *
      * @param offset the offset (inclusive)
      * @return the voter set if one exist, otherwise {@code Optional.empty()}
      */
     public Optional<VoterSet> voterSetAtOffset(long offset) {
-        long fixedNextOffset = nextOffset;
-        if (offset >= fixedNextOffset) {
-            throw new IllegalArgumentException(
-                String.format(
-                    "Attempting the read the voter set at an offset (%d) which kraft hasn't seen (%d)",
-                    offset,
-                    fixedNextOffset - 1
-                )
-            );
-        }
+        checkOffsetIsValid(offset);
 
         synchronized (voterSetHistory) {
             return voterSetHistory.valueAtOrBefore(offset);
@@ -159,19 +156,24 @@ final public class PartitionListener {
      * @return the finalized kraft version if one exist, otherwise 0
      */
     public short kraftVersionAtOffset(long offset) {
+        checkOffsetIsValid(offset);
+
+        synchronized (kraftVersionHistory) {
+            return kraftVersionHistory.valueAtOrBefore(offset).orElse((short) 0);
+        }
+    }
+
+    private void checkOffsetIsValid(long offset) {
         long fixedNextOffset = nextOffset;
         if (offset >= fixedNextOffset) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Attempting the read the kraft.version at an offset (%d) which kraft hasn't seen (%d)",
+                    "Attempting the read a value at an offset (%d) which is greater than or " +
+                    "equal to the largest known offset (%d)",
                     offset,
                     fixedNextOffset - 1
                 )
             );
-        }
-
-        synchronized (kraftVersionHistory) {
-            return kraftVersionHistory.valueAtOrBefore(offset).orElse((short) 0);
         }
     }
 
@@ -233,9 +235,9 @@ final public class PartitionListener {
     }
 
     private void handleBatch(Batch<?> batch, OptionalLong overrideOffset) {
-        int index = 0;
+        int offsetDelta = 0;
         for (ControlRecord record : batch.controlRecords()) {
-            long currentOffset = overrideOffset.orElse(batch.baseOffset() + index);
+            long currentOffset = overrideOffset.orElse(batch.baseOffset() + offsetDelta);
             switch (record.type()) {
                 case KRAFT_VOTERS:
                     synchronized (voterSetHistory) {
@@ -253,7 +255,7 @@ final public class PartitionListener {
                     // Skip the rest of the control records
                     break;
             }
-            ++index;
+            ++offsetDelta;
         }
     }
 }

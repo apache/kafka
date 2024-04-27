@@ -31,15 +31,15 @@ import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-final class PartitionListenerTest {
+final class KRaftControlRecordStateMachineTest {
     private static final RecordSerde<String> STRING_SERDE = new StringSerde();
 
     private static MockLog buildLog() {
         return new MockLog(new TopicPartition("partition", 0), Uuid.randomUuid(), new LogContext());
     }
 
-    private static PartitionListener buildPartitionListener(MockLog log, Optional<VoterSet> staticVoterSet) {
-        return new PartitionListener(
+    private static KRaftControlRecordStateMachine buildPartitionListener(MockLog log, Optional<VoterSet> staticVoterSet) {
+        return new KRaftControlRecordStateMachine(
             staticVoterSet,
             log,
             STRING_SERDE,
@@ -54,12 +54,12 @@ final class PartitionListenerTest {
         MockLog log = buildLog();
         VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)));
 
-        PartitionListener partitionListener = buildPartitionListener(log, Optional.of(voterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(voterSet));
 
         // This should be a no-op operation
-        partitionListener.updateListener();
+        partitionState.updateState();
 
-        assertEquals(voterSet, partitionListener.lastVoterSet());
+        assertEquals(voterSet, partitionState.lastVoterSet());
     }
 
     @Test
@@ -69,7 +69,7 @@ final class PartitionListenerTest {
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        PartitionListener partitionListener = buildPartitionListener(log, Optional.of(staticVoterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
 
         // Append the kraft.version control record
         short kraftVersion = 1;
@@ -98,11 +98,11 @@ final class PartitionListenerTest {
         );
 
         // Read the entire partition
-        partitionListener.updateListener();
+        partitionState.updateState();
 
-        assertEquals(voterSet, partitionListener.lastVoterSet());
-        assertEquals(Optional.of(voterSet), partitionListener.voterSetAtOffset(log.endOffset().offset - 1));
-        assertEquals(kraftVersion, partitionListener.kraftVersionAtOffset(log.endOffset().offset - 1));
+        assertEquals(voterSet, partitionState.lastVoterSet());
+        assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset - 1));
+        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset - 1));
     }
 
     @Test
@@ -112,7 +112,7 @@ final class PartitionListenerTest {
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        PartitionListener partitionListener = buildPartitionListener(log, Optional.of(staticVoterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
 
         // Create a snapshot that doesn't have any kraft.version or voter set control records
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
@@ -149,11 +149,11 @@ final class PartitionListenerTest {
         );
 
         // Read the entire partition
-        partitionListener.updateListener();
+        partitionState.updateState();
 
-        assertEquals(voterSet, partitionListener.lastVoterSet());
-        assertEquals(Optional.of(voterSet), partitionListener.voterSetAtOffset(log.endOffset().offset - 1));
-        assertEquals(kraftVersion, partitionListener.kraftVersionAtOffset(log.endOffset().offset - 1));
+        assertEquals(voterSet, partitionState.lastVoterSet());
+        assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset - 1));
+        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset - 1));
     }
 
     @Test
@@ -162,7 +162,7 @@ final class PartitionListenerTest {
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)));
         int epoch = 1;
 
-        PartitionListener partitionListener = buildPartitionListener(log, Optional.of(staticVoterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
 
         // Create a snapshot that has kraft.version and voter set control records
         short kraftVersion = 1;
@@ -178,11 +178,11 @@ final class PartitionListenerTest {
         log.truncateToLatestSnapshot();
 
         // Read the entire partition
-        partitionListener.updateListener();
+        partitionState.updateState();
 
-        assertEquals(voterSet, partitionListener.lastVoterSet());
-        assertEquals(Optional.of(voterSet), partitionListener.voterSetAtOffset(log.endOffset().offset - 1));
-        assertEquals(kraftVersion, partitionListener.kraftVersionAtOffset(log.endOffset().offset - 1));
+        assertEquals(voterSet, partitionState.lastVoterSet());
+        assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset - 1));
+        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset - 1));
     }
 
     @Test
@@ -192,7 +192,7 @@ final class PartitionListenerTest {
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        PartitionListener partitionListener = buildPartitionListener(log, Optional.of(staticVoterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
 
         // Create a snapshot that has kraft.version and voter set control records
         short kraftVersion = 1;
@@ -222,14 +222,14 @@ final class PartitionListenerTest {
         );
 
         // Read the entire partition
-        partitionListener.updateListener();
+        partitionState.updateState();
 
-        assertEquals(voterSet, partitionListener.lastVoterSet());
-        assertEquals(Optional.of(voterSet), partitionListener.voterSetAtOffset(log.endOffset().offset - 1));
-        assertEquals(kraftVersion, partitionListener.kraftVersionAtOffset(log.endOffset().offset - 1));
+        assertEquals(voterSet, partitionState.lastVoterSet());
+        assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset - 1));
+        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset - 1));
 
         // Check the voter set at the snapshot
-        assertEquals(Optional.of(snapshotVoterSet), partitionListener.voterSetAtOffset(snapshotId.offset() - 1));
+        assertEquals(Optional.of(snapshotVoterSet), partitionState.voterSetAtOffset(snapshotId.offset() - 1));
     }
 
     @Test
@@ -239,7 +239,7 @@ final class PartitionListenerTest {
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        PartitionListener partitionListener = buildPartitionListener(log, Optional.of(staticVoterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
 
         // Append the kraft.version control record
         short kraftVersion = 1;
@@ -283,21 +283,21 @@ final class PartitionListenerTest {
         );
 
         // Read the entire partition
-        partitionListener.updateListener();
+        partitionState.updateState();
 
-        assertEquals(voterSet, partitionListener.lastVoterSet());
+        assertEquals(voterSet, partitionState.lastVoterSet());
 
         // Truncate log and listener
         log.truncateTo(voterSetOffset);
-        partitionListener.truncateNewEntries(voterSetOffset);
+        partitionState.truncateNewEntries(voterSetOffset);
 
-        assertEquals(firstVoterSet, partitionListener.lastVoterSet());
+        assertEquals(firstVoterSet, partitionState.lastVoterSet());
 
         // Truncate the entire log
         log.truncateTo(0);
-        partitionListener.truncateNewEntries(0);
+        partitionState.truncateNewEntries(0);
 
-        assertEquals(staticVoterSet, partitionListener.lastVoterSet());
+        assertEquals(staticVoterSet, partitionState.lastVoterSet());
     }
 
     @Test
@@ -307,7 +307,7 @@ final class PartitionListenerTest {
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        PartitionListener partitionListener = buildPartitionListener(log, Optional.of(staticVoterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
 
         // Append the kraft.version control record
         long kraftVersionOffset = log.endOffset().offset;
@@ -352,24 +352,24 @@ final class PartitionListenerTest {
         );
 
         // Read the entire partition
-        partitionListener.updateListener();
+        partitionState.updateState();
 
-        assertEquals(voterSet, partitionListener.lastVoterSet());
-        assertEquals(kraftVersion, partitionListener.kraftVersionAtOffset(kraftVersionOffset));
+        assertEquals(voterSet, partitionState.lastVoterSet());
+        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(kraftVersionOffset));
 
         // Trim the prefix for the partition listener up to the kraft.version
-        partitionListener.truncateOldEntries(kraftVersionOffset);
-        assertEquals(kraftVersion, partitionListener.kraftVersionAtOffset(kraftVersionOffset));
+        partitionState.truncateOldEntries(kraftVersionOffset);
+        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(kraftVersionOffset));
 
         // Trim the prefix for the partition listener up to the first voter set
-        partitionListener.truncateOldEntries(firstVoterSetOffset);
-        assertEquals(kraftVersion, partitionListener.kraftVersionAtOffset(kraftVersionOffset));
-        assertEquals(Optional.of(firstVoterSet), partitionListener.voterSetAtOffset(firstVoterSetOffset));
+        partitionState.truncateOldEntries(firstVoterSetOffset);
+        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(kraftVersionOffset));
+        assertEquals(Optional.of(firstVoterSet), partitionState.voterSetAtOffset(firstVoterSetOffset));
 
         // Trim the prefix for the partition listener up to the second voter set
-        partitionListener.truncateOldEntries(voterSetOffset);
-        assertEquals(kraftVersion, partitionListener.kraftVersionAtOffset(kraftVersionOffset));
-        assertEquals(Optional.empty(), partitionListener.voterSetAtOffset(firstVoterSetOffset));
-        assertEquals(Optional.of(voterSet), partitionListener.voterSetAtOffset(voterSetOffset));
+        partitionState.truncateOldEntries(voterSetOffset);
+        assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(kraftVersionOffset));
+        assertEquals(Optional.empty(), partitionState.voterSetAtOffset(firstVoterSetOffset));
+        assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(voterSetOffset));
     }
 }
