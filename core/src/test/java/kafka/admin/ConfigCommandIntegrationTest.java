@@ -79,11 +79,11 @@ public class ConfigCommandIntegrationTest {
 
     @ClusterTests({
         @ClusterTest(clusterType = Type.ZK),
-        @ClusterTest(clusterType = Type.KRAFT, brokers = 2)
+        @ClusterTest(clusterType = Type.KRAFT)
     })
     public void testExitWithNonZeroStatusOnUpdatingUnallowedConfig() {
         assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
-            "--entity-name", "1",
+            "--entity-name", cluster.isKRaftTest() ? "0" : "1",
             "--entity-type", "brokers",
             "--alter",
             "--add-config", "security.inter.broker.protocol=PLAINTEXT")),
