@@ -44,8 +44,7 @@ public class GroupRebalanceConfig {
     public final Optional<String> groupInstanceId;
     public final long retryBackoffMs;
     public final long retryBackoffMaxMs;
-
-    private boolean leaveGroupOnClose;
+    public final boolean leaveGroupOnClose;
 
     public GroupRebalanceConfig(AbstractConfig config, ProtocolType protocolType) {
         this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
@@ -82,14 +81,6 @@ public class GroupRebalanceConfig {
         } else {
             this.leaveGroupOnClose = true;
         }
-    }
-
-    public void setLeaveGroupOnClose(final boolean leaveGroupOnClose) {
-        this.leaveGroupOnClose = leaveGroupOnClose;
-    }
-
-    public boolean leaveGroupOnClose() {
-        return leaveGroupOnClose;
     }
 
     // For testing purpose.

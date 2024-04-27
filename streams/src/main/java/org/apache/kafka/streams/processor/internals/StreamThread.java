@@ -1446,7 +1446,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (leaveGroupOnClose) {
             log.info("Leaving consumer group on close");
         }
-        ((LegacyKafkaConsumer<?, ?>) mainConsumer).setLeaveGroupOnClose(leaveGroupOnClose);
+        ((LegacyKafkaConsumer<?, ?>) mainConsumer).overrideLeaveGroupOnClose();
     }
 
     private void completeShutdown(final boolean cleanRun) {

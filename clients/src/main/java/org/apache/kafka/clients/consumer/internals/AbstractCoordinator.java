@@ -143,6 +143,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private String rejoinReason = "";
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
+    private boolean overrideLeaveGroupOnClose = false;
     private HeartbeatThread heartbeatThread = null;
     private RequestFuture<ByteBuffer> joinFuture = null;
     private RequestFuture<Void> findCoordinatorFuture = null;
@@ -1126,7 +1127,7 @@ public abstract class AbstractCoordinator implements Closeable {
             // Synchronize after closing the heartbeat thread since heartbeat thread
             // needs this lock to complete and terminate after close flag is set.
             synchronized (this) {
-                if (rebalanceConfig.leaveGroupOnClose()) {
+                if (leaveGroupOnClose()) {
                     onLeavePrepare();
                     maybeLeaveGroup("the consumer is being closed");
                 }
@@ -1178,6 +1179,14 @@ public abstract class AbstractCoordinator implements Closeable {
 
     protected boolean isDynamicMember() {
         return !rebalanceConfig.groupInstanceId.isPresent();
+    }
+
+    private boolean leaveGroupOnClose() {
+        return overrideLeaveGroupOnClose || rebalanceConfig.leaveGroupOnClose;
+    }
+
+    protected void overrideLeaveGroupOnClose() {
+        this.overrideLeaveGroupOnClose = true;
     }
 
     private class LeaveGroupResponseHandler extends CoordinatorResponseHandler<LeaveGroupResponse, Void> {

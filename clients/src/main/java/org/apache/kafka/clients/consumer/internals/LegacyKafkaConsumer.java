@@ -1114,8 +1114,8 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.client.wakeup();
     }
 
-    public void setLeaveGroupOnClose(boolean leaveGroupOnClose) {
-        this.coordinator.setLeaveGroupOnClose(leaveGroupOnClose);
+    public void overrideLeaveGroupOnClose() {
+        this.coordinator.overrideLeaveGroupOnClose();
     }
 
     private Timer createTimerForRequest(final Duration timeout) {
