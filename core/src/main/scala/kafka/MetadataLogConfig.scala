@@ -16,9 +16,8 @@
  */
 package kafka.raft
 
-import kafka.server.KafkaConfig
 import org.apache.kafka.common.config.AbstractConfig
-import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 
 final case class MetadataLogConfig(
   logSegmentBytes: Int,
@@ -35,15 +34,15 @@ final case class MetadataLogConfig(
 object MetadataLogConfig {
   def apply(config: AbstractConfig, maxBatchSizeInBytes: Int, maxFetchSizeInBytes: Int): MetadataLogConfig = {
     new MetadataLogConfig(
-      config.getInt(KafkaConfig.MetadataLogSegmentBytesProp),
-      config.getInt(KafkaConfig.MetadataLogSegmentMinBytesProp),
-      config.getLong(KafkaConfig.MetadataLogSegmentMillisProp),
-      config.getLong(KafkaConfig.MetadataMaxRetentionBytesProp),
-      config.getLong(KafkaConfig.MetadataMaxRetentionMillisProp),
+      config.getInt(KRaftConfigs.METADATA_LOG_SEGMENT_BYTES_CONFIG),
+      config.getInt(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG),
+      config.getLong(KRaftConfigs.METADATA_LOG_SEGMENT_MILLIS_CONFIG),
+      config.getLong(KRaftConfigs.METADATA_MAX_RETENTION_BYTES_CONFIG),
+      config.getLong(KRaftConfigs.METADATA_MAX_RETENTION_MILLIS_CONFIG),
       maxBatchSizeInBytes,
       maxFetchSizeInBytes,
       ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-      config.getInt(KafkaConfig.NodeIdProp)
+      config.getInt(KRaftConfigs.NODE_ID_CONFIG)
     )
   }
 }

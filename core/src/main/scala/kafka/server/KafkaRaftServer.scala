@@ -29,7 +29,7 @@ import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -66,7 +66,7 @@ class KafkaRaftServer(
   )
 
   private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
-    RaftConfig.parseVoterConnections(config.quorumVoters))
+    QuorumConfig.parseVoterConnections(config.quorumVoters))
 
   private val sharedServer = new SharedServer(
     config,
@@ -122,7 +122,7 @@ object KafkaRaftServer {
   val MetadataTopicId = Uuid.METADATA_TOPIC_ID
 
   /**
-   * Initialize the configured log directories, including both [[KafkaConfig.MetadataLogDirProp]]
+   * Initialize the configured log directories, including both [[KRaftConfigs.MetadataLogDirProp]]
    * and [[KafkaConfig.LOG_DIR_PROP]]. This method performs basic validation to ensure that all
    * directories are accessible and have been initialized with consistent `meta.properties`.
    *
