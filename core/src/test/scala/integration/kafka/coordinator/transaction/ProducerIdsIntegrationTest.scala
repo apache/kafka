@@ -39,13 +39,10 @@ import scala.jdk.CollectionConverters._
 
 object ProducerIdsIntegrationTest {
   def uniqueProducerIdsBumpIBP(clusterGenerator: ClusterGenerator): Unit = {
-    val serverProperties = new java.util.HashMap[String, String]()
-    serverProperties.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
-
-    val broker0Properties = new java.util.HashMap[String, String]()
-    broker0Properties.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0-IV0")
-    val perBrokerProperties = new java.util.HashMap[Integer, java.util.Map[String, String]]()
-    perBrokerProperties.put(0, broker0Properties)
+    val serverProperties = java.util.Collections.singletonMap(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
+    val perBrokerProperties: java.util.Map[Integer, java.util.Map[String, String]] =
+      java.util.Collections.singletonMap(0,
+        java.util.Collections.singletonMap(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0-IV0"))
 
     clusterGenerator.accept(ClusterConfig.defaultBuilder()
       .setType(Type.ZK)

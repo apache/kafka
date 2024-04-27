@@ -460,7 +460,6 @@ class ZkMigrationIntegrationTest {
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
       val serverProperties = new util.HashMap[String, String](zkCluster.config().serverProperties())
-      serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
       serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
@@ -529,7 +528,6 @@ class ZkMigrationIntegrationTest {
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
       val serverProperties = new util.HashMap[String, String](zkCluster.config().serverProperties())
-      serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
       serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
@@ -619,7 +617,6 @@ class ZkMigrationIntegrationTest {
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
       val serverProperties = new util.HashMap[String, String](zkCluster.config().serverProperties())
-      serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
       serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
@@ -689,7 +686,6 @@ class ZkMigrationIntegrationTest {
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
       val serverProperties = new util.HashMap[String, String](zkCluster.config().serverProperties())
-      serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
       serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
@@ -754,7 +750,6 @@ class ZkMigrationIntegrationTest {
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
       val serverProperties = new util.HashMap[String, String](zkCluster.config().serverProperties())
-      serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
       serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
@@ -834,7 +829,6 @@ class ZkMigrationIntegrationTest {
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
       val serverProperties = new util.HashMap[String, String](zkCluster.config().serverProperties())
-      serverProperties.putAll(zkCluster.config().serverProperties())
       serverProperties.put(KafkaConfig.MigrationEnabledProp, "true")
       serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       serverProperties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")

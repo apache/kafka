@@ -26,19 +26,29 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.Optional;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class ClusterConfigTest {
 
+    private static Map<String, Object> fields(ClusterConfig config) {
+        return Arrays.stream(config.getClass().getDeclaredFields()).collect(Collectors.toMap(Field::getName, f -> {
+            f.setAccessible(true);
+            return Assertions.assertDoesNotThrow(() -> f.get(config));
+        }));
+    }
+
     @Test
-    public void testClusterConfigBuilder() throws IOException {
+    public void testCopy() throws IOException {
         File trustStoreFile = TestUtils.tempFile();
 
         ClusterConfig clusterConfig = ClusterConfig.builder()
                 .setType(Type.KRAFT)
-                .setBrokers(1)
-                .setControllers(1)
+                .setBrokers(3)
+                .setControllers(2)
                 .setName("builder-test")
                 .setAutoStart(true)
                 .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
@@ -54,40 +64,12 @@ public class ClusterConfigTest {
                 .setPerBrokerProperties(Collections.singletonMap(0, Collections.singletonMap("broker_0", "broker_0_value")))
                 .build();
 
-        Assertions.assertEquals(Type.KRAFT, clusterConfig.clusterType());
-        Assertions.assertEquals(1, clusterConfig.numBrokers());
-        Assertions.assertEquals(1, clusterConfig.numControllers());
-        Assertions.assertEquals(Optional.of("builder-test"), clusterConfig.name());
-        Assertions.assertTrue(clusterConfig.isAutoStart());
-        Assertions.assertEquals(SecurityProtocol.PLAINTEXT, clusterConfig.securityProtocol());
-        Assertions.assertEquals(Optional.of("EXTERNAL"), clusterConfig.listenerName());
-        Assertions.assertEquals(Optional.of(trustStoreFile), clusterConfig.trustStoreFile());
-        Assertions.assertEquals(MetadataVersion.IBP_0_8_0, clusterConfig.metadataVersion());
-        Assertions.assertEquals(Collections.singletonMap("broker", "broker_value"), clusterConfig.serverProperties());
-        Assertions.assertEquals(Collections.singletonMap("consumer", "consumer_value"), clusterConfig.consumerProperties());
-        Assertions.assertEquals(Collections.singletonMap("producer", "producer_value"), clusterConfig.producerProperties());
-        Assertions.assertEquals(Collections.singletonMap("admin_client", "admin_client_value"), clusterConfig.adminClientProperties());
-        Assertions.assertEquals(Collections.singletonMap("sasl_client", "sasl_client_value"), clusterConfig.saslClientProperties());
-        Assertions.assertEquals(Collections.singletonMap("sasl_server", "sasl_server_value"), clusterConfig.saslServerProperties());
-        Assertions.assertEquals(Collections.singletonMap(0, Collections.singletonMap("broker_0", "broker_0_value")), clusterConfig.perBrokerOverrideProperties());
-
         ClusterConfig copy = ClusterConfig.builder(clusterConfig).build();
+        Assertions.assertEquals(clusterConfig, copy);
+        Assertions.assertEquals(clusterConfig.hashCode(), copy.hashCode());
 
-        Assertions.assertEquals(clusterConfig.clusterType(), copy.clusterType());
-        Assertions.assertEquals(clusterConfig.numBrokers(), copy.numBrokers());
-        Assertions.assertEquals(clusterConfig.numControllers(), copy.numControllers());
-        Assertions.assertEquals(clusterConfig.name(), copy.name());
-        Assertions.assertEquals(clusterConfig.isAutoStart(), copy.isAutoStart());
-        Assertions.assertEquals(clusterConfig.securityProtocol(), copy.securityProtocol());
-        Assertions.assertEquals(clusterConfig.listenerName(), copy.listenerName());
-        Assertions.assertEquals(clusterConfig.trustStoreFile(), copy.trustStoreFile());
-        Assertions.assertEquals(clusterConfig.metadataVersion(), copy.metadataVersion());
-        Assertions.assertEquals(clusterConfig.serverProperties(), copy.serverProperties());
-        Assertions.assertEquals(clusterConfig.consumerProperties(), copy.consumerProperties());
-        Assertions.assertEquals(clusterConfig.producerProperties(), copy.producerProperties());
-        Assertions.assertEquals(clusterConfig.adminClientProperties(), copy.adminClientProperties());
-        Assertions.assertEquals(clusterConfig.saslClientProperties(), copy.saslClientProperties());
-        Assertions.assertEquals(clusterConfig.saslServerProperties(), copy.saslServerProperties());
-        Assertions.assertEquals(clusterConfig.perBrokerOverrideProperties(), copy.perBrokerOverrideProperties());
+        Map<String, Object> clusterConfigFields = fields(clusterConfig);
+        Map<String, Object> copyFields = fields(clusterConfig);
+        Assertions.assertEquals(clusterConfigFields, copyFields);
     }
 }

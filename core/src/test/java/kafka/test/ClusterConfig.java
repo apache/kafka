@@ -151,6 +151,37 @@ public class ClusterConfig {
         return tags;
     }
 
+    @SuppressWarnings({"CyclomaticComplexity"})
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) return true;
+        if (object == null || getClass() != object.getClass()) return false;
+        ClusterConfig clusterConfig = (ClusterConfig) object;
+        return Objects.equals(type, clusterConfig.type)
+                && Objects.equals(brokers, clusterConfig.brokers)
+                && Objects.equals(controllers, clusterConfig.controllers)
+                && Objects.equals(name, clusterConfig.name)
+                && Objects.equals(autoStart, clusterConfig.autoStart)
+                && Objects.equals(securityProtocol, clusterConfig.securityProtocol)
+                && Objects.equals(listenerName, clusterConfig.listenerName)
+                && Objects.equals(trustStoreFile, clusterConfig.trustStoreFile)
+                && Objects.equals(metadataVersion, clusterConfig.metadataVersion)
+                && Objects.equals(serverProperties, clusterConfig.serverProperties)
+                && Objects.equals(producerProperties, clusterConfig.producerProperties)
+                && Objects.equals(consumerProperties, clusterConfig.consumerProperties)
+                && Objects.equals(adminClientProperties, clusterConfig.adminClientProperties)
+                && Objects.equals(saslServerProperties, clusterConfig.saslServerProperties)
+                && Objects.equals(saslClientProperties, clusterConfig.saslClientProperties)
+                && Objects.equals(perBrokerOverrideProperties, clusterConfig.perBrokerOverrideProperties);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(type, brokers, controllers, name, autoStart, securityProtocol, listenerName,
+                trustStoreFile, metadataVersion, serverProperties, producerProperties, consumerProperties,
+                adminClientProperties, saslServerProperties, saslClientProperties, perBrokerOverrideProperties);
+    }
+
     public static Builder defaultBuilder() {
         return new Builder()
                 .setType(Type.ZK)
