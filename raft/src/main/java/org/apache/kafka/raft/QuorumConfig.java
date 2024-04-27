@@ -264,7 +264,7 @@ public class QuorumConfig {
             }
 
             @SuppressWarnings("unchecked")
-            List<String> voterStrings = (List) value;
+            List<String> voterStrings = (List<String>) value;
 
             // Attempt to parse the connect strings
             parseVoterConnections(voterStrings);

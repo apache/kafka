@@ -123,8 +123,8 @@ public class EosIntegrationTest {
     public Timeout globalTimeout = Timeout.seconds(600);
     private static final Logger LOG = LoggerFactory.getLogger(EosIntegrationTest.class);
     private static final int NUM_BROKERS = 3;
-    private static final int MAX_POLL_INTERVAL_MS = 30_1000;
-    private static final int MAX_WAIT_TIME_MS = 120_1000;
+    private static final int MAX_POLL_INTERVAL_MS = 30_000;
+    private static final int MAX_WAIT_TIME_MS = 120_000;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
         NUM_BROKERS,
