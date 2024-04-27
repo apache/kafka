@@ -31,7 +31,7 @@ import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
 import org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetrics
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
-import org.apache.kafka.raft.RaftConfig.AddressSpec
+import org.apache.kafka.raft.QuorumConfig.AddressSpec
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
@@ -107,16 +107,16 @@ class SharedServer(
   @volatile var brokerMetrics: BrokerServerMetrics = _
   @volatile var controllerServerMetrics: ControllerMetadataMetrics = _
   @volatile var loader: MetadataLoader = _
-  val snapshotsDisabledReason = new AtomicReference[String](null)
+  private val snapshotsDisabledReason = new AtomicReference[String](null)
   @volatile var snapshotEmitter: SnapshotEmitter = _
-  @volatile var snapshotGenerator: SnapshotGenerator = _
-  @volatile var metadataLoaderMetrics: MetadataLoaderMetrics = _
+  @volatile private var snapshotGenerator: SnapshotGenerator = _
+  @volatile private var metadataLoaderMetrics: MetadataLoaderMetrics = _
 
   def clusterId: String = metaPropsEnsemble.clusterId().get()
 
-  def nodeId: Int = metaPropsEnsemble.nodeId().getAsInt()
+  def nodeId: Int = metaPropsEnsemble.nodeId().getAsInt
 
-  def isUsed(): Boolean = synchronized {
+  private def isUsed(): Boolean = synchronized {
     usedByController || usedByBroker
   }
 
@@ -160,7 +160,7 @@ class SharedServer(
     }
   }
 
-  def raftManagerFaultHandler: FaultHandler = faultHandlerFactory.build(
+  private def raftManagerFaultHandler: FaultHandler = faultHandlerFactory.build(
     name = "raft manager",
     fatal = true,
     action = () => {}
@@ -169,7 +169,7 @@ class SharedServer(
   /**
    * The fault handler to use when metadata loading fails.
    */
-  def metadataLoaderFaultHandler: FaultHandler = faultHandlerFactory.build(
+  private def metadataLoaderFaultHandler: FaultHandler = faultHandlerFactory.build(
     name = "metadata loading",
     fatal = sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole),
     action = () => SharedServer.this.synchronized {

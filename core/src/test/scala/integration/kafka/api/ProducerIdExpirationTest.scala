@@ -18,7 +18,7 @@
 package kafka.api
 
 import java.util
-import java.util.{Collections, List, Map, Properties}
+import java.util.{Collections, Properties}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -197,13 +197,13 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     TestUtils.waitUntilTrue(() => producerState.isEmpty, "Producer ID did not expire.")
   }
 
-  private def producerState: List[ProducerState] = {
+  private def producerState: util.List[ProducerState] = {
     val describeResult = admin.describeProducers(Collections.singletonList(tp0))
     val activeProducers = describeResult.partitionResult(tp0).get().activeProducers
     activeProducers
   }
 
-  private def producerIdExpirationConfig(configValue: String): Map[ConfigResource, util.Collection[AlterConfigOp]] = {
+  private def producerIdExpirationConfig(configValue: String): util.Map[ConfigResource, util.Collection[AlterConfigOp]] = {
     val producerIdCfg = new ConfigEntry(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG, configValue)
     val configs = Collections.singletonList(new AlterConfigOp(producerIdCfg, AlterConfigOp.OpType.SET))
     Collections.singletonMap(configResource, configs)

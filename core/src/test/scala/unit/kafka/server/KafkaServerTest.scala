@@ -61,7 +61,7 @@ class KafkaServerTest extends QuorumTestHarness {
         "Expected RuntimeException due to address already in use during KafkaServer startup"
       )
     } finally {
-      CoreUtils.swallow(serverSocket.close(), this);
+      CoreUtils.swallow(serverSocket.close(), this)
       TestUtils.shutdownServers(kafkaServer.toList)
     }
   }

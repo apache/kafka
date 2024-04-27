@@ -60,7 +60,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @ValueSource(strings = Array("zk", "kraft"))
   def testMetricsReporterAfterDeletingTopic(quorum: String): Unit = {
     val topic = "test-topic-metric"
-    createTopic(topic, 1, 1)
+    createTopic(topic)
     deleteTopic(topic)
     TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 1, brokers)
     assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
@@ -70,7 +70,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @ValueSource(strings = Array("zk", "kraft"))
   def testBrokerTopicMetricsUnregisteredAfterDeletingTopic(quorum: String): Unit = {
     val topic = "test-broker-topic-metric"
-    createTopic(topic, 2, 1)
+    createTopic(topic, 2)
     // Produce a few messages to create the metrics
     // Don't consume messages as it may cause metrics to be re-created causing the test to fail, see KAFKA-5238
     TestUtils.generateAndProduceMessages(brokers, topic, nMessages)
@@ -144,7 +144,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @ValueSource(strings = Array("zk", "kraft"))
   def testGeneralBrokerTopicMetricsAreGreedilyRegistered(quorum: String): Unit = {
     val topic = "test-broker-topic-metric"
-    createTopic(topic, 2, 1)
+    createTopic(topic, 2)
 
     // The broker metrics for all topics should be greedily registered
     assertTrue(topicMetrics(None).nonEmpty, "General topic metrics don't exist")
@@ -254,7 +254,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
       "kafka.controller:type=KafkaController,name=ZkMigrationState",
     ).foreach(expected => {
       assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName.equals(expected)),
-        s"Unable to find ${expected}")
+        s"Unable to find $expected")
     })
 
     val zkStateMetricName = metrics.keySet.asScala.filter(_.getMBeanName == "kafka.controller:type=KafkaController,name=ZkMigrationState").head

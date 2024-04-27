@@ -36,7 +36,7 @@ import java.io.Closeable
 // This should be named EmbeddedZooKeeper for consistency with other classes, but since this is widely used by other
 // projects (even though it's internal), we keep the name as it is until we have a publicly supported test library for
 // others to use.
-class EmbeddedZookeeper() extends Closeable with Logging {
+class EmbeddedZookeeper extends Closeable with Logging {
 
   val snapshotDir = TestUtils.tempDir()
   val logDir = TestUtils.tempDir()
@@ -62,7 +62,7 @@ class EmbeddedZookeeper() extends Closeable with Logging {
     }
 
     Iterator.continually(isDown()).exists(identity)
-    CoreUtils.swallow(zookeeper.getZKDatabase().close(), this)
+    CoreUtils.swallow(zookeeper.getZKDatabase.close(), this)
 
     Utils.delete(logDir)
     Utils.delete(snapshotDir)

@@ -42,7 +42,7 @@ public final class Versions {
             return defaultVersions;
         }
         String trimmedInput = input.trim();
-        if (trimmedInput.length() == 0) {
+        if (trimmedInput.isEmpty()) {
             return defaultVersions;
         }
         if (trimmedInput.equals(NONE_STRING)) {

@@ -18,10 +18,9 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.raft.RaftConfig;
+import org.apache.kafka.raft.QuorumConfig;
 
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 public class Defaults {
     /** ********* General Configuration *********/
@@ -33,13 +32,6 @@ public class Defaults {
     public static final int BACKGROUND_THREADS = 10;
     public static final int QUEUED_MAX_REQUESTS = 500;
     public static final int QUEUED_MAX_REQUEST_BYTES = -1;
-    public static final int INITIAL_BROKER_REGISTRATION_TIMEOUT_MS = 60000;
-    public static final int BROKER_HEARTBEAT_INTERVAL_MS = 2000;
-    public static final int BROKER_SESSION_TIMEOUT_MS = 9000;
-    public static final int METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES = 20 * 1024 * 1024;
-    public static final long METADATA_SNAPSHOT_MAX_INTERVAL_MS = TimeUnit.HOURS.toMillis(1);
-    public static final int METADATA_MAX_IDLE_INTERVAL_MS = 500;
-    public static final int METADATA_MAX_RETENTION_BYTES = 100 * 1024 * 1024;
     public static final boolean DELETE_TOPIC_ENABLE = true;
     public static final int REQUEST_TIMEOUT_MS = 30000;
     public static final long CONNECTION_SETUP_TIMEOUT_MS = CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS;
@@ -87,11 +79,11 @@ public class Defaults {
 
 
     /**  ********* Raft Quorum Configuration *********/
-    public static final List<String> QUORUM_VOTERS = RaftConfig.DEFAULT_QUORUM_VOTERS;
-    public static final int QUORUM_ELECTION_TIMEOUT_MS = RaftConfig.DEFAULT_QUORUM_ELECTION_TIMEOUT_MS;
-    public static final int QUORUM_FETCH_TIMEOUT_MS = RaftConfig.DEFAULT_QUORUM_FETCH_TIMEOUT_MS;
-    public static final int QUORUM_ELECTION_BACKOFF_MS = RaftConfig.DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS;
-    public static final int QUORUM_LINGER_MS = RaftConfig.DEFAULT_QUORUM_LINGER_MS;
-    public static final int QUORUM_REQUEST_TIMEOUT_MS = RaftConfig.DEFAULT_QUORUM_REQUEST_TIMEOUT_MS;
-    public static final int QUORUM_RETRY_BACKOFF_MS = RaftConfig.DEFAULT_QUORUM_RETRY_BACKOFF_MS;
+    public static final List<String> QUORUM_VOTERS = QuorumConfig.DEFAULT_QUORUM_VOTERS;
+    public static final int QUORUM_ELECTION_TIMEOUT_MS = QuorumConfig.DEFAULT_QUORUM_ELECTION_TIMEOUT_MS;
+    public static final int QUORUM_FETCH_TIMEOUT_MS = QuorumConfig.DEFAULT_QUORUM_FETCH_TIMEOUT_MS;
+    public static final int QUORUM_ELECTION_BACKOFF_MS = QuorumConfig.DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS;
+    public static final int QUORUM_LINGER_MS = QuorumConfig.DEFAULT_QUORUM_LINGER_MS;
+    public static final int QUORUM_REQUEST_TIMEOUT_MS = QuorumConfig.DEFAULT_QUORUM_REQUEST_TIMEOUT_MS;
+    public static final int QUORUM_RETRY_BACKOFF_MS = QuorumConfig.DEFAULT_QUORUM_RETRY_BACKOFF_MS;
 }

@@ -2191,8 +2191,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testLongTopicNames(quorum: String): Unit = {
     val client = Admin.create(createConfig)
-    val longTopicName = String.join("", Collections.nCopies(249, "x"));
-    val invalidTopicName = String.join("", Collections.nCopies(250, "x"));
+    val longTopicName = List.fill(249)("x").mkString("")
+    val invalidTopicName = List.fill(250)("x").mkString("")
     val newTopics2 = Seq(new NewTopic(invalidTopicName, 3, 3.toShort),
                          new NewTopic(longTopicName, 3, 3.toShort))
     val results = client.createTopics(newTopics2.asJava).values()
@@ -2493,7 +2493,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAppendConfigToExistentValue(ignored: String): Unit = {
-    val props = new Properties();
+    val props = new Properties()
     props.setProperty(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "1:1")
     testAppendConfig(props, "0:0", "1:1,0:0")
   }
