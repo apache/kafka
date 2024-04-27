@@ -52,6 +52,9 @@ import static org.apache.kafka.common.GroupType.CONSUMER;
 
 class ConsumerGroupExecutor {
 
+    private ConsumerGroupExecutor() {
+    }
+
     static AutoCloseable buildConsumerGroup(String brokerAddress,
                                             int numberOfConsumers,
                                             String groupId,
@@ -93,9 +96,6 @@ class ConsumerGroupExecutor {
         );
     }
 
-    private ConsumerGroupExecutor() {
-    }
-
     private static AutoCloseable buildConsumers(
             String brokerAddress,
             int numberOfConsumers,
@@ -119,18 +119,11 @@ class ConsumerGroupExecutor {
                         )
                 )
                 .collect(Collectors.toList());
-        Queue<KafkaConsumer<String, String>> kafkaConsumers = new LinkedList<>();
-        buildConsumersSafely(allConfigs, kafkaConsumers);
 
+        Queue<KafkaConsumer<String, String>> kafkaConsumers = buildConsumersSafely(allConfigs);
         ExecutorService executor = Executors.newFixedThreadPool(kafkaConsumers.size());
-
         AtomicBoolean closed = new AtomicBoolean(false);
-        final AutoCloseable closeable = () -> {
-            closed.set(true);
-            kafkaConsumers.forEach(consumer -> Utils.closeQuietly(consumer, "Release Consumer"));
-            executor.shutdownNow();
-            executor.awaitTermination(1, TimeUnit.MINUTES);
-        };
+        final AutoCloseable closeable = () -> releaseConsumers(closed, kafkaConsumers, executor);
 
         try {
             while (!kafkaConsumers.isEmpty()) {
@@ -138,7 +131,7 @@ class ConsumerGroupExecutor {
                 executor.execute(() -> {
                     try {
                         consumer.subscribe(singleton(topic));
-                        while (closed.get()) {
+                        while (!closed.get()) {
                             consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
                             if (syncCommit)
                                 consumer.commitSync();
@@ -156,6 +149,13 @@ class ConsumerGroupExecutor {
             Utils.closeQuietly(closeable, "Release Consumer");
             throw e;
         }
+    }
+
+    private static void releaseConsumers(AtomicBoolean closed, Queue<KafkaConsumer<String, String>> kafkaConsumers, ExecutorService executor) throws InterruptedException {
+        closed.set(true);
+        kafkaConsumers.forEach(consumer -> Utils.closeQuietly(consumer, "Release Consumer"));
+        executor.shutdownNow();
+        executor.awaitTermination(1, TimeUnit.MINUTES);
     }
 
     private static Map<String, Object> composeConfigs(String brokerAddress, String groupId, String groupProtocol, String assignmentStrategy, Optional<String> remoteAssignor, Map<String, Object> customConfigs) {
@@ -176,9 +176,11 @@ class ConsumerGroupExecutor {
         return configs;
     }
 
-    private static void buildConsumersSafely(Iterable<Map<String, Object>> allConfigs, Queue<KafkaConsumer<String, String>> container) {
+    private static Queue<KafkaConsumer<String, String>> buildConsumersSafely(Iterable<Map<String, Object>> allConfigs/*, Queue<KafkaConsumer<String, String>> container*/) {
+        Queue<KafkaConsumer<String, String>> container = new LinkedList<>();
         try {
             allConfigs.forEach(configs -> container.offer(new KafkaConsumer<>(configs)));
+            return container;
         } catch (Throwable e) {
             container.forEach(consumer -> Utils.closeQuietly(consumer, "Release Consumers"));
             throw e;
