@@ -20,7 +20,7 @@ package kafka.server
 import kafka.log.UnifiedLog
 import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
-import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
+import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.commons.io.FileUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -391,11 +391,21 @@ class KRaftClusterTest {
 
   @Test
   def testCreateClusterWithAdvertisedPortZero(): Unit = {
-    val brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String] = (nodes, _) => Map(
-      (SocketServerConfigs.LISTENERS_CONFIG, s"${nodes.externalListenerName.value}://localhost:0"),
-      (SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"${nodes.externalListenerName.value}://localhost:0"))
+    val brokerPropertyOverrides: util.Map[Integer, util.Map[String, String]] = new util.HashMap[Integer, util.Map[String, String]]()
+    Seq.range(0, 3).asJava.forEach(brokerId => {
+      val props = new util.HashMap[String, String]()
+      props.put(SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:0")
+      props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "EXTERNAL://localhost:0")
+      brokerPropertyOverrides.put(brokerId, props)
+    })
 
-    doOnStartedKafkaCluster(numBrokerNodes = 3, brokerPropertyOverrides = brokerPropertyOverrides) { implicit cluster =>
+    val nodes = new TestKitNodes.Builder()
+      .setNumControllerNodes(1)
+      .setNumBrokerNodes(3)
+      .setPerBrokerProperties(brokerPropertyOverrides)
+      .build()
+
+    doOnStartedKafkaCluster(nodes) { implicit cluster =>
       sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))
         .nodes.values.forEach { broker =>
           assertEquals("localhost", broker.host,
@@ -408,11 +418,22 @@ class KRaftClusterTest {
 
   @Test
   def testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer(): Unit = {
-    val brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String] = (nodes, broker) => Map(
-      (SocketServerConfigs.LISTENERS_CONFIG, s"${nodes.externalListenerName.value}://localhost:0"),
-      (SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"${nodes.externalListenerName.value}://advertised-host-${broker.id}:${broker.id + 100}"))
+    val brokerPropertyOverrides: util.Map[Integer, util.Map[String, String]] = new util.HashMap[Integer, util.Map[String, String]]()
+    Seq.range(0, 3).asJava.forEach(brokerId => {
+      val props = new util.HashMap[String, String]()
+      props.put(SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:0")
+      props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"EXTERNAL://advertised-host-$brokerId:${brokerId + 100}")
+      brokerPropertyOverrides.put(brokerId, props)
+    })
 
-    doOnStartedKafkaCluster(numBrokerNodes = 3, brokerPropertyOverrides = brokerPropertyOverrides) { implicit cluster =>
+    val nodes = new TestKitNodes.Builder()
+      .setNumControllerNodes(1)
+      .setNumBrokerNodes(3)
+      .setNumDisksPerBroker(1)
+      .setPerBrokerProperties(brokerPropertyOverrides)
+      .build()
+
+    doOnStartedKafkaCluster(nodes) { implicit cluster =>
       sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))
         .nodes.values.forEach { broker =>
           assertEquals(s"advertised-host-${broker.id}", broker.host, "Did not advertise configured advertised host")
@@ -433,17 +454,8 @@ class KRaftClusterTest {
     }).getMessage)
   }
 
-  private def doOnStartedKafkaCluster(numControllerNodes: Int = 1,
-                                      numBrokerNodes: Int,
-                                      brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String])
+  private def doOnStartedKafkaCluster(nodes: TestKitNodes)
                                      (action: KafkaClusterTestKit => Unit): Unit = {
-    val nodes = new TestKitNodes.Builder()
-      .setNumControllerNodes(numControllerNodes)
-      .setNumBrokerNodes(numBrokerNodes)
-      .build()
-    nodes.brokerNodes.values.forEach {
-      broker => broker.propertyOverrides.putAll(brokerPropertyOverrides(nodes, broker).asJava)
-    }
     val cluster = new KafkaClusterTestKit.Builder(nodes).build()
     try {
       cluster.format()
@@ -1410,7 +1422,8 @@ class KRaftClusterTest {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
-        setBrokerNodes(3, 2).
+        setNumBrokerNodes(3).
+        setNumDisksPerBroker(2).
         setNumControllerNodes(1).build()).
       build()
     try {
@@ -1465,7 +1478,8 @@ class KRaftClusterTest {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
-        setBrokerNodes(3, 2).
+        setNumBrokerNodes(3).
+        setNumDisksPerBroker(2).
         setNumControllerNodes(1).build()).
       build()
     try {
