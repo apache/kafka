@@ -129,7 +129,7 @@ public class Plugins {
     }
 
     private static <T> String pluginNames(Collection<PluginDesc<T>> plugins) {
-        return Utils.join(plugins, ", ");
+        return String.join(", ", Arrays.toString(plugins.toArray())).replace("[", "").replace("]", "");
     }
 
     private <T> T newPlugin(Class<T> klass) {
@@ -317,7 +317,7 @@ public class Plugins {
                         "Failed to find any class that implements Connector and which name matches "
                                 + connectorClassOrAlias
                                 + ", available connectors are: "
-                                + Utils.join(connectors, ", ")
+                                + String.join(", ", Arrays.toString(connectors.toArray())).replace("[", "").replace("]", "")
                 );
             }
             if (matches.size() > 1) {
@@ -325,7 +325,7 @@ public class Plugins {
                         "More than one connector matches alias "
                                 + connectorClassOrAlias
                                 + ". Please use full package and class name instead. Classes found: "
-                                + Utils.join(connectors, ", ")
+                                + String.join(", ", Arrays.toString(connectors.toArray())).replace("[", "").replace("]", "")
                 );
             }
 

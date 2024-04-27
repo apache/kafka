@@ -17,8 +17,7 @@
 
 package org.apache.kafka.common;
 
-import org.apache.kafka.common.utils.Utils;
-
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -116,10 +115,10 @@ public class TopicPartitionInfo {
     }
 
     public String toString() {
-        String elrString = elr != null ? Utils.join(elr, ", ") : "N/A";
-        String lastKnownElrString = lastKnownElr != null ? Utils.join(lastKnownElr, ", ") : "N/A";
+        String elrString = elr != null ? String.join(", ", Arrays.toString(elr.toArray())) : "N/A";
+        String lastKnownElrString = lastKnownElr != null ? String.join(", ", Arrays.toString(lastKnownElr.toArray())) : "N/A";
         return "(partition=" + partition + ", leader=" + leader + ", replicas=" +
-            Utils.join(replicas, ", ") + ", isr=" + Utils.join(isr, ", ") +
+            String.join(", ", Arrays.toString(replicas.toArray())) + ", isr=" + String.join(", ", Arrays.toString(isr.toArray())) +
             ", elr=" + elrString + ", lastKnownElr=" + lastKnownElrString + ")";
     }
 

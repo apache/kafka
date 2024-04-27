@@ -488,12 +488,12 @@ public class ReassignPartitionsCommand {
         targetParts.forEach(t -> brokers.addAll(t.getValue()));
 
         System.out.printf("Clearing broker-level throttles on broker%s %s%n",
-            brokers.size() == 1 ? "" : "s", Utils.join(brokers, ","));
+            brokers.size() == 1 ? "" : "s", String.join(",", Arrays.toString(brokers.toArray())));
         clearBrokerLevelThrottles(adminClient, brokers);
 
         Set<String> topics = targetParts.stream().map(t -> t.getKey().topic()).collect(Collectors.toSet());
         System.out.printf("Clearing topic-level throttles on topic%s %s%n",
-            topics.size() == 1 ? "" : "s", Utils.join(topics, ","));
+            topics.size() == 1 ? "" : "s", String.join(",", topics));
         clearTopicLevelThrottles(adminClient, topics);
     }
 

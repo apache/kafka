@@ -299,7 +299,7 @@ public class TransactionsCommandTest {
             "10000",
             String.valueOf(transactionStartTime),
             "5000",
-            "bar-0"
+            "[bar-0]"
         );
         assertEquals(expectedRow, table.get(1));
     }

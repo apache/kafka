@@ -30,14 +30,14 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.FlattenedIterator;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Collections;
+import java.util.Arrays;
 
 import static java.util.Collections.singletonList;
 
@@ -141,7 +141,7 @@ public final class UpdateMetadataRequest extends AbstractControlRequest {
                 append(", type=").append(updateType).
                 append(", brokerEpoch=").append(brokerEpoch).
                 append(", partitionStates=").append(partitionStates).
-                append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
+                append(", liveBrokers=").append(String.join(", ", Arrays.toString(liveBrokers.toArray()))).
                 append(")");
             return bld.toString();
         }

@@ -521,7 +521,7 @@ public class ConfigDefTest {
                 "  docs3\n" +
                 "\n" +
                 "  * Type: list\n" +
-                "  * Default: a,b\n" +
+                "  * Default: a, b\n" +
                 "  * Importance: low\n" +
                 "\n" +
                 "``opt4``\n" +
@@ -640,7 +640,7 @@ public class ConfigDefTest {
 
     @Test
     public void testConvertValueToStringList() {
-        assertEquals("a,bc,d", ConfigDef.convertToString(Arrays.asList("a", "bc", "d"), Type.LIST));
+        assertEquals("a, bc, d", ConfigDef.convertToString(Arrays.asList("a", "bc", "d"), Type.LIST));
         assertNull(ConfigDef.convertToString(null, Type.LIST));
     }
 

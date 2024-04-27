@@ -25,21 +25,21 @@ import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Collections;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.Collection;
 import java.util.Set;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.HashSet;
+import java.util.Map.Entry;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 
@@ -392,14 +392,14 @@ public class FetchSessionHandler {
         if (!log.isTraceEnabled()) {
             return String.format("%d partition(s)", partitions.size());
         }
-        return "(" + Utils.join(partitions, ", ") + ")";
+        return "(" + String.join(", ", Arrays.toString(partitions.toArray())) + ")";
     }
 
     private String topicIdPartitionsToLogString(Collection<TopicIdPartition> partitions) {
         if (!log.isTraceEnabled()) {
             return String.format("%d partition(s)", partitions.size());
         }
-        return "(" + Utils.join(partitions, ", ") + ")";
+        return "(" + String.join(", ", Arrays.toString(partitions.toArray())) + ")";
     }
 
     /**
@@ -438,16 +438,16 @@ public class FetchSessionHandler {
             extraIds = findMissing(ids, sessionTopicNames.keySet());
         }
         if (!omitted.isEmpty()) {
-            bld.append("omittedPartitions=(").append(Utils.join(omitted, ", ")).append("), ");
+            bld.append("omittedPartitions=(").append(String.join(", ", Arrays.toString(omitted.toArray()))).append("), ");
         }
         if (!extra.isEmpty()) {
-            bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append("), ");
+            bld.append("extraPartitions=(").append(String.join(", ", Arrays.toString(extra.toArray()))).append("), ");
         }
         if (!extraIds.isEmpty()) {
-            bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append("), ");
+            bld.append("extraIds=(").append(String.join(", ", Arrays.toString(extraIds.toArray()))).append("), ");
         }
         if ((!omitted.isEmpty()) || (!extra.isEmpty()) || (!extraIds.isEmpty())) {
-            bld.append("response=(").append(Utils.join(topicPartitions, ", ")).append(")");
+            bld.append("response=(").append(String.join(", ", Arrays.toString(topicPartitions.toArray()))).append(")");
             return bld.toString();
         }
         return null;
@@ -470,11 +470,11 @@ public class FetchSessionHandler {
             findMissing(topicPartitions, sessionPartitions.keySet());
         StringBuilder bld = new StringBuilder();
         if (!extra.isEmpty())
-            bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append("), ");
+            bld.append("extraPartitions=(").append(String.join(", ", Arrays.toString(extra.toArray()))).append("), ");
         if (!extraIds.isEmpty())
-            bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append("), ");
+            bld.append("extraIds=(").append(String.join(", ", Arrays.toString(extraIds.toArray()))).append("), ");
         if ((!extra.isEmpty()) || (!extraIds.isEmpty())) {
-            bld.append("response=(").append(Utils.join(topicPartitions, ", ")).append(")");
+            bld.append("response=(").append(String.join(", ", Arrays.toString(topicPartitions.toArray()))).append(")");
             return bld.toString();
         }
         return null;
@@ -499,7 +499,7 @@ public class FetchSessionHandler {
         }
         StringBuilder bld = new StringBuilder();
         bld.append(" with response=(").
-            append(Utils.join(topicPartitions, ", ")).
+            append(String.join(", ", Arrays.toString(topicPartitions.toArray()))).
             append(")");
         String prefix = ", implied=(";
         String suffix = "";

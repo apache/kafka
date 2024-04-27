@@ -159,13 +159,6 @@ public class UtilsTest {
     }
 
     @Test
-    public void testJoin() {
-        assertEquals("", Utils.join(Collections.emptyList(), ","));
-        assertEquals("1", Utils.join(asList("1"), ","));
-        assertEquals("1,2,3", Utils.join(asList(1, 2, 3), ","));
-    }
-
-    @Test
     public void testMkString() {
         assertEquals("[]", Utils.mkString(Stream.empty(), "[", "]", ","));
         assertEquals("(1)", Utils.mkString(Stream.of("1"), "(", ")", ","));

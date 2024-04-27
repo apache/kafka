@@ -17,12 +17,12 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Utils;
 
+import java.util.Set;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
-import java.util.Set;
+import java.util.Arrays;
 
 /**
  * A description of the assignments of a specific group member.
@@ -64,6 +64,6 @@ public class MemberAssignment {
 
     @Override
     public String toString() {
-        return "(topicPartitions=" + Utils.join(topicPartitions, ",") + ")";
+        return "(topicPartitions=" + String.join(",", Arrays.toString(topicPartitions.toArray())) + ")";
     }
 }

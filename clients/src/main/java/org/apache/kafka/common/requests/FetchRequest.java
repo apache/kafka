@@ -28,16 +28,17 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Map;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
+import java.util.Objects;
+import java.util.ArrayList;
+
 import java.util.stream.Collectors;
 
 public class FetchRequest extends AbstractRequest {
@@ -325,8 +326,8 @@ public class FetchRequest extends AbstractRequest {
                     append(", maxBytes=").append(maxBytes).
                     append(", fetchData=").append(toFetch).
                     append(", isolationLevel=").append(isolationLevel).
-                    append(", removed=").append(Utils.join(removed, ", ")).
-                    append(", replaced=").append(Utils.join(replaced, ", ")).
+                    append(", removed=").append(String.join(", ", Arrays.toString(removed.toArray()))).
+                    append(", replaced=").append(String.join(", ", Arrays.toString(replaced.toArray()))).
                     append(", metadata=").append(metadata).
                     append(", rackId=").append(rackId).
                     append(")");

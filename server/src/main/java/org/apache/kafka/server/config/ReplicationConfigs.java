@@ -19,7 +19,6 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
 
 public class ReplicationConfigs {
@@ -116,7 +115,7 @@ public class ReplicationConfigs {
     public static final String INTER_BROKER_SECURITY_PROTOCOL_DEFAULT = SecurityProtocol.PLAINTEXT.toString();
     public static final String INTER_BROKER_LISTENER_NAME_CONFIG = "inter.broker.listener.name";
     public static final String INTER_BROKER_SECURITY_PROTOCOL_DOC = "Security protocol used to communicate between brokers. Valid values are: " +
-            Utils.join(SecurityProtocol.names(), ", ") + ". It is an error to set this and " + INTER_BROKER_LISTENER_NAME_CONFIG +
+            String.join(", ", SecurityProtocol.names()).replace("[", "").replace("]", "") + ". It is an error to set this and " + INTER_BROKER_LISTENER_NAME_CONFIG +
             " properties at the same time.";
     public static final String INTER_BROKER_LISTENER_NAME_DOC = "Name of listener used for communication between brokers. If this is unset, the listener name is defined by " + INTER_BROKER_SECURITY_PROTOCOL_CONFIG +
            "It is an error to set this and " + INTER_BROKER_SECURITY_PROTOCOL_CONFIG + " properties at the same time.";

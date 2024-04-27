@@ -26,8 +26,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
-import static org.apache.kafka.common.utils.Utils.join;
 import static org.apache.kafka.tools.ToolsUtils.minus;
 
 public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
@@ -213,11 +211,11 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(describeOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + describeOpt + " takes one of these options: " + join(allGroupSelectionScopeOpts, ", "));
+                    "Option " + describeOpt + " takes one of these options: " + String.join(", ", Arrays.toString(allGroupSelectionScopeOpts.toArray())));
             List<OptionSpec<?>> mutuallyExclusiveOpts = Arrays.asList(membersOpt, offsetsOpt, stateOpt);
             if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + describeOpt + " takes at most one of these options: " + join(mutuallyExclusiveOpts, ", "));
+                    "Option " + describeOpt + " takes at most one of these options: " + String.join(", ", Arrays.toString(mutuallyExclusiveOpts.toArray())));
             }
             if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
                 CommandLineUtils.printUsageAndExit(parser,
@@ -230,7 +228,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(deleteOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + deleteOpt + " takes one of these options: " + join(allGroupSelectionScopeOpts, ", "));
+                    "Option " + deleteOpt + " takes one of these options: " + String.join(", ", Arrays.toString(allGroupSelectionScopeOpts.toArray())));
             if (options.has(topicOpt))
                 CommandLineUtils.printUsageAndExit(parser, "The consumer does not support topic-specific offset " +
                     "deletion from a consumer group.");
@@ -239,7 +237,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(deleteOffsetsOpt)) {
             if (!options.has(groupOpt) || !options.has(topicOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + deleteOffsetsOpt + " takes the following options: " + join(allDeleteOffsetsOpts, ", "));
+                    "Option " + deleteOffsetsOpt + " takes the following options: " + String.join(", ", Arrays.toString(allDeleteOffsetsOpts.toArray())));
         }
 
         if (options.has(resetOffsetsOpt)) {
@@ -255,7 +253,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
 
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + resetOffsetsOpt + " takes one of these options: " + join(allGroupSelectionScopeOpts, ", "));
+                    "Option " + resetOffsetsOpt + " takes one of these options: " + String.join(", ", Arrays.toString(allGroupSelectionScopeOpts.toArray())));
             CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt, minus(allResetOffsetScenarioOpts, resetToOffsetOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, minus(allResetOffsetScenarioOpts, resetToDatetimeOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, resetByDurationOpt, minus(allResetOffsetScenarioOpts, resetByDurationOpt));

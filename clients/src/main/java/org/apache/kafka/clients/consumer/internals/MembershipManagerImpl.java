@@ -40,21 +40,21 @@ import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.Arrays;
 import java.util.Optional;
-import java.util.Set;
+import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Set;
+import java.util.HashMap;
+import java.util.Collections;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.unmodifiableList;
@@ -1181,7 +1181,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * Visible for testing
      */
     CompletableFuture<Void> revokePartitions(Set<TopicPartition> revokedPartitions) {
-        log.info("Revoking previously assigned partitions {}", Utils.join(revokedPartitions, ", "));
+        log.info("Revoking previously assigned partitions {}", String.join(", ", Arrays.toString(revokedPartitions.toArray())));
 
         logPausedPartitionsBeingRevoked(revokedPartitions);
 
@@ -1377,7 +1377,7 @@ public class MembershipManagerImpl implements MembershipManager {
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(partitionsToRevoke);
         if (!revokePausedPartitions.isEmpty()) {
-            log.info("The pause flag in partitions [{}] will be removed due to revocation.", Utils.join(revokePausedPartitions, ", "));
+            log.info("The pause flag in partitions [{}] will be removed due to revocation.", String.join(", ", Arrays.toString(revokePausedPartitions.toArray())));
         }
     }
 

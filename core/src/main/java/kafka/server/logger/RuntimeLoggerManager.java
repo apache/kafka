@@ -42,7 +42,7 @@ public class RuntimeLoggerManager {
     static {
         ArrayList<String> logLevels = new ArrayList<>(LogLevelConfig.VALID_LOG_LEVELS);
         logLevels.sort(String::compareTo);
-        VALID_LOG_LEVELS_STRING = String.join(", ", logLevels);
+        VALID_LOG_LEVELS_STRING = String.join(", ", logLevels).replace("[", "").replace("]", "");
     }
 
     private final int nodeId;

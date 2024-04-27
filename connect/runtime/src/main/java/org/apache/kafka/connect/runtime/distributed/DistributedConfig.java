@@ -32,16 +32,16 @@ import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
 import java.security.Security;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
-
+import java.util.Locale;
+import java.util.ArrayList;
+import java.util.Optional;
+import java.util.HashSet;
+import java.util.Set;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
@@ -466,7 +466,7 @@ public class DistributedConfig extends WorkerConfig {
                                         + "compatibility");
                             }
                         },
-                        () -> "[" + Utils.join(ConnectProtocolCompatibility.values(), ", ") + "]"),
+                        () -> "[" + String.join(", ", Arrays.toString(ConnectProtocolCompatibility.values())) + "]"),
                     ConfigDef.Importance.LOW,
                     CONNECT_PROTOCOL_DOC)
             .define(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG,

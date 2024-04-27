@@ -24,9 +24,9 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
@@ -54,7 +54,7 @@ public class ConsumerRebalanceListenerInvoker {
     }
 
     public Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
-        log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
+        log.info("Adding newly assigned partitions: {}", String.join(", ", Arrays.toString(assignedPartitions.toArray())));
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 
@@ -76,11 +76,11 @@ public class ConsumerRebalanceListenerInvoker {
     }
 
     public Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
-        log.info("Revoke previously assigned partitions {}", Utils.join(revokedPartitions, ", "));
+        log.info("Revoke previously assigned partitions {}", String.join(", ", Arrays.toString(revokedPartitions.toArray())));
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(revokedPartitions);
         if (!revokePausedPartitions.isEmpty())
-            log.info("The pause flag in partitions [{}] will be removed due to revocation.", Utils.join(revokePausedPartitions, ", "));
+            log.info("The pause flag in partitions [{}] will be removed due to revocation.", String.join(", ", Arrays.toString(revokePausedPartitions.toArray())));
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 
@@ -102,11 +102,11 @@ public class ConsumerRebalanceListenerInvoker {
     }
 
     public Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
-        log.info("Lost previously assigned partitions {}", Utils.join(lostPartitions, ", "));
+        log.info("Lost previously assigned partitions {}", String.join(", ", Arrays.toString(lostPartitions.toArray())));
         Set<TopicPartition> lostPausedPartitions = subscriptions.pausedPartitions();
         lostPausedPartitions.retainAll(lostPartitions);
         if (!lostPausedPartitions.isEmpty())
-            log.info("The pause flag in partitions [{}] will be removed due to partition lost.", Utils.join(lostPausedPartitions, ", "));
+            log.info("The pause flag in partitions [{}] will be removed due to partition lost.", String.join(", ", Arrays.toString(lostPausedPartitions.toArray())));
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 

@@ -46,17 +46,18 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.ArrayList;
 import java.util.Optional;
+import java.util.List;
 import java.util.OptionalLong;
-import java.util.Properties;
+import java.util.Map;
+import java.util.HashSet;
 import java.util.Set;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -410,7 +411,7 @@ public abstract class TransactionsCommand {
                 String.valueOf(result.transactionTimeoutMs()),
                 transactionStartTimeMsColumnValue,
                 transactionDurationMsColumnValue,
-                Utils.join(result.topicPartitions(), ",")
+                String.join(",", Arrays.toString(result.topicPartitions().toArray()))
             );
 
             ToolsUtils.prettyPrintTable(HEADERS, singletonList(row), out);

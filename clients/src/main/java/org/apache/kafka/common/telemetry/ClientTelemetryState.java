@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.telemetry;
 
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -150,7 +149,7 @@ public enum ClientTelemetryState {
         if (allowableStates != null && !allowableStates.isEmpty()) {
             validStatesClause = String.format("the valid telemetry state transitions from %s are: %s",
                 this,
-                Utils.join(allowableStates, ", "));
+                String.join(", ", Arrays.toString(allowableStates.toArray())));
         } else {
             validStatesClause = String.format("there are no valid telemetry state transitions from %s", this);
         }

@@ -28,13 +28,13 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.MappedIterator;
-import org.apache.kafka.common.utils.Utils;
-
 import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+
 import java.util.stream.Collectors;
 
 public class StopReplicaRequest extends AbstractControlRequest {
@@ -101,7 +101,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
                 append(", controllerEpoch=").append(controllerEpoch).
                 append(", brokerEpoch=").append(brokerEpoch).
                 append(", deletePartitions=").append(deletePartitions).
-                append(", topicStates=").append(Utils.join(topicStates, ",")).
+                append(", topicStates=").append(String.join(",", Arrays.toString(topicStates.toArray()))).
                 append(")");
             return bld.toString();
         }

@@ -50,13 +50,15 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
+import java.util.Arrays;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.HashSet;
 import java.util.Properties;
 import java.util.TreeSet;
+import java.util.Iterator;
+
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -318,7 +320,7 @@ public class RoundTripWorker implements TaskWorker {
                 }
             }
             log.info("{}: consumer waiting for {} message(s), starting with: {}",
-                id, numToReceive, Utils.join(list, ", "));
+                id, numToReceive, String.join(", ", Arrays.toString(list.toArray())));
         }
     }
 

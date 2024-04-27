@@ -133,7 +133,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSu
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
-import static org.apache.kafka.common.utils.Utils.join;
 import static org.apache.kafka.common.utils.Utils.swallow;
 
 /**
@@ -1491,7 +1490,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // See the ApplicationEventProcessor.process() method that handles this event for more detail.
             applicationEventHandler.add(new AssignmentChangeEvent(subscriptions.allConsumed(), time.milliseconds()));
 
-            log.info("Assigned to partition(s): {}", join(partitions, ", "));
+            log.info("Assigned to partition(s): {}", String.join(", ", Arrays.toString(partitions.toArray())));
             if (subscriptions.assignFromUser(new HashSet<>(partitions)))
                 applicationEventHandler.add(new NewTopicsMetadataUpdateRequestEvent());
         } finally {
@@ -1840,7 +1839,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
 
                 fetchBuffer.retainAll(currentTopicPartitions);
-                log.info("Subscribed to topic(s): {}", join(topics, ", "));
+                log.info("Subscribed to topic(s): {}", String.join(", ", Arrays.toString(topics.toArray())));
                 if (subscriptions.subscribe(new HashSet<>(topics), listener))
                     metadata.requestUpdateForNewTopics();
 

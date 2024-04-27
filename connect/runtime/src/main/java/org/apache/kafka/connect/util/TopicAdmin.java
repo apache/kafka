@@ -47,7 +47,6 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.slf4j.Logger;
@@ -399,7 +398,7 @@ public class TopicAdmin implements AutoCloseable {
             }
         }
         if (topicsByName.isEmpty()) return EMPTY_CREATION;
-        String topicNameList = Utils.join(topicsByName.keySet(), "', '");
+        String topicNameList = String.join("', '", topicsByName.keySet()).replace("[", "").replace("]", "");
 
         // Attempt to create any missing topics
         CreateTopicsOptions args = new CreateTopicsOptions().validateOnly(false);
@@ -475,7 +474,7 @@ public class TopicAdmin implements AutoCloseable {
         if (topics == null) {
             return Collections.emptyMap();
         }
-        String topicNameList = String.join(", ", topics);
+        String topicNameList = String.join(", ", topics).replace("[", "").replace("]", "");
 
         Map<String, KafkaFuture<TopicDescription>> newResults =
                 admin.describeTopics(Arrays.asList(topics), new DescribeTopicsOptions()).topicNameValues();
@@ -630,7 +629,7 @@ public class TopicAdmin implements AutoCloseable {
         if (topics.isEmpty()) {
             return Collections.emptyMap();
         }
-        String topicNameList = String.join(", ", topics);
+        String topicNameList = String.join(", ", topics).replace("[", "").replace("]", "");
         Collection<ConfigResource> resources = topics.stream()
                                                      .map(t -> new ConfigResource(ConfigResource.Type.TOPIC, t))
                                                      .collect(Collectors.toList());

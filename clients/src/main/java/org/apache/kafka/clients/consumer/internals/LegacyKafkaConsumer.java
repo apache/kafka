@@ -93,7 +93,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSu
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredConsumerInterceptors;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
-import static org.apache.kafka.common.utils.Utils.join;
 import static org.apache.kafka.common.utils.Utils.swallow;
 
 /**
@@ -473,7 +472,7 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 fetcher.clearBufferedDataForUnassignedPartitions(currentTopicPartitions);
 
-                log.info("Subscribed to topic(s): {}", join(topics, ", "));
+                log.info("Subscribed to topic(s): {}", String.join(", ", topics));
                 if (this.subscriptions.subscribe(new HashSet<>(topics), listener))
                     metadata.requestUpdateForNewTopics();
             }
@@ -571,7 +570,7 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 if (coordinator != null)
                     this.coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
 
-                log.info("Assigned to partition(s): {}", join(partitions, ", "));
+                log.info("Assigned to partition(s): {}", String.join(", ", Arrays.toString(partitions.toArray())));
                 if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))
                     metadata.requestUpdateForNewTopics();
             }

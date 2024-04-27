@@ -29,15 +29,15 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.FlattenedIterator;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Collection;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 public final class LeaderAndIsrRequest extends AbstractControlRequest {
@@ -120,7 +120,7 @@ public final class LeaderAndIsrRequest extends AbstractControlRequest {
                 .append(", brokerEpoch=").append(brokerEpoch)
                 .append(", partitionStates=").append(partitionStates)
                 .append(", topicIds=").append(topicIds)
-                .append(", liveLeaders=(").append(Utils.join(liveLeaders, ", ")).append(")")
+                .append(", liveLeaders=(").append(String.join(", ", Arrays.toString(liveLeaders.toArray()))).append(")")
                 .append(")");
             return bld.toString();
 
