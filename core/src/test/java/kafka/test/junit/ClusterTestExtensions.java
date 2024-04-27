@@ -113,7 +113,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return generatedContexts.stream();
     }
 
-    private void processClusterTemplate(ExtensionContext context, ClusterTemplate annot,
+    protected void processClusterTemplate(ExtensionContext context, ClusterTemplate annot,
                                         Consumer<TestTemplateInvocationContext> testInvocations) {
         // If specified, call cluster config generated method (must be static)
         List<ClusterConfig> generatedClusterConfigs = new ArrayList<>();

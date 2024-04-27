@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package kafka.test;
+package kafka.test.junit;
 
-import kafka.test.junit.ClusterTestExtensions;
 import kafka.test.annotation.ClusterTemplate;
 
 import org.junit.jupiter.api.Test;
@@ -31,16 +30,16 @@ import static org.mockito.Mockito.when;
 
 public class ClusterTestExtensionsUnitTest {
     @Test
-    void testProcessClusterTemplate() throws Exception {
-        ClusterTestExtensions ext = mock(ClusterTestExtensions.class);
+    void testProcessClusterTemplate() {
+        ClusterTestExtensions ext = new ClusterTestExtensions();
         ExtensionContext context = mock(ExtensionContext.class);
         Consumer<TestTemplateInvocationContext> testInvocations = mock(Consumer.class);
         ClusterTemplate annot = mock(ClusterTemplate.class);
         when(annot.value()).thenReturn("");
 
-        Method method = ClusterTestExtensions.class.getDeclaredMethod("processClusterTemplate",
-                ExtensionContext.class, ClusterTemplate.class, Consumer.class);
-        method.setAccessible(true);
-        Assertions.assertThrows(IllegalStateException.class, () -> method.invoke(ext, context, annot, testInvocations));
+        Assertions.assertThrows(IllegalStateException.class, () -> {
+                ext.processClusterTemplate(context, annot, testInvocations);
+            }
+        );
     }
 }
