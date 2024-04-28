@@ -35,7 +35,7 @@ import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Properties}
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.compress.{GzipCompression, Lz4Compression, ZstdCompression}
+import org.apache.kafka.common.compress.{GzipCompression, Lz4Compression, SnappyCompression, ZstdCompression}
 import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.server.common.MetadataVersion
@@ -717,6 +717,14 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testInvalidGzipCompressionBuffer(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.setProperty(KafkaConfig.CompressionTypeProp, "gzip")
+    props.setProperty(KafkaConfig.CompressionGzipBufferProp, (GzipCompression.MIN_BUFFER - 1).toString)
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
   def testInvalidLz4CompressionLevel(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.setProperty(KafkaConfig.CompressionTypeProp, "lz4")
@@ -725,10 +733,34 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testInvalidLz4CompressionBlock(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.setProperty(KafkaConfig.CompressionTypeProp, "snappy")
+    props.setProperty(KafkaConfig.CompressionLz4BlockProp, (Lz4Compression.MAX_BLOCK + 1).toString)
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
   def testInvalidZstdCompressionLevel(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.setProperty(KafkaConfig.CompressionTypeProp, "zstd")
     props.setProperty(KafkaConfig.CompressionZstdLevelProp, (ZstdCompression.MAX_LEVEL + 1).toString)
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testInvalidZstdCompressionWindow(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.setProperty(KafkaConfig.CompressionTypeProp, "zstd")
+    props.setProperty(KafkaConfig.CompressionZstdWindowProp, (ZstdCompression.MAX_WINDOW + 1).toString)
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testInvalidSnappyCompressionBlock(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.setProperty(KafkaConfig.CompressionTypeProp, "snappy")
+    props.setProperty(KafkaConfig.CompressionSnappyBlockProp, (SnappyCompression.MAX_BLOCK + 1).toString)
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
@@ -936,6 +968,7 @@ class KafkaConfigTest {
         case KafkaConfig.DeleteTopicEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
 
         case KafkaConfig.CompressionGzipLevelProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.CompressionGzipBufferProp => assertPropertyInvalid(baseProperties, name, "not_a_number", GzipCompression.MIN_BUFFER - 1)
         case KafkaConfig.CompressionZstdLevelProp => assertPropertyInvalid(baseProperties, name, "not_a_number", ZstdCompression.MAX_LEVEL+1)
 
         case KafkaConfig.MetricNumSamplesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
@@ -1105,10 +1138,18 @@ class KafkaConfigTest {
           assertDynamic(kafkaConfigProp, "lz4", () => config.compressionType)
         case TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG =>
           assertDynamic(kafkaConfigProp, "5", () => config.gzipCompressionLevel)
+        case TopicConfig.COMPRESSION_GZIP_BUFFER_CONFIG =>
+          assertDynamic(kafkaConfigProp, (GzipCompression.DEFAULT_BUFFER + 1).toString, () => config.gzipCompressionBuffer)
         case TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG =>
           assertDynamic(kafkaConfigProp, "5", () => config.lz4CompressionLevel)
+        case TopicConfig.COMPRESSION_LZ4_BLOCK_CONFIG =>
+          assertDynamic(kafkaConfigProp, (Lz4Compression.DEFAULT_BLOCK + 1).toString, () => config.lz4CompressionLevel)
         case TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG =>
           assertDynamic(kafkaConfigProp, "5", () => config.zstdCompressionLevel)
+        case TopicConfig.COMPRESSION_ZSTD_WINDOW_CONFIG =>
+          assertDynamic(kafkaConfigProp, (ZstdCompression.MIN_WINDOW + 1).toString, () => config.zstdCompressionLevel)
+        case TopicConfig.COMPRESSION_SNAPPY_BLOCK_CONFIG =>
+          assertDynamic(kafkaConfigProp, (SnappyCompression.DEFAULT_BLOCK + 1).toString, () => config.snappyCompressionBlock)
         case TopicConfig.SEGMENT_BYTES_CONFIG =>
           assertDynamic(kafkaConfigProp, 10000, () => config.logSegmentBytes)
         case TopicConfig.SEGMENT_MS_CONFIG =>

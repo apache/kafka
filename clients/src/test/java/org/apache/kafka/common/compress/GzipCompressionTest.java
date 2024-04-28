@@ -79,4 +79,12 @@ public class GzipCompressionTest {
         assertThrows(ConfigException.class, () -> validator.ensureValid("", GzipCompression.MIN_LEVEL - 1));
         assertThrows(ConfigException.class, () -> validator.ensureValid("", GzipCompression.MAX_LEVEL + 1));
     }
+
+    @Test
+    public void testBufferSizeValidator() {
+        GzipCompression.BufferSizeValidator validator = new GzipCompression.BufferSizeValidator();
+
+        validator.ensureValid("", GzipCompression.DEFAULT_BUFFER);
+        assertThrows(ConfigException.class, () -> validator.ensureValid("", GzipCompression.MIN_BUFFER - 1));
+    }
 }

@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.compress.Lz4Compression;
+import org.apache.kafka.common.compress.SnappyCompression;
 import org.apache.kafka.common.compress.ZstdCompression;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -232,13 +233,29 @@ public class ProducerConfig extends AbstractConfig {
     public static final String COMPRESSION_GZIP_LEVEL_CONFIG = "compression.gzip.level";
     private static final String COMPRESSION_GZIP_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>gzip</code>.";
 
+    /** <code>compression.gzip.buffer</code> */
+    public static final String COMPRESSION_GZIP_BUFFER_CONFIG = "compression.gzip.buffer";
+    private static final String COMPRESSION_GZIP_BUFFER_DOC = "The compression buffer size to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>gzip</code>.";
+
     /** <code>compression.lz4.level</code> */
     public static final String COMPRESSION_LZ4_LEVEL_CONFIG = "compression.lz4.level";
     private static final String COMPRESSION_LZ4_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>lz4</code>.";
 
+    /** <code>compression.lz4.block</code> */
+    public static final String COMPRESSION_LZ4_BLOCK_CONFIG = "compression.lz4.block";
+    private static final String COMPRESSION_LZ4_BLOCK_DOC = "The compression block size to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>lz4</code>.";
+
     /** <code>compression.zstd.level</code> */
     public static final String COMPRESSION_ZSTD_LEVEL_CONFIG = "compression.zstd.level";
     private static final String COMPRESSION_ZSTD_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>zstd</code>.";
+
+    /** <code>compression.zstd.window</code> */
+    public static final String COMPRESSION_ZSTD_WINDOW_CONFIG = "compression.zstd.window";
+    private static final String COMPRESSION_ZSTD_WINDOW_DOC = "The compression window size to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>zstd</code>.";
+
+    /** <code>compression.snappy.block</code> */
+    public static final String COMPRESSION_SNAPPY_BLOCK_CONFIG = "compression.snappy.block";
+    private static final String COMPRESSION_SNAPPY_BLOCK_DOC = "The compression block size to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>snappy</code>.";
 
     /** <code>metrics.sample.window.ms</code> */
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
@@ -380,8 +397,12 @@ public class ProducerConfig extends AbstractConfig {
                                         ACKS_DOC)
                                 .define(COMPRESSION_TYPE_CONFIG, Type.STRING, CompressionType.NONE.name, in(Utils.enumOptions(CompressionType.class)), Importance.HIGH, COMPRESSION_TYPE_DOC)
                                 .define(COMPRESSION_GZIP_LEVEL_CONFIG, Type.INT, GzipCompression.DEFAULT_LEVEL, new GzipCompression.LevelValidator(), Importance.MEDIUM, COMPRESSION_GZIP_LEVEL_DOC)
+                                .define(COMPRESSION_GZIP_BUFFER_CONFIG, Type.INT, GzipCompression.DEFAULT_BUFFER, new GzipCompression.BufferSizeValidator(), Importance.MEDIUM, COMPRESSION_GZIP_BUFFER_DOC)
                                 .define(COMPRESSION_LZ4_LEVEL_CONFIG, Type.INT, Lz4Compression.DEFAULT_LEVEL, between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), Importance.MEDIUM, COMPRESSION_LZ4_LEVEL_DOC)
+                                .define(COMPRESSION_LZ4_BLOCK_CONFIG, Type.INT, Lz4Compression.DEFAULT_BLOCK, between(Lz4Compression.MIN_BLOCK, Lz4Compression.MAX_BLOCK), Importance.MEDIUM, COMPRESSION_LZ4_BLOCK_DOC)
                                 .define(COMPRESSION_ZSTD_LEVEL_CONFIG, Type.INT, ZstdCompression.DEFAULT_LEVEL, between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), Importance.MEDIUM, COMPRESSION_ZSTD_LEVEL_DOC)
+                                .define(COMPRESSION_ZSTD_WINDOW_CONFIG, Type.INT, ZstdCompression.DEFAULT_WINDOW, between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), Importance.MEDIUM, COMPRESSION_ZSTD_LEVEL_DOC)
+                                .define(COMPRESSION_SNAPPY_BLOCK_CONFIG, Type.INT, SnappyCompression.DEFAULT_BLOCK, between(SnappyCompression.MIN_BLOCK, SnappyCompression.MAX_BLOCK), Importance.MEDIUM, COMPRESSION_SNAPPY_BLOCK_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
                                 .define(PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG, Type.BOOLEAN, true, Importance.LOW, PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_DOC)
                                 .define(PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG, Type.LONG, 0, atLeast(0), Importance.LOW, PARTITIONER_AVAILABILITY_TIMEOUT_MS_DOC)

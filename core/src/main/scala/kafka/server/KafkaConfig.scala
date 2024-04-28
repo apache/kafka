@@ -27,7 +27,7 @@ import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.compress.{GzipCompression, Lz4Compression, ZstdCompression}
+import org.apache.kafka.common.compress.{GzipCompression, Lz4Compression, SnappyCompression, ZstdCompression}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, SaslConfigs, TopicConfig}
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList}
 import org.apache.kafka.common.config.types.Password
@@ -303,8 +303,12 @@ object KafkaConfig {
   val DeleteTopicEnableProp = "delete.topic.enable"
   val CompressionTypeProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_TYPE_CONFIG)
   val CompressionGzipLevelProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG)
+  val CompressionGzipBufferProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_GZIP_BUFFER_CONFIG)
   val CompressionLz4LevelProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG)
+  val CompressionLz4BlockProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_LZ4_BLOCK_CONFIG)
   val CompressionZstdLevelProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG)
+  val CompressionZstdWindowProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_ZSTD_WINDOW_CONFIG)
+  val CompressionSnappyBlockProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_SNAPPY_BLOCK_CONFIG)
 
   /** ********* Kafka Metrics Configuration ***********/
   val MetricSampleWindowMsProp = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG
@@ -689,8 +693,12 @@ object KafkaConfig {
   "('gzip', 'snappy', 'lz4', 'zstd'). It additionally accepts 'uncompressed' which is equivalent to no compression; and " +
   "'producer' which means retain the original compression codec set by the producer."
   val CompressionGzipLevelDoc = s"The compression level to use if $CompressionTypeProp is set to 'gzip'.";
+  val CompressionGzipBufferSizeDoc = s"The buffer size to use if $CompressionTypeProp is set to 'gzip'.";
   val CompressionLz4LevelDoc = s"The compression level to use if $CompressionTypeProp is set to 'lz4'.";
+  val CompressionLz4BlockDoc = s"The compression block size to use if $CompressionTypeProp is set to 'lz4'.";
   val CompressionZstdLevelDoc = s"The compression level to use if $CompressionTypeProp is set to 'zstd'.";
+  val CompressionZstdWindowDoc = s"The compression level to use if $CompressionTypeProp is set to 'zstd'.";
+  val CompressionSnappyBlockDoc = s"The compression block size to use if $CompressionTypeProp is set to 'snappy'.";
 
 
   /** ********* Kafka Metrics Configuration ***********/
@@ -947,8 +955,12 @@ object KafkaConfig {
       .define(DeleteTopicEnableProp, BOOLEAN, Defaults.DELETE_TOPIC_ENABLE, HIGH, DeleteTopicEnableDoc)
       .define(CompressionTypeProp, STRING, LogConfig.DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names.asScala.toSeq:_*), HIGH, CompressionTypeDoc)
       .define(CompressionGzipLevelProp, INT, GzipCompression.DEFAULT_LEVEL, new GzipCompression.LevelValidator(), MEDIUM, CompressionGzipLevelDoc)
+      .define(CompressionGzipBufferProp, INT, GzipCompression.DEFAULT_BUFFER, new GzipCompression.BufferSizeValidator(), MEDIUM, CompressionGzipBufferSizeDoc)
       .define(CompressionLz4LevelProp, INT, Lz4Compression.DEFAULT_LEVEL, between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, CompressionLz4LevelDoc)
+      .define(CompressionLz4BlockProp, INT, Lz4Compression.DEFAULT_BLOCK, between(Lz4Compression.MIN_BLOCK, Lz4Compression.MAX_BLOCK), MEDIUM, CompressionLz4BlockDoc)
       .define(CompressionZstdLevelProp, INT, ZstdCompression.DEFAULT_LEVEL, between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), MEDIUM, CompressionZstdLevelDoc)
+      .define(CompressionZstdWindowProp, INT, ZstdCompression.DEFAULT_WINDOW, new ZstdCompression.WindowValidator(), MEDIUM, CompressionZstdWindowDoc)
+      .define(CompressionSnappyBlockProp, INT, SnappyCompression.DEFAULT_BLOCK, between(SnappyCompression.MIN_BLOCK, SnappyCompression.MAX_BLOCK), MEDIUM, CompressionSnappyBlockDoc)
 
       /** ********* Transaction management configuration ***********/
       .define(TransactionalIdExpirationMsProp, INT, Defaults.TRANSACTIONAL_ID_EXPIRATION_MS, atLeast(1), HIGH, TransactionalIdExpirationMsDoc)
@@ -1680,8 +1692,12 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
   def compressionType = getString(KafkaConfig.CompressionTypeProp)
   def gzipCompressionLevel = getInt(KafkaConfig.CompressionGzipLevelProp)
+  def gzipCompressionBuffer = getInt(KafkaConfig.CompressionGzipBufferProp)
   def lz4CompressionLevel = getInt(KafkaConfig.CompressionLz4LevelProp)
+  def lz4CompressionBlock = getInt(KafkaConfig.CompressionLz4BlockProp)
   def zstdCompressionLevel = getInt(KafkaConfig.CompressionZstdLevelProp)
+  def zstdCompressionWinodw = getInt(KafkaConfig.CompressionZstdWindowProp)
+  def snappyCompressionBlock = getInt(KafkaConfig.CompressionSnappyBlockProp)
 
   /** ********* Raft Quorum Configuration *********/
   val quorumVoters = getList(RaftConfig.QUORUM_VOTERS_CONFIG)
@@ -2115,8 +2131,12 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     logProps.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minInSyncReplicas)
     logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, compressionType)
     logProps.put(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, gzipCompressionLevel)
+    logProps.put(TopicConfig.COMPRESSION_GZIP_BUFFER_CONFIG, gzipCompressionBuffer)
     logProps.put(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, lz4CompressionLevel)
+    logProps.put(TopicConfig.COMPRESSION_LZ4_BLOCK_CONFIG, lz4CompressionBlock)
     logProps.put(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, zstdCompressionLevel)
+    logProps.put(TopicConfig.COMPRESSION_ZSTD_WINDOW_CONFIG, zstdCompressionWinodw)
+    logProps.put(TopicConfig.COMPRESSION_SNAPPY_BLOCK_CONFIG, snappyCompressionBlock)
     logProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, uncleanLeaderElectionEnable)
     logProps.put(TopicConfig.PREALLOCATE_CONFIG, logPreAllocateEnable)
     logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, logMessageFormatVersion.version)

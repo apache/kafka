@@ -176,10 +176,18 @@ public class TopicConfig {
 
     public static final String COMPRESSION_GZIP_LEVEL_CONFIG = "compression.gzip.level";
     public static final String COMPRESSION_GZIP_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>gzip</code>.";
+    public static final String COMPRESSION_GZIP_BUFFER_CONFIG = "compression.gzip.buffer";
+    public static final String COMPRESSION_GZIP_BUFFER_DOC = "The compression buffer size to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>gzip</code>.";
     public static final String COMPRESSION_LZ4_LEVEL_CONFIG = "compression.lz4.level";
     public static final String COMPRESSION_LZ4_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>lz4</code>.";
+    public static final String COMPRESSION_LZ4_BLOCK_CONFIG = "compression.lz4.block";
+    public static final String COMPRESSION_LZ4_BLOCK_DOC = "The compression block size to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>lz4</code>.";
     public static final String COMPRESSION_ZSTD_LEVEL_CONFIG = "compression.zstd.level";
     public static final String COMPRESSION_ZSTD_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>zstd</code>.";
+    public static final String COMPRESSION_ZSTD_WINDOW_CONFIG = "compression.zstd.window";
+    public static final String COMPRESSION_ZSTD_WINDOW_DOC = "The compression window size to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>zstd</code>.";
+    public static final String COMPRESSION_SNAPPY_BLOCK_CONFIG = "compression.snappy.block";
+    public static final String COMPRESSION_SNAPPY_BLOCK_DOC = "The compression block size to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>snappy</code>.";
 
     public static final String PREALLOCATE_CONFIG = "preallocate";
     public static final String PREALLOCATE_DOC = "True if we should preallocate the file on disk when " +

@@ -40,7 +40,8 @@ public final class Lz4BlockOutputStream extends OutputStream {
 
     public static final String CLOSED_STREAM = "The stream is already closed";
 
-    public static final int BLOCKSIZE_64KB = 4;
+    public static final int BLOCK_SIZE_64KB = 4;
+    public static final int BLOCK_SIZE_4MB = 7;
 
     private final LZ4Compressor compressor;
     private final XXHash32 checksum;
@@ -93,13 +94,15 @@ public final class Lz4BlockOutputStream extends OutputStream {
      *
      * @param out The output stream to compress
      * @param level The compression level to use
+     * @param blockSize Default: 4. The block size used during compression. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other
+     * values will generate an exception
      * @param useBrokenFlagDescriptorChecksum Default: false. When true, writes an incorrect FrameDescriptor checksum
      *            compatible with older kafka clients.
      * @throws IOException
      */
 
-    public Lz4BlockOutputStream(OutputStream out, int level, boolean useBrokenFlagDescriptorChecksum) throws IOException {
-        this(out, BLOCKSIZE_64KB, level, false, useBrokenFlagDescriptorChecksum);
+    public Lz4BlockOutputStream(OutputStream out, int blockSize, int level, boolean useBrokenFlagDescriptorChecksum) throws IOException {
+        this(out, blockSize, level, false, useBrokenFlagDescriptorChecksum);
     }
 
     /**

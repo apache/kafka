@@ -39,10 +39,14 @@ public class GzipCompression implements Compression {
     public static final int MAX_LEVEL = Deflater.BEST_COMPRESSION;
     public static final int DEFAULT_LEVEL = Deflater.DEFAULT_COMPRESSION;
 
+    public static final int MIN_BUFFER = 512;
+    public static final int DEFAULT_BUFFER = 8 * 1024;
     private final int level;
+    private final int bufferSize;
 
-    private GzipCompression(int level) {
+    private GzipCompression(int level, int bufferSize) {
         this.level = level;
+        this.bufferSize = bufferSize;
     }
 
     @Override
@@ -56,7 +60,8 @@ public class GzipCompression implements Compression {
             // Set input buffer (uncompressed) to 16 KB (none by default) and output buffer (compressed) to
             // 8 KB (0.5 KB by default) to ensure reasonable performance in cases where the caller passes a small
             // number of bytes to write (potentially a single byte)
-            return new BufferedOutputStream(new GzipOutputStream(buffer, 8 * 1024, this.level), 16 * 1024);
+            System.out.println("gzip level: " + level + ", buffer size: " + bufferSize);
+            return new BufferedOutputStream(new GzipOutputStream(buffer, this.bufferSize, this.level), 16 * 1024);
         } catch (Exception e) {
             throw new KafkaException(e);
         }
@@ -72,7 +77,7 @@ public class GzipCompression implements Compression {
             //
             // ChunkedBytesStream is used to wrap the GZIPInputStream because the default implementation of
             // GZIPInputStream does not use an intermediate buffer for decompression in chunks.
-            return new ChunkedBytesStream(new GZIPInputStream(new ByteBufferInputStream(buffer), 8 * 1024),
+            return new ChunkedBytesStream(new GZIPInputStream(new ByteBufferInputStream(buffer), this.bufferSize),
                                           decompressionBufferSupplier,
                                           decompressionOutputSize(),
                                           false);
@@ -92,16 +97,17 @@ public class GzipCompression implements Compression {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         GzipCompression that = (GzipCompression) o;
-        return level == that.level;
+        return level == that.level && bufferSize == that.bufferSize;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(level);
+        return Objects.hash(level, bufferSize);
     }
 
     public static class Builder implements Compression.Builder<GzipCompression> {
         private int level = DEFAULT_LEVEL;
+        private int bufferSize = DEFAULT_BUFFER;
 
         public Builder level(int level) {
             if ((level < MIN_LEVEL || MAX_LEVEL < level) && level != DEFAULT_LEVEL) {
@@ -112,9 +118,17 @@ public class GzipCompression implements Compression {
             return this;
         }
 
+        public Builder bufferSize(int bufferSize) {
+            if (bufferSize < MIN_BUFFER) {
+                throw new IllegalArgumentException("gzip doesn't support given buffer size: " + bufferSize + " (min: " + MIN_BUFFER + ")");
+            }
+            this.bufferSize = bufferSize;
+            return this;
+        }
+
         @Override
         public GzipCompression build() {
-            return new GzipCompression(this.level);
+            return new GzipCompression(this.level, this.bufferSize);
         }
     }
 
@@ -133,6 +147,23 @@ public class GzipCompression implements Compression {
         @Override
         public String toString() {
             return "[" + MIN_LEVEL + ",...," + MAX_LEVEL + "] or " + DEFAULT_LEVEL;
+        }
+    }
+
+    public static class BufferSizeValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object o) {
+            if (o == null)
+                throw new ConfigException(name, null, "Value must be non-null");
+            int bufferSize = ((Number) o).intValue();
+            if (bufferSize < MIN_BUFFER) {
+                throw new ConfigException(name, o, "Value must be at least " + MIN_BUFFER);
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "[" + MIN_BUFFER + ", )";
         }
     }
 }

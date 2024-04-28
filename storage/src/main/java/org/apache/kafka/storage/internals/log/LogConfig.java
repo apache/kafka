@@ -276,10 +276,15 @@ public class LogConfig extends AbstractConfig {
                 MEDIUM, TopicConfig.COMPRESSION_TYPE_DOC)
             .define(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, INT, GzipCompression.DEFAULT_LEVEL,
                 new GzipCompression.LevelValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_LEVEL_DOC)
+            .define(TopicConfig.COMPRESSION_GZIP_BUFFER_CONFIG, INT, GzipCompression.DEFAULT_BUFFER, new GzipCompression.BufferSizeValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_BUFFER_DOC)
             .define(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, INT, Lz4Compression.DEFAULT_LEVEL,
                 between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, TopicConfig.COMPRESSION_LZ4_LEVEL_DOC)
+            .define(TopicConfig.COMPRESSION_LZ4_BLOCK_CONFIG, INT, Lz4Compression.DEFAULT_BLOCK, between(Lz4Compression.MIN_BLOCK, Lz4Compression.MAX_BLOCK), MEDIUM, TopicConfig.COMPRESSION_LZ4_BLOCK_DOC)
             .define(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, INT, ZstdCompression.DEFAULT_LEVEL,
                 between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), MEDIUM, TopicConfig.COMPRESSION_ZSTD_LEVEL_DOC)
+            .define(TopicConfig.COMPRESSION_ZSTD_WINDOW_CONFIG, INT, ZstdCompression.DEFAULT_WINDOW,
+                new ZstdCompression.WindowValidator(), MEDIUM, TopicConfig.COMPRESSION_ZSTD_WINDOW_DOC)
+            .define(TopicConfig.COMPRESSION_SNAPPY_BLOCK_CONFIG, INT, SnappyCompression.DEFAULT_BLOCK, between(SnappyCompression.MIN_BLOCK, SnappyCompression.MAX_BLOCK), MEDIUM, TopicConfig.COMPRESSION_SNAPPY_BLOCK_DOC)
             .define(TopicConfig.PREALLOCATE_CONFIG, BOOLEAN, DEFAULT_PREALLOCATE, MEDIUM, TopicConfig.PREALLOCATE_DOC)
             .define(MESSAGE_FORMAT_VERSION_CONFIG, STRING, DEFAULT_MESSAGE_FORMAT_VERSION, new MetadataVersionValidator(), MEDIUM,
                 MESSAGE_FORMAT_VERSION_DOC)
@@ -408,6 +413,7 @@ public class LogConfig extends AbstractConfig {
             case GZIP:
                 return Optional.of(new GzipCompression.Builder()
                          .level(getInt(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
+                         .bufferSize(getInt(TopicConfig.COMPRESSION_GZIP_BUFFER_CONFIG))
                          .build());
             case LZ4:
                 return Optional.of(new Lz4Compression.Builder()

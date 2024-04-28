@@ -23,6 +23,8 @@ import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdInputStreamNoFinalizer;
 import com.github.luben.zstd.ZstdOutputStreamNoFinalizer;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
@@ -42,10 +44,16 @@ public class ZstdCompression implements Compression {
     public static final int MAX_LEVEL = Zstd.maxCompressionLevel();
     public static final int DEFAULT_LEVEL = Zstd.defaultCompressionLevel();
 
-    private final int level;
+    public static final int MIN_WINDOW = Zstd.windowLogMin();
+    public static final int MAX_WINDOW = Zstd.windowLogMax();
+    public static final int DEFAULT_WINDOW = 0; // value 0 means "use default windowLog" in ZSTD
 
-    private ZstdCompression(int level) {
+    private final int level;
+    private final int window;
+
+    private ZstdCompression(int level, int window) {
         this.level = level;
+        this.window = window;
     }
 
     @Override
@@ -55,10 +63,13 @@ public class ZstdCompression implements Compression {
 
     @Override
     public OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion) {
+        System.out.println("zstd level: " + level + ", window: " + window);
         try {
             // Set input buffer (uncompressed) to 16 KB (none by default) to ensure reasonable performance
             // in cases where the caller passes a small number of bytes to write (potentially a single byte).
-            return new BufferedOutputStream(new ZstdOutputStreamNoFinalizer(bufferStream, RecyclingBufferPool.INSTANCE, level), 16 * 1024);
+            ZstdOutputStreamNoFinalizer finalizer = new ZstdOutputStreamNoFinalizer(bufferStream, RecyclingBufferPool.INSTANCE, level);
+            finalizer.setWindowLog(window);
+            return new BufferedOutputStream(finalizer, 16 * 1024);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
@@ -115,16 +126,17 @@ public class ZstdCompression implements Compression {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ZstdCompression that = (ZstdCompression) o;
-        return level == that.level;
+        return level == that.level && window == that.window;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(level);
+        return Objects.hash(level, window);
     }
 
     public static class Builder implements Compression.Builder<ZstdCompression> {
         private int level = DEFAULT_LEVEL;
+        private int window = DEFAULT_WINDOW;
 
         public Builder level(int level) {
             if (MAX_LEVEL < level || level < MIN_LEVEL) {
@@ -135,9 +147,31 @@ public class ZstdCompression implements Compression {
             return this;
         }
 
+        public Builder window(int window) {
+            if (MAX_WINDOW < window || window < MIN_WINDOW) {
+                throw new IllegalArgumentException("zstd doesn't support given window log: " + window);
+            }
+
+            this.window = window;
+            return this;
+        }
+
         @Override
         public ZstdCompression build() {
-            return new ZstdCompression(this.level);
+            return new ZstdCompression(this.level, this.window);
+        }
+    }
+
+    public static class WindowValidator implements ConfigDef.Validator {
+
+        @Override
+        public void ensureValid(String name, Object o) {
+            if (o == null)
+                throw new ConfigException(name, null, "Window log must be null");
+            int window = ((Number) o).intValue();
+            if (window != 0 && (window > MAX_WINDOW || window < MIN_WINDOW)) {
+                throw new ConfigException(name, o, "Window log must be 0 or between " + MIN_WINDOW + " and " + MAX_WINDOW);
+            }
         }
     }
 }

@@ -31,8 +31,18 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 public class SnappyCompression implements Compression {
+    public static final int MIN_BLOCK = 1024;
 
-    private SnappyCompression() {}
+    // The maximum block size 512MB is limited by the Snappy library.
+    public static final int MAX_BLOCK = 512 * 1024 * 1024;
+    public static final int DEFAULT_BLOCK = 32 * 1024;
+
+
+    private final int blockSize;
+
+    private SnappyCompression(int blockSize) {
+        this.blockSize = blockSize;
+    }
 
     @Override
     public CompressionType type() {
@@ -41,8 +51,9 @@ public class SnappyCompression implements Compression {
 
     @Override
     public OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion) {
+        System.out.println("snappy wrapForOutput" + this.blockSize);
         try {
-            return new SnappyOutputStream(bufferStream);
+            return new SnappyOutputStream(bufferStream, this.blockSize);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
@@ -54,9 +65,9 @@ public class SnappyCompression implements Compression {
         // SnappyInputStream allocates a new skip buffer every time, hence, we prefer our own implementation.
         try {
             return new ChunkedBytesStream(new SnappyInputStream(new ByteBufferInputStream(buffer)),
-                                          decompressionBufferSupplier,
-                                          decompressionOutputSize(),
-                                          false);
+                decompressionBufferSupplier,
+                decompressionOutputSize(),
+                false);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
@@ -81,10 +92,23 @@ public class SnappyCompression implements Compression {
     }
 
     public static class Builder implements Compression.Builder<SnappyCompression> {
+
+        private int blockSize = DEFAULT_BLOCK;
+
+        public Builder blockSize(int blockSize) {
+            if (blockSize < MIN_BLOCK || blockSize > MAX_BLOCK) {
+                throw new IllegalArgumentException("snappy doesn't support given block size: " + blockSize + ". Block size must be between " +
+                    MIN_BLOCK + " and " + MAX_BLOCK);
+            }
+            this.blockSize = blockSize;
+            return this;
+        }
         @Override
         public SnappyCompression build() {
-            return new SnappyCompression();
+            return new SnappyCompression(this.blockSize);
         }
     }
 
 }
+
+

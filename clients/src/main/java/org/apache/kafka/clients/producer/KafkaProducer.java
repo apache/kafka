@@ -44,6 +44,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.compress.Lz4Compression;
+import org.apache.kafka.common.compress.SnappyCompression;
 import org.apache.kafka.common.compress.ZstdCompression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
@@ -558,18 +559,25 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             case GZIP: {
                 return new GzipCompression.Builder()
                         .level(config.getInt(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
+                        .bufferSize(config.getInt(ProducerConfig.COMPRESSION_GZIP_BUFFER_CONFIG))
                         .build();
             }
             case LZ4: {
                 return new Lz4Compression.Builder()
                         .level(config.getInt(ProducerConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
+                        .blockSize(config.getInt(ProducerConfig.COMPRESSION_LZ4_BLOCK_CONFIG))
                         .build();
             }
             case ZSTD: {
                 return new ZstdCompression.Builder()
                         .level(config.getInt(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
+                        .window(config.getInt(ProducerConfig.COMPRESSION_ZSTD_WINDOW_CONFIG))
                         .build();
             }
+            case SNAPPY:
+                return new SnappyCompression.Builder()
+                    .blockSize(config.getInt(ProducerConfig.COMPRESSION_SNAPPY_BLOCK_CONFIG))
+                    .build();
             default:
                 return Compression.of(type)
                         .build();
