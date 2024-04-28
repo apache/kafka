@@ -16,10 +16,8 @@
  */
 package kafka.raft
 
-import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import kafka.server.KafkaConfig
-import org.apache.kafka.server.config.ServerLogConfigs
 
 final case class MetadataLogConfig(
   logSegmentBytes: Int,
