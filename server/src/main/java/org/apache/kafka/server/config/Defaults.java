@@ -17,7 +17,6 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.raft.QuorumConfig;
 
 import java.util.List;
@@ -57,20 +56,6 @@ public class Defaults {
     /** ********* Request Limit Configuration ***********/
     public static final int MAX_REQUEST_PARTITION_SIZE_LIMIT = 2000;
 
-    /** ********* Kafka Metrics Configuration *********/
-    public static final int METRIC_NUM_SAMPLES = 2;
-    public static final int METRIC_SAMPLE_WINDOW_MS = 30000;
-    public static final String METRIC_REPORTER_CLASSES = "";
-    public static final String METRIC_RECORDING_LEVEL = Sensor.RecordingLevel.INFO.toString();
-    public static final boolean AUTO_INCLUDE_JMX_REPORTER = true;
-
-    /**  ********* Kafka Yammer Metrics Reporter Configuration *********/
-    public static final String KAFKA_METRIC_REPORTER_CLASSES = "";
-    public static final int KAFKA_METRICS_POLLING_INTERVAL_SECONDS = 10;
-
-
-    /** ********* Kafka Client Telemetry Metrics Configuration *********/
-    public static final int CLIENT_TELEMETRY_MAX_BYTES = 1024 * 1024;
 
     /**  ********* Delegation Token Configuration *********/
     public static final long DELEGATION_TOKEN_MAX_LIFE_TIME_MS = 7 * 24 * 60 * 60 * 1000L;
