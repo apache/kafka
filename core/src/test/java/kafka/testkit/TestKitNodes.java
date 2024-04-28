@@ -34,6 +34,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class TestKitNodes {
+    public static final int CONTROLLER_ID_OFFSET = 3000;
+
     public static class Builder {
         private boolean combined;
         private Uuid clusterId;
@@ -41,6 +43,7 @@ public class TestKitNodes {
         private int numBrokerNodes;
         private int numDisksPerBroker = 1;
         private Map<Integer, Map<String, String>> perBrokerProperties = Collections.emptyMap();
+        private Map<Integer, Map<String, String>> perControllerProperties = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
             fromVersion(MetadataVersion.latestTesting(), "testkit");
 
@@ -86,6 +89,13 @@ public class TestKitNodes {
             return this;
         }
 
+        public Builder setPerControllerProperties(Map<Integer, Map<String, String>> perControllerProperties) {
+            this.perControllerProperties = Collections.unmodifiableMap(
+                    perControllerProperties.entrySet().stream()
+                            .collect(Collectors.toMap(Map.Entry::getKey, e -> Collections.unmodifiableMap(new HashMap<>(e.getValue())))));
+            return this;
+        }
+
         public TestKitNodes build() {
             if (numControllerNodes < 0) {
                 throw new RuntimeException("Invalid negative value for numControllerNodes");
@@ -116,6 +126,7 @@ public class TestKitNodes {
                     .setBaseDirectory(baseDirectory)
                     .setClusterId(clusterId)
                     .setCombined(brokerNodeIds.contains(id))
+                    .setPropertyOverrides(perControllerProperties.getOrDefault(id, Collections.emptyMap()))
                     .build();
                 controllerNodes.put(id, controllerNode);
             }
@@ -148,7 +159,7 @@ public class TestKitNodes {
             if (combined) {
                 return startBrokerId();
             }
-            return startBrokerId() + 3000;
+            return startBrokerId() + CONTROLLER_ID_OFFSET;
         }
     }
 

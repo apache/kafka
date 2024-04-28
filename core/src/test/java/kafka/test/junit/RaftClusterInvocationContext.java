@@ -95,6 +95,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         setCombined(isCombined).
                         setNumBrokerNodes(clusterConfig.numBrokers()).
                         setPerBrokerProperties(clusterConfig.perBrokerOverrideProperties()).
+                        setPerControllerProperties(clusterConfig.perControllerProperties()).
                         setNumControllerNodes(clusterConfig.numControllers()).build();
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
 

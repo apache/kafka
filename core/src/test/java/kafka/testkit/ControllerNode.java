@@ -24,6 +24,9 @@ import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 
 import java.io.File;
 import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -38,6 +41,7 @@ public class ControllerNode implements TestKitNode {
         private String metadataDirectory;
         private Uuid clusterId;
         private boolean combined;
+        private Map<String, String> propertyOverrides = Collections.emptyMap();
 
         private Builder() {}
 
@@ -70,6 +74,11 @@ public class ControllerNode implements TestKitNode {
             return this;
         }
 
+        public Builder setPropertyOverrides(Map<String, String> propertyOverrides) {
+            this.propertyOverrides = Collections.unmodifiableMap(new HashMap<>(propertyOverrides));
+            return this;
+        }
+
         public ControllerNode build() {
             if (id == -1) {
                 throw new RuntimeException("You must set the node id.");
@@ -96,7 +105,7 @@ public class ControllerNode implements TestKitNode {
                 setNodeId(id).
                 setDirectoryId(copier.generateValidDirectoryId()).
                 build());
-            return new ControllerNode(copier.copy(), combined);
+            return new ControllerNode(copier.copy(), combined, propertyOverrides);
         }
     }
 
@@ -104,12 +113,16 @@ public class ControllerNode implements TestKitNode {
 
     private final boolean combined;
 
+    private final Map<String, String> propertyOverrides;
+
     private ControllerNode(
         MetaPropertiesEnsemble initialMetaPropertiesEnsemble,
-        boolean combined
+        boolean combined,
+        Map<String, String> propertyOverrides
     ) {
         this.initialMetaPropertiesEnsemble = Objects.requireNonNull(initialMetaPropertiesEnsemble);
         this.combined = combined;
+        this.propertyOverrides = Objects.requireNonNull(propertyOverrides);
     }
 
     @Override
@@ -120,5 +133,9 @@ public class ControllerNode implements TestKitNode {
     @Override
     public boolean combined() {
         return combined;
+    }
+
+    public Map<String, String> propertyOverrides() {
+        return propertyOverrides;
     }
 }

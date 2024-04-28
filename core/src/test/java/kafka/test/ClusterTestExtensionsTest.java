@@ -25,18 +25,24 @@ import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
+import java.util.concurrent.ExecutionException;
 
 @ClusterTestDefaults(clusterType = Type.ZK, serverProperties = {
     @ClusterConfigProperty(key = "default.key", value = "default.value"),
+    @ClusterConfigProperty(id = 0, key = "queued.max.requests", value = "100"),
 })   // Set defaults for a few params in @ClusterTest(s)
 @ExtendWith(ClusterTestExtensions.class)
 public class ClusterTestExtensionsTest {
@@ -94,28 +100,61 @@ public class ClusterTestExtensionsTest {
     @ClusterTests({
         @ClusterTest(name = "cluster-tests-1", clusterType = Type.ZK, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "bar"),
-            @ClusterConfigProperty(key = "spam", value = "eggs")
+            @ClusterConfigProperty(key = "spam", value = "eggs"),
+            @ClusterConfigProperty(id = 86400, key = "spam", value = "eggs"), // this one will be ignored as there is no broker id is 86400
         }),
         @ClusterTest(name = "cluster-tests-2", clusterType = Type.KRAFT, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
             @ClusterConfigProperty(key = "spam", value = "eggz"),
-            @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
+            @ClusterConfigProperty(key = "default.key", value = "overwrite.value"),
+            @ClusterConfigProperty(id = 0, key = "queued.max.requests", value = "200"),
+            @ClusterConfigProperty(id = 3000, key = "queued.max.requests", value = "300")
         }),
         @ClusterTest(name = "cluster-tests-3", clusterType = Type.CO_KRAFT, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
             @ClusterConfigProperty(key = "spam", value = "eggz"),
-            @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
+            @ClusterConfigProperty(key = "default.key", value = "overwrite.value"),
+            @ClusterConfigProperty(id = 0, key = "queued.max.requests", value = "200")
         })
     })
-    public void testClusterTests() {
+    public void testClusterTests() throws ExecutionException, InterruptedException {
         if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.ZK)) {
             Assertions.assertEquals("bar", clusterInstance.config().serverProperties().get("foo"));
             Assertions.assertEquals("eggs", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("default.value", clusterInstance.config().serverProperties().get("default.key"));
+            Assertions.assertEquals(1, clusterInstance.config().perBrokerOverrideProperties().size());
+            Assertions.assertEquals("100", clusterInstance.config().perBrokerOverrideProperties().get(0).get("queued.max.requests"));
+
+            try (Admin admin = clusterInstance.createAdminClient()) {
+                ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+                Map<ConfigResource, Config> configs = admin.describeConfigs(Collections.singletonList(configResource)).all().get();
+                Assertions.assertEquals(1, configs.size());
+                Assertions.assertEquals("100", configs.get(configResource).get("queued.max.requests").value());
+            }
         } else if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.RAFT)) {
             Assertions.assertEquals("baz", clusterInstance.config().serverProperties().get("foo"));
             Assertions.assertEquals("eggz", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("overwrite.value", clusterInstance.config().serverProperties().get("default.key"));
+            Assertions.assertEquals(1, clusterInstance.config().perBrokerOverrideProperties().size());
+            Assertions.assertEquals("200", clusterInstance.config().perBrokerOverrideProperties().get(0).get("queued.max.requests"));
+
+            try (Admin admin = clusterInstance.createAdminClient()) {
+                ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+                Map<ConfigResource, Config> configs = admin.describeConfigs(Collections.singletonList(configResource)).all().get();
+                Assertions.assertEquals(1, configs.size());
+                Assertions.assertEquals("200", configs.get(configResource).get("queued.max.requests").value());
+            }
+            if (config.clusterType().equals(Type.KRAFT)) {
+                Assertions.assertEquals(1, clusterInstance.config().perControllerProperties().size());
+                Assertions.assertEquals("300", clusterInstance.config().perControllerProperties().get(3000).get("queued.max.requests"));
+                try (Admin admin = Admin.create(Collections.singletonMap(
+                        AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()))) {
+                    ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
+                    Map<ConfigResource, Config> configs = admin.describeConfigs(Collections.singletonList(configResource)).all().get();
+                    Assertions.assertEquals(1, configs.size());
+                    Assertions.assertEquals("300", configs.get(configResource).get("queued.max.requests").value());
+                }
+            }
         } else {
             Assertions.fail("Unknown cluster type " + clusterInstance.clusterType());
         }
