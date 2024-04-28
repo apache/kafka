@@ -58,15 +58,12 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs, QuotaConfigs, ZkConfigs}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.server.config.{QuotaConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.server.util.timer.SystemTimer
-import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException

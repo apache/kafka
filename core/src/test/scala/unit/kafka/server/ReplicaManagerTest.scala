@@ -60,7 +60,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.common.{DirectoryEventHandler, MetadataVersion, OffsetAndEpoch}
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.timer.MockTimer
@@ -73,17 +73,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
-import com.yammer.metrics.core.{Gauge, Meter}
-import kafka.log.remote.RemoteLogManager
-import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
-import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
-import org.apache.kafka.server.util.timer.MockTimer
-import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
