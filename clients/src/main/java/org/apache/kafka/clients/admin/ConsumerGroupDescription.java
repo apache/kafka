@@ -26,7 +26,7 @@ import java.util.Collection;
 import java.util.Set;
 import java.util.ArrayList;
 import java.util.Objects;
-import java.util.Arrays;
+import java.util.stream.Collectors;
 
 /**
  * A detailed description of a single consumer group in the cluster.
@@ -160,7 +160,7 @@ public class ConsumerGroupDescription {
     public String toString() {
         return "(groupId=" + groupId +
             ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
-            ", members=" + String.join(",", Arrays.toString(members.toArray())) +
+            ", members=" + members.stream().map(MemberDescription::toString).collect(Collectors.joining(",")) +
             ", partitionAssignor=" + partitionAssignor +
             ", type=" + type +
             ", state=" + state +

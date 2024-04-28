@@ -1490,7 +1490,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // See the ApplicationEventProcessor.process() method that handles this event for more detail.
             applicationEventHandler.add(new AssignmentChangeEvent(subscriptions.allConsumed(), time.milliseconds()));
 
-            log.info("Assigned to partition(s): {}", String.join(", ", Arrays.toString(partitions.toArray())));
+            log.info("Assigned to partition(s): {}", partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+
             if (subscriptions.assignFromUser(new HashSet<>(partitions)))
                 applicationEventHandler.add(new NewTopicsMetadataUpdateRequestEvent());
         } finally {

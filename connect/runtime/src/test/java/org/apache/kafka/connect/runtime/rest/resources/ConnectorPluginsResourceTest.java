@@ -106,7 +106,7 @@ public class ConnectorPluginsResourceTest {
         PARTIAL_PROPS.put("name", "test");
         PARTIAL_PROPS.put("test.string.config", "testString");
         PARTIAL_PROPS.put("test.int.config", "1");
-        PARTIAL_PROPS.put("test.list.config", "a, b");
+        PARTIAL_PROPS.put("test.list.config", "a,b");
 
         PROPS = new HashMap<>(PARTIAL_PROPS);
         PROPS.put("connector.class", ConnectorPluginsResourceTestConnector.class.getSimpleName());
@@ -188,7 +188,7 @@ public class ConnectorPluginsResourceTest {
         partialConfigs.add(configInfo);
 
         configKeyInfo = new ConfigKeyInfo("test.list.config", "LIST", true, null, "HIGH", "Test configuration for list type.", "Test", 2, "LONG", "test.list.config", Collections.emptyList());
-        configValueInfo = new ConfigValueInfo("test.list.config", "a, b", asList("a", "b", "c"), Collections.emptyList(), true);
+        configValueInfo = new ConfigValueInfo("test.list.config", "a,b", asList("a", "b", "c"), Collections.emptyList(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);

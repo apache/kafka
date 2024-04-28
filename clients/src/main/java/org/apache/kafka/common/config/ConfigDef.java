@@ -515,7 +515,8 @@ public class ConfigDef {
         // Check all configurations are defined
         List<String> undefinedConfigKeys = undefinedDependentConfigs();
         if (!undefinedConfigKeys.isEmpty()) {
-            String joined = String.join(",", undefinedConfigKeys).replace("[", "").replace("]", "");
+            //String joined = String.join(",", undefinedConfigKeys).replace("[", "").replace("]", "");
+            String joined = undefinedConfigKeys.stream().map(String::toString).collect(Collectors.joining(","));
             throw new ConfigException("Some configurations in are referred in the dependents, but not defined: " + joined);
         }
         // parse all known keys
@@ -806,7 +807,7 @@ public class ConfigDef {
                 return parsedValue.toString();
             case LIST:
                 List<?> valueList = (List<?>) parsedValue;
-                return String.join(",", Arrays.toString(valueList.toArray()).replace("[", "").replace("]", ""));
+                return valueList.stream().map(Object::toString).collect(Collectors.joining(","));
             case CLASS:
                 Class<?> clazz = (Class<?>) parsedValue;
                 return clazz.getName();
@@ -1051,13 +1052,13 @@ public class ConfigDef {
         public void ensureValid(String name, Object o) {
             String s = (String) o;
             if (!validStrings.contains(s)) {
-                throw new ConfigException(name, o, "String must be one of: " + String.join(", ", validStrings).replace("[", "").replace("]", ""));
+                throw new ConfigException(name, o, "String must be one of: " + String.join(",", validStrings));
             }
 
         }
 
         public String toString() {
-            return "[" + String.join(", ", validStrings) + "]";
+            return "[" + String.join(",", validStrings) + "]";
         }
     }
 
@@ -1079,12 +1080,12 @@ public class ConfigDef {
         public void ensureValid(String name, Object o) {
             String s = (String) o;
             if (s == null || !validStrings.contains(s.toUpperCase(Locale.ROOT))) {
-                throw new ConfigException(name, o, "String must be one of (case insensitive): " + String.join(", ", validStrings).replace("[", "").replace("]", ""));
+                throw new ConfigException(name, o, "String must be one of (case insensitive): " + String.join(",", validStrings));
             }
         }
 
         public String toString() {
-            return "(case insensitive) [" + String.join(", ", validStrings).replace("[", "").replace("]", "") + "]";
+            return "(case insensitive) [" + String.join(",", validStrings).replace("[", "").replace("]", "") + "]";
         }
     }
 
@@ -1206,7 +1207,7 @@ public class ConfigDef {
 
             if (!foundIllegalCharacters.isEmpty()) {
                 throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " +
-                        String.join(", ", Arrays.toString(foundIllegalCharacters.toArray())).replace("[", "").replace("]", ""));
+                        String.join(",", foundIllegalCharacters.stream().map(Object::toString).collect(Collectors.joining(","))));
             }
         }
 
