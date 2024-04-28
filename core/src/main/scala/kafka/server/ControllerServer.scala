@@ -448,6 +448,10 @@ class ControllerServer(
       registrationChannelManager.start()
       registrationManager.start(registrationChannelManager)
 
+      // Currently we can only log the config through the doLog argument in KafkaConfig
+      // we will refactor KafkaConfig in later PR, enable logging through its own method
+      new KafkaConfig(config.originals(), true)
+
       // Block here until all the authorizer futures are complete
       FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "all of the authorizer futures to be completed",
