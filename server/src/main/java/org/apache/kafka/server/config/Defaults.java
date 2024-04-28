@@ -17,10 +17,6 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.raft.QuorumConfig;
-
-import java.util.List;
-
 public class Defaults {
     /** ********* General Configuration *********/
     public static final boolean BROKER_ID_GENERATION_ENABLE = true;

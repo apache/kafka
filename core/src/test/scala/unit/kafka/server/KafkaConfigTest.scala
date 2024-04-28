@@ -997,8 +997,8 @@ class KafkaConfigTest {
         case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
 
         //Kafka Yammer metrics reporter configs
-        case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
-        case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
+        case MetricConfigs.KAFKA_METRICS_REPORTER_CLASSES_CONFIG => // ignore
+        case MetricConfigs.KAFKA_METRICS_POLLING_INTERVAL_SECONDS_CONFIG => //ignore
 
         case KafkaSecurityConfigs.SASL_SERVER_MAX_RECEIVE_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
