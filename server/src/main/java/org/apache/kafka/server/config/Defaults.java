@@ -61,14 +61,4 @@ public class Defaults {
     public static final long DELEGATION_TOKEN_MAX_LIFE_TIME_MS = 7 * 24 * 60 * 60 * 1000L;
     public static final long DELEGATION_TOKEN_EXPIRY_TIME_MS = 24 * 60 * 60 * 1000L;
     public static final long DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS = 1 * 60 * 60 * 1000L;
-
-
-    /**  ********* Raft Quorum Configuration *********/
-    public static final List<String> QUORUM_VOTERS = QuorumConfig.DEFAULT_QUORUM_VOTERS;
-    public static final int QUORUM_ELECTION_TIMEOUT_MS = QuorumConfig.DEFAULT_QUORUM_ELECTION_TIMEOUT_MS;
-    public static final int QUORUM_FETCH_TIMEOUT_MS = QuorumConfig.DEFAULT_QUORUM_FETCH_TIMEOUT_MS;
-    public static final int QUORUM_ELECTION_BACKOFF_MS = QuorumConfig.DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS;
-    public static final int QUORUM_LINGER_MS = QuorumConfig.DEFAULT_QUORUM_LINGER_MS;
-    public static final int QUORUM_REQUEST_TIMEOUT_MS = QuorumConfig.DEFAULT_QUORUM_REQUEST_TIMEOUT_MS;
-    public static final int QUORUM_RETRY_BACKOFF_MS = QuorumConfig.DEFAULT_QUORUM_RETRY_BACKOFF_MS;
 }
