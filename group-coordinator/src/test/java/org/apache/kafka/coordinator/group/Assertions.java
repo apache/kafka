@@ -212,8 +212,10 @@ public class Assertions {
             GroupMetadataValue expectedValue = (GroupMetadataValue) expected.message().duplicate();
             GroupMetadataValue actualValue = (GroupMetadataValue) actual.message().duplicate();
 
-            expectedValue.members().sort(Comparator.comparing(GroupMetadataValue.MemberMetadata::memberId));
-            actualValue.members().sort(Comparator.comparing(GroupMetadataValue.MemberMetadata::memberId));
+            Comparator<GroupMetadataValue.MemberMetadata> comparator =
+                Comparator.comparing(GroupMetadataValue.MemberMetadata::memberId);
+            expectedValue.members().sort(comparator);
+            actualValue.members().sort(comparator);
             try {
                 Arrays.asList(expectedValue, actualValue).forEach(value ->
                     value.members().forEach(memberMetadata -> {
@@ -251,12 +253,11 @@ public class Assertions {
             ConsumerGroupTargetAssignmentMemberValue actualValue =
                 (ConsumerGroupTargetAssignmentMemberValue) actual.message().duplicate();
 
-            expectedValue.topicPartitions().sort(
-                Comparator.comparing(ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId)
-            );
-            actualValue.topicPartitions().sort(
-                Comparator.comparing(ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId)
-            );
+            Comparator<ConsumerGroupTargetAssignmentMemberValue.TopicPartition> comparator =
+                Comparator.comparing(ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId);
+            expectedValue.topicPartitions().sort(comparator);
+            actualValue.topicPartitions().sort(comparator);
+
             assertEquals(expectedValue, actualValue);
         } else {
             assertEquals(expected.message(), actual.message());
