@@ -1232,10 +1232,10 @@ public class RemoteLogManager implements Closeable {
             return false;
         }
         // There can be overlapping remote log segments in the remote storage. (eg)
-        // leader-epoch-file-cache: {(5, 10), (7, 15), (8, 100)}
+        // leader-epoch-file-cache: {(5, 10), (7, 15), (9, 100)}
         // segment1: offset-range = 5-50, Broker = 0, epochs = {(5, 10), (7, 15)}
-        // segment2: offset-range = 14-150, Broker = 1, epochs = {(5, 14), (7, 15), (8, 100)}, after leader-election.
-        // When the segment1 gets deleted, then the leader-epoch-file-cache gets updated to: {(7, 51), (8, 100), (9, 200)}.
+        // segment2: offset-range = 14-150, Broker = 1, epochs = {(5, 14), (7, 15), (9, 100)}, after leader-election.
+        // When the segment1 gets deleted, then the log-start-offset = 51 and leader-epoch-file-cache gets updated to: {(7, 51), (9, 100)}.
         // While validating the segment2, we should ensure the overlapping remote log segments case.
         Integer segmentFirstEpoch = segmentLeaderEpochs.ceilingKey(leaderEpochs.firstKey());
         if (segmentFirstEpoch == null || !leaderEpochs.containsKey(segmentFirstEpoch)) {

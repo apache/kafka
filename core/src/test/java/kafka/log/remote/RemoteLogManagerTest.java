@@ -1574,12 +1574,12 @@ public class RemoteLogManagerTest {
     public void testRemoteSegmentWithinLeaderEpochsForOverlappingSegments() {
         NavigableMap<Integer, Long> leaderEpochCache = new TreeMap<>();
         leaderEpochCache.put(7, 51L);
-        leaderEpochCache.put(8, 100L);
+        leaderEpochCache.put(9, 100L);
 
         TreeMap<Integer, Long> segment1Epochs = new TreeMap<>();
         segment1Epochs.put(5, 14L);
         segment1Epochs.put(7, 15L);
-        segment1Epochs.put(8, 100L);
+        segment1Epochs.put(9, 100L);
         RemoteLogSegmentMetadata segment1 = createRemoteLogSegmentMetadata(14, 150, segment1Epochs);
         assertTrue(isRemoteSegmentWithinLeaderEpochs(segment1, 210, leaderEpochCache));
 
@@ -1593,10 +1593,16 @@ public class RemoteLogManagerTest {
         // segment3Epochs are not within the leaderEpochCache
         TreeMap<Integer, Long> segment3Epochs = new TreeMap<>();
         segment3Epochs.put(7, 15L);
-        segment3Epochs.put(8, 100L);
-        segment3Epochs.put(9, 200L);
+        segment3Epochs.put(9, 100L);
+        segment3Epochs.put(10, 200L);
         RemoteLogSegmentMetadata segment3 = createRemoteLogSegmentMetadata(15, 250, segment3Epochs);
         assertFalse(isRemoteSegmentWithinLeaderEpochs(segment3, 210, leaderEpochCache));
+
+        // segment4Epochs are not within the leaderEpochCache
+        TreeMap<Integer, Long> segment4Epochs = new TreeMap<>();
+        segment4Epochs.put(8, 75L);
+        RemoteLogSegmentMetadata segment4 = createRemoteLogSegmentMetadata(75, 100, segment4Epochs);
+        assertFalse(isRemoteSegmentWithinLeaderEpochs(segment4, 210, leaderEpochCache));
     }
 
     @Test
