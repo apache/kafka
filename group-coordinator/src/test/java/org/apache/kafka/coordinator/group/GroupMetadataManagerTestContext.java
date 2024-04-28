@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -123,8 +124,20 @@ public class GroupMetadataManagerTestContext {
         return protocols;
     }
 
-    public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toRangeProtocol(List<String> topicNames, List<TopicPartition> ownedPartitions) {
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(0);
+    public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toRangeProtocol(
+        List<String> topicNames,
+        List<TopicPartition> ownedPartitions
+    ) {
+        return toRangeProtocol(topicNames, ownedPartitions, ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION);
+    }
+
+    public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toRangeProtocol(
+        List<String> topicNames,
+        List<TopicPartition> ownedPartitions,
+        short version
+    ) {
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(0);
         protocols.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
             .setName("range")
             .setMetadata(ConsumerProtocol.serializeSubscription(
@@ -132,7 +145,8 @@ public class GroupMetadataManagerTestContext {
                     topicNames,
                     null,
                     ownedPartitions
-                )
+                ),
+                version
             ).array())
         );
         return protocols;
