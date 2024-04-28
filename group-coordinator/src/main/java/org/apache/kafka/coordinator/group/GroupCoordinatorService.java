@@ -327,6 +327,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
             );
         }
 
+        if (request.sessionTimeoutMs() < config.classicGroupMinSessionTimeoutMs ||
+            request.sessionTimeoutMs() > config.classicGroupMaxSessionTimeoutMs) {
+            return CompletableFuture.completedFuture(new JoinGroupResponseData()
+                .setMemberId(request.memberId())
+                .setErrorCode(Errors.INVALID_SESSION_TIMEOUT.code())
+            );
+        }
+
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
 
         runtime.scheduleWriteOperation(
@@ -340,7 +348,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "classic-group-join",
                     request,
                     exception,
-                    (error, __) -> createJoinGroupResponseData(request.memberId(), error)
+                    (error, __) -> new JoinGroupResponseData().setErrorCode(error.code())
                 ));
             }
             return null;
@@ -1120,29 +1128,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
             default:
                 return handler.apply(apiError.error(), apiError.message());
-        }
-    }
-
-    /**
-     * Creates the JoinGroupResponseData according to the error type.
-     *
-     * @param memberId  The member id.
-     * @param error     The error.
-     * @return The JoinGroupResponseData.
-     */
-    private static JoinGroupResponseData createJoinGroupResponseData(
-        String memberId,
-        Errors error
-    ) {
-        switch (error) {
-            case MEMBER_ID_REQUIRED:
-            case INVALID_SESSION_TIMEOUT:
-                return new JoinGroupResponseData()
-                    .setMemberId(memberId)
-                    .setErrorCode(error.code());
-            default:
-                return new JoinGroupResponseData()
-                    .setErrorCode(error.code());
         }
     }
 }

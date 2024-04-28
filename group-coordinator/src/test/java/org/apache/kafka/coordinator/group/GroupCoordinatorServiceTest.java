@@ -372,7 +372,8 @@ public class GroupCoordinatorServiceTest {
         );
 
         JoinGroupRequestData request = new JoinGroupRequestData()
-            .setGroupId("foo");
+            .setGroupId("foo")
+            .setSessionTimeoutMs(1000);
 
         service.startup(() -> 1);
 
@@ -405,7 +406,8 @@ public class GroupCoordinatorServiceTest {
         );
 
         JoinGroupRequestData request = new JoinGroupRequestData()
-            .setGroupId("foo");
+            .setGroupId("foo")
+            .setSessionTimeoutMs(1000);
 
         service.startup(() -> 1);
 
@@ -497,6 +499,68 @@ public class GroupCoordinatorServiceTest {
         assertEquals(
             new JoinGroupResponseData()
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            future.get()
+        );
+    }
+
+    @Test
+    public void testJoinGroupSessionTimeoutTooSmall() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorConfig config = createConfig();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            config,
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+        service.startup(() -> 1);
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withSessionTimeoutMs(config.classicGroupMinSessionTimeoutMs - 1)
+            .build();
+
+        CompletableFuture<JoinGroupResponseData> future = service.joinGroup(
+            requestContext(ApiKeys.JOIN_GROUP),
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertEquals(
+            new JoinGroupResponseData()
+                .setErrorCode(Errors.INVALID_SESSION_TIMEOUT.code()),
+            future.get()
+        );
+    }
+
+    @Test
+    public void testJoinGroupSessionTimeoutTooLarge() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorConfig config = createConfig();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            config,
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+        service.startup(() -> 1);
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withSessionTimeoutMs(config.classicGroupMaxSessionTimeoutMs + 1)
+            .build();
+
+        CompletableFuture<JoinGroupResponseData> future = service.joinGroup(
+            requestContext(ApiKeys.JOIN_GROUP),
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertEquals(
+            new JoinGroupResponseData()
+                .setErrorCode(Errors.INVALID_SESSION_TIMEOUT.code()),
             future.get()
         );
     }
