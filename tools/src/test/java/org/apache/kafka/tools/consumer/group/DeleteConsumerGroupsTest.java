@@ -37,7 +37,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -70,7 +69,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 })
 public class DeleteConsumerGroupsTest {
     private final ClusterInstance cluster;
-    private final List<GroupProtocol> groupProtocols;
+    private final Iterable<GroupProtocol> groupProtocols;
 
     public DeleteConsumerGroupsTest(ClusterInstance cluster) {
         this.cluster = cluster;
@@ -87,7 +86,7 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTest
     public void testDeleteCmdNonExistingGroup() {
-        String missingGroupId = composeMissingGroupId(CLASSIC, 0);
+        String missingGroupId = composeMissingGroupId(CLASSIC);
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroupId};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
         String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
@@ -97,7 +96,7 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTest
     public void testDeleteNonExistingGroup() {
-        String missingGroupId = composeMissingGroupId(CLASSIC, 0);
+        String missingGroupId = composeMissingGroupId(CLASSIC);
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroupId};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
         Map<String, Throwable> result = service.deleteGroups();
@@ -107,13 +106,13 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTest
     public void testDeleteNonEmptyGroup() throws Exception {
-        for (int i = 0; i < groupProtocols.size(); i++) {
-            GroupProtocol groupProtocol = groupProtocols.get(i);
-            String groupId = composeGroupId(groupProtocol, i);
-            String topicName = composeTopicName(groupProtocol, i);
+        for (GroupProtocol groupProtocol : groupProtocols) {
+            String groupId = composeGroupId(groupProtocol);
+            String topicName = composeTopicName(groupProtocol);
             try (AutoCloseable consumerGroupCloseable = consumerGroupClosable(groupProtocol, groupId, topicName)) {
                 String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
+
                 TestUtils.waitForCondition(
                         () -> service.collectGroupMembers(groupId, false).getValue().get().size() == 1,
                         "The group did not initialize as expected."
@@ -136,10 +135,9 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTest
     void testDeleteEmptyGroup() throws Exception {
-        for (int i = 0; i < groupProtocols.size(); i++) {
-            GroupProtocol groupProtocol = groupProtocols.get(i);
-            String groupId = composeGroupId(groupProtocol, i);
-            String topicName = composeTopicName(groupProtocol, i);
+        for (GroupProtocol groupProtocol : groupProtocols) {
+            String groupId = composeGroupId(groupProtocol);
+            String topicName = composeTopicName(groupProtocol);
             try (AutoCloseable consumerGroupCloseable = consumerGroupClosable(groupProtocol, groupId, topicName)) {
                 String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -169,12 +167,11 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTest
     public void testDeleteCmdAllGroups() throws Exception {
-        for (int j = 0; j < groupProtocols.size(); j++) {
-            GroupProtocol groupProtocol = groupProtocols.get(j);
-            String topicName = composeTopicName(groupProtocol, j);
+        for (GroupProtocol groupProtocol : groupProtocols) {
+            String topicName = composeTopicName(groupProtocol);
             // Create 3 groups with 1 consumer per each
             Map<String, AutoCloseable> groupIdToExecutor = IntStream.rangeClosed(1, 3)
-                    .mapToObj(i -> composeGroupId(groupProtocol, i) + i)
+                    .mapToObj(i -> composeGroupId(groupProtocol) + i)
                     .collect(Collectors.toMap(Function.identity(), group -> consumerGroupClosable(groupProtocol, group, topicName)));
 
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--all-groups"};
@@ -208,11 +205,10 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTest
     public void testDeleteCmdWithMixOfSuccessAndError() throws Exception {
-        for (int i = 0; i < groupProtocols.size(); i++) {
-            GroupProtocol groupProtocol = groupProtocols.get(i);
-            String groupId = composeGroupId(groupProtocol, i);
-            String topicName = composeTopicName(groupProtocol, i);
-            String missingGroupId = composeMissingGroupId(groupProtocol, i);
+        for (GroupProtocol groupProtocol : groupProtocols) {
+            String groupId = composeGroupId(groupProtocol);
+            String topicName = composeTopicName(groupProtocol);
+            String missingGroupId = composeMissingGroupId(groupProtocol);
             try (AutoCloseable consumerGroupClosable = consumerGroupClosable(groupProtocol, groupId, topicName)) {
                 String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -241,11 +237,10 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTest
     public void testDeleteWithMixOfSuccessAndError() throws Exception {
-        for (int i = 0; i < groupProtocols.size(); i++) {
-            GroupProtocol groupProtocol = groupProtocols.get(i);
-            String groupId = composeGroupId(groupProtocol, i);
-            String topicName = composeTopicName(groupProtocol, i);
-            String missingGroupId = composeMissingGroupId(groupProtocol, i);
+        for (GroupProtocol groupProtocol : groupProtocols) {
+            String groupId = composeGroupId(groupProtocol);
+            String topicName = composeTopicName(groupProtocol);
+            String missingGroupId = composeMissingGroupId(groupProtocol);
             try (AutoCloseable executor = consumerGroupClosable(groupProtocol, groupId, topicName)) {
                 String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -280,22 +275,22 @@ public class DeleteConsumerGroupsTest {
     }
 
     private String getDummyGroupId() {
-        return composeGroupId(null, 0);
+        return composeGroupId(null);
     }
 
-    private String composeGroupId(GroupProtocol protocol, int serial) {
+    private String composeGroupId(GroupProtocol protocol) {
         String groupPrefix = "test.";
-        return protocol != null ? groupPrefix + protocol.name + serial : groupPrefix + "dummy";
+        return protocol != null ? groupPrefix + protocol.name : groupPrefix + "dummy";
     }
 
-    private String composeTopicName(GroupProtocol protocol, int serial) {
+    private String composeTopicName(GroupProtocol protocol) {
         String topicPrefix = "foo.";
-        return protocol != null ? topicPrefix + protocol.name + serial : topicPrefix + "dummy";
+        return protocol != null ? topicPrefix + protocol.name : topicPrefix + "dummy";
     }
 
-    private String composeMissingGroupId(GroupProtocol protocol, int serial) {
+    private String composeMissingGroupId(GroupProtocol protocol) {
         String missingGroupPrefix = "missing.";
-        return protocol != null ? missingGroupPrefix + protocol.name + serial : missingGroupPrefix + "dummy";
+        return protocol != null ? missingGroupPrefix + protocol.name : missingGroupPrefix + "dummy";
     }
 
     private AutoCloseable consumerGroupClosable(GroupProtocol protocol, String groupId, String topicName) {
