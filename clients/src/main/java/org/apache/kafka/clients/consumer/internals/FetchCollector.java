@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.message.FetchResponseData.LeaderIdAndEpoch;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -333,8 +334,9 @@ public class FetchCollector<K, V> {
                 error == Errors.FENCED_LEADER_EPOCH) {
             log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
             requestMetadataUpdate(metadata, subscriptions, tp);
-            if (completedFetch.partitionData.currentLeader().leaderId() == -1 ||
-                    completedFetch.partitionData.currentLeader().leaderEpoch() == -1) {
+
+            LeaderIdAndEpoch currentLeader = completedFetch.partitionData.currentLeader();
+            if (currentLeader.leaderId() == -1 || currentLeader.leaderEpoch() == -1) {
                 subscriptions.awaitUpdate(tp);
             }
         } else if (error == Errors.KAFKA_STORAGE_ERROR ||
