@@ -30,7 +30,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.MappedIterator;
 import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -101,7 +100,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
                 append(", controllerEpoch=").append(controllerEpoch).
                 append(", brokerEpoch=").append(brokerEpoch).
                 append(", deletePartitions=").append(deletePartitions).
-                append(", topicStates=").append(String.join(",", Arrays.toString(topicStates.toArray()))).
+                append(", topicStates=").append(topicStates.stream().map(StopReplicaTopicState::toString).collect(Collectors.joining(","))).
                 append(")");
             return bld.toString();
         }

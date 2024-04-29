@@ -130,7 +130,7 @@ public class CommonClientConfigs {
 
     public static final String SECURITY_PROTOCOL_CONFIG = "security.protocol";
     public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers. Valid values are: " +
-        String.join(", ", SecurityProtocol.names()).replace("[", "").replace("]", "") + ".";
+        String.join(", ", SecurityProtocol.names()) + ".";
     public static final String DEFAULT_SECURITY_PROTOCOL = "PLAINTEXT";
 
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG = "socket.connection.setup.timeout.ms";

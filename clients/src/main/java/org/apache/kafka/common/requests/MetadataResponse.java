@@ -33,7 +33,6 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Set;
 import java.util.HashSet;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.ArrayList;
@@ -416,9 +415,9 @@ public class MetadataResponse extends AbstractResponse {
                     ", partition=" + topicPartition +
                     ", leader=" + leaderId +
                     ", leaderEpoch=" + leaderEpoch +
-                    ", replicas=" + String.join(",", Arrays.toString(replicaIds.toArray())) +
-                    ", isr=" + String.join(",", Arrays.toString(inSyncReplicaIds.toArray())) +
-                    ", offlineReplicas=" + String.join(",", Arrays.toString(offlineReplicaIds.toArray())) + ')';
+                    ", replicas=" + replicaIds.stream().map(Object::toString).collect(Collectors.joining(",")) +
+                    ", isr=" + inSyncReplicaIds.stream().map(Object::toString).collect(Collectors.joining(",")) +
+                    ", offlineReplicas=" + offlineReplicaIds.stream().map(Object::toString).collect(Collectors.joining(",")) + ')';
         }
     }
 

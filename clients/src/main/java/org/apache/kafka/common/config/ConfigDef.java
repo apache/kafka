@@ -515,7 +515,6 @@ public class ConfigDef {
         // Check all configurations are defined
         List<String> undefinedConfigKeys = undefinedDependentConfigs();
         if (!undefinedConfigKeys.isEmpty()) {
-            //String joined = String.join(",", undefinedConfigKeys).replace("[", "").replace("]", "");
             String joined = undefinedConfigKeys.stream().map(String::toString).collect(Collectors.joining(","));
             throw new ConfigException("Some configurations in are referred in the dependents, but not defined: " + joined);
         }
@@ -1085,7 +1084,7 @@ public class ConfigDef {
         }
 
         public String toString() {
-            return "(case insensitive) [" + String.join(",", validStrings).replace("[", "").replace("]", "") + "]";
+            return "(case insensitive) [" + String.join(",", validStrings) + "]";
         }
     }
 
@@ -1207,7 +1206,7 @@ public class ConfigDef {
 
             if (!foundIllegalCharacters.isEmpty()) {
                 throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " +
-                        String.join(",", foundIllegalCharacters.stream().map(Object::toString).collect(Collectors.joining(","))));
+                        foundIllegalCharacters.stream().map(Object::toString).collect(Collectors.joining(",")));
             }
         }
 

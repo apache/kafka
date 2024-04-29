@@ -36,7 +36,6 @@ import java.util.Map;
 import java.util.Collection;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.stream.Collectors;
 
@@ -120,7 +119,7 @@ public final class LeaderAndIsrRequest extends AbstractControlRequest {
                 .append(", brokerEpoch=").append(brokerEpoch)
                 .append(", partitionStates=").append(partitionStates)
                 .append(", topicIds=").append(topicIds)
-                .append(", liveLeaders=(").append(String.join(", ", Arrays.toString(liveLeaders.toArray()))).append(")")
+                .append(", liveLeaders=(").append(liveLeaders.stream().map(Node::toString).collect(Collectors.joining(", "))).append(")")
                 .append(")");
             return bld.toString();
 

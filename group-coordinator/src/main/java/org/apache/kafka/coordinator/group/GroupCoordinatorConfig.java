@@ -24,6 +24,7 @@ import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * The group coordinator configurations.
@@ -53,7 +54,7 @@ public class GroupCoordinatorConfig {
 
     public final static String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG = "group.coordinator.rebalance.protocols";
     public final static String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols. Supported protocols: " +
-            String.join(",", Arrays.toString(Group.GroupType.values()).replace("[", "").replace("]", "")) + ". " +
+            Arrays.stream(Group.GroupType.values()).map(Group.GroupType::toString).collect(Collectors.joining(",")) + ". " +
             "The " + Group.GroupType.CONSUMER + " rebalance protocol is in early access and therefore must not be used in production.";
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = Collections.singletonList(Group.GroupType.CLASSIC.toString());
 

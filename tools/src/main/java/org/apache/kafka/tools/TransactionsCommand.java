@@ -46,7 +46,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Optional;
@@ -411,7 +410,7 @@ public abstract class TransactionsCommand {
                 String.valueOf(result.transactionTimeoutMs()),
                 transactionStartTimeMsColumnValue,
                 transactionDurationMsColumnValue,
-                String.join(",", Arrays.toString(result.topicPartitions().toArray()))
+                result.topicPartitions().stream().map(TopicPartition::toString).collect(Collectors.joining(","))
             );
 
             ToolsUtils.prettyPrintTable(HEADERS, singletonList(row), out);

@@ -22,7 +22,7 @@ import java.util.Set;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
-import java.util.Arrays;
+import java.util.stream.Collectors;
 
 /**
  * A description of the assignments of a specific group member.
@@ -64,6 +64,6 @@ public class MemberAssignment {
 
     @Override
     public String toString() {
-        return "(topicPartitions=" + String.join(",", Arrays.toString(topicPartitions.toArray())) + ")";
+        return "(topicPartitions=" + topicPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(",")) + ")";
     }
 }

@@ -32,7 +32,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
@@ -326,8 +325,8 @@ public class FetchRequest extends AbstractRequest {
                     append(", maxBytes=").append(maxBytes).
                     append(", fetchData=").append(toFetch).
                     append(", isolationLevel=").append(isolationLevel).
-                    append(", removed=").append(String.join(", ", Arrays.toString(removed.toArray()))).
-                    append(", replaced=").append(String.join(", ", Arrays.toString(replaced.toArray()))).
+                    append(", removed=").append(removed.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", "))).
+                    append(", replaced=").append(replaced.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", "))).
                     append(", metadata=").append(metadata).
                     append(", rackId=").append(rackId).
                     append(")");

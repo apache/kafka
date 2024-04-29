@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * State that helps determine where client exists in the telemetry state i.e. subscribe->wait->push loop.
@@ -149,7 +150,7 @@ public enum ClientTelemetryState {
         if (allowableStates != null && !allowableStates.isEmpty()) {
             validStatesClause = String.format("the valid telemetry state transitions from %s are: %s",
                 this,
-                String.join(", ", Arrays.toString(allowableStates.toArray())));
+                allowableStates.stream().map(ClientTelemetryState::toString).collect(Collectors.joining(", ")));
         } else {
             validStatesClause = String.format("there are no valid telemetry state transitions from %s", this);
         }

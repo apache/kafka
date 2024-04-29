@@ -37,7 +37,7 @@ import java.util.Map;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Collections;
-import java.util.Arrays;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
 
@@ -141,7 +141,7 @@ public final class UpdateMetadataRequest extends AbstractControlRequest {
                 append(", type=").append(updateType).
                 append(", brokerEpoch=").append(brokerEpoch).
                 append(", partitionStates=").append(partitionStates).
-                append(", liveBrokers=").append(String.join(", ", Arrays.toString(liveBrokers.toArray()))).
+                append(", liveBrokers=").append(liveBrokers.stream().map(UpdateMetadataBroker::toString).collect(Collectors.joining(", "))).
                 append(")");
             return bld.toString();
         }
