@@ -810,6 +810,7 @@ public class GroupMetadataManager {
      *
      * @param consumerGroup     The converted ConsumerGroup.
      * @param leavingMemberId   The leaving member that triggers the downgrade validation.
+     * @param response          The response of the returned CoordinatorResult.
      * @return A CoordinatorResult.
      */
     private <T> CoordinatorResult<T, Record> convertToClassicGroup(
@@ -1533,8 +1534,8 @@ public class GroupMetadataManager {
      * instance id decided to leave the group and would be back within session
      * timeout.
      *
-     * @param group         The group.
-     * @param member        The static member in the group for the instance id.
+     * @param group     The group.
+     * @param member    The static member in the group for the instance id.
      *
      * @return A CoordinatorResult with a single record signifying that the static member is leaving.
      */
@@ -1562,6 +1563,7 @@ public class GroupMetadataManager {
      * @param group     The group.
      * @param member    The member.
      * @param response  The response of the CoordinatorResult.
+     *
      * @return The CoordinatorResult to be applied.
      */
     private <T> CoordinatorResult<T, Record> consumerGroupFenceMember(
