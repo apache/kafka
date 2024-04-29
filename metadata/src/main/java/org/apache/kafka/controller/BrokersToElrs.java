@@ -164,9 +164,7 @@ public class BrokersToElrs {
     BrokersToIsrs.PartitionsOnReplicaIterator partitionsWithElr() {
         Map<Uuid, int[]> topicMap = new HashMap<>();
         for (Map<Uuid, int[]> map : elrMembers.values()) {
-            if (map != null) {
-                topicMap.putAll(map);
-            }
+            topicMap.putAll(map);
         }
         return new BrokersToIsrs.PartitionsOnReplicaIterator(topicMap, false);
     }

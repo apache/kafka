@@ -465,4 +465,49 @@ public class ConfigurationControlManagerTest {
         verify(replicationControlManager, times(2)).getPartitionElrUpdatesForConfigChanges(ArgumentMatchers.eq(Collections.emptyList()), ArgumentMatchers.any());
         verify(replicationControlManager, times(2)).getPartitionElrUpdatesForConfigChanges(ArgumentMatchers.eq(Arrays.asList(MYTOPIC.name())), ArgumentMatchers.any());
     }
+
+    @Test
+    public void testLegacyAlterConfigsOnMinIsrUpdate() {
+        ReplicationControlManager replicationControlManager = mock(ReplicationControlManager.class);
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(SCHEMA).
+            setMinIsrConfigUpdatePartitionHandler((topicNames, getTopicMinIsrConfig) -> {
+                return replicationControlManager.getPartitionElrUpdatesForConfigChanges(topicNames, getTopicMinIsrConfig);
+            }).
+            setAlterConfigPolicy(Optional.of(new CheckForNullValuesPolicy())).
+            build();
+
+        ControllerResult<Map<ConfigResource, ApiError>> result =
+            manager.legacyAlterConfigs(toMap(entry(BROKER0, toMap(
+                entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")))),
+                true
+            );
+        List<ApiMessageAndVersion> records = result.records();
+        assertEquals(1, records.size());
+        manager.replay((ConfigRecord) result.records().get(0).message());
+
+        result = manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(
+            entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")))),
+            true);
+        records = result.records();
+        assertEquals(1, records.size());
+        manager.replay((ConfigRecord) result.records().get(0).message());
+
+        result = manager.legacyAlterConfigs(toMap(entry(new ConfigResource(BROKER, ""), toMap(
+            entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")))),
+            true);
+        records = result.records();
+        assertEquals(1, records.size());
+        manager.replay((ConfigRecord) result.records().get(0).message());
+
+        result = manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(
+            entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "")))),
+            false);
+        records = result.records();
+        assertEquals(1, records.size());
+        manager.replay((ConfigRecord) result.records().get(0).message());
+
+        verify(replicationControlManager, times(2)).getPartitionElrUpdatesForConfigChanges(ArgumentMatchers.eq(Collections.emptyList()), ArgumentMatchers.any());
+        verify(replicationControlManager, times(2)).getPartitionElrUpdatesForConfigChanges(ArgumentMatchers.eq(Arrays.asList(MYTOPIC.name())), ArgumentMatchers.any());
+    }
 }
