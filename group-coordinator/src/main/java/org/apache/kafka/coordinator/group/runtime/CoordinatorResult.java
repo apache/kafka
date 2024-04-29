@@ -47,7 +47,7 @@ public class CoordinatorResult<T, U> {
      * The boolean indicating whether to replay the records.
      * The default value is {@code true} unless specified otherwise.
      */
-    private final Boolean replayRecords;
+    private final boolean replayRecords;
 
     /**
      * Constructs a Result with records and a response.
@@ -154,7 +154,7 @@ public class CoordinatorResult<T, U> {
         int result = records != null ? records.hashCode() : 0;
         result = 31 * result + (response != null ? response.hashCode() : 0);
         result = 31 * result + (appendFuture != null ? appendFuture.hashCode() : 0);
-        result = 31 * result + replayRecords.hashCode();
+        result = 31 * result + (replayRecords ? 1 : 0);
         return result;
     }
     @Override
