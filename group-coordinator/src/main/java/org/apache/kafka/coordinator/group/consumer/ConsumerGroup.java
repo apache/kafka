@@ -479,10 +479,11 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return An immutable Set containing all the subscribed topic names.
+     * @return An immutable map containing all the subscribed topic names
+     *         with the subscribers counts per topic.
      */
-    public Set<String> subscribedTopicNames() {
-        return Collections.unmodifiableSet(subscribedTopicNames.keySet());
+    public Map<String, Integer> subscribedTopicNames() {
+        return Collections.unmodifiableMap(subscribedTopicNames);
     }
 
     /**
@@ -950,11 +951,7 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember newMember
     ) {
         maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
-        subscriptionType.set(subscriptionType(
-            subscribedTopicNames,
-            members.size(),
-            subscriptionType()
-        ));
+        subscriptionType.set(subscriptionType(subscribedTopicNames));
     }
 
     /**
@@ -964,7 +961,7 @@ public class ConsumerGroup implements Group {
      * @param oldMember             The old member.
      * @param newMember             The new member.
      */
-    public static void maybeUpdateSubscribedTopicNames(
+    private static void maybeUpdateSubscribedTopicNames(
         Map<String, Integer> subscribedTopicCount,
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
@@ -990,47 +987,41 @@ public class ConsumerGroup implements Group {
      *
      * @return Copy of the map of topics to the count of number of subscribers.
      */
-    public Map<String, Integer> updateSubscribedTopicNames(
+    public Map<String, Integer> computeSubscribedTopicNames(
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
-        Map<String, Integer> subscribedTopicCount = new HashMap<>(this.subscribedTopicNames);
-        if (oldMember != null) {
-            oldMember.subscribedTopicNames().forEach(topicName ->
-                subscribedTopicCount.compute(topicName, ConsumerGroup::decValue)
-            );
-        }
-
-        if (newMember != null) {
-            newMember.subscribedTopicNames().forEach(topicName ->
-                subscribedTopicCount.compute(topicName, ConsumerGroup::incValue)
-            );
-        }
-
-        return subscribedTopicCount;
+        Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
+        maybeUpdateSubscribedTopicNames(
+            subscribedTopicNames,
+            oldMember,
+            newMember
+        );
+        return subscribedTopicNames;
     }
 
     /**
      * Compute the subscription type of the consumer group.
      *
-     * If all members are subscribed to the same set of topics, the type is homogeneous.
+     * If all the members are subscribed to the same set of topics, the type is homogeneous.
      * Otherwise, it is heterogeneous.
      *
      * @param subscribedTopicNames      A map of topic names to the count of members subscribed to each topic.
-     * @param numOfMembers              The total number of members in the group.
-     * @param subscriptionType          The current subscription type of the group.
      * @return {@link SubscriptionType#HOMOGENEOUS} if all members are subscribed to exactly the same topics;
      *         otherwise, {@link SubscriptionType#HETEROGENEOUS}.
      */
     public static SubscriptionType subscriptionType(
-        Map<String, Integer> subscribedTopicNames,
-        int numOfMembers,
-        SubscriptionType subscriptionType
+        Map<String, Integer> subscribedTopicNames
     ) {
-        if (subscribedTopicNames.isEmpty()) return subscriptionType;
+        if (subscribedTopicNames.isEmpty()) {
+            return HOMOGENEOUS;
+        }
 
-        for (Map.Entry<String, Integer> entry : subscribedTopicNames.entrySet()) {
-            if (entry.getValue() != numOfMembers) {
+        // Take the subscriber count of the first topic as the reference.
+        int referenceCount = subscribedTopicNames.values().iterator().next();
+
+        for (int subscriberCount : subscribedTopicNames.values()) {
+            if (subscriberCount != referenceCount) {
                 return HETEROGENEOUS;
             }
         }

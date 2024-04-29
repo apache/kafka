@@ -2363,7 +2363,7 @@ public class OffsetMetadataManagerTest {
             .setSubscribedTopicNames(Collections.singletonList("bar"))
             .build();
         group.computeSubscriptionMetadata(
-            group.updateSubscribedTopicNames(null, member1),
+            group.computeSubscribedTopicNames(null, member1),
             image.topics(),
             image.cluster()
         );
