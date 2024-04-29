@@ -11405,8 +11405,6 @@ public class GroupMetadataManagerTest {
                         .setClientId("client")
                         .setClientHost("localhost/127.0.0.1")
                         .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
-                        .setPartitionsPendingRevocation(mkAssignment(
-                            mkTopicAssignment(barTopicId, 0)))
                         .build())
                     .withAssignment(memberId1, mkAssignment(
                         mkTopicAssignment(fooTopicId, 0),
@@ -11537,8 +11535,6 @@ public class GroupMetadataManagerTest {
                             Arrays.asList(fooTopicName, barTopicName),
                             Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(fooTopicName, 1)),
                             version))
-                        .setPartitionsPendingRevocation(mkAssignment(
-                            mkTopicAssignment(fooTopicId, 1)))
                         .build())
                     .withMember(new ConsumerGroupMember.Builder(memberId2)
                         .setState(MemberState.STABLE)
@@ -11548,8 +11544,6 @@ public class GroupMetadataManagerTest {
                         .setClientId("client")
                         .setClientHost("localhost/127.0.0.1")
                         .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
-                        .setPartitionsPendingRevocation(mkAssignment(
-                            mkTopicAssignment(barTopicId, 0)))
                         .build())
                     .withAssignment(memberId1, mkAssignment(
                         mkTopicAssignment(fooTopicId, 0),
@@ -11680,7 +11674,7 @@ public class GroupMetadataManagerTest {
                             mkTopicAssignment(fooTopicId, 1)))
                         .build())
                     .withMember(new ConsumerGroupMember.Builder(memberId2)
-                        .setState(MemberState.STABLE)
+                        .setState(MemberState.UNREVOKED_PARTITIONS)
                         .setMemberEpoch(10)
                         .setPreviousMemberEpoch(10)
                         .setRebalanceTimeoutMs(500)
@@ -11803,8 +11797,6 @@ public class GroupMetadataManagerTest {
                         .setClientId("client")
                         .setClientHost("localhost/127.0.0.1")
                         .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
-                        .setPartitionsPendingRevocation(mkAssignment(
-                            mkTopicAssignment(fooTopicId, 1)))
                         .build())
                     .withAssignment(memberId1, mkAssignment(
                         mkTopicAssignment(fooTopicId, 0),

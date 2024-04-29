@@ -1204,7 +1204,7 @@ public class GroupMetadataManager {
     ) {
         try {
             return ConsumerProtocol.deserializeSubscription(
-                ByteBuffer.wrap(protocols.stream().findAny().get().metadata())
+                ByteBuffer.wrap(protocols.iterator().next().metadata())
             );
         } catch (SchemaException e) {
             throw new IllegalStateException("Malformed embedded consumer protocol.");
@@ -1362,6 +1362,7 @@ public class GroupMetadataManager {
             updatedMember,
             records
         );
+
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
@@ -1547,6 +1548,7 @@ public class GroupMetadataManager {
             updatedMember,
             records
         );
+
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
@@ -1717,6 +1719,19 @@ public class GroupMetadataManager {
         return updatedMember;
     }
 
+    /**
+     * Updates the target assignment according to the updated member and subscription metadata.
+     *
+     * @param group                 The ConsumerGroup.
+     * @param groupEpoch            The group epoch.
+     * @param member                The existing member.
+     * @param updatedMember         The updated member.
+     * @param subscriptionMetadata  The subscription metadata.
+     * @param staticMemberReplaced  The boolean indicating whether the updated member
+     *                              is a static member that replaces the existing member.
+     * @param records               The list to accumulate any new records.
+     * @return The new target assignment.
+     */
     private Assignment updateTargetAssignment(
         ConsumerGroup group,
         int groupEpoch,

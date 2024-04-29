@@ -1186,7 +1186,7 @@ public class ConsumerGroup implements Group {
     /**
      * @return The map of topic id and partition set converted from the list of TopicPartition.
      */
-    public static Map<Uuid, Set<Integer>> topicPartitionMapFromList(
+    private static Map<Uuid, Set<Integer>> topicPartitionMapFromList(
         List<TopicPartition> partitions,
         TopicsImage topicsImage
     ) {
@@ -1213,14 +1213,16 @@ public class ConsumerGroup implements Group {
      * @return A boolean based on the condition mentioned above.
      */
     public boolean supportsClassicProtocols(String memberProtocolType, Set<String> memberProtocols) {
-        if (isEmpty()) {
-            return ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType) && !memberProtocols.isEmpty();
-        } else {
-            return ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType) &&
-                memberProtocols.stream().anyMatch(
+        if (ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType)) {
+            if (isEmpty()) {
+                return !memberProtocols.isEmpty();
+            } else {
+                return memberProtocols.stream().anyMatch(
                     name -> classicProtocolMembersSupportedProtocols.getOrDefault(name, 0) == numClassicProtocolMembers()
                 );
+            }
         }
+        return false;
     }
 
     /**
