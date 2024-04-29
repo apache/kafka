@@ -1499,11 +1499,14 @@ public class GroupMetadataManager {
     ) throws ApiException {
         ConsumerGroup group = consumerGroup(groupId);
         List<Record> records = new ArrayList<>();
-        CompletableFuture<Void> appendFuture = null;
+        ConsumerGroupHeartbeatResponseData response = new ConsumerGroupHeartbeatResponseData()
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch);
+
         if (instanceId == null) {
             ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
             log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
-            appendFuture = consumerGroupFenceMember(group, member, records);
+            return consumerGroupFenceMember(group, member, records, response);
         } else {
             ConsumerGroupMember member = group.staticMember(instanceId);
             throwIfStaticMemberIsUnknown(member, instanceId);
@@ -1515,18 +1518,9 @@ public class GroupMetadataManager {
             } else {
                 log.info("[GroupId {}] Static Member {} with instance id {} left the consumer group.",
                     group.groupId(), memberId, instanceId);
-                appendFuture = consumerGroupFenceMember(group, member, records);
+                return consumerGroupFenceMember(group, member, records, response);
             }
         }
-
-        return new CoordinatorResult<>(
-            records,
-            new ConsumerGroupHeartbeatResponseData()
-                .setMemberId(memberId)
-                .setMemberEpoch(memberEpoch),
-            appendFuture,
-            appendFuture == null
-        );
     }
 
     /**
@@ -1567,13 +1561,15 @@ public class GroupMetadataManager {
      * @param records   The list of records to be applied to the state.
      * @return The append future to be applied.
      */
-    private CompletableFuture<Void> consumerGroupFenceMember(
+    private <T> CoordinatorResult<T, Record> consumerGroupFenceMember(
         ConsumerGroup group,
         ConsumerGroupMember member,
-        List<Record> records
+        List<Record> records,
+        T response
     ) {
         if (validateOnlineDowngrade(group, member.memberId())) {
-            return convertToClassicGroup(group, member.memberId(), records);
+            CompletableFuture<Void> appendFuture = convertToClassicGroup(group, member.memberId(), records);
+            return new CoordinatorResult<>(records, appendFuture, false);
         } else {
             removeMember(records, group.groupId(), member.memberId());
 
@@ -1597,7 +1593,7 @@ public class GroupMetadataManager {
 
             cancelTimers(group.groupId(), member.memberId());
 
-            return null;
+            return new CoordinatorResult<>(records, response);
         }
     }
 
@@ -1644,8 +1640,7 @@ public class GroupMetadataManager {
                     groupId, memberId);
 
                 List<Record> records = new ArrayList<>();
-                CompletableFuture<Void> appendFuture = consumerGroupFenceMember(group, member, records);
-                return new CoordinatorResult<>(records, appendFuture, appendFuture == null);
+                return consumerGroupFenceMember(group, member, records, null);
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
@@ -1697,8 +1692,7 @@ public class GroupMetadataManager {
                         groupId, memberId, memberEpoch, rebalanceTimeoutMs);
 
                     List<Record> records = new ArrayList<>();
-                    CompletableFuture<Void> appendFuture = consumerGroupFenceMember(group, member, records);
-                    return new CoordinatorResult<>(records, appendFuture, appendFuture == null);
+                    return consumerGroupFenceMember(group, member, records, null);
                 } else {
                     log.debug("[GroupId {}] Ignoring rebalance timeout for {} because the member " +
                         "left the epoch {}.", groupId, memberId, memberEpoch);
