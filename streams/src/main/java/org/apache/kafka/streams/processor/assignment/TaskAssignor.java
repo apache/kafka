@@ -21,6 +21,12 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupAssignme
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.common.Configurable;
 
+/**
+ * A TaskAssignor is responsible for creating a TaskAssignment from a given
+ * {@code ApplicationState}.
+ * The implementation may also override the {@code onAssignmentComputed} callback for insight into
+ * the result of the assignment result.
+ */
 public interface TaskAssignor extends Configurable {
 
     /**

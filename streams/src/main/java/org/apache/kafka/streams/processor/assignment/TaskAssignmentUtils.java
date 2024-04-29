@@ -21,7 +21,7 @@ import java.util.SortedSet;
 import org.apache.kafka.streams.processor.TaskId;
 
 /**
- * A set of utilities to help implement task assignment
+ * A set of utilities to help implement task assignment.
  */
 public final class TaskAssignmentUtils {
     /**

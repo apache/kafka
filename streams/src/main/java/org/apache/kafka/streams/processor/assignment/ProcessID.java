@@ -27,6 +27,10 @@ public class ProcessID {
         this.id = id;
     }
 
+    /**
+     *
+     * @return the underlying {@code UUID} that this ProcessID is wrapping.
+     */
     public UUID id() {
         return id;
     }

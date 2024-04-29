@@ -25,8 +25,16 @@ import org.apache.kafka.streams.processor.TaskId;
  * KafkaStreams clients.
  */
 public interface KafkaStreamsAssignment {
+    /**
+     *
+     * @return the {@code ProcessID} associated with this {@code KafkaStreamsAssignment}
+     */
     ProcessID processId();
 
+    /**
+     *
+     * @return a set of assigned tasks that are part of this {@code KafkaStreamsAssignment}
+     */
     Set<AssignedTask> assignment();
 
     /**
@@ -35,6 +43,9 @@ public interface KafkaStreamsAssignment {
      */
     Instant followupRebalanceDeadline();
 
+    /**
+     * The container class for a task's id and type.
+     */
     class AssignedTask {
         private final TaskId id;
         private final Type taskType;
@@ -44,16 +55,27 @@ public interface KafkaStreamsAssignment {
             this.taskType = taskType;
         }
 
+        /**
+         * AssignedTasks can be either STATELESS, STATEFUL or STANDBY.
+         */
         public enum Type {
             STATELESS,
             STATEFUL,
             STANDBY
         }
 
+        /**
+         *
+         * @return the id of the {@code AssignedTask}
+         */
         public TaskId id() {
             return id;
         }
 
+        /**
+         *
+         * @return the type of the {@code AssignedTask}
+         */
         public Type type() {
             return taskType;
         }
