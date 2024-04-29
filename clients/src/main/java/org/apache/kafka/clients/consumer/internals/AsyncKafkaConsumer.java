@@ -1352,7 +1352,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         long commitStart = time.nanoseconds();
         try {
             Timer requestTimer = time.timer(timeout.toMillis());
-            SyncCommitEvent syncCommitEvent = new SyncCommitEvent(offsets, requestTimer);
+            SyncCommitEvent syncCommitEvent = new SyncCommitEvent(offsets, calculateDeadlineMs(requestTimer));
             CompletableFuture<Void> commitFuture = commit(syncCommitEvent);
 
             awaitPendingAsyncCommitsAndExecuteCommitCallbacks(requestTimer, true);
