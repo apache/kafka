@@ -1511,7 +1511,7 @@ public class GroupMetadataManager {
             if (memberEpoch == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
                 log.info("[GroupId {}] Static Member {} with instance id {} temporarily left the consumer group.",
                     group.groupId(), memberId, instanceId);
-                records = consumerGroupStaticMemberGroupLeave(group, member);
+                return consumerGroupStaticMemberGroupLeave(group, member);
             } else {
                 log.info("[GroupId {}] Static Member {} with instance id {} left the consumer group.",
                     group.groupId(), memberId, instanceId);
@@ -1536,12 +1536,12 @@ public class GroupMetadataManager {
      * instance id decided to leave the group and would be back within session
      * timeout.
      *
-     * @param group      The group.
-     * @param member     The static member in the group for the instance id.
+     * @param group         The group.
+     * @param member        The static member in the group for the instance id.
      *
-     * @return A list with a single record signifying that the static member is leaving.
+     * @return A CoordinatorResult with a single record signifying that the static member is leaving.
      */
-    private List<Record> consumerGroupStaticMemberGroupLeave(
+    private CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupStaticMemberGroupLeave(
         ConsumerGroup group,
         ConsumerGroupMember member
     ) {
@@ -1550,7 +1550,13 @@ public class GroupMetadataManager {
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
             .setPartitionsPendingRevocation(Collections.emptyMap())
             .build();
-        return Collections.singletonList(newCurrentAssignmentRecord(group.groupId(), leavingStaticMember));
+
+        return new CoordinatorResult<>(
+            Collections.singletonList(newCurrentAssignmentRecord(group.groupId(), leavingStaticMember)),
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(member.memberId())
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+        );
     }
 
     /**
