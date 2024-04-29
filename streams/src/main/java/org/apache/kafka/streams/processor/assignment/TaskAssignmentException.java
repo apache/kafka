@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
+/**
+ * The TaskAssignmentException should be thrown when an error occurs during the assignment process
+ * that cannot be resolved automatically by the assignor alone.
+ */
 public class TaskAssignmentException extends RuntimeException {
     private final static long serialVersionUID = 1L;
 }
