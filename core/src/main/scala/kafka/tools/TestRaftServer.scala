@@ -39,6 +39,7 @@ import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, Qu
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
+import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils, ShutdownableThread}
 import org.apache.kafka.snapshot.SnapshotReader
@@ -447,7 +448,7 @@ object TestRaftServer extends Logging {
 
       // KafkaConfig requires either `process.roles` or `zookeeper.connect`. Neither are
       // actually used by the test server, so we fill in `process.roles` with an arbitrary value.
-      serverProps.put(KafkaConfig.ProcessRolesProp, "controller")
+      serverProps.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
 
       val config = KafkaConfig.fromProps(serverProps, doLog = false)
       val throughput = opts.options.valueOf(opts.throughputOpt)

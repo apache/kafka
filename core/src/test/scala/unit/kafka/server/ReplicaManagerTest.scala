@@ -77,7 +77,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile
 import org.mockito.invocation.InvocationOnMock
@@ -2616,9 +2616,9 @@ class ReplicaManagerTest {
   def testFullLeaderAndIsrStrayPartitions(zkMigrationEnabled: Boolean): Unit = {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     if (zkMigrationEnabled) {
-      props.put(KafkaConfig.MigrationEnabledProp, "" + zkMigrationEnabled)
+      props.put(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "" + zkMigrationEnabled)
       props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9071")
-      props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
       props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       config = KafkaConfig.fromProps(props)
     }
@@ -6451,9 +6451,9 @@ class ReplicaManagerTest {
       timer = new MockTimer(time),
       aliveBrokerIds = Seq(0, 1, 2),
       propsModifier = props => {
-        props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
-        props.setProperty(KafkaConfig.QuorumVotersProp, "1000@localhost:9093")
-        props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+        props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
+        props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1000@localhost:9093")
+        props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
         props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       },
       defaultTopicRemoteLogStorageEnable = false)

@@ -40,6 +40,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -158,17 +159,17 @@ public class KafkaClusterTestKit implements AutoCloseable {
             ControllerNode controllerNode = nodes.controllerNodes().get(node.id());
 
             Map<String, String> props = new HashMap<>(configProps);
-            props.put(KafkaConfig$.MODULE$.ServerMaxStartupTimeMsProp(),
+            props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
                     Long.toString(TimeUnit.MINUTES.toMillis(10)));
-            props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), roles(node.id()));
-            props.put(KafkaConfig$.MODULE$.NodeIdProp(),
+            props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, roles(node.id()));
+            props.put(KRaftConfigs.NODE_ID_CONFIG,
                     Integer.toString(node.id()));
             // In combined mode, always prefer the metadata log directory of the controller node.
             if (controllerNode != null) {
-                props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
+                props.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG,
                         controllerNode.metadataDirectory());
             } else {
-                props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
+                props.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG,
                         node.metadataDirectory());
             }
             if (brokerNode != null) {
@@ -185,7 +186,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners(node.id()));
             props.put(INTER_BROKER_LISTENER_NAME_CONFIG,
                     nodes.interBrokerListenerName().value());
-            props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
+            props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG,
                     "CONTROLLER");
             // Note: we can't accurately set controller.quorum.voters yet, since we don't
             // yet know what ports each controller will pick.  Set it to a dummy string
