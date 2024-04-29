@@ -124,14 +124,14 @@ public class GroupMetadataManagerTestContext {
         return protocols;
     }
 
-    public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toRangeProtocol(
+    public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toConsumerProtocol(
         List<String> topicNames,
         List<TopicPartition> ownedPartitions
     ) {
-        return toRangeProtocol(topicNames, ownedPartitions, ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION);
+        return toConsumerProtocol(topicNames, ownedPartitions, ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION);
     }
 
-    public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toRangeProtocol(
+    public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toConsumerProtocol(
         List<String> topicNames,
         List<TopicPartition> ownedPartitions,
         short version

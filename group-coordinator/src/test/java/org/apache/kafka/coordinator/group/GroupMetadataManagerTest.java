@@ -10914,7 +10914,7 @@ public class GroupMetadataManagerTest {
             JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
                 .withGroupId(groupId)
                 .withMemberId(UNKNOWN_MEMBER_ID)
-                .withProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                     Arrays.asList(fooTopicName, barTopicName),
                     Collections.emptyList(),
                     version))
@@ -11044,7 +11044,7 @@ public class GroupMetadataManagerTest {
                 .withGroupId(groupId)
                 .withMemberId(UNKNOWN_MEMBER_ID)
                 .withGroupInstanceId(instanceId)
-                .withProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                     Arrays.asList(fooTopicName, barTopicName),
                     Collections.emptyList(),
                     version))
@@ -11142,7 +11142,7 @@ public class GroupMetadataManagerTest {
                 .withGroupId(groupId)
                 .withMemberId(UNKNOWN_MEMBER_ID)
                 .withGroupInstanceId(instanceId)
-                .withProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                     Collections.singletonList(fooTopicName),
                     Collections.emptyList(),
                     version))
@@ -11212,7 +11212,7 @@ public class GroupMetadataManagerTest {
             String memberId2 = Uuid.randomUuid().toString();
             MockPartitionAssignor assignor = new MockPartitionAssignor("range");
             JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
-                GroupMetadataManagerTestContext.toRangeProtocol(
+                GroupMetadataManagerTestContext.toConsumerProtocol(
                     Arrays.asList(fooTopicName, barTopicName),
                     Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(fooTopicName, 1)),
                     version
@@ -11291,7 +11291,7 @@ public class GroupMetadataManagerTest {
         String barTopicName = "bar";
 
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
-            GroupMetadataManagerTestContext.toRangeProtocol(
+            GroupMetadataManagerTestContext.toConsumerProtocol(
                 Arrays.asList(fooTopicName, barTopicName),
                 Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(fooTopicName, 1))
             );
@@ -11326,7 +11326,7 @@ public class GroupMetadataManagerTest {
         String barTopicName = "bar";
 
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
-            GroupMetadataManagerTestContext.toRangeProtocol(
+            GroupMetadataManagerTestContext.toConsumerProtocol(
                 Arrays.asList(fooTopicName, barTopicName),
                 Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(fooTopicName, 1))
             );
@@ -11390,7 +11390,7 @@ public class GroupMetadataManagerTest {
                         .setClientId("client")
                         .setClientHost("localhost/127.0.0.1")
                         .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
-                        .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                        .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                             Arrays.asList(fooTopicName, barTopicName),
                             Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(fooTopicName, 1)),
                             version))
@@ -11435,7 +11435,7 @@ public class GroupMetadataManagerTest {
             JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
                 .withGroupId(groupId)
                 .withMemberId(memberId1)
-                .withProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                     Arrays.asList(fooTopicName, barTopicName, zarTopicName),
                     Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(fooTopicName, 1)),
                     version))
@@ -11452,7 +11452,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName, zarTopicName))
                 .setPartitionsPendingRevocation(mkAssignment(
                     mkTopicAssignment(fooTopicId, 1)))
-                .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                     Arrays.asList(fooTopicName, barTopicName, zarTopicName),
                     Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(fooTopicName, 1)),
                     version))
@@ -11531,7 +11531,7 @@ public class GroupMetadataManagerTest {
                         .setClientId("client")
                         .setClientHost("localhost/127.0.0.1")
                         .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
-                        .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                        .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                             Arrays.asList(fooTopicName, barTopicName),
                             Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(fooTopicName, 1)),
                             version))
@@ -11574,7 +11574,7 @@ public class GroupMetadataManagerTest {
             JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
                 .withGroupId(groupId)
                 .withMemberId(memberId1)
-                .withProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                     Arrays.asList(fooTopicName, barTopicName, zarTopicName),
                     Collections.emptyList(),
                     version))
@@ -11592,7 +11592,7 @@ public class GroupMetadataManagerTest {
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 0),
                     mkTopicAssignment(zarTopicId, 0)))
-                .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                     Arrays.asList(fooTopicName, barTopicName, zarTopicName),
                     Collections.emptyList(),
                     version))
@@ -11666,7 +11666,7 @@ public class GroupMetadataManagerTest {
                         .setClientId("client")
                         .setClientHost("localhost/127.0.0.1")
                         .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
-                        .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                        .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                             Arrays.asList(fooTopicName, barTopicName),
                             Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(fooTopicName, 1)),
                             version))
@@ -11697,7 +11697,7 @@ public class GroupMetadataManagerTest {
             JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
                 .withGroupId(groupId)
                 .withMemberId(memberId1)
-                .withProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                     Arrays.asList(fooTopicName, barTopicName),
                     Collections.singletonList(new TopicPartition(fooTopicName, 0)),
                     version))
@@ -11718,7 +11718,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 0)))
-                .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                     Arrays.asList(fooTopicName, barTopicName),
                     Arrays.asList(new TopicPartition(fooTopicName, 0)),
                     version))
@@ -11784,7 +11784,7 @@ public class GroupMetadataManagerTest {
                         .setClientId("client")
                         .setClientHost("localhost/127.0.0.1")
                         .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
-                        .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                        .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                             Arrays.asList(fooTopicName, barTopicName),
                             Collections.singletonList(new TopicPartition(fooTopicName, 0)),
                             version))
@@ -11811,7 +11811,7 @@ public class GroupMetadataManagerTest {
             JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
                 .withGroupId(groupId)
                 .withMemberId(memberId1)
-                .withProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                     Arrays.asList(fooTopicName, barTopicName),
                     Collections.singletonList(new TopicPartition(fooTopicName, 0)),
                     version))
@@ -11833,7 +11833,7 @@ public class GroupMetadataManagerTest {
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 0),
                     mkTopicAssignment(barTopicId, 0)))
-                .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toRangeProtocol(
+                .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                     Arrays.asList(fooTopicName, barTopicName),
                     Arrays.asList(new TopicPartition(fooTopicName, 0)),
                     version))
