@@ -159,8 +159,6 @@ object TestUtils extends Logging {
    */
   def tempFile(contents: String): File = JTestUtils.tempFile(contents)
 
-  def tempPropertiesFile(properties: Properties): File = tempPropertiesFile(properties.asScala)
-
   def tempPropertiesFile(properties: Map[String, String]): File = {
     val content = properties.map{case (k, v) => k + "=" + v}.mkString(System.lineSeparator())
     tempFile(content)
@@ -964,7 +962,7 @@ object TestUtils extends Logging {
    * easily wait on a condition before evaluating the assertions.
    */
   def tryUntilNoAssertionError[T](waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L)(assertions: => T): T = {
-    val (either, success) = TestUtils.computeUntilTrue({
+    val (either, _) = TestUtils.computeUntilTrue({
       try {
         val res = assertions
         Left(res)
