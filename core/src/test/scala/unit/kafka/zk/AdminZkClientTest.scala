@@ -16,8 +16,9 @@
  */
 package kafka.admin
 
+import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
-import kafka.controller.ReplicaAssignment
+import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.server.KafkaConfig._
 import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.CoreUtils._
@@ -122,7 +123,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     // create the topic
     adminZkClient.createTopicWithAssignment(topic, topicConfig, expectedReplicaAssignment)
     // create leaders for all partitions
-    TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
+    makeLeaderForPartition(zkClient, topic, leaderForPartitionMap)
     val actualReplicaMap = leaderForPartitionMap.keys.map(p => p -> zkClient.getReplicasForPartition(new TopicPartition(topic, p))).toMap
     assertEquals(expectedReplicaAssignment.size, actualReplicaMap.size)
     for (i <- 0 until actualReplicaMap.size)
@@ -440,5 +441,18 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     brokers.foreach(b => zkClient.registerBroker(BrokerInfo(Broker(b.id, b.endPoints, rack = b.rack),
       MetadataVersion.latestTesting, jmxPort = -1)))
     brokers
+  }
+
+  private def makeLeaderForPartition(zkClient: KafkaZkClient,
+                                       topic: String,
+                                       leaderPerPartitionMap: scala.collection.immutable.Map[Int, Int]): Unit = {
+    val newLeaderIsrAndControllerEpochs = leaderPerPartitionMap.map { case (partition, leader) =>
+      val topicPartition = new TopicPartition(topic, partition)
+      val newLeaderAndIsr = zkClient.getTopicPartitionState(topicPartition)
+        .map(_.leaderAndIsr.newLeader(leader))
+        .getOrElse(LeaderAndIsr(leader, List(leader)))
+      topicPartition -> LeaderIsrAndControllerEpoch(newLeaderAndIsr, 1)
+    }
+    zkClient.setTopicPartitionStatesRaw(newLeaderIsrAndControllerEpochs, ZkVersion.MatchAnyVersion)
   }
 }

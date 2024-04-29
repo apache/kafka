@@ -18,7 +18,7 @@ package kafka.utils
 
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api._
-import kafka.controller.{ControllerEventManager, LeaderIsrAndControllerEpoch}
+import kafka.controller.ControllerEventManager
 import kafka.log._
 import kafka.network.RequestChannel
 import kafka.server._
@@ -35,7 +35,6 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.clients.{ClientResponse, CommonClientConfigs}
 import org.apache.kafka.common._
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter}
-import org.apache.kafka.common.config.ConfigResource.Type.TOPIC
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{KafkaStorageException, OperationNotAttemptedException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
@@ -85,7 +84,7 @@ import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Arrays, Collections, Optional, Properties}
 import scala.annotation.nowarn
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, immutable, mutable}
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -758,27 +757,6 @@ object TestUtils extends Logging {
     new KafkaConsumer[K, V](consumerProps, keyDeserializer, valueDeserializer)
   }
 
-  def getMsgStrings(n: Int): Seq[String] = {
-    val buffer = new ListBuffer[String]
-    for (i <- 0 until  n)
-      buffer += ("msg" + i)
-    buffer
-  }
-
-  def makeLeaderForPartition(zkClient: KafkaZkClient,
-                             topic: String,
-                             leaderPerPartitionMap: scala.collection.immutable.Map[Int, Int],
-                             controllerEpoch: Int): Unit = {
-    val newLeaderIsrAndControllerEpochs = leaderPerPartitionMap.map { case (partition, leader) =>
-      val topicPartition = new TopicPartition(topic, partition)
-      val newLeaderAndIsr = zkClient.getTopicPartitionState(topicPartition)
-        .map(_.leaderAndIsr.newLeader(leader))
-        .getOrElse(LeaderAndIsr(leader, List(leader)))
-      topicPartition -> LeaderIsrAndControllerEpoch(newLeaderAndIsr, controllerEpoch)
-    }
-    zkClient.setTopicPartitionStatesRaw(newLeaderIsrAndControllerEpochs, ZkVersion.MatchAnyVersion)
-  }
-
   /**
    *  If neither oldLeaderOpt nor newLeaderOpt is defined, wait until the leader of a partition is elected.
    *  If oldLeaderOpt is defined, it waits until the new leader is different from the old leader.
@@ -931,17 +909,6 @@ object TestUtils extends Logging {
       val records = consumer.poll(Duration.ofMillis(100))
       action(records)
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
-  }
-
-  def subscribeAndWaitForRecords(topic: String,
-                                 consumer: Consumer[Array[Byte], Array[Byte]],
-                                 waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
-    consumer.subscribe(Collections.singletonList(topic))
-    pollRecordsUntilTrue(
-      consumer,
-      (records: ConsumerRecords[Array[Byte], Array[Byte]]) => !records.isEmpty,
-      "Expected records",
-      waitTimeMs)
   }
 
    /**
@@ -1821,11 +1788,6 @@ object TestUtils extends Logging {
       KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
   }
 
-  def stringifyTopicPartitions(partitions: Set[TopicPartition]): String = {
-    Json.encodeAsString(Map("partitions" ->
-      partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition).asJava).asJava).asJava)
-  }
-
   def resource[R <: AutoCloseable, A](resource: R)(func: R => A): A = {
     try {
       func(resource)
@@ -1833,78 +1795,6 @@ object TestUtils extends Logging {
       resource.close()
     }
   }
-
-  /**
-   * Set broker replication quotas and enable throttling for a set of partitions. This
-   * will override any previous replication quotas, but will leave the throttling status
-   * of other partitions unaffected.
-   */
-  def setReplicationThrottleForPartitions(admin: Admin,
-                                          brokerIds: Seq[Int],
-                                          partitions: Set[TopicPartition],
-                                          throttleBytes: Int): Unit = {
-    throttleAllBrokersReplication(admin, brokerIds, throttleBytes)
-    assignThrottledPartitionReplicas(admin, partitions.map(_ -> brokerIds).toMap)
-  }
-
-  /**
-   * Remove a set of throttled partitions and reset the overall replication quota.
-   */
-  def removeReplicationThrottleForPartitions(admin: Admin,
-                                             brokerIds: Seq[Int],
-                                             partitions: Set[TopicPartition]): Unit = {
-    removePartitionReplicaThrottles(admin, partitions)
-    resetBrokersThrottle(admin, brokerIds)
-  }
-
-   /**
-    * Throttles all replication across the cluster.
-    * @param adminClient is the adminClient to use for making connection with the cluster
-    * @param brokerIds all broker ids in the cluster
-    * @param throttleBytes is the target throttle
-    */
-  def throttleAllBrokersReplication(adminClient: Admin, brokerIds: Seq[Int], throttleBytes: Int): Unit = {
-    val throttleConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttleBytes.toString), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, throttleBytes.toString), AlterConfigOp.OpType.SET)
-    ).asJavaCollection
-
-    adminClient.incrementalAlterConfigs(
-      brokerIds.map { brokerId =>
-        new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString) -> throttleConfigs
-      }.toMap.asJava
-    ).all().get()
-  }
-
-  def resetBrokersThrottle(adminClient: Admin, brokerIds: Seq[Int]): Unit =
-    throttleAllBrokersReplication(adminClient, brokerIds, Int.MaxValue)
-
-  def assignThrottledPartitionReplicas(adminClient: Admin, allReplicasByPartition: Map[TopicPartition, Seq[Int]]): Unit = {
-    val throttles = allReplicasByPartition.groupBy(_._1.topic()).map {
-      case (topic, replicasByPartition) =>
-        new ConfigResource(TOPIC, topic) -> Seq(
-          new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET),
-          new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET)
-        ).asJavaCollection
-    }
-    adminClient.incrementalAlterConfigs(throttles.asJava).all().get()
-  }
-
-  def removePartitionReplicaThrottles(adminClient: Admin, partitions: Set[TopicPartition]): Unit = {
-    val throttles = partitions.map {
-      tp =>
-        new ConfigResource(TOPIC, tp.topic()) -> Seq(
-          new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), AlterConfigOp.OpType.DELETE),
-          new AlterConfigOp(new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), AlterConfigOp.OpType.DELETE)
-        ).asJavaCollection
-    }.toMap
-    adminClient.incrementalAlterConfigs(throttles.asJava).all().get()
-  }
-
-  def formatReplicaThrottles(moves: Map[TopicPartition, Seq[Int]]): String =
-    moves.flatMap { case (tp, assignment) =>
-      assignment.map(replicaId => s"${tp.partition}:$replicaId")
-    }.mkString(",")
 
   def waitForAllReassignmentsToComplete(adminClient: Admin, pause: Long = 100L): Unit = {
     waitUntilTrue(() => adminClient.listPartitionReassignments().reassignments().get().isEmpty,
