@@ -138,6 +138,7 @@ class ConsumerGroupExecutor {
                         }
                     } catch (WakeupException | InterruptException e) {
                         // OK
+                        Thread.interrupted();
                     } finally {
                         consumer.close();
                     }

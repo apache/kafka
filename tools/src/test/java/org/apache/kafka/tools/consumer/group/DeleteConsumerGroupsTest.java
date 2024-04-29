@@ -88,20 +88,22 @@ public class DeleteConsumerGroupsTest {
     public void testDeleteCmdNonExistingGroup() {
         String missingGroupId = composeMissingGroupId(CLASSIC);
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroupId};
-        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
-        String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
-        assertTrue(output.contains("Group '" + missingGroupId + "' could not be deleted due to:") && output.contains(Errors.GROUP_ID_NOT_FOUND.message()),
-                "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
+        try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)) {
+            String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
+            assertTrue(output.contains("Group '" + missingGroupId + "' could not be deleted due to:") && output.contains(Errors.GROUP_ID_NOT_FOUND.message()),
+                    "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
+        }
     }
 
     @ClusterTest
     public void testDeleteNonExistingGroup() {
         String missingGroupId = composeMissingGroupId(CLASSIC);
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroupId};
-        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
-        Map<String, Throwable> result = service.deleteGroups();
-        assertTrue(result.size() == 1 && result.containsKey(missingGroupId) && result.get(missingGroupId).getCause() instanceof GroupIdNotFoundException,
-                "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
+        try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)) {
+            Map<String, Throwable> result = service.deleteGroups();
+            assertTrue(result.size() == 1 && result.containsKey(missingGroupId) && result.get(missingGroupId).getCause() instanceof GroupIdNotFoundException,
+                    "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
+        }
     }
 
     @ClusterTest
@@ -109,10 +111,11 @@ public class DeleteConsumerGroupsTest {
         for (GroupProtocol groupProtocol : groupProtocols) {
             String groupId = composeGroupId(groupProtocol);
             String topicName = composeTopicName(groupProtocol);
-            try (AutoCloseable consumerGroupCloseable = consumerGroupClosable(groupProtocol, groupId, topicName)) {
-                String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
-                ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
-
+            String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
+            try (
+                    AutoCloseable consumerGroupCloseable = consumerGroupClosable(groupProtocol, groupId, topicName);
+                    ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
+            ) {
                 TestUtils.waitForCondition(
                         () -> service.collectGroupMembers(groupId, false).getValue().get().size() == 1,
                         "The group did not initialize as expected."
@@ -138,10 +141,11 @@ public class DeleteConsumerGroupsTest {
         for (GroupProtocol groupProtocol : groupProtocols) {
             String groupId = composeGroupId(groupProtocol);
             String topicName = composeTopicName(groupProtocol);
-            try (AutoCloseable consumerGroupCloseable = consumerGroupClosable(groupProtocol, groupId, topicName)) {
-                String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
-                ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
-
+            String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
+            try (
+                    AutoCloseable consumerGroupCloseable = consumerGroupClosable(groupProtocol, groupId, topicName);
+                    ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
+            ) {
                 TestUtils.waitForCondition(
                         () -> service.listConsumerGroups().contains(groupId) && checkGroupState(service, groupId, STABLE),
                         "The group did not initialize as expected."
@@ -173,33 +177,33 @@ public class DeleteConsumerGroupsTest {
             Map<String, AutoCloseable> groupIdToExecutor = IntStream.rangeClosed(1, 3)
                     .mapToObj(i -> composeGroupId(groupProtocol) + i)
                     .collect(Collectors.toMap(Function.identity(), group -> consumerGroupClosable(groupProtocol, group, topicName)));
-
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--all-groups"};
-            ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
-            TestUtils.waitForCondition(() ->
-                            new HashSet<>(service.listConsumerGroups()).equals(groupIdToExecutor.keySet()) &&
-                                    groupIdToExecutor.keySet().stream().allMatch(predicateGroupState(service, STABLE)),
-                    "The group did not initialize as expected.");
+            try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)) {
+                TestUtils.waitForCondition(() ->
+                                new HashSet<>(service.listConsumerGroups()).equals(groupIdToExecutor.keySet()) &&
+                                        groupIdToExecutor.keySet().stream().allMatch(predicateGroupState(service, STABLE)),
+                        "The group did not initialize as expected.");
 
-            // Shutdown consumers to empty out groups
-            for (AutoCloseable consumerGroupExecutor : groupIdToExecutor.values()) {
-                consumerGroupExecutor.close();
+                // Shutdown consumers to empty out groups
+                for (AutoCloseable consumerGroupExecutor : groupIdToExecutor.values()) {
+                    consumerGroupExecutor.close();
+                }
+
+                TestUtils.waitForCondition(() ->
+                                groupIdToExecutor.keySet().stream().allMatch(predicateGroupState(service, EMPTY)),
+                        "The group did not become empty as expected.");
+
+                String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups).trim();
+                Set<String> expectedGroupsForDeletion = groupIdToExecutor.keySet();
+                Set<String> deletedGroupsGrepped = Arrays.stream(output.substring(output.indexOf('(') + 1, output.indexOf(')')).split(","))
+                        .map(str -> str.replaceAll("'", "").trim())
+                        .collect(Collectors.toSet());
+
+                assertTrue(output.matches("Deletion of requested consumer groups (.*) was successful.")
+                                && Objects.equals(deletedGroupsGrepped, expectedGroupsForDeletion),
+                        "The consumer group(s) could not be deleted as expected");
             }
-
-            TestUtils.waitForCondition(() ->
-                            groupIdToExecutor.keySet().stream().allMatch(predicateGroupState(service, EMPTY)),
-                    "The group did not become empty as expected.");
-
-            String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups).trim();
-            Set<String> expectedGroupsForDeletion = groupIdToExecutor.keySet();
-            Set<String> deletedGroupsGrepped = Arrays.stream(output.substring(output.indexOf('(') + 1, output.indexOf(')')).split(","))
-                    .map(str -> str.replaceAll("'", "").trim())
-                    .collect(Collectors.toSet());
-
-            assertTrue(output.matches("Deletion of requested consumer groups (.*) was successful.")
-                            && Objects.equals(deletedGroupsGrepped, expectedGroupsForDeletion),
-                    "The consumer group(s) could not be deleted as expected");
         }
     }
 
@@ -209,10 +213,11 @@ public class DeleteConsumerGroupsTest {
             String groupId = composeGroupId(groupProtocol);
             String topicName = composeTopicName(groupProtocol);
             String missingGroupId = composeMissingGroupId(groupProtocol);
-            try (AutoCloseable consumerGroupClosable = consumerGroupClosable(groupProtocol, groupId, topicName)) {
-                String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
-                ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
-
+            String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
+            try (
+                    AutoCloseable consumerGroupClosable = consumerGroupClosable(groupProtocol, groupId, topicName);
+                    ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
+            ) {
                 TestUtils.waitForCondition(
                         () -> service.listConsumerGroups().contains(groupId) && checkGroupState(service, groupId, STABLE),
                         "The group did not initialize as expected.");
@@ -241,10 +246,11 @@ public class DeleteConsumerGroupsTest {
             String groupId = composeGroupId(groupProtocol);
             String topicName = composeTopicName(groupProtocol);
             String missingGroupId = composeMissingGroupId(groupProtocol);
-            try (AutoCloseable executor = consumerGroupClosable(groupProtocol, groupId, topicName)) {
-                String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
-                ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
-
+            String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
+            try (
+                    AutoCloseable executor = consumerGroupClosable(groupProtocol, groupId, topicName);
+                    ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
+            ) {
                 TestUtils.waitForCondition(
                         () -> service.listConsumerGroups().contains(groupId) && checkGroupState(service, groupId, STABLE),
                         "The group did not initialize as expected.");
@@ -332,7 +338,7 @@ public class DeleteConsumerGroupsTest {
         return Objects.equals(service.collectGroupState(groupId).state, state.toString());
     }
 
-    ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
+    private ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         return new ConsumerGroupCommand.ConsumerGroupService(
                 opts,
