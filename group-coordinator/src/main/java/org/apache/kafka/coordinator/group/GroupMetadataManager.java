@@ -2301,7 +2301,7 @@ public class GroupMetadataManager {
                     RecordHelpers.newEmptyGroupMetadataRecord(group, metadataImage.features().metadataVersion())
                 );
 
-                return new CoordinatorResult<>(records, appendFuture, appendFuture == null);
+                return new CoordinatorResult<>(records, appendFuture, false);
             }
         }
         return result;
@@ -2719,7 +2719,7 @@ public class GroupMetadataManager {
                 List<Record> records = Collections.singletonList(RecordHelpers.newGroupMetadataRecord(
                     group, Collections.emptyMap(), metadataImage.features().metadataVersion()));
 
-                return new CoordinatorResult<>(records, appendFuture, appendFuture == null);
+                return new CoordinatorResult<>(records, appendFuture, false);
 
             } else {
                 log.info("Stabilized group {} generation {} with {} members.",
@@ -3382,7 +3382,7 @@ public class GroupMetadataManager {
                     RecordHelpers.newGroupMetadataRecord(group, groupAssignment, metadataImage.features().metadataVersion())
                 );
 
-                return new CoordinatorResult<>(records, appendFuture, appendFuture == null);
+                return new CoordinatorResult<>(records, appendFuture, false);
             } else {
                 return maybePrepareRebalanceOrCompleteJoin(
                     group,
@@ -3498,7 +3498,7 @@ public class GroupMetadataManager {
                 List<Record> records = Collections.singletonList(
                     RecordHelpers.newGroupMetadataRecord(group, assignment, metadataImage.features().metadataVersion())
                 );
-                return new CoordinatorResult<>(records, appendFuture, appendFuture == null);
+                return new CoordinatorResult<>(records, appendFuture, false);
             }
         } else if (group.isInState(STABLE)) {
             removePendingSyncMember(group, memberId);
@@ -3774,7 +3774,7 @@ public class GroupMetadataManager {
             new LeaveGroupResponseData()
                 .setMembers(memberResponses),
             coordinatorResult.appendFuture(),
-            coordinatorResult.appendFuture() == null
+            coordinatorResult.replayRecords()
         );
     }
 
