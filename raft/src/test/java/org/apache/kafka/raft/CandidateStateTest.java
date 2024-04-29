@@ -193,9 +193,9 @@ public class CandidateStateTest {
             Optional.empty()
         );
 
-        assertFalse(state.canGrantVote(1, isLogUpToDate));
-        assertFalse(state.canGrantVote(2, isLogUpToDate));
-        assertFalse(state.canGrantVote(3, isLogUpToDate));
+        assertFalse(state.canGrantVote(1, Optional.empty(), isLogUpToDate));
+        assertFalse(state.canGrantVote(2, Optional.empty(), isLogUpToDate));
+        assertFalse(state.canGrantVote(3, Optional.empty(), isLogUpToDate));
     }
 
 }

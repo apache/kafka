@@ -80,8 +80,8 @@ public class UnattachedStateTest {
                 Optional.empty()
         );
 
-        assertEquals(isLogUpToDate, state.canGrantVote(1, isLogUpToDate));
-        assertEquals(isLogUpToDate, state.canGrantVote(2, isLogUpToDate));
-        assertEquals(isLogUpToDate, state.canGrantVote(3, isLogUpToDate));
+        assertEquals(isLogUpToDate, state.canGrantVote(1, Optional.empty(), isLogUpToDate));
+        assertEquals(isLogUpToDate, state.canGrantVote(2, Optional.empty(), isLogUpToDate));
+        assertEquals(isLogUpToDate, state.canGrantVote(3, Optional.empty(), isLogUpToDate));
     }
 }

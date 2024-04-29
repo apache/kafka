@@ -627,7 +627,11 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         OffsetAndEpoch lastEpochEndOffsetAndEpoch = new OffsetAndEpoch(lastEpochEndOffset, lastEpoch);
-        boolean voteGranted = quorum.canGrantVote(candidateId, lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0);
+        boolean voteGranted = quorum.canGrantVote(
+            candidateId,
+            Optional.empty(),
+            lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0
+        );
 
         if (voteGranted && quorum.isUnattached()) {
             transitionToVoted(candidateId, Optional.empty(), candidateEpoch);
@@ -1700,10 +1704,11 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     /**
-     * Validate a request which is only valid between voters. If an error is
-     * present in the returned value, it should be returned in the response.
+     * Validate common state for requests to establish leadership.
+     *
+     * These include the Vote, BeginQuorumEpoch rnd EndQuorumEpoch RPCs. If an error is present in
+     * the returned value, it should be returned in the response.
      */
-    // TODO: Change the name of this method it is a bit misleading. In some cases the replica may not not that it is a voter in the remote voter's voter set.
     private Optional<Errors> validateVoterOnlyRequest(int remoteNodeId, int requestEpoch) {
         if (requestEpoch < quorum.epoch()) {
             return Optional.of(Errors.FENCED_LEADER_EPOCH);

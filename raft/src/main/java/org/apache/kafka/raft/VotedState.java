@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 
 /**
  * The "voted" state is for voters who have cast their vote for a specific candidate.
+ *
  * Once a vote has been cast, it is not possible for a voter to change its vote until a
  * new election is started. If the election timeout expires before a new leader is elected,
  * then the voter will become a candidate.
@@ -33,7 +34,7 @@ import org.slf4j.Logger;
 public class VotedState implements EpochState {
     private final int epoch;
     private final int votedId;
-    private final Optional<Uuid> votedUuid;
+    private final Optional<Uuid> votedDirectoryId;
     private final Set<Integer> voters;
     private final int electionTimeoutMs;
     private final Timer electionTimer;
@@ -44,7 +45,7 @@ public class VotedState implements EpochState {
         Time time,
         int epoch,
         int votedId,
-        Optional<Uuid> votedUuid,
+        Optional<Uuid> votedDirectoryId,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
         int electionTimeoutMs,
@@ -52,7 +53,7 @@ public class VotedState implements EpochState {
     ) {
         this.epoch = epoch;
         this.votedId = votedId;
-        this.votedUuid = votedUuid;
+        this.votedDirectoryId = votedDirectoryId;
         this.voters = voters;
         this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
@@ -62,7 +63,7 @@ public class VotedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withVotedCandidate(epoch, votedId, votedUuid, voters);
+        return ElectionState.withVotedCandidate(epoch, votedId, votedDirectoryId, voters);
     }
 
     public int votedId() {
@@ -90,13 +91,24 @@ public class VotedState implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+    public boolean canGrantVote(
+        int candidateId,
+        Optional<Uuid> candidateDirectoryId,
+        boolean isLogUpToDate
+    ) {
         if (votedId() == candidateId) {
-            return true;
+            return !votedDirectoryId.isPresent() || votedDirectoryId.equals(candidateDirectoryId);
         }
 
-        log.debug("Rejecting vote request from candidate {} since we already have voted for " +
-            "another candidate {} in epoch {}", candidateId, votedId(), epoch);
+        log.debug(
+            "Rejecting vote request from candidate ({}, {}), already have voted for another " +
+            "candidate ({}, {}) in epoch {}",
+            candidateId,
+            candidateDirectoryId,
+            votedId,
+            votedDirectoryId,
+            epoch
+        );
         return false;
     }
 
@@ -107,12 +119,15 @@ public class VotedState implements EpochState {
 
     @Override
     public String toString() {
-        return "Voted(" +
-            "epoch=" + epoch +
-            ", votedId=" + votedId +
-            ", voters=" + voters +
-            ", electionTimeoutMs=" + electionTimeoutMs +
-            ')';
+        return String.format(
+            "Voted(epoch=%d, votedId=%d, votedDirectoryId=%s, voters=%s, electionTimeoutMs=%d, highWatermark=%s)",
+            epoch,
+            votedId,
+            votedDirectoryId,
+            voters,
+            electionTimeoutMs,
+            highWatermark
+        );
     }
 
     @Override

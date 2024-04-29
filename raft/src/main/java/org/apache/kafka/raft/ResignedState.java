@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -23,6 +24,7 @@ import org.slf4j.Logger;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -131,9 +133,17 @@ public class ResignedState implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-        log.debug("Rejecting vote request from candidate {} since we have resigned as candidate/leader in epoch {}",
-            candidateId, epoch);
+    public boolean canGrantVote(
+        int candidateId,
+        Optional<Uuid> candidateDirectoryId,
+        boolean isLogUpToDate
+    ) {
+        log.debug(
+            "Rejecting vote request from candidate ({}, {}) since we have resigned as candidate/leader in epoch {}",
+            candidateId,
+            candidateDirectoryId,
+            epoch
+        );
         return false;
     }
 

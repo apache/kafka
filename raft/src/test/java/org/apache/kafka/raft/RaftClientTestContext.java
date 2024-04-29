@@ -171,10 +171,9 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder withVotedCandidate(int epoch, int votedId) {
-            // TODO: should votedUuid be configurable now? Or implement this later?
+        Builder withVotedCandidate(int epoch, int votedId, Optional<Uuid> votedDirectoryId) {
             quorumStateStore.writeElectionState(
-                ElectionState.withVotedCandidate(epoch, votedId, Optional.empty(), voters),
+                ElectionState.withVotedCandidate(epoch, votedId, votedDirectoryId, voters),
                 kraftVersion
             );
             return this;
@@ -452,9 +451,9 @@ public final class RaftClientTestContext {
         pollUntil(channel::hasSentRequests);
     }
 
-    void assertVotedCandidate(int epoch, int leaderId) {
+    void assertVotedCandidate(int epoch, int candidateId) {
         assertEquals(
-            ElectionState.withVotedCandidate(epoch, leaderId, Optional.empty(), voters),
+            ElectionState.withVotedCandidate(epoch, candidateId, Optional.empty(), voters),
             quorumStateStore.readElectionState().get()
         );
     }

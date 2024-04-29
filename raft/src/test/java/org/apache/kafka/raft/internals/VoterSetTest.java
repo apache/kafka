@@ -30,7 +30,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final public class VoterSetTest {
     @Test
@@ -77,6 +79,55 @@ final public class VoterSetTest {
             Optional.of(new VoterSet(new HashMap<>(aVoterMap))),
             voterSet.removeVoter(voter3.id(), voter3.directoryId())
         );
+    }
+
+    @Test
+    void testIsVoterWithDirectoryId() {
+        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2, 3), true);
+        VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
+
+        assertTrue(voterSet.isVoter(1, aVoterMap.get(1).directoryId()));
+        assertFalse(voterSet.isVoter(1, Optional.of(Uuid.randomUuid())));
+        assertFalse(voterSet.isVoter(1, Optional.empty()));
+        assertFalse(voterSet.isVoter(2, aVoterMap.get(1).directoryId()));
+        assertFalse(voterSet.isVoter(4, aVoterMap.get(1).directoryId()));
+        assertFalse(voterSet.isVoter(4, Optional.empty()));
+    }
+
+    @Test
+    void testIsVoterWithoutDirectoryId() {
+        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2, 3), false);
+        VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
+
+        assertTrue(voterSet.isVoter(1, Optional.empty()));
+        assertTrue(voterSet.isVoter(1, Optional.of(Uuid.randomUuid())));
+        assertFalse(voterSet.isVoter(4, Optional.of(Uuid.randomUuid())));
+        assertFalse(voterSet.isVoter(4, Optional.empty()));
+    }
+
+    @Test
+    void testStandaloneAndOnlyVoter() {
+        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1), true);
+        VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
+
+        assertTrue(voterSet.isOnlyVoter(1, aVoterMap.get(1).directoryId()));
+        assertFalse(voterSet.isOnlyVoter(1, Optional.of(Uuid.randomUuid())));
+        assertFalse(voterSet.isOnlyVoter(1, Optional.empty()));
+        assertFalse(voterSet.isOnlyVoter(4, aVoterMap.get(1).directoryId()));
+        assertFalse(voterSet.isOnlyVoter(4, Optional.empty()));
+    }
+
+    @Test
+    void testOnlyVoter() {
+        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2), true);
+        VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
+
+        assertFalse(voterSet.isOnlyVoter(1, aVoterMap.get(1).directoryId()));
+        assertFalse(voterSet.isOnlyVoter(1, Optional.of(Uuid.randomUuid())));
+        assertFalse(voterSet.isOnlyVoter(1, Optional.empty()));
+        assertFalse(voterSet.isOnlyVoter(2, aVoterMap.get(1).directoryId()));
+        assertFalse(voterSet.isOnlyVoter(4, aVoterMap.get(1).directoryId()));
+        assertFalse(voterSet.isOnlyVoter(4, Optional.empty()));
     }
 
     @Test

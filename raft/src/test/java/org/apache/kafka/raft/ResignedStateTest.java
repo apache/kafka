@@ -25,6 +25,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -87,9 +88,9 @@ class ResignedStateTest {
             Collections.emptyList()
         );
 
-        assertFalse(state.canGrantVote(1, isLogUpToDate));
-        assertFalse(state.canGrantVote(2, isLogUpToDate));
-        assertFalse(state.canGrantVote(3, isLogUpToDate));
+        assertFalse(state.canGrantVote(1, Optional.empty(), isLogUpToDate));
+        assertFalse(state.canGrantVote(2, Optional.empty(), isLogUpToDate));
+        assertFalse(state.canGrantVote(3, Optional.empty(), isLogUpToDate));
     }
 
     @Test

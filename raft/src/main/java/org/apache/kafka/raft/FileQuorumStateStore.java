@@ -122,7 +122,6 @@ public class FileQuorumStateStore implements QuorumStateStore {
 
     @Override
     public void writeElectionState(ElectionState latest, short kraftVersion) {
-        // TODO: not sure if this is correct. For example, current voters should be null/empty if kraft.version is 1
         short quorumStateVersion = quorumStateVersionFromKRaftVersion(kraftVersion);
 
         writeElectionStateToFile(

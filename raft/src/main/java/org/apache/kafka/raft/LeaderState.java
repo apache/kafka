@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.utils.LogContext;
@@ -162,7 +163,7 @@ public class LeaderState<T> implements EpochState {
             .setLeaderId(this.election().leaderId())
             .setVoters(voters)
             .setGrantingVoters(grantingVoters);
-        
+
         accumulator.appendLeaderChangeMessage(leaderChangeMessage, currentTimeMs);
         accumulator.forceDrain();
     }
@@ -513,15 +514,23 @@ public class LeaderState<T> implements EpochState {
                 endOffset,
                 lastFetchTimestamp,
                 lastCaughtUpTimestamp,
-                hasAcknowledgedLeader 
+                hasAcknowledgedLeader
             );
         }
     }
 
     @Override
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-        log.debug("Rejecting vote request from candidate {} since we are already leader in epoch {}",
-            candidateId, epoch);
+    public boolean canGrantVote(
+        int candidateId,
+        Optional<Uuid> candidateDirectoryId,
+        boolean isLogUpToDate
+    ) {
+        log.debug(
+            "Rejecting vote request from candidate ({}, {}) since we are already leader in epoch {}",
+            candidateId,
+            candidateDirectoryId,
+            epoch
+        );
         return false;
     }
 

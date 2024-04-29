@@ -508,8 +508,12 @@ public class QuorumState {
         return electionTimeoutMs + random.nextInt(electionTimeoutMs);
     }
 
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-        return state.canGrantVote(candidateId, isLogUpToDate);
+    public boolean canGrantVote(
+        int candidateId,
+        Optional<Uuid> candidateDirectoryId,
+        boolean isLogUpToDate
+    ) {
+        return state.canGrantVote(candidateId, candidateDirectoryId, isLogUpToDate);
     }
 
     public FollowerState followerStateOrThrow() {
