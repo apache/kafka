@@ -893,15 +893,19 @@ class ZkMigrationIntegrationTest {
   ))
   def testIncrementalAlterConfigsPreMigration(zkCluster: ZkClusterInstance): Unit = {
     // Enable migration configs and restart brokers without KRaft quorum ready
-    zkCluster.config().serverProperties().put(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
-    zkCluster.config().serverProperties().put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9999")
-    zkCluster.config().serverProperties().put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_DOC, "CONTROLLER")
-    zkCluster.config().serverProperties().put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
-    zkCluster.rollingBrokerRestart(Optional.empty())
+    val serverProperties = new util.HashMap[String, String](zkCluster.config().serverProperties())
+    serverProperties.put(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
+    serverProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9999")
+    serverProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    serverProperties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+    val clusterConfig = ClusterConfig.builder(zkCluster.config())
+      .setServerProperties(serverProperties)
+      .build()
+    zkCluster.rollingBrokerRestart(Optional.of(clusterConfig))
     zkCluster.waitForReadyBrokers()
 
     val admin = zkCluster.createAdminClient()
-    val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
+    val zkClient = zkCluster.getUnderlying().zkClient
     try {
       alterBrokerConfigs(admin)
       verifyBrokerConfigs(zkClient)
