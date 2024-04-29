@@ -45,7 +45,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.config.{ConfigType, ZkConfigs}
+import org.apache.kafka.server.config.{ConfigType, ReplicationConfigs, ZkConfigs}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.{Code, NoAuthException, NoNodeException, NodeExistsException}
 import org.apache.zookeeper.{CreateMode, ZooDefs}
@@ -1486,6 +1486,26 @@ class KafkaZkClientTest extends QuorumTestHarness {
         assert(requests.take(3).forall(resp => resp.resultCode.equals(Code.NODEEXISTS)))
         assertEquals(Code.OK, requests.last.resultCode)
       case _ => fail()
+    }
+  }
+
+  @Test
+  def testNoEntityConfigUpdateWithNoController(): Unit = {
+    val props = new Properties()
+    props.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "1") // normal config
+
+    // Create a client that cannot set entity configs without a controller present
+    val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient",
+      zkClientConfig = new ZKClientConfig)
+
+    try {
+      assertThrows(
+        classOf[ControllerMovedException],
+        () => client.setOrCreateEntityConfigs(ConfigType.BROKER, "1", props),
+      )
+    } finally {
+      client.close()
     }
   }
 

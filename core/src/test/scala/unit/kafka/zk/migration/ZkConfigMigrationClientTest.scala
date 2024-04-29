@@ -16,7 +16,7 @@
  */
 package kafka.zk.migration
 
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.CoreUtils
 import kafka.server.ZkAdminManager
 import kafka.zk.{AdminZkClient, ZkMigrationClient}
 import org.apache.kafka.clients.admin.ScramMechanism
@@ -57,7 +57,6 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
   @Test
   def testMigrationBrokerConfigs(): Unit = {
-    TestUtils.createControllerInZk(zkClient, 1)
     val brokers = new java.util.ArrayList[Integer]()
     val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
 
@@ -71,7 +70,6 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     defaultProps.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "3") // normal config
     zkClient.setOrCreateEntityConfigs(ConfigType.BROKER, "<default>", defaultProps)
 
-    migrationState = migrationClient.claimControllerLeadership(migrationState)
     migrationClient.migrateBrokerConfigs(batch => batches.add(batch), brokerId => brokers.add(brokerId))
     assertEquals(1, brokers.size())
     assertEquals(2, batches.size())
@@ -132,8 +130,6 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
   @Test
   def testMigrateClientQuotas(): Unit = {
-    TestUtils.createControllerInZk(zkClient, 1)
-
     val props = new Properties()
     props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "100000")
     adminZkClient.changeConfigs(ConfigType.USER, "<default>", props)
@@ -171,15 +167,12 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
   @Test
   def testWriteExistingClientQuotas(): Unit = {
-    TestUtils.createControllerInZk(zkClient, 1)
-
     val props = new Properties()
     props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "100000")
     adminZkClient.changeConfigs(ConfigType.USER, "user1", props)
     adminZkClient.changeConfigs(ConfigType.USER, "user1/clients/clientA", props)
 
     assertEquals(0, migrationState.migrationZkVersion())
-    migrationState = migrationClient.claimControllerLeadership(migrationState)
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> "user1"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0),
@@ -263,8 +256,6 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
   @Test
   def testWriteExistingTopicConfigs(): Unit = {
-    TestUtils.createControllerInZk(zkClient, 1)
-
     val props = new Properties()
     props.put(TopicConfig.FLUSH_MS_CONFIG, "60000")
     props.put(TopicConfig.RETENTION_MS_CONFIG, "300000")
@@ -282,8 +273,6 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
   @Test
   def testScram(): Unit = {
-    TestUtils.createControllerInZk(zkClient, 1)
-
     val random = new MockRandom()
 
     val scramCredential = new ScramCredential(
@@ -307,8 +296,6 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
   @Test
   def testScramAndQuotaChangesInSnapshot(): Unit = {
-    TestUtils.createControllerInZk(zkClient, 1)
-
     val random = new MockRandom()
 
     val props = new Properties()
@@ -325,7 +312,6 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     val alicePropsInit = new Properties()
     alicePropsInit.put("SCRAM-SHA-256", ScramCredentialUtils.credentialToString(aliceScramCredential))
     adminZkClient.changeConfigs(ConfigType.USER, "alice", alicePropsInit)
-    migrationState = migrationClient.claimControllerLeadership(migrationState)
 
     val delta = new MetadataDelta(MetadataImage.EMPTY)
 

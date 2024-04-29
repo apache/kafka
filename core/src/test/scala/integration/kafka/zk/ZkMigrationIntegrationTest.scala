@@ -638,19 +638,17 @@ class ZkMigrationIntegrationTest {
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
       admin = zkCluster.createAdminClient()
-      alterTopicConfig(admin)
+      alterTopicConfig(admin, shouldRetry = true)
       alterClientQuotas(admin)
-      alterBrokerConfigs(admin)
+      alterBrokerConfigs(admin, shouldRetry = true)
 
       // Verify the changes made to KRaft are seen in ZK
       log.info("Verifying metadata changes with ZK")
-      verifyTopicConfigs(zkClient)
+      verifyTopicConfigs(zkClient, shouldRetry = true)
       verifyClientQuotas(zkClient)
-      verifyBrokerConfigs(zkClient)
+      verifyBrokerConfigs(zkClient, shouldRetry = true)
       val nextKRaftProducerId = sendAllocateProducerIds(zkCluster.asInstanceOf[ZkClusterInstance]).get(30, TimeUnit.SECONDS)
       assertNotEquals(nextProducerId, nextKRaftProducerId)
-    } catch {
-      case t: Throwable => fail("Uncaught error in test", t)
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
     }
@@ -907,8 +905,8 @@ class ZkMigrationIntegrationTest {
     val admin = zkCluster.createAdminClient()
     val zkClient = zkCluster.getUnderlying().zkClient
     try {
-      alterBrokerConfigs(admin)
-      verifyBrokerConfigs(zkClient)
+      alterBrokerConfigs(admin, shouldRetry = true)
+      verifyBrokerConfigs(zkClient, shouldRetry = true)
     } finally {
       admin.close()
       zkClient.close()
@@ -1015,7 +1013,7 @@ class ZkMigrationIntegrationTest {
     dataOpt.map(ProducerIdBlockZNode.parseProducerIdBlockData).get
   }
 
-  def alterBrokerConfigs(admin: Admin): Unit = {
+  def alterBrokerConfigs(admin: Admin, shouldRetry: Boolean = false): Unit = {
     val defaultBrokerResource = new ConfigResource(ConfigResource.Type.BROKER, "")
     val defaultBrokerConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "86400000"), AlterConfigOp.OpType.SET),
@@ -1026,7 +1024,7 @@ class ZkMigrationIntegrationTest {
       new AlterConfigOp(new ConfigEntry(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "43200000"), AlterConfigOp.OpType.SET),
     ).asJavaCollection
 
-    TestUtils.retry(60000) {
+    maybeRetry(shouldRetry, 60000) {
       val result = admin.incrementalAlterConfigs(Map(
         defaultBrokerResource -> defaultBrokerConfigs,
         broker0Resource -> specificBrokerConfigs,
@@ -1040,13 +1038,13 @@ class ZkMigrationIntegrationTest {
     }
   }
 
-  def alterTopicConfig(admin: Admin): Unit = {
+  def alterTopicConfig(admin: Admin, shouldRetry: Boolean = false): Unit = {
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, "test")
     val alterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_BYTES_CONFIG, "204800"), AlterConfigOp.OpType.SET),
       new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_MS_CONFIG, null), AlterConfigOp.OpType.DELETE)
     ).asJavaCollection
-    TestUtils.retry(60000) {
+    maybeRetry(shouldRetry, 60000) {
       try {
         admin.incrementalAlterConfigs(Map(topicResource -> alterConfigs).asJava).all().get(10, TimeUnit.SECONDS)
       } catch {
@@ -1092,16 +1090,16 @@ class ZkMigrationIntegrationTest {
     admin.alterUserScramCredentials(alterations)
   }
 
-  def verifyTopicConfigs(zkClient: KafkaZkClient): Unit = {
-    TestUtils.retry(10000) {
+  def verifyTopicConfigs(zkClient: KafkaZkClient, shouldRetry: Boolean = false): Unit = {
+    maybeRetry(shouldRetry, 10000) {
       val propsAfter = zkClient.getEntityConfigs(ConfigType.TOPIC, "test")
       assertEquals("204800", propsAfter.getProperty(TopicConfig.SEGMENT_BYTES_CONFIG))
       assertFalse(propsAfter.containsKey(TopicConfig.SEGMENT_MS_CONFIG))
     }
   }
 
-  def verifyBrokerConfigs(zkClient: KafkaZkClient): Unit = {
-    TestUtils.retry(10000) {
+  def verifyBrokerConfigs(zkClient: KafkaZkClient, shouldRetry: Boolean = false): Unit = {
+    maybeRetry(shouldRetry, 10000) {
       val defaultBrokerProps = zkClient.getEntityConfigs(ConfigType.BROKER, "<default>")
       assertEquals("86400000", defaultBrokerProps.getProperty(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
 
@@ -1114,13 +1112,11 @@ class ZkMigrationIntegrationTest {
   }
 
   def verifyClientQuotas(zkClient: KafkaZkClient): Unit = {
-    TestUtils.retry(10000) {
-      assertEquals("1000", zkClient.getEntityConfigs(ConfigType.USER, Sanitizer.sanitize("user@1")).getProperty("consumer_byte_rate"))
-      assertEquals("900", zkClient.getEntityConfigs(ConfigType.USER, "<default>").getProperty("consumer_byte_rate"))
-      assertEquals("800", zkClient.getEntityConfigs("users/" + Sanitizer.sanitize("user@1") + "/clients", "clientA").getProperty("consumer_byte_rate"))
-      assertEquals("100", zkClient.getEntityConfigs("users/" + Sanitizer.sanitize("user@1") + "/clients", "clientA").getProperty("producer_byte_rate"))
-      assertEquals("10", zkClient.getEntityConfigs(ConfigType.IP, "8.8.8.8").getProperty("connection_creation_rate"))
-    }
+    assertEquals("1000", zkClient.getEntityConfigs(ConfigType.USER, Sanitizer.sanitize("user@1")).getProperty("consumer_byte_rate"))
+    assertEquals("900", zkClient.getEntityConfigs(ConfigType.USER, "<default>").getProperty("consumer_byte_rate"))
+    assertEquals("800", zkClient.getEntityConfigs("users/" + Sanitizer.sanitize("user@1") + "/clients", "clientA").getProperty("consumer_byte_rate"))
+    assertEquals("100", zkClient.getEntityConfigs("users/" + Sanitizer.sanitize("user@1") + "/clients", "clientA").getProperty("producer_byte_rate"))
+    assertEquals("10", zkClient.getEntityConfigs(ConfigType.IP, "8.8.8.8").getProperty("connection_creation_rate"))
   }
 
   def verifyUserScramCredentials(zkClient: KafkaZkClient): Unit = {
@@ -1141,4 +1137,13 @@ class ZkMigrationIntegrationTest {
     kraftCluster.close()
     zkCluster.stop()
   }
+
+  def maybeRetry(shouldRetry: Boolean, maxWaitMs: Long)(block: => Unit): Unit = {
+    if (shouldRetry) {
+      TestUtils.retry(maxWaitMs)(block)
+    } else {
+      block
+    }
+  }
+
 }
