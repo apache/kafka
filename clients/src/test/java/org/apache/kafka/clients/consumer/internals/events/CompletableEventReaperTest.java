@@ -28,6 +28,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -44,7 +45,7 @@ public class CompletableEventReaperTest {
     public void testExpired() {
         // Add a new event to the reaper.
         Timer timer = time.timer(100);
-        UnsubscribeEvent event = new UnsubscribeEvent(timer);
+        UnsubscribeEvent event = new UnsubscribeEvent(calculateDeadlineMs(timer));
         reaper.add(event);
 
         // Without any time passing, we check the reaper and verify that the event is not done amd is still
@@ -74,7 +75,7 @@ public class CompletableEventReaperTest {
     public void testCompleted() {
         // Add a new event to the reaper.
         Timer timer = time.timer(100);
-        UnsubscribeEvent event = new UnsubscribeEvent(timer);
+        UnsubscribeEvent event = new UnsubscribeEvent(calculateDeadlineMs(timer));
         reaper.add(event);
 
         // Without any time passing, we check the reaper and verify that the event is not done amd is still
@@ -105,8 +106,8 @@ public class CompletableEventReaperTest {
     public void testCompletedAndExpired() {
         // Add two events to the reaper. One event will be completed, the other we will let expire.
         Timer timer = time.timer(100);
-        UnsubscribeEvent event1 = new UnsubscribeEvent(timer);
-        UnsubscribeEvent event2 = new UnsubscribeEvent(timer);
+        UnsubscribeEvent event1 = new UnsubscribeEvent(calculateDeadlineMs(timer));
+        UnsubscribeEvent event2 = new UnsubscribeEvent(calculateDeadlineMs(timer));
         reaper.add(event1);
         reaper.add(event2);
 
@@ -143,8 +144,8 @@ public class CompletableEventReaperTest {
         // Add two events to the queue.
         BlockingQueue<CompletableApplicationEvent<?>> queue = new LinkedBlockingQueue<>();
         Timer timer = time.timer(100);
-        UnsubscribeEvent event1 = new UnsubscribeEvent(timer);
-        UnsubscribeEvent event2 = new UnsubscribeEvent(timer);
+        UnsubscribeEvent event1 = new UnsubscribeEvent(calculateDeadlineMs(timer));
+        UnsubscribeEvent event2 = new UnsubscribeEvent(calculateDeadlineMs(timer));
         queue.add(event1);
         queue.add(event2);
 
@@ -181,8 +182,8 @@ public class CompletableEventReaperTest {
 
         // Add two events for the reaper to track.
         Timer timer = time.timer(100);
-        UnsubscribeEvent event1 = new UnsubscribeEvent(timer);
-        UnsubscribeEvent event2 = new UnsubscribeEvent(timer);
+        UnsubscribeEvent event1 = new UnsubscribeEvent(calculateDeadlineMs(timer));
+        UnsubscribeEvent event2 = new UnsubscribeEvent(calculateDeadlineMs(timer));
         reaper.add(event1);
         reaper.add(event2);
 

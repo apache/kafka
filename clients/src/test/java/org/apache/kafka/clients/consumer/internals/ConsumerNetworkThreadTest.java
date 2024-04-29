@@ -62,6 +62,7 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
+import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -175,8 +176,7 @@ public class ConsumerNetworkThreadTest {
     @ValueSource(booleans = {true, false})
     public void testListOffsetsEventIsProcessed(boolean requireTimestamp) {
         Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
-        Timer timer = time.timer(100);
-        ApplicationEvent e = new ListOffsetsEvent(timestamps, timer, requireTimestamp);
+        ApplicationEvent e = new ListOffsetsEvent(timestamps, calculateDeadlineMs(time, 100), requireTimestamp);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ListOffsetsEvent.class));
@@ -185,8 +185,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testResetPositionsEventIsProcessed() {
-        Timer timer = time.timer(100);
-        ResetPositionsEvent e = new ResetPositionsEvent(timer);
+        ResetPositionsEvent e = new ResetPositionsEvent(calculateDeadlineMs(time, 100));
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
@@ -197,8 +196,7 @@ public class ConsumerNetworkThreadTest {
     public void testResetPositionsProcessFailureIsIgnored() {
         doThrow(new NullPointerException()).when(offsetsRequestManager).resetPositionsIfNeeded();
 
-        Timer timer = time.timer(100);
-        ResetPositionsEvent event = new ResetPositionsEvent(timer);
+        ResetPositionsEvent event = new ResetPositionsEvent(calculateDeadlineMs(time, 100));
         applicationEventsQueue.add(event);
         assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
 
@@ -207,8 +205,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testValidatePositionsEventIsProcessed() {
-        Timer timer = time.timer(100);
-        ValidatePositionsEvent e = new ValidatePositionsEvent(timer);
+        ValidatePositionsEvent e = new ValidatePositionsEvent(calculateDeadlineMs(time, 100));
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ValidatePositionsEvent.class));
@@ -233,8 +230,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testFetchTopicMetadata() {
-        Timer timer = time.timer(Long.MAX_VALUE);
-        applicationEventsQueue.add(new TopicMetadataEvent("topic", timer));
+        applicationEventsQueue.add(new TopicMetadataEvent("topic", Long.MAX_VALUE));
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(TopicMetadataEvent.class));
     }

@@ -16,13 +16,16 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
-import java.util.Objects;
+import java.time.Duration;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeoutException;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * {@code CompletableEvent} is an interface that is used by both {@link CompletableApplicationEvent} and
@@ -78,22 +81,53 @@ public interface CompletableEvent<T> {
     long deadlineMs();
 
     /**
-     * Calculate the deadline timestamp based on the given timer.
+     * Calculate the deadline timestamp based on {@link Timer#currentTimeMs()} and {@link Timer#remainingMs()}.
      *
-     * @param timer Timer from which to use the {@link Timer#currentTimeMs()} and {@link Timer#remainingMs()}} to
-     *              calculate the deadline
+     * @param timer Timer
      *
-     * @return Absolute time for event to be completed
+     * @return Absolute time by which event should be completed
      */
     static long calculateDeadlineMs(final Timer timer) {
-        Objects.requireNonNull(timer);
+        requireNonNull(timer);
+        return calculateDeadlineMs(timer.currentTimeMs(), timer.remainingMs());
+    }
 
-        long currentTimeMs = timer.currentTimeMs();
-        long remainingMs = timer.remainingMs();
+    /**
+     * Calculate the deadline timestamp based on {@link Timer#currentTimeMs()} and {@link Duration#toMillis()}.
+     *
+     * @param time     Time
+     * @param duration Duration
+     *
+     * @return Absolute time by which event should be completed
+     */
+    static long calculateDeadlineMs(final Time time, final Duration duration) {
+        return calculateDeadlineMs(requireNonNull(time).milliseconds(), requireNonNull(duration).toMillis());
+    }
 
-        if (currentTimeMs > Long.MAX_VALUE - remainingMs)
+    /**
+     * Calculate the deadline timestamp based on {@link Timer#currentTimeMs()} and timeout.
+     *
+     * @param time      Time
+     * @param timeoutMs Timeout, in milliseconds
+     *
+     * @return Absolute time by which event should be completed
+     */
+    static long calculateDeadlineMs(final Time time, final long timeoutMs) {
+        return calculateDeadlineMs(requireNonNull(time).milliseconds(), timeoutMs);
+    }
+
+    /**
+     * Calculate the deadline timestamp based on the current time and timeout.
+     *
+     * @param currentTimeMs Current time, in milliseconds
+     * @param timeoutMs     Timeout, in milliseconds
+     *
+     * @return Absolute time by which event should be completed
+     */
+    static long calculateDeadlineMs(final long currentTimeMs, final long timeoutMs) {
+        if (currentTimeMs > Long.MAX_VALUE - timeoutMs)
             return Long.MAX_VALUE;
         else
-            return currentTimeMs + remainingMs;
+            return currentTimeMs + timeoutMs;
     }
 }

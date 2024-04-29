@@ -29,6 +29,9 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent impl
     private final CompletableFuture<T> future;
     private final long deadlineMs;
 
+    /**
+     * <em>Note</em>: the {@code deadlineMs} is the future time of expiration, <em>not</em> a timeout.
+     */
     protected CompletableBackgroundEvent(final Type type, final long deadlineMs) {
         super(type);
         this.future = new CompletableFuture<>();
