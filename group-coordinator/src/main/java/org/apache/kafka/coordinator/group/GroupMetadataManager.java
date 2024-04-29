@@ -367,7 +367,7 @@ public class GroupMetadataManager {
      * Package private for testing.
      */
     static final CoordinatorResult<Void, Record> EMPTY_RESULT =
-        new CoordinatorResult<>(Collections.emptyList(), CompletableFuture.completedFuture(null));
+        new CoordinatorResult<>(Collections.emptyList(), CompletableFuture.completedFuture(null), false);
 
     /**
      * The maximum number of members allowed in a single classic group.
@@ -1524,7 +1524,8 @@ public class GroupMetadataManager {
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
                 .setMemberEpoch(memberEpoch),
-            appendFuture
+            appendFuture,
+            appendFuture == null
         );
     }
 
@@ -1638,7 +1639,7 @@ public class GroupMetadataManager {
 
                 List<Record> records = new ArrayList<>();
                 CompletableFuture<Void> appendFuture = consumerGroupFenceMember(group, member, records);
-                return new CoordinatorResult<>(records, appendFuture);
+                return new CoordinatorResult<>(records, appendFuture, appendFuture == null);
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
@@ -1691,7 +1692,7 @@ public class GroupMetadataManager {
 
                     List<Record> records = new ArrayList<>();
                     CompletableFuture<Void> appendFuture = consumerGroupFenceMember(group, member, records);
-                    return new CoordinatorResult<>(records, appendFuture);
+                    return new CoordinatorResult<>(records, appendFuture, appendFuture == null);
                 } else {
                     log.debug("[GroupId {}] Ignoring rebalance timeout for {} because the member " +
                         "left the epoch {}.", groupId, memberId, memberEpoch);
@@ -2300,7 +2301,7 @@ public class GroupMetadataManager {
                     RecordHelpers.newEmptyGroupMetadataRecord(group, metadataImage.features().metadataVersion())
                 );
 
-                return new CoordinatorResult<>(records, appendFuture);
+                return new CoordinatorResult<>(records, appendFuture, appendFuture == null);
             }
         }
         return result;
@@ -2718,7 +2719,7 @@ public class GroupMetadataManager {
                 List<Record> records = Collections.singletonList(RecordHelpers.newGroupMetadataRecord(
                     group, Collections.emptyMap(), metadataImage.features().metadataVersion()));
 
-                return new CoordinatorResult<>(records, appendFuture);
+                return new CoordinatorResult<>(records, appendFuture, appendFuture == null);
 
             } else {
                 log.info("Stabilized group {} generation {} with {} members.",
@@ -3381,7 +3382,7 @@ public class GroupMetadataManager {
                     RecordHelpers.newGroupMetadataRecord(group, groupAssignment, metadataImage.features().metadataVersion())
                 );
 
-                return new CoordinatorResult<>(records, appendFuture);
+                return new CoordinatorResult<>(records, appendFuture, appendFuture == null);
             } else {
                 return maybePrepareRebalanceOrCompleteJoin(
                     group,
@@ -3497,7 +3498,7 @@ public class GroupMetadataManager {
                 List<Record> records = Collections.singletonList(
                     RecordHelpers.newGroupMetadataRecord(group, assignment, metadataImage.features().metadataVersion())
                 );
-                return new CoordinatorResult<>(records, appendFuture);
+                return new CoordinatorResult<>(records, appendFuture, appendFuture == null);
             }
         } else if (group.isInState(STABLE)) {
             removePendingSyncMember(group, memberId);
@@ -3772,7 +3773,8 @@ public class GroupMetadataManager {
             coordinatorResult.records(),
             new LeaveGroupResponseData()
                 .setMembers(memberResponses),
-            coordinatorResult.appendFuture()
+            coordinatorResult.appendFuture(),
+            coordinatorResult.appendFuture() == null
         );
     }
 

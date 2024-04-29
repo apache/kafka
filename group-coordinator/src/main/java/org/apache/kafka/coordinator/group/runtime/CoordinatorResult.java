@@ -44,8 +44,8 @@ public class CoordinatorResult<T, U> {
     private final CompletableFuture<Void> appendFuture;
 
     /**
-     * The boolean indicating whether to replay the records. Without specifying.
-     * The default value is {@code appendFuture == null}.
+     * The boolean indicating whether to replay the records.
+     * The default value is {@code true} unless specified otherwise.
      */
     private final Boolean replayRecords;
 
@@ -67,36 +67,23 @@ public class CoordinatorResult<T, U> {
      *
      * @param records       A non-null list of records.
      * @param appendFuture  The future to complete once the records are committed.
+     * @param replayRecords The replayRecords.
      */
     public CoordinatorResult(
         List<U> records,
-        CompletableFuture<Void> appendFuture
+        CompletableFuture<Void> appendFuture,
+        boolean replayRecords
     ) {
-        this(records, null, appendFuture, appendFuture == null);
-    }
-
-    /**
-     * Constructs a Result with records, a response, and an append-future.
-     *
-     * @param records       A non-null list of records.
-     * @param response      A response.
-     * @param appendFuture  The future to complete once the records are committed.
-     */
-    public CoordinatorResult(
-        List<U> records,
-        T response,
-        CompletableFuture<Void> appendFuture
-    ) {
-        this(records, response, appendFuture, appendFuture == null);
+        this(records, null, appendFuture, replayRecords);
     }
 
     /**
      * Constructs a Result with records, a response, an append-future, and replayRecords.
      *
-     * @param records
-     * @param response
-     * @param appendFuture
-     * @param replayRecords
+     * @param records       A non-null list of records.
+     * @param response      A response.
+     * @param appendFuture  The future to complete once the records are committed.
+     * @param replayRecords The replayRecords.
      */
     public CoordinatorResult(
         List<U> records,
@@ -107,7 +94,7 @@ public class CoordinatorResult<T, U> {
         this.records = Objects.requireNonNull(records);
         this.response = response;
         this.appendFuture = appendFuture;
-        this.replayRecords = Objects.requireNonNull(replayRecords);
+        this.replayRecords = replayRecords;
     }
 
     /**
