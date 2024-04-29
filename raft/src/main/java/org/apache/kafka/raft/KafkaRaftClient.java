@@ -1881,12 +1881,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             clusterId,
             quorum().localIdOrSentinel(),
             log.topicPartition(),
-            snapshotPartition -> {
-                return snapshotPartition
-                    .setCurrentLeaderEpoch(quorum.epoch())
-                    .setSnapshotId(requestSnapshotId)
-                    .setPosition(snapshotSize);
-            }
+            snapshotPartition -> snapshotPartition
+                .setCurrentLeaderEpoch(quorum.epoch())
+                .setSnapshotId(requestSnapshotId)
+                .setPosition(snapshotSize)
         );
 
         return request.setReplicaId(quorum.localIdOrSentinel());

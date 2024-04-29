@@ -253,7 +253,7 @@ public class KRaftMigrationDriverTest {
             MetadataImage image = MetadataImage.EMPTY;
             MetadataDelta delta = new MetadataDelta(image);
 
-            driver.start();
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
             setupDeltaForMigration(delta, registerControllers);
             delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
             delta.replay(zkBrokerRecord(1));
@@ -338,7 +338,7 @@ public class KRaftMigrationDriverTest {
             MetadataDelta delta = new MetadataDelta(image);
             setupDeltaForMigration(delta, true);
 
-            driver.start();
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
             delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
             delta.replay(zkBrokerRecord(1));
             delta.replay(zkBrokerRecord(2));
@@ -360,6 +360,62 @@ public class KRaftMigrationDriverTest {
             } else {
                 Assertions.assertNull(faultHandler.firstException());
             }
+        }
+    }
+
+    @Test
+    public void testMigrationWithClientExceptionWhileMigratingZnodeCreation() throws Exception {
+        CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
+        // suppose the ZNode creation failed 3 times
+        CountDownLatch createZnodeAttempts = new CountDownLatch(3);
+        CapturingMigrationClient migrationClient = new CapturingMigrationClient(new HashSet<>(Arrays.asList(1, 2, 3)),
+                new CapturingTopicMigrationClient(),
+                new CapturingConfigMigrationClient(),
+                new CapturingAclMigrationClient(),
+                new CapturingDelegationTokenMigrationClient(),
+                CapturingMigrationClient.EMPTY_BATCH_SUPPLIER) {
+            @Override
+            public ZkMigrationLeadershipState getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState initialState) {
+                if (createZnodeAttempts.getCount() == 0) {
+                    this.setMigrationRecoveryState(initialState);
+                    return initialState;
+                } else {
+                    createZnodeAttempts.countDown();
+                    throw new MigrationClientException("Some kind of ZK error!");
+                }
+            }
+        };
+        MockFaultHandler faultHandler = new MockFaultHandler("testMigrationClientExpiration");
+        KRaftMigrationDriver.Builder builder = defaultTestBuilder()
+                .setZkMigrationClient(migrationClient)
+                .setFaultHandler(faultHandler)
+                .setPropagator(metadataPropagator);
+        try (KRaftMigrationDriver driver = builder.build()) {
+            MetadataImage image = MetadataImage.EMPTY;
+            MetadataDelta delta = new MetadataDelta(image);
+            setupDeltaForMigration(delta, true);
+
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
+
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
+            delta.replay(zkBrokerRecord(1));
+            delta.replay(zkBrokerRecord(2));
+            delta.replay(zkBrokerRecord(3));
+            MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
+            image = delta.apply(provenance);
+            // Before leadership claiming, the getOrCreateMigrationRecoveryState should be able to get correct state
+            assertTrue(createZnodeAttempts.await(1, TimeUnit.MINUTES));
+
+            // Notify the driver that it is the leader
+            driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 1));
+            // Publish metadata of all the ZK brokers being ready
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance,
+                    new LeaderAndEpoch(OptionalInt.of(3000), 1)).build());
+
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
+                    "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
+
+            Assertions.assertNull(faultHandler.firstException());
         }
     }
 
@@ -413,7 +469,7 @@ public class KRaftMigrationDriverTest {
             MetadataImage image = MetadataImage.EMPTY;
             MetadataDelta delta = new MetadataDelta(image);
 
-            driver.start();
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
             if (allNodePresent) {
                 setupDeltaWithControllerRegistrations(delta, Arrays.asList(4, 5, 6), Arrays.asList());
             } else {
@@ -469,7 +525,7 @@ public class KRaftMigrationDriverTest {
             migrationClient.setMigrationRecoveryState(
                 ZkMigrationLeadershipState.EMPTY.withKRaftMetadataOffsetAndEpoch(100, 1));
 
-            driver.start();
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
             delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
             delta.replay(zkBrokerRecord(1));
             delta.replay(zkBrokerRecord(2));
@@ -483,7 +539,7 @@ public class KRaftMigrationDriverTest {
                 new LeaderAndEpoch(OptionalInt.of(3000), 1)).build());
 
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
-                "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
+                "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
         }
     }
 
@@ -546,7 +602,7 @@ public class KRaftMigrationDriverTest {
                 DelegationTokenImage.EMPTY);
             MetadataDelta delta = new MetadataDelta(image);
 
-            driver.start();
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
             setupDeltaForMigration(delta, true);
             delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
             delta.replay(zkBrokerRecord(0));
@@ -565,7 +621,7 @@ public class KRaftMigrationDriverTest {
 
             // Wait for migration
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
-                "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
+                "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
 
             // Modify topics in a KRaft snapshot -- delete foo, modify bar, add baz, add new foo, add bam, delete bam
             provenance = new MetadataProvenance(200, 1, 1);
@@ -601,7 +657,7 @@ public class KRaftMigrationDriverTest {
                 DelegationTokenImage.EMPTY);
             MetadataDelta delta = new MetadataDelta(image);
 
-            driver.start();
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
             setupDeltaForMigration(delta, true);
             delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
             delta.replay(zkBrokerRecord(0));
@@ -656,7 +712,7 @@ public class KRaftMigrationDriverTest {
                 DelegationTokenImage.EMPTY);
             MetadataDelta delta = new MetadataDelta(image);
 
-            driver.start();
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
             setupDeltaForMigration(delta, true);
             delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
             delta.replay(zkBrokerRecord(0));
@@ -673,7 +729,7 @@ public class KRaftMigrationDriverTest {
             driver.onControllerChange(newLeader);
 
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM),
-                "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
+                "Waiting for KRaftMigrationDriver to enter WAIT_FOR_CONTROLLER_QUORUM state");
 
             driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
 
@@ -711,7 +767,7 @@ public class KRaftMigrationDriverTest {
                 DelegationTokenImage.EMPTY);
             MetadataDelta delta = new MetadataDelta(image);
 
-            driver.start();
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
             setupDeltaForMigration(delta, true);
             delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
             delta.replay(zkBrokerRecord(0));
@@ -778,7 +834,7 @@ public class KRaftMigrationDriverTest {
             MetadataImage image = MetadataImage.EMPTY;
             MetadataDelta delta = new MetadataDelta(image);
 
-            driver.start();
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
             setupDeltaForMigration(delta, true);
             delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
             delta.replay(zkBrokerRecord(1));
@@ -798,7 +854,7 @@ public class KRaftMigrationDriverTest {
                 new LeaderAndEpoch(OptionalInt.of(3000), 1)).build());
 
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
-                    "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
+                    "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
             assertEquals(1, migrationBeginCalls.get());
         }
     }
@@ -864,7 +920,7 @@ public class KRaftMigrationDriverTest {
             MetadataImage image = MetadataImage.EMPTY;
             MetadataDelta delta = new MetadataDelta(image);
 
-            driver.start();
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
             setupDeltaForMigration(delta, true);
             delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
             delta.replay(zkBrokerRecord(1));
@@ -881,10 +937,18 @@ public class KRaftMigrationDriverTest {
                     new LeaderAndEpoch(OptionalInt.of(3000), 1)).build());
 
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
-                    "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
+                    "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
 
             assertEquals(expectedBatchCount, batchesPassedToController.size());
             assertEquals(expectedRecordCount, batchesPassedToController.stream().mapToInt(List::size).sum());
         }
+    }
+
+    // Wait until the driver has recovered MigrationState From ZK. This is to simulate the driver needs to be installed as the metadata publisher
+    // so that it can receive onControllerChange (KRaftLeaderEvent) and onMetadataUpdate (MetadataChangeEvent) events.
+    private void startAndWaitForRecoveringMigrationStateFromZK(KRaftMigrationDriver driver) throws InterruptedException {
+        driver.start();
+        TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.INACTIVE),
+                "Waiting for KRaftMigrationDriver to enter INACTIVE state");
     }
 }

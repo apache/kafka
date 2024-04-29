@@ -16,7 +16,6 @@
  */
 package kafka.server
 
-import java.util.Properties
 import kafka.test.ClusterInstance
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -27,7 +26,6 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.RecordVersion
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, RequestUtils}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -46,18 +44,6 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
       cluster.brokerSocketServers().asScala.head
     }
     IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, socket, listenerName)
-  }
-
-  // Configure control plane listener to make sure we have separate listeners for testing.
-  def brokerPropertyOverrides(properties: Properties): Unit = {
-    if (!cluster.isKRaftTest) {
-      val controlPlaneListenerName = "CONTROL_PLANE"
-      val securityProtocol = cluster.config().securityProtocol()
-      properties.setProperty(SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG, controlPlaneListenerName)
-      properties.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"$controlPlaneListenerName:$securityProtocol,$securityProtocol:$securityProtocol")
-      properties.setProperty("listeners", s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
-      properties.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
-    }
   }
 
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {

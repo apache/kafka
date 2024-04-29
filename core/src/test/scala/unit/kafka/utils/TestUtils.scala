@@ -74,9 +74,10 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs, QuotaConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs, QuotaConfigs, ZkConfigs}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
@@ -333,12 +334,12 @@ object TestUtils extends Logging {
     val props = new Properties
     props.put(KafkaConfig.UnstableMetadataVersionsEnableProp, "true")
     if (zkConnect == null) {
-      props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
-      props.put(KafkaConfig.NodeIdProp, nodeId.toString)
+      props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
+      props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
       props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
       props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, listeners)
       props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners)
-      props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
       props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, protocolAndPorts.
         map(p => "%s:%s".format(p._1, p._1)).mkString(",") + ",CONTROLLER:PLAINTEXT")
     } else {
@@ -356,12 +357,12 @@ object TestUtils extends Logging {
       props.put(ServerLogConfigs.LOG_DIR_CONFIG, tempDir().getAbsolutePath)
     }
     if (zkConnect == null) {
-      props.put(KafkaConfig.ProcessRolesProp, "broker")
+      props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
       // Note: this is just a placeholder value for controller.quorum.voters. JUnit
       // tests use random port assignment, so the controller ports are not known ahead of
       // time. Therefore, we ignore controller.quorum.voters and use
       // controllerQuorumVotersFuture instead.
-      props.put(KafkaConfig.QuorumVotersProp, "1000@localhost:0")
+      props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1000@localhost:0")
     } else {
       props.put(ZkConfigs.ZK_CONNECT_CONFIG, zkConnect)
       props.put(ZkConfigs.ZK_CONNECTION_TIMEOUT_MS_CONFIG, "10000")

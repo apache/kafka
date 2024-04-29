@@ -571,7 +571,7 @@ public class LeaderStateTest {
     }
 
     private DescribeQuorumResponseData.ReplicaState describeVoterState(
-        LeaderState state,
+        LeaderState<?> state,
         int voterId,
         long currentTimeMs
     ) {
@@ -580,7 +580,7 @@ public class LeaderStateTest {
     }
 
     private DescribeQuorumResponseData.ReplicaState describeObserverState(
-        LeaderState state,
+        LeaderState<?> state,
         int observerId,
         long currentTimeMs
     ) {

@@ -1501,7 +1501,7 @@ project(':clients') {
     // dependencies excluded from the final jar, since they are declared as runtime dependencies
     dependencies {
       project.configurations.shadowed.allDependencies.each {
-        exclude(dependency(it.group + ':' + it.name + ':' + it.version))
+        exclude(dependency(it.group + ':' + it.name))
       }
       // exclude proto files from the jar
       exclude "**/opentelemetry/proto/**/*.proto"
@@ -2782,6 +2782,7 @@ project(':jmh-benchmarks') {
     }
     implementation project(':server-common')
     implementation project(':server')
+    implementation project(':raft')
     implementation project(':clients')
     implementation project(':group-coordinator')
     implementation project(':metadata')
