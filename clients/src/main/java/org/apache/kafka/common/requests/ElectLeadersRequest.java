@@ -20,6 +20,7 @@ package org.apache.kafka.common.requests;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
@@ -73,6 +74,9 @@ public class ElectLeadersRequest extends AbstractRequest {
                     if (tps == null) {
                         tps = new ElectLeadersRequestData.TopicPartitions().setTopic(tp.topic());
                         data.topicPartitions().add(tps);
+                    }
+                    if(tps.desiredLeaders().size() != tps.partitions().size()) {
+                        throw new IllegalStateException("Both desiredLeaders and partitions must be the same size");
                     }
                     tps.partitions().add(tp.partition());
                 });
