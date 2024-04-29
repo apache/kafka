@@ -248,7 +248,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def _worker(self, idx, node):
         with self.lock:
             if node not in self.event_handlers:
-                if self._isEager():
+                if self.is_eager():
                     self.event_handlers[node] = ConsumerEventHandler(node, self.verify_offsets, idx)
                 else:
                     self.event_handlers[node] = IncrementalAssignmentConsumerEventHandler(node, self.verify_offsets, idx)
@@ -307,7 +307,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                     else:
                         self.logger.debug("%s: ignoring unknown event: %s" % (str(node.account), event))
 
-    def _isEager(self):
+    def is_eager(self):
         return self.group_protocol == consumer_group.classic_group_protocol and self.assignment_strategy != "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"
     
     def _update_global_position(self, consumed_event, node):
