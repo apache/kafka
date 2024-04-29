@@ -62,9 +62,8 @@ import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializ
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.{PasswordEncoder, PasswordEncoderConfigs}
-import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ZkConfigs}
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
@@ -306,7 +305,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val updatedProps = new Properties
     updatedProps.setProperty("config.providers", "file")
     updatedProps.setProperty("config.providers.file.class", "kafka.server.MockFileConfigProvider")
-    updatedProps.put(KafkaConfig.MetricReporterClassesProp, classOf[TestMetricsReporter].getName)
+    updatedProps.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, classOf[TestMetricsReporter].getName)
 
     // 1. update Integer property using config provider
     updatedProps.put(TestMetricsReporter.PollingIntervalProp, PollingIntervalVal)
@@ -991,10 +990,10 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     newReporters.foreach(_.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 2000))
 
     // Verify that validation failure of metrics reporter fails reconfiguration and leaves config unchanged
-    newProps.put(KafkaConfig.MetricReporterClassesProp, "unknownMetricsReporter")
+    newProps.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, "unknownMetricsReporter")
     reconfigureServers(newProps, perBrokerConfig = false, (TestMetricsReporter.PollingIntervalProp, "2000"), expectFailure = true)
     servers.foreach { server =>
-      assertEquals(classOf[TestMetricsReporter].getName, server.config.originals.get(KafkaConfig.MetricReporterClassesProp))
+      assertEquals(classOf[TestMetricsReporter].getName, server.config.originals.get(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG))
     }
     newReporters.foreach(_.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 2000))
 
@@ -1009,7 +1008,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Verify that even though metrics reporters can be defined at default cluster level for consistent
     // configuration across brokers, they can also be defined at per-broker level for testing
-    newProps.put(KafkaConfig.MetricReporterClassesProp, classOf[TestMetricsReporter].getName)
+    newProps.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, classOf[TestMetricsReporter].getName)
     newProps.put(TestMetricsReporter.PollingIntervalProp, "4000")
     alterConfigsOnServer(servers.head, newProps)
     TestUtils.waitUntilTrue(() => !TestMetricsReporter.testReporters.isEmpty, "Metrics reporter not created")
@@ -1021,7 +1020,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     alterConfigsOnServer(servers.head, newProps)
     perBrokerReporter.verifyState(reconfigureCount = 1, deleteCount = 0, pollingInterval = 3000)
 
-    servers.tail.foreach { server => assertEquals("", server.config.originals.get(KafkaConfig.MetricReporterClassesProp)) }
+    servers.tail.foreach { server => assertEquals("", server.config.originals.get(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG)) }
 
     // Verify that produce/consume worked throughout this test without any retries in producer
     stopAndVerifyProduceConsume(producerThread, consumerThread)
@@ -1647,8 +1646,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private def configureMetricsReporters(reporters: Seq[Class[_]], props: Properties,
                                         perBrokerConfig: Boolean = false): Unit = {
     val reporterStr = reporters.map(_.getName).mkString(",")
-    props.put(KafkaConfig.MetricReporterClassesProp, reporterStr)
-    reconfigureServers(props, perBrokerConfig, (KafkaConfig.MetricReporterClassesProp, reporterStr))
+    props.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, reporterStr)
+    reconfigureServers(props, perBrokerConfig, (MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, reporterStr))
   }
 
   private def invalidSslConfigs: Properties = {
