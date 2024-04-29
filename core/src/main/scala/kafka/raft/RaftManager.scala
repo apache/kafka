@@ -41,7 +41,7 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, RaftClient, RaftConfig, ReplicatedLog}
+import org.apache.kafka.raft.{FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, RaftClient, QuorumConfig, ReplicatedLog}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.KafkaScheduler
@@ -74,7 +74,7 @@ object KafkaRaftManager {
   /**
    * Test if the configured metadata log dir is one of the data log dirs.
    */
-  def hasDifferentLogDir(config: KafkaConfig): Boolean = {
+  private def hasDifferentLogDir(config: KafkaConfig): Boolean = {
     !config
       .logDirs
       .map(Paths.get(_).toAbsolutePath)
@@ -150,7 +150,7 @@ class KafkaRaftManager[T](
 ) extends RaftManager[T] with Logging {
 
   val apiVersions = new ApiVersions()
-  private val raftConfig = new RaftConfig(config)
+  private val raftConfig = new QuorumConfig(config)
   private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
   private val logContext = new LogContext(s"[RaftManager id=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix()

@@ -32,7 +32,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -55,7 +54,7 @@ public class KafkaRaftMetricsTest {
     private final Random random = new Random(1);
     private KafkaRaftMetrics raftMetrics;
 
-    private BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
+    private final BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
 
     @AfterEach
     public void tearDown() {
@@ -81,7 +80,7 @@ public class KafkaRaftMetricsTest {
     }
 
     @Test
-    public void shouldRecordVoterQuorumState() throws IOException {
+    public void shouldRecordVoterQuorumState() {
         QuorumState state = buildQuorumState(Utils.mkSet(localId, 1, 2));
 
         state.initialize(new OffsetAndEpoch(0L, 0));
@@ -138,7 +137,7 @@ public class KafkaRaftMetricsTest {
     }
 
     @Test
-    public void shouldRecordNonVoterQuorumState() throws IOException {
+    public void shouldRecordNonVoterQuorumState() {
         QuorumState state = buildQuorumState(Utils.mkSet(1, 2, 3));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
@@ -168,7 +167,7 @@ public class KafkaRaftMetricsTest {
     }
 
     @Test
-    public void shouldRecordLogEnd() throws IOException {
+    public void shouldRecordLogEnd() {
         QuorumState state = buildQuorumState(Collections.singleton(localId));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
@@ -183,7 +182,7 @@ public class KafkaRaftMetricsTest {
     }
 
     @Test
-    public void shouldRecordNumUnknownVoterConnections() throws IOException {
+    public void shouldRecordNumUnknownVoterConnections() {
         QuorumState state = buildQuorumState(Collections.singleton(localId));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
@@ -268,7 +267,7 @@ public class KafkaRaftMetricsTest {
     }
 
     @Test
-    public void shouldRecordLatency() throws IOException {
+    public void shouldRecordLatency() {
         QuorumState state = buildQuorumState(Collections.singleton(localId));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
@@ -299,7 +298,7 @@ public class KafkaRaftMetricsTest {
     }
 
     @Test
-    public void shouldRecordRate() throws IOException {
+    public void shouldRecordRate() {
         QuorumState state = buildQuorumState(Collections.singleton(localId));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);

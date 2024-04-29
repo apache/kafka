@@ -66,7 +66,7 @@ import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.raft.internals.BlockingMessageQueue;
 import org.apache.kafka.raft.internals.CloseListener;
 import org.apache.kafka.raft.internals.FuturePurgatory;
-import org.apache.kafka.raft.internals.PartitionListener;
+import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.raft.internals.RecordsBatchReader;
@@ -166,7 +166,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     private final RecordSerde<T> serde;
     private final MemoryPool memoryPool;
     private final RaftMessageQueue messageQueue;
-    private final RaftConfig raftConfig;
+    private final QuorumConfig quorumConfig;
     private final RaftMetadataLogCleanerManager snapshotCleaner;
 
     private final Map<Listener<T>, ListenerContext> listenerContexts = new IdentityHashMap<>();
@@ -174,14 +174,14 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
     // These components need to be initialized by the method initialize() because they depend on the voter set
     /*
-     * The key invariant for the internal listener is that it has always read to the LEO. This is achived by:
+     * The key invariant for the kraft control record state machine is that it has always read to the LEO. This is achived by:
      * 1. reading the entire partition (snapshot and log) at start up,
-     * 2. updating the internal log listener when a snapshot is replaced, because of FETCH_SNAPSHOT, on the followers
-     * 3. updating the internal log listener when the leader (call to append()) or follower (FETCH) appends to the log
-     * 4. truncate the internal log listener when a follower truncates their log
-     * 5. trim the internal listener prefix when a snapshot gets generated
+     * 2. updating the state when a snapshot is replaced, because of FETCH_SNAPSHOT, on the followers
+     * 3. updating the state when the leader (call to append()) or follower (FETCH) appends to the log
+     * 4. truncate new entries when a follower truncates their log
+     * 5. truncate old entries when a snapshot gets generated
      */
-    private volatile PartitionListener partitionListener;
+    private volatile KRaftControlRecordStateMachine partitionState;
     private volatile KafkaRaftMetrics kafkaRaftMetrics;
     private volatile QuorumState quorum;
     private volatile RequestManager requestManager;
@@ -202,7 +202,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         ExpirationService expirationService,
         LogContext logContext,
         String clusterId,
-        RaftConfig raftConfig
+        QuorumConfig quorumConfig
     ) {
         this(
             nodeId,
@@ -218,7 +218,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             clusterId,
             logContext,
             new Random(),
-            raftConfig
+            quorumConfig
         );
     }
 
@@ -236,7 +236,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         String clusterId,
         LogContext logContext,
         Random random,
-        RaftConfig raftConfig
+        QuorumConfig quorumConfig
     ) {
         this.nodeId = nodeId;
         this.nodeUuid = nodeUuid;
@@ -253,7 +253,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         this.fetchMaxWaitMs = fetchMaxWaitMs;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
-        this.raftConfig = raftConfig;
+        this.quorumConfig = quorumConfig;
         this.snapshotCleaner = new RaftMetadataLogCleanerManager(logger, time, 60000, log::maybeClean);
     }
 
@@ -375,7 +375,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         QuorumStateStore quorumStateStore,
         Metrics metrics
     ) {
-        partitionListener = new PartitionListener(
+        partitionState = new KRaftControlRecordStateMachine(
             Optional.of(VoterSet.fromAddressSpecs(listenerName, voterAddresses)),
             log,
             serde,
@@ -385,22 +385,22 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         );
         // Read the entire log
         logger.info("Reading KRaft snapshot and log as part of the initialization");
-        partitionListener.updateListener();
+        partitionState.updateState();
 
         requestManager = new RequestManager(
-            partitionListener.lastVoterSet().voterIds(),
-            raftConfig.retryBackoffMs(),
-            raftConfig.requestTimeoutMs(),
+            partitionState.lastVoterSet().voterIds(),
+            quorumConfig.retryBackoffMs(),
+            quorumConfig.requestTimeoutMs(),
             random
         );
 
         quorum = new QuorumState(
             nodeId,
             nodeUuid,
-            partitionListener::lastVoterSet,
-            partitionListener::lastKraftVersion,
-            raftConfig.electionTimeoutMs(),
-            raftConfig.fetchTimeoutMs(),
+            partitionState::lastVoterSet,
+            partitionState::lastKraftVersion,
+            quorumConfig.electionTimeoutMs(),
+            quorumConfig.fetchTimeoutMs(),
             quorumStateStore,
             time,
             logContext,
@@ -412,7 +412,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         // so there are no unknown voter connections. Report this metric as 0.
         kafkaRaftMetrics.updateNumUnknownVoterConnections(0);
 
-        VoterSet lastVoterSet = partitionListener.lastVoterSet();
+        VoterSet lastVoterSet = partitionState.lastVoterSet();
         for (Integer voterId : lastVoterSet.voterIds()) {
             channel.updateEndpoint(voterId, lastVoterSet.voterAddress(voterId, listenerName).get());
         }
@@ -475,7 +475,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         BatchAccumulator<T> accumulator = new BatchAccumulator<>(
             quorum.epoch(),
             endOffset,
-            raftConfig.appendLingerMs(),
+            quorumConfig.appendLingerMs(),
             MAX_BATCH_SIZE_BYTES,
             memoryPool,
             time,
@@ -704,7 +704,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         }
         // upper limit exponential co-efficients at 20 to avoid overflow
         return Math.min(RETRY_BACKOFF_BASE_MS * random.nextInt(2 << Math.min(20, retries - 1)),
-                raftConfig.electionBackoffMaxMs());
+                quorumConfig.electionBackoffMaxMs());
     }
 
     private int strictExponentialElectionBackoffMs(int positionInSuccessors, int totalNumSuccessors) {
@@ -713,8 +713,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                     " and smaller than total number of successors " + totalNumSuccessors);
         }
 
-        int retryBackOffBaseMs = raftConfig.electionBackoffMaxMs() >> (totalNumSuccessors - 1);
-        return Math.min(raftConfig.electionBackoffMaxMs(), retryBackOffBaseMs << (positionInSuccessors - 1));
+        int retryBackOffBaseMs = quorumConfig.electionBackoffMaxMs() >> (totalNumSuccessors - 1);
+        return Math.min(quorumConfig.electionBackoffMaxMs(), retryBackOffBaseMs << (positionInSuccessors - 1));
     }
 
     private BeginQuorumEpochResponseData buildBeginQuorumEpochResponse(Errors partitionLevelError) {
@@ -1186,7 +1186,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                 );
 
                 // Update the internal listener to the new end offset
-                partitionListener.truncateTo(truncationOffset);
+                partitionState.truncateNewEntries(truncationOffset);
             } else if (partitionResponse.snapshotId().epoch() >= 0 ||
                        partitionResponse.snapshotId().endOffset() >= 0) {
                 // The leader is asking us to fetch a snapshot
@@ -1249,7 +1249,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             log.flush(false);
         }
 
-        partitionListener.updateListener();
+        partitionState.updateState();
 
         OffsetAndEpoch endOffset = endOffset();
         kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
@@ -1262,7 +1262,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         LogAppendInfo info = log.appendAsLeader(records, quorum.epoch());
 
-        partitionListener.updateListener();
+        partitionState.updateState();
 
         OffsetAndEpoch endOffset = endOffset();
         kafkaRaftMetrics.updateAppendRecords(info.lastOffset - info.firstOffset + 1);
@@ -1524,9 +1524,9 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                     quorum.leaderIdOrSentinel()
                 );
 
-                // This will aways reload the snapshot because the internal listener's next offset
+                // This will aways reload the snapshot because the internal next offset
                 // is always less than the snapshot id just downloaded.
-                partitionListener.updateListener();
+                partitionState.updateState();
 
                 updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark().offset));
             } else {
@@ -1938,12 +1938,10 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             clusterId,
             quorum().localIdOrSentinel(),
             log.topicPartition(),
-            snapshotPartition -> {
-                return snapshotPartition
-                    .setCurrentLeaderEpoch(quorum.epoch())
-                    .setSnapshotId(requestSnapshotId)
-                    .setPosition(snapshotSize);
-            }
+            snapshotPartition -> snapshotPartition
+                .setCurrentLeaderEpoch(quorum.epoch())
+                .setSnapshotId(requestSnapshotId)
+                .setPosition(snapshotSize)
         );
 
         return request.setReplicaId(quorum.localIdOrSentinel());
@@ -2492,8 +2490,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             long lastContainedLogOffset = snapshotId.offset() - 1;
 
             RawSnapshotWriter wrappedWriter = new NotifyingRawSnapshotWriter(writer, offsetAndEpoch -> {
-                // Trim the state in the internal starting with the new starting offset
-                partitionListener.trimPrefixTo(offsetAndEpoch.offset());
+                // Trim the state in the internal listener up to the new snapshot
+                partitionState.truncateOldEntries(offsetAndEpoch.offset());
             });
 
             return new RecordsSnapshotWriter.Builder()
@@ -2502,8 +2500,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                 .setMaxBatchSize(MAX_BATCH_SIZE_BYTES)
                 .setMemoryPool(memoryPool)
                 .setRawSnapshotWriter(wrappedWriter)
-                .setKraftVersion(partitionListener.kraftVersionAtOffset(lastContainedLogOffset))
-                .setVoterSet(partitionListener.voterSetAtOffset(lastContainedLogOffset))
+                .setKraftVersion(partitionState.kraftVersionAtOffset(lastContainedLogOffset))
+                .setVoterSet(partitionState.voterSetAtOffset(lastContainedLogOffset))
                 .build(serde);
         });
     }
@@ -2546,7 +2544,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private boolean isInitialized() {
-        return partitionListener != null && quorum != null && requestManager != null && kafkaRaftMetrics != null;
+        return partitionState != null && quorum != null && requestManager != null && kafkaRaftMetrics != null;
     }
 
     private class GracefulShutdown {

@@ -830,10 +830,20 @@ public class MemoryRecords extends AbstractRecords {
         KRaftVersionRecord kraftVersionRecord
     ) {
         try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
-            buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-            TimestampType.CREATE_TIME, initialOffset, timestamp,
-            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-            false, true, leaderEpoch, buffer.capacity())
+                buffer,
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                CompressionType.NONE,
+                TimestampType.CREATE_TIME,
+                initialOffset,
+                timestamp,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                RecordBatch.NO_SEQUENCE,
+                false,
+                true,
+                leaderEpoch,
+                buffer.capacity()
+            )
         ) {
             builder.appendKRaftVersionMessage(timestamp, kraftVersionRecord);
         }
@@ -859,10 +869,20 @@ public class MemoryRecords extends AbstractRecords {
         VotersRecord votersRecord
     ) {
         try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
-            buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-            TimestampType.CREATE_TIME, initialOffset, timestamp,
-            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-            false, true, leaderEpoch, buffer.capacity())
+                buffer,
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                CompressionType.NONE,
+                TimestampType.CREATE_TIME,
+                initialOffset,
+                timestamp,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                RecordBatch.NO_SEQUENCE,
+                false,
+                true,
+                leaderEpoch,
+                buffer.capacity()
+            )
         ) {
             builder.appendVotersMessage(timestamp, votersRecord);
         }

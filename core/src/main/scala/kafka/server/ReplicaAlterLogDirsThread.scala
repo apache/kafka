@@ -116,7 +116,7 @@ class ReplicaAlterLogDirsThread(name: String,
 
   // Visible for testing
   private[server] def updateReassignmentState(topicPartition: TopicPartition, state: ReassignmentState): Unit = {
-    log.debug(s"Updating future replica ${topicPartition} reassignment state to ${state}")
+    log.debug(s"Updating future replica $topicPartition reassignment state to $state")
     promotionStates.put(topicPartition, promotionStates.get(topicPartition).withAssignment(state))
   }
 

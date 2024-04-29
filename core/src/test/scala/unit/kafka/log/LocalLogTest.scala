@@ -58,9 +58,7 @@ class LocalLogTest {
     try {
       log.close()
     } catch {
-      case _: KafkaStorageException => {
-        // ignore
-      }
+      case _: KafkaStorageException => // ignore
     }
     Utils.delete(tmpDir)
   }

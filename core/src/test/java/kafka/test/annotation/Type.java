@@ -31,27 +31,27 @@ public enum Type {
     KRAFT {
         @Override
         public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config.copyOf(), false));
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, false));
         }
     },
     CO_KRAFT {
         @Override
         public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config.copyOf(), true));
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, true));
         }
     },
     ZK {
         @Override
         public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config.copyOf()));
+            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config));
         }
     },
     ALL {
         @Override
         public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config.copyOf(), false));
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config.copyOf(), true));
-            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config.copyOf()));
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, false));
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, true));
+            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config));
         }
     },
     DEFAULT {

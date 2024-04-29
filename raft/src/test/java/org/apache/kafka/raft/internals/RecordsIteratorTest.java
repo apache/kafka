@@ -238,7 +238,7 @@ public final class RecordsIteratorTest {
             assertEquals(new KRaftVersionRecord().setKRaftVersion((short) 1), batch.controlRecords().get(1).message());
 
             // Check the voters control record
-            assertEquals(ControlRecordType.VOTERS, batch.controlRecords().get(2).type());
+            assertEquals(ControlRecordType.KRAFT_VOTERS, batch.controlRecords().get(2).type());
             assertEquals(voterSet.toVotersRecord((short) 0), batch.controlRecords().get(2).message());
 
             // Consume the iterator until we find a control record
@@ -260,7 +260,7 @@ public final class RecordsIteratorTest {
     @ParameterizedTest
     @EnumSource(
         value = ControlRecordType.class,
-        names = {"LEADER_CHANGE", "SNAPSHOT_HEADER", "SNAPSHOT_FOOTER", "KRAFT_VERSION", "VOTERS"}
+        names = {"LEADER_CHANGE", "SNAPSHOT_HEADER", "SNAPSHOT_FOOTER", "KRAFT_VERSION", "KRAFT_VOTERS"}
     )
     void testWithAllSupportedControlRecords(ControlRecordType type) {
         MemoryRecords records = buildControlRecords(type);
@@ -474,7 +474,7 @@ public final class RecordsIteratorTest {
                 return new SnapshotFooterRecord();
             case KRAFT_VERSION:
                 return new KRaftVersionRecord();
-            case VOTERS:
+            case KRAFT_VOTERS:
                 return new VotersRecord();
             default:
                 throw new RuntimeException("Should not happen. Poorly configured test");
@@ -491,8 +491,8 @@ public final class RecordsIteratorTest {
                 return ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION;
             case KRAFT_VERSION:
                 return ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION;
-            case VOTERS:
-                return ControlRecordUtils.VOTERS_CURRENT_VERSION;
+            case KRAFT_VOTERS:
+                return ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION;
             default:
                 throw new RuntimeException("Should not happen. Poorly configured test");
         }

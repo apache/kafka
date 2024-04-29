@@ -54,7 +54,7 @@ public class ControlRecordUtilsTest {
         );
         assertEquals(
             VotersRecord.HIGHEST_SUPPORTED_VERSION,
-            ControlRecordUtils.VOTERS_CURRENT_VERSION
+            ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION
         );
     }
 

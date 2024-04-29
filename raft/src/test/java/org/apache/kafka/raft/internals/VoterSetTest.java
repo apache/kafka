@@ -75,7 +75,7 @@ final public class VoterSetTest {
         VoterSet.VoterNode voter3 = aVoterMap.remove(3);
         assertEquals(
             Optional.of(new VoterSet(new HashMap<>(aVoterMap))),
-            voterSet.removeVoter(voter3.id(), voter3.uuid())
+            voterSet.removeVoter(voter3.id(), voter3.directoryId())
         );
     }
 
@@ -84,6 +84,76 @@ final public class VoterSetTest {
         VoterSet voterSet = new VoterSet(voterMap(Arrays.asList(1, 2, 3), true));
 
         assertEquals(voterSet, VoterSet.fromVotersRecord(voterSet.toVotersRecord((short) 0)));
+    }
+
+    @Test
+    void testOverlappingMajority() {
+        Map<Integer, VoterSet.VoterNode> startingVoterMap = voterMap(Arrays.asList(1, 2, 3), true);
+        VoterSet startingVoterSet = voterSet(startingVoterMap);
+
+        VoterSet biggerVoterSet = startingVoterSet
+            .addVoter(voterNode(4, true))
+            .get();
+        assertMajorities(true, startingVoterSet, biggerVoterSet);
+
+        VoterSet smallerVoterSet = startingVoterSet
+            .removeVoter(1, startingVoterMap.get(1).directoryId())
+            .get();
+        assertMajorities(true, startingVoterSet, smallerVoterSet);
+
+        VoterSet replacedVoterSet = startingVoterSet
+            .removeVoter(1, startingVoterMap.get(1).directoryId())
+            .get()
+            .addVoter(voterNode(1, true))
+            .get();
+        assertMajorities(true, startingVoterSet, replacedVoterSet);
+    }
+
+    @Test
+    void testNonoverlappingMajority() {
+        Map<Integer, VoterSet.VoterNode> startingVoterMap = voterMap(Arrays.asList(1, 2, 3, 4, 5), true);
+        VoterSet startingVoterSet = voterSet(startingVoterMap);
+
+        // Two additions don't have an overlapping majority
+        VoterSet biggerVoterSet = startingVoterSet
+            .addVoter(voterNode(6, true))
+            .get()
+            .addVoter(voterNode(7, true))
+            .get();
+        assertMajorities(false, startingVoterSet, biggerVoterSet);
+
+        // Two removals don't have an overlapping majority
+        VoterSet smallerVoterSet = startingVoterSet
+            .removeVoter(1, startingVoterMap.get(1).directoryId())
+            .get()
+            .removeVoter(2, startingVoterMap.get(2).directoryId())
+            .get();
+        assertMajorities(false, startingVoterSet, smallerVoterSet);
+
+        // Two replacements don't have an overlapping majority
+        VoterSet replacedVoterSet = startingVoterSet
+            .removeVoter(1, startingVoterMap.get(1).directoryId())
+            .get()
+            .addVoter(voterNode(1, true))
+            .get()
+            .removeVoter(2, startingVoterMap.get(2).directoryId())
+            .get()
+            .addVoter(voterNode(2, true))
+            .get();
+        assertMajorities(false, startingVoterSet, replacedVoterSet);
+    }
+
+    private void assertMajorities(boolean overlap, VoterSet a, VoterSet b) {
+        assertEquals(
+            overlap,
+            a.hasOverlappingMajority(b),
+            String.format("a = %s, b = %s", a, b)
+        );
+        assertEquals(
+            overlap,
+            b.hasOverlappingMajority(a),
+            String.format("b = %s, a = %s", b, a)
+        );
     }
 
     public static Map<Integer, VoterSet.VoterNode> voterMap(

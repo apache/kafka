@@ -664,8 +664,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     public void appendVotersMessage(long timestamp, VotersRecord votersRecord) {
         appendControlRecord(
             timestamp,
-            ControlRecordType.VOTERS,
-            MessageUtil.toByteBuffer(votersRecord, ControlRecordUtils.VOTERS_CURRENT_VERSION)
+            ControlRecordType.KRAFT_VOTERS,
+            MessageUtil.toByteBuffer(votersRecord, ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
         );
     }
 

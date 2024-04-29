@@ -33,7 +33,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * RaftConfig encapsulates configuration specific to the cluster metadata KRaft replicas.
+ * QuorumConfig encapsulates configuration specific to the cluster metadata KRaft replicas.
  *
  * The default raft timeouts are relatively low compared to some other timeouts such as
  * request.timeout.ms. This is part of a general design philosophy where we see changing
@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
  * controller should be able to transition from standby to active without reloading all of
  * the metadata. The standby is a "hot" standby, not a "cold" one.
  */
-public class RaftConfig {
+public class QuorumConfig {
 
     private static final String QUORUM_PREFIX = "controller.quorum.";
 
@@ -92,7 +92,7 @@ public class RaftConfig {
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
 
-    public RaftConfig(AbstractConfig abstractConfig) {
+    public QuorumConfig(AbstractConfig abstractConfig) {
         this(
             abstractConfig.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG),
             abstractConfig.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG),
@@ -103,7 +103,7 @@ public class RaftConfig {
         );
     }
 
-    public RaftConfig(
+    public QuorumConfig(
         int requestTimeoutMs,
         int retryBackoffMs,
         int electionTimeoutMs,
@@ -217,7 +217,7 @@ public class RaftConfig {
             }
 
             @SuppressWarnings("unchecked")
-            List<String> voterStrings = (List) value;
+            List<String> voterStrings = (List<String>) value;
 
             // Attempt to parse the connect strings
             parseVoterConnections(voterStrings, false);

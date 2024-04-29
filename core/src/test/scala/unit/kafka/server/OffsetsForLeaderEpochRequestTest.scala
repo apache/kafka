@@ -47,7 +47,7 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     val randomBrokerId = brokers.head.config.brokerId
     assertResponseError(Errors.UNKNOWN_TOPIC_OR_PARTITION, randomBrokerId, request)
 
-    val partitionToLeader = createTopic(topic, numPartitions = 1, replicationFactor = 2)
+    val partitionToLeader = createTopic(topic, replicationFactor = 2)
     val topicDescription = createAdminClient().describeTopics(Seq(partition.topic()).asJava).allTopicNames().get()
     val replicas = topicDescription.get(partition.topic()).partitions().get(partition.partition()).replicas().asScala.map(_.id()).toSet
     val leader = partitionToLeader(partition.partition)
@@ -63,7 +63,7 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
   def testCurrentEpochValidation(quorum: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
-    val partitionToLeader = createTopic(topic, numPartitions = 1, replicationFactor = 3)
+    val partitionToLeader = createTopic(topic, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(topicPartition.partition)
 
     def assertResponseErrorForEpoch(error: Errors, brokerId: Int, currentLeaderEpoch: Optional[Integer]): Unit = {

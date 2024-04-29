@@ -373,7 +373,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             case KRAFT_VERSION:
                 message = ControlRecordUtils.deserializeKRaftVersionRecord(value.get());
                 break;
-            case VOTERS:
+            case KRAFT_VOTERS:
                 message = ControlRecordUtils.deserializeVotersRecord(value.get());
                 break;
             default:

@@ -61,7 +61,7 @@ public final class ControlRecord {
                     throwIllegalArgument(recordType, message);
                 }
                 break;
-            case VOTERS:
+            case KRAFT_VOTERS:
                 if (!(message instanceof VotersRecord)) {
                     throwIllegalArgument(recordType, message);
                 }
@@ -88,7 +88,7 @@ public final class ControlRecord {
                 return ((SnapshotFooterRecord) message).version();
             case KRAFT_VERSION:
                 return ((KRaftVersionRecord) message).version();
-            case VOTERS:
+            case KRAFT_VOTERS:
                 return ((VotersRecord) message).version();
             default:
                 throw new IllegalStateException(String.format("Unknown control record type %s", recordType));

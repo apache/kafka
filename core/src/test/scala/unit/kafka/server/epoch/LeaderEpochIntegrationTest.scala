@@ -273,7 +273,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     result
   }
 
-  private def sendFourMessagesToEachTopic() = {
+  private def sendFourMessagesToEachTopic(): Unit = {
     val testMessageList1 = List("test1", "test2", "test3", "test4")
     val testMessageList2 = List("test5", "test6", "test7", "test8")
     val producer = TestUtils.createProducer(plaintextBootstrapServers(brokers),

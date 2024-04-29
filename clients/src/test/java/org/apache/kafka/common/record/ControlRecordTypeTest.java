@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.record;
 
-import org.junit.jupiter.api.Test;
-
 import java.nio.ByteBuffer;
-
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ControlRecordTypeTest {
@@ -45,58 +45,14 @@ public class ControlRecordTypeTest {
         assertEquals(ControlRecordType.ABORT, type);
     }
 
-    @Test
-    public void testLeaderChange() {
+    @ParameterizedTest
+    @EnumSource(value = ControlRecordType.class)
+    public void testRoundTrip(ControlRecordType expected) {
         ByteBuffer buffer = ByteBuffer.allocate(32);
         buffer.putShort(ControlRecordType.CURRENT_CONTROL_RECORD_KEY_VERSION);
-        buffer.putShort((short) 2);
+        buffer.putShort(expected.type());
         buffer.flip();
 
-        ControlRecordType type = ControlRecordType.parse(buffer);
-        assertEquals(ControlRecordType.LEADER_CHANGE, type);
-    }
-
-    @Test
-    public void testSnapshotHeader() {
-        ByteBuffer buffer = ByteBuffer.allocate(32);
-        buffer.putShort(ControlRecordType.CURRENT_CONTROL_RECORD_KEY_VERSION);
-        buffer.putShort((short) 3);
-        buffer.flip();
-
-        ControlRecordType type = ControlRecordType.parse(buffer);
-        assertEquals(ControlRecordType.SNAPSHOT_HEADER, type);
-    }
-
-    @Test
-    public void testSnapshotFooter() {
-        ByteBuffer buffer = ByteBuffer.allocate(32);
-        buffer.putShort(ControlRecordType.CURRENT_CONTROL_RECORD_KEY_VERSION);
-        buffer.putShort((short) 4);
-        buffer.flip();
-
-        ControlRecordType type = ControlRecordType.parse(buffer);
-        assertEquals(ControlRecordType.SNAPSHOT_FOOTER, type);
-    }
-
-    @Test
-    public void testKRaftVersion() {
-        ByteBuffer buffer = ByteBuffer.allocate(32);
-        buffer.putShort(ControlRecordType.CURRENT_CONTROL_RECORD_KEY_VERSION);
-        buffer.putShort((short) 5);
-        buffer.flip();
-
-        ControlRecordType type = ControlRecordType.parse(buffer);
-        assertEquals(ControlRecordType.KRAFT_VERSION, type);
-    }
-
-    @Test
-    public void testVoters() {
-        ByteBuffer buffer = ByteBuffer.allocate(32);
-        buffer.putShort(ControlRecordType.CURRENT_CONTROL_RECORD_KEY_VERSION);
-        buffer.putShort((short) 6);
-        buffer.flip();
-
-        ControlRecordType type = ControlRecordType.parse(buffer);
-        assertEquals(ControlRecordType.VOTERS, type);
+        assertEquals(expected, ControlRecordType.parse(buffer));
     }
 }

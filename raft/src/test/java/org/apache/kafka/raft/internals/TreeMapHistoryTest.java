@@ -57,16 +57,16 @@ final public class TreeMapHistoryTest {
         history.addAt(100, "100");
         history.addAt(200, "200");
 
-        history.truncateTo(201);
+        history.truncateNewEntries(201);
         assertEquals(Optional.of(new History.Entry<>(200, "200")), history.lastEntry());
 
-        history.truncateTo(200);
+        history.truncateNewEntries(200);
         assertEquals(Optional.of(new History.Entry<>(100, "100")), history.lastEntry());
 
-        history.truncateTo(101);
+        history.truncateNewEntries(101);
         assertEquals(Optional.of(new History.Entry<>(100, "100")), history.lastEntry());
 
-        history.truncateTo(100);
+        history.truncateNewEntries(100);
         assertEquals(Optional.empty(), history.lastEntry());
     }
 
@@ -76,19 +76,19 @@ final public class TreeMapHistoryTest {
         history.addAt(100, "100");
         history.addAt(200, "200");
 
-        history.trimPrefixTo(99);
+        history.truncateOldEntries(99);
         assertEquals(Optional.empty(), history.valueAtOrBefore(99));
         assertEquals(Optional.of("100"), history.valueAtOrBefore(100));
 
-        history.trimPrefixTo(100);
+        history.truncateOldEntries(100);
         assertEquals(Optional.empty(), history.valueAtOrBefore(99));
         assertEquals(Optional.of("100"), history.valueAtOrBefore(100));
 
-        history.trimPrefixTo(101);
+        history.truncateOldEntries(101);
         assertEquals(Optional.empty(), history.valueAtOrBefore(99));
         assertEquals(Optional.of("100"), history.valueAtOrBefore(100));
 
-        history.trimPrefixTo(200);
+        history.truncateOldEntries(200);
         assertEquals(Optional.empty(), history.valueAtOrBefore(199));
         assertEquals(Optional.of("200"), history.valueAtOrBefore(200));
     }

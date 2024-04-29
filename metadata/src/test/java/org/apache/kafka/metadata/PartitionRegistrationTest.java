@@ -280,11 +280,11 @@ public class PartitionRegistrationTest {
     }
 
     private static Stream<Arguments> metadataVersionsForTestPartitionRegistration() {
-        return Arrays.asList(
+        return Stream.of(
             MetadataVersion.IBP_3_7_IV1,
             MetadataVersion.IBP_3_7_IV2,
             MetadataVersion.IBP_3_8_IV0
-        ).stream().map(mv -> Arguments.of(mv));
+        ).map(mv -> Arguments.of(mv));
     }
 
     @ParameterizedTest

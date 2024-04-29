@@ -60,11 +60,13 @@ public class FileQuorumStateStoreTest {
             kraftVersion
         );
 
-        final ElectionState expected;
+        final Optional<ElectionState> expected;
         if (kraftVersion == 1) {
-            expected = ElectionState.withElectedLeader(epoch, voter1, Collections.emptySet());
+            expected = Optional.of(
+                ElectionState.withElectedLeader(epoch, voter1, Collections.emptySet())
+            );
         } else {
-            expected = ElectionState.withElectedLeader(epoch, voter1, voters);
+            expected = Optional.of(ElectionState.withElectedLeader(epoch, voter1, voters));
         }
 
         assertEquals(expected, stateStore.readElectionState());
@@ -89,11 +91,25 @@ public class FileQuorumStateStoreTest {
             kraftVersion
         );
 
-        final ElectionState expected;
+        final Optional<ElectionState> expected;
         if (kraftVersion == 1) {
-            expected = ElectionState.withVotedCandidate(epoch, voter1, Optional.of(voter1Uuid), Collections.emptySet());
+            expected = Optional.of(
+                ElectionState.withVotedCandidate(
+                    epoch,
+                    voter1,
+                    Optional.of(voter1Uuid),
+                    Collections.emptySet()
+                )
+            );
         } else {
-            expected = ElectionState.withVotedCandidate(epoch, voter1, Optional.empty(), voters);
+            expected = Optional.of(
+                ElectionState.withVotedCandidate(
+                    epoch,
+                    voter1,
+                    Optional.empty(),
+                    voters
+                )
+            );
         }
 
         assertEquals(expected, stateStore.readElectionState());
@@ -113,11 +129,11 @@ public class FileQuorumStateStoreTest {
             kraftVersion
         );
 
-        final ElectionState expected;
+        final Optional<ElectionState> expected;
         if (kraftVersion == 1) {
-            expected = ElectionState.withUnknownLeader(epoch, Collections.emptySet());
+            expected = Optional.of(ElectionState.withUnknownLeader(epoch, Collections.emptySet()));
         } else {
-            expected = ElectionState.withUnknownLeader(epoch, voters);
+            expected = Optional.of(ElectionState.withUnknownLeader(epoch, voters));
         }
 
         assertEquals(expected, stateStore.readElectionState());
@@ -137,7 +153,7 @@ public class FileQuorumStateStoreTest {
         // Check that state is persisted
         FileQuorumStateStore reloadedStore = new FileQuorumStateStore(stateFile);
         assertEquals(
-            ElectionState.withUnknownLeader(epoch, Collections.emptySet()),
+            Optional.of(ElectionState.withUnknownLeader(epoch, Collections.emptySet())),
             reloadedStore.readElectionState()
         );
     }

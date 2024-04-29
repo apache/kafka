@@ -87,7 +87,7 @@ class LogConfigTest {
     LogConfig.configNames.forEach(name => name match {
       case TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG => assertPropertyInvalid(name, "not a boolean")
       case TopicConfig.RETENTION_BYTES_CONFIG => assertPropertyInvalid(name, "not_a_number")
-      case TopicConfig.RETENTION_MS_CONFIG => assertPropertyInvalid(name, "not_a_number" )
+      case TopicConfig.RETENTION_MS_CONFIG => assertPropertyInvalid(name, "not_a_number")
       case TopicConfig.CLEANUP_POLICY_CONFIG => assertPropertyInvalid(name, "true", "foobar")
       case TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
       case TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG => assertPropertyInvalid(name, "not_a_number", "0", "-1")
@@ -212,7 +212,7 @@ class LogConfigTest {
   }
 
   private def assertPropertyInvalid(name: String, values: AnyRef*): Unit = {
-    values.foreach((value) => {
+    values.foreach(value => {
       val props = new Properties
       props.setProperty(name, value.toString)
       assertThrows(classOf[Exception], () => new LogConfig(props))

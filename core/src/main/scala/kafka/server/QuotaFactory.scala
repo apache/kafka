@@ -96,21 +96,21 @@ object QuotaFactory extends Logging {
     )
   }
 
-  def clientControllerMutationConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
+  private def clientControllerMutationConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
     new ClientQuotaManagerConfig(
       cfg.numControllerQuotaSamples,
       cfg.controllerQuotaWindowSizeSeconds
     )
   }
 
-  def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
+  private def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
     new ReplicationQuotaManagerConfig(
       cfg.numReplicationQuotaSamples,
       cfg.replicationQuotaWindowSizeSeconds
     )
   }
 
-  def alterLogDirsReplicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
+  private def alterLogDirsReplicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
     new ReplicationQuotaManagerConfig(
       cfg.numAlterLogDirsReplicationQuotaSamples,
       cfg.alterLogDirsReplicationQuotaWindowSizeSeconds

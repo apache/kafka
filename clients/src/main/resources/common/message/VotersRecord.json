@@ -24,7 +24,7 @@
     { "name": "Voters", "type": "[]Voter", "versions": "0+", "fields": [
       { "name": "VoterId", "type": "int32", "versions": "0+", "entityType": "brokerId",
         "about": "The replica id of the voter in the topic partition" },
-      { "name": "VoterUuid", "type": "uuid", "versions": "0+",
+      { "name": "VoterDirectoryId", "type": "uuid", "versions": "0+",
         "about": "The directory id of the voter in the topic partition" },
       { "name": "Endpoints", "type": "[]Endpoint", "versions": "0+",
         "about": "The endpoint that can be used to communicate with the voter", "fields": [

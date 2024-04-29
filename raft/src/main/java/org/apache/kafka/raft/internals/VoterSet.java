@@ -21,15 +21,17 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.feature.SupportedVersionRange;
 
 /**
  * A type for representing the set of voters for a topic partition.
@@ -55,7 +57,7 @@ final public class VoterSet {
      *
      * @param voter the id of the voter
      * @param listener the name of the listener
-     * @return the socket address if it exist, otherwise {@code Optional.empty()}
+     * @return the socket address if it exists, otherwise {@code Optional.empty()}
      */
     public Optional<InetSocketAddress> voterAddress(int voter, String listener) {
         return Optional.ofNullable(voters.get(voter))
@@ -66,8 +68,8 @@ final public class VoterSet {
     public boolean isVoter(int nodeId, Optional<Uuid> nodeUuid) {
         VoterNode node = voters.get(nodeId);
         if (node != null) {
-            if (node.uuid().isPresent()) {
-                return node.uuid().equals(nodeUuid);
+            if (node.directoryId().isPresent()) {
+                return node.directoryId().equals(nodeUuid);
             } else {
                 // configured voter set doesn't an uuid so it is a voter as long as the node id
                 // matches
@@ -77,7 +79,7 @@ final public class VoterSet {
             return false;
         }
     }
-    
+
     // TODO: write javad doc
     public boolean isOnlyVoter(int nodeId, Optional<Uuid> nodeUuid) {
         return voters.size() == 1 && isVoter(nodeId, nodeUuid);
@@ -112,19 +114,19 @@ final public class VoterSet {
     }
 
     /**
-     * Removew a voter from the voter set.
+     * Remove a voter from the voter set.
      *
      * This object is immutable. A new voter set is returned if the voter was removed.
      *
-     * A voter can be removed from the voter set if its id and uuid match.
+     * A voter can be removed from the voter set if its id and directory id match.
      *
      * @param voterId the voter id
-     * @param voterUuid the voter uuid
-     * @return a new voter set if the voter was remove, otherwise {@code Optional.empty()}
+     * @param voterDirectoryId the voter directory id
+     * @return a new voter set if the voter was removed, otherwise {@code Optional.empty()}
      */
-    public Optional<VoterSet> removeVoter(int voterId, Optional<Uuid> voterUuid) {
+    public Optional<VoterSet> removeVoter(int voterId, Optional<Uuid> voterDirectoryId) {
         VoterNode oldVoter = voters.get(voterId);
-        if (oldVoter != null && Objects.equals(oldVoter.uuid(), voterUuid)) {
+        if (oldVoter != null && Objects.equals(oldVoter.directoryId(), voterDirectoryId)) {
             HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
             newVoters.remove(voterId);
 
@@ -140,54 +142,68 @@ final public class VoterSet {
      * @param version the version of the voters record
      */
     public VotersRecord toVotersRecord(short version) {
+        Function<VoterNode, VotersRecord.Voter> voterConvertor = voter -> {
+            Iterator<VotersRecord.Endpoint> endpoints = voter
+                .listeners()
+                .entrySet()
+                .stream()
+                .map(entry ->
+                    new VotersRecord.Endpoint()
+                        .setName(entry.getKey())
+                        .setHost(entry.getValue().getHostString())
+                        .setPort(entry.getValue().getPort())
+                )
+                .iterator();
+
+            VotersRecord.KRaftVersionFeature kraftVersionFeature = new VotersRecord.KRaftVersionFeature()
+                .setMinSupportedVersion(voter.supportedKRaftVersion().min())
+                .setMaxSupportedVersion(voter.supportedKRaftVersion().max());
+
+            return new VotersRecord.Voter()
+                .setVoterId(voter.id())
+                .setVoterDirectoryId(voter.directoryId().orElse(Uuid.ZERO_UUID))
+                .setEndpoints(new VotersRecord.EndpointCollection(endpoints))
+                .setKRaftVersionFeature(kraftVersionFeature);
+        };
+
+        List<VotersRecord.Voter> voterRecordVoters = voters
+            .values()
+            .stream()
+            .map(voterConvertor)
+            .collect(Collectors.toList());
+
         return new VotersRecord()
             .setVersion(version)
-            .setVoters(
-                voters
-                    .values()
-                    .stream()
-                    .map(voter -> {
-                        Iterator<VotersRecord.Endpoint> endpoints = voter
-                            .listeners()
-                            .entrySet()
-                            .stream()
-                            .map(entry ->
-                                new VotersRecord.Endpoint()
-                                    .setName(entry.getKey())
-                                    .setHost(entry.getValue().getHostString())
-                                    .setPort(entry.getValue().getPort())
-                            )
-                            .iterator();
-
-                        VotersRecord.KRaftVersionFeature kraftVersionFeature = new VotersRecord.KRaftVersionFeature()
-                            .setMinSupportedVersion(voter.supportedKRaftVersion().min())
-                            .setMaxSupportedVersion(voter.supportedKRaftVersion().max());
-
-                        return new VotersRecord.Voter()
-                            .setVoterId(voter.id())
-                            .setVoterUuid(voter.uuid().orElse(Uuid.ZERO_UUID))
-                            .setEndpoints(new VotersRecord.EndpointCollection(endpoints))
-                            .setKRaftVersionFeature(kraftVersionFeature);
-                    })
-                    .collect(Collectors.toList())
-            );
+            .setVoters(voterRecordVoters);
     }
 
     /**
      * Determines if two sets of voters have an overlapping majority.
      *
-     * A overlapping majority means that for all majorities in {@code this} set of voters and for
-     * all majority in {@code that} voeter set they have at least one voter in common.
+     * An overlapping majority means that for all majorities in {@code this} set of voters and for
+     * all majority in {@code that} set of voters, they have at least one voter in common.
      *
-     * This can be used to validate a change in the set of voters will get committed by both sets
-     * of voters.
+     * If this function returns true is means that one of the voter set commits an offset, it means
+     * that the other voter set cannot commit a conflicting offset.
      *
      * @param that the other voter set to compare
      * @return true if they have an overlapping majority, false otherwise
      */
     public boolean hasOverlappingMajority(VoterSet that) {
-        if (Utils.diff(HashSet::new, voters.keySet(), that.voters.keySet()).size() > 2) return false;
-        if (Utils.diff(HashSet::new, that.voters.keySet(), voters.keySet()).size() > 2) return false;
+        Set<VoterKey> thisVoterKeys = voters
+            .values()
+            .stream()
+            .map(VoterNode::voterKey)
+            .collect(Collectors.toSet());
+
+        Set<VoterKey> thatVoterKeys = that.voters
+            .values()
+            .stream()
+            .map(VoterNode::voterKey)
+            .collect(Collectors.toSet());
+
+        if (Utils.diff(HashSet::new, thisVoterKeys, thatVoterKeys).size() > 1) return false;
+        if (Utils.diff(HashSet::new, thatVoterKeys, thisVoterKeys).size() > 1) return false;
 
         return true;
     }
@@ -212,30 +228,72 @@ final public class VoterSet {
         return String.format("VoterSet(voters=%s)", voters);
     }
 
-    final static class VoterNode {
+    final static class VoterKey {
         private final int id;
-        private final Optional<Uuid> uuid;
+        private final Optional<Uuid> directoryId;
+
+        VoterKey(int id, Optional<Uuid> directoryId) {
+            this.id = id;
+            this.directoryId = directoryId;
+        }
+        int id() {
+            return id;
+        }
+
+        Optional<Uuid> directoryId() {
+            return directoryId;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            VoterKey that = (VoterKey) o;
+
+            if (id != that.id) return false;
+            if (!Objects.equals(directoryId, that.directoryId)) return false;
+
+            return true;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(id, directoryId);
+        }
+
+        @Override
+        public String toString() {
+            return String.format("VoterKey(id=%d, directoryId=%s)", id, directoryId);
+        }
+    }
+
+    final static class VoterNode {
+        private final VoterKey voterKey;
         private final Map<String, InetSocketAddress> listeners;
         private final SupportedVersionRange supportedKRaftVersion;
 
         VoterNode(
             int id,
-            Optional<Uuid> uuid,
+            Optional<Uuid> directoryId,
             Map<String, InetSocketAddress> listeners,
             SupportedVersionRange supportedKRaftVersion
         ) {
-            this.id = id;
-            this.uuid = uuid;
+            this.voterKey = new VoterKey(id, directoryId);
             this.listeners = listeners;
             this.supportedKRaftVersion = supportedKRaftVersion;
         }
 
         int id() {
-            return id;
+            return voterKey.id;
         }
 
-        Optional<Uuid> uuid() {
-            return uuid;
+        Optional<Uuid> directoryId() {
+            return voterKey.directoryId;
+        }
+
+        VoterKey voterKey() {
+            return voterKey;
         }
 
         Map<String, InetSocketAddress> listeners() {
@@ -258,8 +316,7 @@ final public class VoterSet {
 
             VoterNode that = (VoterNode) o;
 
-            if (id != that.id) return false;
-            if (!Objects.equals(uuid, that.uuid)) return false;
+            if (!Objects.equals(voterKey, that.voterKey)) return false;
             if (!Objects.equals(supportedKRaftVersion, that.supportedKRaftVersion)) return false;
             if (!Objects.equals(listeners, that.listeners)) return false;
 
@@ -268,15 +325,14 @@ final public class VoterSet {
 
         @Override
         public int hashCode() {
-            return Objects.hash(id, uuid, listeners, supportedKRaftVersion);
+            return Objects.hash(voterKey, listeners, supportedKRaftVersion);
         }
 
         @Override
         public String toString() {
             return String.format(
-                "VoterNode(id=%d, uuid=%s, listeners=%s, supportedKRaftVersion=%s)",
-                id,
-                uuid,
+                "VoterNode(voterKey=%s, listeners=%s, supportedKRaftVersion=%s)",
+                voterKey,
                 listeners,
                 supportedKRaftVersion
             );
@@ -292,11 +348,11 @@ final public class VoterSet {
     public static VoterSet fromVotersRecord(VotersRecord voters) {
         HashMap<Integer, VoterNode> voterNodes = new HashMap<>(voters.voters().size());
         for (VotersRecord.Voter voter: voters.voters()) {
-            final Optional<Uuid> uuid;
-            if (!voter.voterUuid().equals(Uuid.ZERO_UUID)) {
-                uuid = Optional.of(voter.voterUuid());
+            final Optional<Uuid> directoryId;
+            if (!voter.voterDirectoryId().equals(Uuid.ZERO_UUID)) {
+                directoryId = Optional.of(voter.voterDirectoryId());
             } else {
-                uuid = Optional.empty();
+                directoryId = Optional.empty();
             }
 
             Map<String, InetSocketAddress> listeners = new HashMap<>(voter.endpoints().size());
@@ -308,7 +364,7 @@ final public class VoterSet {
                 voter.voterId(),
                 new VoterNode(
                     voter.voterId(),
-                    uuid,
+                    directoryId,
                     listeners,
                     new SupportedVersionRange(
                         voter.kRaftVersionFeature().minSupportedVersion(),
