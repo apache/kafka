@@ -16,7 +16,7 @@
  */
 package kafka.raft
 
-import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.ServerLogConfigs
 import kafka.server.KafkaConfig
 
 final case class MetadataLogConfig(
@@ -42,7 +42,7 @@ object MetadataLogConfig {
       maxBatchSizeInBytes,
       maxFetchSizeInBytes,
       ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-      config.getInt(KRaftConfigs.NODE_ID_CONFIG)
+      config.metadataNodeIDConfig
     )
   }
 }
