@@ -91,6 +91,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         ClusterTemplate clusterTemplateAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTemplate.class);
         if (clusterTemplateAnnot != null) {
             processClusterTemplate(context, clusterTemplateAnnot, generatedContexts::add);
+            if (generatedContexts.isEmpty()) {
+                throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
+            }
         }
 
         // Process single @ClusterTest annotation
