@@ -22,7 +22,6 @@ import java.net.InetSocketAddress
 import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
-
 import javax.security.auth.login.LoginContext
 import kafka.api.{Both, IntegrationTestHarness, SaslSetup}
 import kafka.utils.TestUtils
@@ -36,6 +35,8 @@ import org.apache.kafka.common.security.{JaasContext, TestSecurityConfig}
 import org.apache.kafka.common.security.auth.{Login, SecurityProtocol}
 import org.apache.kafka.common.security.kerberos.KerberosLogin
 import org.apache.kafka.common.utils.{LogContext, MockTime}
+import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -62,8 +63,8 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   override def setUp(testInfo: TestInfo): Unit = {
     TestableKerberosLogin.reset()
     startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
-    serverConfig.put(KafkaConfig.SslClientAuthProp, "required")
-    serverConfig.put(KafkaConfig.FailedAuthenticationDelayMsProp, failedAuthenticationDelayMs.toString)
+    serverConfig.put(KafkaSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
+    serverConfig.put(SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_CONFIG, failedAuthenticationDelayMs.toString)
     super.setUp(testInfo)
     serverAddr = new InetSocketAddress("localhost",
       servers.head.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)))

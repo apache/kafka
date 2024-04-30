@@ -34,7 +34,7 @@ import org.mockito.Mockito.{mock, when}
 import java.io.File
 import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 
@@ -81,7 +81,7 @@ class AbstractPartitionTest {
     alterPartitionManager = TestUtils.createAlterIsrManager()
     alterPartitionListener = TestUtils.createIsrChangeListener()
     partition = new Partition(topicPartition,
-      replicaLagTimeMaxMs = Defaults.REPLICA_LAG_TIME_MAX_MS,
+      replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
       interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),

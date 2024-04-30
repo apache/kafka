@@ -156,7 +156,7 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
       threadNamePrefix = Option(this.getClass.getName))
     val startupException = assertThrows(classOf[RuntimeException], () => serverB2.startup())
     assertTrue(startupException.getMessage.startsWith("Stored node id 1 doesn't match previous node id 2"),
-      "Unexpected exception message " + startupException.getMessage())
+      "Unexpected exception message " + startupException.getMessage)
     serverB2.config.logDirs.foreach(logDir => Utils.delete(new File(logDir)))
     propsB.setProperty(KafkaConfig.BrokerIdProp, "3")
     val serverB3 = new KafkaServer(KafkaConfig.fromProps(propsB),

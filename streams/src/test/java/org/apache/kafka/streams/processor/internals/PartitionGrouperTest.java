@@ -53,8 +53,8 @@ public class PartitionGrouperTest {
         "cluster",
         Collections.singletonList(Node.noNode()),
         infos,
-        Collections.<String>emptySet(),
-        Collections.<String>emptySet());
+        Collections.emptySet(),
+        Collections.emptySet());
 
     @Test
     public void shouldComputeGroupingForTwoGroups() {

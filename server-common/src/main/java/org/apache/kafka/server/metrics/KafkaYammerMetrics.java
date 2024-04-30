@@ -106,7 +106,7 @@ public class KafkaYammerMetrics implements Reconfigurable {
         nameBuilder.append(":type=");
         nameBuilder.append(typeName);
 
-        if (name.length() > 0) {
+        if (!name.isEmpty()) {
             nameBuilder.append(",name=");
             nameBuilder.append(name);
         }

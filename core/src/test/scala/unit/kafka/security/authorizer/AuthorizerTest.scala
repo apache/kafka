@@ -42,6 +42,7 @@ import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_0_IV0, IBP_2_0_IV1}
 import org.apache.kafka.server.config.ZkConfigs
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.zookeeper.client.ZKClientConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -925,7 +926,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
       ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG -> "HTTPS",
       ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG -> "false",
       ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG -> "false")
-    configs.foreach{case (key, value) => props.put(key, value.toString) }
+    configs.foreach{case (key, value) => props.put(key, value) }
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
@@ -1088,7 +1089,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
     val props = TestUtils.createBrokerConfig(0, zkConnectOrNull)
     props.put(AclAuthorizer.SuperUsersProp, superUsers)
-    protocolVersion.foreach(version => props.put(KafkaConfig.InterBrokerProtocolVersionProp, version.toString))
+    protocolVersion.foreach(version => props.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, version.toString))
 
     config = KafkaConfig.fromProps(props)
 

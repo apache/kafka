@@ -24,22 +24,31 @@ import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 
 import java.io.File;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class BrokerNode implements TestKitNode {
+    public static Builder builder() {
+        return new Builder();
+    }
+
     public static class Builder {
         private int id = -1;
-        private String baseDirectory = null;
-        private Uuid clusterId = null;
-        private Uuid incarnationId = null;
-        private List<String> logDataDirectories = null;
-        private String metadataDirectory = null;
-        private Map<String, String> propertyOverrides = new HashMap<>();
+        private String baseDirectory;
+        private Uuid clusterId;
+        private int numLogDirectories = 1;
+        private String metadataDirectory;
+        private Map<String, String> propertyOverrides = Collections.emptyMap();
+        private boolean combined;
+
+        private Builder() {}
 
         public int id() {
             return id;
@@ -50,50 +59,57 @@ public class BrokerNode implements TestKitNode {
             return this;
         }
 
-        public Builder setIncarnationId(Uuid incarnationId) {
-            this.incarnationId = incarnationId;
-            return this;
-        }
-
         public Builder setMetadataDirectory(String metadataDirectory) {
             this.metadataDirectory = metadataDirectory;
             return this;
         }
 
-        public Builder setLogDirectories(List<String> logDataDirectories) {
-            this.logDataDirectories = logDataDirectories;
+        public Builder setNumLogDirectories(int numLogDirectories) {
+            this.numLogDirectories = numLogDirectories;
             return this;
         }
 
-        public BrokerNode build(
-            String baseDirectory,
-            Uuid clusterId,
-            boolean combined
-        ) {
+        public Builder setClusterId(Uuid clusterId) {
+            this.clusterId = clusterId;
+            return this;
+        }
+
+        public Builder setBaseDirectory(String baseDirectory) {
+            this.baseDirectory = baseDirectory;
+            return this;
+        }
+
+        public Builder setCombined(boolean combined) {
+            this.combined = combined;
+            return this;
+        }
+
+        public Builder setPropertyOverrides(Map<String, String> propertyOverrides) {
+            this.propertyOverrides = Collections.unmodifiableMap(new HashMap<>(propertyOverrides));
+            return this;
+        }
+
+        public BrokerNode build() {
+            Objects.requireNonNull(baseDirectory);
+            Objects.requireNonNull(clusterId);
             if (id == -1) {
                 throw new RuntimeException("You must set the node id.");
             }
-            if (incarnationId == null) {
-                incarnationId = Uuid.randomUuid();
-            }
-            if (logDataDirectories == null) {
-                if (combined) {
-                    logDataDirectories = Collections.
-                        singletonList(String.format("combined_%d", id));
-                } else {
-                    logDataDirectories = Collections.
-                        singletonList(String.format("broker_%d_data0", id));
-                }
-            }
-            List<String> absoluteLogDataDirectories = new ArrayList<>();
-            for (String logDir : logDataDirectories) {
-                if (Paths.get(logDir).isAbsolute()) {
-                    absoluteLogDataDirectories.add(logDir);
-                } else {
-                    absoluteLogDataDirectories.add(new File(baseDirectory, logDir).getAbsolutePath());
-                }
-            }
-            this.logDataDirectories = absoluteLogDataDirectories;
+            List<String> logDataDirectories = IntStream
+                .range(0, numLogDirectories)
+                .mapToObj(i -> {
+                    if (combined) {
+                        return String.format("combined_%d_%d", id, i);
+                    }
+                    return String.format("broker_%d_data%d", id, i);
+                })
+                .map(logDir -> {
+                    if (Paths.get(logDir).isAbsolute()) {
+                        return logDir;
+                    }
+                    return new File(baseDirectory, logDir).getAbsolutePath();
+                })
+                .collect(Collectors.toList());
             if (metadataDirectory == null) {
                 metadataDirectory = logDataDirectories.get(0);
             } else if (!Paths.get(metadataDirectory).isAbsolute()) {
@@ -111,32 +127,27 @@ public class BrokerNode implements TestKitNode {
                     build());
             }
             copier.setMetaLogDir(Optional.of(metadataDirectory));
-            return new BrokerNode(incarnationId,
+            return new BrokerNode(
                 copier.copy(),
                 combined,
                 propertyOverrides);
         }
     }
 
-    private final Uuid incarnationId;
     private final MetaPropertiesEnsemble initialMetaPropertiesEnsemble;
     private final boolean combined;
     private final Map<String, String> propertyOverrides;
+    private final Set<String> logDataDirectories;
 
-    BrokerNode(
-        Uuid incarnationId,
+    private BrokerNode(
         MetaPropertiesEnsemble initialMetaPropertiesEnsemble,
         boolean combined,
         Map<String, String> propertyOverrides
     ) {
-        this.incarnationId = incarnationId;
-        this.initialMetaPropertiesEnsemble = initialMetaPropertiesEnsemble;
+        this.initialMetaPropertiesEnsemble = Objects.requireNonNull(initialMetaPropertiesEnsemble);
         this.combined = combined;
-        this.propertyOverrides = new HashMap<>(propertyOverrides);
-    }
-
-    public Uuid incarnationId() {
-        return incarnationId;
+        this.propertyOverrides = Objects.requireNonNull(propertyOverrides);
+        this.logDataDirectories = Collections.unmodifiableSet(initialMetaPropertiesEnsemble.logDirProps().keySet());
     }
 
     @Override
@@ -149,8 +160,8 @@ public class BrokerNode implements TestKitNode {
         return combined;
     }
 
-    public List<String> logDataDirectories() {
-        return new ArrayList<>(initialMetaPropertiesEnsemble.logDirProps().keySet());
+    public Set<String> logDataDirectories() {
+        return logDataDirectories;
     }
 
     public Map<String, String> propertyOverrides() {

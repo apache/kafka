@@ -20,6 +20,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
+import org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -35,7 +36,7 @@ class FetchRequestWithLegacyMessageFormatTest extends BaseFetchRequestTest {
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     super.brokerPropertyOverrides(properties)
     // legacy message formats are only supported with IBP < 3.0
-    properties.put(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
+    properties.put(INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
   }
 
   /**

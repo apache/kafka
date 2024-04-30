@@ -729,8 +729,7 @@ public class ReplicationControlManager {
             }
             ApiError error = maybeCheckCreateTopicPolicy(() -> {
                 Map<Integer, List<Integer>> assignments = new HashMap<>();
-                newParts.entrySet().forEach(e -> assignments.put(e.getKey(),
-                    Replicas.toList(e.getValue().replicas)));
+                newParts.forEach((key, value) -> assignments.put(key, Replicas.toList(value.replicas)));
                 return new CreateTopicPolicy.RequestMetadata(
                     topic.name(), null, null, assignments, creationConfigs);
             });
@@ -2288,7 +2287,7 @@ public class ReplicationControlManager {
         Arrays.stream(newPartInfo.elr).forEach(validationSet::add);
         if (validationSet.size() != newPartInfo.isr.length + newPartInfo.elr.length) {
             log.error("{}-{} has overlapping ISR={} and ELR={}", topics.get(topicId).name, partitionId,
-                Arrays.toString(newPartInfo.isr), partitionId, Arrays.toString(newPartInfo.elr));
+                Arrays.toString(newPartInfo.isr), Arrays.toString(newPartInfo.elr));
         }
         brokersToIsrs.update(topicId, partitionId, prevPartInfo == null ? null : prevPartInfo.isr,
             newPartInfo.isr, prevPartInfo == null ? NO_LEADER : prevPartInfo.leader, newPartInfo.leader);

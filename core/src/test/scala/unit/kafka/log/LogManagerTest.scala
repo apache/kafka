@@ -30,10 +30,10 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrTopic
 import org.apache.kafka.common.requests.{AbstractControlRequest, LeaderAndIsrRequest}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.image.{TopicImage, TopicsImage}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.server.config.Defaults
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -69,12 +69,14 @@ class LogManagerTest {
   var logManager: LogManager = _
   val name = "kafka"
   val veryLargeLogFlushInterval = 10000000L
+  val initialTaskDelayMs: Long = 10 * 1000
 
   @BeforeEach
   def setUp(): Unit = {
     logDir = TestUtils.tempDir()
     logManager = createLogManager()
     logManager.startup(Set.empty)
+    assertEquals(initialTaskDelayMs, logManager.initialTaskDelayMs)
   }
 
   @AfterEach
@@ -413,7 +415,7 @@ class LogManagerTest {
     assertEquals(numMessages * setSize / segmentBytes, log.numberOfSegments, "Check we have the expected number of segments.")
 
     // this cleanup shouldn't find any expired segments but should delete some to reduce size
-    time.sleep(logManager.InitialTaskDelayMs)
+    time.sleep(logManager.initialTaskDelayMs)
     assertEquals(6, log.numberOfSegments, "Now there should be exactly 6 segments")
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
@@ -482,7 +484,7 @@ class LogManagerTest {
       val set = TestUtils.singletonRecords("test".getBytes())
       log.appendAsLeader(set, leaderEpoch = 0)
     }
-    time.sleep(logManager.InitialTaskDelayMs)
+    time.sleep(logManager.initialTaskDelayMs)
     assertTrue(lastFlush != log.lastFlushTime, "Time based flush should have been triggered")
   }
 
@@ -533,7 +535,7 @@ class LogManagerTest {
       true
     }
 
-    logManager.loadLog(log.dir, true, Map.empty, Map.empty, logConfig, Map.empty, new ConcurrentHashMap[String, Int](),  providedIsStray)
+    logManager.loadLog(log.dir, hadCleanShutdown = true, Map.empty, Map.empty, logConfig, Map.empty, new ConcurrentHashMap[String, Int](),  providedIsStray)
     assertEquals(1, invokedCount)
     assertTrue(
       logDir.listFiles().toSet
@@ -604,7 +606,8 @@ class LogManagerTest {
       configRepository = configRepository,
       logDirs = logDirs,
       time = this.time,
-      recoveryThreadsPerDataDir = recoveryThreadsPerDataDir)
+      recoveryThreadsPerDataDir = recoveryThreadsPerDataDir,
+      initialTaskDelayMs = initialTaskDelayMs)
   }
 
   @Test
@@ -637,9 +640,9 @@ class LogManagerTest {
         fileInIndex.get.getAbsolutePath)
     }
 
-    time.sleep(logManager.InitialTaskDelayMs)
+    time.sleep(logManager.initialTaskDelayMs)
     assertTrue(logManager.hasLogsToBeDeleted, "Logs deleted too early")
-    time.sleep(logManager.currentDefaultConfig.fileDeleteDelayMs - logManager.InitialTaskDelayMs)
+    time.sleep(logManager.currentDefaultConfig.fileDeleteDelayMs - logManager.initialTaskDelayMs)
     assertFalse(logManager.hasLogsToBeDeleted, "Logs not deleted")
   }
 
@@ -822,7 +825,7 @@ class LogManagerTest {
     val segmentBytes = 1024
 
     val log = LogTestUtils.createLog(tpFile, logConfig, brokerTopicStats, time.scheduler, time, 0, 0,
-      5 * 60 * 1000, new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, false), Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS)
+      5 * 60 * 1000, new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false), TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT)
 
     assertTrue(expectedSegmentsPerLog > 0)
     // calculate numMessages to append to logs. It'll create "expectedSegmentsPerLog" log segments with segment.bytes=1024
@@ -958,7 +961,7 @@ class LogManagerTest {
         recoveryPoint = 0,
         maxTransactionTimeoutMs = 5 * 60 * 1000,
         producerStateManagerConfig = new ProducerStateManagerConfig(5 * 60 * 1000, false),
-        producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
+        producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
         scheduler = mockTime.scheduler,
         time = mockTime,
         brokerTopicStats = mockBrokerTopicStats,
@@ -1242,7 +1245,7 @@ class LogManagerTest {
   @Test
   def testIsStrayKraftReplicaWithEmptyImage(): Unit = {
     val image: TopicsImage = topicsImage(Seq())
-    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog(_))
+    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog)
     assertTrue(onDisk.forall(log => LogManager.isStrayKraftReplica(0, image, log)))
   }
 
@@ -1257,7 +1260,7 @@ class LogManagerTest {
         bar1 -> Seq(0, 1, 2),
       ))
     ))
-    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog(_))
+    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog)
     val expectedStrays = Set(foo1, quux0).map(_.topicPartition())
 
     onDisk.foreach(log => assertEquals(expectedStrays.contains(log.topicPartition), LogManager.isStrayKraftReplica(0, image, log)))
@@ -1274,7 +1277,7 @@ class LogManagerTest {
         bar1 -> Seq(2, 3, 0),
       ))
     ))
-    val onDisk = Seq(foo0, bar0, bar1).map(mockLog(_))
+    val onDisk = Seq(foo0, bar0, bar1).map(mockLog)
     val expectedStrays = Set(bar0).map(_.topicPartition)
 
     onDisk.foreach(log => assertEquals(expectedStrays.contains(log.topicPartition), LogManager.isStrayKraftReplica(0, image, log)))
@@ -1287,7 +1290,7 @@ class LogManagerTest {
     assertEquals(expected,
       LogManager.findStrayReplicas(0,
         createLeaderAndIsrRequestForStrayDetection(Seq()),
-          onDisk.map(mockLog(_))).toSet)
+          onDisk.map(mockLog)).toSet)
   }
 
   @Test
@@ -1296,7 +1299,7 @@ class LogManagerTest {
     assertEquals(Set(),
       LogManager.findStrayReplicas(0,
       createLeaderAndIsrRequestForStrayDetection(onDisk),
-        onDisk.map(mockLog(_))).toSet)
+        onDisk.map(mockLog)).toSet)
   }
 
   @Test
@@ -1307,7 +1310,7 @@ class LogManagerTest {
     assertEquals(expected,
       LogManager.findStrayReplicas(0,
         createLeaderAndIsrRequestForStrayDetection(present),
-        onDisk.map(mockLog(_))).toSet)
+        onDisk.map(mockLog)).toSet)
   }
 
   @Test
@@ -1318,7 +1321,7 @@ class LogManagerTest {
     assertEquals(expected,
       LogManager.findStrayReplicas(0,
         createLeaderAndIsrRequestForStrayDetection(present),
-        onDisk.map(mockLog(_))).toSet)
+        onDisk.map(mockLog)).toSet)
   }
 
   /**

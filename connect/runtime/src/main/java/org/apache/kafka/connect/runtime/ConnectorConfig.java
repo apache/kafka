@@ -346,7 +346,7 @@ public class ConnectorConfig extends AbstractConfig {
         ConfigDef newDef = new ConfigDef(baseConfigDef);
         new EnrichablePlugin<Transformation<?>>("Transformation", TRANSFORMS_CONFIG, TRANSFORMS_GROUP, (Class) Transformation.class,
                 props, requireFullConfig) {
-            @SuppressWarnings("rawtypes")
+
             @Override
             protected Set<PluginDesc<Transformation<?>>> plugins() {
                 return plugins.transformations();

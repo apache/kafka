@@ -39,7 +39,7 @@ import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Optional, Properties, Random}
-import scala.collection.mutable.Buffer
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 @Timeout(300)
@@ -112,9 +112,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     log.truncateTo(0)
 
-    val secondOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
-    assertEquals(0L, secondOffset.get.offset)
-    assertEquals(-1L, secondOffset.get.timestamp)
+    assertEquals(Option.empty, log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP))
   }
 
   @ParameterizedTest
@@ -179,7 +177,7 @@ class LogOffsetTest extends BaseRequestTest {
     val topicLogDir = new File(topicPartitionPath)
     topicLogDir.mkdir()
 
-    createTopic(topic, numPartitions = 1, replicationFactor = 1)
+    createTopic(topic)
 
     var offsetChanged = false
     for (_ <- 1 to 14) {
@@ -202,10 +200,8 @@ class LogOffsetTest extends BaseRequestTest {
 
     log.updateHighWatermark(log.logEndOffset)
 
-    val maxTimestampOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
     assertEquals(0L, log.logEndOffset)
-    assertEquals(0L, maxTimestampOffset.get.offset)
-    assertEquals(-1L, maxTimestampOffset.get.timestamp)
+    assertEquals(Option.empty, log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP))
   }
 
   @deprecated("legacyFetchOffsetsBefore", since = "")
@@ -216,7 +212,7 @@ class LogOffsetTest extends BaseRequestTest {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, random.nextInt(3))
 
-    createTopic(topic, 3, 1)
+    createTopic(topic, 3)
 
     val logManager = broker.logManager
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
@@ -246,7 +242,7 @@ class LogOffsetTest extends BaseRequestTest {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, random.nextInt(3))
 
-    createTopic(topic, 3, 1)
+    createTopic(topic, 3)
 
     val logManager = broker.logManager
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
@@ -319,13 +315,13 @@ class LogOffsetTest extends BaseRequestTest {
     )
   }
 
-  private def findPartition(topics: Buffer[ListOffsetsTopicResponse], tp: TopicPartition): ListOffsetsPartitionResponse = {
+  private def findPartition(topics: mutable.Buffer[ListOffsetsTopicResponse], tp: TopicPartition): ListOffsetsPartitionResponse = {
     topics.find(_.name == tp.topic).get
       .partitions.asScala.find(_.partitionIndex == tp.partition).get
   }
 
   private def createTopicAndGetLog(topic: String, topicPartition: TopicPartition): UnifiedLog = {
-    createTopic(topic, 1, 1)
+    createTopic(topic)
 
     val logManager = broker.logManager
     TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,

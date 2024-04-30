@@ -125,7 +125,7 @@ class RaftControllerNodeProvider(
   val securityProtocol: SecurityProtocol,
   val saslMechanism: String
 ) extends ControllerNodeProvider with Logging {
-  val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
+  private val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
 
   override def getControllerInfo(): ControllerInformation =
     ControllerInformation(raftManager.leaderAndEpoch.leaderId.asScala.map(idToNode),
@@ -389,7 +389,12 @@ class NodeToControllerRequestThread(
       debug("Controller isn't cached, looking for local metadata changes")
       controllerInformation.node match {
         case Some(controllerNode) =>
-          info(s"Recorded new controller, from now on will use node $controllerNode")
+          val controllerType = if (controllerInformation.isZkController) {
+            "ZK"
+          } else {
+            "KRaft"
+          }
+          info(s"Recorded new $controllerType controller, from now on will use node $controllerNode")
           updateControllerAddress(controllerNode)
           metadataUpdater.setNodes(Seq(controllerNode).asJava)
         case None =>

@@ -78,7 +78,7 @@ public class ExternalCommandSpec extends TaskSpec {
             @JsonProperty("shutdownGracePeriodMs") Optional<Integer> shutdownGracePeriodMs) {
         super(startMs, durationMs);
         this.commandNode = (commandNode == null) ? "" : commandNode;
-        this.command = (command == null) ? Collections.unmodifiableList(new ArrayList<String>()) : command;
+        this.command = (command == null) ? Collections.unmodifiableList(new ArrayList<>()) : command;
         this.workload = (workload == null) ? NullNode.instance : workload;
         this.shutdownGracePeriodMs = shutdownGracePeriodMs;
     }

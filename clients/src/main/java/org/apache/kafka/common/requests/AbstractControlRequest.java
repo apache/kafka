@@ -31,7 +31,7 @@ public abstract class AbstractControlRequest extends AbstractRequest {
         FULL(2);
 
         private final byte type;
-        private Type(int type) {
+        Type(int type) {
             this.type = (byte) type;
         }
 

@@ -40,12 +40,12 @@ import org.apache.kafka.network.Session
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.server.config.{Defaults, KafkaSecurityConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.Buffer
 
 /*
  * These tests are only for the Zk DelegationTokenManager.
@@ -56,7 +56,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
   val time = new MockTime()
   val owner = SecurityUtils.parseKafkaPrincipal("User:owner")
   val renewer = List(SecurityUtils.parseKafkaPrincipal("User:renewer1"))
-  val tokenManagers = Buffer[DelegationTokenManager]()
+  val tokenManagers = mutable.Buffer[DelegationTokenManager]()
 
   val secretKey = "secretKey"
   val maxLifeTimeMsDefault = Defaults.DELEGATION_TOKEN_MAX_LIFE_TIME_MS
@@ -72,7 +72,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     props = TestUtils.createBrokerConfig(0, zkConnect, enableToken = true)
-    props.put(KafkaConfig.SaslEnabledMechanismsProp, ScramMechanism.mechanismNames().asScala.mkString(","))
+    props.put(KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, ScramMechanism.mechanismNames().asScala.mkString(","))
     props.put(KafkaConfig.DelegationTokenSecretKeyProp, secretKey)
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames())
   }

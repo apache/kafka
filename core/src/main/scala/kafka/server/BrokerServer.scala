@@ -40,7 +40,7 @@ import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, Grou
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, RecordSerde}
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
@@ -222,7 +222,7 @@ class BrokerServer(
         "controller quorum voters future",
         sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections).asScala
+      val controllerNodes = QuorumConfig.voterConnectionsToNodes(voterConnections).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
       clientToControllerChannelManager = new NodeToControllerChannelManagerImpl(
@@ -296,11 +296,13 @@ class BrokerServer(
         time,
         assignmentsChannelManager,
         config.brokerId,
-        () => lifecycleManager.brokerEpoch
+        () => lifecycleManager.brokerEpoch,
+        (directoryId: Uuid) => logManager.directoryPath(directoryId).asJava,
+        (topicId: Uuid) => Optional.ofNullable(metadataCache.topicIdsToNames().get(topicId))
       )
       val directoryEventHandler = new DirectoryEventHandler {
-        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, callback: Runnable): Unit =
-          assignmentsManager.onAssignment(partition, directoryId, callback)
+        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, reason: String, callback: Runnable): Unit =
+          assignmentsManager.onAssignment(partition, directoryId, reason, callback)
 
         override def handleFailure(directoryId: Uuid): Unit =
           lifecycleManager.propagateDirectoryFailure(directoryId)
@@ -569,7 +571,8 @@ class BrokerServer(
         config.groupMaxSessionTimeoutMs,
         config.offsetsRetentionCheckIntervalMs,
         config.offsetsRetentionMinutes * 60 * 1000L,
-        config.offsetCommitTimeoutMs
+        config.offsetCommitTimeoutMs,
+        config.consumerGroupMigrationPolicy
       )
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",
@@ -627,7 +630,7 @@ class BrokerServer(
   override def shutdown(timeout: Duration): Unit = {
     if (!maybeChangeStatus(STARTED, SHUTTING_DOWN)) return
     try {
-      val deadline = time.milliseconds() + timeout.toMillis;
+      val deadline = time.milliseconds() + timeout.toMillis
       info("shutting down")
 
       if (config.controlledShutdownEnable) {

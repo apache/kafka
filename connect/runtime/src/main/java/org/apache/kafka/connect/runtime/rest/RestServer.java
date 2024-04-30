@@ -398,7 +398,7 @@ public abstract class RestServer {
         String advertisedHostname = config.advertisedHostName();
         if (advertisedHostname != null && !advertisedHostname.isEmpty())
             builder.host(advertisedHostname);
-        else if (serverConnector != null && serverConnector.getHost() != null && serverConnector.getHost().length() > 0)
+        else if (serverConnector != null && serverConnector.getHost() != null && !serverConnector.getHost().isEmpty())
             builder.host(serverConnector.getHost());
 
         Integer advertisedPort = config.advertisedPort();

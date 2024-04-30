@@ -58,9 +58,7 @@ class LocalLogTest {
     try {
       log.close()
     } catch {
-      case _: KafkaStorageException => {
-        // ignore
-      }
+      case _: KafkaStorageException => // ignore
     }
     Utils.delete(tmpDir)
   }
@@ -100,7 +98,7 @@ class LocalLogTest {
                             initialOffset: Long = 0L): Unit = {
     log.append(lastOffset = initialOffset + records.size - 1,
       largestTimestamp = records.head.timestamp,
-      offsetOfMaxTimestamp = initialOffset,
+      shallowOffsetOfMaxTimestamp = initialOffset,
       records = MemoryRecords.withRecords(initialOffset, CompressionType.NONE, 0, records.toList : _*))
   }
 

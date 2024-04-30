@@ -24,6 +24,7 @@ import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.MetadataVersion.{IBP_3_1_IV0, IBP_3_2_IV0}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
@@ -298,7 +299,7 @@ class PartitionStateMachineTest {
       val apiVersion = if (isLeaderRecoverySupported) IBP_3_2_IV0 else IBP_3_1_IV0
       val properties = TestUtils.createBrokerConfig(brokerId, "zkConnect")
 
-      properties.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, apiVersion.toString)
+      properties.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, apiVersion.toString)
 
       new ZkPartitionStateMachine(
         KafkaConfig.fromProps(properties),
@@ -353,7 +354,7 @@ class PartitionStateMachineTest {
       partition,
       LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch),
       replicaAssignment(Seq(leaderBrokerId, brokerId)),
-      false)
+      isNew = false)
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
     verify(mockZkClient).getTopicPartitionStatesRaw(any())
     verify(mockZkClient).updateLeaderAndIsr(any(), anyInt(), anyInt())

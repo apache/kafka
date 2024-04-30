@@ -794,8 +794,6 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
     }
 
     static class SinkTaskMetricsGroup {
-        private final ConnectorTaskId id;
-        private final ConnectMetrics metrics;
         private final MetricGroup metricGroup;
         private final Sensor sinkRecordRead;
         private final Sensor sinkRecordSend;
@@ -805,13 +803,10 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         private final Sensor offsetCompletionSkip;
         private final Sensor putBatchTime;
         private final Sensor sinkRecordActiveCount;
-        private long activeRecords;
         private Map<TopicPartition, OffsetAndMetadata> consumedOffsets = new HashMap<>();
         private Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
 
         public SinkTaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics) {
-            this.metrics = connectMetrics;
-            this.id = id;
 
             ConnectMetricsRegistry registry = connectMetrics.registry();
             metricGroup = connectMetrics
@@ -855,7 +850,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         void computeSinkRecordLag() {
             Map<TopicPartition, OffsetAndMetadata> consumed = this.consumedOffsets;
             Map<TopicPartition, OffsetAndMetadata> committed = this.committedOffsets;
-            activeRecords = 0L;
+            long activeRecords = 0L;
             for (Map.Entry<TopicPartition, OffsetAndMetadata> committedOffsetEntry : committed.entrySet()) {
                 final TopicPartition partition = committedOffsetEntry.getKey();
                 final OffsetAndMetadata consumedOffsetMeta = consumed.get(partition);

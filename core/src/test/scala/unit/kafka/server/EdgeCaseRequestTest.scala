@@ -34,6 +34,7 @@ import org.apache.kafka.common.requests.{ProduceResponse, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.ByteUtils
 import org.apache.kafka.common.{TopicPartition, requests}
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -44,7 +45,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
   def generateConfigs = {
     val props = TestUtils.createBrokerConfig(1, zkConnectOrNull)
-    props.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
+    props.setProperty(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false")
     List(KafkaConfig.fromProps(props))
   }
 

@@ -18,7 +18,6 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 import kafka.server.ClientQuotaManager.DefaultTags
 import kafka.utils.TestUtils
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.message.CreatePartitionsRequestData
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
@@ -41,6 +40,8 @@ import org.apache.kafka.common.requests.DeleteTopicsResponse
 import org.apache.kafka.common.security.auth.AuthenticationContext
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.server.config.{KafkaSecurityConfigs, QuotaConfigs}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -95,13 +96,13 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
-    properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-    properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.PrincipalBuilderClassProp,
+    properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
+    properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
+    properties.put(KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
       classOf[ControllerMutationQuotaTest.TestPrincipalBuilder].getName)
     // Specify number of samples and window size.
-    properties.put(KafkaConfig.NumControllerQuotaSamplesProp, ControllerQuotaSamples.toString)
-    properties.put(KafkaConfig.ControllerQuotaWindowSizeSecondsProp, ControllerQuotaWindowSizeSeconds.toString)
+    properties.put(QuotaConfigs.NUM_CONTROLLER_QUOTA_SAMPLES_CONFIG, ControllerQuotaSamples.toString)
+    properties.put(QuotaConfigs.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_CONFIG, ControllerQuotaWindowSizeSeconds.toString)
   }
 
   @BeforeEach
@@ -408,7 +409,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     sendAlterClientQuotasRequest(entries).complete(response)
     val result = response.asScala
     assertEquals(request.size, result.size)
-    request.foreach(e => assertTrue(result.get(e._1).isDefined))
+    request.foreach(e => assertTrue(result.contains(e._1)))
     result.toMap
   }
 

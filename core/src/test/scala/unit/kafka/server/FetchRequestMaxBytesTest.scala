@@ -129,7 +129,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
         val array = new Array[Byte](buffer.remaining())
         buffer.get(array)
         assertArrayEquals(expected(i),
-          array, s"expectNextRecords unexpected element ${i}")
+          array, s"expectNextRecords unexpected element $i")
       }
     }
   }

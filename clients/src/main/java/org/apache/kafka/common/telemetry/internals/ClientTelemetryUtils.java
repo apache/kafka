@@ -133,7 +133,7 @@ public class ClientTelemetryUtils {
     }
 
     public static Uuid validateClientInstanceId(Uuid clientInstanceId) {
-        if (clientInstanceId == null || clientInstanceId == Uuid.ZERO_UUID) {
+        if (clientInstanceId == null || clientInstanceId.equals(Uuid.ZERO_UUID)) {
             throw new IllegalArgumentException("clientInstanceId is not valid");
         }
 
