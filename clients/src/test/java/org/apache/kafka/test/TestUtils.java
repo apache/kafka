@@ -67,6 +67,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -396,6 +397,35 @@ public class TestUtils {
             assertTrue(testCondition.conditionMet(),
                 "Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
         });
+    }
+
+    /**
+     * Wait until the given condition is true or throw an exception if the given wait time elapses.
+     *
+     * @param condition condition to check
+     * @param msg error message
+     */
+    public static void waitUntilTrue(BooleanSupplier condition, Supplier<String> msg) throws InterruptedException {
+        waitUntilTrue(condition, msg, DEFAULT_MAX_WAIT_MS, 100);
+    }
+
+    /**
+     * Wait until the given condition is true or throw an exception if the given wait time elapses.
+     *
+     * @param condition condition to check
+     * @param msg error message
+     * @param waitTimeMs maximum time to wait and retest the condition before failing the test
+     * @param pause delay between condition checks
+     */
+    public static void waitUntilTrue(BooleanSupplier condition, Supplier<String> msg, long waitTimeMs, long pause) throws InterruptedException {
+        long startTime = System.currentTimeMillis();
+        while (true) {
+            if (condition.getAsBoolean())
+                return;
+            if (System.currentTimeMillis() > startTime + waitTimeMs)
+                fail(msg);
+            Thread.sleep(Math.min(waitTimeMs, pause));
+        }
     }
 
     /**

@@ -21,8 +21,6 @@ import kafka.utils.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import scala.Console;
 
 import java.io.ByteArrayOutputStream;
@@ -42,7 +40,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("dontUseSystemExit")
 public class UserScramCredentialsCommandTest extends BaseRequestTest {
-    private static final Logger log = LoggerFactory.getLogger(UserScramCredentialsCommandTest.class);
+    private static final String USER1 = "user1";
+    private static final String USER2 = "user2";
 
     @Override
     public int brokerCount() {
@@ -63,10 +62,15 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
         }
     }
 
-    private ConfigCommandResult runConfigCommandViaBroker(String...args) throws UnsupportedEncodingException {
+    private ConfigCommandResult runConfigCommandViaBroker(String...args) {
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         String utf8 = StandardCharsets.UTF_8.name();
-        PrintStream printStream = new PrintStream(byteArrayOutputStream, true, utf8);
+        PrintStream printStream;
+        try {
+            printStream = new PrintStream(byteArrayOutputStream, true, utf8);
+        } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
+        }
         AtomicReference<OptionalInt> exitStatus = new AtomicReference<>(OptionalInt.empty());
         Exit.setExitProcedure((status, __) -> {
             exitStatus.set(OptionalInt.of((Integer) status));
@@ -82,7 +86,6 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
             });
             return new ConfigCommandResult(byteArrayOutputStream.toString(utf8));
         } catch (Exception e) {
-            log.debug("Exception running ConfigCommand " + String.join(" ", commandArgs), e);
             return new ConfigCommandResult("", exitStatus.get());
         } finally {
             printStream.close();
@@ -93,74 +96,36 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
     @ParameterizedTest
     @ValueSource(strings = {"kraft", "zk"})
     public void testUserScramCredentialsRequests(String quorum) throws Exception {
-        String user1 = "user1";
-        // create and describe a credential
-        ConfigCommandResult result = runConfigCommandViaBroker("--user", user1, "--alter", "--add-config", "SCRAM-SHA-256=[iterations=4096,password=foo-secret]");
-        String alterConfigsUser1Out = "Completed updating config for user " + user1 + ".\n";
-        assertEquals(alterConfigsUser1Out, result.stdout);
-        String scramCredentialConfigsUser1Out = "SCRAM credential configs for user-principal '" + user1 + "' are SCRAM-SHA-256=iterations=4096\n";
-        TestUtils.waitForCondition(
-            () -> Objects.equals(runConfigCommandViaBroker("--user", user1, "--describe").stdout, scramCredentialConfigsUser1Out),
-            () -> "Failed to describe SCRAM credential change '" + user1 + "'");
-        // create a user quota and describe the user again
-        result = runConfigCommandViaBroker("--user", user1, "--alter", "--add-config", "consumer_byte_rate=20000");
-        assertEquals(alterConfigsUser1Out, result.stdout);
-        String quotaConfigsUser1Out = "Quota configs for user-principal '" + user1 + "' are consumer_byte_rate=20000.0\n";
-        TestUtils.waitForCondition(
-            () -> Objects.equals(runConfigCommandViaBroker("--user", user1, "--describe").stdout, quotaConfigsUser1Out + scramCredentialConfigsUser1Out),
-            () -> "Failed to describe Quota change for '" + user1 + "'");
-
+        createAndAlterUser(USER1);
         // now do the same thing for user2
-        String user2 = "user2";
-        // create and describe a credential
-        result = runConfigCommandViaBroker("--user", user2, "--alter", "--add-config", "SCRAM-SHA-256=[iterations=4096,password=foo-secret]");
-        String alterConfigsUser2Out = "Completed updating config for user " + user2 + ".\n";
-        assertEquals(alterConfigsUser2Out, result.stdout);
-        String scramCredentialConfigsUser2Out = "SCRAM credential configs for user-principal '" + user2 + "' are SCRAM-SHA-256=iterations=4096\n";
-        TestUtils.waitForCondition(
-            () -> Objects.equals(runConfigCommandViaBroker("--user", user2, "--describe").stdout, scramCredentialConfigsUser2Out),
-            () -> "Failed to describe SCRAM credential change '" + user2 + "'");
-        // create a user quota and describe the user again
-        result = runConfigCommandViaBroker("--user", user2, "--alter", "--add-config", "consumer_byte_rate=20000");
-        assertEquals(alterConfigsUser2Out, result.stdout);
-        String quotaConfigsUser2Out = "Quota configs for user-principal '" + user2 + "' are consumer_byte_rate=20000.0\n";
-        TestUtils.waitForCondition(
-            () -> Objects.equals(runConfigCommandViaBroker("--user", user2, "--describe").stdout, quotaConfigsUser2Out + scramCredentialConfigsUser2Out),
-            () -> "Failed to describe Quota change for '" + user2 + "'");
+        createAndAlterUser(USER2);
 
         // describe both
-        result = runConfigCommandViaBroker("--entity-type", "users", "--describe");
         // we don't know the order that quota or scram users come out, so we have 2 possibilities for each, 4 total
-        String quotaPossibilityAOut = quotaConfigsUser1Out + quotaConfigsUser2Out;
-        String quotaPossibilityBOut = quotaConfigsUser2Out + quotaConfigsUser1Out;
-        String scramPossibilityAOut = scramCredentialConfigsUser1Out + scramCredentialConfigsUser2Out;
-        String scramPossibilityBOut = scramCredentialConfigsUser2Out + scramCredentialConfigsUser1Out;
-        assertTrue(result.stdout.equals(quotaPossibilityAOut + scramPossibilityAOut)
-            || result.stdout.equals(quotaPossibilityAOut + scramPossibilityBOut)
-            || result.stdout.equals(quotaPossibilityBOut + scramPossibilityAOut)
-            || result.stdout.equals(quotaPossibilityBOut + scramPossibilityBOut));
+        String quotaPossibilityAOut = quotaMessage(USER1) + quotaMessage(USER2);
+        String quotaPossibilityBOut = quotaMessage(USER2) + quotaMessage(USER1);
+        String scramPossibilityAOut = describeUserMessage(USER1) + describeUserMessage(USER2);
+        String scramPossibilityBOut = describeUserMessage(USER2) + describeUserMessage(USER1);
+        describeUsers(
+            quotaPossibilityAOut + scramPossibilityAOut,
+            quotaPossibilityAOut + scramPossibilityBOut,
+            quotaPossibilityBOut + scramPossibilityAOut,
+            quotaPossibilityBOut + scramPossibilityBOut);
 
         // now delete configs, in opposite order, for user1 and user2, and describe
-        result = runConfigCommandViaBroker("--user", user1, "--alter", "--delete-config", "consumer_byte_rate");
-        assertEquals(alterConfigsUser1Out, result.stdout);
-        result = runConfigCommandViaBroker("--user", user2, "--alter", "--delete-config", "SCRAM-SHA-256");
-        assertEquals(alterConfigsUser2Out, result.stdout);
-        TestUtils.waitForCondition(
-            () -> Objects.equals(runConfigCommandViaBroker("--entity-type", "users", "--describe").stdout, quotaConfigsUser2Out + scramCredentialConfigsUser1Out),
-            () -> "Failed to describe Quota change for '" + user2 + "'");
+        deleteConfig(USER1, "consumer_byte_rate");
+        deleteConfig(USER2, "SCRAM-SHA-256");
+        describeUsers(quotaMessage(USER2) + describeUserMessage(USER1));
 
         // now delete the rest of the configs, for user1 and user2, and describe
-        result = runConfigCommandViaBroker("--user", user1, "--alter", "--delete-config", "SCRAM-SHA-256");
-        assertEquals(alterConfigsUser1Out, result.stdout);
-        result = runConfigCommandViaBroker("--user", user2, "--alter", "--delete-config", "consumer_byte_rate");
-        assertEquals(alterConfigsUser2Out, result.stdout);
-        TestUtils.waitForCondition(() -> Objects.equals(runConfigCommandViaBroker("--entity-type", "users", "--describe").stdout, ""),
-            () -> "Failed to describe All users deleted");
+        deleteConfig(USER1, "SCRAM-SHA-256");
+        deleteConfig(USER2, "consumer_byte_rate");
+        describeUsers("");
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"kraft", "zk"})
-    public void testAlterWithEmptyPassword(String quorum) throws Exception {
+    public void testAlterWithEmptyPassword(String quorum) {
         String user1 = "user1";
         ConfigCommandResult result = runConfigCommandViaBroker("--user", user1, "--alter", "--add-config", "SCRAM-SHA-256=[iterations=4096,password=]");
         assertTrue(result.exitStatus.isPresent(), "Expected System.exit() to be called with an empty password");
@@ -169,10 +134,51 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"kraft", "zk"})
-    public void testDescribeUnknownUser(String quorum) throws Exception {
+    public void testDescribeUnknownUser(String quorum) {
         String unknownUser = "unknownUser";
         ConfigCommandResult result = runConfigCommandViaBroker("--user", unknownUser, "--describe");
         assertFalse(result.exitStatus.isPresent(), "Expected System.exit() to not be called with an unknown user");
         assertEquals("", result.stdout);
+    }
+
+    private void createAndAlterUser(String user) throws InterruptedException {
+        // create and describe a credential
+        ConfigCommandResult result = runConfigCommandViaBroker("--user", user, "--alter", "--add-config", "SCRAM-SHA-256=[iterations=4096,password=foo-secret]");
+        assertEquals(updateUserMessage(user), result.stdout);
+        TestUtils.waitUntilTrue(
+            () -> Objects.equals(runConfigCommandViaBroker("--user", user, "--describe").stdout, describeUserMessage(user)),
+            () -> "Failed to describe SCRAM credential change '" + user + "'");
+        // create a user quota and describe the user again
+        result = runConfigCommandViaBroker("--user", user, "--alter", "--add-config", "consumer_byte_rate=20000");
+        assertEquals(updateUserMessage(user), result.stdout);
+        TestUtils.waitUntilTrue(
+            () -> Objects.equals(runConfigCommandViaBroker("--user", user, "--describe").stdout, quotaMessage(user) + describeUserMessage(user)),
+            () -> "Failed to describe Quota change for '" + user + "'");
+    }
+
+    private void deleteConfig(String user, String config) {
+        ConfigCommandResult result = runConfigCommandViaBroker("--user", user, "--alter", "--delete-config", config);
+        assertEquals(updateUserMessage(user), result.stdout);
+    }
+
+    private void describeUsers(String... msgs) throws InterruptedException {
+        TestUtils.waitUntilTrue(
+            () -> {
+                String output = runConfigCommandViaBroker("--entity-type", "users", "--describe").stdout;
+                return Arrays.asList(msgs).contains(output);
+            },
+            () -> "Failed to describe config");
+    }
+
+    private static String describeUserMessage(String user) {
+        return "SCRAM credential configs for user-principal '" + user + "' are SCRAM-SHA-256=iterations=4096\n";
+    }
+
+    private static String updateUserMessage(String user) {
+        return "Completed updating config for user " + user + ".\n";
+    }
+
+    private static String quotaMessage(String user) {
+        return "Quota configs for user-principal '" + user + "' are consumer_byte_rate=20000.0\n";
     }
 }
