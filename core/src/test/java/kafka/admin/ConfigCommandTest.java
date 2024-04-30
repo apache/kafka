@@ -14,12 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.config;
+package kafka.admin;
 
-import kafka.admin.ConfigCommand;
-import kafka.admin.ConfigCommandOptions;
-import kafka.admin.ConfigEntity;
-import kafka.admin.Tuple2;
 import kafka.cluster.Broker;
 import kafka.utils.TestUtils;
 import kafka.zk.AdminZkClient;
@@ -74,8 +70,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.tools.config.ConfigCommandIntegrationTest.assertNonZeroStatusExit;
-import static org.apache.kafka.tools.config.ConfigCommandIntegrationTest.seq;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -1682,7 +1676,7 @@ public class ConfigCommandTest {
     public void checkEntities(List<String> opts, Map<String, List<String>> expectedFetches, List<String> expectedEntityNames) {
         ConfigEntity entity = ConfigCommand.parseEntity(new ConfigCommandOptions(toArray(opts, Collections.singletonList("--describe"))));
         expectedFetches.forEach((name, values) ->
-            when(zkClient.getAllEntitiesWithConfig(name)).thenReturn(seq(values)));
+            when(zkClient.getAllEntitiesWithConfig(name)).thenReturn(ConfigCommandIntegrationTest.seq(values)));
         List<ConfigEntity> entities = entity.getAllEntities(zkClient);
         assertEquals(
             expectedEntityNames,
@@ -1876,6 +1870,10 @@ public class ConfigCommandTest {
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfigWithZk(null, alterOpts, DUMMY_ADMIN_ZK_CLIENT));
         assertEquals("client-metrics is not a known entityType. Should be one of List(topics, clients, users, brokers, ips)", exception.getMessage());
+    }
+
+    public static void assertNonZeroStatusExit(String...args) {
+        ConfigCommandIntegrationTest.assertNonZeroStatusExit(Arrays.stream(args), msg -> { });
     }
 
     public static String[] toArray(String... first) {

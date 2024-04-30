@@ -14,9 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.config;
+package kafka.admin;
 
-import kafka.admin.ConfigCommand;
 import kafka.server.BaseRequestTest;
 import kafka.utils.Exit;
 import org.apache.kafka.test.TestUtils;
@@ -34,7 +33,7 @@ import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.tools.config.ConfigCommandTest.toArray;
+import static kafka.admin.ConfigCommandTest.toArray;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

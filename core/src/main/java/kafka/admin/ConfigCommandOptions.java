@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.config;
+package kafka.admin;
 
 import joptsimple.OptionSpec;
 import kafka.server.DynamicConfig;
@@ -33,8 +33,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.tools.config.ConfigCommand.BROKER_LOGGER_CONFIG_TYPE;
-import static org.apache.kafka.tools.config.ConfigCommand.ZK_SUPPORTED_CONFIG_TYPES;
+import static kafka.admin.ConfigCommand.BROKER_LOGGER_CONFIG_TYPE;
+import static kafka.admin.ConfigCommand.ZK_SUPPORTED_CONFIG_TYPES;
 
 public class ConfigCommandOptions extends CommandDefaultOptions {
     private static final String NL = System.lineSeparator();

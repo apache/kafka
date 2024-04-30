@@ -14,13 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.config;
+package kafka.admin;
 
-import kafka.admin.ConfigCommand;
-import kafka.admin.Tuple2;
 import kafka.server.AbstractDynamicBrokerReconfigurationTest;
 import kafka.server.KafkaBroker;
-import kafka.server.KafkaConfig;
 import kafka.server.TestMetricsReporter;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.Config;
@@ -31,6 +28,8 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs;
+import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.server.metrics.MetricConfigs;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -130,18 +129,18 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
 
         // Verify a few log configs with and without synonyms
         Properties expectedProps = new Properties();
-        expectedProps.setProperty(KafkaConfig.LogRetentionTimeMillisProp(), "1680000000");
-        expectedProps.setProperty(KafkaConfig.LogRetentionTimeHoursProp(), "168");
-        expectedProps.setProperty(KafkaConfig.LogRollTimeHoursProp(), "168");
+        expectedProps.setProperty(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "1680000000");
+        expectedProps.setProperty(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, "168");
+        expectedProps.setProperty(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, "168");
         expectedProps.setProperty(CleanerConfig.LOG_CLEANER_THREADS_PROP, "1");
-        ConfigEntry logRetentionMs = configEntry(configDesc, KafkaConfig.LogRetentionTimeMillisProp());
-        verifyConfig(KafkaConfig.LogRetentionTimeMillisProp(), logRetentionMs,
+        ConfigEntry logRetentionMs = configEntry(configDesc, ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG);
+        verifyConfig(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, logRetentionMs,
             false, false, expectedProps);
-        ConfigEntry logRetentionHours = configEntry(configDesc, KafkaConfig.LogRetentionTimeHoursProp());
-        verifyConfig(KafkaConfig.LogRetentionTimeHoursProp(), logRetentionHours,
+        ConfigEntry logRetentionHours = configEntry(configDesc, ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG);
+        verifyConfig(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, logRetentionHours,
             false, true, expectedProps);
-        ConfigEntry logRollHours = configEntry(configDesc, KafkaConfig.LogRollTimeHoursProp());
-        verifyConfig(KafkaConfig.LogRollTimeHoursProp(), logRollHours,
+        ConfigEntry logRollHours = configEntry(configDesc, ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG);
+        verifyConfig(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, logRollHours,
             false, true, expectedProps);
         ConfigEntry logCleanerThreads = configEntry(configDesc, CleanerConfig.LOG_CLEANER_THREADS_PROP);
         verifyConfig(CleanerConfig.LOG_CLEANER_THREADS_PROP, logCleanerThreads,
@@ -152,15 +151,15 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
                 .map(s -> new Tuple2<>(s.name(), s.source()))
                 .collect(Collectors.toList());
         assertEquals(Arrays.asList(
-                new Tuple2<>(KafkaConfig.LogRetentionTimeMillisProp(), ConfigSource.STATIC_BROKER_CONFIG),
-                new Tuple2<>(KafkaConfig.LogRetentionTimeHoursProp(), ConfigSource.STATIC_BROKER_CONFIG),
-                new Tuple2<>(KafkaConfig.LogRetentionTimeHoursProp(), ConfigSource.DEFAULT_CONFIG)),
+                new Tuple2<>(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+                new Tuple2<>(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+                new Tuple2<>(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)),
             synonymsList.apply(logRetentionMs));
         assertEquals(Arrays.asList(
-                new Tuple2<>(KafkaConfig.LogRetentionTimeHoursProp(), ConfigSource.STATIC_BROKER_CONFIG),
-                new Tuple2<>(KafkaConfig.LogRetentionTimeHoursProp(), ConfigSource.DEFAULT_CONFIG)),
+                new Tuple2<>(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+                new Tuple2<>(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)),
             synonymsList.apply(logRetentionHours));
-        assertEquals(Collections.singletonList(new Tuple2<>(KafkaConfig.LogRollTimeHoursProp(), ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logRollHours));
+        assertEquals(Collections.singletonList(new Tuple2<>(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logRollHours));
         assertEquals(Collections.singletonList(new Tuple2<>(CleanerConfig.LOG_CLEANER_THREADS_PROP, ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logCleanerThreads));
     }
 
@@ -188,7 +187,7 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         Properties updatedProps = new Properties();
         updatedProps.setProperty("config.providers", "file");
         updatedProps.setProperty("config.providers.file.class", "kafka.server.MockFileConfigProvider");
-        updatedProps.put(KafkaConfig.MetricReporterClassesProp(), TestMetricsReporter.class.getName());
+        updatedProps.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, TestMetricsReporter.class.getName());
 
         // 1. update Integer property using config provider
         updatedProps.put(TestMetricsReporter.PollingIntervalProp(), pollingIntervalVal);

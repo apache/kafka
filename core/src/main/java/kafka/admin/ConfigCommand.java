@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.config;
+package kafka.admin;
 
 import joptsimple.OptionException;
-import kafka.admin.ZkSecurityMigrator;
 import kafka.server.DynamicBrokerConfig;
 import kafka.server.DynamicConfig;
 import kafka.server.KafkaConfig;
@@ -43,7 +42,6 @@ import org.apache.kafka.clients.admin.UserScramCredentialsDescription;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.config.internals.QuotaConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.internals.Topic;
@@ -62,6 +60,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.security.PasswordEncoder;
 import org.apache.kafka.security.PasswordEncoderConfigs;
 import org.apache.kafka.server.config.ConfigType;
+import org.apache.kafka.server.config.QuotaConfigs;
 import org.apache.kafka.server.config.ZooKeeperInternals;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.zookeeper.client.ZKClientConfig;
@@ -272,17 +271,17 @@ public class ConfigCommand {
     }
 
     static PasswordEncoder createPasswordEncoder(Map<String, String> encoderConfigs) {
-        encoderConfigs.get(PasswordEncoderConfigs.SECRET);
-        String encoderSecret = encoderConfigs.get(PasswordEncoderConfigs.SECRET);
+        encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG);
+        String encoderSecret = encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG);
         if (encoderSecret == null)
             throw new IllegalArgumentException("Password encoder secret not specified");
-        String keyLength = encoderConfigs.get(PasswordEncoderConfigs.KEY_LENGTH);
-        String iteration = encoderConfigs.get(PasswordEncoderConfigs.ITERATIONS);
+        String keyLength = encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_CONFIG);
+        String iteration = encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG);
         return PasswordEncoder.encrypting(new Password(encoderSecret),
                 null,
-                encoderConfigs.getOrDefault(PasswordEncoderConfigs.CIPHER_ALGORITHM, PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM),
-                keyLength != null ? Integer.parseInt(keyLength) : PasswordEncoderConfigs.DEFAULT_KEY_LENGTH,
-                iteration != null ? Integer.parseInt(iteration) : PasswordEncoderConfigs.DEFAULT_ITERATIONS);
+                encoderConfigs.getOrDefault(PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG, PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT),
+                keyLength != null ? Integer.parseInt(keyLength) : PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_DEFAULT,
+                iteration != null ? Integer.parseInt(iteration) : PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_DEFAULT);
     }
 
     /**
@@ -306,8 +305,8 @@ public class ConfigCommand {
         DynamicBrokerConfig.validateConfigs(configsToBeAdded, perBrokerConfig);
         List<String> passwordConfigs = configsToBeAdded.stringPropertyNames().stream().filter(DynamicBrokerConfig::isPasswordConfig).collect(Collectors.toList());
         if (!passwordConfigs.isEmpty()) {
-            require(passwordEncoderConfigs.containsKey(PasswordEncoderConfigs.SECRET),
-                PasswordEncoderConfigs.SECRET + " must be specified to update " + passwordConfigs + "." +
+            require(passwordEncoderConfigs.containsKey(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG),
+                PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG + " must be specified to update " + passwordConfigs + "." +
                     " Other password encoder configs like cipher algorithm and iterations may also be specified" +
                     " to override the default encoding parameters. Password encoder configs will not be persisted" +
                     " in ZooKeeper."
@@ -516,20 +515,20 @@ public class ConfigCommand {
 
             case ConfigType.USER:
             case ConfigType.CLIENT:
-                boolean hasQuotaConfigsToAdd = configsToBeAdded.keySet().stream().anyMatch(QuotaConfigs::isClientOrUserConfig);
+                boolean hasQuotaConfigsToAdd = configsToBeAdded.keySet().stream().anyMatch(QuotaConfigs::isClientOrUserQuotaConfig);
                 Map<String, ConfigEntry> scramConfigsToAddMap = configsToBeAdded.entrySet().stream()
                     .filter(entry -> ScramMechanism.isScram(entry.getKey()))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
                 List<String> unknownConfigsToAdd = configsToBeAdded.keySet().stream()
-                    .filter(key -> !(ScramMechanism.isScram(key) || QuotaConfigs.isClientOrUserConfig(key)))
+                    .filter(key -> !(ScramMechanism.isScram(key) || QuotaConfigs.isClientOrUserQuotaConfig(key)))
                     .collect(Collectors.toList());
-                boolean hasQuotaConfigsToDelete = configsToBeDeleted.stream().anyMatch(QuotaConfigs::isClientOrUserConfig);
+                boolean hasQuotaConfigsToDelete = configsToBeDeleted.stream().anyMatch(QuotaConfigs::isClientOrUserQuotaConfig);
                 List<String> scramConfigsToDelete = configsToBeDeleted.stream()
                     .filter(ScramMechanism::isScram)
                     .collect(Collectors.toList());
                 List<String> unknownConfigsToDelete = configsToBeDeleted
                     .stream()
-                    .filter(key -> !(ScramMechanism.isScram(key) || QuotaConfigs.isClientOrUserConfig(key)))
+                    .filter(key -> !(ScramMechanism.isScram(key) || QuotaConfigs.isClientOrUserQuotaConfig(key)))
                     .collect(Collectors.toList());
 
                 if (entityTypeHead.equals(ConfigType.CLIENT) || entityTypes.size() == 2) { // size==2 for case where users is specified first on the command line, before clients

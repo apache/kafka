@@ -63,7 +63,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 @ExtendWith(value = ClusterTestExtensions.class)
 @ClusterTestDefaults
 @Tag("integration")
@@ -139,12 +138,12 @@ public class ConfigCommandIntegrationTest {
         alterConfigWithZk(zkClient, configs, brokerId, Collections.emptyMap());
     }
 
-    public void alterConfigWithZk(KafkaZkClient zkClient, Map<String, String> configs, Optional<String> brokerId, Map<String, String> encoderConfigs) {
+    public void alterConfigWithZk(KafkaZkClient zkClient, Map<String, String> configs, Optional<String> brokerId, Map<String, String> encoderConfigs) throws Exception {
         String configStr = Stream.of(configs.entrySet(), encoderConfigs.entrySet())
             .flatMap(Set::stream)
             .map(e -> e.getKey() + "=" + e.getValue())
             .collect(Collectors.joining(","));
-        ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId), Arrays.asList("--add-config", configStr)));
+        ConfigCommandOptions addOpts = new ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId), Arrays.asList("--add-config", configStr)));
         ConfigCommand.alterConfigWithZk(zkClient, addOpts, adminZkClient);
     }
 
@@ -158,8 +157,8 @@ public class ConfigCommandIntegrationTest {
         verifyConfig(zkClient, configs, brokerId);
     }
 
-    void deleteAndVerifyConfig(KafkaZkClient zkClient, Set<String> configNames, Optional<String> brokerId) {
-        ConfigCommand.ConfigCommandOptions deleteOpts = new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId), Arrays.asList("--delete-config", String.join(",", configNames))));
+    void deleteAndVerifyConfig(KafkaZkClient zkClient, Set<String> configNames, Optional<String> brokerId) throws Exception {
+        ConfigCommandOptions deleteOpts = new ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId), Arrays.asList("--delete-config", String.join(",", configNames))));
         ConfigCommand.alterConfigWithZk(zkClient, deleteOpts, adminZkClient);
         verifyConfig(zkClient, Collections.emptyMap(), brokerId);
     }
@@ -210,7 +209,7 @@ public class ConfigCommandIntegrationTest {
         assertFalse(brokerConfigs.contains(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG), "Encoder secret stored in ZooKeeper");
         assertEquals("2", brokerConfigs.getProperty("log.cleaner.threads")); // not encoded
         String encodedPassword = brokerConfigs.getProperty("listener.name.external.ssl.keystore.password");
-        PasswordEncoder passwordEncoder = ConfigCommand.createPasswordEncoder(JavaConverters.mapAsScalaMap(encoderConfigs));
+        PasswordEncoder passwordEncoder = ConfigCommand.createPasswordEncoder(encoderConfigs);
         assertEquals("secret", passwordEncoder.decode(encodedPassword).value());
         assertEquals(configs.size(), brokerConfigs.size());
 
@@ -225,8 +224,8 @@ public class ConfigCommandIntegrationTest {
         alterConfigWithZk(zkClient, configs2, Optional.of(brokerId), encoderConfigs2);
         Properties brokerConfigs2 = zkClient.getEntityConfigs("brokers", brokerId);
         String encodedPassword2 = brokerConfigs2.getProperty("listener.name.internal.ssl.keystore.password");
-        assertEquals("secret2", ConfigCommand.createPasswordEncoder(JavaConverters.mapAsScalaMap(encoderConfigs)).decode(encodedPassword2).value());
-        assertEquals("secret2", ConfigCommand.createPasswordEncoder(JavaConverters.mapAsScalaMap(encoderConfigs2)).decode(encodedPassword2).value());
+        assertEquals("secret2", ConfigCommand.createPasswordEncoder(encoderConfigs).decode(encodedPassword2).value());
+        assertEquals("secret2", ConfigCommand.createPasswordEncoder(encoderConfigs2).decode(encodedPassword2).value());
 
         // Password config update at default cluster-level should fail
         assertThrows(ConfigException.class, () -> alterConfigWithZk(zkClient, configs, Optional.empty(), encoderConfigs));
