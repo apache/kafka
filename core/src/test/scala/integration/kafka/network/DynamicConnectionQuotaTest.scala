@@ -38,7 +38,7 @@ import org.junit.jupiter.params.provider.ValueSource
 
 import java.io.IOException
 import java.net.{InetAddress, Socket}
-import java.util.concurrent._
+import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
