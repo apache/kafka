@@ -262,61 +262,60 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads. Note that at the debug level you can use <code>cache.size</code> to monitor the actual size of the Kafka Streams cache.</td>
             <td>10485760</td>
           </tr>
-          <tr class="row-even"><td>cache.max.bytes.buffering (Deprecated. Use cache.max.bytes instead.)</td>
+          <tr class="row-odd"><td>cache.max.bytes.buffering (Deprecated. Use cache.max.bytes instead.)</td>
             <td>Medium</td>
             <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads.</td>
             <td>10485760 bytes</td>
           </tr>
-          <tr class="row-odd"><td>client.id</td>
+          <tr class="row-even"><td>client.id</td>
             <td>Medium</td>
             <td colspan="2">An ID string to pass to the server when making requests.
               (This setting is passed to the consumer/producer clients used internally by Kafka Streams.)</td>
             <td>the empty string</td>
           </tr>
-          <tr class="row-even"><td>commit.interval.ms</td>
+          <tr class="row-odd"><td>commit.interval.ms</td>
             <td>Low</td>
             <td colspan="2">The frequency in milliseconds with which to save the position (offsets in source topics) of tasks.</td>
             <td>30000 milliseconds</td>
           </tr>
-          <tr class="row-odd"><td>default.deserialization.exception.handler</td>
+          <tr class="row-even"><td>default.deserialization.exception.handler</td>
             <td>Medium</td>
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">DeserializationExceptionHandler</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">LogAndContinueExceptionHandler</span></code></td>
           </tr>
-          <tr class="row-even"><td>default.key.serde</td>
+          <tr class="row-odd"><td>default.key.serde</td>
             <td>Medium</td>
             <td colspan="2">Default serializer/deserializer class for record keys, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface. Must be
               set by the user or all serdes must be passed in explicitly (see also default.value.serde).</td>
             <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
-          <tr class="row-odd"><td>default.production.exception.handler</td>
+          <tr class="row-even"><td>default.production.exception.handler</td>
             <td>Medium</td>
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">ProductionExceptionHandler</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">DefaultProductionExceptionHandler</span></code></td>
           </tr>
-          <tr class="row-even"><td>default.timestamp.extractor</td>
+          <tr class="row-odd"><td>default.timestamp.extractor</td>
             <td>Medium</td>
             <td colspan="2">Timestamp extractor class that implements the <code class="docutils literal"><span class="pre">TimestampExtractor</span></code> interface.</td>
             <td>See <a class="reference internal" href="#streams-developer-guide-timestamp-extractor"><span class="std std-ref">Timestamp Extractor</span></a></td>
           </tr>
-          <tr class="row-odd"><td>default.value.serde</td>
+          <tr class="row-even"><td>default.value.serde</td>
             <td>Medium</td>
             <td colspan="2">Default serializer/deserializer class for record values, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface. Must be
               set by the user or all serdes must be passed in explicitly (see also default.key.serde).</td>
             <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
-          <tr class="row-even"><td>default.windowed.key.serde.inner (Deprecated.)</td>
+          <tr class="row-odd"><td>default.windowed.key.serde.inner (Deprecated.)</td>
             <td>Medium</td>
             <td colspan="2">Default serializer/deserializer for the inner class of windowed keys, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
             <td>null</td>
-
           </tr>
-          <tr class="row-odd"><td>default.windowed.value.serde.inner (Deprecated.)</td>
+          <tr class="row-even"><td>default.windowed.value.serde.inner (Deprecated.)</td>
             <td>Medium</td>
             <td colspan="2">Default serializer/deserializer for the inner class of windowed values, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
             <td>null</td>
           </tr>
-          <tr class="row-even"><td>max.task.idle.ms</td>
+          <tr class="row-odd"><td>max.task.idle.ms</td>
             <td>Medium</td>
             <td colspan="2">
               <p>
@@ -335,37 +334,37 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             </td>
             <td>0 milliseconds</td>
           </tr>
-          <tr class="row-odd"><td>max.warmup.replicas</td>
+          <tr class="row-even"><td>max.warmup.replicas</td>
             <td>Medium</td>
             <td colspan="2">The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once.</td>
             <td><code class="docutils literal"><span class="pre">2</span></code></td>
           </tr>
-          <tr class="row-even"><td>metric.reporters</td>
+          <tr class="row-odd"><td>metric.reporters</td>
             <td>Low</td>
             <td colspan="2">A list of classes to use as metrics reporters.</td>
             <td>the empty list</td>
           </tr>
-          <tr class="row-odd"><td>metrics.num.samples</td>
+          <tr class="row-even"><td>metrics.num.samples</td>
             <td>Low</td>
             <td colspan="2">The number of samples maintained to compute metrics.</td>
             <td><code class="docutils literal"><span class="pre">2</span></code></td>
           </tr>
-          <tr class="row-even"><td>metrics.recording.level</td>
+          <tr class="row-odd"><td>metrics.recording.level</td>
             <td>Low</td>
             <td colspan="2">The highest recording level for metrics.</td>
             <td><code class="docutils literal"><span class="pre">INFO</span></code></td>
           </tr>
-          <tr class="row-odd"><td>metrics.sample.window.ms</td>
+          <tr class="row-even"><td>metrics.sample.window.ms</td>
             <td>Low</td>
             <td colspan="2">The window of time in milliseconds a metrics sample is computed over.</td>
             <td>30000 milliseconds (30 seconds)</td>
           </tr>
-          <tr class="row-even"><td>num.standby.replicas</td>
+          <tr class="row-odd"><td>num.standby.replicas</td>
             <td>High</td>
             <td colspan="2">The number of standby replicas for each task.</td>
             <td><code class="docutils literal"><span class="pre">0</span></code></td>
           </tr>
-          <tr class="row-odd"><td>num.stream.threads</td>
+          <tr class="row-even"><td>num.stream.threads</td>
             <td>Medium</td>
             <td colspan="2">The number of threads to execute stream processing.</td>
             <td><code class="docutils literal"><span class="pre">1</span></code></td>
@@ -394,7 +393,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
               clients with different tag values.</td>
             <td>the empty list</td>
           </tr>
-          <tr class="row-even"><td>replication.factor</td>
+          <tr class="row-odd"><td>replication.factor</td>
             <td>Medium</td>
             <td colspan="2">The replication factor for changelog topics and repartition topics created by the application.
               The default of <code>-1</code> (meaning: use broker default replication factor) requires broker version 2.4 or newer.</td>
@@ -420,22 +419,22 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td colspan="2">Directory location for state stores.</td>
             <td><code class="docutils literal"><span class="pre">/${java.io.tmpdir}/kafka-streams</span></code></td>
           </tr>
-          <tr class="row-odd"><td>task.timeout.ms</td>
+          <tr class="row-even"><td>task.timeout.ms</td>
             <td>Medium</td>
             <td colspan="2">The maximum amount of time in milliseconds a task might stall due to internal errors and retries until an error is raised. For a timeout of <code>0 ms</code>, a task would raise an error for the first internal error. For any timeout larger than <code>0 ms</code>, a task will retry at least once before an error is raised.</td>
             <td>300000 milliseconds (5 minutes)</td>
           </tr>
-          <tr class="row-even"><td>topology.optimization</td>
+          <tr class="row-odd"><td>topology.optimization</td>
             <td>Medium</td>
             <td colspan="2">A configuration telling Kafka Streams if it should optimize the topology and what optimizations to apply. Acceptable values are: <code>StreamsConfig.NO_OPTIMIZATION</code> (<code>none</code>), <code>StreamsConfig.OPTIMIZE</code> (<code>all</code>) or a comma separated list of specific optimizations: (<code>StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS</code> (<code>reuse.ktable.source.topics</code>), <code>StreamsConfig.MERGE_REPARTITION_TOPICS</code> (<code>merge.repartition.topics</code>)).</td>
             <td><code> NO_OPTIMIZATION</code></td>
           </tr>
-          <tr class="row-odd"><td>upgrade.from</td>
+          <tr class="row-even"><td>upgrade.from</td>
             <td>Medium</td>
             <td colspan="2">The version you are upgrading from during a rolling upgrade.</td>
             <td>See <a class="reference internal" href="#streams-developer-guide-upgrade-from"><span class="std std-ref">Upgrade From</span></a></td>
           </tr>
-          <tr class="row-even"><td>windowstore.changelog.additional.retention.ms</td>
+          <tr class="row-odd"><td>windowstore.changelog.additional.retention.ms</td>
             <td>Low</td>
             <td colspan="2">Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift.</td>
             <td>86400000 milliseconds (1 day)</td>
