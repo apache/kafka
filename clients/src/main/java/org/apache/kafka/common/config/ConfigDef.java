@@ -1051,13 +1051,13 @@ public class ConfigDef {
         public void ensureValid(String name, Object o) {
             String s = (String) o;
             if (!validStrings.contains(s)) {
-                throw new ConfigException(name, o, "String must be one of: " + String.join(",", validStrings));
+                throw new ConfigException(name, o, "String must be one of: " + String.join(", ", validStrings));
             }
 
         }
 
         public String toString() {
-            return "[" + String.join(",", validStrings) + "]";
+            return "[" + String.join(", ", validStrings) + "]";
         }
     }
 
@@ -1084,7 +1084,7 @@ public class ConfigDef {
         }
 
         public String toString() {
-            return "(case insensitive) [" + String.join(",", validStrings) + "]";
+            return "(case insensitive) [" + String.join(", ", validStrings) + "]";
         }
     }
 
@@ -1206,7 +1206,7 @@ public class ConfigDef {
 
             if (!foundIllegalCharacters.isEmpty()) {
                 throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " +
-                        foundIllegalCharacters.stream().map(Object::toString).collect(Collectors.joining(",")));
+                        foundIllegalCharacters.stream().map(Object::toString).collect(Collectors.joining(", ")));
             }
         }
 

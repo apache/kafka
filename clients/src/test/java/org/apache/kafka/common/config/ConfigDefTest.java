@@ -514,7 +514,7 @@ public class ConfigDefTest {
                 "\n" +
                 "  * Type: string\n" +
                 "  * Default: a\n" +
-                "  * Valid Values: [a,b,c]\n" +
+                "  * Valid Values: [a, b, c]\n" +
                 "  * Importance: high\n" +
                 "\n" +
                 "``opt3``\n" +
@@ -563,7 +563,7 @@ public class ConfigDefTest {
                 "\n" +
                 "  * Type: string\n" +
                 "  * Default: a\n" +
-                "  * Valid Values: [a,b,c]\n" +
+                "  * Valid Values: [a, b, c]\n" +
                 "  * Importance: high\n" +
                 "\n" +
                 "``opt2.of.group1``\n" +
