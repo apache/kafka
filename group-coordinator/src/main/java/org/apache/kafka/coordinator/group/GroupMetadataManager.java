@@ -1936,6 +1936,12 @@ public class GroupMetadataManager {
         cancelConsumerGroupSyncTimeout(groupId, memberId);
     }
 
+    /**
+     * Schedules (or reschedules) the session timeout for the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
     private void scheduleConsumerGroupSessionTimeout(
         String groupId,
         String memberId
@@ -1946,8 +1952,9 @@ public class GroupMetadataManager {
     /**
      * Schedules (or reschedules) the session timeout for the member.
      *
-     * @param groupId       The group id.
-     * @param memberId      The member id.
+     * @param groupId           The group id.
+     * @param memberId          The member id.
+     * @param sessionTimeoutMs  The session timeout.
      */
     private void scheduleConsumerGroupSessionTimeout(
         String groupId,
