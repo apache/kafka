@@ -27,11 +27,12 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetad
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import java.util
-import java.util.{Collections, Optional}
+import java.util.Optional
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 
 
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 import scala.math.Ordered.orderingToOrdered
 
 object FetchSession {
@@ -396,18 +397,26 @@ object FullFetchContext {
   * The fetch context for a full fetch request.
   *
   * @param time               The clock to use.
-  * @param cache              The fetch session cache.
+  * @param caches             The fetch session cache shards.
   * @param reqMetadata        The request metadata.
   * @param fetchData          The partition data from the fetch request.
   * @param usesTopicIds       True if this session should use topic IDs.
   * @param isFromFollower     True if this fetch request came from a follower.
   */
 class FullFetchContext(private val time: Time,
-                       private val cache: FetchSessionCache,
+                       private val caches: Seq[FetchSessionCache],
                        private val reqMetadata: JFetchMetadata,
                        private val fetchData: util.Map[TopicIdPartition, FetchRequest.PartitionData],
                        private val usesTopicIds: Boolean,
                        private val isFromFollower: Boolean) extends FetchContext {
+
+  def this(time: Time,
+           cache: FetchSessionCache,
+           reqMetadata: JFetchMetadata,
+           fetchData: util.Map[TopicIdPartition, FetchRequest.PartitionData],
+           usesTopicIds: Boolean,
+           isFromFollower: Boolean
+          ) = this(time, Seq(cache), reqMetadata, fetchData, usesTopicIds, isFromFollower)
 
   override lazy val logger = FullFetchContext.logger
 
@@ -431,6 +440,9 @@ class FullFetchContext(private val time: Time,
       }
       cachedPartitions
     }
+    // We select a shard randomly out of the available options
+    val shard = ThreadLocalRandom.current().nextInt(caches.size)
+    val cache = caches.apply(shard);
     val responseSessionId = cache.maybeCreateSession(time.milliseconds(), isFromFollower,
         updates.size, usesTopicIds, () => createNewSession)
     debug(s"Full fetch context with session id $responseSessionId returning " +
@@ -584,9 +596,13 @@ case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Compara
   *
   * @param maxEntries The maximum number of entries that can be in the cache.
   * @param evictionMs The minimum time that an entry must be unused in order to be evictable.
-  */
+  * @param sessionIdRange The number of sessionIds each cache shard handles. The range for a given shard is [Math.max(1, shardNum * sessionIdRange), (shardNum + 1) * sessionIdRange).
+  * @param shardNum Identifier for this shard.
+ */
 class FetchSessionCache(private val maxEntries: Int,
-                        private val evictionMs: Long) extends Logging {
+                        private val evictionMs: Long,
+                        val sessionIdRange: Int = Int.MaxValue,
+                        private val shardNum: Int = 0) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   private var numPartitions: Long = 0
@@ -604,14 +620,16 @@ class FetchSessionCache(private val maxEntries: Int,
   // A map containing sessions which can be evicted by privileged sessions.
   private val evictableByPrivileged = new util.TreeMap[EvictableKey, FetchSession]
 
+  private val metricTag = Map("shard" -> s"$shardNum").asJava
+
   // Set up metrics.
-  metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS)
-  metricsGroup.newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS, () => FetchSessionCache.this.size)
-  metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED)
-  metricsGroup.newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED, () => FetchSessionCache.this.totalPartitions)
-  metricsGroup.removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC)
+  metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS, metricTag)
+  metricsGroup.newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS, () => FetchSessionCache.this.size, metricTag)
+  metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED, metricTag)
+  metricsGroup.newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED, () => FetchSessionCache.this.totalPartitions, metricTag)
+  metricsGroup.removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC, metricTag)
   private[server] val evictionsMeter = metricsGroup.newMeter(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC,
-    FetchSession.EVICTIONS, TimeUnit.SECONDS, Collections.emptyMap())
+    FetchSession.EVICTIONS, TimeUnit.SECONDS, metricTag)
 
   /**
     * Get a session by session ID.
@@ -645,7 +663,7 @@ class FetchSessionCache(private val maxEntries: Int,
   def newSessionId(): Int = synchronized {
     var id = 0
     do {
-      id = ThreadLocalRandom.current().nextInt(1, Int.MaxValue)
+      id = ThreadLocalRandom.current().nextInt(Math.max(1, shardNum * sessionIdRange), (shardNum + 1) * sessionIdRange)
     } while (sessions.contains(id) || id == INVALID_SESSION_ID)
     id
   }
@@ -790,7 +808,15 @@ class FetchSessionCache(private val maxEntries: Int,
 }
 
 class FetchManager(private val time: Time,
-                   private val cache: FetchSessionCache) extends Logging {
+                   private val caches: Seq[FetchSessionCache]) extends Logging {
+
+  def this(time: Time, cache: FetchSessionCache) = this(time, Seq(cache))
+
+  def getShardedCache(sessionId: Int): FetchSessionCache = {
+    val shard = sessionId / caches.head.sessionIdRange
+    caches.apply(shard)
+  }
+
   def newContext(reqVersion: Short,
                  reqMetadata: JFetchMetadata,
                  isFollower: Boolean,
@@ -800,6 +826,7 @@ class FetchManager(private val time: Time,
     val context = if (reqMetadata.isFull) {
       var removedFetchSessionStr = ""
       if (reqMetadata.sessionId != INVALID_SESSION_ID) {
+        val cache = getShardedCache(reqMetadata.sessionId())
         // Any session specified in a FULL fetch request will be closed.
         if (cache.remove(reqMetadata.sessionId).isDefined) {
           removedFetchSessionStr = s" Removed fetch session ${reqMetadata.sessionId}."
@@ -811,12 +838,13 @@ class FetchManager(private val time: Time,
         suffix = " Will not try to create a new session."
         new SessionlessFetchContext(fetchData)
       } else {
-        new FullFetchContext(time, cache, reqMetadata, fetchData, reqVersion >= 13, isFollower)
+        new FullFetchContext(time, caches, reqMetadata, fetchData, reqVersion >= 13, isFollower)
       }
       debug(s"Created a new full FetchContext with ${partitionsToLogString(fetchData.keySet)}."+
         s"$removedFetchSessionStr$suffix")
       context
     } else {
+      val cache = getShardedCache(reqMetadata.sessionId())
       cache.synchronized {
         cache.get(reqMetadata.sessionId) match {
           case None => {

@@ -1932,6 +1932,26 @@ class FetchSessionTest {
     }
     assertEquals(partitions, partitionsInContext.toSeq)
   }
+
+  @Test
+  def testFetchManager_getShardedCache_retrievesCacheFromCorrectSegment(): Unit = {
+    // Given
+    val time = new MockTime()
+    val sessionIdRange = Int.MaxValue / 8
+    val caches = Range(0, 8).map(shardNum => new FetchSessionCache(10, 1000, sessionIdRange, shardNum))
+    val fetchManager = new FetchManager(time, caches)
+
+    // When
+    val cache0 = fetchManager.getShardedCache(sessionIdRange - 1)
+    val cache1 = fetchManager.getShardedCache(sessionIdRange)
+    val cache2 = fetchManager.getShardedCache(sessionIdRange * 2)
+
+    // Then
+    assertEquals(cache0, caches.apply(0))
+    assertEquals(cache1, caches.apply(1))
+    assertEquals(cache2, caches.apply(2))
+    assertThrows(classOf[IndexOutOfBoundsException], () => fetchManager.getShardedCache(sessionIdRange * 8))
+  }
 }
 
 object FetchSessionTest {

@@ -541,9 +541,17 @@ class KafkaServer(
             }.toMap
         }
 
-        val fetchManager = new FetchManager(Time.SYSTEM,
-          new FetchSessionCache(config.maxIncrementalFetchSessionCacheSlots,
-            KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS))
+        // The FetchSessionCache is divided into config.numIoThreads shards, each responsible
+        // for sessionIds falling in [Max(1, shardNum * sessionIdRange), (shardNum + 1) * sessionIdRange)
+        val sessionIdRange = Int.MaxValue / config.numIoThreads
+        val fetchSessionCaches = Range(0, config.numIoThreads)
+          .map(shardNum => new FetchSessionCache(
+            config.maxIncrementalFetchSessionCacheSlots / config.numIoThreads,
+            KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS,
+            sessionIdRange,
+            shardNum
+          ))
+        val fetchManager = new FetchManager(Time.SYSTEM, fetchSessionCaches)
 
         // Start RemoteLogManager before broker start serving the requests.
         remoteLogManagerOpt.foreach { rlm =>
