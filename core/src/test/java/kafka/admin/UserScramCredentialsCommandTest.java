@@ -33,7 +33,6 @@ import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static kafka.admin.ConfigCommandTest.toArray;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -74,7 +73,7 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
             exitStatus.set(OptionalInt.of((Integer) status));
             throw new RuntimeException();
         });
-        String[] commandArgs = toArray(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName())), Arrays.asList(args));
+        String[] commandArgs = ConfigCommandTest.toArray(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName())), Arrays.asList(args));
         try {
             PrintStream prev = System.out;
             System.setOut(printStream);
@@ -179,5 +178,9 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
         ConfigCommandResult result = runConfigCommandViaBroker(toArray("--user", unknownUser, "--describe"));
         assertFalse(result.exitStatus.isPresent(), "Expected System.exit() to not be called with an unknown user");
         assertEquals("", result.stdout);
+    }
+
+    public static String[] toArray(String... first) {
+        return first;
     }
 }

@@ -33,9 +33,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static kafka.admin.ConfigCommand.BROKER_LOGGER_CONFIG_TYPE;
-import static kafka.admin.ConfigCommand.ZK_SUPPORTED_CONFIG_TYPES;
-
 public class ConfigCommandOptions extends CommandDefaultOptions {
     private static final String NL = System.lineSeparator();
 
@@ -150,7 +147,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
                 new Tuple2<>(client, ConfigType.CLIENT),
                 new Tuple2<>(user, ConfigType.USER),
                 new Tuple2<>(broker, ConfigType.BROKER),
-                new Tuple2<>(brokerLogger, BROKER_LOGGER_CONFIG_TYPE),
+                new Tuple2<>(brokerLogger, ConfigCommand.BROKER_LOGGER_CONFIG_TYPE),
                 new Tuple2<>(ip, ConfigType.IP));
 
         entityDefaultsFlags = Arrays.asList(new Tuple2<>(clientDefaults, ConfigType.CLIENT),
@@ -214,7 +211,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
             allowedEntityTypes = ConfigCommand.BROKER_SUPPORTED_CONFIG_TYPES;
             connectOptString = "--bootstrap-server or --bootstrap-controller";
         } else {
-            allowedEntityTypes = ZK_SUPPORTED_CONFIG_TYPES;
+            allowedEntityTypes = ConfigCommand.ZK_SUPPORTED_CONFIG_TYPES;
             connectOptString = "--zookeeper";
         }
 
@@ -249,7 +246,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
         if (options.has(zkTlsConfigFile) && !options.has(zkConnectOpt)) {
             throw new IllegalArgumentException("Only the --zookeeper option can be used with the --zk-tls-config-file option.");
         }
-        if (hasEntityName && (entityTypeVals.contains(ConfigType.BROKER) || entityTypeVals.contains(BROKER_LOGGER_CONFIG_TYPE))) {
+        if (hasEntityName && (entityTypeVals.contains(ConfigType.BROKER) || entityTypeVals.contains(ConfigCommand.BROKER_LOGGER_CONFIG_TYPE))) {
             Stream.of(entityName, broker, brokerLogger).filter(o -> options.has(o)).map(o -> options.valueOf(o)).forEach(brokerId -> {
                 try {
                     Integer.valueOf(brokerId);
@@ -266,7 +263,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
             });
         }
 
-        if (options.has(describeOpt) && entityTypeVals.contains(BROKER_LOGGER_CONFIG_TYPE) && !hasEntityName)
+        if (options.has(describeOpt) && entityTypeVals.contains(ConfigCommand.BROKER_LOGGER_CONFIG_TYPE) && !hasEntityName)
             throw new IllegalArgumentException("an entity name must be specified with --describe of " + Utils.join(entityTypeVals, ","));
 
         if (options.has(alterOpt)) {
