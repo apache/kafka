@@ -39,15 +39,10 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
 
   @ClusterTest(clusterType = Type.KRAFT, serverProperties = Array(
     new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
   def testConsumerGroupDescribeWithNewGroupCoordinator(): Unit = {
-    testConsumerGroupDescribe()
-  }
-
-  private def testConsumerGroupDescribe(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -63,15 +58,15 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
     val clientId = "client-id"
     val clientHost = "/127.0.0.1"
 
-    // Add first group
+    // Add first group with one member
     val consumerGroupHeartbeatResponseData1 = consumerGroupHeartbeat(
       groupId = "grp-1",
       rebalanceTimeoutMs = timeoutMs,
-      subscribedTopicNames = List(""),
+      subscribedTopicNames = List("bar"),
       topicPartitions = List.empty
     )
 
-    // Add second group
+    // Add second group with two members
     consumerGroupHeartbeat(
       memberId = "member-1",
       groupId = "grp-2",
@@ -80,7 +75,6 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
       topicPartitions = List.empty
     )
 
-    // Add second member to second group
     consumerGroupHeartbeat(
       memberId = "member-2",
       groupId = "grp-2",
@@ -88,33 +82,6 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
       subscribedTopicNames = List("foo"),
       topicPartitions = List.empty
     )
-
-    val assignmentMember1 = new Assignment()
-      .setTopicPartitions(List(
-        new TopicPartitions()
-          .setTopicId(topicId)
-          .setTopicName("foo")
-          .setPartitions(List[Integer](0, 1, 2).asJava)
-      ).asJava)
-
-    val targetAssignmentMember1 = new Assignment()
-      .setTopicPartitions(List(
-        new TopicPartitions()
-          .setTopicId(topicId)
-          .setTopicName("foo")
-          .setPartitions(List[Integer](0, 1).asJava)
-      ).asJava)
-
-    val assignmentMember2 = new Assignment()
-      .setTopicPartitions(List().asJava)
-
-    val targetAssignmentMember2 = new Assignment()
-      .setTopicPartitions(List(
-        new TopicPartitions()
-          .setTopicId(topicId)
-          .setTopicName("foo")
-          .setPartitions(List[Integer](2).asJava)
-      ).asJava)
 
     for (version <- ApiKeys.CONSUMER_GROUP_DESCRIBE.oldestVersion() to ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)) {
 
@@ -132,7 +99,7 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
               .setClientId(clientId)
               .setClientHost(clientHost)
               .setSubscribedTopicRegex("")
-              .setSubscribedTopicNames(List("").asJava)
+              .setSubscribedTopicNames(List("bar").asJava)
           ).asJava),
 
         new DescribedGroup()
@@ -149,8 +116,14 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
               .setClientHost(clientHost)
               .setSubscribedTopicRegex("")
               .setSubscribedTopicNames(List("foo").asJava)
-              .setAssignment(assignmentMember2)
-              .setTargetAssignment(targetAssignmentMember2),
+              .setAssignment(new Assignment().setTopicPartitions(List().asJava))
+              .setTargetAssignment(new Assignment()
+                .setTopicPartitions(List(
+                  new TopicPartitions()
+                    .setTopicId(topicId)
+                    .setTopicName("foo")
+                    .setPartitions(List[Integer](2).asJava)
+                ).asJava)),
             new ConsumerGroupDescribeResponseData.Member()
               .setMemberId("member-1")
               .setMemberEpoch(1)
@@ -158,8 +131,20 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
               .setClientHost(clientHost)
               .setSubscribedTopicRegex("")
               .setSubscribedTopicNames(List("foo").asJava)
-              .setAssignment(assignmentMember1)
-              .setTargetAssignment(targetAssignmentMember1),
+              .setAssignment(new Assignment()
+                .setTopicPartitions(List(
+                  new TopicPartitions()
+                    .setTopicId(topicId)
+                    .setTopicName("foo")
+                    .setPartitions(List[Integer](0, 1, 2).asJava)
+                ).asJava))
+              .setTargetAssignment(new Assignment()
+                .setTopicPartitions(List(
+                  new TopicPartitions()
+                    .setTopicId(topicId)
+                    .setTopicName("foo")
+                    .setPartitions(List[Integer](0, 1).asJava)
+                ).asJava)),
           ).asJava),
       )
 
@@ -171,5 +156,4 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
       assertEquals(expected, actual)
     }
   }
-
 }
