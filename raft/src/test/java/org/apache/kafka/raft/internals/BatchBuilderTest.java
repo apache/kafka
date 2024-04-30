@@ -35,8 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BatchBuilderTest {
-    private StringSerde serde = new StringSerde();
-    private MockTime time = new MockTime();
+    private final StringSerde serde = new StringSerde();
+    private final MockTime time = new MockTime();
 
     @ParameterizedTest
     @EnumSource(CompressionType.class)

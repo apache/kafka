@@ -38,9 +38,9 @@ public class Replicas {
      */
     public static List<Integer> toList(int[] array) {
         if (array == null) return null;
-        ArrayList<Integer> list = new ArrayList<>(array.length);
-        for (int i = 0; i < array.length; i++) {
-            list.add(array[i]);
+        List<Integer> list = new ArrayList<>(array.length);
+        for (int i : array) {
+            list.add(i);
         }
         return list;
     }
@@ -111,8 +111,7 @@ public class Replicas {
         int j = 0;
         if (sortedIsr[0] < 0) return false;
         int prevIsr = -1;
-        for (int i = 0; i < sortedIsr.length; i++) {
-            int curIsr = sortedIsr[i];
+        for (int curIsr : sortedIsr) {
             if (prevIsr == curIsr) return false;
             prevIsr = curIsr;
             while (true) {
@@ -133,8 +132,8 @@ public class Replicas {
      * @return              True only if the value is found in the array.
      */
     public static boolean contains(int[] replicas, int value) {
-        for (int i = 0; i < replicas.length; i++) {
-            if (replicas[i] == value) return true;
+        for (int replica : replicas) {
+            if (replica == value) return true;
         }
         return false;
     }
@@ -174,15 +173,14 @@ public class Replicas {
      */
     public static int[] copyWithout(int[] replicas, int value) {
         int size = 0;
-        for (int i = 0; i < replicas.length; i++) {
-            if (replicas[i] != value) {
+        for (int replica : replicas) {
+            if (replica != value) {
                 size++;
             }
         }
         int[] result = new int[size];
         int j = 0;
-        for (int i = 0; i < replicas.length; i++) {
-            int replica = replicas[i];
+        for (int replica : replicas) {
             if (replica != value) {
                 result[j++] = replica;
             }
@@ -200,15 +198,14 @@ public class Replicas {
      */
     public static int[] copyWithout(int[] replicas, int[] values) {
         int size = 0;
-        for (int i = 0; i < replicas.length; i++) {
-            if (!Replicas.contains(values, replicas[i])) {
+        for (int replica : replicas) {
+            if (!Replicas.contains(values, replica)) {
                 size++;
             }
         }
         int[] result = new int[size];
         int j = 0;
-        for (int i = 0; i < replicas.length; i++) {
-            int replica = replicas[i];
+        for (int replica : replicas) {
             if (!Replicas.contains(values, replica)) {
                 result[j++] = replica;
             }

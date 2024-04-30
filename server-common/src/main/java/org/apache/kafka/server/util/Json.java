@@ -37,7 +37,7 @@ public final class Json {
      */
     public static Optional<JsonValue> parseFull(String input) {
         try {
-            return Optional.ofNullable(tryParseFull(input));
+            return Optional.of(tryParseFull(input));
         } catch (JsonProcessingException e) {
             return Optional.empty();
         }

@@ -34,7 +34,7 @@ public class SampleTaskSpec extends TaskSpec {
                         @JsonProperty("nodeToExitMs") Map<String, Long> nodeToExitMs,
                         @JsonProperty("error") String error) {
         super(startMs, durationMs);
-        this.nodeToExitMs = nodeToExitMs == null ? new HashMap<String, Long>() :
+        this.nodeToExitMs = nodeToExitMs == null ? new HashMap<>() :
             Collections.unmodifiableMap(nodeToExitMs);
         this.error = error == null ? "" : error;
     }

@@ -46,6 +46,8 @@
   <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
   <allow pkg="org.apache.kafka.common.memory" />
   <allow pkg="org.apache.kafka.common.network" />
+  <allow pkg="org.apache.kafka.server.config"/>
+
 
   <!-- protocol, records and request/response utilities -->
   <allow pkg="org.apache.kafka.clients" />
@@ -81,6 +83,9 @@
     <subpackage name="metrics">
       <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
       <allow pkg="org.apache.kafka.server.telemetry" />
+    </subpackage>
+    <subpackage name="config">
+      <allow pkg="org.apache.kafka.server" />
     </subpackage>
   </subpackage>
 

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.trogdor.common;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -32,7 +31,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 120)
 public class JsonUtilTest {
 
     @Test

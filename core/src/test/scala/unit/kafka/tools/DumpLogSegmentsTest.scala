@@ -33,10 +33,11 @@ import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRe
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
@@ -77,8 +78,8 @@ class DumpLogSegmentsTest {
       time = time,
       brokerTopicStats = new BrokerTopicStats,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, false),
-      producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
+      producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+      producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
       keepPartitionMetadataFile = true
@@ -88,13 +89,13 @@ class DumpLogSegmentsTest {
   def addSimpleRecords(): Unit = {
     val now = System.currentTimeMillis()
     val firstBatchRecords = (0 until 10).map { i => new SimpleRecord(now + i * 2, s"message key $i".getBytes, s"message value $i".getBytes)}
-    batches += BatchInfo(firstBatchRecords, true, true)
+    batches += BatchInfo(firstBatchRecords, hasKeys = true, hasValues = true)
     val secondBatchRecords = (10 until 30).map { i => new SimpleRecord(now + i * 3, s"message key $i".getBytes, null)}
-    batches += BatchInfo(secondBatchRecords, true, false)
+    batches += BatchInfo(secondBatchRecords, hasKeys = true, hasValues = false)
     val thirdBatchRecords = (30 until 50).map { i => new SimpleRecord(now + i * 5, null, s"message value $i".getBytes)}
-    batches += BatchInfo(thirdBatchRecords, false, true)
+    batches += BatchInfo(thirdBatchRecords, hasKeys = false, hasValues = true)
     val fourthBatchRecords = (50 until 60).map { i => new SimpleRecord(now + i * 7, null)}
-    batches += BatchInfo(fourthBatchRecords, false, false)
+    batches += BatchInfo(fourthBatchRecords, hasKeys = false, hasValues = false)
 
     batches.foreach { batchInfo =>
       log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, batchInfo.records: _*),
@@ -171,7 +172,7 @@ class DumpLogSegmentsTest {
       val totalRecords = batches.map(_.records.size).sum
       var offset = 0
       val batchIterator = batches.iterator
-      var batch : BatchInfo = null;
+      var batch : BatchInfo = null
       (0 until totalRecords + batches.size).foreach { index =>
         val line = lines(lines.length - totalRecords - batches.size + index)
         // The base offset of the batch is the offset of the first record in the batch, so we
@@ -200,15 +201,15 @@ class DumpLogSegmentsTest {
     }
 
     // Verify that records are printed with --print-data-log even if --deep-iteration is not specified
-    verifyRecordsInOutput(true, Array("--print-data-log", "--files", logFilePath))
+    verifyRecordsInOutput(checkKeysAndValues = true, Array("--print-data-log", "--files", logFilePath))
     // Verify that records are printed with --print-data-log if --deep-iteration is also specified
-    verifyRecordsInOutput(true, Array("--print-data-log", "--deep-iteration", "--files", logFilePath))
+    verifyRecordsInOutput(checkKeysAndValues = true, Array("--print-data-log", "--deep-iteration", "--files", logFilePath))
     // Verify that records are printed with --value-decoder even if --print-data-log is not specified
-    verifyRecordsInOutput(true, Array("--value-decoder-class", "kafka.serializer.StringDecoder", "--files", logFilePath))
+    verifyRecordsInOutput(checkKeysAndValues = true, Array("--value-decoder-class", "kafka.serializer.StringDecoder", "--files", logFilePath))
     // Verify that records are printed with --key-decoder even if --print-data-log is not specified
-    verifyRecordsInOutput(true, Array("--key-decoder-class", "kafka.serializer.StringDecoder", "--files", logFilePath))
+    verifyRecordsInOutput(checkKeysAndValues = true, Array("--key-decoder-class", "kafka.serializer.StringDecoder", "--files", logFilePath))
     // Verify that records are printed with --deep-iteration even if --print-data-log is not specified
-    verifyRecordsInOutput(false, Array("--deep-iteration", "--files", logFilePath))
+    verifyRecordsInOutput(checkKeysAndValues = false, Array("--deep-iteration", "--files", logFilePath))
 
     // Verify that records are not printed by default
     verifyNoRecordsInOutput(Array("--files", logFilePath))
@@ -227,7 +228,7 @@ class DumpLogSegmentsTest {
   def testDumpTimeIndexErrors(): Unit = {
     addSimpleRecords()
     val errors = new TimeIndexDumpErrors
-    DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), false, true, errors)
+    DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), indexSanityOnly = false, verifyOnly = true, errors)
     assertEquals(Map.empty, errors.misMatchesForTimeIndexFilesMap)
     assertEquals(Map.empty, errors.outOfOrderTimestamp)
     assertEquals(Map.empty, errors.shallowOffsetNotFound)
@@ -315,7 +316,7 @@ class DumpLogSegmentsTest {
         retentionMillis = 60 * 1000,
         maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
         maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        fileDeleteDelayMs = LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
+        fileDeleteDelayMs = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
         nodeId = 1
       )
     )

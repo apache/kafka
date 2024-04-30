@@ -47,7 +47,7 @@ public class RemoteLogMetadataSerde {
     private static final short REMOTE_LOG_SEGMENT_METADATA_SNAPSHOT_API_KEY = new RemoteLogSegmentMetadataSnapshotRecord().apiKey();
 
     private final Map<String, Short> remoteLogStorageClassToApiKey;
-    private final Map<Short, RemoteLogMetadataTransform> keyToTransform;
+    private final Map<Short, RemoteLogMetadataTransform<? extends RemoteLogMetadata>> keyToTransform;
     private final BytesApiMessageSerde bytesApiMessageSerde;
 
     public RemoteLogMetadataSerde() {
@@ -65,8 +65,8 @@ public class RemoteLogMetadataSerde {
         return MetadataRecordType.fromId(apiKey).newMetadataRecord();
     }
 
-    protected final Map<Short, RemoteLogMetadataTransform> createRemoteLogMetadataTransforms() {
-        Map<Short, RemoteLogMetadataTransform> map = new HashMap<>();
+    protected final Map<Short, RemoteLogMetadataTransform<? extends RemoteLogMetadata>> createRemoteLogMetadataTransforms() {
+        Map<Short, RemoteLogMetadataTransform<? extends RemoteLogMetadata>> map = new HashMap<>();
         map.put(REMOTE_LOG_SEGMENT_METADATA_API_KEY, new RemoteLogSegmentMetadataTransform());
         map.put(REMOTE_LOG_SEGMENT_METADATA_UPDATE_API_KEY, new RemoteLogSegmentMetadataUpdateTransform());
         map.put(REMOTE_PARTITION_DELETE_API_KEY, new RemotePartitionDeleteMetadataTransform());
@@ -91,7 +91,7 @@ public class RemoteLogMetadataSerde {
         }
 
         @SuppressWarnings("unchecked")
-        ApiMessageAndVersion apiMessageAndVersion = remoteLogMetadataTransform(apiKey).toApiMessageAndVersion(remoteLogMetadata);
+        ApiMessageAndVersion apiMessageAndVersion = ((RemoteLogMetadataTransform<RemoteLogMetadata>) remoteLogMetadataTransform(apiKey)).toApiMessageAndVersion(remoteLogMetadata);
 
         return bytesApiMessageSerde.serialize(apiMessageAndVersion);
     }
@@ -102,8 +102,8 @@ public class RemoteLogMetadataSerde {
         return remoteLogMetadataTransform(apiMessageAndVersion.message().apiKey()).fromApiMessageAndVersion(apiMessageAndVersion);
     }
 
-    private RemoteLogMetadataTransform remoteLogMetadataTransform(short apiKey) {
-        RemoteLogMetadataTransform metadataTransform = keyToTransform.get(apiKey);
+    private RemoteLogMetadataTransform<? extends RemoteLogMetadata> remoteLogMetadataTransform(short apiKey) {
+        RemoteLogMetadataTransform<? extends RemoteLogMetadata> metadataTransform = keyToTransform.get(apiKey);
         if (metadataTransform == null) {
             throw new IllegalArgumentException("RemoteLogMetadataTransform for apikey: " + apiKey + " does not exist.");
         }

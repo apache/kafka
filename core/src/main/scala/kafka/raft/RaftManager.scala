@@ -32,15 +32,16 @@ import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClie
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, RaftClient, RaftConfig, ReplicatedLog}
+import org.apache.kafka.common.utils.{LogContext, Time, Utils}
+import org.apache.kafka.raft.QuorumConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
+import org.apache.kafka.raft.{FileBasedStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, RaftClient, QuorumConfig, ReplicatedLog}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.KafkaScheduler
@@ -68,6 +69,51 @@ object KafkaRaftManager {
     }
 
     lock
+  }
+
+  /**
+   * Test if the configured metadata log dir is one of the data log dirs.
+   */
+  private def hasDifferentLogDir(config: KafkaConfig): Boolean = {
+    !config
+      .logDirs
+      .map(Paths.get(_).toAbsolutePath)
+      .contains(Paths.get(config.metadataLogDir).toAbsolutePath)
+  }
+
+  /**
+   * Obtain the file lock and delete the metadata log directory completely.
+   *
+   * This is only used by ZK brokers that are in pre-migration or hybrid mode of the ZK to KRaft migration.
+   * The rationale for deleting the metadata log in these cases is that it is safe to do on brokers and it
+   * it makes recovery from a failed migration much easier. See KAFKA-16463.
+   *
+   * @param config  The broker config
+   */
+  def maybeDeleteMetadataLogDir(config: KafkaConfig): Unit = {
+    // These constraints are enforced in KafkaServer, but repeating them here to guard against future callers
+    if (config.processRoles.nonEmpty) {
+      throw new RuntimeException("Not deleting metadata log dir since this node is in KRaft mode.")
+    } else if (!config.migrationEnabled) {
+      throw new RuntimeException("Not deleting metadata log dir since migrations are not enabled.")
+    } else {
+      val metadataDir = new File(config.metadataLogDir)
+      val logDirName = UnifiedLog.logDirName(Topic.CLUSTER_METADATA_TOPIC_PARTITION)
+      val metadataPartitionDir = KafkaRaftManager.createLogDirectory(metadataDir, logDirName)
+      val deletionLock = if (hasDifferentLogDir(config)) {
+        Some(KafkaRaftManager.lockDataDir(metadataDir))
+      } else {
+        None
+      }
+
+      try {
+        Utils.delete(metadataPartitionDir)
+      } catch {
+        case t: Throwable => throw new RuntimeException("Failed to delete metadata log", t)
+      } finally {
+        deletionLock.foreach(_.destroy())
+      }
+    }
   }
 }
 
@@ -103,7 +149,7 @@ class KafkaRaftManager[T](
 ) extends RaftManager[T] with Logging {
 
   val apiVersions = new ApiVersions()
-  private val raftConfig = new RaftConfig(config)
+  private val raftConfig = new QuorumConfig(config)
   private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
   private val logContext = new LogContext(s"[RaftManager id=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix()
@@ -115,10 +161,8 @@ class KafkaRaftManager[T](
 
   private val dataDirLock = {
     // Acquire the log dir lock if the metadata log dir is different from the log dirs
-    val differentMetadataLogDir = !config
-      .logDirs
-      .map(Paths.get(_).toAbsolutePath)
-      .contains(Paths.get(config.metadataLogDir).toAbsolutePath)
+    val differentMetadataLogDir = KafkaRaftManager.hasDifferentLogDir(config)
+
     // Or this node is only a controller
     val isOnlyController = config.processRoles == Set(ProcessRole.ControllerRole)
 
