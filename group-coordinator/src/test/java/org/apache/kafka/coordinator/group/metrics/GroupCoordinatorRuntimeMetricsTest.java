@@ -47,8 +47,8 @@ public class GroupCoordinatorRuntimeMetricsTest {
             metrics.metricName("event-queue-size", METRICS_GROUP),
             metrics.metricName("partition-load-time-max", METRICS_GROUP),
             metrics.metricName("partition-load-time-avg", METRICS_GROUP),
-            metrics.metricName("thread-idle-ratio-min", METRICS_GROUP),
-            metrics.metricName("thread-idle-ratio-avg", METRICS_GROUP)
+            metrics.metricName("thread-idle-ratio", METRICS_GROUP),
+            metrics.metricName("thread-idle-time-ms-total", METRICS_GROUP)
         ));
 
         try (GroupCoordinatorRuntimeMetrics runtimeMetrics = new GroupCoordinatorRuntimeMetrics(metrics)) {
@@ -103,24 +103,23 @@ public class GroupCoordinatorRuntimeMetricsTest {
     }
 
     @Test
-    public void testThreadIdleRatioSensor() {
+    public void testThreadIdleSensor() {
         Time time = new MockTime();
         Metrics metrics = new Metrics(time);
 
-        try (GroupCoordinatorRuntimeMetrics runtimeMetrics = new GroupCoordinatorRuntimeMetrics(metrics)) {
-            IntStream.range(0, 3).forEach(i -> runtimeMetrics.recordThreadIdleRatio(1.0 / (i + 1)));
+        GroupCoordinatorRuntimeMetrics runtimeMetrics = new GroupCoordinatorRuntimeMetrics(metrics);
+        IntStream.range(0, 3).forEach(i -> runtimeMetrics.recordThreadIdleTime((i + 1) * 1000L));
 
-            org.apache.kafka.common.MetricName metricName = metrics.metricName(
-                "thread-idle-ratio-avg", METRICS_GROUP);
+        org.apache.kafka.common.MetricName metricName = metrics.metricName(
+            "thread-idle-time-ms-total", METRICS_GROUP);
+        KafkaMetric metric = metrics.metrics().get(metricName);
+        assertEquals(6.0 * 1000, metric.metricValue());
 
-            KafkaMetric metric = metrics.metrics().get(metricName);
-            assertEquals((11.0 / 6.0) / 3.0, metric.metricValue()); // (6/6 + 3/6 + 2/6) / 3
+        metricName = metrics.metricName(
+            "thread-idle-ratio", METRICS_GROUP);
 
-            metricName = metrics.metricName(
-                "thread-idle-ratio-min", METRICS_GROUP);
-            metric = metrics.metrics().get(metricName);
-            assertEquals(1.0 / 3.0, metric.metricValue());
-        }
+        metric = metrics.metrics().get(metricName);
+        assertEquals(6 / 30.0, metric.metricValue()); // 'total_ms / window_ms'
     }
 
     @Test
