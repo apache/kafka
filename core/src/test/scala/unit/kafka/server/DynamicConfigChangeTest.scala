@@ -17,23 +17,16 @@
 package kafka.server
 
 import kafka.cluster.Partition
-
-import java.net.InetAddress
-import java.nio.charset.StandardCharsets
-import java.util
-import java.util.Collections.{singletonList, singletonMap}
-import java.util.{Collections, Properties}
-import java.util.concurrent.ExecutionException
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.UnifiedLog
 import kafka.log.remote.RemoteLogManager
-import kafka.utils._
 import kafka.server.Constants._
+import kafka.utils.TestUtils.random
+import kafka.utils._
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, Config, ConfigEntry}
-import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.metrics.Quota
@@ -42,16 +35,23 @@ import org.apache.kafka.common.quota.ClientQuotaEntity.{CLIENT_ID, IP, USER}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
-import org.apache.kafka.server.config.{ConfigType, ServerLogConfigs, QuotaConfigs, ZooKeeperInternals}
+import org.apache.kafka.server.config.{ConfigType, QuotaConfigs, ServerLogConfigs, ZooKeeperInternals}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.{any, anyString}
-import org.mockito.Mockito.{doNothing, mock, never, verify, when}
+import org.mockito.Mockito._
 
+import java.net.InetAddress
+import java.nio.charset.StandardCharsets
+import java.util
+import java.util.Collections.{singletonList, singletonMap}
+import java.util.concurrent.ExecutionException
+import java.util.{Collections, Properties}
 import scala.annotation.nowarn
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -383,16 +383,18 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testConfigChangeOnNonExistingTopic(quorum: String): Unit = {
-    val topic = TestUtils.tempTopic()
+    val topic = tempTopic()
     val logProps = new Properties()
     logProps.put(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, 10000: java.lang.Integer)
     assertThrows(classOf[UnknownTopicOrPartitionException], () => adminZkClient.changeTopicConfig(topic, logProps))
   }
 
+  private def tempTopic() : String = "testTopic" + random.nextInt(1000000)
+
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testConfigChangeOnNonExistingTopicWithAdminClient(quorum: String): Unit = {
-    val topic = TestUtils.tempTopic()
+    val topic = tempTopic()
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
