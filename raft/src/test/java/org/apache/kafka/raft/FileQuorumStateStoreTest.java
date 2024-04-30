@@ -81,13 +81,13 @@ public class FileQuorumStateStoreTest {
 
         final int epoch = 2;
         final int voter1 = 1;
-        final Uuid voter1Uuid = Uuid.randomUuid();
+        final Uuid voter1DirectoryId = Uuid.randomUuid();
         final int voter2 = 2;
         final int voter3 = 3;
         Set<Integer> voters = Utils.mkSet(voter1, voter2, voter3);
 
         stateStore.writeElectionState(
-            ElectionState.withVotedCandidate(epoch, voter1, Optional.of(voter1Uuid), voters),
+            ElectionState.withVotedCandidate(epoch, voter1, Optional.of(voter1DirectoryId), voters),
             kraftVersion
         );
 
@@ -97,7 +97,7 @@ public class FileQuorumStateStoreTest {
                 ElectionState.withVotedCandidate(
                     epoch,
                     voter1,
-                    Optional.of(voter1Uuid),
+                    Optional.of(voter1DirectoryId),
                     Collections.emptySet()
                 )
             );

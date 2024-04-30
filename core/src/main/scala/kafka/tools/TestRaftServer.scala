@@ -52,7 +52,7 @@ import scala.jdk.CollectionConverters._
  */
 class TestRaftServer(
   val config: KafkaConfig,
-  val nodeUuid: Uuid,
+  val nodeDirectoryId: Uuid,
   val throughput: Int,
   val recordSize: Int
 ) extends Logging {
@@ -87,7 +87,7 @@ class TestRaftServer(
     raftManager = new KafkaRaftManager[Array[Byte]](
       Uuid.ZERO_UUID.toString,
       config,
-      nodeUuid,
+      nodeDirectoryId,
       new ByteArraySerde,
       partition,
       topicId,

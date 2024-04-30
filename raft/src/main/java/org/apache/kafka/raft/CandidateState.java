@@ -29,7 +29,7 @@ import org.slf4j.Logger;
 
 public class CandidateState implements EpochState {
     private final int localId;
-    private final Uuid localUuid;
+    private final Uuid localDirectoryId;
     private final int epoch;
     private final int retries;
     private final Map<Integer, State> voteStates = new HashMap<>();
@@ -52,7 +52,7 @@ public class CandidateState implements EpochState {
     protected CandidateState(
         Time time,
         int localId,
-        Uuid localUuid,
+        Uuid localDirectoryId,
         int epoch,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
@@ -60,8 +60,19 @@ public class CandidateState implements EpochState {
         int electionTimeoutMs,
         LogContext logContext
     ) {
+        if (!voters.contains(localId)) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Local replica ({}, {}) must be in the set of voters {}",
+                    localId,
+                    localDirectoryId,
+                    voters
+                )
+            );
+        }
+
         this.localId = localId;
-        this.localUuid = localUuid;
+        this.localDirectoryId = localDirectoryId;
         this.epoch = epoch;
         this.highWatermark = highWatermark;
         this.retries = retries;
@@ -233,7 +244,7 @@ public class CandidateState implements EpochState {
         return ElectionState.withVotedCandidate(
             epoch,
             localId,
-            Optional.of(localUuid),
+            Optional.of(localDirectoryId),
             voteStates.keySet()
         );
     }

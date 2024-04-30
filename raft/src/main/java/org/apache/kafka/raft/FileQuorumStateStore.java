@@ -59,6 +59,7 @@ public class FileQuorumStateStore implements QuorumStateStore {
     private final File stateFile;
 
     static final String DATA_VERSION = "data_version";
+    static final short LOWEST_SUPPORTED_VERSION = 0;
     static final short HIGHEST_SUPPORTED_VERSION = 1;
 
     public FileQuorumStateStore(final File stateFile) {
@@ -87,20 +88,18 @@ public class FileQuorumStateStore implements QuorumStateStore {
                     " does not have " + DATA_VERSION + " field");
             }
 
-            if (dataVersionNode.asInt() < 0 || dataVersionNode.asInt() > 1) {
-                throw new IllegalStateException("Unknown quorum state version of " + dataVersionNode.toString());
-            }
-
             final short dataVersion = dataVersionNode.shortValue();
-            if (dataVersion > HIGHEST_SUPPORTED_VERSION) {
+            if (dataVersion < LOWEST_SUPPORTED_VERSION || dataVersion > HIGHEST_SUPPORTED_VERSION) {
                 throw new IllegalStateException(
                     String.format(
-                        "data_version (%d) is greater than the maximum version (%d) supported",
+                        "data_version (%d) is not within the min (%d) and max ($d) supported version",
                         dataVersion,
+                        LOWEST_SUPPORTED_VERSION,
                         HIGHEST_SUPPORTED_VERSION
                     )
                 );
             }
+
             return QuorumStateDataJsonConverter.read(dataObject, dataVersion);
         } catch (IOException e) {
             throw new UncheckedIOException(

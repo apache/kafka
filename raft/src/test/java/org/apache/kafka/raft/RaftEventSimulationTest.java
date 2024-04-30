@@ -510,7 +510,7 @@ public class RaftEventSimulationTest {
 
     private static class PersistentState {
         final MockQuorumStateStore store = new MockQuorumStateStore();
-        final Uuid nodeUuid = Uuid.randomUuid();
+        final Uuid nodeDirectoryId = Uuid.randomUuid();
         final MockLog log;
 
         PersistentState(int nodeId) {
@@ -740,7 +740,7 @@ public class RaftEventSimulationTest {
 
             KafkaRaftClient<Integer> client = new KafkaRaftClient<>(
                 OptionalInt.of(nodeId),
-                persistentState.nodeUuid,
+                persistentState.nodeDirectoryId,
                 serde,
                 channel,
                 messageQueue,
@@ -931,13 +931,13 @@ public class RaftEventSimulationTest {
                     continue;
                 }
 
-                Integer newEpoch = electionState.get().epoch();
+                int newEpoch = electionState.get().epoch();
                 if (oldEpoch > newEpoch) {
                     fail("Non-monotonic update of epoch detected on node " + nodeId + ": " +
                             oldEpoch + " -> " + newEpoch);
                 }
                 cluster.ifRunning(nodeId, nodeState -> {
-                    assertEquals(newEpoch.intValue(), nodeState.client.quorum().epoch());
+                    assertEquals(newEpoch, nodeState.client.quorum().epoch());
                 });
                 nodeEpochs.put(nodeId, newEpoch);
             }

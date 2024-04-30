@@ -138,7 +138,7 @@ public final class RaftClientTestContext {
         private final Uuid clusterId = Uuid.randomUuid();
         private final Set<Integer> voters;
         private final OptionalInt localId;
-        private final Uuid localUuid = Uuid.randomUuid();
+        private final Uuid localDirectoryId = Uuid.randomUuid();
         private final short kraftVersion = 0;
 
         private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
@@ -258,7 +258,7 @@ public final class RaftClientTestContext {
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
                 localId,
-                localUuid,
+                localDirectoryId,
                 SERDE,
                 channel,
                 messageQueue,

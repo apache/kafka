@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 // TODO: add test for votedUuid
 public class QuorumStateTest {
     private final int localId = 0;
-    private final Uuid localUuid = Uuid.randomUuid();
+    private final Uuid localDirectoryId = Uuid.randomUuid();
     private final int logEndEpoch = 0;
     private final MockQuorumStateStore store = new MockQuorumStateStore();
     private final MockTime time = new MockTime();
@@ -62,7 +62,7 @@ public class QuorumStateTest {
     ) {
         return new QuorumState(
             localId,
-            localUuid,
+            localDirectoryId,
             () -> VoterSetTest.voterSet(VoterSetTest.voterMap(voters, false)),
             () -> kraftVersion,
             electionTimeoutMs,
@@ -171,9 +171,9 @@ public class QuorumStateTest {
         CandidateState candidateState = state.candidateStateOrThrow();
         assertEquals(epoch, candidateState.epoch());
         // Even though the persisted value doesn't include the VotedUuid the deserialized value will
-        // include the localUuid when the local node is the candidate
+        // include the localDirectoryId when the local node is the candidate
         assertEquals(
-            ElectionState.withVotedCandidate(epoch, localId, Optional.of(localUuid), voters),
+            ElectionState.withVotedCandidate(epoch, localId, Optional.of(localDirectoryId), voters),
             candidateState.election()
         );
         assertEquals(Utils.mkSet(node1, node2), candidateState.unrecordedVoters());

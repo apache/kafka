@@ -209,22 +209,22 @@ final public class VoterSetTest {
 
     public static Map<Integer, VoterSet.VoterNode> voterMap(
         Collection<Integer> replicas,
-        boolean withUuid
+        boolean withDirectoryId
     ) {
         return replicas
             .stream()
             .collect(
                 Collectors.toMap(
                     Function.identity(),
-                    id -> VoterSetTest.voterNode(id, withUuid)
+                    id -> VoterSetTest.voterNode(id, withDirectoryId)
                 )
             );
     }
 
-    static VoterSet.VoterNode voterNode(int id, boolean withUuid) {
+    static VoterSet.VoterNode voterNode(int id, boolean withDirectoryId) {
         return new VoterSet.VoterNode(
             id,
-            withUuid ? Optional.of(Uuid.randomUuid()) : Optional.empty(),
+            withDirectoryId ? Optional.of(Uuid.randomUuid()) : Optional.empty(),
             Collections.singletonMap(
                 "LISTENER",
                 InetSocketAddress.createUnresolved(String.format("replica-%d", id), 1234)

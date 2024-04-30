@@ -31,12 +31,12 @@ import org.apache.kafka.raft.generated.QuorumStateData;
 final public class ElectionState {
     private static int unknownLeaderId = -1;
     private static int notVoted = -1;
-    private static Uuid noVotedUuid = Uuid.ZERO_UUID;
+    private static Uuid noVotedDirectoryId = Uuid.ZERO_UUID;
 
     private final int epoch;
     private final OptionalInt leaderId;
     private final OptionalInt votedId;
-    private final Optional<Uuid> votedUuid;
+    private final Optional<Uuid> votedDirectoryId;
     // This is deprecated. It is only used when writing version 0 of the quorum state file
     private final Set<Integer> voters;
 
@@ -44,13 +44,13 @@ final public class ElectionState {
         int epoch,
         OptionalInt leaderId,
         OptionalInt votedId,
-        Optional<Uuid> votedUuid,
+        Optional<Uuid> votedDirectoryId,
         Set<Integer> voters
     ) {
         this.epoch = epoch;
         this.leaderId = leaderId;
         this.votedId = votedId;
-        this.votedUuid = votedUuid;
+        this.votedDirectoryId = votedDirectoryId;
         this.voters = voters;
     }
 
@@ -69,24 +69,24 @@ final public class ElectionState {
      *
      * A replica has voted for a candidate if all of the following are true:
      * 1. the nodeId and votedId match and
-     * 2. if the votedUuid is set, it matches the nodeUuid
+     * 2. if the votedDirectoryId is set, it matches the nodeDirectoryId
      *
      * @param nodeId id of the replica
-     * @param nodeUuid uuid of the replica if it exist
+     * @param nodeDirectoryId directory id of the replica if it exist
      * @return true when the arguments match, otherwise false
      */
-    public boolean isVotedCandidate(int nodeId, Optional<Uuid> nodeUuid) {
+    public boolean isVotedCandidate(int nodeId, Optional<Uuid> nodeDirectoryId) {
         if (nodeId < 0) {
             throw new IllegalArgumentException("Invalid negative nodeId: " + nodeId);
         } else if (votedId.orElse(-1) != nodeId) {
             return false;
-        } else if (!votedUuid.isPresent()) {
+        } else if (!votedDirectoryId.isPresent()) {
             // when the persisted voted uuid is not present assume that we voted for this candidate;
             // this happends when the kraft version is 0.
             return true;
         }
 
-        return votedUuid.equals(nodeUuid);
+        return votedDirectoryId.equals(nodeDirectoryId);
     }
 
     public int leaderId() {
@@ -113,8 +113,8 @@ final public class ElectionState {
         return votedId;
     }
 
-    public Optional<Uuid> votedUuid() {
-        return votedUuid;
+    public Optional<Uuid> votedDirectoryId() {
+        return votedDirectoryId;
     }
 
     public boolean hasLeader() {
@@ -138,7 +138,7 @@ final public class ElectionState {
                 .collect(Collectors.toList());
             data.setCurrentVoters(dataVoters);
         } else if (version == 1) {
-            data.setVotedUuid(votedUuid().isPresent() ? votedUuid().get() : noVotedUuid);
+            data.setVotedDirectoryId(votedDirectoryId().isPresent() ? votedDirectoryId().get() : noVotedDirectoryId);
         } else {
             throw new IllegalStateException(
                 String.format(
@@ -153,16 +153,15 @@ final public class ElectionState {
     @Override
     public String toString() {
         return String.format(
-            "Election(epoch=%d, leaderId=%s, votedId=%s, votedUuid=%s, voters=%s)",
+            "Election(epoch=%d, leaderId=%s, votedId=%s, votedDirectoryId=%s, voters=%s)",
             epoch,
             leaderId,
             votedId,
-            votedUuid,
+            votedDirectoryId,
             voters
         );
     }
 
-    // TODO: Since I changed the implementation, confirm that raft/src/main doesn't call ElectionState's equals or hashCode
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -173,22 +172,22 @@ final public class ElectionState {
         if (epoch != that.epoch) return false;
         if (!leaderId.equals(that.leaderId)) return false;
         if (!votedId.equals(that.votedId)) return false;
-        if (!votedUuid.equals(that.votedUuid)) return false;
+        if (!votedDirectoryId.equals(that.votedDirectoryId)) return false;
 
         return voters.equals(that.voters);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(epoch, leaderId, votedId, votedUuid, voters);
+        return Objects.hash(epoch, leaderId, votedId, votedDirectoryId, voters);
     }
 
-    public static ElectionState withVotedCandidate(int epoch, int votedId, Optional<Uuid> votedUuid, Set<Integer> voters) {
+    public static ElectionState withVotedCandidate(int epoch, int votedId, Optional<Uuid> votedDirectoryId, Set<Integer> voters) {
         if (votedId < 0) {
             throw new IllegalArgumentException("Illegal voted Id " + votedId + ": must be non-negative");
         }
 
-        return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.of(votedId), votedUuid, voters);
+        return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.of(votedId), votedDirectoryId, voters);
     }
 
     public static ElectionState withElectedLeader(int epoch, int leaderId, Set<Integer> voters) {
@@ -208,7 +207,7 @@ final public class ElectionState {
             data.leaderEpoch(),
             data.leaderId() == unknownLeaderId ? OptionalInt.empty() : OptionalInt.of(data.leaderId()),
             data.votedId() == notVoted ? OptionalInt.empty() : OptionalInt.of(data.votedId()),
-            data.votedUuid().equals(noVotedUuid) ? Optional.empty() : Optional.of(data.votedUuid()),
+            data.votedDirectoryId().equals(noVotedDirectoryId) ? Optional.empty() : Optional.of(data.votedDirectoryId()),
             data.currentVoters().stream().map(QuorumStateData.Voter::voterId).collect(Collectors.toSet())
         );
     }

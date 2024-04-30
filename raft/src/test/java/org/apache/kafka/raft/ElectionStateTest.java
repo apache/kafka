@@ -38,28 +38,38 @@ final class ElectionStateTest {
     }
 
     @Test
-    void testVotedCandidateWithoutVotedUuid() {
-        ElectionState electionState = ElectionState.withVotedCandidate(5, 1, Optional.empty(), Collections.emptySet());
+    void testVotedCandidateWithoutVotedDirectoryId() {
+        ElectionState electionState = ElectionState.withVotedCandidate(
+            5,
+            1,
+            Optional.empty(),
+            Collections.emptySet()
+        );
         assertTrue(electionState.isVotedCandidate(1, Optional.empty()));
         assertTrue(electionState.isVotedCandidate(1, Optional.of(Uuid.randomUuid())));
     }
 
     @Test
-    void testVotedCandidateWithVotedUuid() {
-        Uuid votedUuid = Uuid.randomUuid();
-        ElectionState electionState = ElectionState.withVotedCandidate(5, 1, Optional.of(votedUuid), Collections.emptySet());
+    void testVotedCandidateWithVotedDirectoryId() {
+        Uuid votedDirectoryId = Uuid.randomUuid();
+        ElectionState electionState = ElectionState.withVotedCandidate(
+            5,
+            1,
+            Optional.of(votedDirectoryId),
+            Collections.emptySet()
+        );
         assertFalse(electionState.isVotedCandidate(1, Optional.empty()));
-        assertTrue(electionState.isVotedCandidate(1, Optional.of(votedUuid)));
+        assertTrue(electionState.isVotedCandidate(1, Optional.of(votedDirectoryId)));
     }
 
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     void testQuorumStateDataRoundTrip(short version) {
-        Uuid votedUuid = Uuid.randomUuid();
+        Uuid votedDirectoryId = Uuid.randomUuid();
         List<ElectionState> electionStates = Arrays.asList(
             ElectionState.withUnknownLeader(5, Utils.mkSet(1, 2, 3)),
             ElectionState.withElectedLeader(5, 1, Utils.mkSet(1, 2, 3)),
-            ElectionState.withVotedCandidate(5, 1, Optional.of(votedUuid), Utils.mkSet(1, 2, 3))
+            ElectionState.withVotedCandidate(5, 1, Optional.of(votedDirectoryId), Utils.mkSet(1, 2, 3))
         );
 
         final List<ElectionState> expected;
@@ -73,7 +83,7 @@ final class ElectionStateTest {
             expected = Arrays.asList(
                 ElectionState.withUnknownLeader(5, Collections.emptySet()),
                 ElectionState.withElectedLeader(5, 1, Collections.emptySet()),
-                ElectionState.withVotedCandidate(5, 1, Optional.of(votedUuid), Collections.emptySet())
+                ElectionState.withVotedCandidate(5, 1, Optional.of(votedDirectoryId), Collections.emptySet())
             );
         }
 

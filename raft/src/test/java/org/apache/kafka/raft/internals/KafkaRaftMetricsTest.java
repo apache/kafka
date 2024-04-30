@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class KafkaRaftMetricsTest {
 
     private final int localId = 0;
-    private final Uuid localUuid = Uuid.randomUuid();
+    private final Uuid localDirectoryId = Uuid.randomUuid();
     private final int electionTimeoutMs = 5000;
     private final int fetchTimeoutMs = 10000;
 
@@ -67,7 +67,7 @@ public class KafkaRaftMetricsTest {
     private QuorumState buildQuorumState(Set<Integer> voters) {
         return new QuorumState(
             OptionalInt.of(localId),
-            localUuid,
+            localDirectoryId,
             () -> VoterSetTest.voterSet(VoterSetTest.voterMap(voters, false)),
             () -> 0,
             electionTimeoutMs,

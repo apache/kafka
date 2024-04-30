@@ -75,7 +75,7 @@ import org.slf4j.Logger;
  */
 public class QuorumState {
     private final OptionalInt localId;
-    private final Uuid localUuid;
+    private final Uuid localDirectoryId;
     private final Time time;
     private final Logger log;
     private final QuorumStateStore store;
@@ -90,7 +90,7 @@ public class QuorumState {
 
     public QuorumState(
         OptionalInt localId,
-        Uuid localUuid,
+        Uuid localDirectoryId,
         Supplier<VoterSet> latestVoterSet,
         Supplier<Short> latestKraftVersion,
         int electionTimeoutMs,
@@ -101,7 +101,7 @@ public class QuorumState {
         Random random
     ) {
         this.localId = localId;
-        this.localUuid = localUuid;
+        this.localDirectoryId = localDirectoryId;
         this.latestVoterSet = latestVoterSet;
         this.latestKraftVersion = latestKraftVersion;
         this.electionTimeoutMs = electionTimeoutMs;
@@ -169,11 +169,14 @@ public class QuorumState {
                 Collections.emptyList(),
                 logContext
             );
-        } else if (localId.isPresent() && election.isVotedCandidate(localId.getAsInt(), Optional.of(localUuid))) {
+        } else if (
+            localId.isPresent() &&
+            election.isVotedCandidate(localId.getAsInt(), Optional.of(localDirectoryId))
+        ) {
             initialState = new CandidateState(
                 time,
                 localId.getAsInt(),
-                localUuid,
+                localDirectoryId,
                 election.epoch(),
                 latestVoterSet.get().voterIds(),
                 Optional.empty(),
@@ -186,7 +189,7 @@ public class QuorumState {
                 time,
                 election.epoch(),
                 election.votedId(),
-                election.votedUuid(),
+                election.votedDirectoryId(),
                 latestVoterSet.get().voterIds(),
                 Optional.empty(),
                 randomElectionTimeoutMs(),
@@ -217,7 +220,8 @@ public class QuorumState {
     }
 
     public boolean isOnlyVoter() {
-        return localId.isPresent() && latestVoterSet.get().isOnlyVoter(localId.getAsInt(), Optional.of(localUuid));
+        return localId.isPresent() &&
+            latestVoterSet.get().isOnlyVoter(localId.getAsInt(), Optional.of(localDirectoryId));
     }
 
     public int localIdOrSentinel() {
@@ -266,11 +270,11 @@ public class QuorumState {
             return false;
         }
 
-        return latestVoterSet.get().isVoter(localId.getAsInt(), Optional.of(localUuid));
+        return latestVoterSet.get().isVoter(localId.getAsInt(), Optional.of(localDirectoryId));
     }
 
-    public boolean isVoter(int nodeId, Optional<Uuid> nodeUuid) {
-        return latestVoterSet.get().isVoter(nodeId, nodeUuid);
+    public boolean isVoter(int nodeId, Optional<Uuid> nodeDirectoryId) {
+        return latestVoterSet.get().isVoter(nodeId, nodeDirectoryId);
     }
 
     public boolean isObserver() {
@@ -341,7 +345,7 @@ public class QuorumState {
     public void transitionToVoted(
         int epoch,
         int candidateId,
-        Optional<Uuid> candidateUuid
+        Optional<Uuid> candidateDirectoryId
     ) {
         int currentEpoch = state.epoch();
         if (localId.isPresent() && candidateId == localId.getAsInt()) {
@@ -364,7 +368,7 @@ public class QuorumState {
                 time,
                 epoch,
                 candidateId,
-                candidateUuid,
+                candidateDirectoryId,
                 latestVoterSet.get().voterIds(),
                 state.highWatermark(),
                 randomElectionTimeoutMs(),
@@ -410,9 +414,10 @@ public class QuorumState {
         if (isObserver()) {
             throw new IllegalStateException(
                 String.format(
-                    "Cannot transition to Candidate since the local id (%s) and uuid (%s) is not one of the voters %s",
+                    "Cannot transition to Candidate since the local id (%s) and directory id (%s) " +
+                    "is not one of the voters %s",
                     localId,
-                    localUuid,
+                    localDirectoryId,
                     latestVoterSet.get()
                 )
             );
@@ -428,7 +433,7 @@ public class QuorumState {
         durableTransitionTo(new CandidateState(
             time,
             localIdOrThrow(),
-            localUuid,
+            localDirectoryId,
             newEpoch,
             latestVoterSet.get().voterIds(),
             state.highWatermark(),
@@ -442,9 +447,10 @@ public class QuorumState {
         if (isObserver()) {
             throw new IllegalStateException(
                 String.format(
-                    "Cannot transition to Leader since the local id (%s) and uuid (%s) is not one of the voters %s",
+                    "Cannot transition to Leader since the local id (%s) and directory id (%s) " +
+                    "is not one of the voters %s",
                     localId,
-                    localUuid,
+                    localDirectoryId,
                     latestVoterSet.get()
                 )
             );

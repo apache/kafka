@@ -23,7 +23,7 @@
     { "name": "LeaderId", "type": "int32", "versions": "0+", "default": "-1" },
     { "name": "LeaderEpoch", "type": "int32", "versions": "0+", "default": "-1" },
     { "name": "VotedId", "type": "int32", "versions": "0+", "default": "-1" },
-    { "name": "VotedUuid", "type": "uuid", "versions": "1+" },
+    { "name": "VotedDirectoryId", "type": "uuid", "versions": "1+" },
     { "name": "AppliedOffset", "type": "int64", "versions": "0" },
     { "name": "CurrentVoters", "type": "[]Voter", "versions": "0", "nullableVersions": "0", "fields": [
       { "name": "VoterId", "type": "int32", "versions": "0" }

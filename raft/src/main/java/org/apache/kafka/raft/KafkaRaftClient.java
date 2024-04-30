@@ -151,7 +151,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
 
     private final OptionalInt nodeId;
-    private final Uuid nodeUuid;
+    private final Uuid nodeDirectoryId;
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
     private final LogContext logContext;
     private final Logger logger;
@@ -194,7 +194,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
      */
     public KafkaRaftClient(
         OptionalInt nodeId,
-        Uuid nodeUuid,
+        Uuid nodeDirectoryId,
         RecordSerde<T> serde,
         NetworkChannel channel,
         ReplicatedLog log,
@@ -206,7 +206,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         this(
             nodeId,
-            nodeUuid,
+            nodeDirectoryId,
             serde,
             channel,
             new BlockingMessageQueue(),
@@ -224,7 +224,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
     KafkaRaftClient(
         OptionalInt nodeId,
-        Uuid nodeUuid,
+        Uuid nodeDirectoryId,
         RecordSerde<T> serde,
         NetworkChannel channel,
         RaftMessageQueue messageQueue,
@@ -239,7 +239,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         QuorumConfig quorumConfig
     ) {
         this.nodeId = nodeId;
-        this.nodeUuid = nodeUuid;
+        this.nodeDirectoryId = nodeDirectoryId;
         this.logContext = logContext;
         this.serde = serde;
         this.channel = channel;
@@ -396,7 +396,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
         quorum = new QuorumState(
             nodeId,
-            nodeUuid,
+            nodeDirectoryId,
             partitionState::lastVoterSet,
             partitionState::lastKraftVersion,
             quorumConfig.electionTimeoutMs(),
@@ -539,8 +539,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         resetConnections();
     }
 
-    private void transitionToVoted(int candidateId, Optional<Uuid> candidateUuid, int epoch) {
-        quorum.transitionToVoted(epoch, candidateId, candidateUuid);
+    private void transitionToVoted(int candidateId, Optional<Uuid> candidateDirectoryId, int epoch) {
+        quorum.transitionToVoted(epoch, candidateId, candidateDirectoryId);
         maybeFireLeaderChange();
         resetConnections();
     }
