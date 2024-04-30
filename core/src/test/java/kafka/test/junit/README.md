@@ -102,21 +102,18 @@ For each generated invocation:
 
 # Dependency Injection
 
-A few classes are introduced to provide context to the underlying cluster and to provide reusable functionality that was 
+The class is introduced to provide context to the underlying cluster and to provide reusable functionality that was
 previously garnered from the test hierarchy.
 
-* ClusterConfig: a mutable cluster configuration, includes cluster type, number of brokers, properties, etc
 * ClusterInstance: a shim to the underlying class that actually runs the cluster, provides access to things like SocketServers
 
-In order to have one of these objects injected, simply add it as a parameter to your test class, `@BeforeEach` method, or test method.
+In order to inject the object, simply add it as a parameter to your test class, `@BeforeEach` method, or test method.
 
 | Injection | Class | BeforeEach | Test | Notes
 | --- | --- | --- | --- | --- |
-| ClusterConfig | yes | yes | yes* | Once in the test, changing config has no effect |
 | ClusterInstance | yes* | no | yes | Injectable at class level for convenience, can only be accessed inside test |
-
 
 # Gotchas
 * Test methods annotated with JUnit's `@Test` will still be run, but no cluster will be started and no dependency 
   injection will happen. This is generally not what you want.
-* Even though ClusterConfig is accessible and mutable inside the test method, changing it will have no effect on the cluster.
+* Even though ClusterConfig is accessible, it is immutable inside the test method.
