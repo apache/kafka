@@ -236,6 +236,10 @@ public class QuorumState {
         return localId;
     }
 
+    public Uuid localDirectoryId() {
+        return localDirectoryId;
+    }
+
     public int epoch() {
         return state.epoch();
     }
@@ -529,9 +533,17 @@ public class QuorumState {
     }
 
     public VotedState votedStateOrThrow() {
-        if (isVoted())
-            return (VotedState) state;
-        throw new IllegalStateException("Expected to be Voted, but current state is " + state);
+        return maybeVotedState()
+            .orElseThrow(() -> new IllegalStateException("Expected to be Voted, but current state is " + state));
+    }
+
+    public Optional<VotedState> maybeVotedState() {
+        EpochState fixedState = this.state;
+        if (fixedState instanceof VotedState) {
+            return Optional.of((VotedState) fixedState);
+        } else {
+            return Optional.empty();
+        }
     }
 
     public UnattachedState unattachedStateOrThrow() {
@@ -540,18 +552,16 @@ public class QuorumState {
         throw new IllegalStateException("Expected to be Unattached, but current state is " + state);
     }
 
-    @SuppressWarnings("unchecked")
     public <T> LeaderState<T> leaderStateOrThrow() {
-        if (isLeader())
-            return (LeaderState<T>) state;
-        throw new IllegalStateException("Expected to be Leader, but current state is " + state);
+        return this.<T>maybeLeaderState()
+            .orElseThrow(() -> new IllegalStateException("Expected to be Leader, but current state is " + state));
     }
 
     @SuppressWarnings("unchecked")
     public <T> Optional<LeaderState<T>> maybeLeaderState() {
-        EpochState state = this.state;
-        if (state instanceof  LeaderState) {
-            return Optional.of((LeaderState<T>) state);
+        EpochState fixedState = this.state;
+        if (fixedState instanceof LeaderState) {
+            return Optional.of((LeaderState<T>) fixedState);
         } else {
             return Optional.empty();
         }

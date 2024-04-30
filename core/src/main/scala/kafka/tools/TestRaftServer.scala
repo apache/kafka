@@ -433,9 +433,9 @@ object TestRaftServer extends Logging {
       .ofType(classOf[Int])
       .defaultsTo(256)
 
-    val directoryId: OptionSpec[String] = parser.accepts("replica-uuid", "The uuid of the replica")
+    val directoryId: OptionSpec[String] = parser.accepts("replica-directory-id", "The directory id of the replica")
       .withRequiredArg
-      .describedAs("uuid")
+      .describedAs("directory id")
       .ofType(classOf[String])
 
     options = parser.parse(args : _*)
@@ -452,9 +452,9 @@ object TestRaftServer extends Logging {
         throw new InvalidConfigurationException("Missing configuration file. Should specify with '--config'")
       }
 
-      val uuidString = opts.options.valueOf(opts.directoryId)
-      if (uuidString == null) {
-        throw new InvalidConfigurationException("Missing replica uuid. Should specify with --replica-uuid")
+      val directoryIdAsString = opts.options.valueOf(opts.directoryId)
+      if (directoryIdAsString == null) {
+        throw new InvalidConfigurationException("Missing replica directory id. Should specify with --replica-directory-id")
       }
       val serverProps = Utils.loadProps(configFile)
 
@@ -465,7 +465,7 @@ object TestRaftServer extends Logging {
       val config = KafkaConfig.fromProps(serverProps, doLog = false)
       val throughput = opts.options.valueOf(opts.throughputOpt)
       val recordSize = opts.options.valueOf(opts.recordSizeOpt)
-      val server = new TestRaftServer(config, Uuid.fromString(uuidString), throughput, recordSize)
+      val server = new TestRaftServer(config, Uuid.fromString(directoryIdAsString), throughput, recordSize)
 
       Exit.addShutdownHook("raft-shutdown-hook", server.shutdown())
 

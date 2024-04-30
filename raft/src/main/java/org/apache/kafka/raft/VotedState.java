@@ -70,6 +70,10 @@ public class VotedState implements EpochState {
         return votedId;
     }
 
+    public Optional<Uuid> votedDirectoryId() {
+        return votedDirectoryId;
+    }
+
     @Override
     public int epoch() {
         return epoch;
