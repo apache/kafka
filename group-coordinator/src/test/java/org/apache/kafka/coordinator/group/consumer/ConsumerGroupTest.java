@@ -1111,7 +1111,7 @@ public class ConsumerGroupTest {
     }
 
     @Test
-    public void testAllMembersUseClassicProtocol() {
+    public void testNumClassicProtocolMembers() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
         List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = new ArrayList<>();
         protocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
@@ -1125,27 +1125,30 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member1);
         assertEquals(1, consumerGroup.numClassicProtocolMembers());
-        assertTrue(consumerGroup.allMembersUseClassicProtocol());
 
         // The group has member 1 (using the classic protocol) and member 2 (using the consumer protocol).
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member-2")
             .build();
         consumerGroup.updateMember(member2);
         assertEquals(1, consumerGroup.numClassicProtocolMembers());
-        assertFalse(consumerGroup.allMembersUseClassicProtocol());
+        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept("member-1"));
+        assertTrue(consumerGroup.allMembersUseClassicProtocolExcept("member-2"));
 
-        // The group has member 2 (using the consumer protocol).
+        // The group has member 2 (using the consumer protocol) and member 3 (using the consumer protocol).
         consumerGroup.removeMember(member1.memberId());
+        ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member-3")
+            .build();
+        consumerGroup.updateMember(member3);
         assertEquals(0, consumerGroup.numClassicProtocolMembers());
-        assertFalse(consumerGroup.allMembersUseClassicProtocol());
+        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept("member-2"));
 
         // The group has member 2 (using the classic protocol).
+        consumerGroup.removeMember(member2.memberId());
         member2 = new ConsumerGroupMember.Builder("member-2")
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(protocols))
             .build();
         consumerGroup.updateMember(member2);
         assertEquals(1, consumerGroup.numClassicProtocolMembers());
-        assertTrue(consumerGroup.allMembersUseClassicProtocol());
     }
 }

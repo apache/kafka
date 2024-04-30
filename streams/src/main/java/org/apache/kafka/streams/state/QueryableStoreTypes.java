@@ -49,7 +49,7 @@ public final class QueryableStoreTypes {
     }
 
     /**
-     * A {@link QueryableStoreType} that accepts {@link ReadOnlyKeyValueStore ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>}.
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlyKeyValueStore ReadOnlyKeyValueStore&lt;K, ValueAndTimestamp&lt;V&gt;&gt;}.
      *
      * @param <K> key type of the store
      * @param <V> value type of the store
@@ -71,7 +71,7 @@ public final class QueryableStoreTypes {
     }
 
     /**
-     * A {@link QueryableStoreType} that accepts {@link ReadOnlyWindowStore ReadOnlyWindowStore<K, ValueAndTimestamp<V>>}.
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlyWindowStore ReadOnlyWindowStore&lt;K, ValueAndTimestamp&lt;V&gt;&gt;}.
      *
      * @param <K> key type of the store
      * @param <V> value type of the store

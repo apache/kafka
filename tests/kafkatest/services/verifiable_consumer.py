@@ -31,6 +31,12 @@ class ConsumerState:
     Joined = 4
 
 
+def _create_partition_from_dict(d):
+    topic = d["topic"]
+    partition = d["partition"]
+    return TopicPartition(topic, partition)
+
+
 class ConsumerEventHandler(object):
 
     def __init__(self, node, verify_offsets, idx):
@@ -45,13 +51,17 @@ class ConsumerEventHandler(object):
         self.total_consumed = 0
         self.verify_offsets = verify_offsets
 
-    def handle_shutdown_complete(self):
+    def handle_shutdown_complete(self, node=None, logger=None):
         self.state = ConsumerState.Dead
         self.assignment = []
         self.position = {}
 
-    def handle_startup_complete(self):
+        if node is not None and logger is not None:
+            logger.debug("Shut down %s" % node.account.hostname)
+
+    def handle_startup_complete(self, node, logger):
         self.state = ConsumerState.Started
+        logger.debug("Started %s" % node.account.hostname)
 
     def handle_offsets_committed(self, event, node, logger):
         if event["success"]:
@@ -60,9 +70,7 @@ class ConsumerEventHandler(object):
                     logger.debug("%s: Offset commit failed for: %s" % (str(node.account), offset_commit))
                     continue
 
-                topic = offset_commit["topic"]
-                partition = offset_commit["partition"]
-                tp = TopicPartition(topic, partition)
+                tp = _create_partition_from_dict(offset_commit)
                 offset = offset_commit["offset"]
                 assert tp in self.assignment, \
                     "Committed offsets for partition %s not assigned (current assignment: %s)" % \
@@ -73,13 +81,14 @@ class ConsumerEventHandler(object):
                     (offset, self.position[tp], str(tp))
                 self.committed[tp] = offset
 
+        logger.debug("Offsets committed for %s" % node.account.hostname)
+
     def handle_records_consumed(self, event, logger):
         assert self.state == ConsumerState.Joined, \
             "Consumed records should only be received when joined (current state: %s)" % str(self.state)
 
         for record_batch in event["partitions"]:
-            tp = TopicPartition(topic=record_batch["topic"],
-                                partition=record_batch["partition"])
+            tp = _create_partition_from_dict(record_batch)
             min_offset = record_batch["minOffset"]
             max_offset = record_batch["maxOffset"]
 
@@ -99,19 +108,20 @@ class ConsumerEventHandler(object):
                     logger.warn(msg)
         self.total_consumed += event["count"]
 
-    def handle_partitions_revoked(self, event):
+    def handle_partitions_revoked(self, event, node, logger):
         self.revoked_count += 1
         self.state = ConsumerState.Rebalancing
         self.position = {}
+        logger.debug("All partitions revoked from %s" % node.account.hostname)
 
-    def handle_partitions_assigned(self, event):
+    def handle_partitions_assigned(self, event, node, logger):
         self.assigned_count += 1
         self.state = ConsumerState.Joined
         assignment = []
         for topic_partition in event["partitions"]:
-            topic = topic_partition["topic"]
-            partition = topic_partition["partition"]
-            assignment.append(TopicPartition(topic, partition))
+            tp = _create_partition_from_dict(topic_partition)
+            assignment.append(tp)
+        logger.debug("Partitions %s assigned to %s" % (assignment, node.account.hostname))
         self.assignment = assignment
 
     def handle_kill_process(self, clean_shutdown):
@@ -140,22 +150,31 @@ class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
     def __init__(self, node, verify_offsets, idx):
         super().__init__(node, verify_offsets, idx)
         
-    def handle_partitions_revoked(self, event):
+    def handle_partitions_revoked(self, event, node, logger):
         self.revoked_count += 1
         self.state = ConsumerState.Rebalancing
         self.position = {}
-        for topic_partition in event["partitions"]:
-            topic = topic_partition["topic"]
-            partition = topic_partition["partition"]
-            self.assignment.remove(TopicPartition(topic, partition))
+        revoked = []
 
-    def handle_partitions_assigned(self, event):
+        for topic_partition in event["partitions"]:
+            tp = _create_partition_from_dict(topic_partition)
+            assert tp in self.assignment, \
+                "Topic partition %s cannot be revoked from %s as it was not previously assigned to that consumer" % \
+                (tp, node.account.hostname)
+            self.assignment.remove(tp)
+            revoked.append(tp)
+
+        logger.debug("Partitions %s revoked from %s" % (revoked, node.account.hostname))
+
+    def handle_partitions_assigned(self, event, node, logger):
         self.assigned_count += 1
         self.state = ConsumerState.Joined
+        assignment = []
         for topic_partition in event["partitions"]:
-            topic = topic_partition["topic"]
-            partition = topic_partition["partition"]
-            self.assignment.append(TopicPartition(topic, partition))
+            tp = _create_partition_from_dict(topic_partition)
+            assignment.append(tp)
+        logger.debug("Partitions %s assigned to %s" % (assignment, node.account.hostname))
+        self.assignment.extend(assignment)
 
 
 class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
@@ -229,7 +248,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def _worker(self, idx, node):
         with self.lock:
             if node not in self.event_handlers:
-                if self._isEager():
+                if self.is_eager():
                     self.event_handlers[node] = ConsumerEventHandler(node, self.verify_offsets, idx)
                 else:
                     self.event_handlers[node] = IncrementalAssignmentConsumerEventHandler(node, self.verify_offsets, idx)
@@ -270,9 +289,9 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                 with self.lock:
                     name = event["name"]
                     if name == "shutdown_complete":
-                        handler.handle_shutdown_complete()
+                        handler.handle_shutdown_complete(node, self.logger)
                     elif name == "startup_complete":
-                        handler.handle_startup_complete()
+                        handler.handle_startup_complete(node, self.logger)
                     elif name == "offsets_committed":
                         handler.handle_offsets_committed(event, node, self.logger)
                         self._update_global_committed(event)
@@ -282,18 +301,18 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                     elif name == "record_data" and self.on_record_consumed:
                         self.on_record_consumed(event, node)
                     elif name == "partitions_revoked":
-                        handler.handle_partitions_revoked(event)
+                        handler.handle_partitions_revoked(event, node, self.logger)
                     elif name == "partitions_assigned":
-                        handler.handle_partitions_assigned(event)
+                        handler.handle_partitions_assigned(event, node, self.logger)
                     else:
                         self.logger.debug("%s: ignoring unknown event: %s" % (str(node.account), event))
 
-    def _isEager(self):
+    def is_eager(self):
         return self.group_protocol == consumer_group.classic_group_protocol and self.assignment_strategy != "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"
     
     def _update_global_position(self, consumed_event, node):
         for consumed_partition in consumed_event["partitions"]:
-            tp = TopicPartition(consumed_partition["topic"], consumed_partition["partition"])
+            tp = _create_partition_from_dict(consumed_partition)
             if tp in self.global_committed:
                 # verify that the position never gets behind the current commit.
                 if self.global_committed[tp] > consumed_partition["minOffset"]:
@@ -315,7 +334,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def _update_global_committed(self, commit_event):
         if commit_event["success"]:
             for offset_commit in commit_event["offsets"]:
-                tp = TopicPartition(offset_commit["topic"], offset_commit["partition"])
+                tp = _create_partition_from_dict(offset_commit)
                 offset = offset_commit["offset"]
                 assert self.global_position[tp] >= offset, \
                     "Committed offset %d for partition %s is ahead of the current position %d" % \

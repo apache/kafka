@@ -39,9 +39,9 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import scala.jdk.CollectionConverters._
-import scala.collection.mutable.Buffer
+import scala.collection.mutable
 import scala.concurrent.ExecutionException
+import scala.jdk.CollectionConverters._
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
@@ -52,7 +52,6 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     TestUtils.createBrokerConfigs(
       numServers,
       zkConnectOrNull,
-      enableControlledShutdown = true,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile,
       saslProperties = serverSaslProperties
@@ -60,7 +59,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   }
 
   private var consumer: Consumer[Array[Byte], Array[Byte]] = _
-  private val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
+  private val producers = mutable.Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
   protected var admin: Admin = _
 
   protected val topic = "topic"

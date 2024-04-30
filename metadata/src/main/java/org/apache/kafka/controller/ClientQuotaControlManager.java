@@ -139,7 +139,7 @@ public class ClientQuotaControlManager {
         }
         if (record.remove()) {
             quotas.remove(record.key());
-            if (quotas.size() == 0) {
+            if (quotas.isEmpty()) {
                 clientQuotaData.remove(entity);
             }
             log.info("Replayed ClientQuotaRecord for {} removing {}.", entity, record.key());

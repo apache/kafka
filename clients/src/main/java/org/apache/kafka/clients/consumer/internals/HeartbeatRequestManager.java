@@ -210,7 +210,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
         boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
         if (!heartbeatRequestState.canSendRequest(currentTimeMs) && !heartbeatNow) {
-            return new NetworkClientDelegate.PollResult(heartbeatRequestState.nextHeartbeatMs(currentTimeMs));
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
         }
 
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, false);
@@ -246,7 +246,7 @@ public class HeartbeatRequestManager implements RequestManager {
         ) {
             return 0L;
         }
-        return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.nextHeartbeatMs(currentTimeMs));
+        return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
     }
 
     /**
@@ -269,6 +269,7 @@ public class HeartbeatRequestManager implements RequestManager {
         heartbeatRequestState.onSendAttempt(currentTimeMs);
         membershipManager.onHeartbeatRequestSent();
         metricsManager.recordHeartbeatSentMs(currentTimeMs);
+        heartbeatRequestState.resetTimer();
         return request;
     }
 
@@ -325,7 +326,6 @@ public class HeartbeatRequestManager implements RequestManager {
         if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
             heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
-            heartbeatRequestState.resetTimer();
             membershipManager.onHeartbeatSuccess(response.data());
             return;
         }
@@ -380,7 +380,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 break;
 
             case UNRELEASED_INSTANCE_ID:
-                logger.error("GroupHeartbeatRequest failed due to the instance id {} was not released: {}",
+                logger.error("GroupHeartbeatRequest failed due to unreleased instance id {}: {}",
                         membershipManager.groupInstanceId().orElse("null"), errorMessage);
                 handleFatalFailure(Errors.UNRELEASED_INSTANCE_ID.exception(errorMessage));
                 break;
@@ -389,7 +389,7 @@ public class HeartbeatRequestManager implements RequestManager {
             case GROUP_MAX_SIZE_REACHED:
             case UNSUPPORTED_ASSIGNOR:
             case UNSUPPORTED_VERSION:
-                logger.error("GroupHeartbeatRequest failed due to error: {}", error);
+                logger.error("GroupHeartbeatRequest failed due to {}: {}", error, errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
                 break;
 
@@ -413,7 +413,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
             default:
                 // If the manager receives an unknown error - there could be a bug in the code or a new error code
-                logger.error("GroupHeartbeatRequest failed due to unexpected error: {}", error);
+                logger.error("GroupHeartbeatRequest failed due to unexpected error {}: {}", error, errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
                 break;
         }
@@ -469,17 +469,31 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatTimer.reset(heartbeatIntervalMs);
         }
 
+        /**
+         * Check if a heartbeat request should be sent on the current time. A heartbeat should be
+         * sent if the heartbeat timer has expired, backoff has expired, and there is no request
+         * in-flight.
+         */
         @Override
         public boolean canSendRequest(final long currentTimeMs) {
             update(currentTimeMs);
             return heartbeatTimer.isExpired() && super.canSendRequest(currentTimeMs);
         }
 
-        public long nextHeartbeatMs(final long currentTimeMs) {
-            if (heartbeatTimer.remainingMs() == 0) {
+        public long timeToNextHeartbeatMs(final long currentTimeMs) {
+            if (heartbeatTimer.isExpired()) {
                 return this.remainingBackoffMs(currentTimeMs);
             }
             return heartbeatTimer.remainingMs();
+        }
+
+        public void onFailedAttempt(final long currentTimeMs) {
+            // Reset timer to allow sending HB after a failure without waiting for the interval.
+            // After a failure, a next HB may be needed with backoff (ex. errors that lead to
+            // retries, like coordinator load error), or immediately (ex. errors that lead to
+            // rejoining, like fencing errors).
+            heartbeatTimer.reset(0);
+            super.onFailedAttempt(currentTimeMs);
         }
 
         private void updateHeartbeatIntervalMs(final long heartbeatIntervalMs) {

@@ -171,8 +171,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
           topic.partitions().get(partitionId) match {
             case partition : PartitionRegistration => {
               val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas,
-                listenerName, false)
-              val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName, false)
+                listenerName, filterUnavailableEndpoints = false)
+              val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName, filterUnavailableEndpoints = false)
               val offlineReplicas = getOfflineReplicas(image, partition, listenerName)
               val maybeLeader = getAliveEndpoint(image, partition.leader, listenerName)
               maybeLeader match {
@@ -307,7 +307,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
             remaining -= partitions.size
           })
 
-          if (!ignoreTopicsWithExceptions && !partitionResponse.isDefined) {
+          if (!ignoreTopicsWithExceptions && partitionResponse.isEmpty) {
             val error = try {
               Topic.validate(topicName)
               Errors.UNKNOWN_TOPIC_OR_PARTITION

@@ -36,22 +36,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ProducerIdControlManagerTest {
 
-    private SnapshotRegistry snapshotRegistry;
-    private FeatureControlManager featureControl;
-    private ClusterControlManager clusterControl;
     private ProducerIdControlManager producerIdControlManager;
 
     @BeforeEach
     public void setUp() {
         final MockTime time = new MockTime();
-        snapshotRegistry = new SnapshotRegistry(new LogContext());
-        featureControl = new FeatureControlManager.Builder().
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             build();
-        clusterControl = new ClusterControlManager.Builder().
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).

@@ -620,7 +620,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val topic = "test"
     val partition = 0
     // create brokers
-    val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false).map(KafkaConfig.fromProps)
+    val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps)
     servers = serverConfigs.reverse.map(s => TestUtils.createServer(s))
     // create the topic
     TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers)
@@ -664,7 +664,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   @Test
   def testControllerRejectControlledShutdownRequestWithStaleBrokerEpoch(): Unit = {
     // create brokers
-    val serverConfigs = TestUtils.createBrokerConfigs(2, zkConnect, false).map(KafkaConfig.fromProps)
+    val serverConfigs = TestUtils.createBrokerConfigs(2, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps)
     servers = serverConfigs.reverse.map(s => TestUtils.createServer(s))
 
     val controller = getController().kafkaController
@@ -1539,7 +1539,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     assertEquals("t2", controller.controllerContext.topicNames(topicId2))
 
     // The first topic ID has not changed
-    assertEquals(topicId1, controller.controllerContext.topicIds.get("t1").get)
+    assertEquals(topicId1, controller.controllerContext.topicIds("t1"))
     assertNotEquals(topicId1, topicId2)
   }
 
@@ -1637,13 +1637,13 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    val topicId = controller.controllerContext.topicIds.get("t").get
+    val topicId = controller.controllerContext.topicIds("t")
 
     servers(controllerId).shutdown()
     servers(controllerId).awaitShutdown()
     TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
     val controller2 = getController().kafkaController
-    assertEquals(topicId, controller2.controllerContext.topicIds.get("t").get)
+    assertEquals(topicId, controller2.controllerContext.topicIds("t"))
   }
 
   @Test
@@ -1676,14 +1676,14 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.InitialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    val topicId = controller.controllerContext.topicIds.get("t").get
+    val topicId = controller.controllerContext.topicIds("t")
 
     servers(controllerId).shutdown()
     servers(controllerId).awaitShutdown()
     servers(controllerId).startup()
     TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
     val controller2 = getController().kafkaController
-    assertEquals(topicId, controller2.controllerContext.topicIds.get("t").get)
+    assertEquals(topicId, controller2.controllerContext.topicIds("t"))
   }
 
   @Test
@@ -1760,7 +1760,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     assertNotEquals(emptyTopicId, topicIdAfterUpgrade)
     val controller2 = getController().kafkaController
     assertNotEquals(emptyTopicId, controller2.controllerContext.topicIds.get("t"))
-    val topicId = controller2.controllerContext.topicIds.get("t").get
+    val topicId = controller2.controllerContext.topicIds("t")
     assertEquals(topicIdAfterUpgrade.get, topicId)
     assertEquals("t", controller2.controllerContext.topicNames(topicId))
 

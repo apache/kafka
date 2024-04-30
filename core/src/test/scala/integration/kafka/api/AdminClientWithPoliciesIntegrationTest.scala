@@ -94,7 +94,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     val topic2 = "describe-alter-configs-topic-2"
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
-    createTopic(topic2, 1, 1)
+    createTopic(topic2)
 
     PlaintextAdminIntegrationTest.checkValidAlterConfigs(client, this, topicResource1, topicResource2)
   }
@@ -115,15 +115,15 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     // Create topics
     val topic1 = "invalid-alter-configs-due-to-policy-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
-    createTopic(topic1, 1, 1)
+    createTopic(topic1)
 
     val topic2 = "invalid-alter-configs-due-to-policy-topic-2"
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
-    createTopic(topic2, 1, 1)
+    createTopic(topic2)
 
     val topic3 = "invalid-alter-configs-due-to-policy-topic-3"
     val topicResource3 = new ConfigResource(ConfigResource.Type.TOPIC, topic3)
-    createTopic(topic3, 1, 1)
+    createTopic(topic3)
 
     // Set a mutable broker config
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokers.head.config.brokerId.toString)
