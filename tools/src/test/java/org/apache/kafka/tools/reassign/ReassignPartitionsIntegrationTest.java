@@ -42,6 +42,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.config.QuotaConfigs;
 import org.apache.kafka.tools.TerseException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Timeout;
@@ -79,9 +80,6 @@ import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_BA
 import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_FOLLOWER_THROTTLE;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_LEADER_THROTTLE;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_LOG_DIR_THROTTLE;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_THROTTLES;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.cancelAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.executeAssignment;
@@ -474,17 +472,17 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
     private void waitForLogDirThrottle(Set<Integer> throttledBrokers, Long logDirThrottle) {
         Map<String, Long> throttledConfigMap = new HashMap<>();
-        throttledConfigMap.put(BROKER_LEVEL_LEADER_THROTTLE, -1L);
-        throttledConfigMap.put(BROKER_LEVEL_FOLLOWER_THROTTLE, -1L);
-        throttledConfigMap.put(BROKER_LEVEL_LOG_DIR_THROTTLE, logDirThrottle);
+        throttledConfigMap.put(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, -1L);
+        throttledConfigMap.put(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, -1L);
+        throttledConfigMap.put(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, logDirThrottle);
         waitForBrokerThrottles(throttledBrokers, throttledConfigMap);
     }
 
     private void waitForInterBrokerThrottle(List<Integer> throttledBrokers, Long interBrokerThrottle) {
         Map<String, Long> throttledConfigMap = new HashMap<>();
-        throttledConfigMap.put(BROKER_LEVEL_LEADER_THROTTLE, interBrokerThrottle);
-        throttledConfigMap.put(BROKER_LEVEL_FOLLOWER_THROTTLE, interBrokerThrottle);
-        throttledConfigMap.put(BROKER_LEVEL_LOG_DIR_THROTTLE, -1L);
+        throttledConfigMap.put(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, interBrokerThrottle);
+        throttledConfigMap.put(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, interBrokerThrottle);
+        throttledConfigMap.put(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, -1L);
         waitForBrokerThrottles(throttledBrokers, throttledConfigMap);
     }
 
@@ -572,7 +570,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         cluster.adminClient.incrementalAlterConfigs(Collections.singletonMap(
                 new ConfigResource(ConfigResource.Type.BROKER, "0"),
                 Collections.singletonList(new AlterConfigOp(
-                    new ConfigEntry(BROKER_LEVEL_LOG_DIR_THROTTLE, ""), AlterConfigOp.OpType.DELETE))))
+                    new ConfigEntry(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, ""), AlterConfigOp.OpType.DELETE))))
             .all().get();
         waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
 

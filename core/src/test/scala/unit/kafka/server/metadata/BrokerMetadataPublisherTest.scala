@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest, MetadataProvenance}
 import org.apache.kafka.image.loader.LogDeltaManifest
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.LeaderAndEpoch
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.fault.FaultHandler
@@ -54,14 +55,14 @@ class BrokerMetadataPublisherTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    Exit.setExitProcedure((code, _) => exitException.set(new RuntimeException(s"Exit ${code}")))
-    Exit.setHaltProcedure((code, _) => exitException.set(new RuntimeException(s"Halt ${code}")))
+    Exit.setExitProcedure((code, _) => exitException.set(new RuntimeException(s"Exit $code")))
+    Exit.setHaltProcedure((code, _) => exitException.set(new RuntimeException(s"Halt $code")))
   }
 
   @AfterEach
   def tearDown(): Unit = {
-    Exit.resetExitProcedure();
-    Exit.resetHaltProcedure();
+    Exit.resetExitProcedure()
+    Exit.resetHaltProcedure()
     val exception = exitException.get()
     if (exception != null) {
       throw exception
@@ -121,7 +122,7 @@ class BrokerMetadataPublisherTest {
         assertEquals(0, numTimesReloadCalled.get())
         admin.incrementalAlterConfigs(singletonMap(
           new ConfigResource(BROKER, ""),
-          singleton(new AlterConfigOp(new ConfigEntry(KafkaConfig.MaxConnectionsProp, "123"), SET)))).all().get()
+          singleton(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "123"), SET)))).all().get()
         TestUtils.waitUntilTrue(() => numTimesReloadCalled.get() == 0,
           "numTimesConfigured never reached desired value")
 
@@ -129,7 +130,7 @@ class BrokerMetadataPublisherTest {
         // reloadUpdatedFilesWithoutConfigChange will be called.
         admin.incrementalAlterConfigs(singletonMap(
           new ConfigResource(BROKER, broker.config.nodeId.toString),
-          singleton(new AlterConfigOp(new ConfigEntry(KafkaConfig.MaxConnectionsProp, "123"), SET)))).all().get()
+          singleton(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "123"), SET)))).all().get()
         TestUtils.waitUntilTrue(() => numTimesReloadCalled.get() == 1,
           "numTimesConfigured never reached desired value")
       } finally {
@@ -170,7 +171,7 @@ class BrokerMetadataPublisherTest {
       }
       TestUtils.retry(60000) {
         assertTrue(Option(cluster.nonFatalFaultHandler().firstException()).
-          flatMap(e => Option(e.getMessage())).getOrElse("(none)").contains("injected failure"))
+          flatMap(e => Option(e.getMessage)).getOrElse("(none)").contains("injected failure"))
       }
     } finally {
       cluster.nonFatalFaultHandler().setIgnore(true)
@@ -216,7 +217,7 @@ class BrokerMetadataPublisherTest {
         .numBatches(1)
         .elapsedNs(100)
         .numBytes(42)
-        .build());
+        .build())
 
     verify(groupCoordinator).onNewMetadataImage(image, delta)
   }
@@ -266,7 +267,7 @@ class BrokerMetadataPublisherTest {
         .numBatches(1)
         .elapsedNs(100)
         .numBytes(42)
-        .build());
+        .build())
 
     // This should NOT trigger broker reregistration
     verifyNoInteractions(brokerLifecycleManager)
@@ -288,7 +289,7 @@ class BrokerMetadataPublisherTest {
         .numBatches(1)
         .elapsedNs(100)
         .numBytes(42)
-        .build());
+        .build())
 
     // This SHOULD trigger a broker registration
     verify(brokerLifecycleManager, times(1)).handleKraftJBODMetadataVersionUpdate()
@@ -311,7 +312,7 @@ class BrokerMetadataPublisherTest {
         .numBatches(1)
         .elapsedNs(100)
         .numBytes(42)
-        .build());
+        .build())
 
     // This should NOT trigger broker reregistration
     verify(brokerLifecycleManager, times(0)).handleKraftJBODMetadataVersionUpdate()

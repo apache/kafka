@@ -24,14 +24,22 @@ import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 
 import java.io.File;
 import java.nio.file.Paths;
+import java.util.Objects;
 import java.util.Optional;
 
 public class ControllerNode implements TestKitNode {
+    public static Builder builder() {
+        return new Builder();
+    }
+
     public static class Builder {
         private int id = -1;
-        private String baseDirectory = null;
-        private String metadataDirectory = null;
-        private Uuid clusterId = null;
+        private String baseDirectory;
+        private String metadataDirectory;
+        private Uuid clusterId;
+        private boolean combined;
+
+        private Builder() {}
 
         public int id() {
             return id;
@@ -47,11 +55,22 @@ public class ControllerNode implements TestKitNode {
             return this;
         }
 
-        public ControllerNode build(
-            String baseDirectory,
-            Uuid clusterId,
-            boolean combined
-        ) {
+        public Builder setClusterId(Uuid clusterId) {
+            this.clusterId = clusterId;
+            return this;
+        }
+
+        public Builder setBaseDirectory(String baseDirectory) {
+            this.baseDirectory = baseDirectory;
+            return this;
+        }
+
+        public Builder setCombined(boolean combined) {
+            this.combined = combined;
+            return this;
+        }
+
+        public ControllerNode build() {
             if (id == -1) {
                 throw new RuntimeException("You must set the node id.");
             }
@@ -60,7 +79,7 @@ public class ControllerNode implements TestKitNode {
             }
             if (metadataDirectory == null) {
                 if (combined) {
-                    metadataDirectory = String.format("combined_%d", id);
+                    metadataDirectory = String.format("combined_%d_0", id);
                 } else {
                     metadataDirectory = String.format("controller_%d", id);
                 }
@@ -85,11 +104,11 @@ public class ControllerNode implements TestKitNode {
 
     private final boolean combined;
 
-    ControllerNode(
+    private ControllerNode(
         MetaPropertiesEnsemble initialMetaPropertiesEnsemble,
         boolean combined
     ) {
-        this.initialMetaPropertiesEnsemble = initialMetaPropertiesEnsemble;
+        this.initialMetaPropertiesEnsemble = Objects.requireNonNull(initialMetaPropertiesEnsemble);
         this.combined = combined;
     }
 

@@ -37,7 +37,7 @@ public interface NetworkChannel extends AutoCloseable {
     /**
      * Update connection information for the given id.
      */
-    void updateEndpoint(int id, RaftConfig.InetAddressSpec address);
+    void updateEndpoint(int id, QuorumConfig.InetAddressSpec address);
 
     default void close() throws InterruptedException {}
 

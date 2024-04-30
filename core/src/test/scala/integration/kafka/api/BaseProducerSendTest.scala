@@ -33,25 +33,25 @@ import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import scala.jdk.CollectionConverters._
-import scala.collection.mutable.Buffer
+import scala.collection.mutable
 import scala.concurrent.ExecutionException
+import scala.jdk.CollectionConverters._
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
   def generateConfigs: scala.collection.Seq[KafkaConfig] = {
     val overridingProps = new Properties()
     val numServers = 2
-    overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
+    overridingProps.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, 4.toString)
     TestUtils.createBrokerConfigs(
       numServers,
       zkConnectOrNull,
-      enableControlledShutdown = true,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile,
       saslProperties = serverSaslProperties
@@ -59,7 +59,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   }
 
   private var consumer: Consumer[Array[Byte], Array[Byte]] = _
-  private val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
+  private val producers = mutable.Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
   protected var admin: Admin = _
 
   protected val topic = "topic"

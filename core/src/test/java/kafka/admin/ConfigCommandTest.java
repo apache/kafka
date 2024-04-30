@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.tools.config;
 
+import kafka.admin.ConfigCommand;
+import kafka.admin.ConfigCommandOptions;
+import kafka.admin.ConfigEntity;
+import kafka.admin.Tuple2;
 import kafka.cluster.Broker;
 import kafka.utils.TestUtils;
 import kafka.zk.AdminZkClient;

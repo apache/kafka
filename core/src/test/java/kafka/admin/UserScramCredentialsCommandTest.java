@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools.config;
 
+import kafka.admin.ConfigCommand;
 import kafka.server.BaseRequestTest;
 import kafka.utils.Exit;
 import org.apache.kafka.test.TestUtils;

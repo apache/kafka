@@ -494,7 +494,7 @@ class BatchAccumulatorTest {
     }
 
     int recordSizeInBytes(String record, int numberOfRecords) {
-        int serdeSize = serde.recordSize("a", new ObjectSerializationCache());
+        int serdeSize = serde.recordSize(record, new ObjectSerializationCache());
 
         int recordSizeInBytes = DefaultRecord.sizeOfBodyInBytes(
             numberOfRecords,
@@ -507,23 +507,15 @@ class BatchAccumulatorTest {
         return ByteUtils.sizeOfVarint(recordSizeInBytes) + recordSizeInBytes;
     }
 
-    static interface Appender {
+    interface Appender {
         Long call(BatchAccumulator<String> acc, int epoch, List<String> records);
     }
 
-    static final Appender APPEND_ATOMIC = new Appender() {
-        @Override
-        public Long call(BatchAccumulator<String> acc, int epoch, List<String> records) {
-            return acc.append(epoch, records, OptionalLong.empty(), true);
-        }
-    };
+    static final Appender APPEND_ATOMIC = (acc, epoch, records) ->
+            acc.append(epoch, records, OptionalLong.empty(), true);
 
-    static final Appender APPEND = new Appender() {
-        @Override
-        public Long call(BatchAccumulator<String> acc, int epoch, List<String> records) {
-            return acc.append(epoch, records, OptionalLong.empty(), false);
-        }
-    };
+    static final Appender APPEND = (acc, epoch, records) ->
+            acc.append(epoch, records, OptionalLong.empty(), false);
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})

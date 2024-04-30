@@ -68,10 +68,10 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
    */
   @Test
   def testIsZkSecurityEnabled(): Unit = {
-    assertTrue(JaasUtils.isZkSaslEnabled())
+    assertTrue(JaasUtils.isZkSaslEnabled)
     Configuration.setConfiguration(null)
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
-    assertFalse(JaasUtils.isZkSaslEnabled())
+    assertFalse(JaasUtils.isZkSaslEnabled)
     Configuration.setConfiguration(null)
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "no-such-file-exists.conf")
     assertThrows(classOf[KafkaException], () => JaasUtils.isZkSaslEnabled())
@@ -252,7 +252,7 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
     }
     // Check consumers path.
     val consumersAcl = firstZk.getAcl(ConsumerPathZNode.path)
-    assertTrue(isAclCorrect(consumersAcl, false, false), ConsumerPathZNode.path)
+    assertTrue(isAclCorrect(consumersAcl, secure = false, sensitive = false), ConsumerPathZNode.path)
     assertTrue(isAclCorrect(firstZk.getAcl("/kafka-acl-extended"), secondZk.secure,
       ZkData.sensitivePath(ExtendedAclZNode.path)), "/kafka-acl-extended")
     assertTrue(isAclCorrect(firstZk.getAcl("/feature"), secondZk.secure,

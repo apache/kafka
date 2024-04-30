@@ -79,10 +79,10 @@ object ZkMetadataCache {
         Option(topicIdToNewState.get(id)) match {
           case None =>
             currentMetadata.partitionStates.get(name) match {
-              case None => handleLogMessage(s"Error: topic ${name} appeared in currentMetadata.topicNames, " +
+              case None => handleLogMessage(s"Error: topic $name appeared in currentMetadata.topicNames, " +
                 "but not in currentMetadata.partitionStates.")
               case Some(curPartitionStates) =>
-                handleLogMessage(s"Removing topic ${name} with ID ${id} from the metadata cache since " +
+                handleLogMessage(s"Removing topic $name with ID $id from the metadata cache since " +
                   "the full UMR did not include it.")
                 newRequestTopicStates.add(createDeletionEntries(name,
                   id,
@@ -93,13 +93,13 @@ object ZkMetadataCache {
             val indexToState = new util.HashMap[Integer, UpdateMetadataPartitionState]
             newTopicState.partitionStates().forEach(part => indexToState.put(part.partitionIndex, part))
             currentMetadata.partitionStates.get(name) match {
-              case None => handleLogMessage(s"Error: topic ${name} appeared in currentMetadata.topicNames, " +
+              case None => handleLogMessage(s"Error: topic $name appeared in currentMetadata.topicNames, " +
                 "but not in currentMetadata.partitionStates.")
               case Some(curPartitionStates) =>
                 curPartitionStates.foreach(state => indexToState.remove(state._1.toInt))
                 if (!indexToState.isEmpty) {
-                  handleLogMessage(s"Removing ${indexToState.size()} partition(s) from topic ${name} with " +
-                    s"ID ${id} from the metadata cache since the full UMR did not include them.")
+                  handleLogMessage(s"Removing ${indexToState.size()} partition(s) from topic $name with " +
+                    s"ID $id from the metadata cache since the full UMR did not include them.")
                   newRequestTopicStates.add(createDeletionEntries(name,
                     id,
                     indexToState.values().asScala,
@@ -108,7 +108,7 @@ object ZkMetadataCache {
             }
         }
       } catch {
-        case e: Exception => handleLogMessage(s"Error: ${e}")
+        case e: Exception => handleLogMessage(s"Error: $e")
       }
     })
     if (newRequestTopicStates.isEmpty) {
@@ -136,7 +136,7 @@ object ZkMetadataCache {
     partitions.foreach(partition => {
       val lisr = LeaderAndIsr.duringDelete(partition.isr().asScala.map(_.intValue()).toList)
       val newPartitionState = new UpdateMetadataPartitionState()
-        .setPartitionIndex(partition.partitionIndex().toInt)
+        .setPartitionIndex(partition.partitionIndex())
         .setTopicName(topicName)
         .setLeader(lisr.leader)
         .setLeaderEpoch(lisr.leaderEpoch)

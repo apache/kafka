@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.tools.config;
 
+import kafka.admin.ConfigCommand;
+import kafka.admin.Tuple2;
 import kafka.server.AbstractDynamicBrokerReconfigurationTest;
 import kafka.server.KafkaBroker;
 import kafka.server.KafkaConfig;

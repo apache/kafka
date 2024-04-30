@@ -46,8 +46,7 @@ public interface ClusterInstance {
     }
 
     /**
-     * The cluster configuration used to create this cluster. Changing data in this instance through this accessor will
-     * have no effect on the cluster since it is already provisioned.
+     * The immutable cluster configuration used to create this cluster.
      */
     ClusterConfig config();
 
@@ -144,8 +143,6 @@ public interface ClusterInstance {
     void shutdownBroker(int brokerId);
 
     void startBroker(int brokerId);
-
-    void rollingBrokerRestart();
 
     void waitForReadyBrokers() throws InterruptedException;
 }
