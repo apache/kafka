@@ -559,7 +559,7 @@ public class GroupMetadataManagerTestContext {
             request
         );
 
-        if (result.appendFuture() == null) {
+        if (result.replayRecords()) {
             result.records().forEach(this::replay);
         }
         return result;

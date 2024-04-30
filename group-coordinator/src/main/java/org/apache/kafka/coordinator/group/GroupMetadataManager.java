@@ -371,7 +371,7 @@ public class GroupMetadataManager {
      * Package private for testing.
      */
     static final CoordinatorResult<Void, Record> EMPTY_RESULT =
-        new CoordinatorResult<>(Collections.emptyList(), CompletableFuture.completedFuture(null));
+        new CoordinatorResult<>(Collections.emptyList(), CompletableFuture.completedFuture(null), false);
 
     /**
      * The maximum number of members allowed in a single classic group.
@@ -814,10 +814,15 @@ public class GroupMetadataManager {
      *
      * @param consumerGroup     The converted ConsumerGroup.
      * @param leavingMemberId   The leaving member that triggers the downgrade validation.
-     * @param records           The list of Records.
-     * @return An appendFuture of the conversion.
+     * @param response          The response of the returned CoordinatorResult.
+     * @return A CoordinatorResult.
      */
-    private CompletableFuture<Void> convertToClassicGroup(ConsumerGroup consumerGroup, String leavingMemberId, List<Record> records) {
+    private <T> CoordinatorResult<T, Record> convertToClassicGroup(
+        ConsumerGroup consumerGroup,
+        String leavingMemberId,
+        T response
+    ) {
+        List<Record> records = new ArrayList<>();
         consumerGroup.createGroupTombstoneRecords(records);
 
         ClassicGroup classicGroup;
@@ -855,7 +860,7 @@ public class GroupMetadataManager {
             metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
             return null;
         });
-        return appendFuture;
+        return new CoordinatorResult<>(records, response, appendFuture, false);
     }
 
     /**
@@ -1795,12 +1800,14 @@ public class GroupMetadataManager {
         int memberEpoch
     ) throws ApiException {
         ConsumerGroup group = consumerGroup(groupId);
-        List<Record> records = new ArrayList<>();
-        CompletableFuture<Void> appendFuture = null;
+        ConsumerGroupHeartbeatResponseData response = new ConsumerGroupHeartbeatResponseData()
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch);
+
         if (instanceId == null) {
             ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
             log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
-            appendFuture = consumerGroupFenceMember(group, member, records);
+            return consumerGroupFenceMember(group, member, response);
         } else {
             ConsumerGroupMember member = group.staticMember(instanceId);
             throwIfStaticMemberIsUnknown(member, instanceId);
@@ -1808,21 +1815,13 @@ public class GroupMetadataManager {
             if (memberEpoch == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
                 log.info("[GroupId {}] Static Member {} with instance id {} temporarily left the consumer group.",
                     group.groupId(), memberId, instanceId);
-                records = consumerGroupStaticMemberGroupLeave(group, member);
+                return consumerGroupStaticMemberGroupLeave(group, member);
             } else {
                 log.info("[GroupId {}] Static Member {} with instance id {} left the consumer group.",
                     group.groupId(), memberId, instanceId);
-                appendFuture = consumerGroupFenceMember(group, member, records);
+                return consumerGroupFenceMember(group, member, response);
             }
         }
-
-        return new CoordinatorResult<>(
-            records,
-            new ConsumerGroupHeartbeatResponseData()
-                .setMemberId(memberId)
-                .setMemberEpoch(memberEpoch),
-            appendFuture
-        );
     }
 
     /**
@@ -1832,12 +1831,12 @@ public class GroupMetadataManager {
      * instance id decided to leave the group and would be back within session
      * timeout.
      *
-     * @param group      The group.
-     * @param member     The static member in the group for the instance id.
+     * @param group     The group.
+     * @param member    The static member in the group for the instance id.
      *
-     * @return A list with a single record signifying that the static member is leaving.
+     * @return A CoordinatorResult with a single record signifying that the static member is leaving.
      */
-    private List<Record> consumerGroupStaticMemberGroupLeave(
+    private CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupStaticMemberGroupLeave(
         ConsumerGroup group,
         ConsumerGroupMember member
     ) {
@@ -1846,7 +1845,13 @@ public class GroupMetadataManager {
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
             .setPartitionsPendingRevocation(Collections.emptyMap())
             .build();
-        return Collections.singletonList(newCurrentAssignmentRecord(group.groupId(), leavingStaticMember));
+
+        return new CoordinatorResult<>(
+            Collections.singletonList(newCurrentAssignmentRecord(group.groupId(), leavingStaticMember)),
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(member.memberId())
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+        );
     }
 
     /**
@@ -1854,17 +1859,19 @@ public class GroupMetadataManager {
      *
      * @param group     The group.
      * @param member    The member.
-     * @param records   The list of records to be applied to the state.
-     * @return The append future to be applied.
+     * @param response  The response of the CoordinatorResult.
+     *
+     * @return The CoordinatorResult to be applied.
      */
-    private CompletableFuture<Void> consumerGroupFenceMember(
+    private <T> CoordinatorResult<T, Record> consumerGroupFenceMember(
         ConsumerGroup group,
         ConsumerGroupMember member,
-        List<Record> records
+        T response
     ) {
         if (validateOnlineDowngrade(group, member.memberId())) {
-            return convertToClassicGroup(group, member.memberId(), records);
+            return convertToClassicGroup(group, member.memberId(), response);
         } else {
+            List<Record> records = new ArrayList<>();
             removeMember(records, group.groupId(), member.memberId());
 
             // We update the subscription metadata without the leaving member.
@@ -1887,7 +1894,7 @@ public class GroupMetadataManager {
 
             cancelTimers(group.groupId(), member.memberId());
 
-            return null;
+            return new CoordinatorResult<>(records, response);
         }
     }
 
@@ -1934,9 +1941,7 @@ public class GroupMetadataManager {
                 log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
                     groupId, memberId);
 
-                List<Record> records = new ArrayList<>();
-                CompletableFuture<Void> appendFuture = consumerGroupFenceMember(group, member, records);
-                return new CoordinatorResult<>(records, appendFuture);
+                return consumerGroupFenceMember(group, member, null);
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
@@ -1987,9 +1992,7 @@ public class GroupMetadataManager {
                             "it failed to transition from epoch {} within {}ms.",
                         groupId, memberId, memberEpoch, rebalanceTimeoutMs);
 
-                    List<Record> records = new ArrayList<>();
-                    CompletableFuture<Void> appendFuture = consumerGroupFenceMember(group, member, records);
-                    return new CoordinatorResult<>(records, appendFuture);
+                    return consumerGroupFenceMember(group, member, null);
                 } else {
                     log.debug("[GroupId {}] Ignoring rebalance timeout for {} because the member " +
                         "left the epoch {}.", groupId, memberId, memberEpoch);
@@ -2661,7 +2664,7 @@ public class GroupMetadataManager {
                 RecordHelpers.newEmptyGroupMetadataRecord(group, metadataImage.features().metadataVersion())
             );
 
-            return new CoordinatorResult<>(records, appendFuture);
+            return new CoordinatorResult<>(records, appendFuture, false);
         }
         return result;
     }
@@ -3078,7 +3081,7 @@ public class GroupMetadataManager {
                 List<Record> records = Collections.singletonList(RecordHelpers.newGroupMetadataRecord(
                     group, Collections.emptyMap(), metadataImage.features().metadataVersion()));
 
-                return new CoordinatorResult<>(records, appendFuture);
+                return new CoordinatorResult<>(records, appendFuture, false);
 
             } else {
                 log.info("Stabilized group {} generation {} with {} members.",
@@ -3741,7 +3744,7 @@ public class GroupMetadataManager {
                     RecordHelpers.newGroupMetadataRecord(group, groupAssignment, metadataImage.features().metadataVersion())
                 );
 
-                return new CoordinatorResult<>(records, appendFuture);
+                return new CoordinatorResult<>(records, appendFuture, false);
             } else {
                 return maybePrepareRebalanceOrCompleteJoin(
                     group,
@@ -3857,7 +3860,7 @@ public class GroupMetadataManager {
                 List<Record> records = Collections.singletonList(
                     RecordHelpers.newGroupMetadataRecord(group, assignment, metadataImage.features().metadataVersion())
                 );
-                return new CoordinatorResult<>(records, appendFuture);
+                return new CoordinatorResult<>(records, appendFuture, false);
             }
         } else if (group.isInState(STABLE)) {
             removePendingSyncMember(group, memberId);
@@ -4132,7 +4135,8 @@ public class GroupMetadataManager {
             coordinatorResult.records(),
             new LeaveGroupResponseData()
                 .setMembers(memberResponses),
-            coordinatorResult.appendFuture()
+            coordinatorResult.appendFuture(),
+            coordinatorResult.replayRecords()
         );
     }
 

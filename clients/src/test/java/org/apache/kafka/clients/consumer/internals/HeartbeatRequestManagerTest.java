@@ -72,6 +72,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -164,6 +165,35 @@ public class HeartbeatRequestManagerTest {
         assertEquals(0, result2.unsentRequests.size());
     }
 
+    @Test
+    public void testSuccessfulHeartbeatTiming() {
+        mockStableMember();
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(),
+            "No heartbeat should be sent while interval has not expired");
+        assertEquals(heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()), result.timeUntilNextPollMs);
+        assertNextHeartbeatTiming(DEFAULT_HEARTBEAT_INTERVAL_MS);
+
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size(), "A heartbeat should be sent when interval expires");
+        NetworkClientDelegate.UnsentRequest inflightReq = result.unsentRequests.get(0);
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS,
+            heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()),
+            "Heartbeat timer was not reset to the interval when the heartbeat request was sent.");
+
+        long partOfInterval = DEFAULT_HEARTBEAT_INTERVAL_MS / 3;
+        time.sleep(partOfInterval);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(),
+            "No heartbeat should be sent while only part of the interval has passed");
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS - partOfInterval,
+            heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()),
+            "Time to next interval was not properly updated.");
+
+        inflightReq.handler().onComplete(createHeartbeatResponse(inflightReq, Errors.NONE));
+        assertNextHeartbeatTiming(DEFAULT_HEARTBEAT_INTERVAL_MS - partOfInterval);
+    }
+
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments(short version) {
@@ -229,6 +259,35 @@ public class HeartbeatRequestManagerTest {
         membershipManager.transitionToFatal();
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
+    }
+
+    @Test
+    public void testHeartbeatNotSentIfAnotherOneInFlight() {
+        mockStableMember();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+
+        // Heartbeat sent (no response received)
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest inflightReq = result.unsentRequests.get(0);
+
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a " +
+            "previous one is in-flight");
+        
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent when the " +
+            "interval expires if there is a previous HB request in-flight");
+
+        // Receive response for the inflight after the interval expired. The next HB should be sent
+        // on the next poll waiting only for the minimal backoff.
+        inflightReq.handler().onComplete(createHeartbeatResponse(inflightReq, Errors.NONE));
+        time.sleep(DEFAULT_RETRY_BACKOFF_MS);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size(), "A next heartbeat should be sent on " +
+            "the first poll after receiving a response that took longer than the interval, " +
+            "waiting only for the minimal backoff.");
     }
 
     @Test
@@ -402,30 +461,24 @@ public class HeartbeatRequestManagerTest {
         switch (error) {
             case NONE:
                 verify(membershipManager).onHeartbeatSuccess(mockResponse.data());
-                assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestState.nextHeartbeatMs(time.milliseconds()));
+                assertNextHeartbeatTiming(DEFAULT_HEARTBEAT_INTERVAL_MS);
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 verify(backgroundEventHandler, never()).add(any());
-                assertEquals(DEFAULT_RETRY_BACKOFF_MS,
-                    heartbeatRequestState.nextHeartbeatMs(time.milliseconds()), "Request should " +
-                        "backoff after receiving a coordinator load in progress error. ");
+                assertNextHeartbeatTiming(DEFAULT_RETRY_BACKOFF_MS);
                 break;
 
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 verify(backgroundEventHandler, never()).add(any());
                 verify(coordinatorRequestManager).markCoordinatorUnknown(any(), anyLong());
-                assertEquals(0, heartbeatRequestState.nextHeartbeatMs(time.milliseconds()),
-                    "Request should not apply backoff so that the next heartbeat is sent " +
-                        "as soon as the new coordinator is discovered.");
+                assertNextHeartbeatTiming(0);
                 break;
             case UNKNOWN_MEMBER_ID:
             case FENCED_MEMBER_EPOCH:
                 verify(backgroundEventHandler, never()).add(any());
-                assertEquals(0, heartbeatRequestState.nextHeartbeatMs(time.milliseconds()),
-                    "Request should not apply backoff so that the next heartbeat to rejoin is " +
-                        "sent as soon as the fenced member releases its assignment.");
+                assertNextHeartbeatTiming(0);
                 break;
             default:
                 if (isFatal) {
@@ -433,7 +486,7 @@ public class HeartbeatRequestManagerTest {
                     ensureFatalError();
                 } else {
                     verify(backgroundEventHandler, never()).add(any());
-                    assertEquals(0, heartbeatRequestState.nextHeartbeatMs(time.milliseconds()));
+                    assertNextHeartbeatTiming(0);
                 }
                 break;
         }
@@ -444,6 +497,16 @@ public class HeartbeatRequestManagerTest {
             result = heartbeatRequestManager.poll(time.milliseconds());
             assertEquals(1, result.unsentRequests.size());
         }
+    }
+
+    private void assertNextHeartbeatTiming(long expectedTimeToNextHeartbeatMs) {
+        long currentTimeMs = time.milliseconds();
+        assertEquals(expectedTimeToNextHeartbeatMs, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
+        if (expectedTimeToNextHeartbeatMs != 0) {
+            assertFalse(heartbeatRequestState.canSendRequest(currentTimeMs));
+            time.sleep(expectedTimeToNextHeartbeatMs);
+        }
+        assertTrue(heartbeatRequestState.canSendRequest(time.milliseconds()));
     }
 
     @Test

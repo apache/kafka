@@ -34,6 +34,7 @@ import java.util.OptionalInt;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.test.TestUtils;
@@ -54,7 +55,7 @@ final public class MetaPropertiesEnsembleTest {
         new MetaPropertiesEnsemble(
             new HashSet<>(Arrays.asList("/tmp/empty1", "/tmp/empty2")),
             new HashSet<>(Arrays.asList("/tmp/error3")),
-            Arrays.asList(
+            Stream.of(
                 new SimpleImmutableEntry<>("/tmp/dir4",
                     new MetaProperties.Builder().
                         setVersion(MetaPropertiesVersion.V1).
@@ -66,7 +67,7 @@ final public class MetaPropertiesEnsembleTest {
                         setVersion(MetaPropertiesVersion.V1).
                         setClusterId("fooClusterId").
                         setNodeId(2).
-                        build())).stream().collect(Collectors.
+                        build())).collect(Collectors.
                             toMap(Entry::getKey, Entry::getValue)),
                 Optional.of("/tmp/dir4"));
 
@@ -77,7 +78,7 @@ final public class MetaPropertiesEnsembleTest {
         return logDir.getAbsolutePath();
     }
 
-    private static String createEmptyLogDir() throws IOException {
+    private static String createEmptyLogDir() {
         File logDir = TestUtils.tempDirectory();
         return logDir.getAbsolutePath();
     }
@@ -222,7 +223,7 @@ final public class MetaPropertiesEnsembleTest {
     }
 
     @Test
-    public void testVerificationFailureOnLackOfMetadataLogDir() throws IOException {
+    public void testVerificationFailureOnLackOfMetadataLogDir() {
         MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
             Collections.singleton("/tmp/foo1"),
             Collections.emptySet(),
@@ -237,7 +238,7 @@ final public class MetaPropertiesEnsembleTest {
     }
 
     @Test
-    public void testVerificationFailureOnMetadataLogDirWithError() throws IOException {
+    public void testVerificationFailureOnMetadataLogDirWithError() {
         MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
             Collections.emptySet(),
             Collections.singleton("/tmp/foo1"),
@@ -322,8 +323,7 @@ final public class MetaPropertiesEnsembleTest {
 
     static class MetaPropertiesMockRandom extends Random {
         private final AtomicInteger index = new AtomicInteger(0);
-
-        private List<Long> results = Arrays.asList(
+        private final List<Long> results = Arrays.asList(
             0L,
             0L,
             2336837413447398698L,
