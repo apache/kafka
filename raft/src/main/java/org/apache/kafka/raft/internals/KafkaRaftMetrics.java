@@ -44,7 +44,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
     private final MetricName currentLeaderIdMetricName;
     private final MetricName currentVotedIdMetricName;
-    private final MetricName curentVotedDirectoryIdMetricName;
+    private final MetricName currentVotedDirectoryIdMetricName;
     private final MetricName currentEpochMetricName;
     private final MetricName currentStateMetricName;
     private final MetricName highWatermarkMetricName;
@@ -101,7 +101,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
             }
         });
 
-        this.curentVotedDirectoryIdMetricName = metrics.metricName(
+        this.currentVotedDirectoryIdMetricName = metrics.metricName(
             "current-vote-directory-id",
             metricGroupName,
             String.format("The current voted directory id; %s indicates not voted for a directory id", Uuid.ZERO_UUID)
@@ -116,7 +116,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
                     .toString();
             }
         };
-        metrics.addMetric(this.curentVotedDirectoryIdMetricName, null, votedDirectoryIdProvider);
+        metrics.addMetric(this.currentVotedDirectoryIdMetricName, null, votedDirectoryIdProvider);
 
         this.currentEpochMetricName = metrics.metricName("current-epoch", metricGroupName, "The current quorum epoch.");
         metrics.addMetric(this.currentEpochMetricName, (mConfig, currentTimeMs) -> state.epoch());
@@ -216,6 +216,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
         Arrays.asList(
             currentLeaderIdMetricName,
             currentVotedIdMetricName,
+            currentVotedDirectoryIdMetricName,
             currentEpochMetricName,
             currentStateMetricName,
             highWatermarkMetricName,
