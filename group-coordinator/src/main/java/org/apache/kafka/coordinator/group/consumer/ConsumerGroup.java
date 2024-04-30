@@ -1003,10 +1003,8 @@ public class ConsumerGroup implements Group {
     /**
      * Compute the subscription type of the consumer group.
      *
-     * If all the members are subscribed to the same set of topics, the type is homogeneous.
-     * Otherwise, it is heterogeneous.
-     *
      * @param subscribedTopicNames      A map of topic names to the count of members subscribed to each topic.
+     *
      * @return {@link SubscriptionType#HOMOGENEOUS} if all members are subscribed to exactly the same topics;
      *         otherwise, {@link SubscriptionType#HETEROGENEOUS}.
      */
