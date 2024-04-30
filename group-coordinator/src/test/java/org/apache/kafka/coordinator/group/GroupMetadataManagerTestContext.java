@@ -694,6 +694,10 @@ public class GroupMetadataManagerTestContext {
             responseFuture
         );
 
+        if (coordinatorResult.replayRecords()) {
+            coordinatorResult.records().forEach(this::replay);
+        }
+
         return new JoinResult(responseFuture, coordinatorResult);
     }
 
@@ -840,6 +844,10 @@ public class GroupMetadataManagerTestContext {
             request,
             responseFuture
         );
+
+        if (coordinatorResult.replayRecords()) {
+            coordinatorResult.records().forEach(this::replay);
+        }
 
         return new SyncResult(responseFuture, coordinatorResult);
     }

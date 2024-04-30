@@ -82,6 +82,7 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
@@ -10877,8 +10878,9 @@ public class GroupMetadataManagerTest {
         assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(requestWithInvalidProtocolType));
     }
 
-    @Test
-    public void testJoiningConsumerGroupWithNewDynamicMember() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testJoiningConsumerGroupWithNewDynamicMember(boolean replaySuccessfully) throws Exception {
         String groupId = "group-id";
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -10926,6 +10928,9 @@ public class GroupMetadataManagerTest {
                 true
             );
             assertTrue(firstJoinResult.records.isEmpty());
+            // Simulate a successful write to the log.
+            firstJoinResult.appendFuture.complete(null);
+
             assertTrue(firstJoinResult.joinFuture.isDone());
             assertEquals(Errors.MEMBER_ID_REQUIRED.code(), firstJoinResult.joinFuture.get().errorCode());
             String newMemberId = firstJoinResult.joinFuture.get().memberId();
@@ -10989,23 +10994,36 @@ public class GroupMetadataManagerTest {
             assertUnorderedListEquals(expectedRecords.subList(3, 5), secondJoinResult.records.subList(3, 5));
             assertRecordsEquals(expectedRecords.subList(5, 7), secondJoinResult.records.subList(5, 7));
 
-            assertTrue(secondJoinResult.joinFuture.isDone());
-            assertEquals(
-                new JoinGroupResponseData()
-                    .setMemberId(newMemberId)
-                    .setGenerationId(11)
-                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                    .setProtocolName("range"),
-                secondJoinResult.joinFuture.get()
-            );
+            if (replaySuccessfully) {
+                secondJoinResult.appendFuture.complete(null);
+                assertTrue(secondJoinResult.joinFuture.isDone());
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setMemberId(newMemberId)
+                        .setGenerationId(11)
+                        .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                        .setProtocolName("range"),
+                    secondJoinResult.joinFuture.get()
+                );
 
-            context.assertSessionTimeout(groupId, newMemberId, 45000);
-            context.assertSyncTimeout(groupId, newMemberId, request.rebalanceTimeoutMs());
+                context.assertSessionTimeout(groupId, newMemberId, request.sessionTimeoutMs());
+                context.assertSyncTimeout(groupId, newMemberId, request.rebalanceTimeoutMs());
+            } else {
+                secondJoinResult.appendFuture.completeExceptionally(new NotLeaderOrFollowerException());
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setErrorCode(Errors.NOT_COORDINATOR.code()),
+                    secondJoinResult.joinFuture.get()
+                );
+                context.assertNoSessionTimeout(groupId, newMemberId);
+                context.assertNoSyncTimeout(groupId, newMemberId);
+            }
         }
     }
 
-    @Test
-    public void testJoiningConsumerGroupWithNewStaticMember() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testJoiningConsumerGroupWithNewStaticMember(boolean replaySuccessfully) throws Exception {
         String groupId = "group-id";
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -11051,57 +11069,69 @@ public class GroupMetadataManagerTest {
                 .build();
 
             GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request);
-            String newMemberId = joinResult.joinFuture.get().memberId();
 
-            ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(newMemberId)
-                .setMemberEpoch(11)
-                .setPreviousMemberEpoch(0)
-                .setInstanceId(instanceId)
-                .setState(MemberState.STABLE)
-                .setClientId("client")
-                .setClientHost("localhost/127.0.0.1")
-                .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
-                .setRebalanceTimeoutMs(500)
-                .setSupportedClassicProtocols(request.protocols())
-                .build();
+            if (replaySuccessfully) {
+                joinResult.appendFuture.complete(null);
+                String newMemberId = joinResult.joinFuture.get().memberId();
 
-            List<Record> expectedRecords = Arrays.asList(
-                RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
-                RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
-                    {
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
-                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
-                    }
-                }),
-                RecordHelpers.newGroupEpochRecord(groupId, 11),
+                ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(newMemberId)
+                    .setMemberEpoch(11)
+                    .setPreviousMemberEpoch(0)
+                    .setInstanceId(instanceId)
+                    .setState(MemberState.STABLE)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
+                    .setRebalanceTimeoutMs(500)
+                    .setSupportedClassicProtocols(request.protocols())
+                    .build();
 
-                RecordHelpers.newTargetAssignmentRecord(groupId, memberId, Collections.emptyMap()),
-                RecordHelpers.newTargetAssignmentRecord(groupId, newMemberId, Collections.emptyMap()),
+                List<Record> expectedRecords = Arrays.asList(
+                    RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
+                    RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+                        {
+                            put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
+                            put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
+                        }
+                    }),
+                    RecordHelpers.newGroupEpochRecord(groupId, 11),
 
-                RecordHelpers.newTargetAssignmentEpochRecord(groupId, 11),
-                RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
-            );
-            assertRecordsEquals(expectedRecords.subList(0, 3), joinResult.records.subList(0, 3));
-            assertUnorderedListEquals(expectedRecords.subList(3, 5), joinResult.records.subList(3, 5));
-            assertRecordsEquals(expectedRecords.subList(5, 7), joinResult.records.subList(5, 7));
+                    RecordHelpers.newTargetAssignmentRecord(groupId, memberId, Collections.emptyMap()),
+                    RecordHelpers.newTargetAssignmentRecord(groupId, newMemberId, Collections.emptyMap()),
 
-            assertTrue(joinResult.joinFuture.isDone());
-            assertEquals(
-                new JoinGroupResponseData()
-                    .setMemberId(newMemberId)
-                    .setGenerationId(11)
-                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                    .setProtocolName("range"),
-                joinResult.joinFuture.get()
-            );
+                    RecordHelpers.newTargetAssignmentEpochRecord(groupId, 11),
+                    RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
+                );
+                assertRecordsEquals(expectedRecords.subList(0, 3), joinResult.records.subList(0, 3));
+                assertUnorderedListEquals(expectedRecords.subList(3, 5), joinResult.records.subList(3, 5));
+                assertRecordsEquals(expectedRecords.subList(5, 7), joinResult.records.subList(5, 7));
 
-            context.assertSessionTimeout(groupId, newMemberId, 45000);
-            context.assertSyncTimeout(groupId, newMemberId, request.rebalanceTimeoutMs());
+                assertTrue(joinResult.joinFuture.isDone());
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setMemberId(newMemberId)
+                        .setGenerationId(11)
+                        .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                        .setProtocolName("range"),
+                    joinResult.joinFuture.get()
+                );
+
+                context.assertSessionTimeout(groupId, newMemberId, request.sessionTimeoutMs());
+                context.assertSyncTimeout(groupId, newMemberId, request.rebalanceTimeoutMs());
+            } else {
+                joinResult.appendFuture.completeExceptionally(new NotLeaderOrFollowerException());
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setErrorCode(Errors.NOT_COORDINATOR.code()),
+                    joinResult.joinFuture.get()
+                );
+            }
         }
     }
 
-    @Test
-    public void testJoiningConsumerGroupReplacingExistingStaticMember() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testJoiningConsumerGroupReplacingExistingStaticMember(boolean replaySuccessfully) throws Exception {
         String groupId = "group-id";
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -11153,54 +11183,63 @@ public class GroupMetadataManagerTest {
                 request,
                 true
             );
-            String newMemberId = joinResult.joinFuture.get().memberId();
 
-            ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(newMemberId)
-                .setMemberEpoch(0)
-                .setPreviousMemberEpoch(0)
-                .setInstanceId(instanceId)
-                .setState(MemberState.UNREVOKED_PARTITIONS)
-                .setClientId("client")
-                .setClientHost("localhost/127.0.0.1")
-                .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
-                .setRebalanceTimeoutMs(500)
-                .setSupportedClassicProtocols(request.protocols())
-                .setPartitionsPendingRevocation(mkAssignment(
-                    mkTopicAssignment(fooTopicId, 0, 1)))
-                .build();
+            if (replaySuccessfully) {
+                joinResult.appendFuture.complete(null);
 
-            List<Record> expectedRecords = Arrays.asList(
-                // Remove the old static member.
-                RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
-                RecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId),
-                RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId),
+                String newMemberId = joinResult.joinFuture.get().memberId();
+                ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(newMemberId)
+                    .setMemberEpoch(0)
+                    .setPreviousMemberEpoch(0)
+                    .setInstanceId(instanceId)
+                    .setState(MemberState.UNREVOKED_PARTITIONS)
+                    .setClientId("client")
+                    .setClientHost("localhost/127.0.0.1")
+                    .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
+                    .setRebalanceTimeoutMs(500)
+                    .setSupportedClassicProtocols(request.protocols())
+                    .setPartitionsPendingRevocation(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1)))
+                    .build();
 
-                // Create the new static member.
-                RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
-                RecordHelpers.newTargetAssignmentRecord(groupId, newMemberId, Collections.emptyMap()),
-                RecordHelpers.newTargetAssignmentEpochRecord(groupId, 10),
-                RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
-            );
-            assertRecordsEquals(expectedRecords, joinResult.records);
+                List<Record> expectedRecords = Arrays.asList(
+                    // Remove the old static member.
+                    RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
+                    RecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId),
+                    RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId),
 
-            assertTrue(joinResult.joinFuture.isDone());
-            assertEquals(
-                new JoinGroupResponseData()
-                    .setMemberId(newMemberId)
-                    .setGenerationId(0)
-                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                    .setProtocolName("range"),
-                joinResult.joinFuture.get()
-            );
+                    // Create the new static member.
+                    RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
+                    RecordHelpers.newTargetAssignmentRecord(groupId, newMemberId, Collections.emptyMap()),
+                    RecordHelpers.newTargetAssignmentEpochRecord(groupId, 10),
+                    RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
+                );
+                assertRecordsEquals(expectedRecords, joinResult.records);
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setMemberId(newMemberId)
+                        .setGenerationId(0)
+                        .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                        .setProtocolName("range"),
+                    joinResult.joinFuture.get()
+                );
 
-            context.assertSessionTimeout(groupId, newMemberId, 45000);
-            context.assertSyncTimeout(groupId, newMemberId, request.rebalanceTimeoutMs());
+                context.assertSessionTimeout(groupId, newMemberId, request.sessionTimeoutMs());
+                context.assertSyncTimeout(groupId, newMemberId, request.rebalanceTimeoutMs());
+            } else {
+                joinResult.appendFuture.completeExceptionally(new NotLeaderOrFollowerException());
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setErrorCode(Errors.NOT_COORDINATOR.code()),
+                    joinResult.joinFuture.get()
+                );
+            }
         }
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"", "instance-id"})
-    public void testExistingMemberRejoiningConsumerGroup(String instanceId) throws Exception {
+    @CsvSource(value = {", true", ", false", "instance-id, true", "instance-id, false"})
+    public void testExistingMemberRejoiningConsumerGroup(String instanceId, boolean replaySuccessfully) throws Exception {
         String groupId = "group-id";
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -11269,15 +11308,29 @@ public class GroupMetadataManagerTest {
             // The member rejoins with the same member id and protocols.
             GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request);
             assertEquals(Collections.emptyList(), joinResult.records);
-            assertEquals(
-                new JoinGroupResponseData()
-                    .setMemberId(memberId1)
-                    .setGenerationId(10)
-                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                    .setProtocolName("range"),
-                joinResult.joinFuture.get()
-            );
-            context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
+
+            if (replaySuccessfully) {
+                joinResult.appendFuture.complete(null);
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setMemberId(memberId1)
+                        .setGenerationId(10)
+                        .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                        .setProtocolName("range"),
+                    joinResult.joinFuture.get()
+                );
+                context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
+                context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
+            } else {
+                joinResult.appendFuture.completeExceptionally(new NotLeaderOrFollowerException());
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setErrorCode(Errors.NOT_COORDINATOR.code()),
+                    joinResult.joinFuture.get()
+                );
+                context.assertNoSessionTimeout(groupId, memberId1);
+                context.assertNoSyncTimeout(groupId, memberId1);
+            }
         }
     }
 
@@ -11351,8 +11404,11 @@ public class GroupMetadataManagerTest {
         assertThrows(FencedInstanceIdException.class, () -> context.sendClassicGroupJoin(request));
     }
 
-    @Test
-    public void testMemberJoiningConsumerGroupWithNewSubscriptionTransitionsToUnrevokedPartitions() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMemberJoiningConsumerGroupWithNewSubscriptionTransitionsToUnrevokedPartitions(
+        boolean replaySuccessfully
+    ) throws Exception {
         String groupId = "group-id";
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -11481,20 +11537,37 @@ public class GroupMetadataManagerTest {
             assertRecordsEquals(expectedRecords.subList(5, 6), joinResult.records.subList(5, 6));
 
             assertEquals(expectedMember.state(), group.getOrMaybeCreateMember(memberId1, false).state());
-            assertEquals(
-                new JoinGroupResponseData()
-                    .setMemberId(memberId1)
-                    .setGenerationId(10)
-                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                    .setProtocolName("range"),
-                joinResult.joinFuture.get()
-            );
-            context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
+
+            if (replaySuccessfully) {
+                joinResult.appendFuture.complete(null);
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setMemberId(memberId1)
+                        .setGenerationId(10)
+                        .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                        .setProtocolName("range"),
+                    joinResult.joinFuture.get()
+                );
+                context.assertSessionTimeout(groupId, memberId1, request.sessionTimeoutMs());
+                context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
+            } else {
+                joinResult.appendFuture.completeExceptionally(new NotLeaderOrFollowerException());
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setErrorCode(Errors.NOT_COORDINATOR.code()),
+                    joinResult.joinFuture.get()
+                );
+                context.assertNoSessionTimeout(groupId, memberId1);
+                context.assertNoSyncTimeout(groupId, memberId1);
+            }
         }
     }
 
-    @Test
-    public void testStableMemberJoiningConsumerGroupWithNewSubscriptionTransitionsToUnreleasedPartitions() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testStableMemberJoiningConsumerGroupWithNewSubscriptionTransitionsToUnreleasedPartitions(
+        boolean replaySuccessfully
+    ) throws Exception {
         String groupId = "group-id";
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -11621,20 +11694,36 @@ public class GroupMetadataManagerTest {
             assertUnorderedListEquals(expectedRecords.subList(3, 5), joinResult.records.subList(3, 5));
             assertRecordsEquals(expectedRecords.subList(5, 7), joinResult.records.subList(5, 7));
 
-            assertEquals(
-                new JoinGroupResponseData()
-                    .setMemberId(memberId1)
-                    .setGenerationId(11)
-                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                    .setProtocolName("range"),
-                joinResult.joinFuture.get()
-            );
-            context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
+            if (replaySuccessfully) {
+                joinResult.appendFuture.complete(null);
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setMemberId(memberId1)
+                        .setGenerationId(11)
+                        .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                        .setProtocolName("range"),
+                    joinResult.joinFuture.get()
+                );
+                context.assertSessionTimeout(groupId, memberId1, request.sessionTimeoutMs());
+                context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
+            } else {
+                joinResult.appendFuture.completeExceptionally(new NotLeaderOrFollowerException());
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setErrorCode(Errors.NOT_COORDINATOR.code()),
+                    joinResult.joinFuture.get()
+                );
+                context.assertNoSessionTimeout(groupId, memberId1);
+                context.assertNoSyncTimeout(groupId, memberId1);
+            }
         }
     }
 
-    @Test
-    public void testMemberInUnrevokedPartitionsRejoiningConsumerGroupTransitionsToUnreleasedPartitions() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMemberInUnrevokedPartitionsRejoiningConsumerGroupTransitionsToUnreleasedPartitions(
+        boolean replaySuccessfully
+    ) throws Exception {
         String groupId = "group-id";
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -11739,20 +11828,37 @@ public class GroupMetadataManagerTest {
                     joinResult.records
                 );
             }
-            assertEquals(
-                new JoinGroupResponseData()
-                    .setMemberId(memberId1)
-                    .setGenerationId(11)
-                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                    .setProtocolName("range"),
-                joinResult.joinFuture.get()
-            );
-            context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
+
+            if (replaySuccessfully) {
+                joinResult.appendFuture.complete(null);
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setMemberId(memberId1)
+                        .setGenerationId(11)
+                        .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                        .setProtocolName("range"),
+                    joinResult.joinFuture.get()
+                );
+                context.assertSessionTimeout(groupId, memberId1, request.sessionTimeoutMs());
+                context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
+            } else {
+                joinResult.appendFuture.completeExceptionally(new NotLeaderOrFollowerException());
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setErrorCode(Errors.NOT_COORDINATOR.code()),
+                    joinResult.joinFuture.get()
+                );
+                context.assertNoSessionTimeout(groupId, memberId1);
+                context.assertNoSyncTimeout(groupId, memberId1);
+            }
         }
     }
 
-    @Test
-    public void testMemberInUnreleasedPartitionsRejoiningConsumerGroupTransitionsToStable() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMemberInUnreleasedPartitionsRejoiningConsumerGroupTransitionsToStable(
+        boolean replaySuccessfully
+    ) throws Exception {
         String groupId = "group-id";
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -11844,15 +11950,28 @@ public class GroupMetadataManagerTest {
                 joinResult.records
             );
 
-            assertEquals(
-                new JoinGroupResponseData()
-                    .setMemberId(memberId1)
-                    .setGenerationId(11)
-                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                    .setProtocolName("range"),
-                joinResult.joinFuture.get()
-            );
-            context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
+            if (replaySuccessfully) {
+                joinResult.appendFuture.complete(null);
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setMemberId(memberId1)
+                        .setGenerationId(11)
+                        .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                        .setProtocolName("range"),
+                    joinResult.joinFuture.get()
+                );
+                context.assertSessionTimeout(groupId, memberId1, request.sessionTimeoutMs());
+                context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
+            } else {
+                joinResult.appendFuture.completeExceptionally(new NotLeaderOrFollowerException());
+                assertEquals(
+                    new JoinGroupResponseData()
+                        .setErrorCode(Errors.NOT_COORDINATOR.code()),
+                    joinResult.joinFuture.get()
+                );
+                context.assertNoSessionTimeout(groupId, memberId1);
+                context.assertNoSyncTimeout(groupId, memberId1);
+            }
         }
     }
 

@@ -1611,18 +1611,31 @@ public class GroupMetadataManager {
             records
         );
 
-        scheduleConsumerGroupSessionTimeout(groupId, memberId);
-        // The sync timeout ensures that the member send sync request within the rebalance timeout.
-        scheduleConsumerGroupSyncTimeout(groupId, memberId, request.rebalanceTimeoutMs());
-
-        responseFuture.complete(new JoinGroupResponseData()
+        final JoinGroupResponseData response = new JoinGroupResponseData()
             .setMemberId(updatedMember.memberId())
             .setGenerationId(updatedMember.memberEpoch())
             .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-            .setProtocolName(protocols.iterator().next().name())
-        );
+            .setProtocolName(protocols.iterator().next().name());
 
-        return new CoordinatorResult<>(records);
+        CompletableFuture<Void> appendFuture = new CompletableFuture<>();
+        appendFuture.whenComplete((__, t) -> {
+            if (t == null) {
+                responseFuture.complete(response);
+
+                scheduleConsumerGroupSessionTimeout(groupId, response.memberId(), request.sessionTimeoutMs());
+                // The sync timeout ensures that the member send sync request within the rebalance timeout.
+                scheduleConsumerGroupSyncTimeout(groupId, response.memberId(), request.rebalanceTimeoutMs());
+            } else {
+                // We failed to write the empty group metadata. This will revert the snapshot, removing
+                // the newly created group.
+                log.warn("Failed to write metadata for group {}: {}", group.groupId(), t.getMessage());
+
+                responseFuture.complete(new JoinGroupResponseData()
+                    .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
+            }
+        });
+
+        return new CoordinatorResult<>(records, null, appendFuture, true);
     }
 
     /**
@@ -1923,6 +1936,13 @@ public class GroupMetadataManager {
         cancelConsumerGroupSyncTimeout(groupId, memberId);
     }
 
+    private void scheduleConsumerGroupSessionTimeout(
+        String groupId,
+        String memberId
+    ) {
+        scheduleConsumerGroupSessionTimeout(groupId, memberId, consumerGroupSessionTimeoutMs);
+    }
+
     /**
      * Schedules (or reschedules) the session timeout for the member.
      *
@@ -1931,10 +1951,11 @@ public class GroupMetadataManager {
      */
     private void scheduleConsumerGroupSessionTimeout(
         String groupId,
-        String memberId
+        String memberId,
+        int sessionTimeoutMs
     ) {
         String key = consumerGroupSessionTimeoutKey(groupId, memberId);
-        timer.schedule(key, consumerGroupSessionTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
+        timer.schedule(key, sessionTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
                 ConsumerGroup group = consumerGroup(groupId);
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
@@ -2043,9 +2064,7 @@ public class GroupMetadataManager {
                 log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
                     groupId, memberId);
 
-                List<Record> records = new ArrayList<>();
-                CompletableFuture<Void> appendFuture = consumerGroupFenceMember(group, member, records);
-                return new CoordinatorResult<>(records, appendFuture);
+                return consumerGroupFenceMember(group, member, null);
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
                     groupId, memberId);
