@@ -324,14 +324,14 @@ class RemoteIndexCacheTest {
     // Verify that Cleaner thread is still running even when exception is thrown in doWork()
     var threads = getRunningCleanerThread
     assertEquals(1, threads.size,
-      s"Found unexpected ${threads.size} threads=${threads.stream().map(t => t.getName).collect(Collectors.joining(", "))}")
+      s"Found unexpected ${threads.size} threads=${threads.stream().map[String](t => t.getName).collect(Collectors.joining(", "))}")
 
     // close the cache properly
     cache.close()
 
     // verify that the thread is closed properly
     threads = getRunningCleanerThread
-    assertTrue(threads.isEmpty, s"Found unexpected ${threads.size} threads=${threads.stream().map(t => t.getName).collect(Collectors.joining(", "))}")
+    assertTrue(threads.isEmpty, s"Found unexpected ${threads.size} threads=${threads.stream().map[String](t => t.getName).collect(Collectors.joining(", "))}")
     // if the thread is correctly being shutdown it will not be running
     assertFalse(cache.cleanerThread.isRunning, "Unexpected thread state=running. Check error logs.")
   }
