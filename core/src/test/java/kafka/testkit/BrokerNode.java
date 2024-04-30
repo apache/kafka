@@ -44,7 +44,6 @@ public class BrokerNode implements TestKitNode {
         private String baseDirectory;
         private Uuid clusterId;
         private int numLogDirectories = 1;
-        private String metadataDirectory;
         private Map<String, String> propertyOverrides = Collections.emptyMap();
         private boolean combined;
 
@@ -56,11 +55,6 @@ public class BrokerNode implements TestKitNode {
 
         public Builder setId(int id) {
             this.id = id;
-            return this;
-        }
-
-        public Builder setMetadataDirectory(String metadataDirectory) {
-            this.metadataDirectory = metadataDirectory;
             return this;
         }
 
@@ -95,6 +89,9 @@ public class BrokerNode implements TestKitNode {
             if (id == -1) {
                 throw new RuntimeException("You must set the node id.");
             }
+            if (numLogDirectories < 1) {
+                throw new RuntimeException("The value of numLogDirectories should be at least 1.");
+            }
             List<String> logDataDirectories = IntStream
                 .range(0, numLogDirectories)
                 .mapToObj(i -> {
@@ -110,14 +107,9 @@ public class BrokerNode implements TestKitNode {
                     return new File(baseDirectory, logDir).getAbsolutePath();
                 })
                 .collect(Collectors.toList());
-            if (metadataDirectory == null) {
-                metadataDirectory = logDataDirectories.get(0);
-            } else if (!Paths.get(metadataDirectory).isAbsolute()) {
-                metadataDirectory = new File(baseDirectory, metadataDirectory).getAbsolutePath();
-            }
             MetaPropertiesEnsemble.Copier copier =
                     new MetaPropertiesEnsemble.Copier(MetaPropertiesEnsemble.EMPTY);
-            copier.setMetaLogDir(Optional.of(metadataDirectory));
+            copier.setMetaLogDir(Optional.of(logDataDirectories.get(0)));
             for (String logDir : logDataDirectories) {
                 copier.setLogDirProps(logDir, new MetaProperties.Builder().
                     setVersion(MetaPropertiesVersion.V1).
@@ -126,7 +118,6 @@ public class BrokerNode implements TestKitNode {
                     setDirectoryId(copier.generateValidDirectoryId()).
                     build());
             }
-            copier.setMetaLogDir(Optional.of(metadataDirectory));
             return new BrokerNode(
                 copier.copy(),
                 combined,
