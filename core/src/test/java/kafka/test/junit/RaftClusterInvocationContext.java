@@ -41,7 +41,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
@@ -234,14 +233,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public KafkaClusterTestKit getUnderlying() {
             return clusterReference.get();
-        }
-
-        @Override
-        public Admin createAdminClient(Properties configOverrides) {
-            Admin admin = Admin.create(clusterReference.get().
-                newClientPropertiesBuilder(configOverrides).build());
-            admins.add(admin);
-            return admin;
         }
 
         @Override

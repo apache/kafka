@@ -60,11 +60,7 @@ public class DeleteRecordsCommandTest {
 
     @ClusterTest
     public void testCommand() throws Exception {
-        Properties adminProps = new Properties();
-
-        adminProps.put(AdminClientConfig.RETRIES_CONFIG, 1);
-
-        try (Admin admin = cluster.createAdminClient(adminProps)) {
+        try (Admin admin = Admin.create(cluster.adminConfigs(Collections.singletonMap(AdminClientConfig.RETRIES_CONFIG, "1")))) {
             assertThrows(
                 AdminCommandFailedException.class,
                 () -> DeleteRecordsCommand.execute(admin, "{\"partitions\":[" +

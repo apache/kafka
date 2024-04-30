@@ -60,6 +60,7 @@ import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, UUID}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 object ZkMigrationIntegrationTest {
 
@@ -120,37 +121,37 @@ class ZkMigrationIntegrationTest {
     )
   )
   def testMigrateAcls(clusterInstance: ClusterInstance): Unit = {
-    val admin = clusterInstance.createAdminClient()
+    Using(Admin.create(clusterInstance.adminConfigs(Collections.emptyMap()))) { admin =>
+      val resource1 = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
+      val resource2 = new ResourcePattern(TOPIC, "bar-" + UUID.randomUUID(), LITERAL)
+      val prefixedResource = new ResourcePattern(TOPIC, "bar-", PREFIXED)
+      val username = "alice"
+      val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+      val wildcardPrincipal = SecurityUtils.parseKafkaPrincipal(WILDCARD_PRINCIPAL_STRING)
 
-    val resource1 = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
-    val resource2 = new ResourcePattern(TOPIC, "bar-" + UUID.randomUUID(), LITERAL)
-    val prefixedResource = new ResourcePattern(TOPIC, "bar-", PREFIXED)
-    val username = "alice"
-    val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
-    val wildcardPrincipal = SecurityUtils.parseKafkaPrincipal(WILDCARD_PRINCIPAL_STRING)
+      val acl1 = new AclBinding(resource1, new AccessControlEntry(principal.toString, WILDCARD_HOST, READ, ALLOW))
+      val acl2 = new AclBinding(resource1, new AccessControlEntry(principal.toString, "192.168.0.1", WRITE, ALLOW))
+      val acl3 = new AclBinding(resource2, new AccessControlEntry(principal.toString, WILDCARD_HOST, DESCRIBE, ALLOW))
+      val acl4 = new AclBinding(prefixedResource, new AccessControlEntry(wildcardPrincipal.toString, WILDCARD_HOST, READ, ALLOW))
 
-    val acl1 = new AclBinding(resource1, new AccessControlEntry(principal.toString, WILDCARD_HOST, READ, ALLOW))
-    val acl2 = new AclBinding(resource1, new AccessControlEntry(principal.toString, "192.168.0.1", WRITE, ALLOW))
-    val acl3 = new AclBinding(resource2, new AccessControlEntry(principal.toString, WILDCARD_HOST, DESCRIBE, ALLOW))
-    val acl4 = new AclBinding(prefixedResource, new AccessControlEntry(wildcardPrincipal.toString, WILDCARD_HOST, READ, ALLOW))
+      val result = admin.createAcls(List(acl1, acl2, acl3, acl4).asJava)
+      result.all().get
 
-    val result = admin.createAcls(List(acl1, acl2, acl3, acl4).asJava)
-    result.all().get
-
-    val underlying = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying()
-    val zkClient = underlying.zkClient
-    val migrationClient = ZkMigrationClient(zkClient, PasswordEncoder.NOOP)
-    val verifier = new MetadataDeltaVerifier()
-    migrationClient.readAllMetadata(batch => verifier.accept(batch), _ => { })
-    verifier.verify { image =>
-      val aclMap = image.acls().acls()
-      assertEquals(4, aclMap.size())
-      assertTrue(aclMap.values().containsAll(Seq(
-        StandardAcl.fromAclBinding(acl1),
-        StandardAcl.fromAclBinding(acl2),
-        StandardAcl.fromAclBinding(acl3),
-        StandardAcl.fromAclBinding(acl4)
-      ).asJava))
+      val underlying = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying()
+      val zkClient = underlying.zkClient
+      val migrationClient = ZkMigrationClient(zkClient, PasswordEncoder.NOOP)
+      val verifier = new MetadataDeltaVerifier()
+      migrationClient.readAllMetadata(batch => verifier.accept(batch), _ => {})
+      verifier.verify { image =>
+        val aclMap = image.acls().acls()
+        assertEquals(4, aclMap.size())
+        assertTrue(aclMap.values().containsAll(Seq(
+          StandardAcl.fromAclBinding(acl1),
+          StandardAcl.fromAclBinding(acl2),
+          StandardAcl.fromAclBinding(acl3),
+          StandardAcl.fromAclBinding(acl4)
+        ).asJava))
+      }
     }
   }
 
@@ -220,87 +221,88 @@ class ZkMigrationIntegrationTest {
    */
   @ClusterTest(brokers = 3, clusterType = Type.ZK, metadataVersion = MetadataVersion.IBP_3_4_IV0)
   def testMigrate(clusterInstance: ClusterInstance): Unit = {
-    val admin = clusterInstance.createAdminClient()
-    val newTopics = new util.ArrayList[NewTopic]()
-    newTopics.add(new NewTopic("test-topic-1", 2, 3.toShort)
-      .configs(Map(TopicConfig.SEGMENT_BYTES_CONFIG -> "102400", TopicConfig.SEGMENT_MS_CONFIG -> "300000").asJava))
-    newTopics.add(new NewTopic("test-topic-2", 1, 3.toShort))
-    newTopics.add(new NewTopic("test-topic-3", 10, 3.toShort))
-    val createTopicResult = admin.createTopics(newTopics)
-    createTopicResult.all().get(60, TimeUnit.SECONDS)
+    Using(Admin.create(clusterInstance.adminConfigs(Collections.emptyMap()))) { admin =>
+      val newTopics = new util.ArrayList[NewTopic]()
+      newTopics.add(new NewTopic("test-topic-1", 2, 3.toShort)
+        .configs(Map(TopicConfig.SEGMENT_BYTES_CONFIG -> "102400", TopicConfig.SEGMENT_MS_CONFIG -> "300000").asJava))
+      newTopics.add(new NewTopic("test-topic-2", 1, 3.toShort))
+      newTopics.add(new NewTopic("test-topic-3", 10, 3.toShort))
+      val createTopicResult = admin.createTopics(newTopics)
+      createTopicResult.all().get(60, TimeUnit.SECONDS)
 
-    val quotas = new util.ArrayList[ClientQuotaAlteration]()
-    val defaultUserEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, null))
-    quotas.add(new ClientQuotaAlteration(defaultUserEntity, List(new ClientQuotaAlteration.Op("consumer_byte_rate", 900.0)).asJava))
-    val defaultClientIdEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.CLIENT_ID, null))
-    quotas.add(new ClientQuotaAlteration(defaultClientIdEntity, List(new ClientQuotaAlteration.Op("consumer_byte_rate", 900.0)).asJava))
-    val defaultIpEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.IP, null))
-    quotas.add(new ClientQuotaAlteration(defaultIpEntity, List(new ClientQuotaAlteration.Op("connection_creation_rate", 9.0)).asJava))
-    val userEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> "user/1@prod").asJava)
-    quotas.add(new ClientQuotaAlteration(userEntity, List(new ClientQuotaAlteration.Op("consumer_byte_rate", 1000.0)).asJava))
-    val userClientEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> "user/1@prod", ClientQuotaEntity.CLIENT_ID -> "client/1@domain").asJava)
-    quotas.add(new ClientQuotaAlteration(userClientEntity,
-      List(new ClientQuotaAlteration.Op("consumer_byte_rate", 800.0), new ClientQuotaAlteration.Op("producer_byte_rate", 100.0)).asJava))
-    val ipEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "8.8.8.8").asJava)
-    quotas.add(new ClientQuotaAlteration(ipEntity, List(new ClientQuotaAlteration.Op("connection_creation_rate", 10.0)).asJava))
-    admin.alterClientQuotas(quotas).all().get(60, TimeUnit.SECONDS)
+      val quotas = new util.ArrayList[ClientQuotaAlteration]()
+      val defaultUserEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, null))
+      quotas.add(new ClientQuotaAlteration(defaultUserEntity, List(new ClientQuotaAlteration.Op("consumer_byte_rate", 900.0)).asJava))
+      val defaultClientIdEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.CLIENT_ID, null))
+      quotas.add(new ClientQuotaAlteration(defaultClientIdEntity, List(new ClientQuotaAlteration.Op("consumer_byte_rate", 900.0)).asJava))
+      val defaultIpEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.IP, null))
+      quotas.add(new ClientQuotaAlteration(defaultIpEntity, List(new ClientQuotaAlteration.Op("connection_creation_rate", 9.0)).asJava))
+      val userEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> "user/1@prod").asJava)
+      quotas.add(new ClientQuotaAlteration(userEntity, List(new ClientQuotaAlteration.Op("consumer_byte_rate", 1000.0)).asJava))
+      val userClientEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> "user/1@prod", ClientQuotaEntity.CLIENT_ID -> "client/1@domain").asJava)
+      quotas.add(new ClientQuotaAlteration(userClientEntity,
+        List(new ClientQuotaAlteration.Op("consumer_byte_rate", 800.0), new ClientQuotaAlteration.Op("producer_byte_rate", 100.0)).asJava))
+      val ipEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "8.8.8.8").asJava)
+      quotas.add(new ClientQuotaAlteration(ipEntity, List(new ClientQuotaAlteration.Op("connection_creation_rate", 10.0)).asJava))
+      admin.alterClientQuotas(quotas).all().get(60, TimeUnit.SECONDS)
 
-    val zkClient = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
-    val kafkaConfig = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying.servers.head.config
-    val zkConfigEncoder = kafkaConfig.passwordEncoderSecret match {
-      case Some(secret) =>
-        PasswordEncoder.encrypting(secret,
-          kafkaConfig.passwordEncoderKeyFactoryAlgorithm,
-          kafkaConfig.passwordEncoderCipherAlgorithm,
-          kafkaConfig.passwordEncoderKeyLength,
-          kafkaConfig.passwordEncoderIterations)
-      case None => PasswordEncoder.NOOP
+      val zkClient = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
+      val kafkaConfig = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying.servers.head.config
+      val zkConfigEncoder = kafkaConfig.passwordEncoderSecret match {
+        case Some(secret) =>
+          PasswordEncoder.encrypting(secret,
+            kafkaConfig.passwordEncoderKeyFactoryAlgorithm,
+            kafkaConfig.passwordEncoderCipherAlgorithm,
+            kafkaConfig.passwordEncoderKeyLength,
+            kafkaConfig.passwordEncoderIterations)
+        case None => PasswordEncoder.NOOP
+      }
+
+      val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)
+      var migrationState = migrationClient.getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState.EMPTY)
+      migrationState = migrationState.withNewKRaftController(3000, 42)
+      migrationState = migrationClient.claimControllerLeadership(migrationState)
+
+      val brokers = new java.util.HashSet[Integer]()
+      val verifier = new MetadataDeltaVerifier()
+      migrationClient.readAllMetadata(batch => verifier.accept(batch), brokerId => brokers.add(brokerId))
+      assertEquals(Seq(0, 1, 2), brokers.asScala.toSeq)
+
+      verifier.verify { image =>
+        assertNotNull(image.topics().getTopic("test-topic-1"))
+        assertEquals(2, image.topics().getTopic("test-topic-1").partitions().size())
+
+        assertNotNull(image.topics().getTopic("test-topic-2"))
+        assertEquals(1, image.topics().getTopic("test-topic-2").partitions().size())
+
+        assertNotNull(image.topics().getTopic("test-topic-3"))
+        assertEquals(10, image.topics().getTopic("test-topic-3").partitions().size())
+
+        val clientQuotas = image.clientQuotas().entities()
+        assertEquals(new java.util.HashSet[ClientQuotaEntity](java.util.Arrays.asList(
+          defaultUserEntity,
+          defaultClientIdEntity,
+          defaultIpEntity,
+          userEntity,
+          userClientEntity,
+          ipEntity
+        )), clientQuotas.keySet())
+      }
+      migrationState = migrationClient.releaseControllerLeadership(migrationState)
     }
-
-    val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)
-    var migrationState = migrationClient.getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState.EMPTY)
-    migrationState = migrationState.withNewKRaftController(3000, 42)
-    migrationState = migrationClient.claimControllerLeadership(migrationState)
-
-    val brokers = new java.util.HashSet[Integer]()
-    val verifier = new MetadataDeltaVerifier()
-    migrationClient.readAllMetadata(batch => verifier.accept(batch), brokerId => brokers.add(brokerId))
-    assertEquals(Seq(0, 1, 2), brokers.asScala.toSeq)
-
-    verifier.verify { image =>
-      assertNotNull(image.topics().getTopic("test-topic-1"))
-      assertEquals(2, image.topics().getTopic("test-topic-1").partitions().size())
-
-      assertNotNull(image.topics().getTopic("test-topic-2"))
-      assertEquals(1, image.topics().getTopic("test-topic-2").partitions().size())
-
-      assertNotNull(image.topics().getTopic("test-topic-3"))
-      assertEquals(10, image.topics().getTopic("test-topic-3").partitions().size())
-
-      val clientQuotas = image.clientQuotas().entities()
-      assertEquals(new java.util.HashSet[ClientQuotaEntity](java.util.Arrays.asList(
-        defaultUserEntity,
-        defaultClientIdEntity,
-        defaultIpEntity,
-        userEntity,
-        userClientEntity,
-        ipEntity
-      )), clientQuotas.keySet())
-    }
-    migrationState = migrationClient.releaseControllerLeadership(migrationState)
   }
 
   @ClusterTemplate("zkClustersForAllMigrationVersions")
   def testMigrateTopicDeletions(zkCluster: ClusterInstance): Unit = {
     // Create some topics in ZK mode
-    var admin = zkCluster.createAdminClient()
-    val newTopics = new util.ArrayList[NewTopic]()
-    newTopics.add(new NewTopic("test-topic-1", 10, 3.toShort))
-    newTopics.add(new NewTopic("test-topic-2", 10, 3.toShort))
-    newTopics.add(new NewTopic("test-topic-3", 10, 3.toShort))
-    val createTopicResult = admin.createTopics(newTopics)
-    createTopicResult.all().get(300, TimeUnit.SECONDS)
-    admin.close()
+    Using(Admin.create(zkCluster.adminConfigs(Collections.emptyMap()))) { admin =>
+      val newTopics = new util.ArrayList[NewTopic]()
+      newTopics.add(new NewTopic("test-topic-1", 10, 3.toShort))
+      newTopics.add(new NewTopic("test-topic-2", 10, 3.toShort))
+      newTopics.add(new NewTopic("test-topic-3", 10, 3.toShort))
+      val createTopicResult = admin.createTopics(newTopics)
+      createTopicResult.all().get(300, TimeUnit.SECONDS)
+    }
     val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
 
     // Bootstrap the ZK cluster ID into KRaft
@@ -362,66 +364,66 @@ class ZkMigrationIntegrationTest {
         topics.isEmpty
       }
 
-      admin = zkCluster.createAdminClient()
-      log.info("Waiting for topics to be deleted")
-      TestUtils.waitUntilTrue(
-        () => topicsAllDeleted(admin),
-        "Timed out waiting for topics to be deleted",
-        30000,
-        1000)
+      Using(Admin.create(zkCluster.adminConfigs(Collections.emptyMap()))) { admin =>
+        log.info("Waiting for topics to be deleted")
+        TestUtils.waitUntilTrue(
+          () => topicsAllDeleted(admin),
+          "Timed out waiting for topics to be deleted",
+          30000,
+          1000)
 
-      val newTopics = new util.ArrayList[NewTopic]()
-      newTopics.add(new NewTopic("test-topic-1", 2, 3.toShort))
-      newTopics.add(new NewTopic("test-topic-2", 1, 3.toShort))
-      newTopics.add(new NewTopic("test-topic-3", 10, 3.toShort))
-      val createTopicResult = admin.createTopics(newTopics)
-      createTopicResult.all().get(60, TimeUnit.SECONDS)
+        val newTopics = new util.ArrayList[NewTopic]()
+        newTopics.add(new NewTopic("test-topic-1", 2, 3.toShort))
+        newTopics.add(new NewTopic("test-topic-2", 1, 3.toShort))
+        newTopics.add(new NewTopic("test-topic-3", 10, 3.toShort))
+        val createTopicResult = admin.createTopics(newTopics)
+        createTopicResult.all().get(60, TimeUnit.SECONDS)
 
-      def topicsAllRecreated(admin: Admin): Boolean = {
-        val topics = admin.listTopics().names().get(60, TimeUnit.SECONDS)
-        topics.retainAll(util.Arrays.asList(
-          "test-topic-1", "test-topic-2", "test-topic-3"
-        ))
-        topics.size() == 3
-      }
-
-      log.info("Waiting for topics to be re-created")
-      TestUtils.waitUntilTrue(
-        () => topicsAllRecreated(admin),
-        "Timed out waiting for topics to be created",
-        30000,
-        1000)
-
-      TestUtils.retry(300000) {
-        // Need a retry here since topic metadata may be inconsistent between brokers
-        val topicDescriptions = try {
-          admin.describeTopics(util.Arrays.asList(
+        def topicsAllRecreated(admin: Admin): Boolean = {
+          val topics = admin.listTopics().names().get(60, TimeUnit.SECONDS)
+          topics.retainAll(util.Arrays.asList(
             "test-topic-1", "test-topic-2", "test-topic-3"
-          )).topicNameValues().asScala.map { case (name, description) =>
-            name -> description.get(60, TimeUnit.SECONDS)
-          }.toMap
-        } catch {
-          case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => Map.empty[String, TopicDescription]
-          case t: Throwable => fail("Error describing topics", t.getCause)
+          ))
+          topics.size() == 3
         }
 
-        assertEquals(2, topicDescriptions("test-topic-1").partitions().size())
-        assertEquals(1, topicDescriptions("test-topic-2").partitions().size())
-        assertEquals(10, topicDescriptions("test-topic-3").partitions().size())
-        topicDescriptions.foreach { case (topic, description) =>
-          description.partitions().forEach(partition => {
-            assertEquals(3, partition.replicas().size(), s"Unexpected number of replicas for $topic-${partition.partition()}")
-            assertEquals(3, partition.isr().size(), s"Unexpected ISR for $topic-${partition.partition()}")
-          })
+        log.info("Waiting for topics to be re-created")
+        TestUtils.waitUntilTrue(
+          () => topicsAllRecreated(admin),
+          "Timed out waiting for topics to be created",
+          30000,
+          1000)
+
+        TestUtils.retry(300000) {
+          // Need a retry here since topic metadata may be inconsistent between brokers
+          val topicDescriptions = try {
+            admin.describeTopics(util.Arrays.asList(
+              "test-topic-1", "test-topic-2", "test-topic-3"
+            )).topicNameValues().asScala.map { case (name, description) =>
+              name -> description.get(60, TimeUnit.SECONDS)
+            }.toMap
+          } catch {
+            case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => Map.empty[String, TopicDescription]
+            case t: Throwable => fail("Error describing topics", t.getCause)
+          }
+
+          assertEquals(2, topicDescriptions("test-topic-1").partitions().size())
+          assertEquals(1, topicDescriptions("test-topic-2").partitions().size())
+          assertEquals(10, topicDescriptions("test-topic-3").partitions().size())
+          topicDescriptions.foreach { case (topic, description) =>
+            description.partitions().forEach(partition => {
+              assertEquals(3, partition.replicas().size(), s"Unexpected number of replicas for $topic-${partition.partition()}")
+              assertEquals(3, partition.isr().size(), s"Unexpected ISR for $topic-${partition.partition()}")
+            })
+          }
+
+          val absentTopics = admin.listTopics().names().get(60, TimeUnit.SECONDS).asScala
+          assertTrue(absentTopics.contains("test-topic-1"))
+          assertTrue(absentTopics.contains("test-topic-2"))
+          assertTrue(absentTopics.contains("test-topic-3"))
         }
 
-        val absentTopics = admin.listTopics().names().get(60, TimeUnit.SECONDS).asScala
-        assertTrue(absentTopics.contains("test-topic-1"))
-        assertTrue(absentTopics.contains("test-topic-2"))
-        assertTrue(absentTopics.contains("test-topic-3"))
       }
-
-      admin.close()
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
     }
@@ -435,9 +437,9 @@ class ZkMigrationIntegrationTest {
     new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
   ))
   def testDualWriteScram(zkCluster: ClusterInstance): Unit = {
-    var admin = zkCluster.createAdminClient()
-    createUserScramCredentials(admin).all().get(60, TimeUnit.SECONDS)
-    admin.close()
+    Using(Admin.create(zkCluster.adminConfigs(Collections.emptyMap()))) { admin =>
+      createUserScramCredentials(admin).all().get(60, TimeUnit.SECONDS)
+    }
 
     val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
 
@@ -480,8 +482,9 @@ class ZkMigrationIntegrationTest {
 
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
-      admin = zkCluster.createAdminClient()
-      alterUserScramCredentials(admin).all().get(60, TimeUnit.SECONDS)
+      Using(Admin.create(zkCluster.adminConfigs(Collections.emptyMap()))) { admin =>
+        alterUserScramCredentials(admin).all().get(60, TimeUnit.SECONDS)
+      }
 
       // Verify the changes made to KRaft are seen in ZK
       log.info("Verifying metadata changes with ZK")
@@ -498,15 +501,12 @@ class ZkMigrationIntegrationTest {
     new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
   ))
   def testDeleteLogOnStartup(zkCluster: ClusterInstance): Unit = {
-    var admin = zkCluster.createAdminClient()
-    try {
+    Using(Admin.create(zkCluster.adminConfigs(Collections.emptyMap()))) { admin =>
       val newTopics = new util.ArrayList[NewTopic]()
       newTopics.add(new NewTopic("testDeleteLogOnStartup", 2, 3.toShort)
         .configs(Map(TopicConfig.SEGMENT_BYTES_CONFIG -> "102400", TopicConfig.SEGMENT_MS_CONFIG -> "300000").asJava))
       val createTopicResult = admin.createTopics(newTopics)
       createTopicResult.all().get(60, TimeUnit.SECONDS)
-    } finally {
-      admin.close()
     }
 
     // Bootstrap the ZK cluster ID into KRaft
@@ -559,8 +559,7 @@ class ZkMigrationIntegrationTest {
       zkCluster.asInstanceOf[ZkClusterInstance].rollingBrokerRestart(Optional.empty())
       zkCluster.waitForReadyBrokers()
 
-      admin = zkCluster.createAdminClient()
-      try {
+      Using(Admin.create(zkCluster.adminConfigs(Collections.emptyMap()))) { admin =>
         // List topics is served from local MetadataCache on brokers. For ZK brokers this cache is populated by UMR
         // which won't be sent until the broker has been unfenced by the KRaft controller. So, seeing the topic in
         // the brokers cache tells us it has recreated and re-replicated the metadata log
@@ -568,8 +567,6 @@ class ZkMigrationIntegrationTest {
           () => admin.listTopics().names().get(30, TimeUnit.SECONDS).asScala.contains("testDeleteLogOnStartup"),
           "Timed out listing topics",
           30000)
-      } finally {
-        admin.close()
       }
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
@@ -581,13 +578,13 @@ class ZkMigrationIntegrationTest {
   def testDualWrite(zkCluster: ClusterInstance): Unit = {
     // Create a topic in ZK mode
     val topicName = "test"
-    var admin = zkCluster.createAdminClient()
-    val newTopics = new util.ArrayList[NewTopic]()
-    newTopics.add(new NewTopic(topicName, 2, 3.toShort)
-      .configs(Map(TopicConfig.SEGMENT_BYTES_CONFIG -> "102400", TopicConfig.SEGMENT_MS_CONFIG -> "300000").asJava))
-    val createTopicResult = admin.createTopics(newTopics)
-    createTopicResult.all().get(60, TimeUnit.SECONDS)
-    admin.close()
+    Using(Admin.create(zkCluster.adminConfigs(Collections.emptyMap()))) { admin =>
+      val newTopics = new util.ArrayList[NewTopic]()
+      newTopics.add(new NewTopic(topicName, 2, 3.toShort)
+        .configs(Map(TopicConfig.SEGMENT_BYTES_CONFIG -> "102400", TopicConfig.SEGMENT_MS_CONFIG -> "300000").asJava))
+      val createTopicResult = admin.createTopics(newTopics)
+      createTopicResult.all().get(60, TimeUnit.SECONDS)
+    }
 
     // Verify the configs exist in ZK
     val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
@@ -637,9 +634,10 @@ class ZkMigrationIntegrationTest {
 
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
-      admin = zkCluster.createAdminClient()
-      alterTopicConfig(admin).all().get(60, TimeUnit.SECONDS)
-      alterClientQuotas(admin).all().get(60, TimeUnit.SECONDS)
+      Using(Admin.create(zkCluster.adminConfigs(Collections.emptyMap()))) { admin =>
+        alterTopicConfig(admin).all().get(60, TimeUnit.SECONDS)
+        alterClientQuotas(admin).all().get(60, TimeUnit.SECONDS)
+      }
 
       // Verify the changes made to KRaft are seen in ZK
       log.info("Verifying metadata changes with ZK")
@@ -661,9 +659,9 @@ class ZkMigrationIntegrationTest {
     new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
   ))
   def testDualWriteQuotaAndScram(zkCluster: ClusterInstance): Unit = {
-    var admin = zkCluster.createAdminClient()
-    createUserScramCredentials(admin).all().get(60, TimeUnit.SECONDS)
-    admin.close()
+    Using(Admin.create(zkCluster.adminConfigs(Collections.emptyMap()))) { admin =>
+      createUserScramCredentials(admin).all().get(60, TimeUnit.SECONDS)
+    }
 
     val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
 
@@ -706,9 +704,10 @@ class ZkMigrationIntegrationTest {
 
       // Alter the metadata
       log.info("Updating metadata with AdminClient")
-      admin = zkCluster.createAdminClient()
-      alterUserScramCredentials(admin).all().get(60, TimeUnit.SECONDS)
-      alterClientQuotas(admin).all().get(60, TimeUnit.SECONDS)
+      Using(Admin.create(zkCluster.adminConfigs(Collections.emptyMap()))) { admin =>
+        alterUserScramCredentials(admin).all().get(60, TimeUnit.SECONDS)
+        alterClientQuotas(admin).all().get(60, TimeUnit.SECONDS)
+      }
 
       // Verify the changes made to KRaft are seen in ZK
       log.info("Verifying metadata changes with ZK")
@@ -728,7 +727,6 @@ class ZkMigrationIntegrationTest {
   def testNewAndChangedTopicsInDualWrite(zkCluster: ClusterInstance): Unit = {
     val topic1 = "test1"
     val topic2 = "test2"
-    var admin = zkCluster.createAdminClient()
     val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
 
     // Bootstrap the ZK cluster ID into KRaft
@@ -769,30 +767,31 @@ class ZkMigrationIntegrationTest {
         30000)
 
       // Alter the metadata
-      admin = zkCluster.createAdminClient()
-      log.info(s"Create new topic $topic1 with AdminClient with some configs")
-      val topicConfigs = util.Collections.singletonMap("cleanup.policy", "compact")
-      createTopic(topic1, 2, 3.toShort, topicConfigs, admin)
-      verifyTopic(topic1, 2, 3.toShort, topicConfigs, admin, zkClient)
+      Using(Admin.create(zkCluster.adminConfigs(Collections.emptyMap()))) { admin =>
+        log.info(s"Create new topic $topic1 with AdminClient with some configs")
+        val topicConfigs = util.Collections.singletonMap("cleanup.policy", "compact")
+        createTopic(topic1, 2, 3.toShort, topicConfigs, admin)
+        verifyTopic(topic1, 2, 3.toShort, topicConfigs, admin, zkClient)
 
-      log.info(s"Create new topic $topic2 with AdminClient without configs")
-      val emptyTopicConfigs: util.Map[String, String] = util.Collections.emptyMap[String, String]
-      createTopic(topic2, 2, 3.toShort, emptyTopicConfigs, admin)
-      verifyTopic(topic2, 2, 3.toShort, emptyTopicConfigs, admin, zkClient)
+        log.info(s"Create new topic $topic2 with AdminClient without configs")
+        val emptyTopicConfigs: util.Map[String, String] = util.Collections.emptyMap[String, String]
+        createTopic(topic2, 2, 3.toShort, emptyTopicConfigs, admin)
+        verifyTopic(topic2, 2, 3.toShort, emptyTopicConfigs, admin, zkClient)
 
-      val newPartitionCount = 3
-      log.info(s"Create new partitions with AdminClient to $topic1")
-      admin.createPartitions(Map(topic1 -> NewPartitions.increaseTo(newPartitionCount)).asJava).all().get(60, TimeUnit.SECONDS)
-      val (topicDescOpt, _) = TestUtils.computeUntilTrue(topicDesc(topic1, admin))(td => {
-        td.isDefined && td.get.partitions().asScala.size == newPartitionCount
-      })
-      assertTrue(topicDescOpt.isDefined)
-      val partitions = topicDescOpt.get.partitions().asScala
-      assertEquals(newPartitionCount, partitions.size)
+        val newPartitionCount = 3
+        log.info(s"Create new partitions with AdminClient to $topic1")
+        admin.createPartitions(Map(topic1 -> NewPartitions.increaseTo(newPartitionCount)).asJava).all().get(60, TimeUnit.SECONDS)
+        val (topicDescOpt, _) = TestUtils.computeUntilTrue(topicDesc(topic1, admin))(td => {
+          td.isDefined && td.get.partitions().asScala.size == newPartitionCount
+        })
+        assertTrue(topicDescOpt.isDefined)
+        val partitions = topicDescOpt.get.partitions().asScala
+        assertEquals(newPartitionCount, partitions.size)
 
-      // Verify the changes
-      verifyZKTopicPartitionMetadata(topic1, newPartitionCount, 3.toShort, zkClient)
-      verifyKRaftTopicPartitionMetadata(topic1, newPartitionCount, 3.toShort, admin)
+        // Verify the changes
+        verifyZKTopicPartitionMetadata(topic1, newPartitionCount, 3.toShort, zkClient)
+        verifyKRaftTopicPartitionMetadata(topic1, newPartitionCount, 3.toShort, admin)
+      }
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
     }
@@ -807,7 +806,6 @@ class ZkMigrationIntegrationTest {
   def testPartitionReassignmentInHybridMode(zkCluster: ClusterInstance): Unit = {
     // Create a topic in ZK mode
     val topicName = "test"
-    var admin = zkCluster.createAdminClient()
     val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
 
     // Bootstrap the ZK cluster ID into KRaft
@@ -849,34 +847,37 @@ class ZkMigrationIntegrationTest {
 
       // Create a topic with replicas on brokers 0, 1, 2
       log.info("Create new topic with AdminClient")
-      admin = zkCluster.createAdminClient()
-      val newTopics = new util.ArrayList[NewTopic]()
-      val replicaAssignment = Collections.singletonMap(Integer.valueOf(0), Seq(0, 1, 2).map(int2Integer).asJava)
-      newTopics.add(new NewTopic(topicName, replicaAssignment))
-      val createTopicResult = admin.createTopics(newTopics)
-      createTopicResult.all().get(60, TimeUnit.SECONDS)
+      Using(Admin.create(zkCluster.adminConfigs(Collections.emptyMap()))) { admin =>
+        val newTopics = new util.ArrayList[NewTopic]()
+        val replicaAssignment = Collections.singletonMap(Integer.valueOf(0), Seq(0, 1, 2).map(int2Integer).asJava)
+        newTopics.add(new NewTopic(topicName, replicaAssignment))
+        val createTopicResult = admin.createTopics(newTopics)
+        createTopicResult.all().get(60, TimeUnit.SECONDS)
 
-      val topicPartition = new TopicPartition(topicName, 0)
 
-      // Verify the changes made to KRaft are seen in ZK
-      verifyZKTopicPartitionMetadata(topicName, 1, 3.toShort, zkClient)
+        val topicPartition = new TopicPartition(topicName, 0)
 
-      // Reassign replicas to brokers 1, 2, 3 and wait for reassignment to complete
-      admin.alterPartitionReassignments(Collections.singletonMap(topicPartition,
-        Optional.of(new NewPartitionReassignment(Seq(1, 2, 3).map(int2Integer).asJava)))).all().get()
+        // Verify the changes made to KRaft are seen in ZK
+        verifyZKTopicPartitionMetadata(topicName, 1, 3.toShort, zkClient)
 
-      TestUtils.waitUntilTrue(() => {
-        val listPartitionReassignmentsResult = admin.listPartitionReassignments().reassignments().get()
-        listPartitionReassignmentsResult.isEmpty
-      }, "Timed out waiting for reassignments to complete.")
+        // Reassign replicas to brokers 1, 2, 3 and wait for reassignment to complete
+        admin.alterPartitionReassignments(Collections.singletonMap(topicPartition,
+          Optional.of(new NewPartitionReassignment(Seq(1, 2, 3).map(int2Integer).asJava)))).all().get()
 
-      // Verify that the partition is removed from broker 0
-      TestUtils.waitUntilTrue(() => {
-        val brokers = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.brokers
-        assertTrue(brokers.size == 4)
-        assertTrue(brokers.head.config.brokerId == 0)
-        brokers.head.replicaManager.onlinePartition(topicPartition).isEmpty
-      }, "Timed out waiting for removed replica reassignment to be marked offline")
+        TestUtils.waitUntilTrue(() => {
+          val listPartitionReassignmentsResult = admin.listPartitionReassignments().reassignments().get()
+          listPartitionReassignmentsResult.isEmpty
+        }, "Timed out waiting for reassignments to complete.")
+
+
+        // Verify that the partition is removed from broker 0
+        TestUtils.waitUntilTrue(() => {
+          val brokers = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.brokers
+          assertTrue(brokers.size == 4)
+          assertTrue(brokers.head.config.brokerId == 0)
+          brokers.head.replicaManager.onlinePartition(topicPartition).isEmpty
+        }, "Timed out waiting for removed replica reassignment to be marked offline")
+      }
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
     }
