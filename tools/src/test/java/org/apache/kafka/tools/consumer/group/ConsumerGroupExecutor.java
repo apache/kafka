@@ -20,19 +20,18 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.RangeAssignor;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Utils;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -120,43 +119,20 @@ class ConsumerGroupExecutor {
                 )
                 .collect(Collectors.toList());
 
-        Queue<KafkaConsumer<String, String>> kafkaConsumers = buildConsumersSafely(allConfigs);
-        ExecutorService executor = Executors.newFixedThreadPool(kafkaConsumers.size());
+        List<KafkaConsumer<String, String>> kafkaConsumers = Collections.synchronizedList(new ArrayList<>());
+        ExecutorService executor = Executors.newFixedThreadPool(allConfigs.size());
         AtomicBoolean closed = new AtomicBoolean(false);
         final AutoCloseable closeable = () -> releaseConsumers(closed, kafkaConsumers, executor);
 
         try {
-            while (!kafkaConsumers.isEmpty()) {
-                KafkaConsumer<String, String> consumer = kafkaConsumers.poll();
-                executor.execute(() -> {
-                    try {
-                        consumer.subscribe(singleton(topic));
-                        while (!closed.get()) {
-                            consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
-                            if (syncCommit)
-                                consumer.commitSync();
-                        }
-                    } catch (WakeupException | InterruptException e) {
-                        // OK
-                        Thread.interrupted();
-                    } finally {
-                        consumer.close();
-                    }
-                });
+            for (Map<String, Object> configs : allConfigs) {
+                executor.execute(() -> initConsumer(topic, syncCommit, configs, kafkaConsumers, closed));
             }
-
             return closeable;
         } catch (Throwable e) {
             Utils.closeQuietly(closeable, "Release Consumer");
             throw e;
         }
-    }
-
-    private static void releaseConsumers(AtomicBoolean closed, Queue<KafkaConsumer<String, String>> kafkaConsumers, ExecutorService executor) throws InterruptedException {
-        closed.set(true);
-        kafkaConsumers.forEach(consumer -> Utils.closeQuietly(consumer, "Release Consumer"));
-        executor.shutdownNow();
-        executor.awaitTermination(1, TimeUnit.MINUTES);
     }
 
     private static Map<String, Object> composeConfigs(String brokerAddress, String groupId, String groupProtocol, String assignmentStrategy, Optional<String> remoteAssignor, Map<String, Object> customConfigs) {
@@ -172,19 +148,29 @@ class ConsumerGroupExecutor {
         } else {
             configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, assignmentStrategy);
         }
-        configs.putAll(customConfigs);
 
+        configs.putAll(customConfigs);
         return configs;
     }
 
-    private static Queue<KafkaConsumer<String, String>> buildConsumersSafely(Iterable<Map<String, Object>> allConfigs/*, Queue<KafkaConsumer<String, String>> container*/) {
-        Queue<KafkaConsumer<String, String>> container = new LinkedList<>();
-        try {
-            allConfigs.forEach(configs -> container.offer(new KafkaConsumer<>(configs)));
-            return container;
-        } catch (Throwable e) {
-            container.forEach(consumer -> Utils.closeQuietly(consumer, "Release Consumers"));
-            throw e;
+    private static void releaseConsumers(AtomicBoolean closed, List<KafkaConsumer<String, String>> consumers, ExecutorService executor) throws InterruptedException {
+        closed.set(true);
+        consumers.forEach(KafkaConsumer::wakeup);
+        executor.shutdown();
+        executor.awaitTermination(1, TimeUnit.MINUTES);
+    }
+
+    private static void initConsumer(String topic, boolean syncCommit, Map<String, Object> configs, List<KafkaConsumer<String, String>> consumers, AtomicBoolean closed) {
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(configs)) {
+            consumers.add(consumer);
+            consumer.subscribe(singleton(topic));
+            while (!closed.get()) {
+                consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+                if (syncCommit)
+                    consumer.commitSync();
+            }
+        } catch (WakeupException e) {
+            // OK
         }
     }
 }
