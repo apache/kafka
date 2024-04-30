@@ -18,12 +18,11 @@ package kafka.admin
 
 import kafka.admin.AclCommand.AclCommandOptions
 import kafka.security.authorizer.AclAuthorizer
-import kafka.server.{KafkaBroker, KafkaConfig, KafkaServer, QuorumTestHarness}
+import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
 import kafka.utils.{Exit, LogCaptureAppender, Logging, TestUtils}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
-import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourceType._
@@ -171,6 +170,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
         val (acls, cmd) = getAclToCommand(permissionType, operationToCmd._1)
         val (addOut, addErr) = callMain(cmdArgs ++ cmd ++ resourceCmd ++ operationToCmd._2 :+ "--add")
         assertOutputContains("Adding ACLs", resources, resourceCmd, addOut)
+        assertOutputContains("Current ACLs", resources, resourceCmd, addOut)
         assertEquals("", addErr)
 
         for (resource <- resources) {
@@ -330,6 +330,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
 
   private def testRemove(cmdArgs: Array[String], resources: Set[ResourcePattern], resourceCmd: Array[String]): Unit = {
     val (out, err) = callMain(cmdArgs ++ resourceCmd :+ "--remove" :+ "--force")
+    assertEquals("", out)
     assertEquals("", err)
     for (resource <- resources) {
       withAuthorizer() { authorizer =>

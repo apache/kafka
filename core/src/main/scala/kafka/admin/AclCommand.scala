@@ -115,6 +115,8 @@ object AclCommand extends Logging {
           val aclBindings = acls.map(acl => new AclBinding(resource, acl)).asJavaCollection
           adminClient.createAcls(aclBindings).all().get()
         }
+
+        listAcls(adminClient)
       }
     }
 
@@ -131,6 +133,8 @@ object AclCommand extends Logging {
               removeAcls(adminClient, acls, filter)
           }
         }
+
+        listAcls(adminClient)
       }
     }
 
@@ -234,6 +238,8 @@ object AclCommand extends Logging {
             }
           }
         }
+
+        listAcls()
       }
     }
 
@@ -250,6 +256,8 @@ object AclCommand extends Logging {
               removeAcls(authorizer, acls, filter)
           }
         }
+
+        listAcls()
       }
     }
 
