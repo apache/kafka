@@ -134,13 +134,13 @@ public class QuorumState {
         }
 
         final EpochState initialState;
-        if (election.hasVoted() && !isVoter()) {
-            String localIdDescription = localId.isPresent() ?
-                localId.getAsInt() + " is not a voter" :
-                "is undefined";
-            throw new IllegalStateException("Initialized quorum state " + election
-                + " with a voted candidate, which indicates this node was previously "
-                + " a voter, but the local id " + localIdDescription);
+        if (election.hasVoted() && !localId.isPresent()) {
+            throw new IllegalStateException(
+                String.format(
+                    "Initialized quorum state ({}) with a voted candidate but without a local id",
+                    election
+                )
+            );
         } else if (election.epoch() < logEndOffsetAndEpoch.epoch()) {
             log.warn("Epoch from quorum-state file is {}, which is " +
                 "smaller than last written epoch {} in the log",
