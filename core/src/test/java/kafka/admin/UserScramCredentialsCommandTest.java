@@ -17,10 +17,15 @@
 package kafka.admin;
 
 import kafka.server.BaseRequestTest;
+import kafka.test.annotation.ClusterTest;
+import kafka.test.annotation.ClusterTestDefaults;
+import kafka.test.annotation.ClusterTests;
+import kafka.test.annotation.Type;
+import kafka.test.junit.ClusterTestExtensions;
 import kafka.utils.Exit;
+import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.extension.ExtendWith;
 import scala.Console;
 
 import java.io.ByteArrayOutputStream;
@@ -39,6 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("dontUseSystemExit")
+@ExtendWith(value = ClusterTestExtensions.class)
+@ClusterTestDefaults
 public class UserScramCredentialsCommandTest extends BaseRequestTest {
     private static final String USER1 = "user1";
     private static final String USER2 = "user2";
@@ -93,9 +100,11 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"kraft", "zk"})
-    public void testUserScramCredentialsRequests(String quorum) throws Exception {
+    @ClusterTests({
+        @ClusterTest(clusterType = Type.ZK),
+        @ClusterTest(clusterType = Type.KRAFT)
+    })
+    public void testUserScramCredentialsRequests() throws Exception {
         createAndAlterUser(USER1);
         // now do the same thing for user2
         createAndAlterUser(USER2);
@@ -123,18 +132,22 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
         describeUsers("");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"kraft", "zk"})
-    public void testAlterWithEmptyPassword(String quorum) {
+    @ClusterTests({
+        @ClusterTest(clusterType = Type.ZK),
+        @ClusterTest(clusterType = Type.KRAFT)
+    })
+    public void testAlterWithEmptyPassword() {
         String user1 = "user1";
         ConfigCommandResult result = runConfigCommandViaBroker("--user", user1, "--alter", "--add-config", "SCRAM-SHA-256=[iterations=4096,password=]");
         assertTrue(result.exitStatus.isPresent(), "Expected System.exit() to be called with an empty password");
         assertEquals(1, result.exitStatus.getAsInt(), "Expected empty password to cause failure with exit status=1");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"kraft", "zk"})
-    public void testDescribeUnknownUser(String quorum) {
+    @ClusterTests({
+        @ClusterTest(clusterType = Type.ZK),
+        @ClusterTest(clusterType = Type.KRAFT)
+    })
+    public void testDescribeUnknownUser() {
         String unknownUser = "unknownUser";
         ConfigCommandResult result = runConfigCommandViaBroker("--user", unknownUser, "--describe");
         assertFalse(result.exitStatus.isPresent(), "Expected System.exit() to not be called with an unknown user");
@@ -145,14 +158,26 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
         // create and describe a credential
         ConfigCommandResult result = runConfigCommandViaBroker("--user", user, "--alter", "--add-config", "SCRAM-SHA-256=[iterations=4096,password=foo-secret]");
         assertEquals(updateUserMessage(user), result.stdout);
-        TestUtils.waitUntilTrue(
-            () -> Objects.equals(runConfigCommandViaBroker("--user", user, "--describe").stdout, describeUserMessage(user)),
+        TestUtils.waitForCondition(
+            () -> {
+                try {
+                    return Objects.equals(runConfigCommandViaBroker("--user", user, "--describe").stdout, describeUserMessage(user));
+                } catch (Exception e) {
+                    throw new NoRetryException(e);
+                }
+            },
             () -> "Failed to describe SCRAM credential change '" + user + "'");
         // create a user quota and describe the user again
         result = runConfigCommandViaBroker("--user", user, "--alter", "--add-config", "consumer_byte_rate=20000");
         assertEquals(updateUserMessage(user), result.stdout);
-        TestUtils.waitUntilTrue(
-            () -> Objects.equals(runConfigCommandViaBroker("--user", user, "--describe").stdout, quotaMessage(user) + describeUserMessage(user)),
+        TestUtils.waitForCondition(
+            () -> {
+                try {
+                    return Objects.equals(runConfigCommandViaBroker("--user", user, "--describe").stdout, quotaMessage(user) + describeUserMessage(user));
+                } catch (Exception e) {
+                    throw new NoRetryException(e);
+                }
+            },
             () -> "Failed to describe Quota change for '" + user + "'");
     }
 
@@ -162,10 +187,14 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
     }
 
     private void describeUsers(String... msgs) throws InterruptedException {
-        TestUtils.waitUntilTrue(
+        TestUtils.waitForCondition(
             () -> {
-                String output = runConfigCommandViaBroker("--entity-type", "users", "--describe").stdout;
-                return Arrays.asList(msgs).contains(output);
+                try {
+                    String output = runConfigCommandViaBroker("--entity-type", "users", "--describe").stdout;
+                    return Arrays.asList(msgs).contains(output);
+                } catch (Exception e) {
+                    throw new NoRetryException(e);
+                }
             },
             () -> "Failed to describe config");
     }
