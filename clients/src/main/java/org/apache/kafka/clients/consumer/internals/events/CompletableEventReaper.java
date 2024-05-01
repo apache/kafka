@@ -123,7 +123,7 @@ public class CompletableEventReaper<T extends CompletableEvent<?>> {
      *
      * @param events Events from a queue that have not yet been tracked that also need to be reviewed
      */
-    public void reapIncomplete(Collection<T> events) {
+    public void reapIncomplete(Collection<?> events) {
         log.trace("Reaping incomplete events");
 
         Objects.requireNonNull(events, "Event queue to reap must be non-null");
@@ -140,8 +140,11 @@ public class CompletableEventReaper<T extends CompletableEvent<?>> {
         tracked.clear();
 
         events.stream()
+            .filter(e -> e instanceof CompletableEvent<?>)
+            .map(e -> (CompletableEvent<?>) e)
             .filter(e -> !e.future().isDone())
             .forEach(cancelEvent);
+        events.clear();
 
         log.trace("Finished reaping incomplete events");
     }

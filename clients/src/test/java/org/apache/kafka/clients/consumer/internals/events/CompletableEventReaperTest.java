@@ -169,10 +169,10 @@ public class CompletableEventReaperTest {
         assertTrue(event2.future().isCancelled());
         assertThrows(CancellationException.class, () -> ConsumerUtils.getResult(event2.future()));
 
-        // Because the events aren't tracked in the reaper *and* the queue isn't drained as part of the
+        // Because the events aren't tracked in the reaper *and* the queue is cleared as part of the
         // cancellation process, our data structures should both be the same as above.
         assertEquals(0, reaper.size());
-        assertEquals(2, queue.size());
+        assertEquals(0, queue.size());
     }
 
     @Test
