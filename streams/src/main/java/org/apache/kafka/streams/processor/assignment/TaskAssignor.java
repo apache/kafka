@@ -29,6 +29,12 @@ import org.apache.kafka.common.Configurable;
  */
 public interface TaskAssignor extends Configurable {
 
+    enum AssignmentError {
+        OVERLAPPING_CLIENT,
+        OVERLAPPING_STANDBY,
+        UNKNOWN_PROCESS_ID
+    }
+
     /**
      * @param applicationState the metadata for this Kafka Streams application
      *
@@ -41,12 +47,17 @@ public interface TaskAssignor extends Configurable {
     TaskAssignment assign(ApplicationState applicationState);
 
     /**
-     * This callback can be used to observe the final assignment returned to the brokers.
+     * This callback can be used to observe the final assignment returned to the brokers and observe any errors that
+     * were detected while processing the returned assignment. If any errors were found, the rebalance will be
+     * automatically retried by returning the same assignment as the input, scheduling an immediate followup rebalance,
+     * and passing in the corresponding AssignmentError in this callback.
      *
-     * @param assignment: the final assignment returned to the kafka broker
+     * @param assignment:   the final assignment returned to the kafka broker
      * @param subscription: the original subscription passed into the assignor
+     * @param error:        the corresponding error type if one was detected while processing the returned assignment,
+     *                      or null if the assignment was valid
      */
-    default void onAssignmentComputed(GroupAssignment assignment, GroupSubscription subscription) {}
+    default void onAssignmentComputed(GroupAssignment assignment, GroupSubscription subscription, AssignmentError error) {}
 
     /**
      * Wrapper class for the final assignment of active and standbys tasks to individual
