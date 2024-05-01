@@ -16,6 +16,7 @@
  */
 package kafka.admin;
 
+import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.Type;
@@ -48,6 +49,12 @@ public class UserScramCredentialsCommandTest {
     private static final String USER1 = "user1";
     private static final String USER2 = "user2";
 
+    private final ClusterInstance cluster;
+
+    public UserScramCredentialsCommandTest(ClusterInstance cluster) {
+        this.cluster = cluster;
+    }
+
     static class ConfigCommandResult {
         public final String stdout;
         public final OptionalInt exitStatus;
@@ -77,7 +84,7 @@ public class UserScramCredentialsCommandTest {
             throw new RuntimeException();
         });
 
-        List<String> commandArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName())));
+        List<String> commandArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", cluster.bootstrapServers()));
         commandArgs.addAll(Arrays.asList(args));
         try {
             Console.withOut(printStream, () -> {
