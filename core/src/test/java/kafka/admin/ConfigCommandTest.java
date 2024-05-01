@@ -399,8 +399,8 @@ public class ConfigCommandTest {
     public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String...args) {
         ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray(Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--describe"), Arrays.asList(args)));
         createOpts.checkArgs();
-        assertEquals(createOpts.entityTypes(), JavaConverters.asScala(expectedTypes));
-        assertEquals(createOpts.entityNames(), JavaConverters.asScala(expectedNames));
+        assertEquals(JavaConverters.asJava(createOpts.entityTypes()), expectedTypes);
+        assertEquals(JavaConverters.asJava(createOpts.entityNames()), expectedNames);
     }
 
     public void doTestOptionEntityTypeNames(boolean zkConfig) {
@@ -907,7 +907,7 @@ public class ConfigCommandTest {
         addedConfigs.put("delete.retention.ms", "1000000");
         addedConfigs.put("min.insync.replicas", "2");
         if (file) {
-            File f = TestUtils.tempPropertiesFile(JavaConverters.asScala(addedConfigs));
+            File f = TestUtils.tempPropertiesFile(JavaConverters.mapAsScalaMap(addedConfigs));
             filePath = f.getPath();
         }
 
