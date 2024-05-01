@@ -1127,8 +1127,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
-            offsetAndTimestampMap = applicationEventHandler.addAndGet(
-                    listOffsetsEvent);
+            offsetAndTimestampMap = applicationEventHandler.addAndGet(listOffsetsEvent);
             return offsetAndTimestampMap.entrySet()
                     .stream()
                     .collect(Collectors.toMap(
