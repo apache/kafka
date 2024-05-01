@@ -48,11 +48,6 @@ public class UserScramCredentialsCommandTest {
     private static final String USER1 = "user1";
     private static final String USER2 = "user2";
 
-    @Override
-    public int brokerCount() {
-        return 1;
-    }
-
     static class ConfigCommandResult {
         public final String stdout;
         public final OptionalInt exitStatus;
