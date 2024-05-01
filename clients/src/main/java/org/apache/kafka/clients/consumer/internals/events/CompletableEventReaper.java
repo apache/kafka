@@ -42,7 +42,7 @@ public class CompletableEventReaper<T extends CompletableEvent<?>> {
     private final Logger log;
 
     /**
-     * List of tracked events that we are candidates to expire or cancel when reviewed.
+     * List of tracked events that are candidates for expiration or cancellation.
      */
     private final List<T> tracked;
 
@@ -61,8 +61,8 @@ public class CompletableEventReaper<T extends CompletableEvent<?>> {
     }
 
     /**
-     * This method "completes" any {@link CompletableEvent}s that have either expired or completed normally. So this
-     * is a two-step process:
+     * This method performs a two-step process to "complete" {@link CompletableEvent events} that have either expired
+     * or completed normally:
      *
      * <ol>
      *     <li>
