@@ -1698,7 +1698,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         maybeThrowFencedInstanceException();
         offsetCommitCallbackInvoker.executeCallbacks();
         maybeUpdateSubscriptionMetadata();
-        process(backgroundEventProcessor);
+        processBackgroundEvents(backgroundEventProcessor);
 
         return updateFetchPositions(timer);
     }
@@ -1830,7 +1830,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * could occur when processing the events. In such cases, the processor will take a reference to the first
      * error, continue to process the remaining events, and then throw the first error that occurred.
      */
-    private boolean process(EventProcessor<BackgroundEvent> processor) {
+    private boolean processBackgroundEvents(EventProcessor<BackgroundEvent> processor) {
         AtomicReference<KafkaException> firstError = new AtomicReference<>();
 
         LinkedList<BackgroundEvent> events = new LinkedList<>();
@@ -1903,7 +1903,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         log.trace("Will wait up to {} ms for future {} to complete", timer.remainingMs(), future);
 
         do {
-            boolean hadEvents = process(eventProcessor);
+            boolean hadEvents = processBackgroundEvents(eventProcessor);
 
             try {
                 if (future.isDone()) {
