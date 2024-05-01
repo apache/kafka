@@ -1880,13 +1880,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * As an example, take {@link #unsubscribe()}. To start unsubscribing, the application thread enqueues an
      * {@link UnsubscribeEvent} on the application event queue. That event will eventually trigger the
      * rebalancing logic in the background thread. Critically, as part of this rebalancing work, the
-     * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} callback needs to be invoked. However,
+     * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} callback needs to be invoked for any
+     * partitions the consumer owns. However,
      * this callback must be executed on the application thread. To achieve this, the background thread enqueues a
      * {@link ConsumerRebalanceListenerCallbackNeededEvent} on its background event queue. That event queue is
      * periodically queried by the application thread to see if there's work to be done. When the application thread
      * sees {@link ConsumerRebalanceListenerCallbackNeededEvent}, it is processed, and then a
      * {@link ConsumerRebalanceListenerCallbackCompletedEvent} is then enqueued by the application thread on the
-     * background event queue. Moments later, the background thread will see that event, process it, and continue
+     * application event queue. Moments later, the background thread will see that event, process it, and continue
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the
      * {@link ConsumerRebalanceListener} callback is performed.
      *
