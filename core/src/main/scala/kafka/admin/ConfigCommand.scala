@@ -253,7 +253,7 @@ object ConfigCommand extends Logging {
     }
   }
 
-  private[admin] def describeConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
+  def describeConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configEntity = parseEntity(opts)
     val entityType = configEntity.root.entityType
     val describeAllUsers = entityType == ConfigType.USER && configEntity.root.sanitizedName.isEmpty && configEntity.child.isEmpty
@@ -276,7 +276,7 @@ object ConfigCommand extends Logging {
   }
 
   @nowarn("cat=deprecation")
-  private[admin] def parseConfigsToBeAdded(opts: ConfigCommandOptions): Properties = {
+  def parseConfigsToBeAdded(opts: ConfigCommandOptions): Properties = {
     val props = new Properties
     if (opts.options.has(opts.addConfigFile)) {
       val file = opts.options.valueOf(opts.addConfigFile)
@@ -303,7 +303,7 @@ object ConfigCommand extends Logging {
     props
   }
 
-  private[admin] def parseConfigsToBeDeleted(opts: ConfigCommandOptions): Seq[String] = {
+  def parseConfigsToBeDeleted(opts: ConfigCommandOptions): Seq[String] = {
     if (opts.options.has(opts.deleteConfig)) {
       val configsToBeDeleted = opts.options.valuesOf(opts.deleteConfig).asScala.map(_.trim())
       configsToBeDeleted
@@ -348,7 +348,7 @@ object ConfigCommand extends Logging {
   }
 
   @nowarn("cat=deprecation")
-  private[admin] def alterConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
+  def alterConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
     val entityTypeHead = entityTypes.head
@@ -529,7 +529,7 @@ object ConfigCommand extends Logging {
       .all().get(60, TimeUnit.SECONDS)
   }
 
-  private[admin] def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
+  def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
     val describeAll = opts.options.has(opts.allOpt)
@@ -749,7 +749,7 @@ object ConfigCommand extends Logging {
     }
   }
 
-  private[admin] def parseEntity(opts: ConfigCommandOptions): ConfigEntity = {
+  def parseEntity(opts: ConfigCommandOptions): ConfigEntity = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
     if (entityTypes.head == ConfigType.USER || entityTypes.head == ConfigType.CLIENT)
