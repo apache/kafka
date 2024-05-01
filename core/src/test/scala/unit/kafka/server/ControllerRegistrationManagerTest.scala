@@ -218,7 +218,6 @@ class ControllerRegistrationManagerTest {
         r => Some(r.setIncarnationId(new Uuid(456, r.controllerId()))))
       manager.start(context.mockChannelManager)
       TestUtils.retryOnExceptionWithTimeout(30000, () => {
-        context.mockChannelManager.poll()
         assertEquals((true, 0, 0), rpcStats(manager))
       })
 
