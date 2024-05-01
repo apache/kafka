@@ -19,7 +19,6 @@ package kafka.admin;
 import kafka.server.BaseRequestTest;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import kafka.utils.Exit;
@@ -45,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("dontUseSystemExit")
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults
+@ClusterTestDefaults(clusterType = Type.ALL)
 public class UserScramCredentialsCommandTest extends BaseRequestTest {
     private static final String USER1 = "user1";
     private static final String USER2 = "user2";
@@ -100,10 +99,7 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
         }
     }
 
-    @ClusterTests({
-        @ClusterTest(clusterType = Type.ZK),
-        @ClusterTest(clusterType = Type.KRAFT)
-    })
+    @ClusterTest
     public void testUserScramCredentialsRequests() throws Exception {
         createAndAlterUser(USER1);
         // now do the same thing for user2
@@ -132,10 +128,7 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
         describeUsers("");
     }
 
-    @ClusterTests({
-        @ClusterTest(clusterType = Type.ZK),
-        @ClusterTest(clusterType = Type.KRAFT)
-    })
+    @ClusterTest
     public void testAlterWithEmptyPassword() {
         String user1 = "user1";
         ConfigCommandResult result = runConfigCommandViaBroker("--user", user1, "--alter", "--add-config", "SCRAM-SHA-256=[iterations=4096,password=]");
@@ -143,10 +136,7 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
         assertEquals(1, result.exitStatus.getAsInt(), "Expected empty password to cause failure with exit status=1");
     }
 
-    @ClusterTests({
-        @ClusterTest(clusterType = Type.ZK),
-        @ClusterTest(clusterType = Type.KRAFT)
-    })
+    @ClusterTest
     public void testDescribeUnknownUser() {
         String unknownUser = "unknownUser";
         ConfigCommandResult result = runConfigCommandViaBroker("--user", unknownUser, "--describe");
