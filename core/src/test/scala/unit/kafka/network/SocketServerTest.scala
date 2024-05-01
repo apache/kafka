@@ -17,20 +17,10 @@
 
 package kafka.network
 
-import java.io._
-import java.net._
-import java.nio.ByteBuffer
-import java.nio.channels.{SelectionKey, SocketChannel}
-import java.nio.charset.StandardCharsets
-import java.util
-import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, ExecutionException, Executors, TimeUnit}
-import java.util.{Collections, Properties, Random}
 import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
 import com.yammer.metrics.core.{Gauge, Meter}
-
-import javax.net.ssl._
 import kafka.cluster.EndPoint
-import kafka.server.{ApiVersionManager, KafkaConfig, SimpleApiVersionManager, ThrottleCallback, ThrottledChannel}
+import kafka.server._
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.memory.MemoryPool
@@ -38,25 +28,34 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.{ProduceRequestData, SaslAuthenticateRequestData, SaslHandshakeRequestData, VoteRequestData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
-import org.apache.kafka.common.network.{ClientInformation, _}
+import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time, Utils}
+import org.apache.kafka.common.utils._
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfigs
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 
+import java.io._
+import java.net._
+import java.nio.ByteBuffer
+import java.nio.channels.{SelectionKey, SocketChannel}
+import java.nio.charset.StandardCharsets
+import java.security.cert.X509Certificate
+import java.util
 import java.util.concurrent.atomic.AtomicInteger
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
-
+import java.util.concurrent._
+import java.util.{Collections, Properties, Random}
+import javax.net.ssl._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
@@ -194,7 +193,7 @@ class SocketServerTest {
 
   private def sslClientSocket(port: Int): Socket = {
     val sslContext = SSLContext.getInstance(TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS)
-    sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
+    sslContext.init(null, Array(trustAllCerts), new java.security.SecureRandom())
     val socketFactory = sslContext.getSocketFactory
     val socket = socketFactory.createSocket("localhost", port)
     socket.asInstanceOf[SSLSocket].setNeedClientAuth(false)
@@ -1046,7 +1045,7 @@ class SocketServerTest {
     try {
       overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
       val sslContext = SSLContext.getInstance(TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS)
-      sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
+      sslContext.init(null, Array(trustAllCerts), new java.security.SecureRandom())
       val socketFactory = sslContext.getSocketFactory
       val sslSocket = socketFactory.createSocket("localhost",
         overrideServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SSL))).asInstanceOf[SSLSocket]
@@ -2228,6 +2227,20 @@ class SocketServerTest {
       assertNull(selector.channel(connectionId), "Channel not removed")
       assertNull(selector.closingChannel(connectionId), "Closing channel not removed")
     }
+  }
+
+  // a X509TrustManager to trust self-signed certs for unit tests.
+  private def trustAllCerts: X509TrustManager = {
+    val trustManager = new X509TrustManager() {
+      override def getAcceptedIssuers: Array[X509Certificate] = {
+        null
+      }
+      override def checkClientTrusted(certs: Array[X509Certificate], authType: String): Unit = {
+      }
+      override def checkServerTrusted(certs: Array[X509Certificate], authType: String): Unit = {
+      }
+    }
+    trustManager
   }
 
   sealed trait SelectorOperation
