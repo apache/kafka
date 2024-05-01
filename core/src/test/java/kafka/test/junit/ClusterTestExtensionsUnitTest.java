@@ -35,11 +35,14 @@ public class ClusterTestExtensionsUnitTest {
         ExtensionContext context = mock(ExtensionContext.class);
         Consumer<TestTemplateInvocationContext> testInvocations = mock(Consumer.class);
         ClusterTemplate annot = mock(ClusterTemplate.class);
-        when(annot.value()).thenReturn("");
+        when(annot.value()).thenReturn("").thenReturn(" ");
 
-        Assertions.assertThrows(IllegalStateException.class, () -> {
-                ext.processClusterTemplate(context, annot, testInvocations);
-            }
+        Assertions.assertThrows(IllegalStateException.class, () ->
+                ext.processClusterTemplate(context, annot, testInvocations)
+        );
+
+        Assertions.assertThrows(IllegalStateException.class, () ->
+                ext.processClusterTemplate(context, annot, testInvocations)
         );
     }
 }

@@ -122,9 +122,8 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                                         Consumer<TestTemplateInvocationContext> testInvocations) {
         // If specified, call cluster config generated method (must be static)
         List<ClusterConfig> generatedClusterConfigs = new ArrayList<>();
-
-        if (annot.value().isEmpty()) {
-            throw new IllegalStateException("Annotation value can't be empty string.");
+        if (annot.value().trim().isEmpty()) {
+            throw new IllegalStateException("ClusterTemplate value can't be empty string.");
         }
         generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
 
