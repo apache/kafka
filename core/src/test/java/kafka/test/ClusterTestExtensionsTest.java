@@ -101,7 +101,7 @@ public class ClusterTestExtensionsTest {
         @ClusterTest(name = "cluster-tests-1", clusterType = Type.ZK, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "bar"),
             @ClusterConfigProperty(key = "spam", value = "eggs"),
-            @ClusterConfigProperty(id = 86400, key = "spam", value = "eggs"), // this one will be ignored as there is no broker id is 86400
+            @ClusterConfigProperty(id = 86400, key = "baz", value = "qux"), // this one will be ignored as there is no broker id is 86400
         }),
         @ClusterTest(name = "cluster-tests-2", clusterType = Type.KRAFT, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
@@ -122,8 +122,6 @@ public class ClusterTestExtensionsTest {
             Assertions.assertEquals("bar", clusterInstance.config().serverProperties().get("foo"));
             Assertions.assertEquals("eggs", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("default.value", clusterInstance.config().serverProperties().get("default.key"));
-            Assertions.assertEquals(1, clusterInstance.config().perBrokerOverrideProperties().size());
-            Assertions.assertEquals("100", clusterInstance.config().perBrokerOverrideProperties().get(0).get("queued.max.requests"));
 
             try (Admin admin = clusterInstance.createAdminClient()) {
                 ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
@@ -135,8 +133,6 @@ public class ClusterTestExtensionsTest {
             Assertions.assertEquals("baz", clusterInstance.config().serverProperties().get("foo"));
             Assertions.assertEquals("eggz", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("overwrite.value", clusterInstance.config().serverProperties().get("default.key"));
-            Assertions.assertEquals(1, clusterInstance.config().perBrokerOverrideProperties().size());
-            Assertions.assertEquals("200", clusterInstance.config().perBrokerOverrideProperties().get(0).get("queued.max.requests"));
 
             try (Admin admin = clusterInstance.createAdminClient()) {
                 ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
@@ -145,8 +141,6 @@ public class ClusterTestExtensionsTest {
                 Assertions.assertEquals("200", configs.get(configResource).get("queued.max.requests").value());
             }
             if (config.clusterType().equals(Type.KRAFT)) {
-                Assertions.assertEquals(1, clusterInstance.config().perControllerProperties().size());
-                Assertions.assertEquals("300", clusterInstance.config().perControllerProperties().get(3000).get("queued.max.requests"));
                 try (Admin admin = Admin.create(Collections.singletonMap(
                         AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()))) {
                     ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");

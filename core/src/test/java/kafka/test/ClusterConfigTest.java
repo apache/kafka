@@ -61,7 +61,7 @@ public class ClusterConfigTest {
                 .setAdminClientProperties(Collections.singletonMap("admin_client", "admin_client_value"))
                 .setSaslClientProperties(Collections.singletonMap("sasl_client", "sasl_client_value"))
                 .setSaslServerProperties(Collections.singletonMap("sasl_server", "sasl_server_value"))
-                .setPerBrokerProperties(Collections.singletonMap(0, Collections.singletonMap("broker_0", "broker_0_value")))
+                .setPerServerProperties(Collections.singletonMap(0, Collections.singletonMap("broker_0", "broker_0_value")))
                 .build();
 
         ClusterConfig copy = ClusterConfig.builder(clusterConfig).build();

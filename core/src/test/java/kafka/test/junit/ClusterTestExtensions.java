@@ -25,7 +25,6 @@ import kafka.test.annotation.ClusterTemplate;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
-import kafka.testkit.TestKitNodes;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
@@ -197,31 +196,25 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         }
 
         Map<String, String> serverProperties = new HashMap<>();
-        Map<Integer, Map<String, String>> perBrokerProperties = new HashMap<>();
-        Map<Integer, Map<String, String>> perControllerProperties = new HashMap<>();
+        Map<Integer, Map<String, String>> perServerProperties = new HashMap<>();
         for (ClusterConfigProperty property : defaults.serverProperties()) {
-            processClusterConfigProperty(property, serverProperties, perBrokerProperties, perControllerProperties);
+            processClusterConfigProperty(property, serverProperties, perServerProperties);
         }
         for (ClusterConfigProperty property : annot.serverProperties()) {
-            processClusterConfigProperty(property, serverProperties, perBrokerProperties, perControllerProperties);
+            processClusterConfigProperty(property, serverProperties, perServerProperties);
         }
         configBuilder.setServerProperties(serverProperties)
-            .setPerBrokerProperties(perBrokerProperties)
-            .setPerControllerProperties(perControllerProperties);
+            .setPerServerProperties(perServerProperties);
         type.invocationContexts(context.getRequiredTestMethod().getName(), configBuilder.build(), testInvocations);
     }
 
     private void processClusterConfigProperty(ClusterConfigProperty property,
                                               Map<String, String> serverProperties,
-                                              Map<Integer, Map<String, String>> perBrokerProperties,
-                                              Map<Integer, Map<String, String>> perControllerProperties) {
+                                              Map<Integer, Map<String, String>> perServerProperties) {
         if (property.id() == -1) {
             serverProperties.put(property.key(), property.value());
-        } else if (property.id() >= TestKitNodes.CONTROLLER_ID_OFFSET) {
-            perControllerProperties.computeIfAbsent(property.id(), ignored -> new HashMap<>())
-                    .put(property.key(), property.value());
         } else {
-            perBrokerProperties.computeIfAbsent(property.id(), ignored -> new HashMap<>())
+            perServerProperties.computeIfAbsent(property.id(), ignored -> new HashMap<>())
                     .put(property.key(), property.value());
         }
     }
