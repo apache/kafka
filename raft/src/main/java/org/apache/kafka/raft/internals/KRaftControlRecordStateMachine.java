@@ -54,7 +54,7 @@ final public class KRaftControlRecordStateMachine {
     // are the KRaft driver when calling updateState and the RaftClient callers when freezing
     // snapshots
     private final VoterSetHistory voterSetHistory;
-    private final History<Short> kraftVersionHistory = new TreeMapHistory<>();
+    private final LogHistory<Short> kraftVersionHistory = new TreeMapLogHistory<>();
 
     // This synchronization is enough because
     // 1. The write operation updateState only sets the value without reading it and updates to

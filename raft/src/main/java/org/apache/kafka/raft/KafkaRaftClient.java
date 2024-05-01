@@ -170,12 +170,17 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     private final Map<Listener<T>, ListenerContext> listenerContexts = new IdentityHashMap<>();
     private final ConcurrentLinkedQueue<Registration<T>> pendingRegistrations = new ConcurrentLinkedQueue<>();
 
-    // These components need to be initialized by the method initialize() because they depend on the voter set
+    // These components need to be initialized by the method initialize() because they depend on
+    // the voter set
     /*
-     * The key invariant for the kraft control record state machine is that it has always read to the LEO. This is achived by:
+     * The key invariant for the kraft control record state machine is that it has always read to
+     * the LEO. This is achieved by:
+     *
      * 1. reading the entire partition (snapshot and log) at start up,
-     * 2. updating the state when a snapshot is replaced, because of FETCH_SNAPSHOT, on the followers
-     * 3. updating the state when the leader (call to append()) or follower (FETCH) appends to the log
+     * 2. updating the state when a snapshot is replaced, because of FETCH_SNAPSHOT, on the
+     *    followers
+     * 3. updating the state when the leader (call to append()) or follower (FETCH) appends to the
+     *    log
      * 4. truncate new entries when a follower truncates their log
      * 5. truncate old entries when a snapshot gets generated
      */
@@ -370,7 +375,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         Metrics metrics
     ) {
         partitionState = new KRaftControlRecordStateMachine(
-            Optional.of(VoterSet.fromAddressSpecs(listenerName, voterAddresses)),
+            Optional.of(VoterSet.fromInetSocketAddresses(listenerName, voterAddresses)),
             log,
             serde,
             BufferSupplier.create(),

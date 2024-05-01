@@ -21,6 +21,7 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
@@ -41,6 +42,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.function.Function;
+import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -215,24 +217,27 @@ public class BatchAccumulator<T> implements Closeable {
      *        batch that will be appended. The memory records returned must contain one
      *        control batch and that control batch have at least one record.
      */
-    public void appendControlMessages(Function<ByteBuffer, CreatedRecords> valueCreator) {
+    public void appendControlMessages(Function<ByteBuffer, MemoryRecords> valueCreator) {
         appendLock.lock();
         try {
             ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSize);
             if (buffer != null) {
                 try {
                     forceDrain();
-                    CreatedRecords createdRecords = valueCreator.apply(buffer);
+                    MemoryRecords memoryRecords = valueCreator.apply(buffer);
+
+                    int numberOfRecords = validateMemoryRecordAndReturnCount(memoryRecords);
+
                     completed.add(
                         new CompletedBatch<>(
                             nextOffset,
-                            createdRecords.numberOfRecords(),
-                            createdRecords.records(),
+                            numberOfRecords,
+                            memoryRecords,
                             memoryPool,
                             buffer
                         )
                     );
-                    nextOffset += 1;
+                    nextOffset += numberOfRecords;
                 } catch (Exception e) {
                     // Release the buffer now since the buffer was not stored in completed for a delayed release
                     memoryPool.release(buffer);
@@ -244,6 +249,28 @@ public class BatchAccumulator<T> implements Closeable {
         } finally {
             appendLock.unlock();
         }
+    }
+
+    private int validateMemoryRecordAndReturnCount(MemoryRecords memoryRecord) {
+        // Confirm that it is at most one batch and it is a control record
+        Iterator<MutableRecordBatch> batches = memoryRecord.batches().iterator();
+        if (!batches.hasNext()) {
+            throw new IllegalArgumentException("valueCreator didn't create a batch");
+        }
+
+        MutableRecordBatch batch = batches.next();
+        if (!batch.isControlBatch()) {
+            throw new IllegalArgumentException("valueCreator didn't creatte a control batch");
+        }
+
+        Integer numberOfRecords = batch.countOrNull();
+        if (numberOfRecords == null) {
+            throw new IllegalArgumentException("valueCreator didn't create a batch with the count");
+        } else if (batches.hasNext()) {
+            throw new IllegalArgumentException("valueCreator created more than one batch");
+        }
+
+        return numberOfRecords;
     }
 
     /**
@@ -258,15 +285,12 @@ public class BatchAccumulator<T> implements Closeable {
         long currentTimestamp
     ) {
         appendControlMessages(buffer ->
-            new CreatedRecords(
-                1,
-                MemoryRecords.withLeaderChangeMessage(
-                    this.nextOffset,
-                    currentTimestamp,
-                    this.epoch,
-                    buffer,
-                    leaderChangeMessage
-                )
+            MemoryRecords.withLeaderChangeMessage(
+                this.nextOffset,
+                currentTimestamp,
+                this.epoch,
+                buffer,
+                leaderChangeMessage
             )
         );
     }
@@ -284,15 +308,12 @@ public class BatchAccumulator<T> implements Closeable {
         long currentTimestamp
     ) {
         appendControlMessages(buffer ->
-            new CreatedRecords(
-                1,
-                MemoryRecords.withSnapshotHeaderRecord(
-                    this.nextOffset,
-                    currentTimestamp,
-                    this.epoch,
-                    buffer,
-                    snapshotHeaderRecord
-                )
+            MemoryRecords.withSnapshotHeaderRecord(
+                this.nextOffset,
+                currentTimestamp,
+                this.epoch,
+                buffer,
+                snapshotHeaderRecord
             )
         );
     }
@@ -309,15 +330,12 @@ public class BatchAccumulator<T> implements Closeable {
         long currentTimestamp
     ) {
         appendControlMessages(buffer ->
-            new CreatedRecords(
-                1,
-                MemoryRecords.withSnapshotFooterRecord(
-                    this.nextOffset,
-                    currentTimestamp,
-                    this.epoch,
-                    buffer,
-                    snapshotFooterRecord
-                )
+            MemoryRecords.withSnapshotFooterRecord(
+                this.nextOffset,
+                currentTimestamp,
+                this.epoch,
+                buffer,
+                snapshotFooterRecord
             )
         );
     }
@@ -526,24 +544,6 @@ public class BatchAccumulator<T> implements Closeable {
             // 2. maxTimestamp is the append time of the batch. This needs to be changed
             //    to return the LastContainedLogTimestamp of the SnapshotHeaderRecord
             return data.firstBatch().maxTimestamp();
-        }
-    }
-
-    final public static class CreatedRecords {
-        private final int numberOfRecords;
-        private final MemoryRecords records;
-
-        public CreatedRecords(int numberOfRecords, MemoryRecords records) {
-            this.numberOfRecords = numberOfRecords;
-            this.records = records;
-        }
-
-        public int numberOfRecords() {
-            return numberOfRecords;
-        }
-
-        public MemoryRecords records() {
-            return records;
         }
     }
 

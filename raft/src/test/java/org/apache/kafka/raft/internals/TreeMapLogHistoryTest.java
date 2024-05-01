@@ -21,17 +21,17 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-final public class TreeMapHistoryTest {
+final public class TreeMapLogHistoryTest {
     @Test
     void testEmpty() {
-        TreeMapHistory<String> history = new TreeMapHistory<>();
+        TreeMapLogHistory<String> history = new TreeMapLogHistory<>();
         assertEquals(Optional.empty(), history.valueAtOrBefore(100));
         assertEquals(Optional.empty(), history.lastEntry());
     }
 
     @Test
     void testAddAt() {
-        TreeMapHistory<String> history = new TreeMapHistory<>();
+        TreeMapLogHistory<String> history = new TreeMapLogHistory<>();
         assertThrows(IllegalArgumentException.class, () -> history.addAt(-1, ""));
         assertEquals(Optional.empty(), history.lastEntry());
 
@@ -48,23 +48,23 @@ final public class TreeMapHistoryTest {
         assertEquals(Optional.of("100"), history.valueAtOrBefore(199));
         assertEquals(Optional.of("200"), history.valueAtOrBefore(200));
         assertEquals(Optional.of("200"), history.valueAtOrBefore(201));
-        assertEquals(Optional.of(new History.Entry<>(200, "200")), history.lastEntry());
+        assertEquals(Optional.of(new LogHistory.Entry<>(200, "200")), history.lastEntry());
     }
 
     @Test
     void testTruncateTo() {
-        TreeMapHistory<String> history = new TreeMapHistory<>();
+        TreeMapLogHistory<String> history = new TreeMapLogHistory<>();
         history.addAt(100, "100");
         history.addAt(200, "200");
 
         history.truncateNewEntries(201);
-        assertEquals(Optional.of(new History.Entry<>(200, "200")), history.lastEntry());
+        assertEquals(Optional.of(new LogHistory.Entry<>(200, "200")), history.lastEntry());
 
         history.truncateNewEntries(200);
-        assertEquals(Optional.of(new History.Entry<>(100, "100")), history.lastEntry());
+        assertEquals(Optional.of(new LogHistory.Entry<>(100, "100")), history.lastEntry());
 
         history.truncateNewEntries(101);
-        assertEquals(Optional.of(new History.Entry<>(100, "100")), history.lastEntry());
+        assertEquals(Optional.of(new LogHistory.Entry<>(100, "100")), history.lastEntry());
 
         history.truncateNewEntries(100);
         assertEquals(Optional.empty(), history.lastEntry());
@@ -72,7 +72,7 @@ final public class TreeMapHistoryTest {
 
     @Test
     void testTrimPrefixTo() {
-        TreeMapHistory<String> history = new TreeMapHistory<>();
+        TreeMapLogHistory<String> history = new TreeMapLogHistory<>();
         history.addAt(100, "100");
         history.addAt(200, "200");
 
@@ -95,7 +95,7 @@ final public class TreeMapHistoryTest {
 
     @Test
     void testClear() {
-        TreeMapHistory<String> history = new TreeMapHistory<>();
+        TreeMapLogHistory<String> history = new TreeMapLogHistory<>();
         history.addAt(100, "100");
         history.addAt(200, "200");
         history.clear();

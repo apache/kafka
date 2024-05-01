@@ -159,7 +159,10 @@ public class QuorumConfig {
         return parseVoterConnections(voterEntries, false).keySet();
     }
 
-    private static Map<Integer, InetSocketAddress> parseVoterConnections(List<String> voterEntries, boolean routableOnly) {
+    private static Map<Integer, InetSocketAddress> parseVoterConnections(
+        List<String> voterEntries,
+        boolean requireRoutableAddresses
+    ) {
         Map<Integer, InetSocketAddress> voterMap = new HashMap<>();
         for (String voterMapEntry : voterEntries) {
             String[] idAndAddress = voterMapEntry.split("@");
@@ -184,7 +187,7 @@ public class QuorumConfig {
             }
 
             InetSocketAddress address = new InetSocketAddress(host, port);
-            if (address.getHostString().equals(NON_ROUTABLE_HOST) && routableOnly) {
+            if (address.getHostString().equals(NON_ROUTABLE_HOST) && requireRoutableAddresses) {
                 throw new ConfigException(
                     String.format("Host string ({}) is not routeable", address.getHostString())
                 );

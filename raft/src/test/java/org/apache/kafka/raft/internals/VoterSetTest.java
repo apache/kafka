@@ -60,7 +60,7 @@ final public class VoterSetTest {
         assertEquals(Optional.empty(), voterSet.addVoter(voterNode(1)));
 
         VoterSet.VoterNode voter4 = voterNode(4);
-        aVoterMap.put(voter4.id(), voter4);
+        aVoterMap.put(voter4.voterKey().id(), voter4);
         assertEquals(Optional.of(new VoterSet(new HashMap<>(aVoterMap))), voterSet.addVoter(voter4));
     }
 
@@ -69,13 +69,13 @@ final public class VoterSetTest {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2, 3));
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
-        assertEquals(Optional.empty(), voterSet.removeVoter(4, Optional.empty()));
-        assertEquals(Optional.empty(), voterSet.removeVoter(4, Optional.of(Uuid.randomUuid())));
+        assertEquals(Optional.empty(), voterSet.removeVoter(VoterSet.VoterKey.of(4, Optional.empty())));
+        assertEquals(Optional.empty(), voterSet.removeVoter(VoterSet.VoterKey.of(4, Optional.of(Uuid.randomUuid()))));
 
         VoterSet.VoterNode voter3 = aVoterMap.remove(3);
         assertEquals(
             Optional.of(new VoterSet(new HashMap<>(aVoterMap))),
-            voterSet.removeVoter(voter3.id(), voter3.directoryId())
+            voterSet.removeVoter(voter3.voterKey())
         );
     }
 
@@ -97,12 +97,12 @@ final public class VoterSetTest {
         assertMajorities(true, startingVoterSet, biggerVoterSet);
 
         VoterSet smallerVoterSet = startingVoterSet
-            .removeVoter(1, startingVoterMap.get(1).directoryId())
+            .removeVoter(startingVoterMap.get(1).voterKey())
             .get();
         assertMajorities(true, startingVoterSet, smallerVoterSet);
 
         VoterSet replacedVoterSet = startingVoterSet
-            .removeVoter(1, startingVoterMap.get(1).directoryId())
+            .removeVoter(startingVoterMap.get(1).voterKey())
             .get()
             .addVoter(voterNode(1))
             .get();
@@ -124,19 +124,19 @@ final public class VoterSetTest {
 
         // Two removals don't have an overlapping majority
         VoterSet smallerVoterSet = startingVoterSet
-            .removeVoter(1, startingVoterMap.get(1).directoryId())
+            .removeVoter(startingVoterMap.get(1).voterKey())
             .get()
-            .removeVoter(2, startingVoterMap.get(2).directoryId())
+            .removeVoter(startingVoterMap.get(2).voterKey())
             .get();
         assertMajorities(false, startingVoterSet, smallerVoterSet);
 
         // Two replacements don't have an overlapping majority
         VoterSet replacedVoterSet = startingVoterSet
-            .removeVoter(1, startingVoterMap.get(1).directoryId())
+            .removeVoter(startingVoterMap.get(1).voterKey())
             .get()
             .addVoter(voterNode(1))
             .get()
-            .removeVoter(2, startingVoterMap.get(2).directoryId())
+            .removeVoter(startingVoterMap.get(2).voterKey())
             .get()
             .addVoter(voterNode(2))
             .get();
@@ -169,8 +169,7 @@ final public class VoterSetTest {
 
     static VoterSet.VoterNode voterNode(int id) {
         return new VoterSet.VoterNode(
-            id,
-            Optional.of(Uuid.randomUuid()),
+            VoterSet.VoterKey.of(id, Optional.of(Uuid.randomUuid())),
             Collections.singletonMap(
                 "LISTENER",
                 InetSocketAddress.createUnresolved(String.format("replica-%d", id), 1234)

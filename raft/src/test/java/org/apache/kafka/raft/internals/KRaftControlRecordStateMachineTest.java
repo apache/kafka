@@ -50,7 +50,7 @@ final class KRaftControlRecordStateMachineTest {
     }
 
     @Test
-    void testEmptyParition() {
+    void testEmptyPartition() {
         MockLog log = buildLog();
         VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)));
 

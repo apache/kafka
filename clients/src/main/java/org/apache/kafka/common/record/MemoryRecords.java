@@ -730,25 +730,15 @@ public class MemoryRecords extends AbstractRecords {
         ByteBuffer buffer,
         LeaderChangeMessage leaderChangeMessage
     ) {
-        writeLeaderChangeMessage(buffer, initialOffset, timestamp, leaderEpoch, leaderChangeMessage);
-        buffer.flip();
-        return MemoryRecords.readableRecords(buffer);
-    }
-
-    private static void writeLeaderChangeMessage(
-        ByteBuffer buffer,
-        long initialOffset,
-        long timestamp,
-        int leaderEpoch,
-        LeaderChangeMessage leaderChangeMessage
-    ) {
-        try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
-            buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-            TimestampType.CREATE_TIME, initialOffset, timestamp,
-            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-            false, true, leaderEpoch, buffer.capacity())
+        try (MemoryRecordsBuilder builder = createKraftControlReccordBuilder(
+                initialOffset,
+                timestamp,
+                leaderEpoch,
+                buffer
+            )
         ) {
             builder.appendLeaderChangeMessage(timestamp, leaderChangeMessage);
+            return builder.build();
         }
     }
 
@@ -759,25 +749,15 @@ public class MemoryRecords extends AbstractRecords {
         ByteBuffer buffer,
         SnapshotHeaderRecord snapshotHeaderRecord
     ) {
-        writeSnapshotHeaderRecord(buffer, initialOffset, timestamp, leaderEpoch, snapshotHeaderRecord);
-        buffer.flip();
-        return MemoryRecords.readableRecords(buffer);
-    }
-
-    private static void writeSnapshotHeaderRecord(
-        ByteBuffer buffer,
-        long initialOffset,
-        long timestamp,
-        int leaderEpoch,
-        SnapshotHeaderRecord snapshotHeaderRecord
-    ) {
-        try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
-            buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-            TimestampType.CREATE_TIME, initialOffset, timestamp,
-            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-            false, true, leaderEpoch, buffer.capacity())
+        try (MemoryRecordsBuilder builder = createKraftControlReccordBuilder(
+                initialOffset,
+                timestamp,
+                leaderEpoch,
+                buffer
+            )
         ) {
             builder.appendSnapshotHeaderMessage(timestamp, snapshotHeaderRecord);
+            return builder.build();
         }
     }
 
@@ -788,25 +768,15 @@ public class MemoryRecords extends AbstractRecords {
         ByteBuffer buffer,
         SnapshotFooterRecord snapshotFooterRecord
     ) {
-        writeSnapshotFooterRecord(buffer, initialOffset, timestamp, leaderEpoch, snapshotFooterRecord);
-        buffer.flip();
-        return MemoryRecords.readableRecords(buffer);
-    }
-
-    private static void writeSnapshotFooterRecord(
-        ByteBuffer buffer,
-        long initialOffset,
-        long timestamp,
-        int leaderEpoch,
-        SnapshotFooterRecord snapshotFooterRecord
-    ) {
-        try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
-            buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-            TimestampType.CREATE_TIME, initialOffset, timestamp,
-            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-            false, true, leaderEpoch, buffer.capacity())
+        try (MemoryRecordsBuilder builder = createKraftControlReccordBuilder(
+                initialOffset,
+                timestamp,
+                leaderEpoch,
+                buffer
+            )
         ) {
             builder.appendSnapshotFooterMessage(timestamp, snapshotFooterRecord);
+            return builder.build();
         }
     }
 
@@ -817,35 +787,15 @@ public class MemoryRecords extends AbstractRecords {
         ByteBuffer buffer,
         KRaftVersionRecord kraftVersionRecord
     ) {
-        writeKRaftVersionRecord(buffer, initialOffset, timestamp, leaderEpoch, kraftVersionRecord);
-        buffer.flip();
-        return MemoryRecords.readableRecords(buffer);
-    }
-
-    private static void writeKRaftVersionRecord(
-        ByteBuffer buffer,
-        long initialOffset,
-        long timestamp,
-        int leaderEpoch,
-        KRaftVersionRecord kraftVersionRecord
-    ) {
-        try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
-                buffer,
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE,
-                TimestampType.CREATE_TIME,
+        try (MemoryRecordsBuilder builder = createKraftControlReccordBuilder(
                 initialOffset,
                 timestamp,
-                RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH,
-                RecordBatch.NO_SEQUENCE,
-                false,
-                true,
                 leaderEpoch,
-                buffer.capacity()
+                buffer
             )
         ) {
             builder.appendKRaftVersionMessage(timestamp, kraftVersionRecord);
+            return builder.build();
         }
     }
 
@@ -856,35 +806,38 @@ public class MemoryRecords extends AbstractRecords {
         ByteBuffer buffer,
         VotersRecord votersRecord
     ) {
-        writeVotersRecord(buffer, initialOffset, timestamp, leaderEpoch, votersRecord);
-        buffer.flip();
-        return MemoryRecords.readableRecords(buffer);
-    }
-
-    private static void writeVotersRecord(
-        ByteBuffer buffer,
-        long initialOffset,
-        long timestamp,
-        int leaderEpoch,
-        VotersRecord votersRecord
-    ) {
-        try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
-                buffer,
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE,
-                TimestampType.CREATE_TIME,
+        try (MemoryRecordsBuilder builder = createKraftControlReccordBuilder(
                 initialOffset,
                 timestamp,
-                RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH,
-                RecordBatch.NO_SEQUENCE,
-                false,
-                true,
                 leaderEpoch,
-                buffer.capacity()
+                buffer
             )
         ) {
             builder.appendVotersMessage(timestamp, votersRecord);
+            return builder.build();
         }
+    }
+
+    private static MemoryRecordsBuilder createKraftControlReccordBuilder(
+        long initialOffset,
+        long timestamp,
+        int leaderEpoch,
+        ByteBuffer buffer
+    ) {
+        return new MemoryRecordsBuilder(
+            buffer,
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            CompressionType.NONE,
+            TimestampType.CREATE_TIME,
+            initialOffset,
+            timestamp,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_SEQUENCE,
+            false,
+            true,
+            leaderEpoch,
+            buffer.capacity()
+        );
     }
 }
