@@ -421,8 +421,8 @@ public class ConfigCommandTest {
     public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String...args) {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--describe"), Arrays.asList(args)));
         createOpts.checkArgs();
-        assertEquals(createOpts.entityTypes().toSeq(), ConfigCommandIntegrationTest.seq(expectedTypes));
-        assertEquals(createOpts.entityNames().toSeq(), ConfigCommandIntegrationTest.seq(expectedNames));
+        assertEquals(createOpts.entityTypes().toSeq(), seq(expectedTypes));
+        assertEquals(createOpts.entityNames().toSeq(), seq(expectedNames));
     }
 
     public void doTestOptionEntityTypeNames(boolean zkConfig) {
@@ -1995,5 +1995,10 @@ public class ConfigCommandTest {
         public AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options) {
             return mock(AlterClientQuotasResult.class);
         }
+    }
+
+    @SuppressWarnings({"deprecation"})
+    private <T> Seq<T> seq(Collection<T> seq) {
+        return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
     }
 }
