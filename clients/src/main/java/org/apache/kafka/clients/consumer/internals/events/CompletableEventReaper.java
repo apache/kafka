@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -31,9 +32,10 @@ import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
 /**
- * The {@code CompletableEventReaper} is responsible for tracking any {@link CompletableEvent}s that were processed,
- * making sure to reap them if they complete normally or pass their deadline. This is done so that we enforce an upper
- * bound on the amount of time the event logic will execute.
+ * {@code CompletableEventReaper} is responsible for tracking {@link CompletableEvent time-bound events} and removing
+ * any that exceed their {@link CompletableEvent#deadlineMs() deadline} (unless they've already completed). This
+ * mechanism is used by the {@link AsyncKafkaConsumer} to enforce the timeout provided by the user in its API
+ * calls (e.g. {@link AsyncKafkaConsumer#commitSync(Duration)}).
  */
 public class CompletableEventReaper<T extends CompletableEvent<?>> {
 
