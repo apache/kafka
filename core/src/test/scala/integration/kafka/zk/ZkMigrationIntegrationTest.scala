@@ -889,7 +889,7 @@ class ZkMigrationIntegrationTest {
     new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
     new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
   ))
-  def testIncrementalAlterConfigsPreMigration(zkCluster: ZkClusterInstance): Unit = {
+  def testIncrementalAlterConfigsPreMigration(zkCluster: ClusterInstance): Unit = {
     // Enable migration configs and restart brokers without KRaft quorum ready
     val serverProperties = new util.HashMap[String, String](zkCluster.config().serverProperties())
     serverProperties.put(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -899,11 +899,11 @@ class ZkMigrationIntegrationTest {
     val clusterConfig = ClusterConfig.builder(zkCluster.config())
       .setServerProperties(serverProperties)
       .build()
-    zkCluster.rollingBrokerRestart(Optional.of(clusterConfig))
+    zkCluster.asInstanceOf[ZkClusterInstance].rollingBrokerRestart(Optional.of(clusterConfig))
     zkCluster.waitForReadyBrokers()
 
     val admin = zkCluster.createAdminClient()
-    val zkClient = zkCluster.getUnderlying().zkClient
+    val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
     try {
       alterBrokerConfigs(admin, shouldRetry = true)
       verifyBrokerConfigs(zkClient, shouldRetry = true)

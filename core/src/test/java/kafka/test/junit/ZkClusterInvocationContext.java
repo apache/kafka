@@ -106,7 +106,6 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
             },
             (AfterTestExecutionCallback) context -> clusterShim.stop(),
             new ClusterInstanceParameterResolver(clusterShim),
-            new GenericParameterResolver<>(clusterShim, ZkClusterInstance.class),
             new GenericParameterResolver<>(clusterConfig, ClusterConfig.class)
         );
     }
