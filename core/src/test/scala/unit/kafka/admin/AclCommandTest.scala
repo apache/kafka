@@ -16,21 +16,17 @@
  */
 package kafka.admin
 
-import java.io.File
-import java.util.Properties
-import javax.management.InstanceAlreadyExistsException
 import kafka.admin.AclCommand.AclCommandOptions
 import kafka.security.authorizer.AclAuthorizer
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.{Exit, LogCaptureAppender, Logging, TestUtils}
-import kafka.server.QuorumTestHarness
-import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
-import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern}
-import org.apache.kafka.common.resource.ResourceType._
+import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
+import org.apache.kafka.common.resource.ResourceType._
+import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{AppInfoParser, SecurityUtils}
 import org.apache.kafka.security.authorizer.AclEntry
@@ -38,6 +34,10 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+
+import java.io.{ByteArrayOutputStream, File}
+import java.util.Properties
+import javax.management.InstanceAlreadyExistsException
 
 class AclCommandTest extends QuorumTestHarness with Logging {
 
@@ -145,7 +145,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   }
 
   private def callMain(args: Array[String]): (String, String) = {
-    TestUtils.grabConsoleOutputAndError(AclCommand.main(args))
+    grabConsoleOutputAndError(AclCommand.main(args))
   }
 
   private def testAclCli(cmdArgs: Array[String]): Unit = {
@@ -329,5 +329,19 @@ class AclCommandTest extends QuorumTestHarness with Logging {
       authZ.configure(kafkaConfig.originals)
       f(authZ)
     } finally authZ.close()
+  }
+
+  /**
+   * Capture both the console output and console error during the execution of the provided function.
+   */
+  private def grabConsoleOutputAndError(f: => Unit) : (String, String) = {
+    val out = new ByteArrayOutputStream
+    val err = new ByteArrayOutputStream
+    try scala.Console.withOut(out)(scala.Console.withErr(err)(f))
+    finally {
+      scala.Console.out.flush()
+      scala.Console.err.flush()
+    }
+    (out.toString, err.toString)
   }
 }
