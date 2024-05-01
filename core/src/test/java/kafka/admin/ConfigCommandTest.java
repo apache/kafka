@@ -399,8 +399,8 @@ public class ConfigCommandTest {
     public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String...args) {
         ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray(Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--describe"), Arrays.asList(args)));
         createOpts.checkArgs();
-        assertEquals(JavaConverters.asJava(createOpts.entityTypes()), expectedTypes);
-        assertEquals(JavaConverters.asJava(createOpts.entityNames()), expectedNames);
+        assertEquals(createOpts.entityTypes().toSeq(), ConfigCommandIntegrationTest.seq(expectedTypes));
+        assertEquals(createOpts.entityNames().toSeq(), ConfigCommandIntegrationTest.seq(expectedNames));
     }
 
     public void doTestOptionEntityTypeNames(boolean zkConfig) {
