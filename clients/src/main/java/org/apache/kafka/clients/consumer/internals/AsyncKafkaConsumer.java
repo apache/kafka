@@ -1911,18 +1911,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     // If the event is done (either successfully or otherwise), go ahead and attempt to return
                     // without waiting. We use the ConsumerUtils.getResult() method here to handle the conversion
                     // of the exception types.
-                    T result = ConsumerUtils.getResult(future);
-                    log.trace("Future {} completed successfully", future);
-                    return result;
+                    return ConsumerUtils.getResult(future);
                 } else if (!hadEvents) {
                     // If the above processing yielded no events, then let's sit tight for a bit to allow the
                     // background thread to either a) finish the task, or b) populate the background event
                     // queue with things to process in our next loop.
                     Timer pollInterval = time.timer(100L);
                     log.trace("Waiting {} ms for future {} to complete", pollInterval.remainingMs(), future);
-                    T result = ConsumerUtils.getResult(future, pollInterval);
-                    log.trace("Future {} completed successfully", future);
-                    return result;
+                    return ConsumerUtils.getResult(future, pollInterval);
                 }
             } catch (TimeoutException e) {
                 // Ignore this as we will retry the event until the timeout expires.
