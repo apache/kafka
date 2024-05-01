@@ -395,6 +395,39 @@ public class PartitionChangeBuilderTest {
             1);
     }
 
+    /**
+     * Regression test for KAFKA-16624. Tests that when targetIsr is the empty list, but we
+     * cannot actually change the ISR, triggerLeaderEpochBumpForIsrShrinkIfNeeded does not engage.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV4"})
+    public void testNoLeaderEpochBumpOnEmptyTargetIsr(String metadataVersionString) {
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        PartitionRegistration partition = new PartitionRegistration.Builder().
+            setReplicas(new int[] {2}).
+            setDirectories(new Uuid[]{
+                Uuid.fromString("dpdvA5AZSWySmnPFTnu5Kw")
+            }).
+            setIsr(new int[] {2}).
+            setLeader(2).
+            setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+            setLeaderEpoch(100).
+            setPartitionEpoch(200).
+            build();
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition,
+            FOO_ID,
+            0,
+            r -> true,
+            metadataVersion,
+            2).
+            setEligibleLeaderReplicasEnabled(metadataVersion.isElrSupported()).
+            setDefaultDirProvider(DEFAULT_DIR_PROVIDER).
+            setTargetReplicas(Arrays.asList());
+        PartitionChangeRecord record = new PartitionChangeRecord();
+        builder.triggerLeaderEpochBumpForIsrShrinkIfNeeded(record);
+        assertEquals(NO_LEADER_CHANGE, record.leader());
+    }
+
     @ParameterizedTest
     @MethodSource("partitionChangeRecordVersions")
     public void testNoChange(short version) {

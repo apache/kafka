@@ -424,7 +424,7 @@ public class PartitionChangeBuilder {
     /**
      * @return true if the reassignment was completed; false otherwise.
      */
-    private boolean completeReassignmentIfNeeded() {
+    private void completeReassignmentIfNeeded() {
         PartitionReassignmentReplicas reassignmentReplicas =
             new PartitionReassignmentReplicas(
                 targetRemoving,
@@ -434,7 +434,7 @@ public class PartitionChangeBuilder {
         Optional<PartitionReassignmentReplicas.CompletedReassignment> completedReassignmentOpt =
             reassignmentReplicas.maybeCompleteReassignment(targetIsr);
         if (!completedReassignmentOpt.isPresent()) {
-            return false;
+            return;
         }
 
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = completedReassignmentOpt.get();
@@ -443,7 +443,6 @@ public class PartitionChangeBuilder {
         targetReplicas = completedReassignment.replicas;
         targetRemoving = Collections.emptyList();
         targetAdding = Collections.emptyList();
-        return true;
     }
 
     public Optional<ApiMessageAndVersion> build() {
