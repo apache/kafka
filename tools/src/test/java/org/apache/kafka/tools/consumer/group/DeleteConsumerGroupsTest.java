@@ -17,11 +17,10 @@
 package org.apache.kafka.tools.consumer.group;
 
 import joptsimple.OptionException;
+import kafka.test.ClusterConfig;
+import kafka.test.ClusterGenerator;
 import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterConfigProperty;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.annotation.Type;
+import kafka.test.annotation.ClusterTemplate;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
@@ -49,6 +48,9 @@ import java.util.stream.IntStream;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static kafka.test.annotation.Type.CO_KRAFT;
+import static kafka.test.annotation.Type.KRAFT;
+import static kafka.test.annotation.Type.ZK;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 import static org.apache.kafka.common.ConsumerGroupState.EMPTY;
@@ -62,11 +64,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.ALL, serverProperties = {
-        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true")
-})
 public class DeleteConsumerGroupsTest {
     private final ClusterInstance cluster;
     private final Iterable<GroupProtocol> groupProtocols;
@@ -78,13 +75,54 @@ public class DeleteConsumerGroupsTest {
                 : singletonList(CLASSIC);
     }
 
-    @ClusterTest
+    private static void generator(ClusterGenerator clusterGenerator) {
+        Map<String, String> serverProperties = new HashMap<>();
+        serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
+        serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
+        serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false");
+
+        ClusterConfig zk = ClusterConfig.defaultBuilder()
+                .setType(ZK)
+                .setServerProperties(serverProperties)
+                .build();
+        clusterGenerator.accept(zk);
+
+        ClusterConfig raftWithLegacyCoordinator = ClusterConfig.defaultBuilder()
+                .setType(KRAFT)
+                .setServerProperties(serverProperties)
+                .build();
+        clusterGenerator.accept(raftWithLegacyCoordinator);
+
+        ClusterConfig combinedKRaftWithLegacyCoordinator = ClusterConfig.defaultBuilder()
+                .setType(CO_KRAFT)
+                .setServerProperties(serverProperties)
+                .build();
+        clusterGenerator.accept(combinedKRaftWithLegacyCoordinator);
+
+        // Following are test case config with new group coordinator
+        serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true");
+
+        ClusterConfig raftWithNewGroupCoordinator = ClusterConfig.defaultBuilder()
+                .setType(KRAFT)
+                .setName("newGroupCoordinator")
+                .setServerProperties(serverProperties).build();
+        clusterGenerator.accept(raftWithNewGroupCoordinator);
+
+        ClusterConfig combinedKRaftWithNewGroupCoordinator = ClusterConfig.defaultBuilder()
+                .setType(CO_KRAFT)
+                .setName("newGroupCoordinator")
+                .setServerProperties(serverProperties)
+                .build();
+        clusterGenerator.accept(combinedKRaftWithNewGroupCoordinator);
+    }
+
+    @ClusterTemplate("generator")
     public void testDeleteWithTopicOption() {
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", getDummyGroupId(), "--topic"};
         assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteCmdNonExistingGroup() {
         String missingGroupId = composeMissingGroupId(CLASSIC);
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroupId};
@@ -95,7 +133,7 @@ public class DeleteConsumerGroupsTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteNonExistingGroup() {
         String missingGroupId = composeMissingGroupId(CLASSIC);
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroupId};
@@ -106,7 +144,7 @@ public class DeleteConsumerGroupsTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteNonEmptyGroup() throws Exception {
         for (GroupProtocol groupProtocol : groupProtocols) {
             String groupId = composeGroupId(groupProtocol);
@@ -136,7 +174,7 @@ public class DeleteConsumerGroupsTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     void testDeleteEmptyGroup() throws Exception {
         for (GroupProtocol groupProtocol : groupProtocols) {
             String groupId = composeGroupId(groupProtocol);
@@ -169,7 +207,7 @@ public class DeleteConsumerGroupsTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteCmdAllGroups() throws Exception {
         for (GroupProtocol groupProtocol : groupProtocols) {
             String topicName = composeTopicName(groupProtocol);
@@ -207,7 +245,7 @@ public class DeleteConsumerGroupsTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteCmdWithMixOfSuccessAndError() throws Exception {
         for (GroupProtocol groupProtocol : groupProtocols) {
             String groupId = composeGroupId(groupProtocol);
@@ -240,7 +278,7 @@ public class DeleteConsumerGroupsTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteWithMixOfSuccessAndError() throws Exception {
         for (GroupProtocol groupProtocol : groupProtocols) {
             String groupId = composeGroupId(groupProtocol);
@@ -274,7 +312,7 @@ public class DeleteConsumerGroupsTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteWithUnrecognizedNewConsumerOption() {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", getDummyGroupId()};
         assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
@@ -300,7 +338,12 @@ public class DeleteConsumerGroupsTest {
     }
 
     private AutoCloseable consumerGroupClosable(GroupProtocol protocol, String groupId, String topicName) {
-        if (cluster.isKRaftTest()) {
+        boolean isNewCoordinator = cluster.config()
+                .serverProperties()
+                .get(NEW_GROUP_COORDINATOR_ENABLE_CONFIG)
+                .equals("true");
+
+        if (isNewCoordinator) {
             return ConsumerGroupExecutor.buildConsumerGroup(
                     cluster.bootstrapServers(),
                     1,
@@ -311,17 +354,17 @@ public class DeleteConsumerGroupsTest {
                     emptyMap(),
                     false
             );
-        } else {
-            return ConsumerGroupExecutor.buildClassicGroup(
-                    cluster.bootstrapServers(),
-                    1,
-                    groupId,
-                    topicName,
-                    RangeAssignor.class.getName(),
-                    emptyMap(),
-                    false
-            );
         }
+
+        return ConsumerGroupExecutor.buildClassicGroup(
+                cluster.bootstrapServers(),
+                1,
+                groupId,
+                topicName,
+                RangeAssignor.class.getName(),
+                emptyMap(),
+                false
+        );
     }
 
     private Predicate<String> predicateGroupState(ConsumerGroupCommand.ConsumerGroupService service, ConsumerGroupState state) {
