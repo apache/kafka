@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class CompletableEventReaperTest {
 
     private final LogContext logContext = new LogContext();
-    private final Time time = new MockTime(0, 0, 0);
+    private final Time time = new MockTime();
     private final CompletableEventReaper<CompletableApplicationEvent<?>> reaper = new CompletableEventReaper<>(logContext);
 
     @Test
