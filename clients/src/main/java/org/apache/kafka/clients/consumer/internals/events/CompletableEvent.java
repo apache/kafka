@@ -56,9 +56,9 @@ public interface CompletableEvent<T> {
      *         {@link CompletableFuture#completeExceptionally(Throwable)}.
      *     </li>
      *     <li>
-     *         Cancelled: when an event remains incomplete when the consumer closes, the future will be
-     *         {@link CompletableFuture#cancel(boolean) cancelled}. Attempts to {@link Future#get() get the result}
-     *         of the processing will throw a {@link CancellationException}.
+     *         Cancelled: when an event remains incomplete when the consumer closes, an
+     *         instance of {@link CancellationException} should be created and passed to
+     *         {@link CompletableFuture#completeExceptionally(Throwable)}.
      *     </li>
      * </ul>
      *
