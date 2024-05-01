@@ -218,6 +218,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                   (Raft Manager per broker/controller)
              */
             int numOfExecutorThreads = (nodes.brokerNodes().size() + nodes.controllerNodes().size()) * 2;
+            System.out.println("DEBUG: creating nodes for" + nodes.controllerNodes().keySet());
             ExecutorService executorService = null;
             ControllerQuorumVotersFutureManager connectFutureManager =
                 new ControllerQuorumVotersFutureManager(nodes.controllerNodes().size());
@@ -248,6 +249,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         throw e;
                     }
                     controllers.put(node.id(), controller);
+                    System.out.println("DEBUG: created a controller" + node.id());
                     controller.socketServerFirstBoundPortFuture().whenComplete((port, e) -> {
                         if (e != null) {
                             connectFutureManager.fail(e);
@@ -274,6 +276,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         if (broker != null) broker.shutdown();
                         throw e;
                     }
+                    System.out.println("DEBUG: created a broker" + node.id());
                     brokers.put(node.id(), broker);
                 }
             } catch (Exception e) {
@@ -412,21 +415,35 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public void startup() throws ExecutionException, InterruptedException {
-        List<Future<?>> futures = new ArrayList<>();
+        Map<Integer, Future<?>> controllerFutures = new HashMap<>();
+        Map<Integer, Future<?>> brokerFutures = new HashMap<>();
         try {
             // Note the startup order here is chosen to be consistent with
             // `KafkaRaftServer`. See comments in that class for an explanation.
+            System.out.println("DEBUG: starting controllers " + controllers.keySet());
             for (ControllerServer controller : controllers.values()) {
-                futures.add(executorService.submit(controller::startup));
+                controllerFutures.put(controller.config().nodeId(), executorService.submit(controller::startup));
             }
+            // Ensure that the controllers have started successfully before starting brokers
+            for (Entry<Integer, Future<?>> future: controllerFutures.entrySet()) {
+                System.out.println("DEBUG: getting controller future for " + future.getKey());
+                future.getValue().get();
+            }
+
+            System.out.println("DEBUG: starting brokers " + brokers.keySet());
             for (BrokerServer broker : brokers.values()) {
-                futures.add(executorService.submit(broker::startup));
+                brokerFutures.put(broker.config().nodeId(), executorService.submit(broker::startup));
             }
-            for (Future<?> future: futures) {
-                future.get();
+            for (Entry<Integer, Future<?>> future: brokerFutures.entrySet()) {
+                System.out.println("DEBUG: getting broker future for " + future.getKey());
+                future.getValue().get();
             }
         } catch (Exception e) {
-            for (Future<?> future: futures) {
+            for (Future<?> future: controllerFutures.values()) {
+                future.cancel(true);
+            }
+
+            for (Future<?> future: controllerFutures.values()) {
                 future.cancel(true);
             }
             throw e;
