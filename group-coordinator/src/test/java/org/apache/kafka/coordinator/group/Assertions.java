@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.opentest4j.AssertionFailedError;
@@ -211,8 +212,10 @@ public class Assertions {
             GroupMetadataValue expectedValue = (GroupMetadataValue) expected.message().duplicate();
             GroupMetadataValue actualValue = (GroupMetadataValue) actual.message().duplicate();
 
-            expectedValue.members().sort(Comparator.comparing(GroupMetadataValue.MemberMetadata::memberId));
-            actualValue.members().sort(Comparator.comparing(GroupMetadataValue.MemberMetadata::memberId));
+            Comparator<GroupMetadataValue.MemberMetadata> comparator =
+                Comparator.comparing(GroupMetadataValue.MemberMetadata::memberId);
+            expectedValue.members().sort(comparator);
+            actualValue.members().sort(comparator);
             try {
                 Arrays.asList(expectedValue, actualValue).forEach(value ->
                     value.members().forEach(memberMetadata -> {
@@ -243,6 +246,18 @@ public class Assertions {
             } catch (SchemaException ex) {
                 fail("Failed deserialization: " + ex.getMessage());
             }
+            assertEquals(expectedValue, actualValue);
+        } else if (actual.message() instanceof ConsumerGroupTargetAssignmentMemberValue) {
+            ConsumerGroupTargetAssignmentMemberValue expectedValue =
+                (ConsumerGroupTargetAssignmentMemberValue) expected.message().duplicate();
+            ConsumerGroupTargetAssignmentMemberValue actualValue =
+                (ConsumerGroupTargetAssignmentMemberValue) actual.message().duplicate();
+
+            Comparator<ConsumerGroupTargetAssignmentMemberValue.TopicPartition> comparator =
+                Comparator.comparing(ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId);
+            expectedValue.topicPartitions().sort(comparator);
+            actualValue.topicPartitions().sort(comparator);
+
             assertEquals(expectedValue, actualValue);
         } else {
             assertEquals(expected.message(), actual.message());

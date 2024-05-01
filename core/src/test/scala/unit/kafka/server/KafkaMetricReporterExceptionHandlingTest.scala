@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ListGroupsRequest, ListGroupsResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.config.QuotaConfigs
+import org.apache.kafka.server.metrics.MetricConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -40,7 +41,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
   override def brokerCount: Int = 1
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.MetricReporterClassesProp, classOf[KafkaMetricReporterExceptionHandlingTest.BadReporter].getName + "," + classOf[KafkaMetricReporterExceptionHandlingTest.GoodReporter].getName)
+    properties.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, classOf[KafkaMetricReporterExceptionHandlingTest.BadReporter].getName + "," + classOf[KafkaMetricReporterExceptionHandlingTest.GoodReporter].getName)
   }
 
   @BeforeEach
