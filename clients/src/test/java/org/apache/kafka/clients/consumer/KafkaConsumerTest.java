@@ -1277,7 +1277,8 @@ public class KafkaConsumerTest {
             Thread.currentThread().interrupt();
             assertThrows(InterruptException.class, () -> consumer.poll(Duration.ZERO));
         } finally {
-            // clear interrupted state again since this thread may be reused by JUnit
+            // ensure this test doesn't exit with the thread still in an interrupted state
+            // so that it cannot interfere with subsequent tests since this thread may be reused by JUnit
             Thread.interrupted();
         }
     }
