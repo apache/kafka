@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Timer;
 import java.time.Duration;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeoutException;
 
 import static java.util.Objects.requireNonNull;
