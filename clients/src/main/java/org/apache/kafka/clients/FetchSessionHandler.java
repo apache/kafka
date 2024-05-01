@@ -27,18 +27,18 @@ import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Collections;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.Collection;
-import java.util.Set;
-import java.util.LinkedHashSet;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;

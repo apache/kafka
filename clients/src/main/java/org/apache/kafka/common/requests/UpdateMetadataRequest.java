@@ -32,11 +32,11 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.FlattenedIterator;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Collections;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;

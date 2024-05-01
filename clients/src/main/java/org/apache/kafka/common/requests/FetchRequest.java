@@ -30,14 +30,13 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.Objects;
-import java.util.ArrayList;
-
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class FetchRequest extends AbstractRequest {

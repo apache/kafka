@@ -49,16 +49,15 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.TreeSet;
-import java.util.Iterator;
-
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -66,6 +65,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+
 
 public class RoundTripWorker implements TaskWorker {
     private static final int THROTTLE_PERIOD_MS = 100;

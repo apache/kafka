@@ -21,11 +21,12 @@ import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclOperation;
-import java.util.Collections;
-import java.util.Collection;
-import java.util.Set;
+
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**

@@ -20,10 +20,11 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclOperation;
+
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.Collections;
 import java.util.stream.Collectors;
 
 /**
