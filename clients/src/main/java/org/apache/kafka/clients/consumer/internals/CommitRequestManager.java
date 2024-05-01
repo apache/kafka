@@ -507,11 +507,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         // Retry the same fetch request while it fails with RetriableException and the retry timeout hasn't expired.
         currentResult.whenComplete((res, error) -> {
-            boolean inflightRemoved = pendingRequests.inflightOffsetFetches.remove(fetchRequest);
-            if (!inflightRemoved) {
-                log.warn("A duplicated, inflight, request was identified, but unable to find it in the " +
-                    "outbound buffer:" + fetchRequest);
-            }
+            pendingRequests.maybeRemoveInflightOffsetFetch(fetchRequest, error);
             if (error == null) {
                 result.complete(res);
             } else {
@@ -1145,12 +1141,40 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
 
             if (dupe.isPresent() || inflight.isPresent()) {
-                log.info("Duplicated OffsetFetchRequest: " + request.requestedPartitions);
-                dupe.orElseGet(inflight::get).chainFuture(request.future);
+                log.info("Duplicate OffsetFetchRequest found for partitions: {}", request.requestedPartitions);
+                OffsetFetchRequestState originalRequest = dupe.orElseGet(inflight::get);
+                originalRequest.chainFuture(request.future);
             } else {
                 this.unsentOffsetFetches.add(request);
             }
             return request.future;
+        }
+
+        /**
+         * Remove the {@link OffsetFetchRequestState request} from the inflight requests queue <em>iff</em>
+         * both of the following are true:
+         *
+         * <ul>
+         *     <li>The request completed with a <code>null</code> {@link Throwable error}</li>
+         *     <li>The request is not {@link OffsetFetchRequestState#isExpired expired}</li>
+         * </ul>
+         *
+         * <p/>
+         *
+         * In some cases, even though an offset fetch request may complete without an error, <em>technically</em>
+         * the request took longer than the user's provided timeout. In that case, the application thread will
+         * still receive a timeout error, and will shortly try to fetch these offsets again. Keeping the result
+         * of the <em>current</em> attempt will enable the </em><em>next</em> attempt to use that result and return
+         * almost immediately.
+         */
+        private void maybeRemoveInflightOffsetFetch(OffsetFetchRequestState fetchRequest, Throwable error) {
+            if (error == null && !fetchRequest.isExpired) {
+                boolean inflightRemoved = inflightOffsetFetches.remove(fetchRequest);
+                if (!inflightRemoved) {
+                    log.warn("A duplicated, inflight, request was identified, but unable to find it in the " +
+                            "outbound buffer:" + fetchRequest);
+                }
+            }
         }
 
         /**
