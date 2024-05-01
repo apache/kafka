@@ -11,15 +11,15 @@ import java.util.*;
 
 
 public class MetadataTestTopic {
-    private String topic1 = "topic1";
-    private String topic2 = "topic2";
-    private Set<String> internalTopics;
-    private Map<String, Uuid> topicIds;
-    private Map<String, Integer> topicPartitionCounts;
-    private TopicPartition tp11;
-    private TopicPartition tp12;
-    private TopicPartition tp21;
-    private RequestTestUtils.PartitionMetadataSupplier metadataSupplier;
+    private final String topic1 = "topic1";
+    private final String topic2 = "topic2";
+    private final Set<String> internalTopics;
+    private final Map<String, Uuid> topicIds;
+    private final Map<String, Integer> topicPartitionCounts;
+    private final TopicPartition tp11;
+    private final TopicPartition tp12;
+    private final TopicPartition tp21;
+    private final RequestTestUtils.PartitionMetadataSupplier metadataSupplier;
     private MetadataResponse.PartitionMetadata part11Metadata;
     private MetadataResponse.PartitionMetadata part12Metadata;
     private MetadataResponse.PartitionMetadata part2Metadata;
@@ -72,7 +72,6 @@ public class MetadataTestTopic {
         this.tp12 = tp12;
         this.tp21 = tp21;
         this.metadataSupplier = metadataSupplier;
-        this.topicPartitionCounts = topicPartitionCounts;
         this.internalTopics = internalTopics;
     }
     public String getTopic1() {
@@ -82,7 +81,7 @@ public class MetadataTestTopic {
         return topic2;
     }
     public Set<String> getInternalTopics() {
-        return internalTopics
+        return internalTopics;
     }
     public Map<String, Uuid> getTopicIds() {
         return topicIds;
@@ -92,9 +91,6 @@ public class MetadataTestTopic {
     }
     public TopicPartition getTp11() {
         return tp11;
-    }
-    public TopicPartition getTp12() {
-        return tp12;
     }
     public TopicPartition getTp21() {
         return tp21;
