@@ -1750,7 +1750,7 @@ class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerReconfigurat
   }
 
   private def alterConfigsUsingConfigCommand(props: Properties): Unit = {
-    val propsFile = TestUtils.tempPropertiesFile(clientProps(SecurityProtocol.SSL))
+    val propsFile = tempPropertiesFile(clientProps(SecurityProtocol.SSL))
 
     servers.foreach { server =>
       val args = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, new ListenerName(SecureInternal)),
@@ -1761,6 +1761,8 @@ class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerReconfigurat
       ConfigCommand.main(args)
     }
   }
+
+  private def tempPropertiesFile(properties: Properties): File = TestUtils.tempPropertiesFile(properties.asScala)
 
   private abstract class ClientBuilder[T]() {
     protected var _bootstrapServers: Option[String] = None
