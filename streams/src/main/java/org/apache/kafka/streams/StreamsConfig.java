@@ -148,7 +148,7 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  */
 public class StreamsConfig extends AbstractConfig {
 
-    private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
+    private static final java.util.logging.Logger log = LoggerFactory.getLogger(StreamsConfig.class);
 
     private static final ConfigDef CONFIG;
 
@@ -1202,16 +1202,47 @@ public class StreamsConfig extends AbstractConfig {
         PRODUCER_EOS_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
 
+    private static final Map<String, Object> KS_DEFAULT_CONSUMER_CONFIGS;
+    static {
+        final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>();
+        tempConsumerDefaultOverrides.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000");
+        tempConsumerDefaultOverrides.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        tempConsumerDefaultOverrides.put("internal.leave.group.on.close", false);
+
+        KS_CONTROLLED_CONSUMER_CONFIGS = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
+    }
+
+    private static final Map<String, Object> KS_CONTROLLED_CONSUMER_CONFIGS;
+    static {
+        final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>();
+        tempConsumerDefaultOverrides.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        tempConsumerDefaultOverrides.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
+
+        KS_CONTROLLED_CONSUMER_CONFIGS = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
+    }
+
+    private static final Map<String, Object> KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED;
+    static {
+        final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>(KS_CONTROLLED_CONSUMER_CONFIGS);
+
+        tempConsumerDefaultOverrides.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED.toString());
+
+        KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
+    }
+
+    //TODO: Delete this
     private static final Map<String, Object> CONSUMER_DEFAULT_OVERRIDES;
     static {
         final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>();
         tempConsumerDefaultOverrides.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000");
         tempConsumerDefaultOverrides.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         tempConsumerDefaultOverrides.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        tempConsumerDefaultOverrides.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
         tempConsumerDefaultOverrides.put("internal.leave.group.on.close", false);
         CONSUMER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
+    //TODO: Delete this
     private static final Map<String, Object> CONSUMER_EOS_OVERRIDES;
     static {
         final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>(CONSUMER_DEFAULT_OVERRIDES);
@@ -1934,5 +1965,56 @@ public class StreamsConfig extends AbstractConfig {
 
     public static void main(final String[] args) {
         System.out.println(CONFIG.toHtml(4, config -> "streamsconfigs_" + config));
+    }
+
+    private Map<String, Object> getCommonConsumerConfigs() {
+        final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
+
+        // Create a consumer config map 
+        final Map<String, Object> consumerProps = new HashMap<>();
+        if (StreamsConfigUtils.processingMode(this) == StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2) {
+            consumerProps.put("internal.throw.on.fetch.stable.offset.unsupported", true);
+        }
+        
+        consumerProps.putAll(getClientCustomProps());
+        consumerProps.putAll(clientProvidedProps);
+
+        // bootstrap.servers should be from StreamsConfig
+        overwritePropertyMap(
+            consumerProps,
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, 
+            originals().get(BOOTSTRAP_SERVERS_CONFIG),
+            "consumer"
+        );
+
+        return consumerProps;
+    }
+
+    private void overwritePropertyMap(final Map<String, Object> props, final String key, final Object value, final String config) {
+        final String overwritePropertyLogMessage = "Unexpected user-specified %s config: %s found. User setting (%s) will be ignored and the Streams default setting (%s) will be used";
+        
+        if (props.containsKey(key)) {
+            log.warn(String.format(overwritePropertyLogMessage, config, key, props.get(key), value));
+        }
+        props.put(key, value);
+    }
+
+    // TODO: Only override the ones that need to be.
+    // Some values can be overriden but their defaults are different, so if set let them pass
+    // if not then set the default value
+    private void validateConsumerPropertyMap(final Map<String, Object> props){
+        if (eosEnabled){
+            // Iterate over CONSUMER_EOS_OVERRIDES
+            for (Map.Entry<String, Object> entry : CONSUMER_EOS_OVERRIDES.entrySet()) {
+                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
+            }
+
+            verifyMaxInFlightRequestPerConnection(props.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
+        } else {
+            // Iterate over CONSUMER_DEFAULT_OVERRIDES
+            for (Map.Entry<String, Object> entry : CONSUMER_DEFAULT_OVERRIDES.entrySet()) {
+                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
+            }
+        }   
     }
 }
