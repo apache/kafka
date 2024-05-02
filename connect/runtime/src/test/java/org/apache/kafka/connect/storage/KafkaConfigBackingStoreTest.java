@@ -1261,22 +1261,6 @@ public class KafkaConfigBackingStoreTest {
         PowerMock.verifyAll();
     }
 
-    @Test
-    public void testConsumerPropertiesNotInsertedByDefaultWithoutExactlyOnceSourceEnabled() throws Exception {
-        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "preparing");
-        props.remove(ISOLATION_LEVEL_CONFIG);
-        createStore();
-
-        expectConfigure();
-        PowerMock.replayAll();
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-
-        assertNull(capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG));
-
-        PowerMock.verifyAll();
-    }
-
     private void expectConfigure() throws Exception {
         PowerMock.expectPrivate(configStorage, "createKafkaBasedLog",
                 EasyMock.capture(capturedTopic), EasyMock.capture(capturedProducerProps),
