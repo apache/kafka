@@ -788,12 +788,12 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
         expectConfigValidation(SourceSink.SOURCE, originalConnConfig, patchedConnConfig);
 
-        expectConnectorStartingWithoutTasks(originalConnConfig);
+        expectConnectorStartingWithoutTasks(originalConnConfig, SourceSink.SOURCE);
 
         herder.putConnectorConfig(CONNECTOR_NAME, originalConnConfig, false, createCallback);
         createCallback.get(1000L, TimeUnit.SECONDS);
 
-        expectConnectorStartingWithoutTasks(patchedConnConfig);
+        expectConnectorStartingWithoutTasks(patchedConnConfig, SourceSink.SOURCE);
 
         FutureCallback<Herder.Created<ConnectorInfo>> patchCallback = new FutureCallback<>();
         herder.patchConnectorConfig(CONNECTOR_NAME, connConfigPatch, patchCallback);
@@ -809,7 +809,7 @@ public class StandaloneHerderTest {
         assertEquals(patchedConnConfig, returnedConfig2);
     }
 
-    private void expectConnectorStartingWithoutTasks(Map<String, String> config) {
+    private void expectConnectorStartingWithoutTasks(Map<String, String> config, SourceSink sourceSink) {
         doNothing().when(worker).stopAndAwaitConnector(CONNECTOR_NAME);
         final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
@@ -817,7 +817,10 @@ public class StandaloneHerderTest {
             return true;
         }).when(worker).startConnector(eq(CONNECTOR_NAME), any(Map.class), any(),
                 eq(herder), eq(TargetState.STARTED), onStart.capture());
-        when(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, config, true)))
+        ConnectorConfig connConfig = sourceSink == SourceSink.SOURCE ?
+                new SourceConnectorConfig(plugins, config, true) :
+                new SinkConnectorConfig(plugins, config);
+        when(worker.connectorTaskConfigs(CONNECTOR_NAME, connConfig))
                 .thenReturn(emptyList());
     }
 
