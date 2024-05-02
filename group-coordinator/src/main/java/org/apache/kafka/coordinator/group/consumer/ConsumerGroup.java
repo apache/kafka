@@ -951,7 +951,7 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember newMember
     ) {
         maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
-        subscriptionType.set(subscriptionType(subscribedTopicNames));
+        subscriptionType.set(subscriptionType(subscribedTopicNames, members.size()));
     }
 
     /**
@@ -1009,17 +1009,15 @@ public class ConsumerGroup implements Group {
      *         otherwise, {@link SubscriptionType#HETEROGENEOUS}.
      */
     public static SubscriptionType subscriptionType(
-        Map<String, Integer> subscribedTopicNames
+        Map<String, Integer> subscribedTopicNames,
+        int numberOfMembers
     ) {
         if (subscribedTopicNames.isEmpty()) {
             return HOMOGENEOUS;
         }
 
-        // Take the subscriber count of the first topic as the reference.
-        int referenceCount = subscribedTopicNames.values().iterator().next();
-
         for (int subscriberCount : subscribedTopicNames.values()) {
-            if (subscriberCount != referenceCount) {
+            if (subscriberCount != numberOfMembers) {
                 return HETEROGENEOUS;
             }
         }
