@@ -60,9 +60,6 @@ import static org.apache.kafka.storage.internals.log.LogStartOffsetIncrementReas
 /**
  *  This class defines the APIs and implementation needed to handle any state transitions related to tiering
  *
- *  Currently, the tier state machine follows a synchronous execution, and we only need to start the machine.
- *  There is no need to advance the state.
- *
  *  When started, the tier state machine will fetch the local log start offset of the
  *  leader and then build the follower's remote log aux state until the leader's
  *  local log start offset.
