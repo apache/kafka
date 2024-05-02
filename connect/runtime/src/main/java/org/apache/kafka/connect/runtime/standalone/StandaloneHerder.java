@@ -248,7 +248,7 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
-    public void patchConnectorConfig(String connName, Map<String, String> configPatch, Callback<Created<ConnectorInfo>> callback) {
+    public synchronized void patchConnectorConfig(String connName, Map<String, String> configPatch, Callback<Created<ConnectorInfo>> callback) {
         try {
             ConnectorInfo connectorInfo = connectorInfo(connName);
             if (connectorInfo == null) {
