@@ -1148,6 +1148,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     public void patchConnectorConfig(String connName, Map<String, String> configPatch, Callback<Created<ConnectorInfo>> callback) {
         log.trace("Submitting connector config patch request {}", connName);
         addRequest(() -> {
+            // This reduces (but not completely eliminates) the chance for race conditions.
+            if (!isLeader()) {
+                callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+                return null;
+            }
+
             ConnectorInfo connectorInfo = connectorInfo(connName);
             if (connectorInfo == null) {
                 callback.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);

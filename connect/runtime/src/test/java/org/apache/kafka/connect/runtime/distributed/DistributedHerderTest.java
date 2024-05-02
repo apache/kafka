@@ -2338,6 +2338,10 @@ public class DistributedHerderTest {
 
     @Test
     public void testPatchConnectorConfigNotFound() {
+        when(member.memberId()).thenReturn("leader");
+        expectRebalance(0, Collections.emptyList(), Collections.emptyList(), true);
+        when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
+
         ClusterConfigState clusterConfigState = new ClusterConfigState(
                 0,
                 null,
@@ -2360,6 +2364,38 @@ public class DistributedHerderTest {
         assertTrue(patchCallback.isDone());
         ExecutionException exception = assertThrows(ExecutionException.class, patchCallback::get);
         assertInstanceOf(NotFoundException.class, exception.getCause());
+    }
+
+    @Test
+    public void testPatchConnectorConfigNotALeader() {
+        when(member.memberId()).thenReturn("not-leader");
+
+        // The connector is pre-existing due to the mocks.
+        ClusterConfigState originalSnapshot = new ClusterConfigState(
+                1,
+                null,
+                Collections.singletonMap(CONN1, 0),
+                Collections.singletonMap(CONN1, CONN1_CONFIG),
+                Collections.singletonMap(CONN1, TargetState.STARTED),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
+                Collections.emptySet());
+        expectConfigRefreshAndSnapshot(originalSnapshot);
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+
+        // Patch the connector config.
+
+        expectMemberEnsureActive();
+        expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList(), false);
+
+        FutureCallback<Herder.Created<ConnectorInfo>> patchCallback = new FutureCallback<>();
+        herder.patchConnectorConfig(CONN1, new HashMap<>(), patchCallback);
+        herder.tick();
+        assertTrue(patchCallback.isDone());
+        ExecutionException fencingException = assertThrows(ExecutionException.class, patchCallback::get);
+        assertInstanceOf(ConnectException.class, fencingException.getCause());
     }
 
     @Test
