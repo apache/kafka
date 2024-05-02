@@ -786,7 +786,6 @@ public class StandaloneHerderTest {
         patchedConnConfig.put("foo3", "added");
 
         expectAdd(SourceSink.SOURCE);
-        Connector connectorMock = mock(SourceConnector.class);
         expectConfigValidation(SourceSink.SOURCE, originalConnConfig, patchedConnConfig);
 
         expectConnectorStartingWithoutTasks(originalConnConfig);
