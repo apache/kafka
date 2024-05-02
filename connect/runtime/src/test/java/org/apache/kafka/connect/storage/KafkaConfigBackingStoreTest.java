@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
@@ -65,7 +64,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
@@ -1219,25 +1217,6 @@ public class KafkaConfigBackingStoreTest {
         Map<String, Object> fencableProducerProperties = configStorage.fencableProducerProps(config);
         assertEquals("connect-cluster-" + groupId, fencableProducerProperties.get(TRANSACTIONAL_ID_CONFIG));
         assertEquals("true", fencableProducerProperties.get(ENABLE_IDEMPOTENCE_CONFIG));
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testConsumerPropertiesInsertedByDefaultWithExactlyOnceSourceEnabled() throws Exception {
-        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
-        props.remove(ISOLATION_LEVEL_CONFIG);
-        createStore();
-
-        expectConfigure();
-        PowerMock.replayAll();
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-
-        assertEquals(
-                IsolationLevel.READ_COMMITTED.toString(),
-                capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
-        );
 
         PowerMock.verifyAll();
     }
