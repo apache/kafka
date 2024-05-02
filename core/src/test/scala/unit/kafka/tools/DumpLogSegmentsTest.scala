@@ -423,16 +423,8 @@ class DumpLogSegmentsTest {
     // A valid key and value should work.
     assertEquals(
       (
-        Some(
-          new ConsumerGroupMetadataKey()
-            .setGroupId("group")
-            .toString
-        ),
-        Some(
-          new ConsumerGroupMetadataValue()
-            .setEpoch(10)
-            .toString
-        )
+        Some("{\"type\":\"3\",\"data\":{\"groupId\":\"group\"}}"),
+        Some("{\"version\":\"0\",\"data\":{\"epoch\":10}}")
       ),
       parser.parse(serializedRecord(
         new ApiMessageAndVersion(
@@ -451,14 +443,8 @@ class DumpLogSegmentsTest {
     // A valid key with a tombstone should work.
     assertEquals(
       (
-        Some(
-          new ConsumerGroupMetadataKey()
-            .setGroupId("group")
-            .toString
-        ),
-        Some(
-          "<DELETE>"
-        )
+        Some("{\"type\":\"3\",\"data\":{\"groupId\":\"group\"}}"),
+        Some("<DELETE>")
       ),
       parser.parse(serializedRecord(
         new ApiMessageAndVersion(
