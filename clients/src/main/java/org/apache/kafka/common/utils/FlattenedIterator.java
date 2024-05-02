@@ -33,7 +33,7 @@ public final class FlattenedIterator<O, I> extends AbstractIterator<I> {
     }
 
     @Override
-    public I makeNext() {
+    protected I makeNext() {
         while (innerIterator == null || !innerIterator.hasNext()) {
             if (outerIterator.hasNext())
                 innerIterator = innerIteratorFunction.apply(outerIterator.next());

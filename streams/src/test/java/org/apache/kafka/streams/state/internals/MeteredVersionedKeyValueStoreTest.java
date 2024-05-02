@@ -24,6 +24,7 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
@@ -31,6 +32,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -53,6 +55,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.MultiVersionedKeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -295,6 +298,18 @@ public class MeteredVersionedKeyValueStoreTest {
     public void shouldThrowOnIQv2KeyQuery() {
         assertThrows(UnsupportedOperationException.class, () -> store.query(mock(KeyQuery.class), null, null));
     }
+
+    @Test
+    public void shouldThrowOnMultiVersionedKeyQueryInvalidTimeRange() {
+        MultiVersionedKeyQuery<String, Object> query = MultiVersionedKeyQuery.withKey("key");
+        final Instant fromTime = Instant.now();
+        final Instant toTime = Instant.ofEpochMilli(fromTime.toEpochMilli() - 100);
+        query = query.fromTime(fromTime).toTime(toTime);
+        final MultiVersionedKeyQuery<String, Object> finalQuery = query;
+        final Exception exception = assertThrows(IllegalArgumentException.class, () -> store.query(finalQuery, null, null));
+        assertEquals("The `fromTime` timestamp must be smaller than the `toTime` timestamp.", exception.getMessage());
+    }
+
 
     @SuppressWarnings("unchecked")
     @Test

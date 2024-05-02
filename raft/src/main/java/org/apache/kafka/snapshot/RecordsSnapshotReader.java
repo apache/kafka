@@ -64,8 +64,13 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
             nextBatch.ifPresent(batch -> {
                 throw new IllegalStateException(
                     String.format(
-                        "nextBatch was present when last contained log timestamp was not present",
-                        batch
+                        "nextBatch was present when last contained log timestamp was not present: Batch(baseOffset=%d" +
+                        ", epoch=%d, appendTimestamp=%d, sizeInBytes=%d, lastOffset=%d)",
+                        batch.baseOffset(),
+                        batch.epoch(),
+                        batch.appendTimestamp(),
+                        batch.sizeInBytes(),
+                        batch.lastOffset()
                     )
                 );
             });

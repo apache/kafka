@@ -27,9 +27,7 @@ import org.apache.kafka.trogdor.task.TaskSpec;
 /**
  * The state which a worker is in on the Agent.
  */
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
-    include = JsonTypeInfo.As.PROPERTY,
-    property = "state")
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "state")
 @JsonSubTypes(value = {
     @JsonSubTypes.Type(value = WorkerReceiving.class, name = "RECEIVING"),
     @JsonSubTypes.Type(value = WorkerStarting.class, name = "STARTING"),

@@ -296,6 +296,7 @@ public class ConnectorTopicsIntegrationTest {
                 }
             }
         }
+        verifiableConsumer.close();
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {

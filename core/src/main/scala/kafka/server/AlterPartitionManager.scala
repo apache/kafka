@@ -34,6 +34,7 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.{AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.util.Scheduler
 
@@ -84,7 +85,7 @@ object AlterPartitionManager {
     threadNamePrefix: String,
     brokerEpochSupplier: () => Long,
   ): AlterPartitionManager = {
-    val channelManager = NodeToControllerChannelManager(
+    val channelManager = new NodeToControllerChannelManagerImpl(
       controllerNodeProvider,
       time = time,
       metrics = metrics,
@@ -298,7 +299,7 @@ class DefaultAlterPartitionManager(
     (new AlterPartitionRequest.Builder(message, canUseTopicIds), topicNamesByIds)
   }
 
-  def handleAlterPartitionResponse(
+  private def handleAlterPartitionResponse(
     requestHeader: RequestHeader,
     alterPartitionResp: AlterPartitionResponse,
     sentBrokerEpoch: Long,

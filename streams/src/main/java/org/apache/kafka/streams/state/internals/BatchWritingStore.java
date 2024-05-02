@@ -18,10 +18,10 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.rocksdb.RocksDBException;
-import org.rocksdb.WriteBatch;
+import org.rocksdb.WriteBatchInterface;
 
 public interface BatchWritingStore {
     void addToBatch(final KeyValue<byte[], byte[]> record,
-                    final WriteBatch batch) throws RocksDBException;
-    void write(final WriteBatch batch) throws RocksDBException;
+                    final WriteBatchInterface batch) throws RocksDBException;
+    void write(final WriteBatchInterface batch) throws RocksDBException;
 }

@@ -19,7 +19,6 @@ package org.apache.kafka.jmh.acl;
 
 import kafka.security.authorizer.AclAuthorizer;
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls;
-import kafka.security.authorizer.AclEntry;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
@@ -36,6 +35,7 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.security.authorizer.AclEntry;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.server.authorizer.Action;
@@ -81,7 +81,7 @@ public class AuthorizerBenchmark {
         ACL(AclAuthorizer::new),
         KRAFT(StandardAuthorizer::new);
 
-        private Supplier<Authorizer> supplier;
+        private final Supplier<Authorizer> supplier;
 
         AuthorizerType(Supplier<Authorizer> supplier) {
             this.supplier = supplier;
@@ -107,13 +107,12 @@ public class AuthorizerBenchmark {
     private final int hostPreCount = 1000;
     private final String resourceNamePrefix = "foo-bar35_resource-";
     private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
+    private final String authorizeByResourceTypeHostName = "127.0.0.2";
+    private final HashMap<ResourcePattern, AclAuthorizer.VersionedAcls> aclToUpdate = new HashMap<>();
     private Authorizer authorizer;
     private List<Action> actions = new ArrayList<>();
     private RequestContext authorizeContext;
     private RequestContext authorizeByResourceTypeContext;
-    private String authorizeByResourceTypeHostName = "127.0.0.2";
-
-    private HashMap<ResourcePattern, AclAuthorizer.VersionedAcls> aclToUpdate = new HashMap<>();
 
     Random rand = new Random(System.currentTimeMillis());
     double eps = 1e-9;

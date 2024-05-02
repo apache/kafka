@@ -59,7 +59,7 @@ import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
  * Manages DelegationTokens.
  */
 public class DelegationTokenControlManager {
-    private Time time = Time.SYSTEM;
+    private final Time time = Time.SYSTEM;
 
     static class Builder {
         private LogContext logContext = null;
@@ -193,7 +193,7 @@ public class DelegationTokenControlManager {
 
         String tokenId = Uuid.randomUuid().toString();
 
-        List<KafkaPrincipal> renewers = new ArrayList<KafkaPrincipal>();
+        List<KafkaPrincipal> renewers = new ArrayList<>();
         for (CreatableRenewers renewer : requestData.renewers()) {
             if (renewer.principalType().equals(KafkaPrincipal.USER_TYPE)) {
                 renewers.add(new KafkaPrincipal(renewer.principalType(), renewer.principalName()));
@@ -335,7 +335,7 @@ public class DelegationTokenControlManager {
     // Periodic call to remove expired DelegationTokens
     public List<ApiMessageAndVersion> sweepExpiredDelegationTokens() {
         long now = time.milliseconds();
-        List<ApiMessageAndVersion> records = new ArrayList<ApiMessageAndVersion>();
+        List<ApiMessageAndVersion> records = new ArrayList<>();
 
         for (TokenInformation oldTokenInformation: tokenCache.tokens()) {
             if ((oldTokenInformation.maxTimestamp() < now) ||

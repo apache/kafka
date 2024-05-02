@@ -24,7 +24,6 @@ import java.util.concurrent.{Executors, TimeUnit}
 import javax.security.auth.Subject
 import javax.security.auth.callback.CallbackHandler
 import kafka.api.SaslSetup
-import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.utils.JaasTestUtils.{JaasModule, JaasSection}
 import kafka.utils.{JaasTestUtils, TestUtils}
@@ -41,6 +40,7 @@ import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.TOPIC
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
+import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.apache.zookeeper.server.auth.DigestLoginModule
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -91,6 +91,7 @@ class AclAuthorizerWithZkSaslTest extends QuorumTestHarness with SaslSetup {
     aclAuthorizer.close()
     aclAuthorizer2.close()
     super.tearDown()
+    closeSasl()
   }
 
   @Test
@@ -115,8 +116,8 @@ class AclAuthorizerWithZkSaslTest extends QuorumTestHarness with SaslSetup {
   }
 
   private def verifyAclUpdate(): Unit = {
-    val allowReadAcl = new AccessControlEntry(principal.toString, WildcardHost, READ, ALLOW)
-    val allowWriteAcl = new AccessControlEntry(principal.toString, WildcardHost, WRITE, ALLOW)
+    val allowReadAcl = new AccessControlEntry(principal.toString, WILDCARD_HOST, READ, ALLOW)
+    val allowWriteAcl = new AccessControlEntry(principal.toString, WILDCARD_HOST, WRITE, ALLOW)
     val acls = Set(allowReadAcl, allowWriteAcl)
 
     TestUtils.retry(maxWaitMs = 15000) {

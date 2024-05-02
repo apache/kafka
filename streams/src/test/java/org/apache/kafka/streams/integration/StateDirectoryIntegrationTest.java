@@ -78,7 +78,7 @@ public class StateDirectoryIntegrationTest {
 
     @Test
     public void testCleanUpStateDirIfEmpty() throws InterruptedException {
-        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+        final String uniqueTestName = safeUniqueTestName(testName);
 
         // Create Topic
         final String input = uniqueTestName + "-input";
@@ -184,7 +184,7 @@ public class StateDirectoryIntegrationTest {
 
     @Test
     public void testNotCleanUpStateDirIfNotEmpty() throws InterruptedException {
-        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+        final String uniqueTestName = safeUniqueTestName(testName);
 
         // Create Topic
         final String input = uniqueTestName + "-input";

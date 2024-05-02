@@ -111,7 +111,7 @@ public class AdminUtils {
      * brokers, it guarantees that the replica distribution is even across brokers and racks.
      * </p>
      * @return a Map from partition id to replica ids
-     * @throws AdminOperationException If rack information is supplied but it is incomplete, or if it is not possible to
+     * @throws AdminOperationException If rack information is supplied, but it is incomplete, or if it is not possible to
      *                                 assign each replica to a unique rack.
      *
      */
@@ -214,13 +214,13 @@ public class AdminUtils {
     /**
      * Given broker and rack information, returns a list of brokers alternated by the rack. Assume
      * this is the rack and its brokers:
-     *
+     * <pre>
      * rack1: 0, 1, 2
      * rack2: 3, 4, 5
      * rack3: 6, 7, 8
-     *
+     * </pre>
      * This API would return the list of 0, 3, 6, 1, 4, 7, 2, 5, 8
-     *
+     * <br>
      * This is essential to make sure that the assignReplicasToBrokers API can use such list and
      * assign replicas to brokers in a simple round-robin fashion, while ensuring an even
      * distribution of leader and replica counts on each broker and that replicas are

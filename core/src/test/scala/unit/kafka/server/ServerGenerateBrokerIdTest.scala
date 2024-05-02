@@ -16,17 +16,16 @@
   */
 package kafka.server
 
-import java.util.Properties
-
-import scala.collection.Seq
-
-import kafka.server.QuorumTestHarness
 import kafka.utils.TestUtils
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
-import org.junit.jupiter.api.Assertions._
-import java.io.File
-
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.zookeeper.KeeperException.NodeExistsException
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+
+import java.io.File
+import java.util.{OptionalInt, Properties}
+import scala.collection.Seq
 
 class ServerGenerateBrokerIdTest extends QuorumTestHarness {
   var props1: Properties = _
@@ -57,7 +56,7 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
     server1.shutdown()
     assertTrue(verifyBrokerMetadata(config1.logDirs, 1001))
     // restart the server check to see if it uses the brokerId generated previously
-    server1 = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
+    server1 = createServer(config1, threadNamePrefix = Option(this.getClass.getName))
     servers = Seq(server1)
     assertEquals(server1.config.brokerId, 1001)
     server1.shutdown()
@@ -92,7 +91,7 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
     // Set reserve broker ids to cause collision and ensure disabling broker id generation ignores the setting
     props3.put(KafkaConfig.MaxReservedBrokerIdProp, "0")
     val config3 = KafkaConfig.fromProps(props3)
-    val server3 = TestUtils.createServer(config3, threadNamePrefix = Option(this.getClass.getName))
+    val server3 = createServer(config3, threadNamePrefix = Option(this.getClass.getName))
     servers = Seq(server3)
     assertEquals(server3.config.brokerId, 3)
     server3.shutdown()
@@ -132,11 +131,7 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
     servers = Seq(server1)
     server1.shutdown()
     server1 = new KafkaServer(config2, threadNamePrefix = Option(this.getClass.getName)) // user specified broker id
-    try {
-      server1.startup()
-    } catch {
-      case _: kafka.common.InconsistentBrokerIdException => //success
-    }
+    server1.startup()
     server1.shutdown()
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
@@ -146,7 +141,7 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
     // Start a good server
     val propsA = TestUtils.createBrokerConfig(1, zkConnect)
     val configA = KafkaConfig.fromProps(propsA)
-    val serverA = TestUtils.createServer(configA, threadNamePrefix = Option(this.getClass.getName))
+    val serverA = createServer(configA, threadNamePrefix = Option(this.getClass.getName))
 
     // Start a server that collides on the broker id
     val propsB = TestUtils.createBrokerConfig(1, zkConnect)
@@ -155,38 +150,42 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
     assertThrows(classOf[NodeExistsException], () => serverB.startup())
     servers = Seq(serverA)
 
-    // verify no broker metadata was written
-    serverB.config.logDirs.foreach { logDir =>
-      val brokerMetaFile = new File(logDir + File.separator + KafkaServer.brokerMetaPropsFile)
-      assertFalse(brokerMetaFile.exists())
-    }
-
     // adjust the broker config and start again
     propsB.setProperty(KafkaConfig.BrokerIdProp, "2")
-    val newConfigB = KafkaConfig.fromProps(propsB)
-    val newServerB = TestUtils.createServer(newConfigB, threadNamePrefix = Option(this.getClass.getName))
-    servers = Seq(serverA, newServerB)
+    val serverB2 = new KafkaServer(KafkaConfig.fromProps(propsB),
+      threadNamePrefix = Option(this.getClass.getName))
+    val startupException = assertThrows(classOf[RuntimeException], () => serverB2.startup())
+    assertTrue(startupException.getMessage.startsWith("Stored node id 1 doesn't match previous node id 2"),
+      "Unexpected exception message " + startupException.getMessage)
+    serverB2.config.logDirs.foreach(logDir => Utils.delete(new File(logDir)))
+    propsB.setProperty(KafkaConfig.BrokerIdProp, "3")
+    val serverB3 = new KafkaServer(KafkaConfig.fromProps(propsB),
+      threadNamePrefix = Option(this.getClass.getName))
+    serverB3.startup()
+    servers = Seq(serverA, serverB3)
 
     serverA.shutdown()
-    newServerB.shutdown()
+    serverB3.shutdown()
 
     // verify correct broker metadata was written
     assertTrue(verifyBrokerMetadata(serverA.config.logDirs, 1))
-    assertTrue(verifyBrokerMetadata(newServerB.config.logDirs, 2))
+    assertTrue(verifyBrokerMetadata(serverB3.config.logDirs, 3))
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   def verifyBrokerMetadata(logDirs: Seq[String], brokerId: Int): Boolean = {
     for (logDir <- logDirs) {
-      val brokerMetadataOpt = new BrokerMetadataCheckpoint(
-        new File(logDir + File.separator + KafkaServer.brokerMetaPropsFile)).read()
-      brokerMetadataOpt match {
-        case Some(properties) =>
-          val brokerMetadata = new RawMetaProperties(properties)
-          if (brokerMetadata.brokerId.exists(_ != brokerId)) return false
-        case _ => return false
+      val properties = PropertiesUtils.readPropertiesFile(
+        new File(logDir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath)
+      val metaProps = new MetaProperties.Builder(properties).build()
+      if (!metaProps.nodeId().equals(OptionalInt.of(brokerId))) {
+        return false
       }
     }
     true
+  }
+
+  private def createServer(config: KafkaConfig, threadNamePrefix: Option[String]): KafkaServer = {
+    TestUtils.createServer(config, Time.SYSTEM, threadNamePrefix)
   }
 }

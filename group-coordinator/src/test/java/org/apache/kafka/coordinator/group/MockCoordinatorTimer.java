@@ -108,6 +108,7 @@ public class MockCoordinatorTimer<T, U> implements CoordinatorTimer<T, U> {
         long delay,
         TimeUnit unit,
         boolean retry,
+        long retryBackoff,
         TimeoutOperation<T, U> operation
     ) {
         cancel(key);
@@ -116,6 +117,17 @@ public class MockCoordinatorTimer<T, U> implements CoordinatorTimer<T, U> {
         ScheduledTimeout<T, U> timeout = new ScheduledTimeout<>(key, deadlineMs, operation);
         timeoutQueue.add(timeout);
         timeoutMap.put(key, timeout);
+    }
+
+    @Override
+    public void schedule(
+        String key,
+        long delay,
+        TimeUnit unit,
+        boolean retry,
+        TimeoutOperation<T, U> operation
+    ) {
+        schedule(key, delay, unit, retry, 500L, operation);
     }
 
     /**

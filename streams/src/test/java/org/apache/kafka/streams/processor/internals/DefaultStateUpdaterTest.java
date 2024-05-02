@@ -61,6 +61,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -104,7 +105,7 @@ class DefaultStateUpdaterTest {
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
     private final TopologyMetadata topologyMetadata = unnamedTopology().build();
     private DefaultStateUpdater stateUpdater =
-        new DefaultStateUpdater("test-state-updater", metrics, config, changelogReader, topologyMetadata, time);
+        new DefaultStateUpdater("test-state-updater", metrics, config, null, changelogReader, topologyMetadata, time);
 
     @AfterEach
     public void tearDown() {
@@ -162,7 +163,7 @@ class DefaultStateUpdaterTest {
     @Test
     public void shouldRemoveUpdatingTasksOnShutdown() throws Exception {
         stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
-        stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, new StreamsConfig(configProps(Integer.MAX_VALUE)), changelogReader, topologyMetadata, time);
+        stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, new StreamsConfig(configProps(Integer.MAX_VALUE)), null, changelogReader, topologyMetadata, time);
         final StreamTask activeTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
@@ -1397,7 +1398,7 @@ class DefaultStateUpdaterTest {
     public void shouldNotAutoCheckpointTasksIfIntervalNotElapsed() {
         // we need to use a non auto-ticking timer here to control how much time elapsed exactly
         final Time time = new MockTime();
-        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, config, changelogReader, topologyMetadata, time);
+        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, config, null, changelogReader, topologyMetadata, time);
         try {
             final StreamTask task1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
             final StreamTask task2 = statefulTask(TASK_0_2, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
@@ -1676,7 +1677,7 @@ class DefaultStateUpdaterTest {
         final Set<Task> tasks = stateUpdater.getTasks();
 
         assertEquals(expectedActiveTasks.size() + expectedStandbyTasks.size(), tasks.size());
-        tasks.forEach(task -> assertTrue(task instanceof ReadOnlyTask));
+        tasks.forEach(task -> assertInstanceOf(ReadOnlyTask.class, task));
         final Set<TaskId> actualTaskIds = tasks.stream().map(Task::id).collect(Collectors.toSet());
         final Set<Task> expectedTasks = new HashSet<>(expectedActiveTasks);
         expectedTasks.addAll(expectedStandbyTasks);

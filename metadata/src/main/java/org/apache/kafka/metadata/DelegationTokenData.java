@@ -33,7 +33,7 @@ import java.util.Objects;
  */
 public final class DelegationTokenData {
 
-    private TokenInformation tokenInformation;
+    private final TokenInformation tokenInformation;
 
     public static DelegationTokenData fromRecord(DelegationTokenRecord record) {
         List<KafkaPrincipal> renewers = new ArrayList<>();
@@ -62,7 +62,7 @@ public final class DelegationTokenData {
         return new DelegationTokenRecord()
             .setOwner(tokenInformation.ownerAsString())
             .setRequester(tokenInformation.tokenRequesterAsString())
-            .setRenewers(new ArrayList<String>(tokenInformation.renewersAsString()))
+            .setRenewers(new ArrayList<>(tokenInformation.renewersAsString()))
             .setIssueTimestamp(tokenInformation.issueTimestamp())
             .setMaxTimestamp(tokenInformation.maxTimestamp())
             .setExpirationTimestamp(tokenInformation.expiryTimestamp())

@@ -153,9 +153,7 @@ public class FollowerState implements EpochState {
     }
 
     public void setFetchingSnapshot(Optional<RawSnapshotWriter> newSnapshot) {
-        if (fetchingSnapshot.isPresent()) {
-            fetchingSnapshot.get().close();
-        }
+        fetchingSnapshot.ifPresent(RawSnapshotWriter::close);
         fetchingSnapshot = newSnapshot;
     }
 
@@ -180,9 +178,7 @@ public class FollowerState implements EpochState {
 
     @Override
     public void close() {
-        if (fetchingSnapshot.isPresent()) {
-            fetchingSnapshot.get().close();
-        }
+        fetchingSnapshot.ifPresent(RawSnapshotWriter::close);
     }
 
     private void logHighWatermarkUpdate(

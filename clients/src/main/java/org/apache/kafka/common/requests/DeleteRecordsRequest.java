@@ -34,7 +34,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
     private final DeleteRecordsRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<DeleteRecordsRequest> {
-        private DeleteRecordsRequestData data;
+        private final DeleteRecordsRequestData data;
 
         public Builder(DeleteRecordsRequestData data) {
             super(ApiKeys.DELETE_RECORDS);

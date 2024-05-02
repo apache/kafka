@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.{ClientQuotaManagerConfig, ReplicationQuotaManagerConfig, QuotaConfigs}
 import org.apache.kafka.server.quota.ClientQuotaType
 
 object QuotaType  {
@@ -73,7 +74,7 @@ object QuotaFactory extends Logging {
 
   def instantiate(cfg: KafkaConfig, metrics: Metrics, time: Time, threadNamePrefix: String): QuotaManagers = {
 
-    val clientQuotaCallback = Option(cfg.getConfiguredInstance(KafkaConfig.ClientQuotaCallbackClassProp,
+    val clientQuotaCallback = Option(cfg.getConfiguredInstance(QuotaConfigs.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,
       classOf[ClientQuotaCallback]))
     QuotaManagers(
       new ClientQuotaManager(clientConfig(cfg), metrics, Fetch, time, threadNamePrefix, clientQuotaCallback),
@@ -89,30 +90,30 @@ object QuotaFactory extends Logging {
   }
 
   def clientConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
-    ClientQuotaManagerConfig(
-      numQuotaSamples = cfg.numQuotaSamples,
-      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
+    new ClientQuotaManagerConfig(
+      cfg.numQuotaSamples,
+      cfg.quotaWindowSizeSeconds
     )
   }
 
-  def clientControllerMutationConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
-    ClientQuotaManagerConfig(
-      numQuotaSamples = cfg.numControllerQuotaSamples,
-      quotaWindowSizeSeconds = cfg.controllerQuotaWindowSizeSeconds
+  private def clientControllerMutationConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
+    new ClientQuotaManagerConfig(
+      cfg.numControllerQuotaSamples,
+      cfg.controllerQuotaWindowSizeSeconds
     )
   }
 
-  def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
-    ReplicationQuotaManagerConfig(
-      numQuotaSamples = cfg.numReplicationQuotaSamples,
-      quotaWindowSizeSeconds = cfg.replicationQuotaWindowSizeSeconds
+  private def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
+    new ReplicationQuotaManagerConfig(
+      cfg.numReplicationQuotaSamples,
+      cfg.replicationQuotaWindowSizeSeconds
     )
   }
 
-  def alterLogDirsReplicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
-    ReplicationQuotaManagerConfig(
-      numQuotaSamples = cfg.numAlterLogDirsReplicationQuotaSamples,
-      quotaWindowSizeSeconds = cfg.alterLogDirsReplicationQuotaWindowSizeSeconds
+  private def alterLogDirsReplicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
+    new ReplicationQuotaManagerConfig(
+      cfg.numAlterLogDirsReplicationQuotaSamples,
+      cfg.alterLogDirsReplicationQuotaWindowSizeSeconds
     )
   }
 

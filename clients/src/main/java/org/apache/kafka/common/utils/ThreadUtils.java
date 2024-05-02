@@ -70,6 +70,9 @@ public class ThreadUtils {
      */
     public static void shutdownExecutorServiceQuietly(ExecutorService executorService,
                                                       long timeout, TimeUnit timeUnit) {
+        if (executorService == null) {
+            return;
+        }
         executorService.shutdown(); // Disable new tasks from being submitted
         try {
             // Wait a while for existing tasks to terminate

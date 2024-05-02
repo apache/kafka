@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.time.Duration;
@@ -208,4 +210,9 @@ public interface StateUpdater {
      * @return set of all tasks managed by the state updater
      */
     Set<StandbyTask> getStandbyTasks();
+
+    /**
+     * Get the restore consumer instance id for telemetry, and complete the given future to return it.
+     */
+    KafkaFutureImpl<Uuid> restoreConsumerInstanceId(final Duration timeout);
 }

@@ -98,10 +98,11 @@ public class KTableSourceTopicRestartIntegrationTest {
 
     @BeforeEach
     public void before(final TestInfo testInfo) throws Exception {
-        sourceTopic = SOURCE_TOPIC + "-" + IntegrationTestUtils.safeUniqueTestName(getClass(), testInfo);
+        final String safeTestName = IntegrationTestUtils.safeUniqueTestName(testInfo);
+        sourceTopic = SOURCE_TOPIC + "-" + safeTestName;
         CLUSTER.createTopic(sourceTopic);
 
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, IntegrationTestUtils.safeUniqueTestName(getClass(), testInfo));
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, safeTestName);
 
         final KTable<String, String> kTable = streamsBuilder.table(sourceTopic, Materialized.as("store"));
         kTable.toStream().foreach(readKeyValues::put);

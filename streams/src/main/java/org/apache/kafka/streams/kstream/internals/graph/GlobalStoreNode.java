@@ -20,7 +20,7 @@ import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreNode<S> {
 
@@ -29,14 +29,16 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
     private final ConsumedInternal<KIn, VIn> consumed;
     private final String processorName;
     private final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier;
+    private final boolean reprocessOnRestore;
 
 
-    public GlobalStoreNode(final StoreBuilder<S> storeBuilder,
+    public GlobalStoreNode(final StoreFactory storeBuilder,
                            final String sourceName,
                            final String topic,
                            final ConsumedInternal<KIn, VIn> consumed,
                            final String processorName,
-                           final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+                           final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier,
+                           final boolean reprocessOnRestore) {
 
         super(storeBuilder);
         this.sourceName = sourceName;
@@ -44,6 +46,7 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
         this.consumed = consumed;
         this.processorName = processorName;
         this.stateUpdateSupplier = stateUpdateSupplier;
+        this.reprocessOnRestore = reprocessOnRestore;
     }
 
     @Override
@@ -56,7 +59,8 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
                                        consumed.valueDeserializer(),
                                        topic,
                                        processorName,
-                                       stateUpdateSupplier);
+                                       stateUpdateSupplier,
+                                       reprocessOnRestore);
 
     }
 
@@ -66,6 +70,7 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
                "sourceName='" + sourceName + '\'' +
                ", topic='" + topic + '\'' +
                ", processorName='" + processorName + '\'' +
+               ", reprocessOnRestore='" + reprocessOnRestore + '\'' +
                "} ";
     }
 }

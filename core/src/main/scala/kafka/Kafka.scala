@@ -18,7 +18,6 @@
 package kafka
 
 import java.util.Properties
-
 import joptsimple.OptionParser
 import kafka.server.{KafkaConfig, KafkaRaftServer, KafkaServer, Server}
 import kafka.utils.Implicits._
@@ -69,7 +68,7 @@ object Kafka extends Logging {
     config.migrationEnabled && config.interBrokerProtocolVersion.isApiForwardingEnabled
 
   private def buildServer(props: Properties): Server = {
-    val config = KafkaConfig.fromProps(props, false)
+    val config = KafkaConfig.fromProps(props, doLog = false)
     if (config.requiresZookeeper) {
       new KafkaServer(
         config,

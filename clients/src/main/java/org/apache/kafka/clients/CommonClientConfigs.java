@@ -22,6 +22,8 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Configurations shared by Kafka client applications: producer, consumer, connect, etc.
@@ -104,6 +107,9 @@ public class CommonClientConfigs {
 
     public static final int RETRY_BACKOFF_EXP_BASE = 2;
     public static final double RETRY_BACKOFF_JITTER = 0.2;
+
+    public static final String ENABLE_METRICS_PUSH_CONFIG = "enable.metrics.push";
+    public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of client metrics to the cluster, if the cluster has a client metrics subscription which matches this client.";
 
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = "metrics.sample.window.ms";
     public static final String METRICS_SAMPLE_WINDOW_MS_DOC = "The window of time a metrics sample is computed over.";
@@ -290,5 +296,15 @@ public class CommonClientConfigs {
             reporters.add(jmxReporter);
         }
         return reporters;
+    }
+
+    public static Optional<ClientTelemetryReporter> telemetryReporter(String clientId, AbstractConfig config) {
+        if (!config.getBoolean(CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG)) {
+            return Optional.empty();
+        }
+
+        ClientTelemetryReporter telemetryReporter = new ClientTelemetryReporter(Time.SYSTEM);
+        telemetryReporter.configure(config.originals(Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId)));
+        return Optional.of(telemetryReporter);
     }
 }

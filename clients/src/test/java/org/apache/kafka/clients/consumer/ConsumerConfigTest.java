@@ -25,6 +25,8 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -32,11 +34,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConsumerConfigTest {
 
@@ -63,18 +65,24 @@ public class ConsumerConfigTest {
 
     @Test
     public void testOverrideEnableAutoCommit() {
-        ConsumerConfig config = new ConsumerConfig(properties);
-        boolean overrideEnableAutoCommit = config.maybeOverrideEnableAutoCommit();
-        assertFalse(overrideEnableAutoCommit);
+        // Verify that our default properties (no 'enable.auto.commit' or 'group.id') are valid.
+        assertEquals(false, new ConsumerConfig(properties).getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
 
-        properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
-        config = new ConsumerConfig(properties);
-        try {
-            config.maybeOverrideEnableAutoCommit();
-            fail("Should have thrown an exception");
-        } catch (InvalidConfigurationException e) {
-            // expected
-        }
+        // Verify that explicitly disabling 'enable.auto.commit' still works.
+        properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, Boolean.FALSE.toString());
+        assertEquals(false, new ConsumerConfig(properties).getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
+
+        // Verify that enabling 'enable.auto.commit' but without 'group.id' fails.
+        properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, Boolean.TRUE.toString());
+        assertThrows(InvalidConfigurationException.class, () -> new ConsumerConfig(properties));
+
+        // Verify that then adding 'group.id' to the mix allows it to pass OK.
+        properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
+        assertEquals(true, new ConsumerConfig(properties).getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
+
+        // Now remove the 'enable.auto.commit' flag and verify that it is set to true (the default).
+        properties.remove(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
+        assertEquals(true, new ConsumerConfig(properties).getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
     }
 
     @Test
@@ -157,5 +165,44 @@ public class ConsumerConfigTest {
         configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase);
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
         assertEquals(saslSslLowerCase, consumerConfig.originals().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    }
+
+    @Test
+    public void testDefaultConsumerGroupConfig() {
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
+        assertEquals("classic", consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+        assertNull(consumerConfig.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
+    }
+
+    @Test
+    public void testRemoteAssignorConfig() {
+        String remoteAssignorName = "SomeAssignor";
+        String protocol = "consumer";
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, remoteAssignorName);
+        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol);
+        final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
+        assertEquals(protocol, consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+        assertEquals(remoteAssignorName, consumerConfig.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"consumer, true", "classic, true", "Consumer, true", "Classic, true", "invalid, false"})
+    public void testProtocolConfigValidation(String protocol, boolean isValid) {
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol);
+        if (isValid) {
+            ConsumerConfig config = new ConsumerConfig(configs);
+            assertEquals(protocol, config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+        } else {
+            assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        }
     }
 }

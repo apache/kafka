@@ -291,8 +291,8 @@ public class QuorumState {
     }
 
     /**
-     * Transition to the "unattached" state. This means we have found an epoch greater than
-     * or equal to the current epoch, but wo do not yet know of the elected leader.
+     * Transition to the "unattached" state. This means we have found an epoch greater than the current epoch,
+     * but we do not yet know of the elected leader.
      */
     public void transitionToUnattached(int epoch) {
         int currentEpoch = state.epoch();
@@ -453,12 +453,14 @@ public class QuorumState {
         // we typically expect the state machine to be caught up anyway.
 
         LeaderState<T> state = new LeaderState<>(
+            time,
             localIdOrThrow(),
             epoch(),
             epochStartOffset,
             voters,
             candidateState.grantingVoters(),
             accumulator,
+            fetchTimeoutMs,
             logContext
         );
         durableTransitionTo(state);

@@ -54,7 +54,7 @@ public class FeatureControlManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
-        private MetadataVersion metadataVersion = MetadataVersion.latest();
+        private MetadataVersion metadataVersion = MetadataVersion.latestProduction();
         private MetadataVersion minimumBootstrapVersion = MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
@@ -105,7 +105,7 @@ public class FeatureControlManager {
                 Map<String, VersionRange> localSupportedFeatures = new HashMap<>();
                 localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                         MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
-                        MetadataVersion.latest().featureLevel()));
+                        MetadataVersion.latestProduction().featureLevel()));
                 quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, Collections.singletonList(0));
             }
             return new FeatureControlManager(
@@ -346,9 +346,10 @@ public class FeatureControlManager {
                 return invalidMetadataVersion(newVersionLevel, "Unsafe metadata downgrade is not supported " +
                         "in this version.");
             } else {
+                // The phrase "Retry using UNSAFE_DOWNGRADE if you want to force the downgrade to proceed." has been removed
+                // because unsafe metadata downgrades are not yet supported. We can add it back when implemented (KAFKA-13896).
                 return invalidMetadataVersion(newVersionLevel, "Refusing to perform the requested " +
-                        "downgrade because it might delete metadata information. Retry using " +
-                        "UNSAFE_DOWNGRADE if you want to force the downgrade to proceed.");
+                        "downgrade because it might delete metadata information.");
             }
         } else {
             log.warn("Upgrading metadata.version from {} to {}.", currentVersion, newVersion);
@@ -396,7 +397,7 @@ public class FeatureControlManager {
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             MetadataVersion mv = MetadataVersion.fromFeatureLevel(record.featureLevel());
             metadataVersion.set(mv);
-            log.info("Replayed a FeatureLevelRecord setting metadata version to {}", mv);
+            log.info("Replayed a FeatureLevelRecord setting metadata.version to {}", mv);
         } else {
             if (record.featureLevel() == 0) {
                 finalizedVersions.remove(record.name());

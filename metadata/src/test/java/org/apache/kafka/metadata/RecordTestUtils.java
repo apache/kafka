@@ -273,7 +273,6 @@ public class RecordTestUtils {
      *
      * @param o     The input object. It will be modified in-place.
      */
-    @SuppressWarnings("unchecked")
     public static void deepSortRecords(Object o) throws Exception {
         if (o == null) {
             return;

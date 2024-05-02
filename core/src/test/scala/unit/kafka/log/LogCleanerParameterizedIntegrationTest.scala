@@ -62,7 +62,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     val firstDirty = log.activeSegment.baseOffset
     checkLastCleaned("log", 0, firstDirty)
-    val compactedSize = log.logSegments.map(_.size).sum
+    val compactedSize = log.logSegments.asScala.map(_.size).sum
     assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
 
     checkLogAfterAppendingDups(log, startSize, appends)
@@ -111,7 +111,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
       // should compact the log
       checkLastCleaned("log", 0, firstDirty)
-      val compactedSize = log.logSegments.map(_.size).sum
+      val compactedSize = log.logSegments.asScala.map(_.size).sum
       assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
       (log, messages)
     }
@@ -120,12 +120,12 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     // Set the last modified time to an old value to force deletion of old segments
     val endOffset = log.logEndOffset
-    log.logSegments.foreach(_.lastModified = time.milliseconds - (2 * retentionMs))
-    TestUtils.waitUntilTrue(() => log.logStartOffset == endOffset,
+    log.logSegments.forEach(_.setLastModified(time.milliseconds - (2 * retentionMs)))
+    TestUtils.waitUntilTrue(() => log.logStartOffset == endOffset && log.numberOfSegments == 1,
       "Timed out waiting for deletion of old segments")
-    assertEquals(1, log.numberOfSegments)
 
     cleaner.shutdown()
+    closeLog(log)
 
     // run the cleaner again to make sure if there are no issues post deletion
     val (log2, messages) = runCleanerAndCheckCompacted(20)
@@ -162,7 +162,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     val firstDirty = log.activeSegment.baseOffset
     checkLastCleaned("log", 0, firstDirty)
-    val compactedSize = log.logSegments.map(_.size).sum
+    val compactedSize = log.logSegments.asScala.map(_.size).sum
     assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
 
     checkLogAfterAppendingDups(log, startSize, appends)
@@ -220,7 +220,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     assertTrue(firstDirty > appendsV0.size) // ensure we clean data from V0 and V1
 
     checkLastCleaned("log", 0, firstDirty)
-    val compactedSize = log.logSegments.map(_.size).sum
+    val compactedSize = log.logSegments.asScala.map(_.size).sum
     assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
 
     checkLogAfterAppendingDups(log, startSize, appends)
@@ -250,13 +250,13 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     def kafkaConfigWithCleanerConfig(cleanerConfig: CleanerConfig): KafkaConfig = {
       val props = TestUtils.createBrokerConfig(0, "localhost:2181")
-      props.put(KafkaConfig.LogCleanerThreadsProp, cleanerConfig.numThreads.toString)
-      props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, cleanerConfig.dedupeBufferSize.toString)
-      props.put(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp, cleanerConfig.dedupeBufferLoadFactor.toString)
-      props.put(KafkaConfig.LogCleanerIoBufferSizeProp, cleanerConfig.ioBufferSize.toString)
+      props.put(CleanerConfig.LOG_CLEANER_THREADS_PROP, cleanerConfig.numThreads.toString)
+      props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, cleanerConfig.dedupeBufferSize.toString)
+      props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP, cleanerConfig.dedupeBufferLoadFactor.toString)
+      props.put(CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP, cleanerConfig.ioBufferSize.toString)
       props.put(KafkaConfig.MessageMaxBytesProp, cleanerConfig.maxMessageSize.toString)
-      props.put(KafkaConfig.LogCleanerBackoffMsProp, cleanerConfig.backoffMs.toString)
-      props.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, cleanerConfig.maxIoBytesPerSecond.toString)
+      props.put(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP, cleanerConfig.backoffMs.toString)
+      props.put(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, cleanerConfig.maxIoBytesPerSecond.toString)
       KafkaConfig.fromProps(props)
     }
 
@@ -274,7 +274,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     assertEquals(2, cleaner.cleanerCount)
     checkLastCleaned("log", 0, firstDirty)
-    val compactedSize = log.logSegments.map(_.size).sum
+    val compactedSize = log.logSegments.asScala.map(_.size).sum
     assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
   }
 
@@ -298,7 +298,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   private def readFromLog(log: UnifiedLog): Iterable[(Int, String, Long)] = {
-    for (segment <- log.logSegments; deepLogEntry <- segment.log.records.asScala) yield {
+    for (segment <- log.logSegments.asScala; deepLogEntry <- segment.log.records.asScala) yield {
       val key = TestUtils.readString(deepLogEntry.key).toInt
       val value = TestUtils.readString(deepLogEntry.value)
       (key, value, deepLogEntry.offset)

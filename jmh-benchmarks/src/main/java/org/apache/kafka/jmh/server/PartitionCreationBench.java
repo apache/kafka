@@ -135,7 +135,7 @@ public class PartitionCreationBench {
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
             setProducerStateManagerConfig(60000, false).
-            setInterBrokerProtocolVersion(MetadataVersion.latest()).
+            setInterBrokerProtocolVersion(MetadataVersion.latestTesting()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(failureChannel).
@@ -162,7 +162,7 @@ public class PartitionCreationBench {
             setBrokerTopicStats(brokerTopicStats).
             setMetadataCache(MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(),
                 this.brokerProperties.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(),
-                null)).
+                null, false)).
             setLogDirFailureChannel(failureChannel).
             setAlterPartitionManager(alterPartitionManager).
             build();
@@ -173,7 +173,7 @@ public class PartitionCreationBench {
     @TearDown(Level.Invocation)
     public void tearDown() throws Exception {
         this.replicaManager.shutdown(false);
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         this.metrics.close();
         this.scheduler.shutdown();
         this.quotaManagers.shutdown();
@@ -218,7 +218,7 @@ public class PartitionCreationBench {
                     .setReplicas(replicas)
                     .setIsNew(true);
 
-            partition.makeFollower(partitionState, checkpoints, topicId);
+            partition.makeFollower(partitionState, checkpoints, topicId, Option.empty());
         }
     }
 }

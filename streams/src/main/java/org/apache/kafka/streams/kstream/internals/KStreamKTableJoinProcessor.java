@@ -125,13 +125,18 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
     @SuppressWarnings("unchecked")
     private void doJoin(final Record<K1, V1> record) {
         final K2 mappedKey = keyMapper.apply(record.key(), record.value());
-        final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter.isVersioned()
-            ? valueGetter.get(mappedKey, record.timestamp())
-            : valueGetter.get(mappedKey);
-        final V2 value2 = getValueOrNull(valueAndTimestamp2);
+        final V2 value2 = getValue2(record, mappedKey);
         if (leftJoin || value2 != null) {
             internalProcessorContext.forward(record.withValue(joiner.apply(record.key(), record.value(), value2)));
         }
+    }
+
+    private V2 getValue2(final Record<K1, V1> record, final K2 mappedKey) {
+        if (mappedKey == null) return null;
+        final ValueAndTimestamp<V2> valueAndTimestamp = valueGetter.isVersioned()
+            ? valueGetter.get(mappedKey, record.timestamp())
+            : valueGetter.get(mappedKey);
+        return getValueOrNull(valueAndTimestamp);
     }
 
     private boolean maybeDropRecord(final Record<K1, V1> record) {
@@ -144,6 +149,9 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
         // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
         final K2 mappedKey = keyMapper.apply(record.key(), record.value());
+        if (leftJoin && record.key() == null && record.value() != null) {
+            return false;
+        }
         if (mappedKey == null || record.value() == null) {
             if (context().recordMetadata().isPresent()) {
                 final RecordMetadata recordMetadata = context().recordMetadata().get();

@@ -158,7 +158,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final RecordSerde<T> serde;
     private final MemoryPool memoryPool;
     private final RaftMessageQueue messageQueue;
-    private final RaftConfig raftConfig;
+    private final QuorumConfig quorumConfig;
     private final KafkaRaftMetrics kafkaRaftMetrics;
     private final QuorumState quorum;
     private final RequestManager requestManager;
@@ -184,7 +184,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LogContext logContext,
         String clusterId,
         OptionalInt nodeId,
-        RaftConfig raftConfig
+        QuorumConfig quorumConfig
     ) {
         this(serde,
             channel,
@@ -200,7 +200,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             nodeId,
             logContext,
             new Random(),
-            raftConfig);
+                quorumConfig);
     }
 
     KafkaRaftClient(
@@ -218,7 +218,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         OptionalInt nodeId,
         LogContext logContext,
         Random random,
-        RaftConfig raftConfig
+        QuorumConfig quorumConfig
     ) {
         this.serde = serde;
         this.channel = channel;
@@ -232,16 +232,16 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         this.fetchMaxWaitMs = fetchMaxWaitMs;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
-        this.raftConfig = raftConfig;
+        this.quorumConfig = quorumConfig;
         this.snapshotCleaner = new RaftMetadataLogCleanerManager(logger, time, 60000, log::maybeClean);
-        Set<Integer> quorumVoterIds = raftConfig.quorumVoterIds();
-        this.requestManager = new RequestManager(quorumVoterIds, raftConfig.retryBackoffMs(),
-            raftConfig.requestTimeoutMs(), random);
+        Set<Integer> quorumVoterIds = quorumConfig.quorumVoterIds();
+        this.requestManager = new RequestManager(quorumVoterIds, quorumConfig.retryBackoffMs(),
+            quorumConfig.requestTimeoutMs(), random);
         this.quorum = new QuorumState(
             nodeId,
             quorumVoterIds,
-            raftConfig.electionTimeoutMs(),
-            raftConfig.fetchTimeoutMs(),
+            quorumConfig.electionTimeoutMs(),
+            quorumConfig.fetchTimeoutMs(),
             quorumStateStore,
             time,
             logContext,
@@ -252,10 +252,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         kafkaRaftMetrics.updateNumUnknownVoterConnections(0);
 
         // Update the voter endpoints with what's in RaftConfig
-        Map<Integer, RaftConfig.AddressSpec> voterAddresses = raftConfig.quorumVoterConnections();
+        Map<Integer, QuorumConfig.AddressSpec> voterAddresses = quorumConfig.quorumVoterConnections();
         voterAddresses.entrySet().stream()
-            .filter(e -> e.getValue() instanceof RaftConfig.InetAddressSpec)
-            .forEach(e -> this.channel.updateEndpoint(e.getKey(), (RaftConfig.InetAddressSpec) e.getValue()));
+            .filter(e -> e.getValue() instanceof QuorumConfig.InetAddressSpec)
+            .forEach(e -> this.channel.updateEndpoint(e.getKey(), (QuorumConfig.InetAddressSpec) e.getValue()));
     }
 
     private void updateFollowerHighWatermark(
@@ -429,7 +429,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         BatchAccumulator<T> accumulator = new BatchAccumulator<>(
             quorum.epoch(),
             endOffset,
-            raftConfig.appendLingerMs(),
+            quorumConfig.appendLingerMs(),
             MAX_BATCH_SIZE_BYTES,
             memoryPool,
             time,
@@ -658,7 +658,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
         // upper limit exponential co-efficients at 20 to avoid overflow
         return Math.min(RETRY_BACKOFF_BASE_MS * random.nextInt(2 << Math.min(20, retries - 1)),
-                raftConfig.electionBackoffMaxMs());
+                quorumConfig.electionBackoffMaxMs());
     }
 
     private int strictExponentialElectionBackoffMs(int positionInSuccessors, int totalNumSuccessors) {
@@ -667,8 +667,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     " and smaller than total number of successors " + totalNumSuccessors);
         }
 
-        int retryBackOffBaseMs = raftConfig.electionBackoffMaxMs() >> (totalNumSuccessors - 1);
-        return Math.min(raftConfig.electionBackoffMaxMs(), retryBackOffBaseMs << (positionInSuccessors - 1));
+        int retryBackOffBaseMs = quorumConfig.electionBackoffMaxMs() >> (totalNumSuccessors - 1);
+        return Math.min(quorumConfig.electionBackoffMaxMs(), retryBackOffBaseMs << (positionInSuccessors - 1));
     }
 
     private BeginQuorumEpochResponseData buildBeginQuorumEpochResponse(Errors partitionLevelError) {
@@ -975,7 +975,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             || isPartitionDiverged(partitionResponse)
             || isPartitionSnapshotted(partitionResponse)) {
             // Reply immediately if any of the following is true
-            // 1. The response contains an errror
+            // 1. The response contains an error
             // 2. There are records in the response
             // 3. The fetching replica doesn't want to wait for the partition to contain new data
             // 4. The fetching replica needs to truncate because the log diverged
@@ -1257,7 +1257,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#POSITION_OUT_OF_RANGE} if the request snapshot offset out of range
      */
     private FetchSnapshotResponseData handleFetchSnapshotRequest(
-        RaftRequest.Inbound requestMetadata
+        RaftRequest.Inbound requestMetadata,
+        long currentTimeMs
     ) {
         FetchSnapshotRequestData data = (FetchSnapshotRequestData) requestMetadata.data;
 
@@ -1339,6 +1340,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         UnalignedRecords records = snapshot.slice(partitionSnapshot.position(), Math.min(data.maxBytes(), maxSnapshotSize));
+
+        LeaderState<T> state = quorum.leaderStateOrThrow();
+        state.updateCheckQuorumForFollowingVoter(data.replicaId(), currentTimeMs);
 
         return FetchSnapshotResponse.singleton(
             log.topicPartition(),
@@ -1701,7 +1705,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 break;
 
             case FETCH_SNAPSHOT:
-                responseFuture = completedFuture(handleFetchSnapshotRequest(request));
+                responseFuture = completedFuture(handleFetchSnapshotRequest(request, currentTimeMs));
                 break;
 
             default:
@@ -1875,13 +1879,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         FetchSnapshotRequestData request = FetchSnapshotRequest.singleton(
             clusterId,
+            quorum().localIdOrSentinel(),
             log.topicPartition(),
-            snapshotPartition -> {
-                return snapshotPartition
-                    .setCurrentLeaderEpoch(quorum.epoch())
-                    .setSnapshotId(requestSnapshotId)
-                    .setPosition(snapshotSize);
-            }
+            snapshotPartition -> snapshotPartition
+                .setCurrentLeaderEpoch(quorum.epoch())
+                .setSnapshotId(requestSnapshotId)
+                .setPosition(snapshotSize)
         );
 
         return request.setReplicaId(quorum.localIdOrSentinel());
@@ -1990,7 +1993,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> state = quorum.leaderStateOrThrow();
         maybeFireLeaderChange(state);
 
-        if (shutdown.get() != null || state.isResignRequested()) {
+        long timeUntilCheckQuorumExpires = state.timeUntilCheckQuorumExpires(currentTimeMs);
+        if (shutdown.get() != null || state.isResignRequested() || timeUntilCheckQuorumExpires == 0) {
             transitionToResigned(state.nonLeaderVotersByDescendingFetchOffset());
             return 0L;
         }
@@ -2006,7 +2010,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             this::buildBeginQuorumEpochRequest
         );
 
-        return Math.min(timeUntilFlush, timeUntilSend);
+        return Math.min(timeUntilFlush, Math.min(timeUntilSend, timeUntilCheckQuorumExpires));
     }
 
     private long maybeSendVoteRequests(
@@ -2196,6 +2200,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         quorum.highWatermark().ifPresent(highWatermarkMetadata -> {
             updateListenersProgress(highWatermarkMetadata.offset);
         });
+
+        // Notify the new listeners of the latest leader and epoch
+        Optional<LeaderState<T>> leaderState = quorum.maybeLeaderState();
+        if (leaderState.isPresent()) {
+            maybeFireLeaderChange(leaderState.get());
+        } else {
+            maybeFireLeaderChange();
+        }
     }
 
     private void processRegistration(Registration<T> registration) {
@@ -2375,7 +2387,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // take no further action.
             logger.debug("Ignoring call to resign from epoch {} since it is smaller than the " +
                 "current epoch {}", epoch, currentEpoch);
-            return;
         } else if (!leaderAndEpoch.isLeader(quorum.localIdOrThrow())) {
             throw new IllegalArgumentException("Cannot resign from epoch " + epoch +
                 " since we are not the leader");

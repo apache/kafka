@@ -32,9 +32,10 @@ import org.junit.platform.commons.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -74,7 +75,7 @@ import java.util.stream.Stream;
  * will generate two invocations of "someTest" (since ClusterType.Both was given). For each invocation, the test class
  * SomeIntegrationTest will be instantiated, lifecycle methods (before/after) will be run, and "someTest" will be invoked.
  *
- **/
+ */
 public class ClusterTestExtensions implements TestTemplateInvocationContextProvider {
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {
@@ -90,7 +91,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         ClusterTemplate clusterTemplateAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTemplate.class);
         if (clusterTemplateAnnot != null) {
             processClusterTemplate(context, clusterTemplateAnnot, generatedContexts::add);
-            if (generatedContexts.size() == 0) {
+            if (generatedContexts.isEmpty()) {
                 throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
             }
         }
@@ -109,7 +110,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             }
         }
 
-        if (generatedContexts.size() == 0) {
+        if (generatedContexts.isEmpty()) {
             throw new IllegalStateException("Please annotate test methods with @ClusterTemplate, @ClusterTest, or " +
                     "@ClusterTests when using the ClusterTestExtensions provider");
         }
@@ -117,18 +118,17 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return generatedContexts.stream();
     }
 
-    private void processClusterTemplate(ExtensionContext context, ClusterTemplate annot,
+    void processClusterTemplate(ExtensionContext context, ClusterTemplate annot,
                                         Consumer<TestTemplateInvocationContext> testInvocations) {
         // If specified, call cluster config generated method (must be static)
         List<ClusterConfig> generatedClusterConfigs = new ArrayList<>();
-        if (!annot.value().isEmpty()) {
-            generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
-        } else {
-            // Ensure we have at least one cluster config
-            generatedClusterConfigs.add(ClusterConfig.defaultClusterBuilder().build());
+        if (annot.value().trim().isEmpty()) {
+            throw new IllegalStateException("ClusterTemplate value can't be empty string.");
         }
+        generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
 
-        generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(config, testInvocations));
+        String baseDisplayName = context.getRequiredTestMethod().getName();
+        generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(baseDisplayName, config, testInvocations));
     }
 
     private void generateClusterConfigurations(ExtensionContext context, String generateClustersMethods, ClusterGenerator generator) {
@@ -179,25 +179,29 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 throw new IllegalStateException();
         }
 
-        ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, autoStart,
-            annot.securityProtocol(), annot.metadataVersion());
+        ClusterConfig.Builder configBuilder = ClusterConfig.builder()
+                .setType(type)
+                .setBrokers(brokers)
+                .setControllers(controllers)
+                .setAutoStart(autoStart)
+                .setSecurityProtocol(annot.securityProtocol())
+                .setMetadataVersion(annot.metadataVersion());
         if (!annot.name().isEmpty()) {
-            builder.name(annot.name());
-        } else {
-            builder.name(context.getRequiredTestMethod().getName());
+            configBuilder.setName(annot.name());
         }
         if (!annot.listener().isEmpty()) {
-            builder.listenerName(annot.listener());
+            configBuilder.setListenerName(annot.listener());
         }
 
-        Properties properties = new Properties();
+        Map<String, String> serverProperties = new HashMap<>();
+        for (ClusterConfigProperty property : defaults.serverProperties()) {
+            serverProperties.put(property.key(), property.value());
+        }
         for (ClusterConfigProperty property : annot.serverProperties()) {
-            properties.put(property.key(), property.value());
+            serverProperties.put(property.key(), property.value());
         }
-
-        ClusterConfig config = builder.build();
-        config.serverProperties().putAll(properties);
-        type.invocationContexts(config, testInvocations);
+        configBuilder.setServerProperties(serverProperties);
+        type.invocationContexts(context.getRequiredTestMethod().getName(), configBuilder.build(), testInvocations);
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {

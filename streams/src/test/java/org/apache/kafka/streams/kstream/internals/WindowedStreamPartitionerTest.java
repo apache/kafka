@@ -49,7 +49,7 @@ public class WindowedStreamPartitionerTest {
     );
 
     private Cluster cluster = new Cluster("cluster", Collections.singletonList(Node.noNode()), infos,
-            Collections.<String>emptySet(), Collections.<String>emptySet());
+            Collections.emptySet(), Collections.emptySet());
 
     @Test
     public void testCopartitioning() {

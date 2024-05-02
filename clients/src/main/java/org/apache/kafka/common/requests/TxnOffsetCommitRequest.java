@@ -189,6 +189,25 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e);
     }
 
+    public static TxnOffsetCommitResponseData getErrorResponse(
+        TxnOffsetCommitRequestData request,
+        Errors error
+    ) {
+        TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData();
+        request.topics().forEach(topic -> {
+            TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic responseTopic = new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                .setName(topic.name());
+            response.topics().add(responseTopic);
+
+            topic.partitions().forEach(partition -> {
+                responseTopic.partitions().add(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                    .setPartitionIndex(partition.partitionIndex())
+                    .setErrorCode(error.code()));
+            });
+        });
+        return response;
+    }
+
     public static TxnOffsetCommitRequest parse(ByteBuffer buffer, short version) {
         return new TxnOffsetCommitRequest(new TxnOffsetCommitRequestData(
             new ByteBufferAccessor(buffer), version), version);

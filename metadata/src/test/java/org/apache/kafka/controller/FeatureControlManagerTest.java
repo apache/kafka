@@ -76,7 +76,7 @@ public class FeatureControlManagerTest {
     }
 
     public static QuorumFeatures features(Object... args) {
-        Map<String, VersionRange> features = QuorumFeatures.defaultFeatureMap();
+        Map<String, VersionRange> features = QuorumFeatures.defaultFeatureMap(true);
         features.putAll(rangeMap(args));
         return new QuorumFeatures(0, features, emptyList());
     }
@@ -317,8 +317,7 @@ public class FeatureControlManagerTest {
         assertEquals(ControllerResult.of(Collections.emptyList(),
             singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "Invalid metadata.version 4. Refusing to perform the requested downgrade because " +
-                "it might delete metadata information. Retry using UNSAFE_DOWNGRADE if you want to " +
-                "force the downgrade to proceed."))),
+                "it might delete metadata information."))),
             manager.updateFeatures(
                 singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV0.featureLevel()),
                 singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
@@ -385,7 +384,7 @@ public class FeatureControlManagerTest {
     public void testCreateFeatureLevelRecords() {
         Map<String, VersionRange> localSupportedFeatures = new HashMap<>();
         localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-            MetadataVersion.IBP_3_0_IV1.featureLevel(), MetadataVersion.latest().featureLevel()));
+            MetadataVersion.IBP_3_0_IV1.featureLevel(), MetadataVersion.latestTesting().featureLevel()));
         localSupportedFeatures.put("foo", VersionRange.of(0, 2));
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0, localSupportedFeatures, emptyList())).

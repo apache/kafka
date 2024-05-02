@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.HashMap;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -37,6 +38,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.SubtopologyDescription;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -50,12 +52,14 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.internal.util.collections.Sets;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -87,6 +91,20 @@ public class TopologyTest {
     private KeyValueStoreBuilder<?, ?> globalStoreBuilder;
     private final Topology topology = new Topology();
     private final InternalTopologyBuilder.TopologyDescription expectedDescription = new InternalTopologyBuilder.TopologyDescription();
+    private StreamsConfig streamsConfig;
+
+    @Before
+    public void setUp() {
+        final HashMap<String, Object> configs = new HashMap<>();
+        configs.put(StreamsConfig.APPLICATION_ID_CONFIG, "applicationId");
+
+        // not used, but required for StreamsConfig
+        configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        configs.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        configs.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+
+        streamsConfig = new StreamsConfig(configs);
+    }
 
     @Test
     public void shouldNotAllowNullNameWhenAddingSourceWithTopic() {
@@ -321,7 +339,7 @@ public class TopologyTest {
         mockStoreBuilder();
         topology.addStateStore(storeBuilder);
 
-        final StoreBuilder otherStoreBuilder = mock(StoreBuilder.class);
+        final StoreBuilder<?> otherStoreBuilder = mock(StoreBuilder.class);
         when(otherStoreBuilder.name()).thenReturn("store");
         when(otherStoreBuilder.logConfig()).thenReturn(Collections.emptyMap());
         when(otherStoreBuilder.loggingEnabled()).thenReturn(false);
@@ -1176,6 +1194,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
@@ -1199,6 +1218,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1223,6 +1243,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
@@ -1245,6 +1266,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1269,6 +1291,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1292,6 +1315,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
@@ -1315,6 +1339,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1339,6 +1364,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
@@ -1362,6 +1388,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1386,6 +1413,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1409,6 +1437,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
@@ -1432,6 +1461,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1456,6 +1486,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1484,6 +1515,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
@@ -1513,6 +1545,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1542,6 +1575,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1570,6 +1604,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
@@ -1599,6 +1634,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1627,6 +1663,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1655,6 +1692,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
@@ -1684,6 +1722,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1712,6 +1751,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1735,6 +1775,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
@@ -1759,6 +1800,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1783,6 +1825,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
@@ -1806,6 +1849,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1830,6 +1874,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
@@ -1865,6 +1910,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
         // one for ktable, and one for count operation
         assertThat(processorTopology.stateStores().size(), is(2));
@@ -1907,6 +1953,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
         // one for ktable, and one for count operation
         assertThat(processorTopology.stateStores().size(), is(2));
@@ -1950,6 +1997,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
         // one for ktable, and one for count operation
         assertThat(processorTopology.stateStores().size(), is(2));
@@ -1992,6 +2040,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
         // one for ktable, and one for count operation
         assertThat(processorTopology.stateStores().size(), is(2));
@@ -2033,6 +2082,7 @@ public class TopologyTest {
             describe.toString()
         );
 
+        topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
         final ProcessorTopology processorTopology = topology.internalTopologyBuilder.setApplicationId("test").buildTopology();
         // one for ktable, and one for count operation
         assertThat(processorTopology.stateStores().size(), is(2));
@@ -2265,7 +2315,7 @@ public class TopologyTest {
 
         topology.addSink(sinkName, sinkTopic, null, null, null, parentNames);
         final TopologyDescription.Sink expectedSinkNode =
-            new InternalTopologyBuilder.Sink(sinkName, sinkTopic);
+            new InternalTopologyBuilder.Sink<>(sinkName, sinkTopic);
 
         for (final TopologyDescription.Node parent : parents) {
             ((InternalTopologyBuilder.AbstractNode) parent).addSuccessor(expectedSinkNode);
@@ -2301,6 +2351,63 @@ public class TopologyTest {
             id);
 
         expectedDescription.addGlobalStore(expectedGlobalStore);
+    }
+
+    @Test
+    public void readOnlyStateStoresShouldHaveTheirOwnSubTopology() {
+        final String sourceName = "source";
+        final String storeName = "store";
+        final String topicName = "topic";
+        final String processorName = "processor";
+
+        final KeyValueStoreBuilder<?, ?> storeBuilder = mock(KeyValueStoreBuilder.class);
+        when(storeBuilder.name()).thenReturn(storeName);
+        topology.addReadOnlyStateStore(
+                storeBuilder,
+                sourceName,
+                null,
+                null,
+                null,
+                topicName,
+                processorName,
+                new MockProcessorSupplier<>());
+
+        final TopologyDescription.Source expectedSource = new InternalTopologyBuilder.Source(sourceName, Sets.newSet(topicName), null);
+        final TopologyDescription.Processor expectedProcessor = new InternalTopologyBuilder.Processor(processorName, Sets.newSet(storeName));
+
+        ((InternalTopologyBuilder.AbstractNode) expectedSource).addSuccessor(expectedProcessor);
+        ((InternalTopologyBuilder.AbstractNode) expectedProcessor).addPredecessor(expectedSource);
+
+        final Set<TopologyDescription.Node> allNodes = new HashSet<>();
+        allNodes.add(expectedSource);
+        allNodes.add(expectedProcessor);
+        expectedDescription.addSubtopology(new SubtopologyDescription(0, allNodes));
+
+        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+    }
+
+    @Test
+    public void readOnlyStateStoresShouldNotLog() {
+        final String sourceName = "source";
+        final String storeName = "store";
+        final String topicName = "topic";
+        final String processorName = "processor";
+
+        final KeyValueStoreBuilder<?, ?> storeBuilder = mock(KeyValueStoreBuilder.class);
+        when(storeBuilder.name()).thenReturn(storeName);
+        topology.addReadOnlyStateStore(
+                storeBuilder,
+                sourceName,
+                null,
+                null,
+                null,
+                topicName,
+                processorName,
+                new MockProcessorSupplier<>());
+
+        final StoreFactory stateStoreFactory = topology.internalTopologyBuilder.stateStores().get(storeName);
+        assertThat(stateStoreFactory.loggingEnabled(), equalTo(false));
     }
 
     private TopologyConfig overrideDefaultStore(final String defaultStore) {
