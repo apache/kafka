@@ -327,7 +327,7 @@ public class BatchAccumulator<T> implements Closeable {
     ) {
         appendControlMessages((baseOffset, epoch, buffer) ->
             MemoryRecords.withSnapshotHeaderRecord(
-                nextOffset,
+                baseOffset,
                 currentTimestamp,
                 epoch,
                 buffer,
@@ -349,7 +349,7 @@ public class BatchAccumulator<T> implements Closeable {
     ) {
         appendControlMessages((baseOffset, epoch, buffer) ->
             MemoryRecords.withSnapshotFooterRecord(
-                nextOffset,
+                baseOffset,
                 currentTimestamp,
                 epoch,
                 buffer,
