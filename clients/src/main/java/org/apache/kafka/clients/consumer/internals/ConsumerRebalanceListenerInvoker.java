@@ -102,7 +102,7 @@ public class ConsumerRebalanceListenerInvoker {
     }
 
     public Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
-        log.info("Lost previously assigned partitions {}", lostPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(". ")));
+        log.info("Lost previously assigned partitions {}", lostPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
         Set<TopicPartition> lostPausedPartitions = subscriptions.pausedPartitions();
         lostPausedPartitions.retainAll(lostPartitions);
         if (!lostPausedPartitions.isEmpty())

@@ -398,7 +398,7 @@ public class TopicAdmin implements AutoCloseable {
             }
         }
         if (topicsByName.isEmpty()) return EMPTY_CREATION;
-        String topicNameList = String.join("', '", topicsByName.keySet()).replace("[", "").replace("]", "");
+        String topicNameList = String.join("', '", topicsByName.keySet());
 
         // Attempt to create any missing topics
         CreateTopicsOptions args = new CreateTopicsOptions().validateOnly(false);
@@ -474,7 +474,7 @@ public class TopicAdmin implements AutoCloseable {
         if (topics == null) {
             return Collections.emptyMap();
         }
-        String topicNameList = String.join(", ", topics).replace("[", "").replace("]", "");
+        String topicNameList = String.join(", ", topics);
 
         Map<String, KafkaFuture<TopicDescription>> newResults =
                 admin.describeTopics(Arrays.asList(topics), new DescribeTopicsOptions()).topicNameValues();
@@ -629,7 +629,7 @@ public class TopicAdmin implements AutoCloseable {
         if (topics.isEmpty()) {
             return Collections.emptyMap();
         }
-        String topicNameList = String.join(", ", topics).replace("[", "").replace("]", "");
+        String topicNameList = String.join(", ", topics);
         Collection<ConfigResource> resources = topics.stream()
                                                      .map(t -> new ConfigResource(ConfigResource.Type.TOPIC, t))
                                                      .collect(Collectors.toList());

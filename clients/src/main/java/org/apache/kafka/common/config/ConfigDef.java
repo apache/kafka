@@ -1079,7 +1079,7 @@ public class ConfigDef {
         public void ensureValid(String name, Object o) {
             String s = (String) o;
             if (s == null || !validStrings.contains(s.toUpperCase(Locale.ROOT))) {
-                throw new ConfigException(name, o, "String must be one of (case insensitive): " + String.join(",", validStrings));
+                throw new ConfigException(name, o, "String must be one of (case insensitive): " + String.join(", ", validStrings));
             }
         }
 

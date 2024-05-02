@@ -231,8 +231,8 @@ public class MetadataQuorumCommand {
             "\nHighWatermark:          " + quorumInfo.highWatermark() +
             "\nMaxFollowerLag:         " + maxFollowerLag +
             "\nMaxFollowerLagTimeMs:   " + maxFollowerLagTimeMs +
-            "\nCurrentVoters:          " + "[" + quorumInfo.voters().stream().map(QuorumInfo.ReplicaState::replicaId).map(Object::toString).collect(Collectors.joining(",")) + "]" +
-            "\nCurrentObservers:       " + "[" + quorumInfo.observers().stream().map(QuorumInfo.ReplicaState::replicaId).map(Objects::toString).collect(Collectors.joining(",")) + "]"
+            "\nCurrentVoters:          " + quorumInfo.voters().stream().map(QuorumInfo.ReplicaState::replicaId).map(Object::toString).collect(Collectors.joining(",", "[", "]")) +
+            "\nCurrentObservers:       " + quorumInfo.observers().stream().map(QuorumInfo.ReplicaState::replicaId).map(Objects::toString).collect(Collectors.joining(",", "[", "]"))
         );
     }
 

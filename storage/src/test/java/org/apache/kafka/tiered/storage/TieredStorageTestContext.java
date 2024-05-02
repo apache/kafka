@@ -51,7 +51,6 @@ import scala.Function1;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -217,7 +216,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
         Function0<String> messageSupplier = () ->
                 String.format("Could not consume %d records of %s from offset %d in %d ms. %d message(s) consumed:%s%s",
                         expectedTotalCount, topicPartition, fetchOffset, timeoutMs, records.size(), sep,
-                        String.join(sep, Arrays.toString(records.toArray())));
+                        records.stream().map(Object::toString).collect(Collectors.joining(sep)));
         TestUtils.pollRecordsUntilTrue(consumer, pollAction, messageSupplier, timeoutMs);
         return records;
     }
