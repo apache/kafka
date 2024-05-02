@@ -1406,6 +1406,38 @@ public class KafkaProducerTest {
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
+    @Test
+    public void testCommitTransactionWithRecordTooLargeExceptionAndCustomHandler() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.MAX_REQUEST_SIZE_CONFIG, 1000);
+        configs.put(ProducerConfig.CUSTOM_EXCEPTION_HANDLER_CLASS_CONFIG,
+                SwallowRecordTooLargeExceptionHandler.class.getName());
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = mock(ProducerMetadata.class);
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+        when(metadata.fetch()).thenReturn(onePartitionCluster);
+
+        String largeString = IntStream.range(0, 1000).mapToObj(i -> "*").collect(Collectors.joining());
+        ProducerRecord<String, String> largeRecord = new ProducerRecord<>(topic, "large string", largeString);
+
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions();
+
+            client.prepareResponse(endTxnResponse(Errors.NONE));
+            producer.beginTransaction();
+            TestUtils.assertFutureError(producer.send(largeRecord), RecordTooLargeException.class);
+            assertDoesNotThrow(producer::commitTransaction);
+        }
+    }
 
     @Test
     public void testCommitTransactionWithMetadataTimeoutForMissingTopic() throws Exception {
@@ -2496,6 +2528,21 @@ public class KafkaProducerTest {
         configs.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 1);
 
         assertDoesNotThrow(() -> new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer()).close());
+    }
+
+    public static class SwallowRecordTooLargeExceptionHandler implements ProducerExceptionHandler {
+        @Override
+        public Response handle(ProducerRecord record, Exception exception) {
+            if (exception instanceof RecordTooLargeException) {
+                return Response.SWALLOW;
+            }
+            return null;
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+
+        }
     }
 
 }

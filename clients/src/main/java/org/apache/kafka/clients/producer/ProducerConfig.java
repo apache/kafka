@@ -338,6 +338,9 @@ public class ProducerConfig extends AbstractConfig {
             "By default the TransactionId is not configured, which means transactions cannot be used. " +
             "Note that, by default, transactions require a cluster of at least three brokers which is the recommended setting for production; for development you can change this, by adjusting broker setting <code>transaction.state.log.replication.factor</code>.";
 
+    public static final String CUSTOM_EXCEPTION_HANDLER_CLASS_CONFIG = "custom.exception.handler";
+    private static final String CUSTOM_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.clients.producer.ProducerExceptionHandler</code> interface.";
+
     /**
      * <code>security.providers</code>
      */
@@ -510,7 +513,16 @@ public class ProducerConfig extends AbstractConfig {
                                         null,
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
-                                        TRANSACTIONAL_ID_DOC);
+                                        TRANSACTIONAL_ID_DOC)
+                                .define(CUSTOM_EXCEPTION_HANDLER_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        null,
+                                        Importance.MEDIUM,
+                                        CUSTOM_EXCEPTION_HANDLER_CLASS_DOC);
+    }
+
+    public ProducerExceptionHandler getProducerExceptionHandler() {
+        return getConfiguredInstance(CUSTOM_EXCEPTION_HANDLER_CLASS_CONFIG, ProducerExceptionHandler.class);
     }
 
     @Override
