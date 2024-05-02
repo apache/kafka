@@ -125,7 +125,7 @@ public class ShareHeartbeatRequestManager implements RequestManager {
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.heartbeatState = new HeartbeatState(subscriptions, shareMembershipManager, maxPollIntervalMs);
+        this.heartbeatState = new HeartbeatState(subscriptions, shareMembershipManager);
         this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
                 retryBackoffMaxMs, maxPollIntervalMs);
         this.pollTimer = time.timer(maxPollIntervalMs);
@@ -483,16 +483,13 @@ public class ShareHeartbeatRequestManager implements RequestManager {
     static class HeartbeatState {
         private final SubscriptionState subscriptions;
         private final ShareMembershipManager shareMembershipManager;
-        private final int rebalanceTimeoutMs;
         private final SentFields sentFields;
 
         public HeartbeatState(
                 final SubscriptionState subscriptions,
-                final ShareMembershipManager shareMembershipManager,
-                final int rebalanceTimeoutMs) {
+                final ShareMembershipManager shareMembershipManager) {
             this.subscriptions = subscriptions;
             this.shareMembershipManager = shareMembershipManager;
-            this.rebalanceTimeoutMs = rebalanceTimeoutMs;
             this.sentFields = new SentFields();
         }
 
@@ -519,12 +516,6 @@ public class ShareHeartbeatRequestManager implements RequestManager {
                 sentFields.rackId = shareMembershipManager.rackId();
             }
 
-            // RebalanceTimeoutMs - only sent if changed since the last heartbeat
-            if (sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
-                data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
-                sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
-            }
-
             // SubscribedTopicNames - only sent if changed since the last heartbeat
             TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
             if (!subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
@@ -537,14 +528,12 @@ public class ShareHeartbeatRequestManager implements RequestManager {
 
         // Fields of ShareGroupHeartbeatRequest sent in the most recent request
         static class SentFields {
-            private int rebalanceTimeoutMs = -1;
             private String rackId = null;
             private TreeSet<String> subscribedTopicNames = null;
 
             SentFields() {}
 
             void reset() {
-                rebalanceTimeoutMs = -1;
                 rackId = null;
                 subscribedTopicNames = null;
             }

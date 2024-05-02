@@ -30,6 +30,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.coordinator.group.OffsetConfig;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
+import org.apache.kafka.coordinator.group.share.SimpleAssignor;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.raft.RaftConfig;
@@ -154,18 +155,22 @@ public class Defaults {
 
     /** Share Group Configs **/
     public static final boolean SHARE_GROUP_ENABLE = false;
-    public static final int SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS = 200;
     public static final int SHARE_GROUP_DELIVERY_COUNT_LIMIT = 5;
-    public static final short SHARE_GROUP_MAX_GROUPS = 10;
-    public static final short SHARE_GROUP_MAX_SIZE = 200;
+    public static final int SHARE_GROUP_RECORD_LOCK_DURATION_MS = 30000;
+    public static final int SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS = 15000;
+    public static final int SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS = 60000;
+    public static final int SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS = 200;
     public static final int SHARE_GROUP_SESSION_TIMEOUT_MS = 45000;
     public static final int SHARE_GROUP_MIN_SESSION_TIMEOUT_MS = 45000;
     public static final int SHARE_GROUP_MAX_SESSION_TIMEOUT_MS = 60000;
     public static final int SHARE_GROUP_HEARTBEAT_INTERVAL_MS = 5000;
     public static final int SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS = 5000;
     public static final int SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS = 15000;
-    public static final int SHARE_GROUP_RECORD_LOCK_DURATION_MS = 30000;
-    public static final int SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS = 60000;
+    public static final short SHARE_GROUP_MAX_GROUPS = 10;
+    public static final short SHARE_GROUP_MAX_SIZE = 200;
+    public static final List<String> SHARE_GROUP_ASSIGNORS = Arrays.asList(
+        SimpleAssignor.class.getName()
+    );
 
     /** ********* Offset management configuration *********/
     public static final int OFFSET_METADATA_MAX_SIZE = OffsetConfig.DEFAULT_MAX_METADATA_SIZE;

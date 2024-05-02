@@ -310,10 +310,10 @@ public class ShareCompletedFetchTest {
         }
     }
 
-    public static List<ShareFetchResponseData.AcquiredRecords> acquiredRecords(long baseOffset, int count) {
+    public static List<ShareFetchResponseData.AcquiredRecords> acquiredRecords(long firstOffset, int count) {
         ShareFetchResponseData.AcquiredRecords acquiredRecords = new ShareFetchResponseData.AcquiredRecords()
-                .setBaseOffset(baseOffset)
-                .setLastOffset(baseOffset + count - 1)
+                .setFirstOffset(firstOffset)
+                .setLastOffset(firstOffset + count - 1)
                 .setDeliveryCount((short) 1);
         return Collections.singletonList(acquiredRecords);
     }

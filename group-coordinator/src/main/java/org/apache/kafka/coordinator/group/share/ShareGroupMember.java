@@ -32,7 +32,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.Set;
 
 /**
@@ -53,7 +52,6 @@ public class ShareGroupMember extends GroupMember {
     private int previousMemberEpoch = -1;
     private MemberState state = MemberState.STABLE;
     private String rackId = null;
-    private int rebalanceTimeoutMs = -1;
     private String clientId = "";
     private String clientHost = "";
     private List<String> subscribedTopicNames = Collections.emptyList();
@@ -70,7 +68,6 @@ public class ShareGroupMember extends GroupMember {
       this.memberEpoch = member.memberEpoch;
       this.previousMemberEpoch = member.previousMemberEpoch;
       this.rackId = member.rackId;
-      this.rebalanceTimeoutMs = member.rebalanceTimeoutMs;
       this.clientId = member.clientId;
       this.clientHost = member.clientHost;
       this.subscribedTopicNames = member.subscribedTopicNames;
@@ -94,16 +91,6 @@ public class ShareGroupMember extends GroupMember {
 
     public Builder maybeUpdateRackId(Optional<String> rackId) {
       this.rackId = rackId.orElse(this.rackId);
-      return this;
-    }
-
-    public Builder setRebalanceTimeoutMs(int rebalanceTimeoutMs) {
-      this.rebalanceTimeoutMs = rebalanceTimeoutMs;
-      return this;
-    }
-
-    public Builder maybeUpdateRebalanceTimeoutMs(OptionalInt rebalanceTimeoutMs) {
-      this.rebalanceTimeoutMs = rebalanceTimeoutMs.orElse(this.rebalanceTimeoutMs);
       return this;
     }
 
@@ -144,7 +131,6 @@ public class ShareGroupMember extends GroupMember {
       setClientId(record.clientId());
       setClientHost(record.clientHost());
       setSubscribedTopicNames(record.subscribedTopicNames());
-      setRebalanceTimeoutMs(record.rebalanceTimeoutMs());
       return this;
     }
 
@@ -163,7 +149,6 @@ public class ShareGroupMember extends GroupMember {
               memberEpoch,
               previousMemberEpoch,
               rackId,
-              rebalanceTimeoutMs,
               clientId,
               clientHost,
               subscribedTopicNames,
@@ -178,7 +163,6 @@ public class ShareGroupMember extends GroupMember {
           int memberEpoch,
           int previousMemberEpoch,
           String rackId,
-          int rebalanceTimeoutMs,
           String clientId,
           String clientHost,
           List<String> subscribedTopicNames,
@@ -189,7 +173,6 @@ public class ShareGroupMember extends GroupMember {
     this.memberEpoch = memberEpoch;
     this.previousMemberEpoch = previousMemberEpoch;
     this.rackId = rackId;
-    this.rebalanceTimeoutMs = rebalanceTimeoutMs;
     this.clientId = clientId;
     this.clientHost = clientHost;
     this.subscribedTopicNames = subscribedTopicNames;
@@ -215,7 +198,6 @@ public class ShareGroupMember extends GroupMember {
     ShareGroupMember that = (ShareGroupMember) o;
     return memberEpoch == that.memberEpoch
             && previousMemberEpoch == that.previousMemberEpoch
-            && rebalanceTimeoutMs == that.rebalanceTimeoutMs
             && Objects.equals(memberId, that.memberId)
             && Objects.equals(rackId, that.rackId)
             && Objects.equals(clientId, that.clientId)
@@ -230,7 +212,6 @@ public class ShareGroupMember extends GroupMember {
     result = 31 * result + memberEpoch;
     result = 31 * result + previousMemberEpoch;
     result = 31 * result + Objects.hashCode(rackId);
-    result = 31 * result + rebalanceTimeoutMs;
     result = 31 * result + Objects.hashCode(clientId);
     result = 31 * result + Objects.hashCode(clientHost);
     result = 31 * result + Objects.hashCode(subscribedTopicNames);
@@ -245,7 +226,6 @@ public class ShareGroupMember extends GroupMember {
             ", memberEpoch=" + memberEpoch +
             ", previousMemberEpoch=" + previousMemberEpoch +
             ", rackId='" + rackId + '\'' +
-            ", rebalanceTimeoutMs=" + rebalanceTimeoutMs +
             ", clientId='" + clientId + '\'' +
             ", clientHost='" + clientHost + '\'' +
             ", subscribedTopicNames=" + subscribedTopicNames +
@@ -272,7 +252,7 @@ public class ShareGroupMember extends GroupMember {
   }
 
   /**
-   * @param topicsImage: Topics image objec to search for a specific topic id
+   * @param topicsImage: Topics image object to search for a specific topic id
    *
    * @return The ShareGroupMember mapped as ShareGroupDescribeResponseData.Member.
    */

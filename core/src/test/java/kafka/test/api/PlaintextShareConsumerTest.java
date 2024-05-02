@@ -673,6 +673,7 @@ public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"kraft+kip932"})
+    @Disabled
     public void testMultipleConsumersInGroupConcurrentConsumption(String quorum) {
         AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
 

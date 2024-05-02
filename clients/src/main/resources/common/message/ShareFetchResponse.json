@@ -63,7 +63,7 @@
           "about": "The record data."},
         { "name": "AcquiredRecords", "type": "[]AcquiredRecords", "versions": "0+",
           "about": "The acquired records", "fields": [
-          { "name": "BaseOffset", "type":  "int64", "versions": "0+",
+          { "name": "FirstOffset", "type":  "int64", "versions": "0+",
             "about": "The earliest offset in this batch of acquired records." },
           { "name": "LastOffset", "type": "int64", "versions": "0+", "about":
             "The last offset of this batch of acquired records." },

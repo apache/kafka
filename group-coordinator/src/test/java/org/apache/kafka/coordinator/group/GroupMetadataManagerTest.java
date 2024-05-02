@@ -9449,8 +9449,7 @@ public class GroupMetadataManagerTest {
         ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId("foo")
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)));
+                .setMemberEpoch(0)));
         assertEquals("SubscribedTopicNames must be set in first request.", ex.getMessage());
 
         // MemberId must be non-empty in all requests except for the first one where it
@@ -9504,7 +9503,6 @@ public class GroupMetadataManagerTest {
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupIds.get(1))
                 .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Collections.singletonList("foo")));
 
         // Verify that a member id was generated for the new member.
@@ -9556,7 +9554,6 @@ public class GroupMetadataManagerTest {
             new ShareGroupHeartbeatRequestData()
                 .setGroupId("group-foo")
                 .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
 
         // Verify that a member id was generated for the new member.
@@ -9593,7 +9590,6 @@ public class GroupMetadataManagerTest {
                     .setGroupId(groupId)
                     .setMemberId(memberId)
                     .setMemberEpoch(100) // Epoch must be > 0.
-                    .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
     }
 
@@ -9615,7 +9611,6 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
 
         // The second member is rejected because the member id is unknown and
@@ -9626,7 +9621,6 @@ public class GroupMetadataManagerTest {
                     .setGroupId(groupId)
                     .setMemberId(Uuid.randomUuid().toString())
                     .setMemberEpoch(1)
-                    .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
     }
 
@@ -9653,7 +9647,6 @@ public class GroupMetadataManagerTest {
                     .setGroupId(groupId)
                     .setMemberId(memberId)
                     .setMemberEpoch(100)
-                    .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
 
         // Member joins with epoch 0 to re-join the group.
@@ -9662,7 +9655,6 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
         assertEquals(101, result.response().memberEpoch());
     }
@@ -9702,7 +9694,6 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
 
         assertResponseEquals(
@@ -9725,7 +9716,6 @@ public class GroupMetadataManagerTest {
         ShareGroupMember expectedMember = new ShareGroupMember.Builder(memberId)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setRebalanceTimeoutMs(5000)
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .build();
 
@@ -9762,7 +9752,6 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
                 .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
         assertEquals(101, result.response().memberEpoch());
 
@@ -9772,7 +9761,6 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId2)
                 .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
         assertEquals(102, result.response().memberEpoch());
 
@@ -9782,7 +9770,6 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId2)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
-                .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
 
         assertResponseEquals(
@@ -9827,7 +9814,6 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
                 .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
         assertEquals(101, result.response().memberEpoch());
 
@@ -9837,7 +9823,6 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId2)
                 .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
     }
 

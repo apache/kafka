@@ -179,7 +179,6 @@ public class ShareHeartbeatRequestManagerTest {
 
         // Should include subscription and group basic info to start getting assignments.
         assertEquals(Collections.singletonList(topic), heartbeatRequest.data().subscribedTopicNames());
-        assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, heartbeatRequest.data().rebalanceTimeoutMs());
         assertEquals(DEFAULT_GROUP_ID, heartbeatRequest.data().groupId());
     }
 
@@ -336,7 +335,6 @@ public class ShareHeartbeatRequestManagerTest {
         assertEquals(DEFAULT_GROUP_ID, heartbeatRequest.data().groupId());
         assertEquals(memberId, heartbeatRequest.data().memberId());
         assertEquals(memberEpoch, heartbeatRequest.data().memberEpoch());
-        assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, heartbeatRequest.data().rebalanceTimeoutMs());
         assertEquals(subscribedTopics, heartbeatRequest.data().subscribedTopicNames());
     }
 
@@ -499,7 +497,6 @@ public class ShareHeartbeatRequestManagerTest {
         assertEquals(DEFAULT_GROUP_ID, heartbeatRequest.data().groupId());
         assertEquals(memberId, heartbeatRequest.data().memberId());
         assertEquals(ShareGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH, heartbeatRequest.data().memberEpoch());
-        assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, heartbeatRequest.data().rebalanceTimeoutMs());
         assertEquals(subscribedTopics, heartbeatRequest.data().subscribedTopicNames());
     }
 
@@ -510,7 +507,6 @@ public class ShareHeartbeatRequestManagerTest {
         assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
         assertEquals("", data.memberId());
         assertEquals(0, data.memberEpoch());
-        assertEquals(ConsumerTestBuilder.DEFAULT_MAX_POLL_INTERVAL_MS, data.rebalanceTimeoutMs());
         assertEquals(Collections.emptyList(), data.subscribedTopicNames());
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
@@ -521,7 +517,6 @@ public class ShareHeartbeatRequestManagerTest {
         assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
         assertEquals(memberId, data.memberId());
         assertEquals(1, data.memberEpoch());
-        assertEquals(-1, data.rebalanceTimeoutMs());
         assertNull(data.subscribedTopicNames());
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
@@ -535,7 +530,6 @@ public class ShareHeartbeatRequestManagerTest {
         assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
         assertEquals(memberId, data.memberId());
         assertEquals(0, data.memberEpoch());
-        assertEquals(-1, data.rebalanceTimeoutMs());
         assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.JOINING, membershipManager.state());

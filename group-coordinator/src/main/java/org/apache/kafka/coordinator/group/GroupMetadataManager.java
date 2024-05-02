@@ -1073,9 +1073,6 @@ public class GroupMetadataManager {
         if (request.memberEpoch() > 0 || request.memberEpoch() == ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH) {
             throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
         } else if (request.memberEpoch() == 0) {
-            if (request.rebalanceTimeoutMs() == -1) {
-                throw new InvalidRequestException("RebalanceTimeoutMs must be provided in first request.");
-            }
             if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
                 throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
             }
@@ -1552,7 +1549,6 @@ public class GroupMetadataManager {
      * @param memberId              The member id from the request.
      * @param memberEpoch           The member epoch from the request.
      * @param rackId                The rack id from the request or null.
-     * @param rebalanceTimeoutMs    The rebalance timeout from the request or -1.
      * @param clientId              The client id.
      * @param clientHost            The client host.
      * @param subscribedTopicNames  The list of subscribed topic names from the request or null.
@@ -1565,7 +1561,6 @@ public class GroupMetadataManager {
             String memberId,
             int memberEpoch,
             String rackId,
-            int rebalanceTimeoutMs,
             String clientId,
             String clientHost,
             List<String> subscribedTopicNames
@@ -1595,7 +1590,6 @@ public class GroupMetadataManager {
         // 1. Create or update the member.
         ShareGroupMember updatedMember = updatedMemberBuilder
                 .maybeUpdateRackId(Optional.ofNullable(rackId))
-                .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
                 .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
                 .setClientId(clientId)
                 .setClientHost(clientHost)
@@ -2119,7 +2113,6 @@ public class GroupMetadataManager {
                 request.memberId(),
                 request.memberEpoch(),
                 request.rackId(),
-                request.rebalanceTimeoutMs(),
                 context.clientId(),
                 context.clientAddress.toString(),
                 request.subscribedTopicNames());

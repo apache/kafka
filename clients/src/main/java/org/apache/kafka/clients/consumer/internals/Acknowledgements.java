@@ -162,7 +162,7 @@ public class Acknowledgements {
             Map.Entry<Long, AcknowledgeType> entry = iterator.next();
             if (currentBatch == null) {
                 currentBatch = new ShareFetchRequestData.AcknowledgementBatch();
-                currentBatch.setBaseOffset(entry.getKey());
+                currentBatch.setFirstOffset(entry.getKey());
                 currentBatch.setLastOffset(entry.getKey());
                 if (entry.getValue() != null) {
                     currentBatch.setAcknowledgeType(entry.getValue().id);
@@ -191,7 +191,7 @@ public class Acknowledgements {
                             batches.add(currentBatch);
 
                             currentBatch = new ShareFetchRequestData.AcknowledgementBatch();
-                            currentBatch.setBaseOffset(entry.getKey());
+                            currentBatch.setFirstOffset(entry.getKey());
                             currentBatch.setLastOffset(entry.getKey());
                             currentBatch.setAcknowledgeType(entry.getValue().id);
                             currentBatch.acknowledgeTypes().add(entry.getValue().id);
@@ -204,7 +204,7 @@ public class Acknowledgements {
                         batches.add(currentBatch);
 
                         currentBatch = new ShareFetchRequestData.AcknowledgementBatch();
-                        currentBatch.setBaseOffset(entry.getKey());
+                        currentBatch.setFirstOffset(entry.getKey());
                         currentBatch.setLastOffset(entry.getKey());
                         currentBatch.setAcknowledgeType(entry.getValue().id);
                         currentBatch.acknowledgeTypes().add(entry.getValue().id);
@@ -222,7 +222,7 @@ public class Acknowledgements {
                         batches.add(currentBatch);
 
                         currentBatch = new ShareFetchRequestData.AcknowledgementBatch();
-                        currentBatch.setBaseOffset(entry.getKey());
+                        currentBatch.setFirstOffset(entry.getKey());
                         currentBatch.setLastOffset(entry.getKey());
                         // Put a marker value of -1 while this batch only has gaps
                         currentBatch.setAcknowledgeType((byte) -1);
@@ -242,7 +242,7 @@ public class Acknowledgements {
 
     @Override
     public String toString() {
-        StringBuffer sb = new StringBuffer("Acknowledgements(");
+        StringBuilder sb = new StringBuilder("Acknowledgements(");
         sb.append(acknowledgements);
         if (acknowledgeErrorCode != null) {
             sb.append(", errorCode=");

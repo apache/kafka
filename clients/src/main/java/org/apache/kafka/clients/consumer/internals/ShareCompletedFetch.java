@@ -90,7 +90,7 @@ public class ShareCompletedFetch {
     private List<OffsetAndDeliveryCount> buildAcquiredRecordList(List<ShareFetchResponseData.AcquiredRecords> partitionAcquiredRecords) {
         List<OffsetAndDeliveryCount> acquiredRecordList = new LinkedList<>();
         partitionAcquiredRecords.forEach(acquiredRecords -> {
-            for (long offset = acquiredRecords.baseOffset(); offset <= acquiredRecords.lastOffset(); offset++) {
+            for (long offset = acquiredRecords.firstOffset(); offset <= acquiredRecords.lastOffset(); offset++) {
                 acquiredRecordList.add(new OffsetAndDeliveryCount(offset, acquiredRecords.deliveryCount()));
             }
         });

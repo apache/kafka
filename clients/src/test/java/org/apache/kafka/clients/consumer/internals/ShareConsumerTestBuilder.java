@@ -174,8 +174,7 @@ public class ShareConsumerTestBuilder implements Closeable {
 
         ShareHeartbeatRequestManager.HeartbeatState heartbeatState = spy(new ShareHeartbeatRequestManager.HeartbeatState(
                 subscriptions,
-                membershipManager,
-                DEFAULT_MAX_POLL_INTERVAL_MS));
+                membershipManager));
         ShareHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState = spy(new ShareHeartbeatRequestManager.HeartbeatRequestState(
                 logContext,
                 time,

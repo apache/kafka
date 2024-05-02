@@ -1175,7 +1175,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               partition.acknowledgementBatches().forEach( batch => {
                 try {
                   acknowledgeBatches.add(new SharePartition.AcknowledgementBatch(
-                    batch.baseOffset(),
+                    batch.firstOffset(),
                     batch.lastOffset(),
                     batch.gapOffsets(),
                     AcknowledgeType.forId(batch.acknowledgeType())
@@ -1206,12 +1206,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         var prevEndOffset = -1L
         breakable {
           acknowledgeBatches.forEach(batch => {
-            if (batch.baseOffset() > batch.lastOffset()) {
+            if (batch.firstOffset() > batch.lastOffset()) {
               erroneous += tp -> ShareAcknowledgeResponse.partitionResponse(tp, Errors.INVALID_REQUEST)
               erroneousTopicIdPartitions.add(tp)
               break()
             }
-            if (batch.baseOffset() < prevEndOffset) {
+            if (batch.firstOffset() < prevEndOffset) {
               erroneous += tp -> ShareAcknowledgeResponse.partitionResponse(tp, Errors.INVALID_REQUEST)
               erroneousTopicIdPartitions.add(tp)
               break()
@@ -1219,7 +1219,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             var gapOffsetsValid = true
             breakable {
               batch.gapOffsets().forEach(gapOffset => {
-                if (gapOffset < batch.baseOffset() || gapOffset > batch.lastOffset()) {
+                if (gapOffset < batch.firstOffset() || gapOffset > batch.lastOffset()) {
                   erroneous += tp -> ShareAcknowledgeResponse.partitionResponse(tp, Errors.INVALID_REQUEST)
                   erroneousTopicIdPartitions.add(tp)
                   gapOffsetsValid = false
@@ -4636,7 +4636,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       for (batch : ShareAcknowledgeRequestData.AcknowledgementBatch <- acknowledgePartition.acknowledgementBatches().asScala) {
         try {
           val acknowledgementBatch = new SharePartition.AcknowledgementBatch(
-            batch.baseOffset(),
+            batch.firstOffset(),
             batch.lastOffset(),
             batch.gapOffsets(),
             AcknowledgeType.forId(batch.acknowledgeType())

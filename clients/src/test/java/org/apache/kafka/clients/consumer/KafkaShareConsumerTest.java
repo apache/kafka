@@ -638,7 +638,7 @@ public class KafkaShareConsumerTest {
                             .setPartitionIndex(tip.partition())
                             .setRecords(records)
                             .setAcquiredRecords(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
-                                    .setBaseOffset(firstOffset)
+                                    .setFirstOffset(firstOffset)
                                     .setLastOffset(firstOffset + count - 1)
                                     .setDeliveryCount((short) 1))));
         }

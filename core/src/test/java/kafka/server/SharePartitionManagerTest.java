@@ -1434,10 +1434,10 @@ public class SharePartitionManagerTest {
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
         assertEquals(Errors.NONE.code(), resultData.get(tp1).errorCode());
         assertEquals(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
-                .setBaseOffset(0).setLastOffset(3).setDeliveryCount((short) 1)),
+                .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)),
             resultData.get(tp0).acquiredRecords());
         assertEquals(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
-                .setBaseOffset(100).setLastOffset(103).setDeliveryCount((short) 1)),
+                .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)),
             resultData.get(tp1).acquiredRecords());
     }
 

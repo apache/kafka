@@ -72,7 +72,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setRebalanceTimeoutMs(5 * 60 * 1000)
         .setSubscribedTopicNames(List("foo").asJava), true
     ).build()
 
@@ -160,7 +159,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setRebalanceTimeoutMs(5 * 60 * 1000)
         .setSubscribedTopicNames(List("foo").asJava), true
     ).build()
 
@@ -288,7 +286,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setRebalanceTimeoutMs(5 * 60 * 1000)
         .setSubscribedTopicNames(List("foo").asJava), true
     ).build()
 
@@ -359,7 +356,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         .setGroupId("grp")
         .setMemberEpoch(0)
         .setMemberId(memberId)
-        .setRebalanceTimeoutMs(5 * 60 * 1000)
         .setSubscribedTopicNames(List("foo").asJava), true
     ).build()
 
@@ -394,7 +390,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setRebalanceTimeoutMs(5 * 60 * 1000)
         .setSubscribedTopicNames(List("foo", "bar", "baz").asJava), true
     ).build()
     // Send the request until receiving a successful response. There is a delay
@@ -576,7 +571,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setRebalanceTimeoutMs(500)
         .setSubscribedTopicNames(List("foo").asJava), true
     ).build()
 
@@ -695,7 +689,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setRebalanceTimeoutMs(500)
         .setSubscribedTopicNames(List("foo", "bar").asJava), true
     ).build()
 
@@ -733,7 +726,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setRebalanceTimeoutMs(500)
         .setSubscribedTopicNames(List("foo").asJava), true
     ).build()
     // Send the request until receiving a successful response. There is a delay
@@ -800,7 +792,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setRebalanceTimeoutMs(500)
         .setSubscribedTopicNames(List("foo").asJava), true
     ).build()
 
