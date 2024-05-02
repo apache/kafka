@@ -2405,7 +2405,6 @@ public class DistributedHerderTest {
 
         expectMemberEnsureActive();
         expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList(), true);
-        when(worker.getPlugins()).thenReturn(plugins);
 
         ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
