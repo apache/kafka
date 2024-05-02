@@ -21,7 +21,7 @@ public enum AssignorError {
     // to throw an exception upon an unrecognized error code.
     NONE(0, "NONE", "NONE"),
     INCOMPLETE_SOURCE_TOPIC_METADATA(1, "INCOMPLETE_SOURCE_TOPIC_METADATA","Missing source topics are existed. To check which topics are missing, please look into the logs of the consumer group leader. Only the leaders knows and logs the name of the missing topics."),
-    VERSION_PROBING(2, "VERSION_PROBING", "VERSION_PROBING"), // not actually used anymore, but we may hit it during a rolling upgrade from earlier versions
+    VERSION_PROBING(2, "VERSION_PROBING", "Could not read internal rebalance metadata due to unknown encoding version."), // not actually used anymore, but we may hit it during a rolling upgrade from earlier versions
     ASSIGNMENT_ERROR(3, "ASSIGNMENT_ERROR", "Hit an unexpected exception during task assignment phase of rebalance."),
     SHUTDOWN_REQUESTED(4, "SHUTDOWN_REQUESTED", "A KafkaStreams instance encountered a fatal error and requested a shutdown for the entire application.");
 
