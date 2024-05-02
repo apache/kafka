@@ -147,7 +147,7 @@ public class SharePartitionManager implements AutoCloseable {
                 // TODO: Fetch inflight and delivery count from config.
                 SharePartition sharePartition = partitionCacheMap.computeIfAbsent(sharePartitionKey,
                     k -> new SharePartition(shareFetchPartitionData.groupId, topicIdPartition, maxDeliveryCount,
-                            maxInFlightMessages, recordLockDurationMs, timer, time));
+                            maxInFlightMessages, recordLockDurationMs, timer, time, null));
                 int partitionMaxBytes = shareFetchPartitionData.partitionMaxBytes.getOrDefault(topicIdPartition, 0);
                 // Add the share partition to the list of partitions to be fetched only if we can
                 // acquire the fetch lock on it.

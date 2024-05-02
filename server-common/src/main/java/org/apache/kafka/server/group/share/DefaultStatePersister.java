@@ -19,7 +19,6 @@ package org.apache.kafka.server.group.share;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -37,7 +36,7 @@ public class DefaultStatePersister implements Persister {
    * @param request InitializeShareGroupStateParameters
    * @return InitializeShareGroupStateResult
    */
-  public CompletableFuture<List<InitializeShareGroupStateResult>> initializeState(InitializeShareGroupStateParameters request) {
+  public CompletableFuture<InitializeShareGroupStateResult> initializeState(InitializeShareGroupStateParameters request) {
     throw new RuntimeException("not implemented");
   }
 
@@ -48,7 +47,7 @@ public class DefaultStatePersister implements Persister {
    * @param request ReadShareGroupStateParameters
    * @return ReadShareGroupStateResult
    */
-  public CompletableFuture<List<ReadShareGroupStateResult>> readState(ReadShareGroupStateParameters request) {
+  public CompletableFuture<ReadShareGroupStateResult> readState(ReadShareGroupStateParameters request) {
     throw new RuntimeException("not implemented");
   }
 
@@ -59,7 +58,7 @@ public class DefaultStatePersister implements Persister {
    * @param request WriteShareGroupStateParameters
    * @return WriteShareGroupStateResult
    */
-  public CompletableFuture<List<WriteShareGroupStateResult>> writeState(WriteShareGroupStateParameters request) {
+  public CompletableFuture<WriteShareGroupStateResult> writeState(WriteShareGroupStateParameters request) {
     throw new RuntimeException("not implemented");
   }
 
@@ -70,7 +69,7 @@ public class DefaultStatePersister implements Persister {
    * @param request DeleteShareGroupStateParameters
    * @return DeleteShareGroupStateResult
    */
-  public CompletableFuture<List<DeleteShareGroupStateResult>> deleteState(DeleteShareGroupStateParameters request) {
+  public CompletableFuture<DeleteShareGroupStateResult> deleteState(DeleteShareGroupStateParameters request) {
     throw new RuntimeException("not implemented");
   }
 
@@ -81,7 +80,7 @@ public class DefaultStatePersister implements Persister {
    * @param request ReadShareGroupOffsetsStateParameters
    * @return ReadShareGroupOffsetsStateResult
    */
-  public CompletableFuture<List<ReadShareGroupOffsetsStateResult>> readOffsets(ReadShareGroupOffsetsStateParameters request) {
+  public CompletableFuture<ReadShareGroupOffsetsStateResult> readOffsets(ReadShareGroupOffsetsStateParameters request) {
     throw new RuntimeException("not implemented");
   }
 }
