@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 public final class BrokerLocalStorage {
 
     private final Integer brokerId;
-    private final Set<File> brokerStorageDirectorys;
+    private final Set<File> brokerStorageDirectories;
     private final Integer storageWaitTimeoutSec;
 
     private final int storagePollPeriodSec = 1;
@@ -49,7 +49,7 @@ public final class BrokerLocalStorage {
                               Set<String> storageDirnames,
                               Integer storageWaitTimeoutSec) {
         this.brokerId = brokerId;
-        this.brokerStorageDirectorys = storageDirnames.stream().map(File::new).collect(Collectors.toSet());
+        this.brokerStorageDirectories = storageDirnames.stream().map(File::new).collect(Collectors.toSet());
         this.storageWaitTimeoutSec = storageWaitTimeoutSec;
     }
 
@@ -57,8 +57,8 @@ public final class BrokerLocalStorage {
         return brokerId;
     }
 
-    public Set<File> getBrokerStorageDirectory() {
-        return brokerStorageDirectorys;
+    public Set<File> getBrokerStorageDirectories() {
+        return brokerStorageDirectories;
     }
 
     /**
@@ -146,11 +146,12 @@ public final class BrokerLocalStorage {
         if (offsetToSearch.equals(firstLogFileBaseOffset)) {
             return true;
         }
-        File partitionDir = brokerStorageDirectorys.stream()
+        File logDir = brokerStorageDirectories.stream()
                 .filter(dir -> dirContainsTopicPartition(topicPartition, dir))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(String.format("[BrokerId=%d] Directory for the topic-partition %s " +
                 "was not found", brokerId, topicPartition)));
+        File partitionDir = new File(logDir.getAbsolutePath(), topicPartition.toString());
         File firstSegmentFile = new File(partitionDir.getAbsolutePath(),
                 LogFileUtils.filenamePrefixFromOffset(firstLogFileBaseOffset) + LogFileUtils.LOG_FILE_SUFFIX);
         try (FileRecords fileRecords = FileRecords.open(firstSegmentFile, false)) {
@@ -166,7 +167,7 @@ public final class BrokerLocalStorage {
     }
 
     public void eraseStorage() throws IOException {
-        for (File brokerDir : brokerStorageDirectorys) {
+        for (File brokerDir : brokerStorageDirectories) {
             for (File file : Objects.requireNonNull(brokerDir.listFiles())) {
                 Utils.delete(file);
             }
@@ -192,7 +193,7 @@ public final class BrokerLocalStorage {
     }
 
     private File[] getTopicPartitionFiles(TopicPartition topicPartition) {
-        return getTopicPartitionFiles(topicPartition, brokerStorageDirectorys);
+        return getTopicPartitionFiles(topicPartition, brokerStorageDirectories);
     }
 
     private File[] getTopicPartitionFiles(TopicPartition topicPartition, Set<File> logDirs) {

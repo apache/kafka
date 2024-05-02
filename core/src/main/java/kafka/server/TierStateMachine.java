@@ -158,31 +158,21 @@ public class TierStateMachine {
         }
     }
 
-    private void buildProducerSnapshotFile(File snapshotFile,
+    private void buildProducerSnapshotFile(UnifiedLog unifiedLog,
+                                           long nextOffset,
                                            RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                            RemoteLogManager rlm) throws IOException, RemoteStorageException {
+        // Restore producer snapshot
+        File snapshotFile = LogFileUtils.producerSnapshotFile(unifiedLog.dir(), nextOffset);
         Path tmpSnapshotFile = Paths.get(snapshotFile.getAbsolutePath() + ".tmp");
         // Copy it to snapshot file in atomic manner.
         Files.copy(rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT),
                 tmpSnapshotFile, StandardCopyOption.REPLACE_EXISTING);
         Utils.atomicMoveWithFallback(tmpSnapshotFile, snapshotFile.toPath(), false);
-    }
 
-    /**
-     * Optionally advance the state of the tier state machine, based on the
-     * current PartitionFetchState. The decision to advance the tier
-     * state machine is implementation specific.
-     *
-     * @param topicPartition the topic partition
-     * @param currentFetchState the current PartitionFetchState which will
-     *                          be used to derive the return value
-     *
-     * @return the new PartitionFetchState if the tier state machine was advanced, otherwise, return the currentFetchState
-     */
-    Optional<PartitionFetchState> maybeAdvanceState(TopicPartition topicPartition,
-                                                    PartitionFetchState currentFetchState) {
-        // This is currently a no-op but will be used for implementing async tiering logic in KAFKA-13560.
-        return Optional.of(currentFetchState);
+        // Reload producer snapshots.
+        unifiedLog.producerStateManager().truncateFullyAndReloadSnapshots();
+        unifiedLog.loadProducerState(nextOffset);
     }
 
     /**
@@ -197,91 +187,82 @@ public class TierStateMachine {
                                         Long leaderLogStartOffset,
                                         UnifiedLog unifiedLog) throws IOException, RemoteStorageException {
 
-        long nextOffset;
-
-        if (unifiedLog.remoteStorageSystemEnable() && unifiedLog.config().remoteStorageEnable()) {
-            if (replicaMgr.remoteLogManager().isEmpty()) throw new IllegalStateException("RemoteLogManager is not yet instantiated");
-
-            RemoteLogManager rlm = replicaMgr.remoteLogManager().get();
-
-            // Find the respective leader epoch for (leaderLocalLogStartOffset - 1). We need to build the leader epoch cache
-            // until that offset
-            long previousOffsetToLeaderLocalLogStartOffset = leaderLocalLogStartOffset - 1;
-            int targetEpoch;
-            // If the existing epoch is 0, no need to fetch from earlier epoch as the desired offset(leaderLogStartOffset - 1)
-            // will have the same epoch.
-            if (epochForLeaderLocalLogStartOffset == 0) {
-                targetEpoch = epochForLeaderLocalLogStartOffset;
-            } else {
-                // Fetch the earlier epoch/end-offset(exclusive) from the leader.
-                OffsetForLeaderEpochResponseData.EpochEndOffset earlierEpochEndOffset = fetchEarlierEpochEndOffset(epochForLeaderLocalLogStartOffset, topicPartition, currentLeaderEpoch);
-                // Check if the target offset lies within the range of earlier epoch. Here, epoch's end-offset is exclusive.
-                if (earlierEpochEndOffset.endOffset() > previousOffsetToLeaderLocalLogStartOffset) {
-                    // Always use the leader epoch from returned earlierEpochEndOffset.
-                    // This gives the respective leader epoch, that will handle any gaps in epochs.
-                    // For ex, leader epoch cache contains:
-                    // leader-epoch   start-offset
-                    //  0               20
-                    //  1               85
-                    //  <2> - gap no messages were appended in this leader epoch.
-                    //  3               90
-                    //  4               98
-                    // There is a gap in leader epoch. For leaderLocalLogStartOffset as 90, leader-epoch is 3.
-                    // fetchEarlierEpochEndOffset(2) will return leader-epoch as 1, end-offset as 90.
-                    // So, for offset 89, we should return leader epoch as 1 like below.
-                    targetEpoch = earlierEpochEndOffset.leaderEpoch();
-                } else {
-                    targetEpoch = epochForLeaderLocalLogStartOffset;
-                }
-            }
-
-            Optional<RemoteLogSegmentMetadata> maybeRlsm = rlm.fetchRemoteLogSegmentMetadata(topicPartition, targetEpoch, previousOffsetToLeaderLocalLogStartOffset);
-
-            if (maybeRlsm.isPresent()) {
-                RemoteLogSegmentMetadata remoteLogSegmentMetadata = maybeRlsm.get();
-                // Build leader epoch cache, producer snapshots until remoteLogSegmentMetadata.endOffset() and start
-                // segments from (remoteLogSegmentMetadata.endOffset() + 1)
-                // Assign nextOffset with the offset from which next fetch should happen.
-                nextOffset = remoteLogSegmentMetadata.endOffset() + 1;
-
-                // Truncate the existing local log before restoring the leader epoch cache and producer snapshots.
-                Partition partition = replicaMgr.getPartitionOrException(topicPartition);
-                partition.truncateFullyAndStartAt(nextOffset, useFutureLog, Option.apply(leaderLogStartOffset));
-                // Increment start offsets
-                unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented);
-                unifiedLog.maybeIncrementLocalLogStartOffset(nextOffset, LeaderOffsetIncremented);
-
-                // Build leader epoch cache.
-                List<EpochEntry> epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata);
-                if (unifiedLog.leaderEpochCache().isDefined()) {
-                    unifiedLog.leaderEpochCache().get().assign(epochs);
-                }
-
-                log.info("Updated the epoch cache from remote tier till offset: {} with size: {} for {}", leaderLocalLogStartOffset, epochs.size(), partition);
-
-                // Restore producer snapshot
-                File snapshotFile = LogFileUtils.producerSnapshotFile(unifiedLog.dir(), nextOffset);
-                buildProducerSnapshotFile(snapshotFile, remoteLogSegmentMetadata, rlm);
-
-                // Reload producer snapshots.
-                unifiedLog.producerStateManager().truncateFullyAndReloadSnapshots();
-                unifiedLog.loadProducerState(nextOffset);
-                log.debug("Built the leader epoch cache and producer snapshots from remote tier for {}, " +
-                                "with active producers size: {}, leaderLogStartOffset: {}, and logEndOffset: {}",
-                        partition, unifiedLog.producerStateManager().activeProducers().size(), leaderLogStartOffset, nextOffset);
-            } else {
-                throw new RemoteStorageException("Couldn't build the state from remote store for partition: " + topicPartition +
-                        ", currentLeaderEpoch: " + currentLeaderEpoch +
-                        ", leaderLocalLogStartOffset: " + leaderLocalLogStartOffset +
-                        ", leaderLogStartOffset: " + leaderLogStartOffset +
-                        ", epoch: " + targetEpoch +
-                        "as the previous remote log segment metadata was not found");
-            }
-        } else {
+        if (!unifiedLog.remoteStorageSystemEnable() || !unifiedLog.config().remoteStorageEnable()) {
             // If the tiered storage is not enabled throw an exception back so that it will retry until the tiered storage
             // is set as expected.
             throw new RemoteStorageException("Couldn't build the state from remote store for partition " + topicPartition + ", as remote log storage is not yet enabled");
         }
+
+        if (replicaMgr.remoteLogManager().isEmpty())
+            throw new IllegalStateException("RemoteLogManager is not yet instantiated");
+
+        RemoteLogManager rlm = replicaMgr.remoteLogManager().get();
+
+        // Find the respective leader epoch for (leaderLocalLogStartOffset - 1). We need to build the leader epoch cache
+        // until that offset
+        long previousOffsetToLeaderLocalLogStartOffset = leaderLocalLogStartOffset - 1;
+        int targetEpoch;
+        // If the existing epoch is 0, no need to fetch from earlier epoch as the desired offset(leaderLogStartOffset - 1)
+        // will have the same epoch.
+        if (epochForLeaderLocalLogStartOffset == 0) {
+            targetEpoch = epochForLeaderLocalLogStartOffset;
+        } else {
+            // Fetch the earlier epoch/end-offset(exclusive) from the leader.
+            OffsetForLeaderEpochResponseData.EpochEndOffset earlierEpochEndOffset = fetchEarlierEpochEndOffset(epochForLeaderLocalLogStartOffset, topicPartition, currentLeaderEpoch);
+            // Check if the target offset lies within the range of earlier epoch. Here, epoch's end-offset is exclusive.
+            if (earlierEpochEndOffset.endOffset() > previousOffsetToLeaderLocalLogStartOffset) {
+                // Always use the leader epoch from returned earlierEpochEndOffset.
+                // This gives the respective leader epoch, that will handle any gaps in epochs.
+                // For ex, leader epoch cache contains:
+                // leader-epoch   start-offset
+                //  0               20
+                //  1               85
+                //  <2> - gap no messages were appended in this leader epoch.
+                //  3               90
+                //  4               98
+                // There is a gap in leader epoch. For leaderLocalLogStartOffset as 90, leader-epoch is 3.
+                // fetchEarlierEpochEndOffset(2) will return leader-epoch as 1, end-offset as 90.
+                // So, for offset 89, we should return leader epoch as 1 like below.
+                targetEpoch = earlierEpochEndOffset.leaderEpoch();
+            } else {
+                targetEpoch = epochForLeaderLocalLogStartOffset;
+            }
+        }
+
+        RemoteLogSegmentMetadata remoteLogSegmentMetadata = rlm.fetchRemoteLogSegmentMetadata(topicPartition, targetEpoch, previousOffsetToLeaderLocalLogStartOffset)
+                .orElseThrow(() -> new RemoteStorageException("Couldn't build the state from remote store for partition: " + topicPartition +
+                        ", currentLeaderEpoch: " + currentLeaderEpoch +
+                        ", leaderLocalLogStartOffset: " + leaderLocalLogStartOffset +
+                        ", leaderLogStartOffset: " + leaderLogStartOffset +
+                        ", epoch: " + targetEpoch +
+                        "as the previous remote log segment metadata was not found"));
+
+
+        // Build leader epoch cache, producer snapshots until remoteLogSegmentMetadata.endOffset() and start
+        // segments from (remoteLogSegmentMetadata.endOffset() + 1)
+        // Assign nextOffset with the offset from which next fetch should happen.
+        long nextOffset = remoteLogSegmentMetadata.endOffset() + 1;
+
+        // Truncate the existing local log before restoring the leader epoch cache and producer snapshots.
+        Partition partition = replicaMgr.getPartitionOrException(topicPartition);
+        partition.truncateFullyAndStartAt(nextOffset, useFutureLog, Option.apply(leaderLogStartOffset));
+        // Increment start offsets
+        unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented);
+        unifiedLog.maybeIncrementLocalLogStartOffset(nextOffset, LeaderOffsetIncremented);
+
+        // Build leader epoch cache.
+        List<EpochEntry> epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata);
+        if (unifiedLog.leaderEpochCache().isDefined()) {
+            unifiedLog.leaderEpochCache().get().assign(epochs);
+        }
+
+        log.info("Updated the epoch cache from remote tier till offset: {} with size: {} for {}", leaderLocalLogStartOffset, epochs.size(), partition);
+
+        buildProducerSnapshotFile(unifiedLog, nextOffset, remoteLogSegmentMetadata, rlm);
+
+        log.debug("Built the leader epoch cache and producer snapshots from remote tier for {}, " +
+                        "with active producers size: {}, leaderLogStartOffset: {}, and logEndOffset: {}",
+                partition, unifiedLog.producerStateManager().activeProducers().size(), leaderLogStartOffset, nextOffset);
 
         return nextOffset;
     }

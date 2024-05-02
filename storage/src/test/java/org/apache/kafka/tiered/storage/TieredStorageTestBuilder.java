@@ -315,8 +315,8 @@ public final class TieredStorageTestBuilder {
     }
 
     public TieredStorageTestBuilder alterLogDir(String topic,
-                                                    Integer partition,
-                                                    int replicaIds) {
+                                                Integer partition,
+                                                int replicaIds) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         actions.add(new AlterLogDirAction(topicPartition, replicaIds));
         return this;

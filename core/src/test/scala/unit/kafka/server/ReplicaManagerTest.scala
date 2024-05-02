@@ -3285,9 +3285,7 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
     val path1 = TestUtils.tempRelativeDir("data").getAbsolutePath
     val path2 = TestUtils.tempRelativeDir("data2").getAbsolutePath
-    if (enableRemoteStorage) {
-      props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, enableRemoteStorage.toString)
-    }
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, enableRemoteStorage.toString)
     props.put("log.dirs", path1 + "," + path2)
     propsModifier.apply(props)
     val config = KafkaConfig.fromProps(props)
