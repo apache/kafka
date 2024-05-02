@@ -246,7 +246,7 @@ public class ConnectorsResource {
     @Path("/{connector}/config")
     public Response patchConnectorConfig(final @PathParam("connector") String connector,
                                          final @Context HttpHeaders headers,
-                                         final @QueryParam("forward") Boolean forward,
+                                         final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
                                          final Map<String, String> connectorConfigPatch) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.patchConnectorConfig(connector, connectorConfigPatch, cb);
