@@ -41,13 +41,17 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
-import java.util.function.Function;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class BatchAccumulator<T> implements Closeable {
+    @FunctionalInterface
+    public interface MemoryRecordsCreator {
+        MemoryRecords create(long baseOffset, int epoch, ByteBuffer byteBuffer);
+    }
+
     private final int epoch;
     private final Time time;
     private final SimpleTimer lingerTimer;
@@ -217,14 +221,14 @@ public class BatchAccumulator<T> implements Closeable {
      *        batch that will be appended. The memory records returned must contain one
      *        control batch and that control batch have at least one record.
      */
-    public void appendControlMessages(Function<ByteBuffer, MemoryRecords> valueCreator) {
+    public void appendControlMessages(MemoryRecordsCreator valueCreator) {
         appendLock.lock();
         try {
             ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSize);
             if (buffer != null) {
                 try {
                     forceDrain();
-                    MemoryRecords memoryRecords = valueCreator.apply(buffer);
+                    MemoryRecords memoryRecords = valueCreator.create(nextOffset, epoch, buffer);
 
                     int numberOfRecords = validateMemoryRecordAndReturnCount(memoryRecords);
 
@@ -259,12 +263,26 @@ public class BatchAccumulator<T> implements Closeable {
         }
 
         MutableRecordBatch batch = batches.next();
+        Integer numberOfRecords = batch.countOrNull();
         if (!batch.isControlBatch()) {
             throw new IllegalArgumentException("valueCreator didn't creatte a control batch");
-        }
-
-        Integer numberOfRecords = batch.countOrNull();
-        if (numberOfRecords == null) {
+        } else if (batch.baseOffset() != nextOffset) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Expected a base offset of {} but got {}",
+                    nextOffset,
+                    batch.baseOffset()
+                )
+            );
+        } else if (batch.partitionLeaderEpoch() != epoch) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Expected a partition leader epoch of {} but got {}",
+                    epoch,
+                    batch.partitionLeaderEpoch()
+                )
+            );
+        } else if (numberOfRecords == null) {
             throw new IllegalArgumentException("valueCreator didn't create a batch with the count");
         } else if (batches.hasNext()) {
             throw new IllegalArgumentException("valueCreator created more than one batch");
@@ -284,11 +302,11 @@ public class BatchAccumulator<T> implements Closeable {
         LeaderChangeMessage leaderChangeMessage,
         long currentTimestamp
     ) {
-        appendControlMessages(buffer ->
+        appendControlMessages((baseOffset, epoch, buffer) ->
             MemoryRecords.withLeaderChangeMessage(
-                this.nextOffset,
+                baseOffset,
                 currentTimestamp,
-                this.epoch,
+                epoch,
                 buffer,
                 leaderChangeMessage
             )
@@ -307,11 +325,11 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotHeaderRecord snapshotHeaderRecord,
         long currentTimestamp
     ) {
-        appendControlMessages(buffer ->
+        appendControlMessages((baseOffset, epoch, buffer) ->
             MemoryRecords.withSnapshotHeaderRecord(
-                this.nextOffset,
+                nextOffset,
                 currentTimestamp,
-                this.epoch,
+                epoch,
                 buffer,
                 snapshotHeaderRecord
             )
@@ -329,11 +347,11 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotFooterRecord snapshotFooterRecord,
         long currentTimestamp
     ) {
-        appendControlMessages(buffer ->
+        appendControlMessages((baseOffset, epoch, buffer) ->
             MemoryRecords.withSnapshotFooterRecord(
-                this.nextOffset,
+                nextOffset,
                 currentTimestamp,
-                this.epoch,
+                epoch,
                 buffer,
                 snapshotFooterRecord
             )
@@ -564,5 +582,4 @@ public class BatchAccumulator<T> implements Closeable {
             return Math.max(0, deadlineMs.get() - currentTimeMs);
         }
     }
-
 }

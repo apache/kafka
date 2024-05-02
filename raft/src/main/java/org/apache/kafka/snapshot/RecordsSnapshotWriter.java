@@ -212,21 +212,21 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                 serde
             );
 
-            writer.accumulator.appendControlMessages(buffer -> {
+            writer.accumulator.appendControlMessages((baseOffset, epoch, buffer) -> {
                 long now = time.milliseconds();
                 try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                         buffer,
                         RecordBatch.CURRENT_MAGIC_VALUE,
                         compressionType,
                         TimestampType.CREATE_TIME,
-                        0, // initialOffset
+                        baseOffset,
                         now,
                         RecordBatch.NO_PRODUCER_ID,
                         RecordBatch.NO_PRODUCER_EPOCH,
                         RecordBatch.NO_SEQUENCE,
                         false, // isTransactional
                         true,  // isControlBatch
-                        rawSnapshotWriter.get().snapshotId().epoch(),
+                        epoch,
                         buffer.capacity()
                     )
                 ) {
@@ -256,8 +256,6 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                     return builder.build();
                 }
             });
-
-            writer.accumulator.forceDrain();
 
             return writer;
         }
