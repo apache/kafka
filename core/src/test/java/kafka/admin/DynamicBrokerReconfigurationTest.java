@@ -34,6 +34,8 @@ import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import scala.None$;
+import scala.collection.JavaConverters;
 
 import java.io.File;
 import java.util.Arrays;
@@ -41,6 +43,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -287,8 +290,9 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         waitForConfig(configPrefix + SSL_KEYSTORE_LOCATION_CONFIG, props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG), 10000);
     }
 
+    @SuppressWarnings({"deprecation", "unchecked"}) // Added for Scala 2.12 compatibility for usages of JavaConverters
     private void alterConfigsUsingConfigCommand(Properties props) {
-        File propsFile = kafka.utils.TestUtils.tempPropertiesFile(clientProps(SecurityProtocol.SSL, scala.None$.empty()));
+        File propsFile = kafka.utils.TestUtils.tempPropertiesFile(JavaConverters.mapAsScalaMap((Map) clientProps(SecurityProtocol.SSL, None$.empty())));
 
         servers().foreach(server -> {
             String[] args = new String[]{"--bootstrap-server", kafka.utils.TestUtils.bootstrapServers(servers(), new ListenerName(SecureInternal())),

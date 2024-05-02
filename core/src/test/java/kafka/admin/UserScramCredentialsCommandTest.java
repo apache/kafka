@@ -25,7 +25,6 @@ import kafka.utils.Exit;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.extension.ExtendWith;
-import scala.Console;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -87,10 +86,13 @@ public class UserScramCredentialsCommandTest {
         List<String> commandArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", cluster.bootstrapServers()));
         commandArgs.addAll(Arrays.asList(args));
         try {
-            Console.withOut(printStream, () -> {
+            PrintStream prev = System.out;
+            System.setOut(printStream);
+            try {
                 ConfigCommand.main(commandArgs.toArray(new String[0]));
-                return null;
-            });
+            } finally {
+                System.setOut(prev);
+            }
             return new ConfigCommandResult(byteArrayOutputStream.toString(utf8));
         } catch (Exception e) {
             return new ConfigCommandResult("", exitStatus.get());

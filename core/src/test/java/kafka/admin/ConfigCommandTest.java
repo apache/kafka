@@ -51,6 +51,7 @@ import org.apache.kafka.common.utils.Sanitizer;
 import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.server.config.ZooKeeperInternals;
 import org.junit.jupiter.api.Test;
+import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
 import java.io.File;
@@ -892,13 +893,14 @@ public class ConfigCommandTest {
         return ConfigTest.newConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, Collections.emptyList());
     }
 
+    @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
     public void doShouldAlterTopicConfig(boolean file) throws Exception {
         String filePath = "";
-        Properties addedConfigs = new Properties();
+        Map<String, String> addedConfigs = new HashMap<>();
         addedConfigs.put("delete.retention.ms", "1000000");
         addedConfigs.put("min.insync.replicas", "2");
         if (file) {
-            File f = TestUtils.tempPropertiesFile(addedConfigs);
+            File f = TestUtils.tempPropertiesFile(JavaConverters.mapAsScalaMap(addedConfigs));
             filePath = f.getPath();
         }
 
