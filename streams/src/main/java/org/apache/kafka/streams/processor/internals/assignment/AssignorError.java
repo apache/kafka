@@ -22,7 +22,7 @@ public enum AssignorError {
     NONE(0, "NONE", "NONE"),
     INCOMPLETE_SOURCE_TOPIC_METADATA(1, "INCOMPLETE_SOURCE_TOPIC_METADATA", "Missing metadata for source topics. Check the group leader logs for details."),
     VERSION_PROBING(2, "VERSION_PROBING", "Could not read internal rebalance metadata due to unknown encoding version."), // not actually used anymore, but we may hit it during a rolling upgrade from earlier versions
-    ASSIGNMENT_ERROR(3, "ASSIGNMENT_ERROR", "Hit an unexpected exception during task assignment phase of rebalance."),
+    ASSIGNMENT_ERROR(3, "ASSIGNMENT_ERROR", "Internal task assignment error. Check the group leader logs for details."),
     SHUTDOWN_REQUESTED(4, "SHUTDOWN_REQUESTED", "A KafkaStreams instance encountered a fatal error and requested a shutdown for the entire application.");
 
     private final int code;
