@@ -19,29 +19,24 @@ package kafka.admin
 import kafka.admin.AclCommand.AclCommandOptions
 import kafka.security.authorizer.AclAuthorizer
 import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
-import kafka.utils.{Exit, LogCaptureAppender, Logging, TestUtils}
-import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
+import kafka.utils.{Exit, Logging, TestUtils}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern}
-import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.{AppInfoParser, SecurityUtils}
-import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.ServerConfigs
-import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
-import java.io.{ByteArrayOutputStream, File}
+import java.io.ByteArrayOutputStream
 import java.util.Properties
-import javax.management.InstanceAlreadyExistsException
 
 class AclCommandTest extends QuorumTestHarness with Logging {
 
@@ -107,7 +102,6 @@ class AclCommandTest extends QuorumTestHarness with Logging {
 
   private var brokerProps: Properties = _
   private var zkArgs: Array[String] = _
-  private var adminArgs: Array[String] = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -139,24 +133,6 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   @Test
   def testAclCliWithAuthorizer(): Unit = {
     testAclCli(zkArgs)
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testAclCliWithAdminAPI(quorum: String): Unit = {
-    createServer()
-    testAclCli(adminArgs)
-  }
-
-  private def createServer(commandConfig: Option[File] = None): Unit = {
-    servers = Seq(createBroker(KafkaConfig.fromProps(brokerProps)))
-    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-
-    var adminArgs = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, listenerName))
-    if (commandConfig.isDefined) {
-      adminArgs ++= Array("--command-config", commandConfig.get.getAbsolutePath)
-    }
-    this.adminArgs = adminArgs
   }
 
   private def callMain(args: Array[String]): (String, String) = {
@@ -207,35 +183,6 @@ class AclCommandTest extends QuorumTestHarness with Logging {
     testProducerConsumerCli(zkArgs)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testProducerConsumerCliWithAdminAPI(quorum: String): Unit = {
-    createServer()
-    testProducerConsumerCli(adminArgs)
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testAclCliWithClientId(quorum: String): Unit = {
-    val adminClientConfig = TestUtils.tempFile("client.id=my-client")
-
-    createServer(Some(adminClientConfig))
-
-    val appender = LogCaptureAppender.createAndRegister()
-    val previousLevel = LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], Level.WARN)
-    try {
-        testAclCli(adminArgs)
-    } finally {
-      LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], previousLevel)
-      LogCaptureAppender.unregister(appender)
-    }
-    val warning = appender.getMessages.find(e => e.getLevel == Level.WARN &&
-      e.getThrowableInformation != null &&
-      e.getThrowableInformation.getThrowable.getClass.getName == classOf[InstanceAlreadyExistsException].getName)
-    assertFalse(warning.isDefined, "There should be no warnings about multiple registration of mbeans")
-
-  }
-
   private def testProducerConsumerCli(cmdArgs: Array[String]): Unit = {
     for ((cmd, resourcesToAcls) <- CmdToResourcesToAcl) {
       val resourceCommand: Array[String] = resourcesToAcls.keys.map(ResourceToCommand).foldLeft(Array[String]())(_ ++ _)
@@ -254,13 +201,6 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   @Test
   def testAclsOnPrefixedResourcesWithAuthorizer(): Unit = {
     testAclsOnPrefixedResources(zkArgs)
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testAclsOnPrefixedResourcesWithAdminAPI(quorum: String): Unit = {
-    createServer()
-    testAclsOnPrefixedResources(adminArgs)
   }
 
   private def testAclsOnPrefixedResources(cmdArgs: Array[String]): Unit = {
@@ -295,13 +235,6 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   @Test
   def testPatternTypesWithAuthorizer(): Unit = {
     testPatternTypes(zkArgs)
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testPatternTypesWithAdminAPI(quorum: String): Unit = {
-    createServer()
-    testPatternTypes(adminArgs)
   }
 
   private def testPatternTypes(cmdArgs: Array[String]): Unit = {
