@@ -906,6 +906,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     return position.offset;
 
                 updateFetchPositions(timer);
+                timer.update();
             } while (timer.notExpired());
 
             throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the position " +

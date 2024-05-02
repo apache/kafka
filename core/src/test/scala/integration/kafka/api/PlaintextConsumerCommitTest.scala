@@ -17,6 +17,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.test.MockConsumerInterceptor
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
@@ -269,6 +270,19 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     consumer.seek(tp, 0)
 
     consumer.commitSync()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @Timeout(15)
+  def testPositionRespectsTimeout(quorum: String, groupProtocol: String): Unit = {
+    val topicPartition = new TopicPartition(topic, 15)
+    val consumer = createConsumer()
+    consumer.assign(List(topicPartition).asJava)
+
+    // When position() is called for a topic/partition that doesn't exist, the consumer will repeatedly update the
+    // local metadata. However, it should give up after the user-supplied timeout has past.
+    assertThrows(classOf[TimeoutException], () => consumer.position(topicPartition, Duration.ofSeconds(3)))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
