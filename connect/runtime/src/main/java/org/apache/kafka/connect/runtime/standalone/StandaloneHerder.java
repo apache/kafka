@@ -267,7 +267,7 @@ public class StandaloneHerder extends AbstractHerder {
                         () -> putConnectorConfig(connName, patchedConfig, null, true, callback, configInfos)
                 );
             });
-        } catch (ConnectException e) {
+        } catch (Throwable e) {
             callback.onCompletion(e, null);
         }
     }
