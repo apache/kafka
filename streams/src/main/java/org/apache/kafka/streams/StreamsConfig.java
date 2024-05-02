@@ -1508,15 +1508,10 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     private Map<String, Object> getCommonConsumerConfigs() {
+        // Get all consumer configs that are prefixed with "consumer."
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
 
-        checkIfUnexpectedUserSpecifiedConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
-        checkIfUnexpectedUserSpecifiedConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
-
-        final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
-        if (StreamsConfigUtils.processingMode(this) == StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2) {
-            consumerProps.put("internal.throw.on.fetch.stable.offset.unsupported", true);
-        }
+        // Get all custom consumer configs 
         consumerProps.putAll(getClientCustomProps());
         consumerProps.putAll(clientProvidedProps);
 
@@ -1526,7 +1521,7 @@ public class StreamsConfig extends AbstractConfig {
         return consumerProps;
     }
 
-    private void checkIfUnexpectedUserSpecifiedConfig(final Map<String, Object> clientProvidedProps,
+    private void checkIfUnexpectedUserSpecifiedConsumerConfig(final Map<String, Object> clientProvidedProps,
                                                               final String[] nonConfigurableConfigs) {
         // Streams does not allow users to configure certain consumer/producer configurations, for example,
         // enable.auto.commit. In cases where user tries to override such non-configurable
@@ -1541,7 +1536,7 @@ public class StreamsConfig extends AbstractConfig {
             if (clientProvidedProps.containsKey(config)) {
                 if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
                     if (!clientProvidedProps.get(config).equals(CONSUMER_DEFAULT_OVERRIDES.get(config))) {
-                        log.warn(String.format(nonConfigurableConfigMessage, "consumer", config, "", clientProvidedProps.get(config), CONSUMER_DEFAULT_OVERRIDES.get(config)));
+                        log.warn(String.format(nonConfigurableConfigMessage, "consumer", config, "", clientProvidedProps.get(config),  CONSUMER_DEFAULT_OVERRIDES.get(config)));
                         clientProvidedProps.remove(config);
                     }
                 } else if (eosEnabled) {
@@ -1565,6 +1560,7 @@ public class StreamsConfig extends AbstractConfig {
                 }
             }
         }
+
         if (eosEnabled) {
             verifyMaxInFlightRequestPerConnection(clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
         }
@@ -1939,20 +1935,3 @@ public class StreamsConfig extends AbstractConfig {
         System.out.println(CONFIG.toHtml(4, config -> "streamsconfigs_" + config));
     }
 }
-
-
-    public Map<String, Object> getMainConsumerConfigs(...) {
-        // Fetch the props starting with "consumer." after cleaning
-        // any props that needed to be overwritten
-        final consumerProps = getCommonConsumerConfigs();
-
-        // Get main consumer override configs i.e. starting with "main.consumer."
-        // and merge the two maps.
-        final mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
-        for (final entry: mainConsumerProps.entrySet()) {
-            consumerProps.put(entry.getKey(), entry.getValue());
-
-        // Continue processing and filling in other required configs
-        }
-
-
