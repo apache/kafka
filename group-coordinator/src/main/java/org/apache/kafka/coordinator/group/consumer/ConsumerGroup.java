@@ -328,7 +328,8 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Gets or creates a member.
+     * Gets or creates a new member but without adding it to the group. Adding a member
+     * is done via the {@link ConsumerGroup#updateMember(ConsumerGroupMember)} method.
      *
      * @param memberId          The member id.
      * @param createIfNotExists Booleans indicating whether the member must be
@@ -347,9 +348,7 @@ public class ConsumerGroup implements Group {
                     memberId, groupId));
             }
             member = new ConsumerGroupMember.Builder(memberId).build();
-            members.put(memberId, member);
         }
-
         return member;
     }
 
@@ -366,7 +365,7 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Updates the member.
+     * Add or updates the member.
      *
      * @param newMember The new member state.
      */
