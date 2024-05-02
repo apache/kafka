@@ -123,7 +123,7 @@ public class ClusterTestExtensionsTest {
                 Assertions.assertEquals(1, configs.size());
                 Assertions.assertEquals("200", configs.get(configResource).get("queued.max.requests").value());
             }
-            if (config.clusterType().equals(Type.KRAFT)) {
+            if (clusterInstance.config().clusterType().equals(Type.KRAFT)) {
                 try (Admin admin = Admin.create(Collections.singletonMap(
                         AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()))) {
                     ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
