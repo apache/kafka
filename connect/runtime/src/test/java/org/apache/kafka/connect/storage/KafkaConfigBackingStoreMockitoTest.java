@@ -621,6 +621,21 @@ public class KafkaConfigBackingStoreMockitoTest {
     }
 
     @Test
+    public void testConsumerPropertiesOverrideUserSuppliedValuesWithExactlyOnceSourceEnabled() {
+        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.toString());
+        createStore();
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+
+        assertEquals(
+                IsolationLevel.READ_COMMITTED.toString(),
+                capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
+        );
+    }
+
+    @Test
     public void testConsumerPropertiesNotInsertedByDefaultWithoutExactlyOnceSourceEnabled() {
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "preparing");
         props.remove(ISOLATION_LEVEL_CONFIG);

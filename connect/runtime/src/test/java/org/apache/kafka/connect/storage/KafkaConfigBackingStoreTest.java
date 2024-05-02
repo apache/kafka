@@ -1242,25 +1242,6 @@ public class KafkaConfigBackingStoreTest {
         PowerMock.verifyAll();
     }
 
-    @Test
-    public void testConsumerPropertiesOverrideUserSuppliedValuesWithExactlyOnceSourceEnabled() throws Exception {
-        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
-        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.toString());
-        createStore();
-
-        expectConfigure();
-        PowerMock.replayAll();
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-
-        assertEquals(
-                IsolationLevel.READ_COMMITTED.toString(),
-                capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
-        );
-
-        PowerMock.verifyAll();
-    }
-
     private void expectConfigure() throws Exception {
         PowerMock.expectPrivate(configStorage, "createKafkaBasedLog",
                 EasyMock.capture(capturedTopic), EasyMock.capture(capturedProducerProps),
