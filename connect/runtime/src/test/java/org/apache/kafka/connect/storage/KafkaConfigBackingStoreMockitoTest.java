@@ -621,6 +621,21 @@ public class KafkaConfigBackingStoreMockitoTest {
     }
 
     @Test
+    public void testFencableProducerPropertiesInsertedByDefault()  {
+        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "preparing");
+        String groupId = "my-connect-cluster";
+        props.put(GROUP_ID_CONFIG, groupId);
+        props.remove(TRANSACTIONAL_ID_CONFIG);
+        props.remove(ENABLE_IDEMPOTENCE_CONFIG);
+        createStore();
+
+
+        Map<String, Object> fencableProducerProperties = configStorage.fencableProducerProps(config);
+        assertEquals("connect-cluster-" + groupId, fencableProducerProperties.get(TRANSACTIONAL_ID_CONFIG));
+        assertEquals("true", fencableProducerProperties.get(ENABLE_IDEMPOTENCE_CONFIG));
+    }
+
+    @Test
     public void testConsumerPropertiesInsertedByDefaultWithExactlyOnceSourceEnabled() {
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
         props.remove(ISOLATION_LEVEL_CONFIG);

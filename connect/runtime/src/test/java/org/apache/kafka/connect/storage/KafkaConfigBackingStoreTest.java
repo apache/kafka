@@ -1203,24 +1203,6 @@ public class KafkaConfigBackingStoreTest {
         PowerMock.verifyAll();
     }
 
-    @Test
-    public void testFencableProducerPropertiesInsertedByDefault() throws Exception {
-        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "preparing");
-        String groupId = "my-connect-cluster";
-        props.put(GROUP_ID_CONFIG, groupId);
-        props.remove(TRANSACTIONAL_ID_CONFIG);
-        props.remove(ENABLE_IDEMPOTENCE_CONFIG);
-        createStore();
-
-        PowerMock.replayAll();
-
-        Map<String, Object> fencableProducerProperties = configStorage.fencableProducerProps(config);
-        assertEquals("connect-cluster-" + groupId, fencableProducerProperties.get(TRANSACTIONAL_ID_CONFIG));
-        assertEquals("true", fencableProducerProperties.get(ENABLE_IDEMPOTENCE_CONFIG));
-
-        PowerMock.verifyAll();
-    }
-
     private void expectConfigure() throws Exception {
         PowerMock.expectPrivate(configStorage, "createKafkaBasedLog",
                 EasyMock.capture(capturedTopic), EasyMock.capture(capturedProducerProps),
@@ -1228,13 +1210,6 @@ public class KafkaConfigBackingStoreTest {
                 EasyMock.capture(capturedNewTopic), EasyMock.capture(capturedAdminSupplier),
                 EasyMock.anyObject(WorkerConfig.class), EasyMock.anyObject(Time.class))
                 .andReturn(storeLog);
-    }
-
-    private void expectFencableProducer() throws Exception {
-        fencableProducer.initTransactions();
-        EasyMock.expectLastCall();
-        PowerMock.expectPrivate(configStorage, "createFencableProducer")
-                .andReturn(fencableProducer);
     }
 
     private void expectPartitionCount(int partitionCount) {
@@ -1279,11 +1254,6 @@ public class KafkaConfigBackingStoreTest {
         expectRead(serializedData, Collections.singletonMap(key, deserializedValue));
     }
 
-    private void expectConvert(Schema valueSchema, Struct valueStruct, byte[] serialized) {
-        EasyMock.expect(converter.fromConnectData(EasyMock.eq(TOPIC), EasyMock.eq(valueSchema), EasyMock.eq(valueStruct)))
-                .andReturn(serialized);
-    }
-
     // Expect a conversion & write to the underlying log, followed by a subsequent read when the data is consumed back
     // from the log. Validate the data that is captured when the conversion is performed matches the specified data
     // (by checking a single field's value)
@@ -1309,14 +1279,6 @@ public class KafkaConfigBackingStoreTest {
                 });
     }
 
-    private void expectConvertRead(final String configKey, final Struct struct, final byte[] serialized) {
-        EasyMock.expect(converter.toConnectData(EasyMock.eq(TOPIC), EasyMock.aryEq(serialized)))
-                .andAnswer(() -> new SchemaAndValue(null, serialized == null ? null : structToMap(struct)));
-        LinkedHashMap<String, byte[]> recordsToRead = new LinkedHashMap<>();
-        recordsToRead.put(configKey, serialized);
-        expectReadToEnd(recordsToRead);
-    }
-
     // This map needs to maintain ordering
     private void expectReadToEnd(final LinkedHashMap<String, byte[]> serializedConfigs) {
         EasyMock.expect(storeLog.readToEnd())
@@ -1330,16 +1292,6 @@ public class KafkaConfigBackingStoreTest {
                     future.resolveOnGet((Void) null);
                     return future;
                 });
-    }
-
-    private void expectConnectorRemoval(String configKey, String targetStateKey) throws Exception {
-        expectConvertWriteRead(configKey, KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, null, null, null);
-        expectConvertWriteRead(targetStateKey, KafkaConfigBackingStore.TARGET_STATE_V0, null, null, null);
-
-        LinkedHashMap<String, byte[]> recordsToRead = new LinkedHashMap<>();
-        recordsToRead.put(configKey, null);
-        recordsToRead.put(targetStateKey, null);
-        expectReadToEnd(recordsToRead);
     }
 
     private void expectConvertWriteAndRead(final String configKey, final Schema valueSchema, final byte[] serialized,
