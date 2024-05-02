@@ -18,8 +18,6 @@ package org.apache.kafka.connect.util.clusters;
 
 import org.apache.kafka.connect.cli.ConnectDistributed;
 import org.apache.kafka.connect.runtime.Connect;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.util.Map;
@@ -29,7 +27,6 @@ import java.util.Objects;
  * A handle to a worker executing in a Connect cluster.
  */
 public class WorkerHandle {
-    private static final Logger log = LoggerFactory.getLogger(WorkerHandle.class);
 
     private final String workerName;
     private final Connect worker;

@@ -17,12 +17,12 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
+import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -197,10 +197,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         manager.maybeAutoCommitAsync();
     }
 
+    /**
+     * Handles ListOffsetsEvent by fetching the offsets for the given partitions and timestamps.
+     */
     private void process(final ListOffsetsEvent event) {
-        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
-                requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
-                        event.requireTimestamps());
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> future =
+            requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(), event.requireTimestamps());
         future.whenComplete(complete(event.future()));
     }
 

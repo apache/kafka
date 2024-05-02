@@ -56,6 +56,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.spy;
 
@@ -222,7 +223,7 @@ public class TopicMetadataRequestManagerTest {
             final String topic,
             final Errors error) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
-        assertTrue(abstractRequest instanceof MetadataRequest);
+        assertInstanceOf(MetadataRequest.class, abstractRequest);
         MetadataRequest metadataRequest = (MetadataRequest) abstractRequest;
         Cluster cluster = mockCluster(3, 0);
         List<MetadataResponse.TopicMetadata> topics = new ArrayList<>();
@@ -248,7 +249,7 @@ public class TopicMetadataRequestManagerTest {
         final NetworkClientDelegate.UnsentRequest request,
         final Errors error) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
-        assertTrue(abstractRequest instanceof MetadataRequest);
+        assertInstanceOf(MetadataRequest.class, abstractRequest);
         MetadataRequest metadataRequest = (MetadataRequest) abstractRequest;
         Cluster cluster = mockCluster(3, 0);
         List<MetadataResponse.TopicMetadata> topics = new ArrayList<>();

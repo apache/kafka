@@ -22,12 +22,13 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll, waitUntilTrue}
-import kafka.utils.{CoreUtils, Exit, TestInfoUtils, TestUtils}
+import kafka.utils.{CoreUtils, Exit, TestUtils}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.provider.ValueSource
@@ -49,8 +50,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
   private val partitionNum = 12
   override val logDirCount = 3
 
-  this.serverConfig.setProperty(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp, "60000")
-  this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
+  this.serverConfig.setProperty(ReplicationConfigs.REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_CONFIG, "60000")
+  this.serverConfig.setProperty(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG, "1")
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -59,13 +60,13 @@ class LogDirFailureTest extends IntegrationTestHarness {
     ensureConsistentKRaftMetadata()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceErrorFromFailureOnLogRoll(quorum: String): Unit = {
     testProduceErrorsFromLogDirFailureOnLeader(Roll)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testIOExceptionDuringLogRoll(quorum: String): Unit = {
     testProduceAfterLogDirFailureOnLeader(Roll, quorum)
@@ -84,8 +85,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
     var server: KafkaServer = null
     try {
       val props = TestUtils.createBrokerConfig(brokerCount, zkConnect, logDirCount = 3)
-      props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.11.0")
-      props.put(KafkaConfig.LogMessageFormatVersionProp, "0.11.0")
+      props.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "0.11.0")
+      props.put(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG, "0.11.0")
       val kafkaConfig = KafkaConfig.fromProps(props)
       val logDir = new File(kafkaConfig.logDirs.head)
       // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
@@ -102,19 +103,19 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceErrorFromFailureOnCheckpoint(quorum: String): Unit = {
     testProduceErrorsFromLogDirFailureOnLeader(Checkpoint)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testIOExceptionDuringCheckpoint(quorum: String): Unit = {
     testProduceAfterLogDirFailureOnLeader(Checkpoint, quorum)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testReplicaFetcherThreadAfterLogDirFailureOnFollower(quorum: String): Unit = {
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")

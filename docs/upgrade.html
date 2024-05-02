@@ -102,13 +102,18 @@
         <li>Kafka Streams ships multiple KIPs for IQv2 support.
             See the <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_370">Kafka Streams upgrade section</a> for more details.
         </li>
+        <li>
+            In versions 3.5.0, 3.5.1, 3.5.2, 3.6.0, and 3.6.1, MirrorMaker 2 offset translation may not reach the end
+            of a replicated topic after the upstream consumers commit at the end of the source topic.
+            This was addressed in <a href="https://issues.apache.org/jira/browse/KAFKA-15906">KAFKA-15906</a>.
+        </li>
         <li>All the notable changes are present in the <a href="https://kafka.apache.org/blog#apache_kafka_370_release_announcement">blog post announcing the 3.7.0 release.</a>
         </li>
     </ul>
 
-<h4><a id="upgrade_3_6_1" href="#upgrade_3_6_1">Upgrading to 3.6.1 from any version 0.8.x through 3.5.x</a></h4>
+<h4><a id="upgrade_3_6_2" href="#upgrade_3_6_2">Upgrading to 3.6.2 from any version 0.8.x through 3.5.x</a></h4>
 
-    <h5><a id="upgrade_361_zk" href="#upgrade_361_zk">Upgrading ZooKeeper-based clusters</a></h5>
+    <h5><a id="upgrade_362_zk" href="#upgrade_362_zk">Upgrading ZooKeeper-based clusters</a></h5>
     <p><b>If you are upgrading from a version prior to 2.1.x, please see the note in step 5 below about the change to the schema used to store consumer offsets.
         Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
 
@@ -149,7 +154,7 @@
         </li>
     </ol>
 
-    <h5><a id="upgrade_361_kraft" href="#upgrade_361_kraft">Upgrading KRaft-based clusters</a></h5>
+    <h5><a id="upgrade_362_kraft" href="#upgrade_362_kraft">Upgrading KRaft-based clusters</a></h5>
     <p><b>If you are upgrading from a version prior to 3.3.0, please see the note in step 3 below. Once you have changed the metadata.version to the latest version, it will not be possible to downgrade to a version prior to 3.3-IV0.</b></p>
 
     <p><b>For a rolling upgrade:</b></p>
@@ -224,6 +229,11 @@
         In 3.5.0 and 3.5.1, there could be an issue that the empty ISR is returned from controller after AlterPartition request
         during rolling upgrade. This issue will impact the availability of the topic partition.
         See <a href="https://issues.apache.org/jira/browse/KAFKA-15353">KAFKA-15353</a> for more details.
+    </li>
+    <li>
+        In 3.5.0 and 3.5.1, there was an issue where MirrorMaker 2 offset translation produced an earlier offset than needed,
+        substantially increasing the re-delivery of data when starting a consumer from the downstream consumer offsets.
+        See <a href="https://issues.apache.org/jira/browse/KAFKA-15202">KAFKA-15202</a> for more details.
     </li>
 </ul>
 
@@ -333,6 +343,12 @@
         <li>The JmxTool, EndToEndLatency, StreamsResetter, ConsumerPerformance and ClusterTool have been migrated to the tools module.
             The 'kafka.tools' package is deprecated and will change to 'org.apache.kafka.tools' in the next major release.
             See <a href="https://issues.apache.org/jira/browse/KAFKA-14525">KAFKA-14525</a> for more details.
+        </li>
+        <li>In versions earlier than 3.5.0 and 3.4.1, MirrorMaker 2 offset translation could incorrectly translate offsets for topics using compaction, transactional producers, and filter SMTs.
+            In 3.5.0 and 3.4.1, offset translation has changed for all topics in order to ensure at-least-once delivery when a consumer is failed-over to the translated offsets.
+            Translated offsets will be earlier than in previous versions, so consumers using downstream offsets may initially have more lag, and re-deliver more data after failing-over.
+            See <a href="https://issues.apache.org/jira/browse/KAFKA-12468">KAFKA-12468</a> and linked tickets, and <a href="https://github.com/apache/kafka/pull/13178">PR #13178</a> for more details.
+            Further improvements to the offset translation  are included in later releases to reduce the lag introduced by this change, so consider upgrading MM2 to the latest version available.
         </li>
     </ul>
 

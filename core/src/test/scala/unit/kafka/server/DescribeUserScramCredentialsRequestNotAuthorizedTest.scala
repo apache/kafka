@@ -17,11 +17,11 @@
 package kafka.server
 
 import kafka.network.SocketServer
-import kafka.utils.TestInfoUtils
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
+import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -39,10 +39,10 @@ class DescribeUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTe
     } else {
       properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[DescribeCredentialsTest.TestAuthorizer].getName)
     }
-    properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
+    properties.put(KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeNotAuthorized(quorum: String): Unit = {
     val request = new DescribeUserScramCredentialsRequest.Builder(

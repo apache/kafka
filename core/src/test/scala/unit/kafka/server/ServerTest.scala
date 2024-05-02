@@ -20,6 +20,8 @@ import java.util.Properties
 
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.MetricsContext
+import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.server.config.{KRaftConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -33,10 +35,10 @@ class ServerTest {
     val clusterId = Uuid.randomUuid().toString
 
     val props = new Properties()
-    props.put(KafkaConfig.ProcessRolesProp, "broker")
-    props.put(KafkaConfig.NodeIdProp, nodeId.toString)
-    props.put(KafkaConfig.QuorumVotersProp, s"${(nodeId + 1)}@localhost:9093")
-    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
+    props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"${nodeId + 1}@localhost:9093")
+    props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     val config = KafkaConfig.fromProps(props)
 
     val context = Server.createKafkaMetricsContext(config, clusterId)
@@ -54,7 +56,7 @@ class ServerTest {
 
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, brokerId.toString)
-    props.put(KafkaConfig.ZkConnectProp, "127.0.0.1:0")
+    props.put(ZkConfigs.ZK_CONNECT_CONFIG, "127.0.0.1:0")
     val config = KafkaConfig.fromProps(props)
 
     val context = Server.createKafkaMetricsContext(config, clusterId)

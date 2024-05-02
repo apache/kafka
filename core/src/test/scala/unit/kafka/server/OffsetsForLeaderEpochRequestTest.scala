@@ -17,7 +17,7 @@
 package kafka.server
 
 import java.util.Optional
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
@@ -33,7 +33,7 @@ import scala.jdk.CollectionConverters._
 
 class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testOffsetsForLeaderEpochErrorCodes(quorum: String): Unit = {
     val topic = "topic"
@@ -47,7 +47,7 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     val randomBrokerId = brokers.head.config.brokerId
     assertResponseError(Errors.UNKNOWN_TOPIC_OR_PARTITION, randomBrokerId, request)
 
-    val partitionToLeader = createTopic(topic, numPartitions = 1, replicationFactor = 2)
+    val partitionToLeader = createTopic(topic, replicationFactor = 2)
     val topicDescription = createAdminClient().describeTopics(Seq(partition.topic()).asJava).allTopicNames().get()
     val replicas = topicDescription.get(partition.topic()).partitions().get(partition.partition()).replicas().asScala.map(_.id()).toSet
     val leader = partitionToLeader(partition.partition)
@@ -58,12 +58,12 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, request)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCurrentEpochValidation(quorum: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
-    val partitionToLeader = createTopic(topic, numPartitions = 1, replicationFactor = 3)
+    val partitionToLeader = createTopic(topic, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(topicPartition.partition)
 
     def assertResponseErrorForEpoch(error: Errors, brokerId: Int, currentLeaderEpoch: Optional[Integer]): Unit = {

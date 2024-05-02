@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -129,6 +129,6 @@ public class KStreamFlatTransformValuesTest {
 
         final Processor<Integer, Integer, Integer, String> processor = processorSupplier.get();
 
-        assertTrue(processor instanceof KStreamFlatTransformValuesProcessor);
+        assertInstanceOf(KStreamFlatTransformValuesProcessor.class, processor);
     }
 }

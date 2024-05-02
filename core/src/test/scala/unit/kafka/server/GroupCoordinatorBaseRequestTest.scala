@@ -74,11 +74,12 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def isUnstableApiEnabled: Boolean = {
-    cluster.config.serverProperties.getProperty("unstable.api.versions.enable") == "true"
+    cluster.config.serverProperties.get("unstable.api.versions.enable") == "true"
   }
 
   protected def isNewGroupCoordinatorEnabled: Boolean = {
-    cluster.config.serverProperties.getProperty("group.coordinator.new.enable") == "true"
+    cluster.config.serverProperties.get("group.coordinator.new.enable") == "true" ||
+      cluster.config.serverProperties.get("group.coordinator.rebalance.protocols").contains("consumer")
   }
 
   protected def commitOffset(
@@ -406,7 +407,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def listGroups(
     statesFilter: List[String],
     typesFilter: List[String],
-    version: Short
+    version: Short = ApiKeys.LIST_GROUPS.latestVersion(isUnstableApiEnabled)
   ): List[ListGroupsResponseData.ListedGroup] = {
     val request = new ListGroupsRequest.Builder(
       new ListGroupsRequestData()
@@ -463,7 +464,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     rebalanceTimeoutMs: Int = -1,
     serverAssignor: String = null,
     subscribedTopicNames: List[String] = null,
-    topicPartitions: List[ConsumerGroupHeartbeatRequestData.TopicPartitions] = null
+    topicPartitions: List[ConsumerGroupHeartbeatRequestData.TopicPartitions] = null,
+    expectedError: Errors = Errors.NONE
   ): ConsumerGroupHeartbeatResponseData = {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
       new ConsumerGroupHeartbeatRequestData()
@@ -484,7 +486,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponse = null
     TestUtils.waitUntilTrue(() => {
       consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
-      consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+      consumerGroupHeartbeatResponse.data.errorCode == expectedError.code
     }, msg = s"Could not heartbeat successfully. Last response $consumerGroupHeartbeatResponse.")
 
     consumerGroupHeartbeatResponse.data
@@ -507,7 +509,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     groupInstanceIds: List[String] = null,
     expectedLeaveGroupError: Errors,
     expectedMemberErrors: List[Errors],
-    version: Short
+    version: Short = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
   ): Unit = {
     val leaveGroupRequest = new LeaveGroupRequest.Builder(
       groupId,

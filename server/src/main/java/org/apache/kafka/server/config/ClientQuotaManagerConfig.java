@@ -15,12 +15,7 @@
  * limitations under the License.
  */
 package org.apache.kafka.server.config;
-
 public class ClientQuotaManagerConfig {
-    // Always have 10 whole windows + 1 current window
-    public static final int DEFAULT_NUM_QUOTA_SAMPLES = 11;
-    public static final int DEFAULT_QUOTA_WINDOW_SIZE_SECONDS = 1;
-
     public final int numQuotaSamples;
     public final int quotaWindowSizeSeconds;
 
@@ -36,10 +31,10 @@ public class ClientQuotaManagerConfig {
     }
 
     public ClientQuotaManagerConfig() {
-        this(DEFAULT_NUM_QUOTA_SAMPLES, DEFAULT_QUOTA_WINDOW_SIZE_SECONDS);
+        this(QuotaConfigs.NUM_QUOTA_SAMPLES_DEFAULT, QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT);
     }
 
     public ClientQuotaManagerConfig(int numQuotaSamples) {
-        this(numQuotaSamples, DEFAULT_QUOTA_WINDOW_SIZE_SECONDS);
+        this(numQuotaSamples, QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT);
     }
 }

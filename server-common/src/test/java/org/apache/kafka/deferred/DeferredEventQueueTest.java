@@ -44,10 +44,6 @@ public class DeferredEventQueueTest {
                 future.complete(null);
             }
         }
-
-        CompletableFuture<Void> future() {
-            return future;
-        }
     }
 
     @Test

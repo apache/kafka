@@ -94,14 +94,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         setBootstrapMetadataVersion(clusterConfig.metadataVersion()).
                         setCombined(isCombined).
                         setNumBrokerNodes(clusterConfig.numBrokers()).
+                        setPerBrokerProperties(clusterConfig.perBrokerOverrideProperties()).
                         setNumControllerNodes(clusterConfig.numControllers()).build();
-                nodes.brokerNodes().forEach((brokerId, brokerNode) -> {
-                    clusterConfig.brokerServerProperties(brokerId).forEach(
-                            (key, value) -> brokerNode.propertyOverrides().put(key.toString(), value.toString()));
-                });
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
 
-                if (Boolean.parseBoolean(clusterConfig.serverProperties().getProperty("zookeeper.metadata.migration.enable", "false"))) {
+                if (Boolean.parseBoolean(clusterConfig.serverProperties().getOrDefault("zookeeper.metadata.migration.enable", "false"))) {
                     zkReference.set(new EmbeddedZookeeper());
                     builder.setConfigProp("zookeeper.connect", String.format("localhost:%d", zkReference.get().port()));
                 }
@@ -121,8 +118,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 }
             },
             (AfterTestExecutionCallback) context -> clusterInstance.stop(),
-            new ClusterInstanceParameterResolver(clusterInstance),
-            new GenericParameterResolver<>(clusterConfig, ClusterConfig.class)
+            new ClusterInstanceParameterResolver(clusterInstance)
         );
     }
 
@@ -263,6 +259,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         public void stop() {
             if (stopped.compareAndSet(false, true)) {
                 admins.forEach(admin -> Utils.closeQuietly(admin, "admin"));
+                admins.clear();
                 Utils.closeQuietly(clusterReference.get(), "cluster");
                 if (zkReference.get() != null) {
                     Utils.closeQuietly(zkReference.get(), "zk");
@@ -287,11 +284,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             } catch (ExecutionException e) {
                 throw new AssertionError("Failed while waiting for brokers to become ready", e);
             }
-        }
-
-        @Override
-        public void rollingBrokerRestart() {
-            throw new UnsupportedOperationException("Restarting Raft servers is not yet supported.");
         }
 
         private BrokerServer findBrokerOrThrow(int brokerId) {

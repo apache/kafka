@@ -62,7 +62,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -70,7 +69,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
-@Timeout(value = 240000, unit = MILLISECONDS)
+@Timeout(value = 240)
 public class CoordinatorTest {
 
     private static final Logger log = LoggerFactory.getLogger(CoordinatorTest.class);
@@ -420,7 +419,7 @@ public class CoordinatorTest {
     }
 
     @Test
-    public void testTasksRequestMatches() throws Exception {
+    public void testTasksRequestMatches() {
         TasksRequest req1 = new TasksRequest(null, 0, 0, 0, 0, Optional.empty());
         assertTrue(req1.matches("foo1", -1, -1, TaskStateType.PENDING));
         assertTrue(req1.matches("bar1", 100, 200, TaskStateType.DONE));

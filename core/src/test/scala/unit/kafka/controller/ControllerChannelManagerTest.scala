@@ -34,6 +34,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_0_10_2_IV0, IBP_0_9_0, IBP_1_0_IV0, IBP_2_2_IV0, IBP_2_4_IV0, IBP_2_4_IV1, IBP_2_6_IV0, IBP_2_8_IV1, IBP_3_2_IV0, IBP_3_4_IV0}
+import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -74,7 +75,7 @@ class ControllerChannelManagerTest {
     assertEquals(1, updateMetadataRequests.size)
 
     val leaderAndIsrRequest = leaderAndIsrRequests.head
-    val topicIds = leaderAndIsrRequest.topicIds();
+    val topicIds = leaderAndIsrRequest.topicIds()
     val topicNames = topicIds.asScala.map { case (k, v) => (v, k) }
     assertEquals(controllerId, leaderAndIsrRequest.controllerId)
     assertEquals(controllerEpoch, leaderAndIsrRequest.controllerEpoch)
@@ -895,7 +896,7 @@ class ControllerChannelManagerTest {
   private def createConfig(interBrokerVersion: MetadataVersion): KafkaConfig = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, controllerId.toString)
-    props.put(KafkaConfig.ZkConnectProp, "zkConnect")
+    props.put(ZkConfigs.ZK_CONNECT_CONFIG, "zkConnect")
     TestUtils.setIbpAndMessageFormatVersions(props, interBrokerVersion)
     KafkaConfig.fromProps(props)
   }

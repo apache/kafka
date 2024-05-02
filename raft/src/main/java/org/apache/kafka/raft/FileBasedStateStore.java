@@ -93,7 +93,7 @@ public class FileBasedStateStore implements QuorumStateStore {
             }
 
             if (dataVersionNode.asInt() != 0) {
-                throw new UnsupportedVersionException("Unknown data version of " + dataVersionNode.toString());
+                throw new UnsupportedVersionException("Unknown data version of " + dataVersionNode);
             }
 
             final short dataVersion = dataVersionNode.shortValue();

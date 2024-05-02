@@ -71,7 +71,7 @@ public class VersionConditionalTest {
     }
 
     @Test
-    public void testAllowMembershipCheckAlwaysFalseFails() throws Exception {
+    public void testAllowMembershipCheckAlwaysFalseFails() {
         try {
             CodeBuffer buffer = new CodeBuffer();
             VersionConditional.

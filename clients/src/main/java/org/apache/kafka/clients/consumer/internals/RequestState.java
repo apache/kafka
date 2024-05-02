@@ -31,6 +31,7 @@ class RequestState {
     protected long lastReceivedMs = -1;
     protected int numAttempts = 0;
     protected long backoffMs = 0;
+    private boolean requestInFlight = false;
 
     public RequestState(final LogContext logContext,
                         final String owner,
@@ -66,6 +67,7 @@ class RequestState {
      * and the backoff is restored to its minimal configuration.
      */
     public void reset() {
+        this.requestInFlight = false;
         this.lastSentMs = -1;
         this.lastReceivedMs = -1;
         this.numAttempts = 0;
@@ -73,11 +75,6 @@ class RequestState {
     }
 
     public boolean canSendRequest(final long currentTimeMs) {
-        if (this.lastSentMs == -1) {
-            // no request has been sent
-            return true;
-        }
-
         if (requestInFlight()) {
             log.trace("An inflight request already exists for {}", this);
             return false;
@@ -98,10 +95,12 @@ class RequestState {
      * is a request in-flight.
      */
     public boolean requestInFlight() {
-        return this.lastSentMs > -1 && this.lastReceivedMs < this.lastSentMs;
+        return requestInFlight;
     }
 
     public void onSendAttempt(final long currentTimeMs) {
+        this.requestInFlight = true;
+
         // Here we update the timer everytime we try to send a request.
         this.lastSentMs = currentTimeMs;
     }
@@ -114,6 +113,7 @@ class RequestState {
      * @param currentTimeMs Current time in milliseconds
      */
     public void onSuccessfulAttempt(final long currentTimeMs) {
+        this.requestInFlight = false;
         this.lastReceivedMs = currentTimeMs;
         this.backoffMs = exponentialBackoff.backoff(0);
         this.numAttempts = 0;
@@ -127,6 +127,7 @@ class RequestState {
      * @param currentTimeMs Current time in milliseconds
      */
     public void onFailedAttempt(final long currentTimeMs) {
+        this.requestInFlight = false;
         this.lastReceivedMs = currentTimeMs;
         this.backoffMs = exponentialBackoff.backoff(numAttempts);
         this.numAttempts++;
@@ -150,11 +151,12 @@ class RequestState {
                 ", lastSentMs=" + lastSentMs +
                 ", lastReceivedMs=" + lastReceivedMs +
                 ", numAttempts=" + numAttempts +
-                ", backoffMs=" + backoffMs;
+                ", backoffMs=" + backoffMs +
+                ", requestInFlight=" + requestInFlight;
     }
 
     @Override
     public String toString() {
-        return "RequestState{" + toStringBase() + '}';
+        return getClass().getSimpleName() + "{" + toStringBase() + '}';
     }
 }

@@ -104,7 +104,7 @@ public final class Utils {
 
     private static final String[] BYTE_SCALE_SUFFIXES = new String[] {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
 
-    public static final String NL = System.getProperty("line.separator");
+    public static final String NL = System.lineSeparator();
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
@@ -1196,7 +1196,7 @@ public final class Utils {
     // changing the signature to `public <R> List<R> tryAll(all: List[Callable<R>])`
     public static void tryAll(List<Callable<Void>> all) throws Throwable {
         Throwable exception = null;
-        for (Callable call : all) {
+        for (Callable<Void> call : all) {
             try {
                 call.call();
             } catch (Throwable t) {
@@ -1502,13 +1502,23 @@ public final class Utils {
      * @return a map including all elements in properties
      */
     public static Map<String, Object> propsToMap(Properties properties) {
-        Map<String, Object> map = new HashMap<>(properties.size());
-        for (Map.Entry<Object, Object> entry : properties.entrySet()) {
+        return castToStringObjectMap(properties);
+    }
+
+    /**
+     * Cast a map with arbitrary type keys to be keyed on String.
+     * @param inputMap A map with unknown type keys
+     * @return A map with the same contents as the input map, but with String keys
+     * @throws ConfigException if any key is not a String
+     */
+    public static Map<String, Object> castToStringObjectMap(Map<?, ?> inputMap) {
+        Map<String, Object> map = new HashMap<>(inputMap.size());
+        for (Map.Entry<?, ?> entry : inputMap.entrySet()) {
             if (entry.getKey() instanceof String) {
                 String k = (String) entry.getKey();
-                map.put(k, properties.get(k));
+                map.put(k, entry.getValue());
             } else {
-                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
+                throw new ConfigException(String.valueOf(entry.getKey()), entry.getValue(), "Key must be a string.");
             }
         }
         return map;
@@ -1673,6 +1683,15 @@ public final class Utils {
             }
         }
         return result;
+    }
+
+    /**
+     * Checks requirement. Throw {@link IllegalArgumentException} if {@code requirement} failed.
+     * @param requirement Requirement to check.
+     */
+    public static void require(boolean requirement) {
+        if (!requirement)
+            throw new IllegalArgumentException("requirement failed");
     }
 
     /**

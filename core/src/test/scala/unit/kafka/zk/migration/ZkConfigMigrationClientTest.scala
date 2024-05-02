@@ -17,10 +17,9 @@
 package kafka.zk.migration
 
 import kafka.utils.CoreUtils
-import kafka.server.{KafkaConfig, ZkAdminManager}
+import kafka.server.ZkAdminManager
 import kafka.zk.{AdminZkClient, ZkMigrationClient}
 import org.apache.kafka.clients.admin.ScramMechanism
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.metadata.ClientQuotaRecord
@@ -38,11 +37,12 @@ import org.apache.kafka.metadata.RecordTestUtils
 import org.apache.kafka.metadata.migration.KRaftMigrationZkWriter
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ReplicationConfigs, QuotaConfigs}
 import org.apache.kafka.server.util.MockRandom
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.Test
 
+import java.nio.charset.StandardCharsets.UTF_8
 import java.util
 import java.util.Properties
 import scala.collection.Map
@@ -62,12 +62,12 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
     // Create some configs and persist in Zk.
     val props = new Properties()
-    props.put(KafkaConfig.DefaultReplicationFactorProp, "1") // normal config
-    props.put(KafkaConfig.SslKeystorePasswordProp, encoder.encode(new Password(SECRET))) // sensitive config
+    props.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "1") // normal config
+    props.put(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, encoder.encode(new Password(SECRET))) // sensitive config
     zkClient.setOrCreateEntityConfigs(ConfigType.BROKER, "1", props)
 
     val defaultProps = new Properties()
-    defaultProps.put(KafkaConfig.DefaultReplicationFactorProp, "3") // normal config
+    defaultProps.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "3") // normal config
     zkClient.setOrCreateEntityConfigs(ConfigType.BROKER, "<default>", defaultProps)
 
     migrationClient.migrateBrokerConfigs(batch => batches.add(batch), brokerId => brokers.add(brokerId))
@@ -83,7 +83,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
       assertTrue(props.containsKey(name))
       // If the config is sensitive, compare it to the decoded value.
-      if (name == KafkaConfig.SslKeystorePasswordProp) {
+      if (name == KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) {
         assertEquals(SECRET, value)
       } else {
         assertEquals(props.getProperty(name), value)
@@ -93,29 +93,39 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     val record = batches.get(1).get(0).message().asInstanceOf[ConfigRecord]
     assertEquals(ConfigResource.Type.BROKER.id(), record.resourceType())
     assertEquals("", record.resourceName())
-    assertEquals(KafkaConfig.DefaultReplicationFactorProp, record.name())
+    assertEquals(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, record.name())
     assertEquals("3", record.value())
 
     // Update the sensitive config value from the config client and check that the value
     // persisted in Zookeeper is encrypted.
     val newProps = new util.HashMap[String, String]()
-    newProps.put(KafkaConfig.DefaultReplicationFactorProp, "2") // normal config
-    newProps.put(KafkaConfig.SslKeystorePasswordProp, NEW_SECRET) // sensitive config
+    newProps.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "2") // normal config
+    newProps.put(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, NEW_SECRET) // sensitive config
     migrationState = migrationClient.configClient().writeConfigs(
       new ConfigResource(ConfigResource.Type.BROKER, "1"), newProps, migrationState)
     val actualPropsInZk = zkClient.getEntityConfigs(ConfigType.BROKER, "1")
     assertEquals(2, actualPropsInZk.size())
     actualPropsInZk.forEach { case (key, value) =>
-      if (key == KafkaConfig.SslKeystorePasswordProp) {
+      if (key == KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) {
         assertEquals(NEW_SECRET, encoder.decode(value.toString).value)
       } else {
         assertEquals(newProps.get(key), value)
       }
     }
+    assertPathExistenceAndData("/config/changes/config_change_0000000000", """{"version":2,"entity_path":"brokers/1"}""")
 
     migrationState = migrationClient.configClient().deleteConfigs(
       new ConfigResource(ConfigResource.Type.BROKER, "1"), migrationState)
     assertEquals(0, zkClient.getEntityConfigs(ConfigType.BROKER, "1").size())
+    assertPathExistenceAndData("/config/changes/config_change_0000000001", """{"version":2,"entity_path":"brokers/1"}""")
+
+    // make sure there is no more config change notification in znode
+    assertFalse(zkClient.pathExists("/config/changes/config_change_0000000002"))
+  }
+
+  private def assertPathExistenceAndData(expectedPath: String, data: String): Unit = {
+    assertTrue(zkClient.pathExists(expectedPath))
+    assertEquals(Some(data), zkClient.getDataAndStat(expectedPath)._1.map(new String(_, UTF_8)))
   }
 
   @Test
@@ -142,15 +152,17 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     RecordTestUtils.replayAllBatches(delta, batches)
     val image = delta.apply()
 
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("user" -> "").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("user" -> "user1").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("user" -> "user1", "client-id" -> "clientA").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("user" -> "", "client-id" -> "").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("user" -> "", "client-id" -> "clientA").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("client-id" -> "").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("client-id" -> "clientB").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("ip" -> "1.1.1.1").asJava)))
-    assertTrue(image.entities().containsKey(new ClientQuotaEntity(Map("ip" -> "").asJava)))
+    assertEquals(new util.HashSet[ClientQuotaEntity](java.util.Arrays.asList(
+      new ClientQuotaEntity(Map("user" -> null.asInstanceOf[String]).asJava),
+      new ClientQuotaEntity(Map("user" -> "user1").asJava),
+      new ClientQuotaEntity(Map("user" -> "user1", "client-id" -> "clientA").asJava),
+      new ClientQuotaEntity(Map("user" -> null.asInstanceOf[String], "client-id" -> null.asInstanceOf[String]).asJava),
+      new ClientQuotaEntity(Map("user" -> null.asInstanceOf[String], "client-id" -> "clientA").asJava),
+      new ClientQuotaEntity(Map("client-id" -> null.asInstanceOf[String]).asJava),
+      new ClientQuotaEntity(Map("client-id" -> "clientB").asJava),
+      new ClientQuotaEntity(Map("ip" -> "1.1.1.1").asJava),
+      new ClientQuotaEntity(Map("ip" -> null.asInstanceOf[String]).asJava))),
+      image.entities().keySet())
   }
 
   @Test
@@ -186,7 +198,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(4, migrationState.migrationZkVersion())
 
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
-      Map(ClientQuotaEntity.USER -> ""),
+      Map(ClientQuotaEntity.USER -> null.asInstanceOf[String]),
       Map(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 200.0),
       ConfigType.USER, "<default>")
     assertEquals(5, migrationState.migrationZkVersion())

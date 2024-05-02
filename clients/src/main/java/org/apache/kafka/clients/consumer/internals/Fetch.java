@@ -61,7 +61,7 @@ public class Fetch<K, V> {
 
     /**
      * Add another {@link Fetch} to this one; all of its records will be added to this fetch's
-     * {@link #records()} records}, and if the other fetch
+     * {@link #records() records}, and if the other fetch
      * {@link #positionAdvanced() advanced the consume position for any topic partition},
      * this fetch will be marked as having advanced the consume position as well.
      * @param fetch the other fetch to add; may not be null

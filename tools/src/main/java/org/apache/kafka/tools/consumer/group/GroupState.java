@@ -14,13 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.transaction;
+package org.apache.kafka.tools.consumer.group;
 
-public class TransactionLogConfig {
-    // Log-level config default values
-    public static final int DEFAULT_NUM_PARTITIONS = 50;
-    public static final int DEFAULT_SEGMENT_BYTES = 100 * 1024 * 1024;
-    public static final short DEFAULT_REPLICATION_FACTOR = 3;
-    public static final int DEFAULT_MIN_IN_SYNC_REPLICAS = 2;
-    public static final int DEFAULT_LOAD_BUFFER_SIZE = 5 * 1024 * 1024;
+import org.apache.kafka.common.Node;
+
+class GroupState {
+    final String group;
+    final Node coordinator;
+    final String assignmentStrategy;
+    final String state;
+    final int numMembers;
+
+    GroupState(String group, Node coordinator, String assignmentStrategy, String state, int numMembers) {
+        this.group = group;
+        this.coordinator = coordinator;
+        this.assignmentStrategy = assignmentStrategy;
+        this.state = state;
+        this.numMembers = numMembers;
+    }
 }

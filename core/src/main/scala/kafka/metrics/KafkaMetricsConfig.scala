@@ -20,9 +20,8 @@
 
 package kafka.metrics
 
-import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, VerifiableProperties}
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.server.metrics.MetricConfigs
 
 import scala.collection.Seq
 
@@ -32,12 +31,12 @@ class KafkaMetricsConfig(props: VerifiableProperties) {
    * Comma-separated list of reporter types. These classes should be on the
    * classpath and will be instantiated at run-time.
    */
-  val reporters: Seq[String] = CoreUtils.parseCsvList(props.getString(KafkaConfig.KafkaMetricsReporterClassesProp,
-    Defaults.KAFKA_METRIC_REPORTER_CLASSES))
+  val reporters: Seq[String] = CoreUtils.parseCsvList(props.getString(MetricConfigs.KAFKA_METRICS_REPORTER_CLASSES_CONFIG,
+    MetricConfigs.KAFKA_METRIC_REPORTER_CLASSES_DEFAULT))
 
   /**
    * The metrics polling interval (in seconds).
    */
-  val pollingIntervalSecs: Int = props.getInt(KafkaConfig.KafkaMetricsPollingIntervalSecondsProp,
-    Defaults.KAFKA_METRICS_POLLING_INTERVAL_SECONDS)
+  val pollingIntervalSecs: Int = props.getInt(MetricConfigs.KAFKA_METRICS_POLLING_INTERVAL_SECONDS_CONFIG,
+    MetricConfigs.KAFKA_METRICS_POLLING_INTERVAL_SECONDS_DEFAULT)
 }

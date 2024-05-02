@@ -24,19 +24,19 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.Stack;
+import java.util.UUID;
 
 import static org.apache.kafka.common.utils.Utils.wrapNullable;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -315,8 +315,7 @@ public class SerializationTest {
     public void listSerdeShouldReturnLinkedList() {
         List<Integer> testData = new LinkedList<>();
         Serde<List<Integer>> listSerde = Serdes.ListSerde(LinkedList.class, Serdes.Integer());
-        assertTrue(listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData))
-            instanceof LinkedList, "Should return List instance of type LinkedList");
+        assertInstanceOf(LinkedList.class, listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)), "Should return List instance of type LinkedList");
     }
 
     @SuppressWarnings("unchecked")
@@ -324,8 +323,7 @@ public class SerializationTest {
     public void listSerdeShouldReturnStack() {
         List<Integer> testData = new Stack<>();
         Serde<List<Integer>> listSerde = Serdes.ListSerde(Stack.class, Serdes.Integer());
-        assertTrue(listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData))
-            instanceof Stack, "Should return List instance of type Stack");
+        assertInstanceOf(Stack.class, listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)), "Should return List instance of type Stack");
     }
 
     @Test

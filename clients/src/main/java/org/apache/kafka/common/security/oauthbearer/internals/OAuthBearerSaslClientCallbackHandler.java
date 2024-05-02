@@ -100,7 +100,7 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
         Set<OAuthBearerToken> privateCredentials = subject != null
             ? subject.getPrivateCredentials(OAuthBearerToken.class)
             : Collections.emptySet();
-        if (privateCredentials.size() == 0)
+        if (privateCredentials.isEmpty())
             throw new IOException("No OAuth Bearer tokens in Subject's private credentials");
         if (privateCredentials.size() == 1)
             callback.token(privateCredentials.iterator().next());
@@ -116,12 +116,7 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
              */
             SortedSet<OAuthBearerToken> sortedByLifetime =
                 new TreeSet<>(
-                    new Comparator<OAuthBearerToken>() {
-                        @Override
-                        public int compare(OAuthBearerToken o1, OAuthBearerToken o2) {
-                            return Long.compare(o1.lifetimeMs(), o2.lifetimeMs());
-                        }
-                    });
+                        Comparator.comparingLong(OAuthBearerToken::lifetimeMs));
             sortedByLifetime.addAll(privateCredentials);
             log.warn("Found {} OAuth Bearer tokens in Subject's private credentials; the oldest expires at {}, will use the newest, which expires at {}",
                 sortedByLifetime.size(),

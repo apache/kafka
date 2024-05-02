@@ -397,7 +397,7 @@ public class FeatureControlManager {
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             MetadataVersion mv = MetadataVersion.fromFeatureLevel(record.featureLevel());
             metadataVersion.set(mv);
-            log.info("Replayed a FeatureLevelRecord setting metadata version to {}", mv);
+            log.info("Replayed a FeatureLevelRecord setting metadata.version to {}", mv);
         } else {
             if (record.featureLevel() == 0) {
                 finalizedVersions.remove(record.name());

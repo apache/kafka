@@ -36,7 +36,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
-import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -66,11 +67,11 @@ class AutoTopicCreationManagerTest {
     val props = TestUtils.createBrokerConfig(1, "localhost")
     props.setProperty(KafkaConfig.RequestTimeoutMsProp, requestTimeout.toString)
 
-    props.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, internalTopicPartitions.toString)
-    props.setProperty(KafkaConfig.TransactionsTopicReplicationFactorProp, internalTopicPartitions.toString)
+    props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, internalTopicPartitions.toString)
+    props.setProperty(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, internalTopicPartitions.toString)
 
-    props.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, internalTopicReplicationFactor.toString)
-    props.setProperty(KafkaConfig.TransactionsTopicPartitionsProp, internalTopicReplicationFactor.toString)
+    props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
+    props.setProperty(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
 
     config = KafkaConfig.fromProps(props)
     val aliveBrokers = Seq(new Node(0, "host0", 0), new Node(1, "host1", 1))
@@ -83,18 +84,18 @@ class AutoTopicCreationManagerTest {
   @Test
   def testCreateOffsetTopic(): Unit = {
     Mockito.when(groupCoordinator.groupMetadataTopicConfigs).thenReturn(new Properties)
-    testCreateTopic(GROUP_METADATA_TOPIC_NAME, true, internalTopicPartitions, internalTopicReplicationFactor)
+    testCreateTopic(GROUP_METADATA_TOPIC_NAME, isInternal = true, internalTopicPartitions, internalTopicReplicationFactor)
   }
 
   @Test
   def testCreateTxnTopic(): Unit = {
     Mockito.when(transactionCoordinator.transactionTopicConfigs).thenReturn(new Properties)
-    testCreateTopic(TRANSACTION_STATE_TOPIC_NAME, true, internalTopicPartitions, internalTopicReplicationFactor)
+    testCreateTopic(TRANSACTION_STATE_TOPIC_NAME, isInternal = true, internalTopicPartitions, internalTopicReplicationFactor)
   }
 
   @Test
   def testCreateNonInternalTopic(): Unit = {
-    testCreateTopic("topic", false)
+    testCreateTopic("topic", isInternal = false)
   }
 
   private def testCreateTopic(topicName: String,
@@ -141,7 +142,7 @@ class AutoTopicCreationManagerTest {
 
     Mockito.when(controller.isActive).thenReturn(false)
 
-    createTopicAndVerifyResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicName, false)
+    createTopicAndVerifyResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicName, isInternal = false)
 
     Mockito.verify(adminManager).createTopics(
       ArgumentMatchers.eq(0),

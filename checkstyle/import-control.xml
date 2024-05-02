@@ -303,6 +303,7 @@
     <allow pkg="kafka.admin" />
     <allow pkg="kafka.server" />
     <allow pkg="org.apache.kafka.storage.internals" />
+    <allow pkg="org.apache.kafka.server.config" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.clients.admin" />
@@ -323,8 +324,8 @@
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.tools"/>
-
       <subpackage name="group">
+        <allow pkg="org.apache.kafka.coordinator.group"/>
         <allow pkg="kafka.api"/>
         <allow pkg="kafka.security"/>
         <allow pkg="kafka.zk" />
@@ -413,6 +414,9 @@
       <allow pkg="org.apache.kafka.tools" />
       <allow pkg="org.apache.kafka.server.config" />
       <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
+      <allow class="org.apache.kafka.coordinator.transaction.TransactionLogConfigs" />
+      <allow pkg="org.apache.kafka.coordinator.group" />
+      <allow pkg="org.apache.kafka.network" />
     </subpackage>
 
     <subpackage name="test">
@@ -483,6 +487,9 @@
     <allow pkg="org.apache.kafka.connect.components"/>
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
+    <!-- for testing -->
+    <allow pkg="org.apache.kafka.coordinator.group" />
+    <allow pkg="org.apache.kafka.network" />
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />
@@ -532,6 +539,7 @@
       <!-- for tests -->
       <allow pkg="org.apache.kafka.connect.integration" />
       <allow pkg="org.apache.kafka.connect.mirror" />
+      <allow pkg="org.apache.kafka.server.config" />
       <allow pkg="kafka.server" />
       <subpackage name="rest">
         <allow pkg="javax.ws.rs" />
@@ -595,6 +603,7 @@
       <allow pkg="com.fasterxml.jackson.annotation" />
       <allow pkg="com.fasterxml.jackson.databind" />
       <subpackage name="clusters">
+        <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="kafka.cluster" />
         <allow pkg="kafka.server" />
         <allow pkg="kafka.zk" />
@@ -605,6 +614,7 @@
         <allow pkg="org.apache.kafka.metadata" />
         <allow pkg="org.eclipse.jetty.client"/>
         <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
+        <allow class="org.apache.kafka.server.config.ZkConfigs" />
       </subpackage>
     </subpackage>
 

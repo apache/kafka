@@ -48,6 +48,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.SelectionKey;
@@ -68,18 +69,22 @@ import java.util.stream.Stream;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
+import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSession;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -1064,7 +1069,7 @@ public class SslTransportLayerTest {
 
         CertStores newServerCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("localhost").build();
         Map<String, Object> newKeystoreConfigs = newServerCertStores.keyStoreProps();
-        assertTrue(serverChannelBuilder instanceof ListenerReconfigurable, "SslChannelBuilder not reconfigurable");
+        assertInstanceOf(ListenerReconfigurable.class, serverChannelBuilder, "SslChannelBuilder not reconfigurable");
         ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
         assertEquals(listenerName, reconfigurableBuilder.listenerName());
         reconfigurableBuilder.validateReconfiguration(newKeystoreConfigs);
@@ -1192,7 +1197,7 @@ public class SslTransportLayerTest {
         CertStores newClientCertStores = certBuilder(true, "client", args.useInlinePem).addHostName("localhost").build();
         args.sslClientConfigs = args.getTrustingConfig(newClientCertStores, args.serverCertStores);
         Map<String, Object> newTruststoreConfigs = newClientCertStores.trustStoreProps();
-        assertTrue(serverChannelBuilder instanceof ListenerReconfigurable, "SslChannelBuilder not reconfigurable");
+        assertInstanceOf(ListenerReconfigurable.class, serverChannelBuilder, "SslChannelBuilder not reconfigurable");
         ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
         assertEquals(listenerName, reconfigurableBuilder.listenerName());
         reconfigurableBuilder.validateReconfiguration(newTruststoreConfigs);
@@ -1526,5 +1531,31 @@ public class SslTransportLayerTest {
         verify(sslEngine, times(2)).unwrap(netReadBuffer, appReadBuffer);
         assertEquals(SSLEngineResult.Status.OK, result.getStatus());
         assertEquals(SSLEngineResult.HandshakeStatus.NEED_WRAP, result.getHandshakeStatus());
+    }
+
+    @Test
+    public void testSSLEngineCloseInboundInvokedOnClose() throws IOException {
+        // Given
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        Socket socket = mock(Socket.class);
+        SocketChannel socketChannel = mock(SocketChannel.class);
+        SelectionKey selectionKey = mock(SelectionKey.class);
+        when(socketChannel.socket()).thenReturn(socket);
+        when(selectionKey.channel()).thenReturn(socketChannel);
+        doThrow(new SSLException("Mock exception")).when(sslEngine).closeInbound();
+        SslTransportLayer sslTransportLayer = new SslTransportLayer(
+                "test-channel",
+                selectionKey,
+                sslEngine,
+                mock(ChannelMetadataRegistry.class)
+        );
+
+        // When
+        sslTransportLayer.close();
+
+        // Then
+        verify(sslEngine, times(1)).closeOutbound();
+        verify(sslEngine, times(1)).closeInbound();
+        verifyNoMoreInteractions(sslEngine);
     }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeAclsResult;
+import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.resource.PatternType;
@@ -78,22 +80,18 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class MirrorSourceConnectorTest {
     private ConfigPropertyFilter getConfigPropertyFilter() {
-        return new ConfigPropertyFilter() {
-            @Override
-            public boolean shouldReplicateConfigProperty(String prop) {
-                return true;
-            }
-
-        };
+        return prop -> true;
     }
 
     @Test
@@ -183,7 +181,8 @@ public class MirrorSourceConnectorTest {
     public void testNoBrokerAclAuthorizer() throws Exception {
         Admin sourceAdmin = mock(Admin.class);
         Admin targetAdmin = mock(Admin.class);
-        MirrorSourceConnector connector = new MirrorSourceConnector(sourceAdmin, targetAdmin);
+        MirrorSourceConnector connector = new MirrorSourceConnector(sourceAdmin, targetAdmin,
+                new MirrorSourceConfig(makeProps()));
 
         ExecutionException describeAclsFailure = new ExecutionException(
                 "Failed to describe ACLs",
@@ -222,6 +221,39 @@ public class MirrorSourceConnectorTest {
 
         // We should never have tried to perform an ACL sync on the target cluster
         verifyNoInteractions(targetAdmin);
+    }
+
+    @Test
+    public void testMissingDescribeConfigsAcl() throws Exception {
+        Admin sourceAdmin = mock(Admin.class);
+        MirrorSourceConnector connector = new MirrorSourceConnector(
+                sourceAdmin,
+                mock(Admin.class),
+                new MirrorSourceConfig(makeProps())
+        );
+
+        ExecutionException describeConfigsFailure = new ExecutionException(
+                "Failed to describe topic configs",
+                new TopicAuthorizationException("Topic authorization failed")
+        );
+        @SuppressWarnings("unchecked")
+        KafkaFuture<Map<ConfigResource, Config>> describeConfigsFuture = mock(KafkaFuture.class);
+        when(describeConfigsFuture.get()).thenThrow(describeConfigsFailure);
+        DescribeConfigsResult describeConfigsResult = mock(DescribeConfigsResult.class);
+        when(describeConfigsResult.all()).thenReturn(describeConfigsFuture);
+        when(sourceAdmin.describeConfigs(any())).thenReturn(describeConfigsResult);
+
+        try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorUtils.class)) {
+            connectorLogs.setClassLoggerToTrace(MirrorUtils.class);
+            Set<String> topics = new HashSet<>();
+            topics.add("topic1");
+            topics.add("topic2");
+            ExecutionException exception = assertThrows(ExecutionException.class, () -> connector.describeTopicConfigs(topics));
+            assertEquals(
+                    exception.getCause().getClass().getSimpleName() + " occurred while trying to describe configs for topics [topic1, topic2] on source1 cluster",
+                    connectorLogs.getMessages().get(0)
+            );
+        }
     }
 
     @Test

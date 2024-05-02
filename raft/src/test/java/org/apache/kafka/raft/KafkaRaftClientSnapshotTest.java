@@ -52,6 +52,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -1872,12 +1873,10 @@ final public class KafkaRaftClientSnapshotTest {
             clusterId,
             replicaId,
             topicPartition,
-            snapshotPartition -> {
-                return snapshotPartition
-                    .setCurrentLeaderEpoch(epoch)
-                    .setSnapshotId(snapshotId)
-                    .setPosition(position);
-            }
+            snapshotPartition -> snapshotPartition
+                .setCurrentLeaderEpoch(epoch)
+                .setSnapshotId(snapshotId)
+                .setPosition(position)
         );
 
         return request.setMaxBytes(maxBytes);
@@ -1938,7 +1937,7 @@ final public class KafkaRaftClientSnapshotTest {
         int replicaId,
         int maxBytes
     ) {
-        assertTrue(request.data() instanceof FetchSnapshotRequestData);
+        assertInstanceOf(FetchSnapshotRequestData.class, request.data());
 
         FetchSnapshotRequestData data = (FetchSnapshotRequestData) request.data();
 
@@ -1962,8 +1961,8 @@ final public class KafkaRaftClientSnapshotTest {
 
     private final static class MemorySnapshotWriter implements RawSnapshotWriter {
         private final OffsetAndEpoch snapshotId;
+        private final AtomicLong frozenPosition;
         private ByteBuffer data;
-        private AtomicLong frozenPosition;
 
         public MemorySnapshotWriter(OffsetAndEpoch snapshotId) {
             this.snapshotId = snapshotId;

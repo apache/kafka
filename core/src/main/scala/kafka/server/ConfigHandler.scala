@@ -19,23 +19,21 @@ package kafka.server
 
 import java.net.{InetAddress, UnknownHostException}
 import java.util.{Collections, Properties}
-import DynamicConfig.Broker._
 import kafka.controller.KafkaController
 import kafka.log.UnifiedLog
 import kafka.network.ConnectionQuotas
-import kafka.security.CredentialProvider
 import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Implicits._
 import kafka.utils.Logging
+import org.apache.kafka.server.config.{ReplicationConfigs, QuotaConfigs, ZooKeeperInternals}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.ClientMetricsManager
-import org.apache.kafka.server.config.ConfigEntityName
-import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
+import org.apache.kafka.storage.internals.log.ThrottledReplicaListValidator
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 
 import scala.annotation.nowarn
@@ -105,10 +103,10 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
         debug(s"Removing $prop from broker ${kafkaConfig.brokerId} for topic $topic")
       }
     }
-    updateThrottledList(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.leader)
-    updateThrottledList(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.follower)
+    updateThrottledList(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.leader)
+    updateThrottledList(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.follower)
 
-    if (Try(topicConfig.getProperty(KafkaConfig.UncleanLeaderElectionEnableProp).toBoolean).getOrElse(false)) {
+    if (Try(topicConfig.getProperty(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).toBoolean).getOrElse(false)) {
       kafkaController.foreach(_.enableTopicUncleanLeaderElection(topic))
     }
   }
@@ -208,7 +206,7 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
     val sanitizedUser = entities(0)
     val sanitizedClientId = if (entities.length == 3) Some(entities(2)) else None
     updateQuotaConfig(Some(sanitizedUser), sanitizedClientId, config)
-    if (sanitizedClientId.isEmpty && sanitizedUser != ConfigEntityName.DEFAULT)
+    if (sanitizedClientId.isEmpty && sanitizedUser != ZooKeeperInternals.DEFAULT_STRING)
       credentialProvider.updateCredentials(Sanitizer.desanitize(sanitizedUser), config)
   }
 }
@@ -218,7 +216,7 @@ class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends Co
   def processConfigChanges(ip: String, config: Properties): Unit = {
     val ipConnectionRateQuota = Option(config.getProperty(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG)).map(_.toInt)
     val updatedIp = {
-      if (ip != ConfigEntityName.DEFAULT) {
+      if (ip != ZooKeeperInternals.DEFAULT_STRING) {
         try {
           Some(InetAddress.getByName(ip))
         } catch {
@@ -244,15 +242,15 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
       if (properties.containsKey(prop))
         properties.getProperty(prop).toLong
       else
-        DefaultReplicationThrottledRate
+        QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT
     }
-    if (brokerId == ConfigEntityName.DEFAULT)
+    if (brokerId == ZooKeeperInternals.DEFAULT_STRING)
       brokerConfig.dynamicConfig.updateDefaultConfig(properties)
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
       brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
-      quotaManagers.leader.updateQuota(upperBound(getOrDefault(LeaderReplicationThrottledRateProp).toDouble))
-      quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp).toDouble))
-      quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp).toDouble))
+      quotaManagers.leader.updateQuota(upperBound(getOrDefault(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
+      quotaManagers.follower.updateQuota(upperBound(getOrDefault(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
+      quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG).toDouble))
     }
   }
 }

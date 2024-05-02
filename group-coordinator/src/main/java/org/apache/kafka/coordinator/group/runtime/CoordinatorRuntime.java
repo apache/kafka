@@ -51,6 +51,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -356,7 +357,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
                     log.debug("Scheduling write event {} for timer {}.", event.name, key);
                     try {
-                        enqueue(event);
+                        enqueueLast(event);
                     } catch (NotCoordinatorException ex) {
                         log.info("Failed to enqueue write event {} for timer {} because the runtime is closed. Ignoring it.",
                             event.name, key);
@@ -439,6 +440,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         SnapshottableCoordinator<S, U> coordinator;
 
         /**
+         * The high watermark listener registered to all the partitions
+         * backing the coordinators.
+         */
+        HighWatermarkListener highWatermarklistener;
+
+        /**
          * Constructor.
          *
          * @param tp The topic partition of the coordinator.
@@ -495,6 +502,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
                 case ACTIVE:
                     state = CoordinatorState.ACTIVE;
+                    highWatermarklistener = new HighWatermarkListener();
                     partitionWriter.registerListener(tp, highWatermarklistener);
                     coordinator.onLoaded(metadataImage);
                     break;
@@ -520,7 +528,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          * Unloads the coordinator.
          */
         private void unload() {
-            partitionWriter.deregisterListener(tp, highWatermarklistener);
+            if (highWatermarklistener != null) {
+                partitionWriter.deregisterListener(tp, highWatermarklistener);
+                highWatermarklistener = null;
+            }
             timer.cancelAll();
             deferredEventQueue.failAll(Errors.NOT_COORDINATOR.exception());
             if (coordinator != null) {
@@ -1179,6 +1190,23 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * backing the coordinator are updated.
      */
     class HighWatermarkListener implements PartitionWriter.Listener {
+
+        private static final long NO_OFFSET = -1L;
+
+        /**
+         * The atomic long is used to store the last and unprocessed high watermark
+         * received from the partition. The atomic value is replaced by -1L when
+         * the high watermark is taken to update the context.
+         */
+        private final AtomicLong lastHighWatermark = new AtomicLong(NO_OFFSET);
+
+        /**
+         * @return The last high watermark received or NO_OFFSET if none is pending.
+         */
+        public long lastHighWatermark() {
+            return lastHighWatermark.get();
+        }
+
         /**
          * Updates the high watermark of the corresponding coordinator.
          *
@@ -1191,30 +1219,37 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             long offset
         ) {
             log.debug("High watermark of {} incremented to {}.", tp, offset);
-            scheduleInternalOperation("HighWatermarkUpdated(tp=" + tp + ", offset=" + offset + ")", tp, () -> {
-                CoordinatorContext context = coordinators.get(tp);
-                if (context != null) {
-                    context.lock.lock();
-                    try {
-                        if (context.state == CoordinatorState.ACTIVE) {
-                            // The updated high watermark can be applied to the coordinator only if the coordinator
-                            // exists and is in the active state.
-                            log.debug("Updating high watermark of {} to {}.", tp, offset);
-                            context.coordinator.updateLastCommittedOffset(offset);
-                            context.deferredEventQueue.completeUpTo(offset);
-                            coordinatorMetrics.onUpdateLastCommittedOffset(tp, offset);
-                        } else {
-                            log.debug("Ignored high watermark updated for {} to {} because the coordinator is not active.",
-                                tp, offset);
+            if (lastHighWatermark.getAndSet(offset) == NO_OFFSET) {
+                // An event to apply the new high watermark is pushed to the front of the
+                // queue only if the previous value was -1L. If it was not, it means that
+                // there is already an event waiting to process the last value.
+                enqueueFirst(new CoordinatorInternalEvent("HighWatermarkUpdate", tp, () -> {
+                    long newHighWatermark = lastHighWatermark.getAndSet(NO_OFFSET);
+
+                    CoordinatorContext context = coordinators.get(tp);
+                    if (context != null) {
+                        context.lock.lock();
+                        try {
+                            if (context.state == CoordinatorState.ACTIVE) {
+                                // The updated high watermark can be applied to the coordinator only if the coordinator
+                                // exists and is in the active state.
+                                log.debug("Updating high watermark of {} to {}.", tp, newHighWatermark);
+                                context.coordinator.updateLastCommittedOffset(newHighWatermark);
+                                context.deferredEventQueue.completeUpTo(newHighWatermark);
+                                coordinatorMetrics.onUpdateLastCommittedOffset(tp, newHighWatermark);
+                            } else {
+                                log.debug("Ignored high watermark updated for {} to {} because the coordinator is not active.",
+                                    tp, newHighWatermark);
+                            }
+                        } finally {
+                            context.lock.unlock();
                         }
-                    } finally {
-                        context.lock.unlock();
+                    } else {
+                        log.debug("Ignored high watermark updated for {} to {} because the coordinator does not exist.",
+                            tp, newHighWatermark);
                     }
-                } else {
-                    log.debug("Ignored high watermark updated for {} to {} because the coordinator does not exist.",
-                        tp, offset);
-                }
-            });
+                }));
+            }
         }
     }
 
@@ -1262,12 +1297,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * The partition writer used by the runtime to persist records.
      */
     private final PartitionWriter<U> partitionWriter;
-
-    /**
-     * The high watermark listener registered to all the partitions
-     * backing the coordinators.
-     */
-    private final HighWatermarkListener highWatermarklistener;
 
     /**
      * The coordinator loaded used by the runtime.
@@ -1335,7 +1364,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.coordinators = new ConcurrentHashMap<>();
         this.processor = processor;
         this.partitionWriter = partitionWriter;
-        this.highWatermarklistener = new HighWatermarkListener();
         this.loader = loader;
         this.coordinatorShardBuilderSupplier = coordinatorShardBuilderSupplier;
         this.runtimeMetrics = runtimeMetrics;
@@ -1353,14 +1381,28 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
-     * Enqueues a new event.
+     * Enqueues a new event at the end of the processing queue.
      *
      * @param event The event.
      * @throws NotCoordinatorException If the event processor is closed.
      */
-    private void enqueue(CoordinatorEvent event) {
+    private void enqueueLast(CoordinatorEvent event) {
         try {
-            processor.enqueue(event);
+            processor.enqueueLast(event);
+        } catch (RejectedExecutionException ex) {
+            throw new NotCoordinatorException("Can't accept an event because the processor is closed", ex);
+        }
+    }
+
+    /**
+     * Enqueues a new event at the front of the processing queue.
+     *
+     * @param event The event.
+     * @throws NotCoordinatorException If the event processor is closed.
+     */
+    private void enqueueFirst(CoordinatorEvent event) {
+        try {
+            processor.enqueueFirst(event);
         } catch (RejectedExecutionException ex) {
             throw new NotCoordinatorException("Can't accept an event because the processor is closed", ex);
         }
@@ -1442,7 +1484,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         throwIfNotRunning();
         log.debug("Scheduled execution of write operation {}.", name);
         CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(name, tp, timeout, op);
-        enqueue(event);
+        enqueueLast(event);
         return event.future;
     }
 
@@ -1482,6 +1524,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param producerEpoch     The producer epoch.
      * @param timeout           The write operation timeout.
      * @param op                The write operation.
+     * @param apiVersion        The Version of the Txn_Offset_Commit request
      *
      * @return A future that will be completed with the result of the write operation
      * when the operation is completed or an exception if the write operation failed.
@@ -1495,7 +1538,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         long producerId,
         short producerEpoch,
         Duration timeout,
-        CoordinatorWriteOperation<S, T, U> op
+        CoordinatorWriteOperation<S, T, U> op,
+        Short apiVersion
     ) {
         throwIfNotRunning();
         log.debug("Scheduled execution of transactional write operation {}.", name);
@@ -1503,7 +1547,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             tp,
             transactionalId,
             producerId,
-            producerEpoch
+            producerEpoch,
+            apiVersion
         ).thenCompose(verificationGuard -> {
             CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(
                 name,
@@ -1515,7 +1560,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 timeout,
                 op
             );
-            enqueue(event);
+            enqueueLast(event);
             return event.future;
         });
     }
@@ -1554,7 +1599,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             result,
             timeout
         );
-        enqueue(event);
+        enqueueLast(event);
         return event.future;
     }
 
@@ -1578,7 +1623,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         throwIfNotRunning();
         log.debug("Scheduled execution of read operation {}.", name);
         CoordinatorReadEvent<T> event = new CoordinatorReadEvent<>(name, tp, op);
-        enqueue(event);
+        enqueueLast(event);
         return event.future;
     }
 
@@ -1619,7 +1664,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         Runnable op
     ) {
         log.debug("Scheduled execution of internal operation {}.", name);
-        enqueue(new CoordinatorInternalEvent(name, tp, op));
+        enqueueLast(new CoordinatorInternalEvent(name, tp, op));
     }
 
     /**

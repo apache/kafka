@@ -721,7 +721,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(Map.empty)
     else {
       val internalTopicsAllowed = request.header.clientId == AdminUtils.ADMIN_CLIENT_ID
-
+      val supportedOperation = if (request.header.apiVersion > 10) genericError else defaultError
       // call the replica manager to append messages to the replicas
       replicaManager.handleProduceAppend(
         timeout = produceRequest.timeout.toLong,
@@ -731,7 +731,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         entriesPerPartition = authorizedRequestInfo,
         responseCallback = sendResponseCallback,
         recordValidationStatsCallback = processingStatsCallback,
-        requestLocal = requestLocal)
+        requestLocal = requestLocal,
+        supportedOperation = supportedOperation)
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log
@@ -1425,7 +1426,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           new DescribeTopicPartitionsResponse(response)
         })
       }
-      case None => throw new InvalidRequestException("ZK cluster does not handle DescribeTopicPartitions request")
+      case None => {
+        requestHelper.sendMaybeThrottle(request, request.body[DescribeTopicPartitionsRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      }
     }
   }
 
@@ -2515,7 +2518,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def ensureInterBrokerVersion(version: MetadataVersion): Unit = {
     if (config.interBrokerProtocolVersion.isLessThan(version))
-      throw new UnsupportedVersionException(s"inter.broker.protocol.version: ${config.interBrokerProtocolVersion.version} is less than the required version: ${version.version}")
+      throw new UnsupportedVersionException(s"inter.broker.protocol.version: ${config.interBrokerProtocolVersion} is less than the required version: ${version}")
   }
 
   def handleAddPartitionsToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
