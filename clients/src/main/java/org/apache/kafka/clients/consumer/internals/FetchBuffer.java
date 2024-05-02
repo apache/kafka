@@ -179,7 +179,7 @@ public class FetchBuffer implements AutoCloseable {
                     // We only need to check this when we are not going to wait because waiting
                     // already checks whether the thread is interrupted.
                     if (Thread.interrupted())
-                        throw new InterruptException("Thread interrupted.");
+                        throw new InterruptException("Interrupted waiting for results from fetching records");
 
                     break;
                 }
