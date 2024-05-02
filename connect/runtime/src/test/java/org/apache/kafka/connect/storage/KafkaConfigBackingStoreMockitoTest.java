@@ -621,6 +621,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertEquals(expectedClientId + "-leader", fencableProducerProps.get(CLIENT_ID_CONFIG));
     }
 
+
     @Test
     public void testExceptionOnStartWhenConfigTopicHasMultiplePartitions() {
         expectStart(Collections.emptyList(), Collections.emptyMap());

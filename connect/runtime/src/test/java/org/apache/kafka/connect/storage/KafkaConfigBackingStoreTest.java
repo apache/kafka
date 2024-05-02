@@ -1183,22 +1183,6 @@ public class KafkaConfigBackingStoreTest {
         PowerMock.verifyAll();
     }
 
-    @Test
-    public void testExceptionOnStartWhenConfigTopicHasMultiplePartitions() throws Exception {
-        expectConfigure();
-        expectStart(Collections.emptyList(), Collections.emptyMap());
-
-        expectPartitionCount(2);
-
-        PowerMock.replayAll();
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-        ConfigException e = assertThrows(ConfigException.class, () -> configStorage.start());
-        assertTrue(e.getMessage().contains("required to have a single partition"));
-
-        PowerMock.verifyAll();
-    }
-
     private void expectConfigure() throws Exception {
         PowerMock.expectPrivate(configStorage, "createKafkaBasedLog",
                 EasyMock.capture(capturedTopic), EasyMock.capture(capturedProducerProps),
