@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import java.nio.file.Path;
 import java.util.Optional;
 
 /**
@@ -35,9 +36,14 @@ public interface QuorumStateStore {
      * and replacing the old state.
      *
      * @param latest the latest election state
-     * @param kraftVersion the finalized kraft.version 
+     * @param kraftVersion the finalized kraft.version
      */
     void writeElectionState(ElectionState latest, short kraftVersion);
+
+    /**
+     * Path to the quorum state store
+     */
+    Path path();
 
     /**
      * Clear any state associated to the store for a fresh start

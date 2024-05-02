@@ -86,6 +86,55 @@ final public class VoterSetHistoryTest {
     }
 
     @Test
+    void testAddAtNonOverlapping() {
+        VoterSetHistory votersHistory = new VoterSetHistory(Optional.empty());
+
+        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true);
+        VoterSet voterSet = new VoterSet(new HashMap<>(voterMap));
+
+        // Add a starting voter to the history
+        votersHistory.addAt(100, voterSet);
+
+        // Remove voter so that it doesn't overlap
+        VoterSet nonoverlappingRemovedSet = voterSet
+            .removeVoter(voterMap.get(1).voterKey()).get()
+            .removeVoter(voterMap.get(2).voterKey()).get();
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> votersHistory.addAt(200, nonoverlappingRemovedSet)
+        );
+        assertEquals(voterSet, votersHistory.lastValue());
+
+
+        // Add voters so that it doesn't overlap
+        VoterSet nonoverlappingAddSet = voterSet
+            .addVoter(VoterSetTest.voterNode(4, true)).get()
+            .addVoter(VoterSetTest.voterNode(5, true)).get();
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> votersHistory.addAt(200, nonoverlappingAddSet)
+        );
+        assertEquals(voterSet, votersHistory.lastValue());
+    }
+
+    @Test
+    void testNonoverlappingFromStaticVoterSet() {
+        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true);
+        VoterSet staticVoterSet = new VoterSet(new HashMap<>(voterMap));
+        VoterSetHistory votersHistory = new VoterSetHistory(Optional.empty());
+
+        // Remove voter so that it doesn't overlap
+        VoterSet nonoverlappingRemovedSet = staticVoterSet
+            .removeVoter(voterMap.get(1).voterKey()).get()
+            .removeVoter(voterMap.get(2).voterKey()).get();
+
+        votersHistory.addAt(100, nonoverlappingRemovedSet);
+        assertEquals(nonoverlappingRemovedSet, votersHistory.lastValue());
+    }
+
+    @Test
     void testTruncateTo() {
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true);
         VoterSet staticVoterSet = new VoterSet(new HashMap<>(voterMap));

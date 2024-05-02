@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.raft;
 
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
 import java.util.Optional;
 import org.apache.kafka.raft.generated.QuorumStateData;
 
@@ -32,6 +34,11 @@ public class MockQuorumStateStore implements QuorumStateStore {
         current = Optional.of(
             update.toQourumStateData(quorumStateVersionFromKRaftVersion(kraftVersion))
         );
+    }
+
+    @Override
+    public Path path() {
+        return FileSystems.getDefault().getPath("mock-file");
     }
 
     @Override

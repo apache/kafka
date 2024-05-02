@@ -23,7 +23,6 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 
 import java.io.File;
-import java.nio.file.Paths;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -35,7 +34,6 @@ public class ControllerNode implements TestKitNode {
     public static class Builder {
         private int id = -1;
         private String baseDirectory;
-        private String metadataDirectory;
         private Uuid clusterId;
         private boolean combined;
 
@@ -47,11 +45,6 @@ public class ControllerNode implements TestKitNode {
 
         public Builder setId(int id) {
             this.id = id;
-            return this;
-        }
-
-        public Builder setMetadataDirectory(String metadataDirectory) {
-            this.metadataDirectory = metadataDirectory;
             return this;
         }
 
@@ -77,16 +70,8 @@ public class ControllerNode implements TestKitNode {
             if (baseDirectory == null) {
                 throw new RuntimeException("You must set the base directory.");
             }
-            if (metadataDirectory == null) {
-                if (combined) {
-                    metadataDirectory = String.format("combined_%d_0", id);
-                } else {
-                    metadataDirectory = String.format("controller_%d", id);
-                }
-            }
-            if (!Paths.get(metadataDirectory).isAbsolute()) {
-                metadataDirectory = new File(baseDirectory, metadataDirectory).getAbsolutePath();
-            }
+            String metadataDirectory = new File(baseDirectory,
+                combined ? String.format("combined_%d_0", id) : String.format("controller_%d", id)).getAbsolutePath();
             MetaPropertiesEnsemble.Copier copier =
                 new MetaPropertiesEnsemble.Copier(MetaPropertiesEnsemble.EMPTY);
             copier.setMetaLogDir(Optional.of(metadataDirectory));

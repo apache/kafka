@@ -36,6 +36,7 @@ import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Optional;
 
 /**
@@ -55,12 +56,15 @@ import java.util.Optional;
  * */
 public class FileQuorumStateStore implements QuorumStateStore {
     private static final Logger log = LoggerFactory.getLogger(FileQuorumStateStore.class);
+    private static final String DATA_VERSION = "data_version";
+
+    static final short LOWEST_SUPPORTED_VERSION = 0;
+    static final short HIGHEST_SUPPORTED_VERSION = 1;
+
+    public static final String DEFAULT_FILE_NAME = "quorum-state";
 
     private final File stateFile;
 
-    static final String DATA_VERSION = "data_version";
-    static final short LOWEST_SUPPORTED_VERSION = 0;
-    static final short HIGHEST_SUPPORTED_VERSION = 1;
 
     public FileQuorumStateStore(final File stateFile) {
         this.stateFile = stateFile;
@@ -128,6 +132,11 @@ public class FileQuorumStateStore implements QuorumStateStore {
             latest.toQourumStateData(quorumStateVersion),
             quorumStateVersion
         );
+    }
+
+    @Override
+    public Path path() {
+        return stateFile.toPath();
     }
 
     private short quorumStateVersionFromKRaftVersion(short kraftVersion) {

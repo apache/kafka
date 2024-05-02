@@ -23,8 +23,8 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteResourceNotFoundException, RemoteStorageManager}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.RemoteIndexCache.{DIR_NAME, Entry, REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, remoteDeletedSuffixIndexFileName, remoteOffsetIndexFile, remoteOffsetIndexFileName, remoteTimeIndexFile, remoteTimeIndexFileName, remoteTransactionIndexFile, remoteTransactionIndexFileName}
-import org.apache.kafka.storage.internals.log.{AbortedTxn, CorruptIndexException, LogFileUtils, OffsetIndex, OffsetPosition, RemoteIndexCache, TimeIndex, TransactionIndex}
+import org.apache.kafka.storage.internals.log.RemoteIndexCache._
+import org.apache.kafka.storage.internals.log._
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -32,15 +32,16 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
-import org.mockito.invocation.InvocationOnMock
 import org.mockito.Mockito._
+import org.mockito.invocation.InvocationOnMock
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.io.{File, FileInputStream, IOException, PrintWriter, UncheckedIOException}
 import java.nio.file.{Files, NoSuchFileException, Paths}
 import java.util
-import java.util.{Collections, Optional}
 import java.util.concurrent.{CountDownLatch, Executors, Future, TimeUnit}
+import java.util.stream.Collectors
+import java.util.{Collections, Optional}
 import scala.collection.mutable
 
 class RemoteIndexCacheTest {
@@ -307,7 +308,7 @@ class RemoteIndexCacheTest {
     // cache is empty at beginning
     assertTrue(cache.internalCache.asMap().isEmpty)
     // verify that cleaner thread is running
-    TestUtils.numThreadsRunning(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, isDaemon = true)
+    getRunningCleanerThread
     // create a new entry
     val spyEntry = generateSpyCacheEntry()
     // an exception should not close the cleaner thread
@@ -321,16 +322,16 @@ class RemoteIndexCacheTest {
     // Give the thread cleaner thread some time to throw an exception
     Thread.sleep(100)
     // Verify that Cleaner thread is still running even when exception is thrown in doWork()
-    var threads = TestUtils.numThreadsRunning(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, isDaemon = true)
+    var threads = getRunningCleanerThread
     assertEquals(1, threads.size,
-      s"Found unexpected ${threads.size} threads=${threads.map(t => t.getName).mkString(", ")}")
+      s"Found unexpected ${threads.size} threads=${threads.stream().map[String](t => t.getName).collect(Collectors.joining(", "))}")
 
     // close the cache properly
     cache.close()
 
     // verify that the thread is closed properly
-    threads = TestUtils.numThreadsRunning(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD, isDaemon = true)
-    assertTrue(threads.isEmpty, s"Found unexpected ${threads.size} threads=${threads.map(t => t.getName).mkString(", ")}")
+    threads = getRunningCleanerThread
+    assertTrue(threads.isEmpty, s"Found unexpected ${threads.size} threads=${threads.stream().map[String](t => t.getName).collect(Collectors.joining(", "))}")
     // if the thread is correctly being shutdown it will not be running
     assertFalse(cache.cleanerThread.isRunning, "Unexpected thread state=running. Check error logs.")
   }
@@ -1083,7 +1084,14 @@ class RemoteIndexCacheTest {
         .filter(path => path.getFileName.toString.endsWith(suffix))
         .findAny()
     } catch {
-      case e @ (_ : NoSuchFileException | _ : UncheckedIOException) => Optional.empty()
+      case _ : NoSuchFileException | _ : UncheckedIOException => Optional.empty()
     }
+  }
+
+  private def getRunningCleanerThread: java.util.Set[Thread] = {
+    Thread.getAllStackTraces.keySet()
+      .stream()
+      .filter(t => t.isAlive && t.getName.startsWith(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD))
+      .collect(Collectors.toSet())
   }
 }

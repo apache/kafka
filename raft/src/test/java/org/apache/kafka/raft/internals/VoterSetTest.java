@@ -62,7 +62,7 @@ final public class VoterSetTest {
         assertEquals(Optional.empty(), voterSet.addVoter(voterNode(1, true)));
 
         VoterSet.VoterNode voter4 = voterNode(4, true);
-        aVoterMap.put(voter4.id(), voter4);
+        aVoterMap.put(voter4.voterKey().id(), voter4);
         assertEquals(Optional.of(new VoterSet(new HashMap<>(aVoterMap))), voterSet.addVoter(voter4));
     }
 
@@ -71,13 +71,13 @@ final public class VoterSetTest {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2, 3), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
-        assertEquals(Optional.empty(), voterSet.removeVoter(4, Optional.empty()));
-        assertEquals(Optional.empty(), voterSet.removeVoter(4, Optional.of(Uuid.randomUuid())));
+        assertEquals(Optional.empty(), voterSet.removeVoter(VoterSet.VoterKey.of(4, Optional.empty())));
+        assertEquals(Optional.empty(), voterSet.removeVoter(VoterSet.VoterKey.of(4, Optional.of(Uuid.randomUuid()))));
 
         VoterSet.VoterNode voter3 = aVoterMap.remove(3);
         assertEquals(
             Optional.of(new VoterSet(new HashMap<>(aVoterMap))),
-            voterSet.removeVoter(voter3.id(), voter3.directoryId())
+            voterSet.removeVoter(voter3.voterKey())
         );
     }
 
@@ -86,11 +86,11 @@ final public class VoterSetTest {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2, 3), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
-        assertTrue(voterSet.isVoter(1, aVoterMap.get(1).directoryId()));
+        assertTrue(voterSet.isVoter(1, aVoterMap.get(1).voterKey().directoryId()));
         assertFalse(voterSet.isVoter(1, Optional.of(Uuid.randomUuid())));
         assertFalse(voterSet.isVoter(1, Optional.empty()));
-        assertFalse(voterSet.isVoter(2, aVoterMap.get(1).directoryId()));
-        assertFalse(voterSet.isVoter(4, aVoterMap.get(1).directoryId()));
+        assertFalse(voterSet.isVoter(2, aVoterMap.get(1).voterKey().directoryId()));
+        assertFalse(voterSet.isVoter(4, aVoterMap.get(1).voterKey().directoryId()));
         assertFalse(voterSet.isVoter(4, Optional.empty()));
     }
 
@@ -110,10 +110,10 @@ final public class VoterSetTest {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
-        assertTrue(voterSet.isOnlyVoter(1, aVoterMap.get(1).directoryId()));
+        assertTrue(voterSet.isOnlyVoter(1, aVoterMap.get(1).voterKey().directoryId()));
         assertFalse(voterSet.isOnlyVoter(1, Optional.of(Uuid.randomUuid())));
         assertFalse(voterSet.isOnlyVoter(1, Optional.empty()));
-        assertFalse(voterSet.isOnlyVoter(4, aVoterMap.get(1).directoryId()));
+        assertFalse(voterSet.isOnlyVoter(4, aVoterMap.get(1).voterKey().directoryId()));
         assertFalse(voterSet.isOnlyVoter(4, Optional.empty()));
     }
 
@@ -122,11 +122,11 @@ final public class VoterSetTest {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
-        assertFalse(voterSet.isOnlyVoter(1, aVoterMap.get(1).directoryId()));
+        assertFalse(voterSet.isOnlyVoter(1, aVoterMap.get(1).voterKey().directoryId()));
         assertFalse(voterSet.isOnlyVoter(1, Optional.of(Uuid.randomUuid())));
         assertFalse(voterSet.isOnlyVoter(1, Optional.empty()));
-        assertFalse(voterSet.isOnlyVoter(2, aVoterMap.get(1).directoryId()));
-        assertFalse(voterSet.isOnlyVoter(4, aVoterMap.get(1).directoryId()));
+        assertFalse(voterSet.isOnlyVoter(2, aVoterMap.get(1).voterKey().directoryId()));
+        assertFalse(voterSet.isOnlyVoter(4, aVoterMap.get(1).voterKey().directoryId()));
         assertFalse(voterSet.isOnlyVoter(4, Optional.empty()));
     }
 
@@ -148,12 +148,12 @@ final public class VoterSetTest {
         assertMajorities(true, startingVoterSet, biggerVoterSet);
 
         VoterSet smallerVoterSet = startingVoterSet
-            .removeVoter(1, startingVoterMap.get(1).directoryId())
+            .removeVoter(startingVoterMap.get(1).voterKey())
             .get();
         assertMajorities(true, startingVoterSet, smallerVoterSet);
 
         VoterSet replacedVoterSet = startingVoterSet
-            .removeVoter(1, startingVoterMap.get(1).directoryId())
+            .removeVoter(startingVoterMap.get(1).voterKey())
             .get()
             .addVoter(voterNode(1, true))
             .get();
@@ -175,19 +175,19 @@ final public class VoterSetTest {
 
         // Two removals don't have an overlapping majority
         VoterSet smallerVoterSet = startingVoterSet
-            .removeVoter(1, startingVoterMap.get(1).directoryId())
+            .removeVoter(startingVoterMap.get(1).voterKey())
             .get()
-            .removeVoter(2, startingVoterMap.get(2).directoryId())
+            .removeVoter(startingVoterMap.get(2).voterKey())
             .get();
         assertMajorities(false, startingVoterSet, smallerVoterSet);
 
         // Two replacements don't have an overlapping majority
         VoterSet replacedVoterSet = startingVoterSet
-            .removeVoter(1, startingVoterMap.get(1).directoryId())
+            .removeVoter(startingVoterMap.get(1).voterKey())
             .get()
             .addVoter(voterNode(1, true))
             .get()
-            .removeVoter(2, startingVoterMap.get(2).directoryId())
+            .removeVoter(startingVoterMap.get(2).voterKey())
             .get()
             .addVoter(voterNode(2, true))
             .get();
@@ -223,8 +223,10 @@ final public class VoterSetTest {
 
     static VoterSet.VoterNode voterNode(int id, boolean withDirectoryId) {
         return new VoterSet.VoterNode(
-            id,
-            withDirectoryId ? Optional.of(Uuid.randomUuid()) : Optional.empty(),
+            VoterSet.VoterKey.of(
+                id,
+                withDirectoryId ? Optional.of(Uuid.randomUuid()) : Optional.empty()
+            ),
             Collections.singletonMap(
                 "LISTENER",
                 InetSocketAddress.createUnresolved(String.format("replica-%d", id), 1234)

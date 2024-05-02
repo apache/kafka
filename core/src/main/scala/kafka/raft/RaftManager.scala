@@ -185,7 +185,7 @@ class KafkaRaftManager[T](
     client.initialize(
       controllerQuorumVotersFuture.get(),
       config.controllerListenerNames.head,
-      new FileQuorumStateStore(new File(dataDir, "quorum-state")),
+      new FileQuorumStateStore(new File(dataDir, FileQuorumStateStore.DEFAULT_FILE_NAME)),
       metrics
     )
     netChannel.start()

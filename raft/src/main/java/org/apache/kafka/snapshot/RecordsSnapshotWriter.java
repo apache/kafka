@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordUtils;
-import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
@@ -213,26 +212,24 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                 serde
             );
 
-            writer.accumulator.appendControlMessages(buffer -> {
+            writer.accumulator.appendControlMessages((baseOffset, epoch, buffer) -> {
                 long now = time.milliseconds();
-                int numberOfRecords = 0;
                 try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                         buffer,
                         RecordBatch.CURRENT_MAGIC_VALUE,
                         compressionType,
                         TimestampType.CREATE_TIME,
-                        0, // initialOffset
+                        baseOffset,
                         now,
                         RecordBatch.NO_PRODUCER_ID,
                         RecordBatch.NO_PRODUCER_EPOCH,
                         RecordBatch.NO_SEQUENCE,
                         false, // isTransactional
                         true,  // isControlBatch
-                        rawSnapshotWriter.get().snapshotId().epoch(),
+                        epoch,
                         buffer.capacity()
                     )
                 ) {
-                    numberOfRecords++;
                     builder.appendSnapshotHeaderMessage(
                         now,
                         new SnapshotHeaderRecord()
@@ -241,7 +238,6 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                     );
 
                     if (kraftVersion > 0) {
-                        numberOfRecords++;
                         builder.appendKRaftVersionMessage(
                             now,
                             new KRaftVersionRecord()
@@ -250,20 +246,16 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                         );
 
                         if (voterSet.isPresent()) {
-                            numberOfRecords++;
                             builder.appendVotersMessage(
                                 now,
                                 voterSet.get().toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
                             );
                         }
                     }
+
+                    return builder.build();
                 }
-
-                buffer.flip();
-                return new BatchAccumulator.CreatedRecords(numberOfRecords, MemoryRecords.readableRecords(buffer));
             });
-
-            writer.accumulator.forceDrain();
 
             return writer;
         }

@@ -27,7 +27,7 @@ import java.util.Optional;
  */
 final public class VoterSetHistory {
     private final Optional<VoterSet> staticVoterSet;
-    private final History<VoterSet> votersHistory = new TreeMapHistory<>();
+    private final LogHistory<VoterSet> votersHistory = new TreeMapLogHistory<>();
 
     VoterSetHistory(Optional<VoterSet> staticVoterSet) {
         this.staticVoterSet = staticVoterSet;
@@ -44,7 +44,7 @@ final public class VoterSetHistory {
      * @throws IllegalArgumentException if the offset is not greater than all previous offsets
      */
     public void addAt(long offset, VoterSet voters) {
-        Optional<History.Entry<VoterSet>> lastEntry = votersHistory.lastEntry();
+        Optional<LogHistory.Entry<VoterSet>> lastEntry = votersHistory.lastEntry();
         if (lastEntry.isPresent() && lastEntry.get().offset() >= 0) {
             // If the last voter set comes from the replicated log then the majorities must overlap.
             // This ignores the static voter set and the bootstrapped voter set since they come from
@@ -82,7 +82,7 @@ final public class VoterSetHistory {
      * Returns the latest set of voters.
      */
     public VoterSet lastValue() {
-        Optional<History.Entry<VoterSet>> result = votersHistory.lastEntry();
+        Optional<LogHistory.Entry<VoterSet>> result = votersHistory.lastEntry();
         if (result.isPresent()) {
             return result.get().value();
         }

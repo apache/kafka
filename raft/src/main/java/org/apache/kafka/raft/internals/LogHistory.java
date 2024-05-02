@@ -22,7 +22,7 @@ import java.util.Optional;
 /**
  * An object that tracks values of {@code T} at different offsets.
  */
-public interface History<T> {
+public interface LogHistory<T> {
     /**
      * Add a new value at a given offset.
      *

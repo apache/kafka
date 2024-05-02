@@ -21,6 +21,7 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
@@ -40,12 +41,17 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
-import java.util.function.Function;
+import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class BatchAccumulator<T> implements Closeable {
+    @FunctionalInterface
+    public interface MemoryRecordsCreator {
+        MemoryRecords create(long baseOffset, int epoch, ByteBuffer byteBuffer);
+    }
+
     private final int epoch;
     private final Time time;
     private final SimpleTimer lingerTimer;
@@ -215,24 +221,27 @@ public class BatchAccumulator<T> implements Closeable {
      *        batch that will be appended. The memory records returned must contain one
      *        control batch and that control batch have at least one record.
      */
-    public void appendControlMessages(Function<ByteBuffer, CreatedRecords> valueCreator) {
+    public void appendControlMessages(MemoryRecordsCreator valueCreator) {
         appendLock.lock();
         try {
             ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSize);
             if (buffer != null) {
                 try {
                     forceDrain();
-                    CreatedRecords createdRecords = valueCreator.apply(buffer);
+                    MemoryRecords memoryRecords = valueCreator.create(nextOffset, epoch, buffer);
+
+                    int numberOfRecords = validateMemoryRecordAndReturnCount(memoryRecords);
+
                     completed.add(
                         new CompletedBatch<>(
                             nextOffset,
-                            createdRecords.numberOfRecords(),
-                            createdRecords.records(),
+                            numberOfRecords,
+                            memoryRecords,
                             memoryPool,
                             buffer
                         )
                     );
-                    nextOffset += 1;
+                    nextOffset += numberOfRecords;
                 } catch (Exception e) {
                     // Release the buffer now since the buffer was not stored in completed for a delayed release
                     memoryPool.release(buffer);
@@ -246,6 +255,42 @@ public class BatchAccumulator<T> implements Closeable {
         }
     }
 
+    private int validateMemoryRecordAndReturnCount(MemoryRecords memoryRecord) {
+        // Confirm that it is at most one batch and it is a control record
+        Iterator<MutableRecordBatch> batches = memoryRecord.batches().iterator();
+        if (!batches.hasNext()) {
+            throw new IllegalArgumentException("valueCreator didn't create a batch");
+        }
+
+        MutableRecordBatch batch = batches.next();
+        Integer numberOfRecords = batch.countOrNull();
+        if (!batch.isControlBatch()) {
+            throw new IllegalArgumentException("valueCreator didn't creatte a control batch");
+        } else if (batch.baseOffset() != nextOffset) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Expected a base offset of {} but got {}",
+                    nextOffset,
+                    batch.baseOffset()
+                )
+            );
+        } else if (batch.partitionLeaderEpoch() != epoch) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Expected a partition leader epoch of {} but got {}",
+                    epoch,
+                    batch.partitionLeaderEpoch()
+                )
+            );
+        } else if (numberOfRecords == null) {
+            throw new IllegalArgumentException("valueCreator didn't create a batch with the count");
+        } else if (batches.hasNext()) {
+            throw new IllegalArgumentException("valueCreator created more than one batch");
+        }
+
+        return numberOfRecords;
+    }
+
     /**
      * Append a {@link LeaderChangeMessage} record to the batch
      *
@@ -257,16 +302,13 @@ public class BatchAccumulator<T> implements Closeable {
         LeaderChangeMessage leaderChangeMessage,
         long currentTimestamp
     ) {
-        appendControlMessages(buffer ->
-            new CreatedRecords(
-                1,
-                MemoryRecords.withLeaderChangeMessage(
-                    this.nextOffset,
-                    currentTimestamp,
-                    this.epoch,
-                    buffer,
-                    leaderChangeMessage
-                )
+        appendControlMessages((baseOffset, epoch, buffer) ->
+            MemoryRecords.withLeaderChangeMessage(
+                baseOffset,
+                currentTimestamp,
+                epoch,
+                buffer,
+                leaderChangeMessage
             )
         );
     }
@@ -283,16 +325,13 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotHeaderRecord snapshotHeaderRecord,
         long currentTimestamp
     ) {
-        appendControlMessages(buffer ->
-            new CreatedRecords(
-                1,
-                MemoryRecords.withSnapshotHeaderRecord(
-                    this.nextOffset,
-                    currentTimestamp,
-                    this.epoch,
-                    buffer,
-                    snapshotHeaderRecord
-                )
+        appendControlMessages((baseOffset, epoch, buffer) ->
+            MemoryRecords.withSnapshotHeaderRecord(
+                nextOffset,
+                currentTimestamp,
+                epoch,
+                buffer,
+                snapshotHeaderRecord
             )
         );
     }
@@ -308,16 +347,13 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotFooterRecord snapshotFooterRecord,
         long currentTimestamp
     ) {
-        appendControlMessages(buffer ->
-            new CreatedRecords(
-                1,
-                MemoryRecords.withSnapshotFooterRecord(
-                    this.nextOffset,
-                    currentTimestamp,
-                    this.epoch,
-                    buffer,
-                    snapshotFooterRecord
-                )
+        appendControlMessages((baseOffset, epoch, buffer) ->
+            MemoryRecords.withSnapshotFooterRecord(
+                nextOffset,
+                currentTimestamp,
+                epoch,
+                buffer,
+                snapshotFooterRecord
             )
         );
     }
@@ -529,24 +565,6 @@ public class BatchAccumulator<T> implements Closeable {
         }
     }
 
-    final public static class CreatedRecords {
-        private final int numberOfRecords;
-        private final MemoryRecords records;
-
-        public CreatedRecords(int numberOfRecords, MemoryRecords records) {
-            this.numberOfRecords = numberOfRecords;
-            this.records = records;
-        }
-
-        public int numberOfRecords() {
-            return numberOfRecords;
-        }
-
-        public MemoryRecords records() {
-            return records;
-        }
-    }
-
     private static class SimpleTimer {
         // We use an atomic long so that the Raft IO thread can query the linger
         // time without any locking
@@ -564,5 +582,4 @@ public class BatchAccumulator<T> implements Closeable {
             return Math.max(0, deadlineMs.get() - currentTimeMs);
         }
     }
-
 }
