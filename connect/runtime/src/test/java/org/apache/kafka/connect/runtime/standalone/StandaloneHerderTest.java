@@ -772,8 +772,9 @@ public class StandaloneHerderTest {
     public void testPatchConnectorConfig() throws ExecutionException, InterruptedException, TimeoutException {
         // Create the connector.
         Map<String, String> originalConnConfig = connectorConfig(SourceSink.SOURCE);
-        originalConnConfig.put("foo1", "bar1");
-        originalConnConfig.put("foo2", "bar2");
+        originalConnConfig.put("foo0", "unaffected");
+        originalConnConfig.put("foo1", "will-be-changed");
+        originalConnConfig.put("foo2", "will-be-removed");
 
         Map<String, String> connConfigPatch = new HashMap<>();
         connConfigPatch.put("foo1", "changed");
@@ -781,6 +782,7 @@ public class StandaloneHerderTest {
         connConfigPatch.put("foo3", "added");
 
         Map<String, String> patchedConnConfig = new HashMap<>(originalConnConfig);
+        patchedConnConfig.put("foo0", "unaffected");
         patchedConnConfig.put("foo1", "changed");
         patchedConnConfig.remove("foo2");
         patchedConnConfig.put("foo3", "added");

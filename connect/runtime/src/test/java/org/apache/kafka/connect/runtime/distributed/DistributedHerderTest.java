@@ -2369,8 +2369,9 @@ public class DistributedHerderTest {
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
 
         Map<String, String> originalConnConfig = new HashMap<>(CONN1_CONFIG);
-        originalConnConfig.put("foo1", "bar1");
-        originalConnConfig.put("foo2", "bar2");
+        originalConnConfig.put("foo0", "unaffected");
+        originalConnConfig.put("foo1", "will-be-changed");
+        originalConnConfig.put("foo2", "will-be-removed");
 
         // The connector is pre-existing due to the mocks.
 
@@ -2397,6 +2398,7 @@ public class DistributedHerderTest {
         connConfigPatch.put("foo3", "added");
 
         Map<String, String> patchedConnConfig = new HashMap<>(originalConnConfig);
+        patchedConnConfig.put("foo0", "unaffected");
         patchedConnConfig.put("foo1", "changed");
         patchedConnConfig.remove("foo2");
         patchedConnConfig.put("foo3", "added");
