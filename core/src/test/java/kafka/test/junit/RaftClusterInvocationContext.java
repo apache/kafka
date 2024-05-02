@@ -118,8 +118,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 }
             },
             (AfterTestExecutionCallback) context -> clusterInstance.stop(),
-            new ClusterInstanceParameterResolver(clusterInstance),
-            new GenericParameterResolver<>(clusterConfig, ClusterConfig.class)
+            new ClusterInstanceParameterResolver(clusterInstance)
         );
     }
 

@@ -45,12 +45,16 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -81,7 +85,7 @@ public class LeaderElectionCommandTest {
     public void testAllTopicPartition() throws InterruptedException, ExecutionException {
         String topic = "unclean-topic";
         int partition = 0;
-        List<Integer> assignment = Arrays.asList(broker2, broker3);
+        List<Integer> assignment = asList(broker2, broker3);
 
         cluster.waitForReadyBrokers();
         Admin client = cluster.createAdminClient();
@@ -93,8 +97,8 @@ public class LeaderElectionCommandTest {
         TestUtils.assertLeader(client, topicPartition, broker2);
         cluster.shutdownBroker(broker3);
         TestUtils.waitForBrokersOutOfIsr(client,
-                JavaConverters.asScalaBuffer(Collections.singletonList(topicPartition)).toSet(),
-                JavaConverters.asScalaBuffer(Collections.singletonList(broker3)).toSet()
+                JavaConverters.asScalaBuffer(singletonList(topicPartition)).toSet(),
+                JavaConverters.asScalaBuffer(singletonList(broker3)).toSet()
         );
         cluster.shutdownBroker(broker2);
         TestUtils.assertNoLeader(client, topicPartition);
@@ -137,7 +141,7 @@ public class LeaderElectionCommandTest {
     public void testTopicPartition() throws InterruptedException, ExecutionException {
         String topic = "unclean-topic";
         int partition = 0;
-        List<Integer> assignment = Arrays.asList(broker2, broker3);
+        List<Integer> assignment = asList(broker2, broker3);
 
         cluster.waitForReadyBrokers();
         Admin client = cluster.createAdminClient();
@@ -149,8 +153,8 @@ public class LeaderElectionCommandTest {
 
         cluster.shutdownBroker(broker3);
         TestUtils.waitForBrokersOutOfIsr(client,
-            JavaConverters.asScalaBuffer(Collections.singletonList(topicPartition)).toSet(),
-            JavaConverters.asScalaBuffer(Collections.singletonList(broker3)).toSet()
+            JavaConverters.asScalaBuffer(singletonList(topicPartition)).toSet(),
+            JavaConverters.asScalaBuffer(singletonList(broker3)).toSet()
         );
         cluster.shutdownBroker(broker2);
         TestUtils.assertNoLeader(client, topicPartition);
@@ -171,7 +175,7 @@ public class LeaderElectionCommandTest {
     public void testPathToJsonFile() throws Exception {
         String topic = "unclean-topic";
         int partition = 0;
-        List<Integer> assignment = Arrays.asList(broker2, broker3);
+        List<Integer> assignment = asList(broker2, broker3);
 
         cluster.waitForReadyBrokers();
         Map<Integer, List<Integer>> partitionAssignment = new HashMap<>();
@@ -186,15 +190,15 @@ public class LeaderElectionCommandTest {
 
         cluster.shutdownBroker(broker3);
         TestUtils.waitForBrokersOutOfIsr(client,
-            JavaConverters.asScalaBuffer(Collections.singletonList(topicPartition)).toSet(),
-            JavaConverters.asScalaBuffer(Collections.singletonList(broker3)).toSet()
+            JavaConverters.asScalaBuffer(singletonList(topicPartition)).toSet(),
+            JavaConverters.asScalaBuffer(singletonList(broker3)).toSet()
         );
         cluster.shutdownBroker(broker2);
         TestUtils.assertNoLeader(client, topicPartition);
         cluster.startBroker(broker3);
         TestUtils.waitForOnlineBroker(client, broker3);
 
-        Path topicPartitionPath = tempTopicPartitionFile(Collections.singletonList(topicPartition));
+        Path topicPartitionPath = tempTopicPartitionFile(singletonList(topicPartition));
 
         assertEquals(0, LeaderElectionCommand.mainNoExit(
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -209,7 +213,7 @@ public class LeaderElectionCommandTest {
     public void testPreferredReplicaElection() throws InterruptedException, ExecutionException {
         String topic = "preferred-topic";
         int partition = 0;
-        List<Integer> assignment = Arrays.asList(broker2, broker3);
+        List<Integer> assignment = asList(broker2, broker3);
 
         cluster.waitForReadyBrokers();
         Admin client = cluster.createAdminClient();
@@ -226,7 +230,7 @@ public class LeaderElectionCommandTest {
         TestUtils.assertLeader(client, topicPartition, broker3);
         cluster.startBroker(broker2);
         TestUtils.waitForBrokersInIsr(client, topicPartition,
-            JavaConverters.asScalaBuffer(Collections.singletonList(broker2)).toSet()
+            JavaConverters.asScalaBuffer(singletonList(broker2)).toSet()
         );
 
         assertEquals(0, LeaderElectionCommand.mainNoExit(
@@ -255,8 +259,8 @@ public class LeaderElectionCommandTest {
         String topic = "non-preferred-topic";
         int partition0 = 0;
         int partition1 = 1;
-        List<Integer> assignment0 = Arrays.asList(broker2, broker3);
-        List<Integer> assignment1 = Arrays.asList(broker3, broker2);
+        List<Integer> assignment0 = asList(broker2, broker3);
+        List<Integer> assignment1 = asList(broker3, broker2);
 
         cluster.waitForReadyBrokers();
         Admin client = cluster.createAdminClient();
@@ -276,13 +280,13 @@ public class LeaderElectionCommandTest {
         TestUtils.assertLeader(client, topicPartition0, broker3);
         cluster.startBroker(broker2);
         TestUtils.waitForBrokersInIsr(client, topicPartition0,
-            JavaConverters.asScalaBuffer(Collections.singletonList(broker2)).toSet()
+            JavaConverters.asScalaBuffer(singletonList(broker2)).toSet()
         );
         TestUtils.waitForBrokersInIsr(client, topicPartition1,
-            JavaConverters.asScalaBuffer(Collections.singletonList(broker2)).toSet()
+            JavaConverters.asScalaBuffer(singletonList(broker2)).toSet()
         );
 
-        Path topicPartitionPath = tempTopicPartitionFile(Arrays.asList(topicPartition0, topicPartition1));
+        Path topicPartitionPath = tempTopicPartitionFile(asList(topicPartition0, topicPartition1));
         String output = ToolsTestUtils.captureStandardOut(() ->
             LeaderElectionCommand.mainNoExit(
                 "--bootstrap-server", cluster.bootstrapServers(),
@@ -304,29 +308,45 @@ public class LeaderElectionCommandTest {
             String.format("Unexpected output: %s", secondLine));
     }
 
-    private static void createTopic(Admin admin, String topic, Map<Integer, List<Integer>> replicaAssignment) throws ExecutionException, InterruptedException {
+    private void createTopic(Admin admin, String topic, Map<Integer, List<Integer>> replicaAssignment) throws ExecutionException, InterruptedException {
         NewTopic newTopic = new NewTopic(topic, replicaAssignment);
-        List<NewTopic> newTopics = Collections.singletonList(newTopic);
+        List<NewTopic> newTopics = singletonList(newTopic);
         CreateTopicsResult createTopicResult = admin.createTopics(newTopics);
         createTopicResult.all().get();
     }
 
-    private static Path tempTopicPartitionFile(List<TopicPartition> partitions) throws Exception {
+    private Path tempTopicPartitionFile(List<TopicPartition> partitions) throws Exception {
         java.io.File file = TestUtils.tempFile("leader-election-command", ".json");
 
-        scala.collection.immutable.Set<TopicPartition> topicPartitionSet =
-            JavaConverters.asScalaBuffer(partitions).toSet();
-        String jsonString = TestUtils.stringifyTopicPartitions(topicPartitionSet);
+        String jsonString = stringifyTopicPartitions(new HashSet<>(partitions));
 
         Files.write(file.toPath(), jsonString.getBytes(StandardCharsets.UTF_8));
 
         return file.toPath();
     }
 
-    private static Path tempAdminConfig(String defaultApiTimeoutMs, String requestTimeoutMs) throws Exception {
+    private Path tempAdminConfig(String defaultApiTimeoutMs, String requestTimeoutMs) throws Exception {
         String content = "default.api.timeout.ms=" + defaultApiTimeoutMs + "\nrequest.timeout.ms=" + requestTimeoutMs;
         java.io.File file = TestUtils.tempFile("admin-config", ".properties");
         Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
         return file.toPath();
+    }
+
+    private String stringifyTopicPartitions(Set<TopicPartition> topicPartitions) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"partitions\":[");
+        Iterator<TopicPartition> iterator = topicPartitions.iterator();
+        while (iterator.hasNext()) {
+            TopicPartition topicPartition = iterator.next();
+            sb.append("{\"topic\":\"")
+                    .append(topicPartition.topic())
+                    .append("\",\"partition\":")
+                    .append(topicPartition.partition()).append("}");
+            if (iterator.hasNext()) {
+                sb.append(",");
+            }
+        }
+        sb.append("]}");
+        return sb.toString();
     }
 }

@@ -118,16 +118,14 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return generatedContexts.stream();
     }
 
-    private void processClusterTemplate(ExtensionContext context, ClusterTemplate annot,
+    void processClusterTemplate(ExtensionContext context, ClusterTemplate annot,
                                         Consumer<TestTemplateInvocationContext> testInvocations) {
         // If specified, call cluster config generated method (must be static)
         List<ClusterConfig> generatedClusterConfigs = new ArrayList<>();
-        if (!annot.value().isEmpty()) {
-            generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
-        } else {
-            // Ensure we have at least one cluster config
-            generatedClusterConfigs.add(ClusterConfig.defaultBuilder().build());
+        if (annot.value().trim().isEmpty()) {
+            throw new IllegalStateException("ClusterTemplate value can't be empty string.");
         }
+        generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
 
         String baseDisplayName = context.getRequiredTestMethod().getName();
         generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(baseDisplayName, config, testInvocations));
