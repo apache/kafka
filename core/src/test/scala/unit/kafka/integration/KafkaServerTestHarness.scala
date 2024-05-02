@@ -19,8 +19,11 @@ package kafka.integration
 
 import kafka.server._
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils.{createAdminClient, resource}
-import org.apache.kafka.common.acl.AccessControlEntry
+import kafka.utils.TestUtils._
+import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
+import org.apache.kafka.common.errors.TopicExistsException
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.resource.ResourcePattern
@@ -32,8 +35,9 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import java.io.File
+import java.time.Duration
 import java.util
-import java.util.{Arrays, Collections, Properties}
+import java.util.{Collections, Properties}
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -140,7 +144,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
 
     TestUtils.shutdownServers(_brokers, deleteLogDirs = false)
     _brokers.clear()
-    Arrays.fill(alive, false)
+    util.Arrays.fill(alive, false)
 
     createBrokers(startup)
   }
@@ -154,7 +158,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         TestUtils.createOffsetsTopicWithAdmin(admin, brokers, controllerServers)
       }
     } else {
-      TestUtils.createOffsetsTopic(zkClient, servers)
+      createOffsetsTopic(zkClient, servers)
     }
   }
 
@@ -242,11 +246,35 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   }
 
   def addAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    TestUtils.addAndVerifyAcls(brokers, acls, resource, controllerServers)
+    val authorizerForWrite = pickAuthorizerForWrite(brokers, controllerServers)
+    val aclBindings = acls.map { acl => new AclBinding(resource, acl) }
+    authorizerForWrite.createAcls(anonymousAuthorizableContext, aclBindings.toList.asJava).asScala
+      .map(_.toCompletableFuture.get)
+      .foreach { result =>
+        result.exception.ifPresent { e => throw e }
+      }
+    val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
+    (brokers.map(_.authorizer.get) ++ controllerServers.map(_.authorizer.get)).foreach {
+      authorizer => waitAndVerifyAcls(
+        authorizer.acls(aclFilter).asScala.map(_.entry).toSet ++ acls,
+        authorizer, resource)
+    }
   }
 
   def removeAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
-    TestUtils.removeAndVerifyAcls(brokers, acls, resource, controllerServers)
+    val authorizerForWrite = pickAuthorizerForWrite(brokers, controllerServers)
+    val aclBindingFilters = acls.map { acl => new AclBindingFilter(resource.toFilter, acl.toFilter) }
+    authorizerForWrite.deleteAcls(anonymousAuthorizableContext, aclBindingFilters.toList.asJava).asScala
+      .map(_.toCompletableFuture.get)
+      .foreach { result =>
+        result.exception.ifPresent { e => throw e }
+      }
+    val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
+    (brokers.map(_.authorizer.get) ++ controllerServers.map(_.authorizer.get)).foreach {
+      authorizer => waitAndVerifyAcls(
+        authorizer.acls(aclFilter).asScala.map(_.entry).toSet -- acls,
+        authorizer, resource)
+    }
   }
 
   /**
@@ -259,9 +287,21 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     index
   }
 
+  /**
+   * Kill the broker at the specified index.
+   * A controlled shutdown is attempted, with a timeout of 5 minutes.
+   */
   def killBroker(index: Int): Unit = {
-    if (alive(index)) {
-      _brokers(index).shutdown()
+    killBroker(index, Duration.ofMinutes(5))
+  }
+
+  /**
+   * Kill the broker at the specified index.
+   * A controlled shutdown is attempted, with the specified timeout.
+   */
+  def killBroker(index: Int, timeout: Duration): Unit = {
+    if(alive(index)) {
+      _brokers(index).shutdown(timeout)
       _brokers(index).awaitShutdown()
       alive(index) = false
     }
@@ -316,7 +356,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     } else {
       val topicIdsMap = getController().kafkaController.controllerContext.topicIds.toMap
       names.foreach { name =>
-        if (topicIdsMap.contains(name)) result.put(name, topicIdsMap.get(name).get)
+        if (topicIdsMap.contains(name)) result.put(name, topicIdsMap(name))
       }
     }
     result.asScala.toMap
@@ -333,8 +373,8 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   def getTopicNames(): Map[Uuid, String] = {
     if (isKRaftTest()) {
       val result = new util.HashMap[Uuid, String]()
-      controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().entrySet().forEach {
-        e => result.put(e.getValue(), e.getKey())
+      controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().forEach {
+        (key, value) => result.put(value, key)
       }
       result.asScala.toMap
     } else {
@@ -347,7 +387,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     // are shutdown cleanly in tearDown even if a subsequent broker fails to start
     val potentiallyRegeneratedConfigs = configs
     alive = new Array[Boolean](potentiallyRegeneratedConfigs.length)
-    Arrays.fill(alive, false)
+    util.Arrays.fill(alive, false)
     for (config <- potentiallyRegeneratedConfigs) {
       val broker = createBrokerFromConfig(config)
       _brokers += broker
@@ -398,6 +438,42 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     }
     else {
       adminZkClient.changeClientIdConfig(sanitizedClientId, configs)
+    }
+  }
+
+  /**
+   * Ensures that the consumer offsets/group metadata topic exists. If it does not, the topic is created and the method waits
+   * until the leader is elected and metadata is propagated to all brokers. If it does, the method verifies that it has
+   * the expected number of partition and replication factor however it does not guarantee that the topic is empty.
+   */
+  private def createOffsetsTopic(zkClient: KafkaZkClient, servers: Seq[KafkaBroker]): Unit = {
+    val server = servers.head
+    val numPartitions = server.config.offsetsTopicPartitions
+    val replicationFactor = server.config.offsetsTopicReplicationFactor.toInt
+
+    try {
+       TestUtils.createTopic(
+        zkClient,
+        Topic.GROUP_METADATA_TOPIC_NAME,
+        numPartitions,
+        replicationFactor,
+        servers,
+        server.groupCoordinator.groupMetadataTopicConfigs
+      )
+    } catch {
+      case ex: TopicExistsException =>
+        val allPartitionsMetadata = waitForAllPartitionsMetadata(
+          servers,
+          Topic.GROUP_METADATA_TOPIC_NAME,
+          numPartitions
+        )
+
+        // If the topic already exists, we ensure that it has the required
+        // number of partitions and replication factor. If it has not, the
+        // exception is thrown further.
+        if (allPartitionsMetadata.size != numPartitions || allPartitionsMetadata.head._2.replicas.size != replicationFactor) {
+          throw ex
+        }
     }
   }
 }

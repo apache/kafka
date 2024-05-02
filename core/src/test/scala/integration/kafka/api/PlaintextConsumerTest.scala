@@ -15,7 +15,7 @@ package kafka.api
 import java.time.Duration
 import java.util
 import java.util.Arrays.asList
-import java.util.{Locale, Properties}
+import java.util.{Collections, Locale, Optional, Properties}
 import kafka.server.{KafkaBroker, QuotaType}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
@@ -163,7 +163,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPartitionsFor(quorum: String, groupProtocol: String): Unit = {
     val numParts = 2
-    createTopic("part-test", numParts, 1)
+    createTopic("part-test", numParts)
     val consumer = createConsumer()
     val parts = consumer.partitionsFor("part-test")
     assertNotNull(parts)
@@ -213,7 +213,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(mid, consumer.position(tp))
 
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt,
-      startingTimestamp = mid.toLong)
+      startingTimestamp = mid)
 
     // Test seek compressed message
     sendCompressedMessages(totalRecords.toInt, tp2)
@@ -230,7 +230,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.seek(tp2, mid)
     assertEquals(mid, consumer.position(tp2))
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt,
-      startingTimestamp = mid.toLong, tp = tp2)
+      startingTimestamp = mid, tp = tp2)
   }
 
   private def sendCompressedMessages(numRecords: Int, tp: TopicPartition): Unit = {
@@ -386,14 +386,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val consumer = createConsumer()
     consumer.assign(List(tp1).asJava)
-    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, tp = tp1, startingOffset = 0, startingKeyAndValueIndex = 0,
+    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, tp = tp1, startingOffset = 0,
       startingTimestamp = startTime, timestampType = TimestampType.LOG_APPEND_TIME)
 
     // Test compressed messages
     val tp2 = new TopicPartition(topicName, 1)
     sendCompressedMessages(numRecords, tp2)
     consumer.assign(List(tp2).asJava)
-    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, tp = tp2, startingOffset = 0, startingKeyAndValueIndex = 0,
+    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, tp = tp2, startingOffset = 0,
       startingTimestamp = startTime, timestampType = TimestampType.LOG_APPEND_TIME)
   }
 
@@ -404,9 +404,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val topic1 = "part-test-topic-1"
     val topic2 = "part-test-topic-2"
     val topic3 = "part-test-topic-3"
-    createTopic(topic1, numParts, 1)
-    createTopic(topic2, numParts, 1)
-    createTopic(topic3, numParts, 1)
+    createTopic(topic1, numParts)
+    createTopic(topic2, numParts)
+    createTopic(topic3, numParts)
 
     val consumer = createConsumer()
     val topics = consumer.listTopics()
@@ -645,7 +645,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val topic = "test_topic"
     val partition = 0
     val tp = new TopicPartition(topic, partition)
-    createTopic(topic, 1, 1)
+    createTopic(topic)
 
     val producer = createProducer()
     producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
@@ -722,7 +722,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val topic = "test_topic"
     val partition = 0
     val tp = new TopicPartition(topic, partition)
-    createTopic(topic, 1, 1)
+    createTopic(topic)
 
     val producer = createProducer()
     producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
@@ -804,5 +804,59 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer2, Set(foo0, foo1))
 
     consumer2.close()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testEndOffsets(quorum: String, groupProtocol: String): Unit = {
+    val producer = createProducer()
+    val startingTimestamp = System.currentTimeMillis()
+    val numRecords = 10000
+    (0 until numRecords).map { i =>
+      val timestamp = startingTimestamp + i.toLong
+      val record = new ProducerRecord(tp.topic(), tp.partition(), timestamp, s"key $i".getBytes, s"value $i".getBytes)
+      producer.send(record)
+      record
+    }
+    producer.flush()
+
+    val consumer = createConsumer()
+    consumer.subscribe(List(topic).asJava)
+    awaitAssignment(consumer, Set(tp, tp2))
+
+    val endOffsets = consumer.endOffsets(Set(tp).asJava)
+    assertEquals(numRecords, endOffsets.get(tp))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFetchOffsetsForTime(quorum: String, groupProtocol: String): Unit = {
+    val numPartitions = 2
+    val producer = createProducer()
+    val timestampsToSearch = new util.HashMap[TopicPartition, java.lang.Long]()
+    var i = 0
+    for (part <- 0 until numPartitions) {
+      val tp = new TopicPartition(topic, part)
+      // key, val, and timestamp equal to the sequence number.
+      sendRecords(producer, numRecords = 100, tp, startingTimestamp = 0)
+      timestampsToSearch.put(tp, (i * 20).toLong)
+      i += 1
+    }
+
+    val consumer = createConsumer()
+    // Test negative target time
+    assertThrows(classOf[IllegalArgumentException],
+      () => consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(topic, 0), -1)))
+    val timestampOffsets = consumer.offsetsForTimes(timestampsToSearch)
+
+    val timestampTp0 = timestampOffsets.get(new TopicPartition(topic, 0))
+    assertEquals(0, timestampTp0.offset)
+    assertEquals(0, timestampTp0.timestamp)
+    assertEquals(Optional.of(0), timestampTp0.leaderEpoch)
+
+    val timestampTp1 = timestampOffsets.get(new TopicPartition(topic, 1))
+    assertEquals(20, timestampTp1.offset)
+    assertEquals(20, timestampTp1.timestamp)
+    assertEquals(Optional.of(0), timestampTp1.leaderEpoch)
   }
 }

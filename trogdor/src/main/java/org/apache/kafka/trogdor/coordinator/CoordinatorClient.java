@@ -137,7 +137,7 @@ public class CoordinatorClient {
 
     public CoordinatorStatusResponse status() throws Exception {
         HttpResponse<CoordinatorStatusResponse> resp =
-            JsonRestServer.<CoordinatorStatusResponse>httpRequest(url("/coordinator/status"), "GET",
+            JsonRestServer.httpRequest(url("/coordinator/status"), "GET",
                 null, new TypeReference<CoordinatorStatusResponse>() { }, maxTries);
         return resp.body();
     }
@@ -384,7 +384,7 @@ public class CoordinatorClient {
                 break;
             }
             case "showTasks": {
-                TaskStateType taskStateType = res.<TaskStateType>get("taskStateType");
+                TaskStateType taskStateType = res.get("taskStateType");
                 List<String> taskIds = new ArrayList<>();
                 Pattern taskIdPattern = null;
                 if (res.getList("taskIds") != null) {
@@ -497,7 +497,7 @@ public class CoordinatorClient {
             return "Started " + dateString(stoppingState.startedMs(), zoneOffset);
         } else if (taskState instanceof TaskDone) {
             TaskDone doneState = (TaskDone) taskState;
-            String status = null;
+            String status;
             if (doneState.error() == null || doneState.error().isEmpty()) {
                 if (doneState.cancelled()) {
                     status = "CANCELLED";

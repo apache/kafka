@@ -16,13 +16,23 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.protocol.types.SchemaException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.opentest4j.AssertionFailedError;
 
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -187,7 +197,7 @@ public class Assertions {
                 if (expectedPartitionMetadataList.size() != actualPartitionMetadataList.size()) {
                     fail("Partition metadata lists have different sizes");
                 } else if (!expectedPartitionMetadataList.isEmpty() && !actualPartitionMetadataList.isEmpty()) {
-                    for (int j = 0; j < expectedTopicMetadataList.size(); j++) {
+                    for (int j = 0; j < expectedPartitionMetadataList.size(); j++) {
                         ConsumerGroupPartitionMetadataValue.PartitionMetadata expectedPartitionMetadata =
                             expectedPartitionMetadataList.get(j);
                         ConsumerGroupPartitionMetadataValue.PartitionMetadata actualPartitionMetadata =
@@ -198,6 +208,57 @@ public class Assertions {
                     }
                 }
             }
+        } else if (actual.message() instanceof GroupMetadataValue) {
+            GroupMetadataValue expectedValue = (GroupMetadataValue) expected.message().duplicate();
+            GroupMetadataValue actualValue = (GroupMetadataValue) actual.message().duplicate();
+
+            Comparator<GroupMetadataValue.MemberMetadata> comparator =
+                Comparator.comparing(GroupMetadataValue.MemberMetadata::memberId);
+            expectedValue.members().sort(comparator);
+            actualValue.members().sort(comparator);
+            try {
+                Arrays.asList(expectedValue, actualValue).forEach(value ->
+                    value.members().forEach(memberMetadata -> {
+                        // Sort topics and ownedPartitions in Subscription.
+                        ConsumerPartitionAssignor.Subscription subscription =
+                            ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberMetadata.subscription()));
+                        subscription.topics().sort(String::compareTo);
+                        subscription.ownedPartitions().sort(
+                            Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition)
+                        );
+                        memberMetadata.setSubscription(Utils.toArray(ConsumerProtocol.serializeSubscription(
+                            subscription,
+                            ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(memberMetadata.subscription()))
+                        )));
+
+                        // Sort partitions in Assignment.
+                        ConsumerPartitionAssignor.Assignment assignment =
+                            ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(memberMetadata.assignment()));
+                        assignment.partitions().sort(
+                            Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition)
+                        );
+                        memberMetadata.setAssignment(Utils.toArray(ConsumerProtocol.serializeAssignment(
+                            assignment,
+                            ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(memberMetadata.assignment()))
+                        )));
+                    })
+                );
+            } catch (SchemaException ex) {
+                fail("Failed deserialization: " + ex.getMessage());
+            }
+            assertEquals(expectedValue, actualValue);
+        } else if (actual.message() instanceof ConsumerGroupTargetAssignmentMemberValue) {
+            ConsumerGroupTargetAssignmentMemberValue expectedValue =
+                (ConsumerGroupTargetAssignmentMemberValue) expected.message().duplicate();
+            ConsumerGroupTargetAssignmentMemberValue actualValue =
+                (ConsumerGroupTargetAssignmentMemberValue) actual.message().duplicate();
+
+            Comparator<ConsumerGroupTargetAssignmentMemberValue.TopicPartition> comparator =
+                Comparator.comparing(ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId);
+            expectedValue.topicPartitions().sort(comparator);
+            actualValue.topicPartitions().sort(comparator);
+
+            assertEquals(expectedValue, actualValue);
         } else {
             assertEquals(expected.message(), actual.message());
         }

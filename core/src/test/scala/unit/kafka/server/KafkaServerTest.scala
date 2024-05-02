@@ -19,6 +19,8 @@ package kafka.server
 
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
 
@@ -59,7 +61,7 @@ class KafkaServerTest extends QuorumTestHarness {
         "Expected RuntimeException due to address already in use during KafkaServer startup"
       )
     } finally {
-      CoreUtils.swallow(serverSocket.close(), this);
+      CoreUtils.swallow(serverSocket.close(), this)
       TestUtils.shutdownServers(kafkaServer.toList)
     }
   }
@@ -136,7 +138,7 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testZkIsrManager(): Unit = {
     val props = TestUtils.createBrokerConfigs(1, zkConnect).head
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, "2.7-IV1")
+    props.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.7-IV1")
 
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
     server.replicaManager.alterPartitionManager match {
@@ -149,7 +151,7 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testAlterIsrManager(): Unit = {
     val props = TestUtils.createBrokerConfigs(1, zkConnect).head
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, MetadataVersion.latestTesting.toString)
+    props.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, MetadataVersion.latestTesting.toString)
 
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
     server.replicaManager.alterPartitionManager match {
@@ -178,14 +180,14 @@ class KafkaServerTest extends QuorumTestHarness {
 
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
-    props.put(KafkaConfig.AdvertisedListenersProp, s"PLAINTEXT://$hostName:$port")
+    props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"PLAINTEXT://$hostName:$port")
     val kafkaConfig = KafkaConfig.fromProps(props)
     TestUtils.createServer(kafkaConfig)
   }
 
   def createServerWithListenerOnPort(port: Int): KafkaServer = {
     val props = TestUtils.createBrokerConfig(0, zkConnect)
-    props.put(KafkaConfig.ListenersProp, s"PLAINTEXT://localhost:$port")
+    props.put(SocketServerConfigs.LISTENERS_CONFIG, s"PLAINTEXT://localhost:$port")
     val kafkaConfig = KafkaConfig.fromProps(props)
     TestUtils.createServer(kafkaConfig)
   }

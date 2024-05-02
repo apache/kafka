@@ -314,10 +314,9 @@ public class StreamsMetadataState {
                                final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap,
                                final Map<TopicPartition, PartitionInfo> topicPartitionInfo) {
         this.partitionsByTopic = new HashMap<>();
-        topicPartitionInfo.entrySet().forEach(entry -> this.partitionsByTopic
-                .computeIfAbsent(entry.getKey().topic(), topic -> new ArrayList<>())
-                .add(entry.getValue())
-        );
+        topicPartitionInfo.forEach((key, value) -> this.partitionsByTopic
+                .computeIfAbsent(key.topic(), topic -> new ArrayList<>())
+                .add(value));
 
         rebuildMetadata(activePartitionHostMap, standbyPartitionHostMap);
     }

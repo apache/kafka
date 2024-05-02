@@ -45,7 +45,7 @@ public class MetadataBatchLoader {
         STARTED_TRANSACTION,
         CONTINUED_TRANSACTION,
         ENDED_TRANSACTION,
-        ABORTED_TRANSACTION;
+        ABORTED_TRANSACTION
     }
 
     @FunctionalInterface

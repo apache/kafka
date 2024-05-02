@@ -19,11 +19,12 @@ package kafka.admin
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
+import org.apache.kafka.network.SocketServerConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
@@ -49,17 +50,17 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
       TestUtils.createBrokerConfigs(1, zkConnect).map(props => {
         // Configure control plane listener to make sure we have separate listeners from client,
         // in order to avoid returning Envelope API version.
-        props.setProperty(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLLER")
-        props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+        props.setProperty(SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG, "CONTROLLER")
+        props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
         props.setProperty("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
-        props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
+        props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
         props.setProperty(KafkaConfig.UnstableApiVersionsEnableProp, "true")
         props
       }).map(KafkaConfig.fromProps)
     }
 
   @Timeout(120)
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def checkBrokerApiVersionCommandOutput(quorum: String): Unit = {
     val byteArrayOutputStream = new ByteArrayOutputStream

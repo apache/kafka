@@ -47,8 +47,7 @@ public interface ValueTransformerWithKeySupplier<K, V, VR> extends ConnectedStor
      * Creating a single {@link ValueTransformerWithKey} object and returning the same object reference in {@link ValueTransformerWithKeySupplier#get()}
      * is a violation of the supplier pattern and leads to runtime exceptions.
      *
-     * @return  a new {@link ValueTransformerWithKey} instance
-     * @return  a newly constructed {@link ValueTransformerWithKey} instance
+     * @return a newly constructed {@link ValueTransformerWithKey} instance
      */
     ValueTransformerWithKey<K, V, VR> get();
 }

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -30,7 +29,7 @@ import org.apache.kafka.trogdor.common.JsonUtil;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 120)
 public class TopicsSpecTest {
 
     private final static TopicsSpec FOO;

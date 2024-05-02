@@ -76,6 +76,7 @@ import org.slf4j.LoggerFactory;
 import static org.apache.kafka.connect.mirror.MirrorSourceConfig.SYNC_TOPIC_ACLS_ENABLED;
 import static org.apache.kafka.connect.mirror.MirrorUtils.SOURCE_CLUSTER_KEY;
 import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.adminCall;
 
 /** Replicate data, configuration, and ACLs between clusters.
  *
@@ -139,9 +140,10 @@ public class MirrorSourceConnector extends SourceConnector {
     }
         
     // visible for testing
-    MirrorSourceConnector(Admin sourceAdminClient, Admin targetAdminClient) {
+    MirrorSourceConnector(Admin sourceAdminClient, Admin targetAdminClient, MirrorSourceConfig config) {
         this.sourceAdminClient = sourceAdminClient;
         this.targetAdminClient = targetAdminClient;
+        this.config = config;
     }
 
     @Override
@@ -495,59 +497,83 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     // visible for testing
-    void createNewTopics(Map<String, NewTopic> newTopics) {
-        targetAdminClient.createTopics(newTopics.values(), new CreateTopicsOptions()).values().forEach((k, v) -> v.whenComplete((x, e) -> {
-            if (e != null) {
-                log.warn("Could not create topic {}.", k, e);
-            } else {
-                log.info("Created remote topic {} with {} partitions.", k, newTopics.get(k).numPartitions());
-            }
-        }));
+    void createNewTopics(Map<String, NewTopic> newTopics) throws ExecutionException, InterruptedException {
+        adminCall(
+                () -> {
+                    targetAdminClient.createTopics(newTopics.values(), new CreateTopicsOptions()).values()
+                            .forEach((k, v) -> v.whenComplete((x, e) -> {
+                                if (e != null) {
+                                    log.warn("Could not create topic {}.", k, e);
+                                } else {
+                                    log.info("Created remote topic {} with {} partitions.", k, newTopics.get(k).numPartitions());
+                                }
+                            }));
+                    return null;
+                },
+                () -> String.format("create topics %s on %s cluster", newTopics, config.targetClusterAlias())
+        );
     }
 
-    void createNewPartitions(Map<String, NewPartitions> newPartitions) {
-        targetAdminClient.createPartitions(newPartitions).values().forEach((k, v) -> v.whenComplete((x, e) -> {
-            if (e instanceof InvalidPartitionsException) {
-                // swallow, this is normal
-            } else if (e != null) {
-                log.warn("Could not create topic-partitions for {}.", k, e);
-            } else {
-                log.info("Increased size of {} to {} partitions.", k, newPartitions.get(k).totalCount());
-            }
-        }));
+    void createNewPartitions(Map<String, NewPartitions> newPartitions) throws ExecutionException, InterruptedException {
+        adminCall(
+                () -> {
+                    targetAdminClient.createPartitions(newPartitions).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+                        if (e instanceof InvalidPartitionsException) {
+                            // swallow, this is normal
+                        } else if (e != null) {
+                            log.warn("Could not create topic-partitions for {}.", k, e);
+                        } else {
+                            log.info("Increased size of {} to {} partitions.", k, newPartitions.get(k).totalCount());
+                        }
+                    }));
+                    return null;
+                },
+                () -> String.format("create partitions %s on %s cluster", newPartitions, config.targetClusterAlias())
+        );
     }
 
     private Set<String> listTopics(Admin adminClient)
             throws InterruptedException, ExecutionException {
-        return adminClient.listTopics().names().get();
+        return adminCall(
+                () -> adminClient.listTopics().names().get(),
+                () -> "list topics on " + actualClusterAlias(adminClient) + " cluster"
+        );
     }
 
     private Optional<Collection<AclBinding>> listTopicAclBindings()
             throws InterruptedException, ExecutionException {
-        Collection<AclBinding> bindings;
-        try {
-            bindings = sourceAdminClient.describeAcls(ANY_TOPIC_ACL).values().get();
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof SecurityDisabledException) {
-                if (noAclAuthorizer.compareAndSet(false, true)) {
-                    log.info(
-                            "No ACL authorizer is configured on the source Kafka cluster, so no topic ACL syncing will take place. "
-                                    + "Consider disabling topic ACL syncing by setting " + SYNC_TOPIC_ACLS_ENABLED + " to 'false'."
-                    );
-                } else {
-                    log.debug("Source-side ACL authorizer still not found; skipping topic ACL sync");
-                }
-                return Optional.empty();
-            } else {
-                throw e;
-            }
-        }
-        return Optional.of(bindings);
+        return adminCall(
+                () -> {
+                    Collection<AclBinding> bindings;
+                    try {
+                        bindings = sourceAdminClient.describeAcls(ANY_TOPIC_ACL).values().get();
+                    } catch (ExecutionException e) {
+                        if (e.getCause() instanceof SecurityDisabledException) {
+                            if (noAclAuthorizer.compareAndSet(false, true)) {
+                                log.info(
+                                        "No ACL authorizer is configured on the source Kafka cluster, so no topic ACL syncing will take place. "
+                                                + "Consider disabling topic ACL syncing by setting " + SYNC_TOPIC_ACLS_ENABLED + " to 'false'."
+                                );
+                            } else {
+                                log.debug("Source-side ACL authorizer still not found; skipping topic ACL sync");
+                            }
+                            return Optional.empty();
+                        } else {
+                            throw e;
+                        }
+                    }
+                    return Optional.of(bindings);
+                },
+                () -> "describe ACLs on " + config.sourceClusterAlias() + " cluster"
+        );
     }
 
-    private static Collection<TopicDescription> describeTopics(Admin adminClient, Collection<String> topics)
+    private Collection<TopicDescription> describeTopics(Admin adminClient, Collection<String> topics)
             throws InterruptedException, ExecutionException {
-        return adminClient.describeTopics(topics).allTopicNames().get().values();
+        return adminCall(
+                () -> adminClient.describeTopics(topics).allTopicNames().get().values(),
+                () -> String.format("describe topics %s on %s cluster", topics, actualClusterAlias(adminClient))
+        );
     }
 
     static Map<String, String> configToMap(Config config) {
@@ -558,20 +584,26 @@ public class MirrorSourceConnector extends SourceConnector {
     // visible for testing
     // use deprecated alterConfigs API for broker compatibility back to 0.11.0
     @SuppressWarnings("deprecation")
-    void deprecatedAlterConfigs(Map<String, Config> topicConfigs) {
+    void deprecatedAlterConfigs(Map<String, Config> topicConfigs) throws ExecutionException, InterruptedException {
         Map<ConfigResource, Config> configs = topicConfigs.entrySet().stream()
             .collect(Collectors.toMap(x ->
                 new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), Entry::getValue));
         log.trace("Syncing configs for {} topics.", configs.size());
-        targetAdminClient.alterConfigs(configs).values().forEach((k, v) -> v.whenComplete((x, e) -> {
-            if (e != null) {
-                log.warn("Could not alter configuration of topic {}.", k.name(), e);
-            }
-        }));
+        adminCall(
+                () -> {
+                    targetAdminClient.alterConfigs(configs).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+                        if (e != null) {
+                            log.warn("Could not alter configuration of topic {}.", k.name(), e);
+                        }
+                    }));
+                    return null;
+                },
+                () -> String.format("alter topic configs %s on %s cluster", topicConfigs, config.targetClusterAlias())
+        );
     }
 
     // visible for testing
-    void incrementalAlterConfigs(Map<String, Config> topicConfigs) {
+    void incrementalAlterConfigs(Map<String, Config> topicConfigs) throws ExecutionException, InterruptedException {
         Map<ConfigResource, Collection<AlterConfigOp>> configOps = new HashMap<>();
         for (Map.Entry<String, Config> topicConfig : topicConfigs.entrySet()) {
             Collection<AlterConfigOp> ops = new ArrayList<>();
@@ -587,36 +619,48 @@ public class MirrorSourceConnector extends SourceConnector {
         }
         log.trace("Syncing configs for {} topics.", configOps.size());
         AtomicReference<Boolean> encounteredError = new AtomicReference<>(false);
-        targetAdminClient.incrementalAlterConfigs(configOps).values().forEach((k, v) -> v.whenComplete((x, e) -> {
-            if (e != null) {
-                if (config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIGS)
-                        && e instanceof UnsupportedVersionException && !encounteredError.get()) {
-                    //Fallback logic
-                    log.warn("The target cluster {} is not compatible with IncrementalAlterConfigs API. "
-                            + "Therefore using deprecated AlterConfigs API for syncing configs for topic {}",
-                            sourceAndTarget.target(), k.name(), e);
-                    encounteredError.set(true);
-                    useIncrementalAlterConfigs = false;
-                } else if (config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS)
-                        && e instanceof UnsupportedVersionException && !encounteredError.get()) {
-                    log.error("Failed to sync configs for topic {} on cluster {} with IncrementalAlterConfigs API", k.name(), sourceAndTarget.target(), e);
-                    encounteredError.set(true);
-                    context.raiseError(new ConnectException("use.incremental.alter.configs was set to \"required\", but the target cluster '"
-                            + sourceAndTarget.target() + "' is not compatible with IncrementalAlterConfigs API", e));
-                } else {
-                    log.warn("Could not alter configuration of topic {}.", k.name(), e);
-                }
-            }
-        }));
+        adminCall(
+                () -> {
+                    targetAdminClient.incrementalAlterConfigs(configOps).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+                        if (e != null) {
+                            if (config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIGS)
+                                    && e instanceof UnsupportedVersionException && !encounteredError.get()) {
+                                //Fallback logic
+                                log.warn("The target cluster {} is not compatible with IncrementalAlterConfigs API. "
+                                                + "Therefore using deprecated AlterConfigs API for syncing configs for topic {}",
+                                        sourceAndTarget.target(), k.name(), e);
+                                encounteredError.set(true);
+                                useIncrementalAlterConfigs = false;
+                            } else if (config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS)
+                                    && e instanceof UnsupportedVersionException && !encounteredError.get()) {
+                                log.error("Failed to sync configs for topic {} on cluster {} with IncrementalAlterConfigs API", k.name(), sourceAndTarget.target(), e);
+                                encounteredError.set(true);
+                                context.raiseError(new ConnectException("use.incremental.alter.configs was set to \"required\", but the target cluster '"
+                                        + sourceAndTarget.target() + "' is not compatible with IncrementalAlterConfigs API", e));
+                            } else {
+                                log.warn("Could not alter configuration of topic {}.", k.name(), e);
+                            }
+                        }
+                    }));
+                    return null;
+                },
+                () -> String.format("incremental alter topic configs %s on %s cluster", topicConfigs, config.targetClusterAlias())
+        );
     }
 
-    private void updateTopicAcls(List<AclBinding> bindings) {
+    private void updateTopicAcls(List<AclBinding> bindings) throws ExecutionException, InterruptedException {
         log.trace("Syncing {} topic ACL bindings.", bindings.size());
-        targetAdminClient.createAcls(bindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
-            if (e != null) {
-                log.warn("Could not sync ACL of topic {}.", k.pattern().name(), e);
-            }
-        }));
+        adminCall(
+                () -> {
+                    targetAdminClient.createAcls(bindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+                        if (e != null) {
+                            log.warn("Could not sync ACL of topic {}.", k.pattern().name(), e);
+                        }
+                    }));
+                    return null;
+                },
+                () -> String.format("create ACLs %s on %s cluster", bindings, config.targetClusterAlias())
+        );
     }
 
     private static Stream<TopicPartition> expandTopicDescription(TopicDescription description) {
@@ -630,8 +674,11 @@ public class MirrorSourceConnector extends SourceConnector {
         Set<ConfigResource> resources = topics.stream()
             .map(x -> new ConfigResource(ConfigResource.Type.TOPIC, x))
             .collect(Collectors.toSet());
-        return sourceAdminClient.describeConfigs(resources).all().get().entrySet().stream()
-            .collect(Collectors.toMap(x -> x.getKey().name(), Entry::getValue));
+        return adminCall(
+                () -> sourceAdminClient.describeConfigs(resources).all().get().entrySet().stream()
+                        .collect(Collectors.toMap(x -> x.getKey().name(), Entry::getValue)),
+                () -> String.format("describe configs for topics %s on %s cluster", topics, config.sourceClusterAlias())
+        );
     }
 
     Config targetConfig(Config sourceConfig, boolean incremental) {
@@ -700,5 +747,9 @@ public class MirrorSourceConnector extends SourceConnector {
 
     String formatRemoteTopic(String topic) {
         return replicationPolicy.formatRemoteTopic(sourceAndTarget.source(), topic);
+    }
+
+    private String actualClusterAlias(Admin adminClient) {
+        return adminClient.equals(sourceAdminClient) ? config.sourceClusterAlias() : config.targetClusterAlias();
     }
 }

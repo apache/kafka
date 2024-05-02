@@ -23,7 +23,6 @@ import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Collections;
 import java.util.Optional;
@@ -45,8 +44,7 @@ public class QuorumStateTest {
     private final int electionTimeoutMs = 5000;
     private final int fetchTimeoutMs = 10000;
     private final MockableRandom random = new MockableRandom(1L);
-
-    private BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
+    private final BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
 
     private QuorumState buildQuorumState(Set<Integer> voters) {
         return buildQuorumState(OptionalInt.of(localId), voters);
@@ -69,7 +67,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testInitializePrimordialEpoch() throws IOException {
+    public void testInitializePrimordialEpoch() {
         Set<Integer> voters = Utils.mkSet(localId);
         assertNull(store.readElectionState());
 
@@ -83,7 +81,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testInitializeAsUnattached() throws IOException {
+    public void testInitializeAsUnattached() {
         int node1 = 1;
         int node2 = 2;
         int epoch = 5;
@@ -104,7 +102,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testInitializeAsFollower() throws IOException {
+    public void testInitializeAsFollower() {
         int node1 = 1;
         int node2 = 2;
         int epoch = 5;
@@ -123,7 +121,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testInitializeAsVoted() throws IOException {
+    public void testInitializeAsVoted() {
         int node1 = 1;
         int node2 = 2;
         int epoch = 5;
@@ -146,7 +144,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testInitializeAsResignedCandidate() throws IOException {
+    public void testInitializeAsResignedCandidate() {
         int node1 = 1;
         int node2 = 2;
         int epoch = 5;
@@ -173,7 +171,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testInitializeAsResignedLeader() throws IOException {
+    public void testInitializeAsResignedLeader() {
         int node1 = 1;
         int node2 = 2;
         int epoch = 5;
@@ -203,7 +201,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testCandidateToCandidate() throws IOException {
+    public void testCandidateToCandidate() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -246,7 +244,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testCandidateToResigned() throws IOException {
+    public void testCandidateToResigned() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -263,7 +261,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testCandidateToLeader() throws IOException {
+    public void testCandidateToLeader()  {
         Set<Integer> voters = Utils.mkSet(localId);
         assertNull(store.readElectionState());
 
@@ -273,14 +271,14 @@ public class QuorumStateTest {
         assertEquals(1, state.epoch());
 
         state.transitionToLeader(0L, accumulator);
-        LeaderState leaderState = state.leaderStateOrThrow();
+        LeaderState<Object> leaderState = state.leaderStateOrThrow();
         assertTrue(state.isLeader());
         assertEquals(1, leaderState.epoch());
         assertEquals(Optional.empty(), leaderState.highWatermark());
     }
 
     @Test
-    public void testCandidateToLeaderWithoutGrantedVote() throws IOException {
+    public void testCandidateToLeaderWithoutGrantedVote() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -295,7 +293,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testCandidateToFollower() throws IOException {
+    public void testCandidateToFollower() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -309,7 +307,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testCandidateToUnattached() throws IOException {
+    public void testCandidateToUnattached() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -323,7 +321,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testCandidateToVoted() throws IOException {
+    public void testCandidateToVoted() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -340,7 +338,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testCandidateToAnyStateLowerEpoch() throws IOException {
+    public void testCandidateToAnyStateLowerEpoch() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -355,7 +353,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testLeaderToLeader() throws IOException {
+    public void testLeaderToLeader() {
         Set<Integer> voters = Utils.mkSet(localId);
         assertNull(store.readElectionState());
 
@@ -372,7 +370,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testLeaderToResigned() throws IOException {
+    public void testLeaderToResigned() {
         Set<Integer> voters = Utils.mkSet(localId);
         assertNull(store.readElectionState());
 
@@ -393,7 +391,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testLeaderToCandidate() throws IOException {
+    public void testLeaderToCandidate() {
         Set<Integer> voters = Utils.mkSet(localId);
         assertNull(store.readElectionState());
 
@@ -410,7 +408,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testLeaderToFollower() throws IOException {
+    public void testLeaderToFollower() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
@@ -427,7 +425,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testLeaderToUnattached() throws IOException {
+    public void testLeaderToUnattached() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -442,7 +440,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testLeaderToVoted() throws IOException {
+    public void testLeaderToVoted() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -460,7 +458,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testLeaderToAnyStateLowerEpoch() throws IOException {
+    public void testLeaderToAnyStateLowerEpoch() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -477,7 +475,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testCannotFollowOrVoteForSelf() throws IOException {
+    public void testCannotFollowOrVoteForSelf() {
         Set<Integer> voters = Utils.mkSet(localId);
         assertNull(store.readElectionState());
         QuorumState state = initializeEmptyState(voters);
@@ -487,7 +485,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testUnattachedToLeaderOrResigned() throws IOException {
+    public void testUnattachedToLeaderOrResigned() {
         int leaderId = 1;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
@@ -500,7 +498,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testUnattachedToVotedSameEpoch() throws IOException {
+    public void testUnattachedToVotedSameEpoch() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -522,7 +520,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testUnattachedToVotedHigherEpoch() throws IOException {
+    public void testUnattachedToVotedHigherEpoch() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -537,7 +535,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testUnattachedToCandidate() throws IOException {
+    public void testUnattachedToCandidate() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -556,7 +554,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testUnattachedToUnattached() throws IOException {
+    public void testUnattachedToUnattached() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -576,7 +574,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testUnattachedToFollowerSameEpoch() throws IOException {
+    public void testUnattachedToFollowerSameEpoch() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -592,7 +590,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testUnattachedToFollowerHigherEpoch() throws IOException {
+    public void testUnattachedToFollowerHigherEpoch() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -608,7 +606,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testUnattachedToAnyStateLowerEpoch() throws IOException {
+    public void testUnattachedToAnyStateLowerEpoch() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -622,7 +620,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testVotedToInvalidLeaderOrResigned() throws IOException {
+    public void testVotedToInvalidLeaderOrResigned() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -634,7 +632,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testVotedToCandidate() throws IOException {
+    public void testVotedToCandidate() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -653,7 +651,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testVotedToVotedSameEpoch() throws IOException {
+    public void testVotedToVotedSameEpoch() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -666,7 +664,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testVotedToFollowerSameEpoch() throws IOException {
+    public void testVotedToFollowerSameEpoch() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -682,7 +680,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testVotedToFollowerHigherEpoch() throws IOException {
+    public void testVotedToFollowerHigherEpoch() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -698,7 +696,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testVotedToUnattachedSameEpoch() throws IOException {
+    public void testVotedToUnattachedSameEpoch() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -709,7 +707,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testVotedToUnattachedHigherEpoch() throws IOException {
+    public void testVotedToUnattachedHigherEpoch() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -729,7 +727,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testVotedToAnyStateLowerEpoch() throws IOException {
+    public void testVotedToAnyStateLowerEpoch() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -743,7 +741,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testFollowerToFollowerSameEpoch() throws IOException {
+    public void testFollowerToFollowerSameEpoch() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -760,7 +758,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testFollowerToFollowerHigherEpoch() throws IOException {
+    public void testFollowerToFollowerHigherEpoch() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -776,7 +774,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testFollowerToLeaderOrResigned() throws IOException {
+    public void testFollowerToLeaderOrResigned() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -788,7 +786,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testFollowerToCandidate() throws IOException {
+    public void testFollowerToCandidate() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -807,7 +805,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testFollowerToUnattachedSameEpoch() throws IOException {
+    public void testFollowerToUnattachedSameEpoch() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -818,7 +816,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testFollowerToUnattachedHigherEpoch() throws IOException {
+    public void testFollowerToUnattachedHigherEpoch() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -837,7 +835,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testFollowerToVotedSameEpoch() throws IOException {
+    public void testFollowerToVotedSameEpoch() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -851,7 +849,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testFollowerToVotedHigherEpoch() throws IOException {
+    public void testFollowerToVotedHigherEpoch() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
@@ -871,7 +869,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testFollowerToAnyStateLowerEpoch() throws IOException {
+    public void testFollowerToAnyStateLowerEpoch() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -885,7 +883,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testCannotBecomeFollowerOfNonVoter() throws IOException {
+    public void testCannotBecomeFollowerOfNonVoter() {
         int otherNodeId = 1;
         int nonVoterId = 2;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
@@ -896,7 +894,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testObserverCannotBecomeCandidateOrLeaderOrVoted() throws IOException {
+    public void testObserverCannotBecomeCandidateOrLeaderOrVoted() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(otherNodeId);
         QuorumState state = initializeEmptyState(voters);
@@ -908,7 +906,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testObserverFollowerToUnattached() throws IOException {
+    public void testObserverFollowerToUnattached() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(node1, node2);
@@ -927,7 +925,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testObserverUnattachedToFollower() throws IOException {
+    public void testObserverUnattachedToFollower() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> voters = Utils.mkSet(node1, node2);
@@ -959,7 +957,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testInconsistentVotersBetweenConfigAndState() throws IOException {
+    public void testInconsistentVotersBetweenConfigAndState() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
@@ -975,7 +973,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testHasRemoteLeader() throws IOException {
+    public void testHasRemoteLeader() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
@@ -1000,7 +998,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testHighWatermarkRetained() throws IOException {
+    public void testHighWatermarkRetained() {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
@@ -1031,7 +1029,7 @@ public class QuorumStateTest {
     }
 
     @Test
-    public void testInitializeWithEmptyLocalId() throws IOException {
+    public void testInitializeWithEmptyLocalId() {
         QuorumState state = buildQuorumState(OptionalInt.empty(), Utils.mkSet(0, 1));
         state.initialize(new OffsetAndEpoch(0L, 0));
 
@@ -1064,7 +1062,7 @@ public class QuorumStateTest {
         assertThrows(IllegalStateException.class, () -> state2.initialize(new OffsetAndEpoch(0, 0)));
     }
 
-    private QuorumState initializeEmptyState(Set<Integer> voters) throws IOException {
+    private QuorumState initializeEmptyState(Set<Integer> voters) {
         QuorumState state = buildQuorumState(voters);
         store.writeElectionState(ElectionState.withUnknownLeader(0, voters));
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));

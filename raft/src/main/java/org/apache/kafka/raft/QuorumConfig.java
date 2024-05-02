@@ -47,7 +47,7 @@ import java.util.stream.Collectors;
  * controller should be able to transition from standby to active without reloading all of
  * the metadata. The standby is a "hot" standby, not a "cold" one.
  */
-public class RaftConfig {
+public class QuorumConfig {
 
     private static final String QUORUM_PREFIX = "controller.quorum.";
 
@@ -138,7 +138,7 @@ public class RaftConfig {
         }
     }
 
-    public RaftConfig(AbstractConfig abstractConfig) {
+    public QuorumConfig(AbstractConfig abstractConfig) {
         this(parseVoterConnections(abstractConfig.getList(QUORUM_VOTERS_CONFIG)),
             abstractConfig.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG),
             abstractConfig.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG),
@@ -148,7 +148,7 @@ public class RaftConfig {
             abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG));
     }
 
-    public RaftConfig(
+    public QuorumConfig(
         Map<Integer, AddressSpec> voterConnections,
         int requestTimeoutMs,
         int retryBackoffMs,
@@ -245,7 +245,7 @@ public class RaftConfig {
         return voterConnectionsToNodes(parseVoterConnections(voters));
     }
 
-    public static List<Node> voterConnectionsToNodes(Map<Integer, RaftConfig.AddressSpec> voterConnections) {
+    public static List<Node> voterConnectionsToNodes(Map<Integer, QuorumConfig.AddressSpec> voterConnections) {
         return voterConnections.entrySet().stream()
             .filter(Objects::nonNull)
             .filter(connection -> connection.getValue() instanceof InetAddressSpec)
@@ -264,7 +264,7 @@ public class RaftConfig {
             }
 
             @SuppressWarnings("unchecked")
-            List<String> voterStrings = (List) value;
+            List<String> voterStrings = (List<String>) value;
 
             // Attempt to parse the connect strings
             parseVoterConnections(voterStrings);

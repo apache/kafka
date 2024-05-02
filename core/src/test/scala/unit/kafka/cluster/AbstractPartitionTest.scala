@@ -20,12 +20,16 @@ import kafka.log.LogManager
 import kafka.server.MetadataCache
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.MockConfigRepository
-import kafka.utils.TestUtils.{MockAlterPartitionListener, MockAlterPartitionManager}
 import kafka.utils.TestUtils
+import kafka.utils.TestUtils.MockAlterPartitionManager
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.ArgumentMatchers
@@ -33,11 +37,7 @@ import org.mockito.Mockito.{mock, when}
 
 import java.io.File
 import java.util.Properties
-import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.config.Defaults
-import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
-
+import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
 
 object AbstractPartitionTest {
@@ -79,9 +79,9 @@ class AbstractPartitionTest {
     logManager.startup(Set.empty)
 
     alterPartitionManager = TestUtils.createAlterIsrManager()
-    alterPartitionListener = TestUtils.createIsrChangeListener()
+    alterPartitionListener = createIsrChangeListener()
     partition = new Partition(topicPartition,
-      replicaLagTimeMaxMs = Defaults.REPLICA_LAG_TIME_MAX_MS,
+      replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
       interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
@@ -152,5 +152,28 @@ class AbstractPartitionTest {
 
   def defaultBrokerEpoch(brokerId: Int): Long = {
     brokerId + 1000L
+  }
+
+  private def createIsrChangeListener(): MockAlterPartitionListener = {
+    new MockAlterPartitionListener()
+  }
+
+  class MockAlterPartitionListener extends AlterPartitionListener {
+    val expands: AtomicInteger = new AtomicInteger(0)
+    val shrinks: AtomicInteger = new AtomicInteger(0)
+    val failures: AtomicInteger = new AtomicInteger(0)
+
+    override def markIsrExpand(): Unit = expands.incrementAndGet()
+
+    override def markIsrShrink(): Unit = shrinks.incrementAndGet()
+
+    override def markFailed(): Unit = failures.incrementAndGet()
+
+
+    def reset(): Unit = {
+      expands.set(0)
+      shrinks.set(0)
+      failures.set(0)
+    }
   }
 }

@@ -83,9 +83,7 @@ public class StandardAclTest {
     }
 
     private static int signum(int input) {
-        if (input < 0) return -1;
-        else if (input > 0) return 1;
-        else return 0;
+        return Integer.compare(input, 0);
     }
 
     @Test

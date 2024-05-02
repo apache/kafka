@@ -16,11 +16,11 @@
  */
 package kafka.api
 
-import kafka.server.KafkaConfig
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.NewPartitionReassignment
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -35,9 +35,9 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
   val producerCount: Int = 1
   val brokerCount: Int = 2
 
-  serverConfig.put(KafkaConfig.NumPartitionsProp, 2.toString)
-  serverConfig.put(KafkaConfig.DefaultReplicationFactorProp, 2.toString)
-  serverConfig.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
+  serverConfig.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, 2.toString)
+  serverConfig.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, 2.toString)
+  serverConfig.put(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)
 
   producerConfig.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5000L.toString)
   producerConfig.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 10000.toString)
@@ -49,7 +49,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * Producer will attempt to send messages to the partition specified in each record, and should
    * succeed as long as the partition is included in the metadata.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testSendWithTopicDeletionMidWay(quorum: String): Unit = {
     val numRecords = 10

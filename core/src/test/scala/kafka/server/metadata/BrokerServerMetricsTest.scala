@@ -68,7 +68,7 @@ final class BrokerServerMetricsTest {
       brokerMetrics.updateLastAppliedImageProvenance(new MetadataProvenance(
         expectedValue,
         brokerMetrics.lastAppliedImageProvenance.get().lastContainedEpoch(),
-        brokerMetrics.lastAppliedTimestamp()));
+        brokerMetrics.lastAppliedTimestamp()))
       assertEquals(expectedValue, offsetMetric.metricValue.asInstanceOf[Long])
     }
   }

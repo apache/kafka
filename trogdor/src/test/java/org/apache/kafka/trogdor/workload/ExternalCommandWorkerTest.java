@@ -37,18 +37,17 @@ import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 120)
 public class ExternalCommandWorkerTest {
 
     static class ExternalCommandWorkerBuilder {
         private final String id;
+        private final ObjectNode workload;
         private int shutdownGracePeriodMs = 3000000;
         private String[] command = new String[0];
-        private ObjectNode workload;
 
         ExternalCommandWorkerBuilder(String id) {
             this.id = id;

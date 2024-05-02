@@ -65,14 +65,14 @@ final public class PropertiesUtilsTest {
     }
 
     @Test
-    public void loadRequiredIntProp() throws IOException {
+    public void loadRequiredIntProp() {
         Properties props = new Properties();
         props.setProperty("foo.bar", "123");
         assertEquals(123, PropertiesUtils.loadRequiredIntProp(props, "foo.bar"));
     }
 
     @Test
-    public void loadMissingRequiredIntProp() throws IOException {
+    public void loadMissingRequiredIntProp() {
         Properties props = new Properties();
         assertEquals("Failed to find foo.bar",
             assertThrows(RuntimeException.class,
@@ -81,7 +81,7 @@ final public class PropertiesUtilsTest {
     }
 
     @Test
-    public void loadNonIntegerRequiredIntProp() throws IOException {
+    public void loadNonIntegerRequiredIntProp() {
         Properties props = new Properties();
         props.setProperty("foo.bar", "b");
         assertEquals("Unable to read foo.bar as a base-10 number.",

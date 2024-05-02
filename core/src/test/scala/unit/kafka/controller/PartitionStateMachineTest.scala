@@ -17,13 +17,17 @@
 package kafka.controller
 
 import kafka.api.LeaderAndIsr
+import kafka.cluster.Broker
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.common.MetadataVersion.{IBP_3_1_IV0, IBP_3_2_IV0}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
@@ -86,7 +90,7 @@ class PartitionStateMachineTest {
 
   @Test
   def testNewPartitionToOnlinePartitionTransition(): Unit = {
-    controllerContext.setLiveBrokers(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
+    controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, NewPartition)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
@@ -107,7 +111,7 @@ class PartitionStateMachineTest {
 
   @Test
   def testNewPartitionToOnlinePartitionTransitionZooKeeperClientExceptionFromCreateStates(): Unit = {
-    controllerContext.setLiveBrokers(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
+    controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, NewPartition)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
@@ -126,7 +130,7 @@ class PartitionStateMachineTest {
 
   @Test
   def testNewPartitionToOnlinePartitionTransitionErrorCodeFromCreateStates(): Unit = {
-    controllerContext.setLiveBrokers(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
+    controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, NewPartition)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
@@ -159,7 +163,7 @@ class PartitionStateMachineTest {
 
   @Test
   def testOnlinePartitionToOnlineTransition(): Unit = {
-    controllerContext.setLiveBrokers(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
+    controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, OnlinePartition)
     val leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId))
@@ -190,8 +194,8 @@ class PartitionStateMachineTest {
   def testOnlinePartitionToOnlineTransitionForControlledShutdown(): Unit = {
     val otherBrokerId = brokerId + 1
     controllerContext.setLiveBrokers(Map(
-      TestUtils.createBrokerAndEpoch(brokerId, "host", 0),
-      TestUtils.createBrokerAndEpoch(otherBrokerId, "host", 0)))
+      createBrokerAndEpoch(brokerId, "host", 0),
+      createBrokerAndEpoch(otherBrokerId, "host", 0)))
     controllerContext.shuttingDownBrokerIds.add(brokerId)
     controllerContext.updatePartitionFullReplicaAssignment(
       partition,
@@ -246,7 +250,7 @@ class PartitionStateMachineTest {
 
   @Test
   def testOfflinePartitionToOnlinePartitionTransition(): Unit = {
-    controllerContext.setLiveBrokers(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
+    controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, OfflinePartition)
     val leaderAndIsr = LeaderAndIsr(LeaderAndIsr.NoLeader, List(brokerId))
@@ -258,7 +262,7 @@ class PartitionStateMachineTest {
       .thenReturn(Seq(GetDataResponse(Code.OK, null, Some(partition),
         TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat, ResponseMetadata(0, 0))))
 
-    when(mockZkClient.getLogConfigs(Set.empty, config.extractLogConfigMap))
+    when(mockZkClient.getLogConfigs(Set.empty, config.originals()))
       .thenReturn((Map(partition.topic -> new LogConfig(new Properties)), Map.empty[String, Exception]))
     val leaderAndIsrAfterElection = leaderAndIsr.newLeader(brokerId)
     val updatedLeaderAndIsr = leaderAndIsrAfterElection.withPartitionEpoch(2)
@@ -298,7 +302,7 @@ class PartitionStateMachineTest {
       val apiVersion = if (isLeaderRecoverySupported) IBP_3_2_IV0 else IBP_3_1_IV0
       val properties = TestUtils.createBrokerConfig(brokerId, "zkConnect")
 
-      properties.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, apiVersion.toString)
+      properties.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, apiVersion.toString)
 
       new ZkPartitionStateMachine(
         KafkaConfig.fromProps(properties),
@@ -309,7 +313,7 @@ class PartitionStateMachineTest {
       )
     }
     val leaderBrokerId = brokerId + 1
-    controllerContext.setLiveBrokers(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
+    controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(
       partition,
       ReplicaAssignment(Seq(leaderBrokerId, brokerId))
@@ -352,8 +356,7 @@ class PartitionStateMachineTest {
       Seq(brokerId),
       partition,
       LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch),
-      replicaAssignment(Seq(leaderBrokerId, brokerId)),
-      false)
+      replicaAssignment(Seq(leaderBrokerId, brokerId)), isNew = false)
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
     verify(mockZkClient).getTopicPartitionStatesRaw(any())
     verify(mockZkClient).updateLeaderAndIsr(any(), anyInt(), anyInt())
@@ -362,7 +365,7 @@ class PartitionStateMachineTest {
 
   @Test
   def testOfflinePartitionToOnlinePartitionTransitionZooKeeperClientExceptionFromStateLookup(): Unit = {
-    controllerContext.setLiveBrokers(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
+    controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, OfflinePartition)
     val leaderAndIsr = LeaderAndIsr(LeaderAndIsr.NoLeader, List(brokerId))
@@ -385,7 +388,7 @@ class PartitionStateMachineTest {
 
   @Test
   def testOfflinePartitionToOnlinePartitionTransitionErrorCodeFromStateLookup(): Unit = {
-    controllerContext.setLiveBrokers(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
+    controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, OfflinePartition)
     val leaderAndIsr = LeaderAndIsr(LeaderAndIsr.NoLeader, List(brokerId))
@@ -434,7 +437,7 @@ class PartitionStateMachineTest {
     }
     prepareMockToGetTopicPartitionsStatesRaw()
     def prepareMockToGetLogConfigs(): Unit = {
-      when(mockZkClient.getLogConfigs(Set.empty, config.extractLogConfigMap)).thenReturn((Map.empty[String, LogConfig], Map.empty[String, Exception]))
+      when(mockZkClient.getLogConfigs(Set.empty, config.originals())).thenReturn((Map.empty[String, LogConfig], Map.empty[String, Exception]))
     }
     prepareMockToGetLogConfigs()
 
@@ -454,7 +457,7 @@ class PartitionStateMachineTest {
     */
   @Test
   def testUpdatingOfflinePartitionsCount(): Unit = {
-    controllerContext.setLiveBrokers(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
+    controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
 
     val partitionIds = Seq(0, 1, 2, 3)
     val topic = "test"
@@ -537,5 +540,10 @@ class PartitionStateMachineTest {
   }
 
   private def replicaAssignment(replicas: Seq[Int]): ReplicaAssignment = ReplicaAssignment(replicas, Seq(), Seq())
+
+  private def createBrokerAndEpoch(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
+                           epoch: Long = 0): (Broker, Long) = {
+    (new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol), epoch)
+  }
 
 }

@@ -54,7 +54,7 @@ public class KafkaEventQueueTest {
         }
 
         @Override
-        public void run() throws Exception {
+        public void run() {
             T value = supplier.get();
             future.complete(value);
         }
@@ -194,9 +194,9 @@ public class KafkaEventQueueTest {
             "testDeferredIsQueuedAfterTriggering");
         AtomicInteger count = new AtomicInteger(0);
         List<CompletableFuture<Integer>> futures = Arrays.asList(
-                new CompletableFuture<Integer>(),
-                new CompletableFuture<Integer>(),
-                new CompletableFuture<Integer>());
+                new CompletableFuture<>(),
+                new CompletableFuture<>(),
+                new CompletableFuture<>());
         queue.scheduleDeferred("foo", __ -> OptionalLong.of(2L),
             new FutureEvent<>(futures.get(0), () -> count.getAndIncrement()));
         queue.append(new FutureEvent<>(futures.get(1), () -> count.getAndAdd(1)));
@@ -231,7 +231,7 @@ public class KafkaEventQueueTest {
         CompletableFuture<Void> future = new CompletableFuture<>();
         queue.append(new EventQueue.Event() {
                 @Override
-                public void run() throws Exception {
+                public void run() {
                     future.complete(null);
                 }
 
@@ -284,7 +284,7 @@ public class KafkaEventQueueTest {
         AtomicInteger counter = new AtomicInteger(0);
         queue.append(new EventQueue.Event() {
             @Override
-            public void run() throws Exception {
+            public void run() {
                 counter.incrementAndGet();
                 throw new IllegalStateException("First exception");
             }

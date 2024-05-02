@@ -19,7 +19,6 @@ package kafka.api
 import java.time.Duration
 import java.util
 import java.util.Properties
-
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
@@ -30,9 +29,10 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.{ArrayBuffer, Buffer}
+import scala.collection.mutable.ArrayBuffer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.collection.mutable
@@ -67,11 +67,11 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
 
   override protected def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
-    properties.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
-    properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100") // set small enough session timeout
-    properties.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, groupMaxSessionTimeoutMs.toString)
-    properties.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "10")
+    properties.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "3") // don't want to lose offset
+    properties.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
+    properties.setProperty(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "100") // set small enough session timeout
+    properties.setProperty(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, groupMaxSessionTimeoutMs.toString)
+    properties.setProperty(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "10")
   }
 
   @BeforeEach
@@ -111,9 +111,9 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
    */
   def createConsumerGroupAndWaitForAssignment(consumerCount: Int,
                                               topicsToSubscribe: List[String],
-                                              subscriptions: Set[TopicPartition]): (Buffer[Consumer[Array[Byte], Array[Byte]]], Buffer[ConsumerAssignmentPoller]) = {
+                                              subscriptions: Set[TopicPartition]): (mutable.Buffer[Consumer[Array[Byte], Array[Byte]]], mutable.Buffer[ConsumerAssignmentPoller]) = {
     assertTrue(consumerCount <= subscriptions.size)
-    val consumerGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
+    val consumerGroup = mutable.Buffer[Consumer[Array[Byte], Array[Byte]]]()
     for (_ <- 0 until consumerCount)
       consumerGroup += createConsumer()
 
@@ -140,7 +140,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     consumerPollers
   }
 
-  def changeConsumerGroupSubscriptionAndValidateAssignment(consumerPollers: Buffer[ConsumerAssignmentPoller],
+  def changeConsumerGroupSubscriptionAndValidateAssignment(consumerPollers: mutable.Buffer[ConsumerAssignmentPoller],
                                                            topicsToSubscribe: List[String],
                                                            subscriptions: Set[TopicPartition]): Unit = {
     for (poller <- consumerPollers)
@@ -355,7 +355,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
                               subscriptions: Set[TopicPartition],
                               msg: Option[String] = None,
                               waitTime: Long = 10000L,
-                              expectedAssignment: Buffer[Set[TopicPartition]] = Buffer()): Unit = {
+                              expectedAssignment: mutable.Buffer[Set[TopicPartition]] = mutable.Buffer()): Unit = {
     val assignments = mutable.Buffer[Set[TopicPartition]]()
     TestUtils.waitUntilTrue(() => {
       assignments.clear()
@@ -518,9 +518,9 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
    * @param partitions set of partitions that consumers subscribed to
    * @return true if partition assignment is valid
    */
-  def isPartitionAssignmentValid(assignments: Buffer[Set[TopicPartition]],
+  def isPartitionAssignmentValid(assignments: mutable.Buffer[Set[TopicPartition]],
                                  partitions: Set[TopicPartition],
-                                 expectedAssignment: Buffer[Set[TopicPartition]]): Boolean = {
+                                 expectedAssignment: mutable.Buffer[Set[TopicPartition]]): Boolean = {
     val allNonEmptyAssignments = assignments.forall(assignment => assignment.nonEmpty)
     if (!allNonEmptyAssignments) {
       // at least one consumer got empty assignment

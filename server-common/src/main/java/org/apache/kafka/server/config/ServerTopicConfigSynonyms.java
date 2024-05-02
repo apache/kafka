@@ -29,7 +29,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.utils.Utils;
 
 public final class ServerTopicConfigSynonyms {
-    private static final String LOG_PREFIX = "log.";
+    public static final String LOG_PREFIX = "log.";
     public static final String LOG_CLEANER_PREFIX = LOG_PREFIX + "cleaner.";
 
     /**
