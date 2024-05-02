@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -618,6 +619,16 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertEquals(expectedClientId, capturedProducerProps.getValue().get(CLIENT_ID_CONFIG));
         assertEquals(expectedClientId, capturedConsumerProps.getValue().get(CLIENT_ID_CONFIG));
         assertEquals(expectedClientId + "-leader", fencableProducerProps.get(CLIENT_ID_CONFIG));
+    }
+
+    @Test
+    public void testExceptionOnStartWhenConfigTopicHasMultiplePartitions() {
+        expectStart(Collections.emptyList(), Collections.emptyMap());
+        expectPartitionCount(2);
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        ConfigException e = assertThrows(ConfigException.class, () -> configStorage.start());
+        assertTrue(e.getMessage().contains("required to have a single partition"));
     }
 
     @Test
