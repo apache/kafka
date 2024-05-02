@@ -47,6 +47,7 @@ import org.apache.kafka.connect.storage.MemoryConfigBackingStore;
 import org.apache.kafka.connect.storage.MemoryStatusBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -255,7 +256,7 @@ public class StandaloneHerder extends AbstractHerder {
                 return;
             }
 
-            Map<String, String> patchedConfig = applyConnectorConfigPatch(connectorInfo.config(), configPatch);
+            Map<String, String> patchedConfig = ConnectUtils.patchConfig(connectorInfo.config(), configPatch);
             validateConnectorConfig(patchedConfig, (error, configInfos) -> {
                 if (error != null) {
                     callback.onCompletion(error, null);
