@@ -2413,15 +2413,16 @@ public class DistributedHerderTest {
             return null;
         }).when(herder).validateConnectorConfig(eq(patchedConnConfig), validateCallback.capture());
 
-        // This is effectively the main check of this test:
-        // we validate that what's written in the config storage is the patched config.
-        doNothing().when(configBackingStore).putConnectorConfig(eq(CONN1), eq(patchedConnConfig), isNull());
-
         FutureCallback<Herder.Created<ConnectorInfo>> patchCallback = new FutureCallback<>();
         herder.patchConnectorConfig(CONN1, connConfigPatch, patchCallback);
         herder.tick();
         assertTrue(patchCallback.isDone());
         assertEquals(patchedConnConfig, patchCallback.get().result().config());
+
+        // This is effectively the main check of this test:
+        // we validate that what's written in the config storage is the patched config.
+        verify(configBackingStore).putConnectorConfig(eq(CONN1), eq(patchedConnConfig), isNull());
+        verifyNoMoreInteractions(configBackingStore);
 
         // No need to check herder.connectorConfig explicitly:
         // all the related parts are mocked and that the config is correct is checked by eq()'s in the mocked called above.
