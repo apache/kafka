@@ -38,6 +38,7 @@ public class ClusterConfig {
     private final Type type;
     private final int brokers;
     private final int controllers;
+    private final int disksPerBroker;
     private final String name;
     private final boolean autoStart;
 
@@ -55,14 +56,20 @@ public class ClusterConfig {
     private final Map<Integer, Map<String, String>> perServerProperties;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
-    private ClusterConfig(Type type, int brokers, int controllers, String name, boolean autoStart,
+    private ClusterConfig(Type type, int brokers, int controllers, int disksPerBroker, String name, boolean autoStart,
                   SecurityProtocol securityProtocol, String listenerName, File trustStoreFile,
                   MetadataVersion metadataVersion, Map<String, String> serverProperties, Map<String, String> producerProperties,
                   Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
                   Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perServerProperties) {
+        // do fail fast. the following values are invalid for both zk and kraft modes.
+        if (brokers < 0) throw new IllegalArgumentException("Number of brokers must be greater or equal to zero.");
+        if (controllers < 0) throw new IllegalArgumentException("Number of controller must be greater or equal to zero.");
+        if (disksPerBroker <= 0) throw new IllegalArgumentException("Number of disks must be greater than zero.");
+
         this.type = Objects.requireNonNull(type);
         this.brokers = brokers;
         this.controllers = controllers;
+        this.disksPerBroker = disksPerBroker;
         this.name = name;
         this.autoStart = autoStart;
         this.securityProtocol = Objects.requireNonNull(securityProtocol);
@@ -88,6 +95,10 @@ public class ClusterConfig {
 
     public int numControllers() {
         return controllers;
+    }
+
+    public int numDisksPerBroker() {
+        return disksPerBroker;
     }
 
     public Optional<String> name() {
@@ -156,6 +167,7 @@ public class ClusterConfig {
                 .setType(Type.ZK)
                 .setBrokers(1)
                 .setControllers(1)
+                .setDisksPerBroker(1)
                 .setAutoStart(true)
                 .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
                 .setMetadataVersion(MetadataVersion.latestTesting());
@@ -170,6 +182,7 @@ public class ClusterConfig {
                 .setType(clusterConfig.type)
                 .setBrokers(clusterConfig.brokers)
                 .setControllers(clusterConfig.controllers)
+                .setDisksPerBroker(clusterConfig.disksPerBroker)
                 .setName(clusterConfig.name)
                 .setAutoStart(clusterConfig.autoStart)
                 .setSecurityProtocol(clusterConfig.securityProtocol)
@@ -189,6 +202,7 @@ public class ClusterConfig {
         private Type type;
         private int brokers;
         private int controllers;
+        private int disksPerBroker;
         private String name;
         private boolean autoStart;
         private SecurityProtocol securityProtocol;
@@ -217,6 +231,11 @@ public class ClusterConfig {
 
         public Builder setControllers(int controllers) {
             this.controllers = controllers;
+            return this;
+        }
+
+        public Builder setDisksPerBroker(int disksPerBroker) {
+            this.disksPerBroker = disksPerBroker;
             return this;
         }
 
@@ -288,7 +307,7 @@ public class ClusterConfig {
         }
 
         public ClusterConfig build() {
-            return new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName,
+            return new ClusterConfig(type, brokers, controllers, disksPerBroker, name, autoStart, securityProtocol, listenerName,
                     trustStoreFile, metadataVersion, serverProperties, producerProperties, consumerProperties,
                     adminClientProperties, saslServerProperties, saslClientProperties, perServerProperties);
         }

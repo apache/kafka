@@ -29,6 +29,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -135,6 +136,23 @@ public class ClusterTestExtensionsTest {
         } else {
             Assertions.fail("Unknown cluster type " + clusterInstance.clusterType());
         }
+    }
+
+    @ClusterTests({
+        @ClusterTest(clusterType = Type.ZK),
+        @ClusterTest(clusterType = Type.ZK, disksPerBroker = 2),
+        @ClusterTest(clusterType = Type.KRAFT),
+        @ClusterTest(clusterType = Type.KRAFT, disksPerBroker = 2),
+        @ClusterTest(clusterType = Type.CO_KRAFT),
+        @ClusterTest(clusterType = Type.CO_KRAFT, disksPerBroker = 2)
+    })
+    public void testClusterTestWithDisksPerBroker() throws ExecutionException, InterruptedException {
+        Admin admin = clusterInstance.createAdminClient();
+
+        DescribeLogDirsResult result = admin.describeLogDirs(clusterInstance.brokerIds());
+        result.allDescriptions().get().forEach((brokerId, logDirDescriptionMap) -> {
+            Assertions.assertEquals(clusterInstance.config().numDisksPerBroker(), logDirDescriptionMap.size());
+        });
     }
 
     @ClusterTest(autoStart = AutoStart.NO)

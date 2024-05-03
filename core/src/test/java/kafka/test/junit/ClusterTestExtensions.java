@@ -19,6 +19,7 @@ package kafka.test.junit;
 
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterGenerator;
+import kafka.test.annotation.AutoStart;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTemplate;
@@ -139,59 +140,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
     private void processClusterTest(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults,
                                     Consumer<TestTemplateInvocationContext> testInvocations) {
-        final Type type;
-        if (annot.clusterType() == Type.DEFAULT) {
-            type = defaults.clusterType();
-        } else {
-            type = annot.clusterType();
-        }
-
-        final int brokers;
-        if (annot.brokers() == 0) {
-            brokers = defaults.brokers();
-        } else {
-            brokers = annot.brokers();
-        }
-
-        final int controllers;
-        if (annot.controllers() == 0) {
-            controllers = defaults.controllers();
-        } else {
-            controllers = annot.controllers();
-        }
-
-        if (brokers <= 0 || controllers <= 0) {
-            throw new IllegalArgumentException("Number of brokers/controllers must be greater than zero.");
-        }
-
-        final boolean autoStart;
-        switch (annot.autoStart()) {
-            case YES:
-                autoStart = true;
-                break;
-            case NO:
-                autoStart = false;
-                break;
-            case DEFAULT:
-                autoStart = defaults.autoStart();
-                break;
-            default:
-                throw new IllegalStateException();
-        }
-
-        ClusterConfig.Builder configBuilder = ClusterConfig.builder()
-                .setType(type)
-                .setBrokers(brokers)
-                .setControllers(controllers)
-                .setAutoStart(autoStart)
-                .setSecurityProtocol(annot.securityProtocol())
-                .setMetadataVersion(annot.metadataVersion());
-        if (!annot.name().isEmpty()) {
-            configBuilder.setName(annot.name());
-        }
-        if (!annot.listener().isEmpty()) {
-            configBuilder.setListenerName(annot.listener());
-        }
+        Type type = annot.clusterType() == Type.DEFAULT ? defaults.clusterType() : annot.clusterType();
 
         Map<String, String> serverProperties = new HashMap<>();
         Map<Integer, Map<String, String>> perServerProperties = new HashMap<>();
@@ -201,9 +150,20 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         for (ClusterConfigProperty property : annot.serverProperties()) {
             processClusterConfigProperty(property, serverProperties, perServerProperties);
         }
-        configBuilder.setServerProperties(serverProperties)
-            .setPerServerProperties(perServerProperties);
-        type.invocationContexts(context.getRequiredTestMethod().getName(), configBuilder.build(), testInvocations);
+        ClusterConfig config = ClusterConfig.builder()
+                .setType(type)
+                .setBrokers(annot.brokers() == 0 ? defaults.brokers() : annot.brokers())
+                .setControllers(annot.controllers() == 0 ? defaults.controllers() : annot.controllers())
+                .setDisksPerBroker(annot.disksPerBroker() == 0 ? defaults.disksPerBroker() : annot.disksPerBroker())
+                .setAutoStart(annot.autoStart() == AutoStart.DEFAULT ? defaults.autoStart() : annot.autoStart() == AutoStart.YES)
+                .setName(annot.name().trim().isEmpty() ? null : annot.name())
+                .setListenerName(annot.listener().trim().isEmpty() ? null : annot.listener())
+                .setServerProperties(serverProperties)
+                .setPerServerProperties(perServerProperties)
+                .setSecurityProtocol(annot.securityProtocol())
+                .setMetadataVersion(annot.metadataVersion())
+                .build();
+        type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
     }
 
     private void processClusterConfigProperty(ClusterConfigProperty property,
