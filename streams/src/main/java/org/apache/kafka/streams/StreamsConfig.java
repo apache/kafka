@@ -1531,23 +1531,52 @@ public class StreamsConfig extends AbstractConfig {
         });
     }
 
+    private void overwritePropertyMap(final Map<String, Object> props, final String key, final Object value, final String config) {
+        final String overwritePropertyLogMessage = "Unexpected %s config: %s found. User setting (%s) will be ignored and the Streams default setting (%s) will be used";
+        
+        if (props.containsKey(key)) {
+            log.warn(String.format(overwritePropertyLogMessage, config, key, props.get(key), value));
+        }
+        props.put(key, value);
+    }
+
     private Map<String, Object> getCommonConsumerConfigs() {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
 
-        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
-        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
-
-        final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
+        // Create a consumer config map with custom default values set by Kafka Streams
+        final Map<String, Object> consumerProps = new HashMap<>(KS_DEFAULT_CONSUMER_CONFIGS);
         if (StreamsConfigUtils.processingMode(this) == StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2) {
             consumerProps.put("internal.throw.on.fetch.stable.offset.unsupported", true);
         }
+        
         consumerProps.putAll(getClientCustomProps());
         consumerProps.putAll(clientProvidedProps);
 
         // bootstrap.servers should be from StreamsConfig
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
+        overwritePropertyMap(
+            consumerProps,
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, 
+            originals().get(BOOTSTRAP_SERVERS_CONFIG),
+            "consumer"
+        );
 
         return consumerProps;
+    }
+
+    private void validateConsumerPropertyMap(final Map<String, Object> props){
+        if (eosEnabled){
+            // Iterate over CONSUMER_EOS_OVERRIDES
+            for (Map.Entry<String, Object> entry : KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED.entrySet()) {
+                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
+            }
+            verifyMaxInFlightRequestPerConnection(props.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
+
+        } else {
+            // Iterate over CONSUMER_DEFAULT_OVERRIDES
+            for (Map.Entry<String, Object> entry : KS_CONTROLLED_CONSUMER_CONFIGS.entrySet()) {
+                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
+            }
+        }   
     }
 
     private void checkIfUnexpectedUserSpecifiedConsumerConfig(final Map<String, Object> clientProvidedProps,
@@ -1640,6 +1669,8 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
         consumerProps.putAll(mainConsumerProps);
 
+        validateConsumerPropertyMap(consumerProps);
+
         // this is a hack to work around StreamsConfig constructor inside StreamsPartitionAssignor to avoid casting
         consumerProps.put(APPLICATION_ID_CONFIG, groupId);
 
@@ -1712,6 +1743,8 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
         baseConsumerProps.putAll(restoreConsumerProps);
 
+        validateConsumerPropertyMap(restoreConsumerProps);
+
         // no need to set group id for a restore consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
         // no need to set instance id for a restore consumer
@@ -1744,6 +1777,8 @@ public class StreamsConfig extends AbstractConfig {
         // Get global consumer override configs
         final Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
         baseConsumerProps.putAll(globalConsumerProps);
+
+        validateConsumerPropertyMap(globalConsumerProps);
 
         // no need to set group id for a global consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -1965,56 +2000,5 @@ public class StreamsConfig extends AbstractConfig {
 
     public static void main(final String[] args) {
         System.out.println(CONFIG.toHtml(4, config -> "streamsconfigs_" + config));
-    }
-
-    private Map<String, Object> getCommonConsumerConfigs() {
-        final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
-
-        // Create a consumer config map 
-        final Map<String, Object> consumerProps = new HashMap<>();
-        if (StreamsConfigUtils.processingMode(this) == StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2) {
-            consumerProps.put("internal.throw.on.fetch.stable.offset.unsupported", true);
-        }
-        
-        consumerProps.putAll(getClientCustomProps());
-        consumerProps.putAll(clientProvidedProps);
-
-        // bootstrap.servers should be from StreamsConfig
-        overwritePropertyMap(
-            consumerProps,
-            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, 
-            originals().get(BOOTSTRAP_SERVERS_CONFIG),
-            "consumer"
-        );
-
-        return consumerProps;
-    }
-
-    private void overwritePropertyMap(final Map<String, Object> props, final String key, final Object value, final String config) {
-        final String overwritePropertyLogMessage = "Unexpected user-specified %s config: %s found. User setting (%s) will be ignored and the Streams default setting (%s) will be used";
-        
-        if (props.containsKey(key)) {
-            log.warn(String.format(overwritePropertyLogMessage, config, key, props.get(key), value));
-        }
-        props.put(key, value);
-    }
-
-    // TODO: Only override the ones that need to be.
-    // Some values can be overriden but their defaults are different, so if set let them pass
-    // if not then set the default value
-    private void validateConsumerPropertyMap(final Map<String, Object> props){
-        if (eosEnabled){
-            // Iterate over CONSUMER_EOS_OVERRIDES
-            for (Map.Entry<String, Object> entry : CONSUMER_EOS_OVERRIDES.entrySet()) {
-                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
-            }
-
-            verifyMaxInFlightRequestPerConnection(props.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
-        } else {
-            // Iterate over CONSUMER_DEFAULT_OVERRIDES
-            for (Map.Entry<String, Object> entry : CONSUMER_DEFAULT_OVERRIDES.entrySet()) {
-                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
-            }
-        }   
     }
 }
