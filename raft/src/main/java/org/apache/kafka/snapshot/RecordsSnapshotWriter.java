@@ -146,7 +146,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         private Time time = Time.SYSTEM;
         private int maxBatchSize = 1024;
         private MemoryPool memoryPool = MemoryPool.NONE;
-        private short kraftVersion = 0;
+        private short kraftVersion = 1;
         private Optional<VoterSet> voterSet = Optional.empty();
         private Optional<RawSnapshotWriter> rawSnapshotWriter = Optional.empty();
 
