@@ -24,11 +24,13 @@ import kafka.test.annotation.ClusterTemplate;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,7 +40,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -51,6 +52,12 @@ import static java.util.Collections.singletonMap;
 import static kafka.test.annotation.Type.CO_KRAFT;
 import static kafka.test.annotation.Type.KRAFT;
 import static kafka.test.annotation.Type.ZK;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 import static org.apache.kafka.common.ConsumerGroupState.EMPTY;
@@ -70,7 +77,8 @@ public class DeleteConsumerGroupsTest {
 
     public DeleteConsumerGroupsTest(ClusterInstance cluster) {
         this.cluster = cluster;
-        this.groupProtocols = cluster.isKRaftTest()
+        this.groupProtocols = cluster.config().serverProperties()
+                .get(NEW_GROUP_COORDINATOR_ENABLE_CONFIG).equals("true")
                 ? Arrays.asList(CLASSIC, CONSUMER)
                 : singletonList(CLASSIC);
     }
@@ -338,32 +346,17 @@ public class DeleteConsumerGroupsTest {
     }
 
     private AutoCloseable consumerGroupClosable(GroupProtocol protocol, String groupId, String topicName) {
-        boolean isNewCoordinator = cluster.config()
-                .serverProperties()
-                .get(NEW_GROUP_COORDINATOR_ENABLE_CONFIG)
-                .equals("true");
-
-        if (isNewCoordinator) {
-            return ConsumerGroupExecutor.buildConsumerGroup(
-                    cluster.bootstrapServers(),
-                    1,
-                    groupId,
-                    topicName,
-                    protocol.name,
-                    Optional.empty(),
-                    emptyMap(),
-                    false
-            );
-        }
-
-        return ConsumerGroupExecutor.buildClassicGroup(
-                cluster.bootstrapServers(),
-                1,
+        Map<String, Object> configs = composeConfigs(
                 groupId,
+                protocol.name,
+                emptyMap()
+        );
+
+        return ConsumerGroupExecutor.buildConsumers(
+                1,
+                false,
                 topicName,
-                RangeAssignor.class.getName(),
-                emptyMap(),
-                false
+                () -> new KafkaConsumer<String, String>(configs)
         );
     }
 
@@ -387,5 +380,19 @@ public class DeleteConsumerGroupsTest {
                 opts,
                 singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
+    }
+
+    private Map<String, Object> composeConfigs(String groupId, String groupProtocol, Map<String, Object> customConfigs) {
+        System.err.println(groupProtocol);
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        configs.put(GROUP_ID_CONFIG, groupId);
+        configs.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        configs.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        configs.put(GROUP_PROTOCOL_CONFIG, groupProtocol);
+        configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
+
+        configs.putAll(customConfigs);
+        return configs;
     }
 }
