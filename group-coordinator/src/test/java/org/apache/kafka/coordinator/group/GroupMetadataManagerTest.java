@@ -300,12 +300,9 @@ public class GroupMetadataManagerTest {
         // Use a static member id as it makes the test easier.
         String memberId = Uuid.randomUuid().toString();
 
-        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
             .build();
-
-        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
 
         // A first member joins to create the group.
         context.consumerGroupHeartbeat(
@@ -313,7 +310,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(0)
-                .setServerAssignor("range")
+                .setServerAssignor(NoOpPartitionAssignor.NAME)
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList()));
@@ -9353,10 +9350,8 @@ public class GroupMetadataManagerTest {
     public void testConsumerGroupHeartbeatWithNonEmptyClassicGroup() {
         String classicGroupId = "classic-group-id";
         String memberId = Uuid.randomUuid().toString();
-        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
-        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
             .build();
         ClassicGroup classicGroup = new ClassicGroup(
             new LogContext(),
@@ -9374,7 +9369,7 @@ public class GroupMetadataManagerTest {
                     .setGroupId(classicGroupId)
                     .setMemberId(memberId)
                     .setMemberEpoch(0)
-                    .setServerAssignor("range")
+                    .setServerAssignor(NoOpPartitionAssignor.NAME)
                     .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setTopicPartitions(Collections.emptyList())));
@@ -9384,10 +9379,8 @@ public class GroupMetadataManagerTest {
     public void testConsumerGroupHeartbeatWithEmptyClassicGroup() {
         String classicGroupId = "classic-group-id";
         String memberId = Uuid.randomUuid().toString();
-        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
-        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
             .build();
         ClassicGroup classicGroup = new ClassicGroup(
             new LogContext(),
@@ -9403,7 +9396,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(classicGroupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(0)
-                .setServerAssignor("range")
+                .setServerAssignor(NoOpPartitionAssignor.NAME)
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList()));
@@ -9416,7 +9409,7 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-            .setServerAssignorName("range")
+            .setServerAssignorName(NoOpPartitionAssignor.NAME)
             .setAssignedPartitions(Collections.emptyMap())
             .build();
 
@@ -11088,12 +11081,9 @@ public class GroupMetadataManagerTest {
 
         String memberId = Uuid.randomUuid().toString();
         String instanceId = "instance-id";
-        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
-        // An empty target assignment is used as the new member id is unknown before calling join group.
-        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
                 .addTopic(barTopicId, barTopicName, 1)
@@ -11155,15 +11145,12 @@ public class GroupMetadataManagerTest {
             }),
             RecordHelpers.newGroupEpochRecord(groupId, 11),
 
-            RecordHelpers.newTargetAssignmentRecord(groupId, memberId, Collections.emptyMap()),
             RecordHelpers.newTargetAssignmentRecord(groupId, newMemberId, Collections.emptyMap()),
             RecordHelpers.newTargetAssignmentEpochRecord(groupId, 11),
 
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
         );
-        assertRecordsEquals(expectedRecords.subList(0, 3), joinResult.records.subList(0, 3));
-        assertUnorderedListEquals(expectedRecords.subList(3, 5), joinResult.records.subList(3, 5));
-        assertRecordsEquals(expectedRecords.subList(5, 7), joinResult.records.subList(5, 7));
+        assertRecordsEquals(expectedRecords, joinResult.records);
 
         assertTrue(joinResult.joinFuture.isDone());
         assertEquals(
@@ -11187,12 +11174,8 @@ public class GroupMetadataManagerTest {
 
         String memberId = Uuid.randomUuid().toString();
         String instanceId = "instance-id";
-        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
-        // An empty target assignment is used as the new member id is unknown before calling join group.
-
-        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withAssignors(Collections.singletonList(new NoOpPartitionAssignor()))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
                 .addRacks()
@@ -11246,6 +11229,8 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1)))
             .setRebalanceTimeoutMs(500)
             .setSupportedClassicProtocols(request.protocols())
             .build();
@@ -11258,7 +11243,7 @@ public class GroupMetadataManagerTest {
 
             // Create the new static member.
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
-            RecordHelpers.newTargetAssignmentRecord(groupId, newMemberId, Collections.emptyMap()),
+            RecordHelpers.newTargetAssignmentRecord(groupId, newMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0, 1))),
             RecordHelpers.newTargetAssignmentEpochRecord(groupId, 10),
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
         );
