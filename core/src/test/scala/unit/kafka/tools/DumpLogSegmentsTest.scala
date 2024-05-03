@@ -411,7 +411,10 @@ class DumpLogSegmentsTest {
 
     def serializedRecord(key: ApiMessageAndVersion, value: ApiMessageAndVersion): Record = {
       val record = new group.Record(key, value)
-      TestUtils.singletonRecord(key = serde.serializeKey(record), value = serde.serializeValue(record))
+      TestUtils.singletonRecords(
+        key = serde.serializeKey(record),
+        value = serde.serializeValue(record)
+      ).records.iterator.next
     }
 
     // The key is mandatory.
@@ -419,7 +422,7 @@ class DumpLogSegmentsTest {
       "Failed to decode message at offset 0 using offset topic decoder (message had a missing key)",
       assertThrows(
         classOf[RuntimeException],
-        () => parser.parse(TestUtils.singletonRecord(key = null, value = null))
+        () => parser.parse(TestUtils.singletonRecords(key = null, value = null).records.iterator.next)
       ).getMessage
     )
 

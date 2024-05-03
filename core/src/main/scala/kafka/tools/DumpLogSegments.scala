@@ -444,9 +444,9 @@ object DumpLogSegments {
         reader: (org.apache.kafka.common.protocol.Readable, Short) => T,
         writer: (T, Short) => JsonNode
       ): Unit = {
-        Option(node.get(field)).foreach { subscription =>
+        Option(node.get(field)).foreach { filedNode =>
           try {
-            val buffer = ByteBuffer.wrap(subscription.binaryValue())
+            val buffer = ByteBuffer.wrap(filedNode.binaryValue())
             val accessor = new ByteBufferAccessor(buffer)
             val version = accessor.readShort
             val data = reader(accessor, version)

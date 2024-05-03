@@ -619,20 +619,6 @@ object TestUtils extends Logging {
     records(Seq(new SimpleRecord(timestamp, key, value)), magicValue = magicValue, codec = codec)
   }
 
-  def singletonRecord(
-    value: Array[Byte],
-    key: Array[Byte] = null,
-    codec: CompressionType = CompressionType.NONE,
-    timestamp: Long = RecordBatch.NO_TIMESTAMP,
-    magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE
-  ): Record = {
-    records(
-      Seq(new SimpleRecord(timestamp, key, value)),
-      magicValue = magicValue,
-      codec = codec
-    ).records.iterator.next
-  }
-
   def records(records: Iterable[SimpleRecord],
               magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
               codec: CompressionType = CompressionType.NONE,
