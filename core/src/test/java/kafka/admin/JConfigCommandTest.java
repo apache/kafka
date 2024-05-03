@@ -18,6 +18,7 @@ package kafka.admin;
 
 import kafka.admin.ConfigCommand.ConfigCommandOptions;
 import kafka.utils.TestUtils;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.config.ConfigType;
 import org.junit.jupiter.api.Test;
 import scala.collection.Seq;
@@ -27,9 +28,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -94,6 +97,25 @@ public class JConfigCommandTest {
             "--entity-type", "users",
             "--zk-tls-config-file", "zk_tls_config.properties",
             "--describe");
+    }
+
+    public static void assertNonZeroStatusExit(String... args) {
+        AtomicReference<Integer> exitStatus = new AtomicReference<>();
+        Exit.setExitProcedure((status, __) -> {
+            exitStatus.set(status);
+            throw new RuntimeException();
+        });
+
+        try {
+            ConfigCommand.main(args);
+        } catch (RuntimeException e) {
+            // do nothing.
+        } finally {
+            Exit.resetExitProcedure();
+        }
+
+        assertNotNull(exitStatus.get());
+        assertEquals(1, exitStatus.get());
     }
 
     @Test
@@ -386,10 +408,6 @@ public class JConfigCommandTest {
     @Test
     public void testOptionEntityTypeNames() {
         doTestOptionEntityTypeNames(false);
-    }
-
-    public static void assertNonZeroStatusExit(String...args) {
-        ConfigCommandIntegrationTest.assertNonZeroStatusExit(Arrays.stream(args), msg -> { });
     }
 
     public static String[] toArray(String... first) {
