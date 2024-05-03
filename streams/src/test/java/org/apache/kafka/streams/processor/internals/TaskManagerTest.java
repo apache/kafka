@@ -85,6 +85,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -1421,15 +1422,20 @@ public class TaskManagerTest {
             .withInputPartitions(taskId02Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setupForRevocationAndLost(mkSet(task1, task2, task3), tasks);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = new CompletableFuture<>();
+        when(stateUpdater.removeWithFuture(task1.id())).thenReturn(future1);
+        future1.complete(new StateUpdater.RemovedTaskResult(task1));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future3 = new CompletableFuture<>();
+        when(stateUpdater.removeWithFuture(task3.id())).thenReturn(future3);
+        future3.complete(new StateUpdater.RemovedTaskResult(task3));
 
         taskManager.handleLostAll();
 
-        verify(stateUpdater).remove(task1.id());
+        verify(task1).suspend();
+        verify(task1).closeClean();
+        verify(task3).suspend();
+        verify(task3).closeClean();
         verify(stateUpdater, never()).remove(task2.id());
-        verify(stateUpdater).remove(task3.id());
-        verify(tasks).addPendingTaskToCloseClean(task1.id());
-        verify(tasks, never()).addPendingTaskToCloseClean(task2.id());
-        verify(tasks).addPendingTaskToCloseClean(task3.id());
     }
 
     private TaskManager setupForRevocationAndLost(final Set<Task> tasksInStateUpdater,
