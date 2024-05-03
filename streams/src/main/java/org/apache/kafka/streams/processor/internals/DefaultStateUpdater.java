@@ -506,16 +506,14 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void removeTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
             try {
-                if (updatingTasks.containsKey(taskId)) {
-                    removeUpdatingTask(taskId, future);
-                } else if (pausedTasks.containsKey(taskId)) {
-                    removePausedTask(taskId, future);
-                } else {
-                    if (!removeRestoredTask(taskId, future)) {
-                        if (!removeFailedTask(taskId, future)) {
-                            future.complete(null);
-                            log.warn("Task " + taskId + " could not be removed from the state updater because "
-                                + "the state updater does not own this task.");
+                if (!removeUpdatingTask(taskId, future)) {
+                    if (!removePausedTask(taskId, future)) {
+                        if (!removeRestoredTask(taskId, future)) {
+                            if (!removeFailedTask(taskId, future)) {
+                                future.complete(null);
+                                log.warn("Task " + taskId + " could not be removed from the state updater because "
+                                    + "the state updater does not own this task.");
+                            }
                         }
                     }
                 }
@@ -528,7 +526,10 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private void removeUpdatingTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
+        private boolean removeUpdatingTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
+            if (!updatingTasks.containsKey(taskId)) {
+                return false;
+            }
             final Task task = updatingTasks.get(taskId);
             prepareUpdatingTaskForRemoval(task);
             updatingTasks.remove(taskId);
@@ -538,6 +539,7 @@ public class DefaultStateUpdater implements StateUpdater {
             log.info((task.isActive() ? "Active" : "Standby")
                 + " task " + task.id() + " was removed from the updating tasks.");
             future.complete(new RemovedTaskResult(task));
+            return true;
         }
 
         private void prepareUpdatingTaskForRemoval(final Task task) {
@@ -546,13 +548,17 @@ public class DefaultStateUpdater implements StateUpdater {
             changelogReader.unregister(changelogPartitions);
         }
 
-        private void removePausedTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
+        private boolean removePausedTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
+            if (!pausedTasks.containsKey(taskId)) {
+                return false;
+            }
             final Task task = pausedTasks.get(taskId);
             preparePausedTaskForRemoval(task);
             pausedTasks.remove(taskId);
             log.info((task.isActive() ? "Active" : "Standby")
                 + " task " + task.id() + " was removed from the paused tasks.");
             future.complete(new RemovedTaskResult(task));
+            return true;
         }
 
         private void preparePausedTaskForRemoval(final Task task) {
