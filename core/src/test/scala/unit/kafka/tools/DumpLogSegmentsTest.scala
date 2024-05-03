@@ -20,13 +20,15 @@ package kafka.tools
 import java.io.{ByteArrayOutputStream, File, PrintWriter}
 import java.nio.ByteBuffer
 import java.util
-import java.util.Properties
+import java.util.{Collections, Optional, Properties}
 import kafka.log.{LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.{BrokerTopicStats, KafkaRaftServer}
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, TimeIndexDumpErrors}
 import kafka.utils.TestUtils
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, Subscription}
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
@@ -35,7 +37,7 @@ import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTr
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group
 import org.apache.kafka.coordinator.group.RecordSerde
-import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue}
+import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
@@ -437,6 +439,91 @@ class DumpLogSegmentsTest {
           new ConsumerGroupMetadataValue()
             .setEpoch(10),
           0.toShort
+        )
+      ))
+    )
+
+    // Consumer embedded protocol is parsed if possible.
+    assertEquals(
+      (
+        Some("{\"type\":\"2\",\"data\":{\"group\":\"group\"}}"),
+        Some("{\"version\":\"4\",\"data\":{\"protocolType\":\"consumer\",\"generation\":10,\"protocol\":\"range\"," +
+             "\"leader\":\"member\",\"currentStateTimestamp\":-1,\"members\":[{\"memberId\":\"member\"," +
+             "\"groupInstanceId\":\"instance\",\"clientId\":\"client\",\"clientHost\":\"host\"," +
+             "\"rebalanceTimeout\":1000,\"sessionTimeout\":100,\"subscription\":{\"topics\":[\"foo\"]," +
+             "\"userData\":null,\"ownedPartitions\":[{\"topic\":\"foo\",\"partitions\":[0]}]," +
+             "\"generationId\":0,\"rackId\":\"rack\"},\"assignment\":{\"assignedPartitions\":" +
+             "[{\"topic\":\"foo\",\"partitions\":[0]}],\"userData\":null}}]}}")
+      ),
+      parser.parse(serializedRecord(
+        new ApiMessageAndVersion(
+          new GroupMetadataKey()
+            .setGroup("group"),
+          2.toShort
+        ),
+        new ApiMessageAndVersion(
+          new GroupMetadataValue()
+            .setProtocolType("consumer")
+            .setProtocol("range")
+            .setLeader("member")
+            .setGeneration(10)
+            .setMembers(Collections.singletonList(
+              new GroupMetadataValue.MemberMetadata()
+                .setMemberId("member")
+                .setClientId("client")
+                .setClientHost("host")
+                .setGroupInstanceId("instance")
+                .setSessionTimeout(100)
+                .setRebalanceTimeout(1000)
+                .setSubscription(Utils.toArray(ConsumerProtocol.serializeSubscription(
+                  new Subscription(
+                    Collections.singletonList("foo"),
+                    null,
+                    Collections.singletonList(new TopicPartition("foo", 0)),
+                    0,
+                    Optional.of("rack")))))
+                .setAssignment(Utils.toArray(ConsumerProtocol.serializeAssignment(
+                  new Assignment(Collections.singletonList(new TopicPartition("foo", 0))))))
+            )),
+          GroupMetadataValue.HIGHEST_SUPPORTED_VERSION
+        )
+      ))
+    )
+
+    // Consumer embedded protocol is not parsed if malformed.
+    assertEquals(
+      (
+        Some("{\"type\":\"2\",\"data\":{\"group\":\"group\"}}"),
+        Some("{\"version\":\"4\",\"data\":{\"protocolType\":\"consumer\",\"generation\":10,\"protocol\":\"range\"," +
+             "\"leader\":\"member\",\"currentStateTimestamp\":-1,\"members\":[{\"memberId\":\"member\"," +
+             "\"groupInstanceId\":\"instance\",\"clientId\":\"client\",\"clientHost\":\"host\"," +
+             "\"rebalanceTimeout\":1000,\"sessionTimeout\":100,\"subscription\":\"U3Vic2NyaXB0aW9u\"," +
+             "\"assignment\":\"QXNzaWdubWVudA==\"}]}}")
+      ),
+      parser.parse(serializedRecord(
+        new ApiMessageAndVersion(
+          new GroupMetadataKey()
+            .setGroup("group"),
+          2.toShort
+        ),
+        new ApiMessageAndVersion(
+          new GroupMetadataValue()
+            .setProtocolType("consumer")
+            .setProtocol("range")
+            .setLeader("member")
+            .setGeneration(10)
+            .setMembers(Collections.singletonList(
+              new GroupMetadataValue.MemberMetadata()
+                .setMemberId("member")
+                .setClientId("client")
+                .setClientHost("host")
+                .setGroupInstanceId("instance")
+                .setSessionTimeout(100)
+                .setRebalanceTimeout(1000)
+                .setSubscription("Subscription".getBytes)
+                .setAssignment("Assignment".getBytes)
+            )),
+          GroupMetadataValue.HIGHEST_SUPPORTED_VERSION
         )
       ))
     )

@@ -438,6 +438,25 @@ object DumpLogSegments {
     private def prepareGroupMetadataValue(message: GroupMetadataValue, version: Short): JsonNode = {
       val json = GroupMetadataValueJsonConverter.write(message, version)
 
+      def replace[T](
+        node: JsonNode,
+        field: String,
+        reader: (org.apache.kafka.common.protocol.Readable, Short) => T,
+        writer: (T, Short) => JsonNode
+      ): Unit = {
+        Option(node.get(field)).foreach { subscription =>
+          try {
+            val buffer = ByteBuffer.wrap(subscription.binaryValue())
+            val accessor = new ByteBufferAccessor(buffer)
+            val version = accessor.readShort
+            val data = reader(accessor, version)
+            node.asInstanceOf[ObjectNode].replace(field, writer(data, version))
+          } catch {
+            case _: RuntimeException => // Swallow and keep the original bytes.
+          }
+        }
+      }
+
       Option(json.get("protocolType")).foreach { protocolTypeNode =>
         // If the group uses the consumer embedded protocol, we deserialize
         // the subscription and the assignment of each member.
@@ -446,30 +465,20 @@ object DumpLogSegments {
             if (membersNode.isArray) {
               membersNode.forEach { memberNode =>
                 // Replace the subscription field by its deserialized version.
-                val subscription = memberNode.get("subscription")
-                if (subscription != null) {
-                  val buffer = ByteBuffer.wrap(subscription.binaryValue())
-                  val accessor = new ByteBufferAccessor(buffer)
-                  val version = accessor.readShort
-                  val data = new ConsumerProtocolSubscription(accessor, version)
-                  memberNode.asInstanceOf[ObjectNode].replace(
-                    "subscription",
-                    ConsumerProtocolSubscriptionJsonConverter.write(data, version)
-                  )
-                }
+                replace(
+                  memberNode,
+                  "subscription",
+                  (readable, version) => new ConsumerProtocolSubscription(readable, version),
+                  ConsumerProtocolSubscriptionJsonConverter.write
+                )
 
                 // Replace the assignment field by its deserialized version.
-                val assignment = memberNode.get("assignment")
-                if (assignment != null) {
-                  val buffer = ByteBuffer.wrap(assignment.binaryValue())
-                  val accessor = new ByteBufferAccessor(buffer)
-                  val version = accessor.readShort
-                  val data = new ConsumerProtocolAssignment(accessor, version)
-                  memberNode.asInstanceOf[ObjectNode].replace(
-                    "assignment",
-                    ConsumerProtocolAssignmentJsonConverter.write(data, version)
-                  )
-                }
+                replace(
+                  memberNode,
+                  "assignment",
+                  (readable, version) => new ConsumerProtocolAssignment(readable, version),
+                  ConsumerProtocolAssignmentJsonConverter.write
+                )
               }
             }
           }
