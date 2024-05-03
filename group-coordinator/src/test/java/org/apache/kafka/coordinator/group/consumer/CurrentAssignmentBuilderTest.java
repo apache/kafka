@@ -171,6 +171,43 @@ public class CurrentAssignmentBuilderTest {
     }
 
     @Test
+    public void testStableToUnreleasedPartitionsWithOwnedPartitionsNotHavingRevokedPartitions() {
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(topicId1, 1, 2, 3),
+                mkTopicAssignment(topicId2, 4, 5, 6)))
+            .build();
+
+        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+            .withTargetAssignment(11, new Assignment(mkAssignment(
+                mkTopicAssignment(topicId1, 1, 2, 3),
+                mkTopicAssignment(topicId2, 4, 5, 7))))
+            .withCurrentPartitionEpoch((topicId, __) ->
+                topicId2.equals(topicId) ? 10 : -1
+            )
+            .withOwnedTopicPartitions(Collections.emptyList())
+            .build();
+
+        assertEquals(
+            new ConsumerGroupMember.Builder("member")
+                .setState(MemberState.UNRELEASED_PARTITIONS)
+                .setMemberEpoch(11)
+                .setPreviousMemberEpoch(10)
+                .setAssignedPartitions(mkAssignment(
+                    mkTopicAssignment(topicId1, 1, 2, 3),
+                    mkTopicAssignment(topicId2, 4, 5)))
+                .build(),
+            updatedMember
+        );
+    }
+
+    @Test
     public void testUnrevokedPartitionsToStable() {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
