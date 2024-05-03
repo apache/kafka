@@ -119,19 +119,9 @@ public class QuorumState {
         // when we send Vote or BeginEpoch requests.
 
         ElectionState election;
-        try {
-            election = store
-                .readElectionState()
-                .orElseGet(() -> ElectionState.withUnknownLeader(0, latestVoterSet.get().voterIds()));
-        } catch (final UncheckedIOException e) {
-            // TODO: is this correct? I think the code should fail to start if qourum-state is present but it cannot read it
-            // For exceptions during state file loading (missing or not readable),
-            // we could assume the file is corrupted already and should be cleaned up.
-            log.warn("Clearing local quorum state store after error loading state {}",
-                store, e);
-            store.clear();
-            election = ElectionState.withUnknownLeader(0, latestVoterSet.get().voterIds());
-        }
+        election = store
+            .readElectionState()
+            .orElseGet(() -> ElectionState.withUnknownLeader(0, latestVoterSet.get().voterIds()));
 
         final EpochState initialState;
         if (election.hasVoted() && !localId.isPresent()) {
