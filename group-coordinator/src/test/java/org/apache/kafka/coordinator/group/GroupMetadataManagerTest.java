@@ -11075,10 +11075,7 @@ public class GroupMetadataManagerTest {
 
         context.assertNoSessionTimeout(groupId, newMemberId);
         context.assertNoSyncTimeout(groupId, newMemberId);
-        assertThrows(
-            UnknownMemberIdException.class,
-            () -> context.groupMetadataManager.consumerGroup(groupId).getOrMaybeCreateMember(newMemberId, false)
-        );
+        assertFalse(context.groupMetadataManager.consumerGroup(groupId).hasMember(newMemberId));
     }
 
     @Test
@@ -11242,17 +11239,15 @@ public class GroupMetadataManagerTest {
         assertNotEquals("", newMemberId);
 
         ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(newMemberId)
-            .setMemberEpoch(0)
+            .setMemberEpoch(10)
             .setPreviousMemberEpoch(0)
             .setInstanceId(instanceId)
-            .setState(MemberState.UNREVOKED_PARTITIONS)
+            .setState(MemberState.STABLE)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
             .setRebalanceTimeoutMs(500)
             .setSupportedClassicProtocols(request.protocols())
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1)))
             .build();
 
         List<Record> expectedRecords = Arrays.asList(
@@ -11271,7 +11266,7 @@ public class GroupMetadataManagerTest {
         assertEquals(
             new JoinGroupResponseData()
                 .setMemberId(newMemberId)
-                .setGenerationId(0)
+                .setGenerationId(10)
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .setProtocolName("range"),
             joinResult.joinFuture.get()
@@ -11376,17 +11371,16 @@ public class GroupMetadataManagerTest {
 
         ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId1)
             .setInstanceId(instanceId)
-            .setMemberEpoch(10)
+            .setMemberEpoch(11)
             .setPreviousMemberEpoch(10)
             .setRebalanceTimeoutMs(500)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setState(MemberState.UNREVOKED_PARTITIONS)
+            .setState(MemberState.STABLE)
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName, zarTopicName))
             .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(barTopicId, 0)))
+                mkTopicAssignment(fooTopicId, 0),
+                mkTopicAssignment(zarTopicId, 0)))
             .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                 Arrays.asList(fooTopicName, barTopicName, zarTopicName),
                 Collections.emptyList()))
@@ -11412,7 +11406,7 @@ public class GroupMetadataManagerTest {
         assertEquals(
             new JoinGroupResponseData()
                 .setMemberId(memberId1)
-                .setGenerationId(10)
+                .setGenerationId(11)
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .setProtocolName("range"),
             joinResult.joinFuture.get()
@@ -11572,8 +11566,8 @@ public class GroupMetadataManagerTest {
             }
         ));
 
-        // Member 1 rejoins with a new subscription list and transitions to UNREVOKED_PARTITIONS, because its
-        // assignedPartitions still contains bar-0 though all of its partitions have actually been revoked.
+        // Member 1 rejoins with a new subscription list and an empty owned
+        // partition, and transitions to UNRELEASED_PARTITIONS.
         JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
             .withMemberId(memberId1)
@@ -11584,17 +11578,16 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext.JoinResult joinResult1 = context.sendClassicGroupJoin(request);
 
         ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(memberId1)
-            .setMemberEpoch(10)
+            .setMemberEpoch(11)
             .setPreviousMemberEpoch(10)
             .setRebalanceTimeoutMs(500)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setState(MemberState.UNREVOKED_PARTITIONS)
+            .setState(MemberState.UNRELEASED_PARTITIONS)
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName, zarTopicName))
             .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(barTopicId, 0)))
+                mkTopicAssignment(fooTopicId, 0),
+                mkTopicAssignment(zarTopicId, 0)))
             .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                 Arrays.asList(fooTopicName, barTopicName, zarTopicName),
                 Collections.emptyList()))
@@ -11631,7 +11624,7 @@ public class GroupMetadataManagerTest {
         assertEquals(
             new JoinGroupResponseData()
                 .setMemberId(memberId1)
-                .setGenerationId(10)
+                .setGenerationId(11)
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .setProtocolName("range"),
             joinResult1.joinFuture.get()
@@ -11639,15 +11632,22 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId1, request.sessionTimeoutMs());
         context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
 
-        // Member 1 rejoins to transition from UNREVOKED_PARTITIONS to UNRELEASED_PARTITIONS.
-        GroupMetadataManagerTestContext.JoinResult joinResult2 = context.sendClassicGroupJoin(request);
+        // Member 2 heartbeats to confirm revoking foo-1.
+        context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(10)
+                .setTopicPartitions(Collections.emptyList())
+        );
 
+        // Member 1 rejoins to transition from UNRELEASED_PARTITIONS to STABLE.
+        GroupMetadataManagerTestContext.JoinResult joinResult2 = context.sendClassicGroupJoin(request);
         ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(expectedMember1)
-            .setMemberEpoch(11)
-            .setState(MemberState.UNRELEASED_PARTITIONS)
-            .setPartitionsPendingRevocation(Collections.emptyMap())
+            .setState(MemberState.STABLE)
+            .setPreviousMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0),
+                mkTopicAssignment(fooTopicId, 0, 1),
                 mkTopicAssignment(zarTopicId, 0)))
             .build();
 
@@ -11665,49 +11665,6 @@ public class GroupMetadataManagerTest {
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .setProtocolName("range"),
             joinResult2.joinFuture.get()
-        );
-        context.assertSessionTimeout(groupId, memberId1, request.sessionTimeoutMs());
-        context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
-
-        // Member 2 rejoins to transition to UNREVOKED_PARTITIONS and confirm revoking foo-1.
-        context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId2)
-                .setMemberEpoch(10)
-        );
-        context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId2)
-                .setMemberEpoch(10)
-                .setTopicPartitions(Collections.emptyList())
-        );
-
-        // Member 1 rejoins to transition from UNRELEASED_PARTITIONS to STABLE.
-        GroupMetadataManagerTestContext.JoinResult joinResult3 = context.sendClassicGroupJoin(request);
-        ConsumerGroupMember expectedMember3 = new ConsumerGroupMember.Builder(expectedMember2)
-            .setState(MemberState.STABLE)
-            .setPreviousMemberEpoch(11)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1),
-                mkTopicAssignment(zarTopicId, 0)))
-            .build();
-
-        assertRecordsEquals(
-            Collections.singletonList(RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember3)),
-            joinResult3.records
-        );
-        assertEquals(expectedMember3.state(), group.getOrMaybeCreateMember(memberId1, false).state());
-
-        joinResult3.appendFuture.complete(null);
-        assertEquals(
-            new JoinGroupResponseData()
-                .setMemberId(memberId1)
-                .setGenerationId(11)
-                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                .setProtocolName("range"),
-            joinResult3.joinFuture.get()
         );
         context.assertSessionTimeout(groupId, memberId1, request.sessionTimeoutMs());
         context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
@@ -11794,8 +11751,7 @@ public class GroupMetadataManagerTest {
             }
         ));
 
-        // Member 1 rejoins with a new subscription list and transitions to UNREVOKED_PARTITIONS, because its
-        // assignedPartitions still contains bar-0 though all of its partitions have actually been revoked.
+        // Member 1 rejoins with a new subscription list and transitions to UNREVOKED_PARTITIONS.
         JoinGroupRequestData request1 = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
             .withMemberId(memberId1)
@@ -11904,13 +11860,7 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId1, request2.sessionTimeoutMs());
         context.assertSyncTimeout(groupId, memberId1, request2.rebalanceTimeoutMs());
 
-        // Member 2 rejoins to transition to UNREVOKED_PARTITIONS and confirm revoking foo-1.
-        context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId2)
-                .setMemberEpoch(10)
-        );
+        // Member 2 heartbeats to confirm revoking foo-1.
         context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
