@@ -257,8 +257,8 @@ public class TargetAssignmentBuilder {
                 // A new static member joins and needs to replace an existing departed one.
                 if (updatedMemberOrNull.instanceId() != null) {
                     String previousMemberId = staticMembers.get(updatedMemberOrNull.instanceId());
-                    if (previousMemberId != null) {
-                        assignment = targetAssignment.getOrDefault(updatedMemberOrNull.instanceId(), Assignment.EMPTY);
+                    if (previousMemberId != null && !previousMemberId.equals(memberId)) {
+                        assignment = targetAssignment.getOrDefault(previousMemberId, Assignment.EMPTY);
                     }
                 }
 

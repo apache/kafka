@@ -342,14 +342,15 @@ public class ConsumerGroup implements Group {
         boolean createIfNotExists
     ) {
         ConsumerGroupMember member = members.get(memberId);
-        if (member == null) {
-            if (!createIfNotExists) {
-                throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
-                    memberId, groupId));
-            }
-            member = new ConsumerGroupMember.Builder(memberId).build();
+        if (member != null) return member;
+
+        if (!createIfNotExists) {
+            throw new UnknownMemberIdException(
+                String.format("Member %s is not a member of group %s.", memberId, groupId)
+            );
         }
-        return member;
+
+        return new ConsumerGroupMember.Builder(memberId).build();
     }
 
     /**
@@ -365,7 +366,7 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Add or updates the member.
+     * Adds or updates the member.
      *
      * @param newMember The new member state.
      */
