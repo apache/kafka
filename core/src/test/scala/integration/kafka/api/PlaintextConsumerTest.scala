@@ -859,4 +859,28 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(20, timestampTp1.timestamp)
     assertEquals(Optional.of(0), timestampTp1.leaderEpoch)
   }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testGetPositionOfNewlyAssignedPartitionFromPartitionsAssignedCallback(quorum: String,
+                                                                            groupProtocol: String): Unit = {
+    val consumer = createConsumer()
+    val listener = new TestConsumerReassignmentListener {
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+        super.onPartitionsRevoked(partitions)
+      }
+
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+        super.onPartitionsAssigned(partitions)
+        partitions.forEach(tp => {
+          assertDoesNotThrow(() => consumer.position(tp))
+        })
+
+      }
+    }
+    consumer.subscribe(List(topic).asJava, listener)
+    awaitRebalance(consumer, listener)
+    assertEquals(1, listener.callsToAssigned)
+    assertEquals(0, listener.callsToRevoked)
+  }
 }
