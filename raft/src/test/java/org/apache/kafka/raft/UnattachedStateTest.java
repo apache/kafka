@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.internals.VoterSet;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -80,8 +81,17 @@ public class UnattachedStateTest {
                 Optional.empty()
         );
 
-        assertEquals(isLogUpToDate, state.canGrantVote(1, Optional.empty(), isLogUpToDate));
-        assertEquals(isLogUpToDate, state.canGrantVote(2, Optional.empty(), isLogUpToDate));
-        assertEquals(isLogUpToDate, state.canGrantVote(3, Optional.empty(), isLogUpToDate));
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(VoterSet.VoterKey.of(1, Optional.empty()), isLogUpToDate)
+        );
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(VoterSet.VoterKey.of(2, Optional.empty()), isLogUpToDate)
+        );
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(VoterSet.VoterKey.of(3, Optional.empty()), isLogUpToDate)
+        );
     }
 }

@@ -18,7 +18,7 @@ package org.apache.kafka.raft;
 
 import java.io.Closeable;
 import java.util.Optional;
-import org.apache.kafka.common.Uuid;
+import org.apache.kafka.raft.internals.VoterSet;
 
 public interface EpochState extends Closeable {
 
@@ -32,12 +32,11 @@ public interface EpochState extends Closeable {
      * It is the responsibility of the caller to invoke
      * {@link QuorumState#transitionToVoted(int, int)} if vote is granted.
      *
-     * @param candidateId the id of the candidate attempting to become leader
-     * @param candidateDirectoryId the directory id of the candidate attempting to become leader
+     * @param candidateKey the id and directory of the candidate
      * @param isLogUpToDate whether the candidate’s log is at least as up-to-date as receiver’s log
      * @return true if it can grant the vote, false otherwise
      */
-    boolean canGrantVote(int candidateId, Optional<Uuid> candidateDirectoryId, boolean isLogUpToDate);
+    boolean canGrantVote(VoterSet.VoterKey candidateKey, boolean isLogUpToDate);
 
     /**
      * Get the current election state, which is guaranteed to be immutable.

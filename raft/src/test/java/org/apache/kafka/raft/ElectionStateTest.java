@@ -23,53 +23,54 @@ import java.util.Optional;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.generated.QuorumStateData;
+import org.apache.kafka.raft.internals.VoterSet;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 final class ElectionStateTest {
     @Test
     void testVotedCandidateWithoutVotedId() {
         ElectionState electionState = ElectionState.withUnknownLeader(5, Collections.emptySet());
-        assertFalse(electionState.isVotedCandidate(1, Optional.empty()));
+        assertFalse(electionState.isVotedCandidate(VoterSet.VoterKey.of(1, Optional.empty())));
     }
 
     @Test
     void testVotedCandidateWithoutVotedDirectoryId() {
         ElectionState electionState = ElectionState.withVotedCandidate(
             5,
-            1,
-            Optional.empty(),
+            VoterSet.VoterKey.of(1, Optional.empty()),
             Collections.emptySet()
         );
-        assertTrue(electionState.isVotedCandidate(1, Optional.empty()));
-        assertTrue(electionState.isVotedCandidate(1, Optional.of(Uuid.randomUuid())));
+        assertTrue(electionState.isVotedCandidate(VoterSet.VoterKey.of(1, Optional.empty())));
+        assertTrue(
+            electionState.isVotedCandidate(VoterSet.VoterKey.of(1, Optional.of(Uuid.randomUuid())))
+        );
     }
 
     @Test
     void testVotedCandidateWithVotedDirectoryId() {
-        Uuid votedDirectoryId = Uuid.randomUuid();
+        VoterSet.VoterKey votedKey = VoterSet.VoterKey.of(1, Optional.of(Uuid.randomUuid()));
         ElectionState electionState = ElectionState.withVotedCandidate(
             5,
-            1,
-            Optional.of(votedDirectoryId),
+            votedKey,
             Collections.emptySet()
         );
-        assertFalse(electionState.isVotedCandidate(1, Optional.empty()));
-        assertTrue(electionState.isVotedCandidate(1, Optional.of(votedDirectoryId)));
+        assertFalse(electionState.isVotedCandidate(VoterSet.VoterKey.of(1, Optional.empty())));
+        assertTrue(electionState.isVotedCandidate(votedKey));
     }
 
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     void testQuorumStateDataRoundTrip(short version) {
-        Uuid votedDirectoryId = Uuid.randomUuid();
+        VoterSet.VoterKey votedKey = VoterSet.VoterKey.of(1, Optional.of(Uuid.randomUuid()));
         List<ElectionState> electionStates = Arrays.asList(
             ElectionState.withUnknownLeader(5, Utils.mkSet(1, 2, 3)),
             ElectionState.withElectedLeader(5, 1, Utils.mkSet(1, 2, 3)),
-            ElectionState.withVotedCandidate(5, 1, Optional.of(votedDirectoryId), Utils.mkSet(1, 2, 3))
+            ElectionState.withVotedCandidate(5, votedKey, Utils.mkSet(1, 2, 3))
         );
 
         final List<ElectionState> expected;
@@ -77,13 +78,17 @@ final class ElectionStateTest {
             expected = Arrays.asList(
                 ElectionState.withUnknownLeader(5, Utils.mkSet(1, 2, 3)),
                 ElectionState.withElectedLeader(5, 1, Utils.mkSet(1, 2, 3)),
-                ElectionState.withVotedCandidate(5, 1, Optional.empty(), Utils.mkSet(1, 2, 3))
+                ElectionState.withVotedCandidate(
+                    5,
+                    VoterSet.VoterKey.of(1, Optional.empty()),
+                    Utils.mkSet(1, 2, 3)
+                )
             );
         } else {
             expected = Arrays.asList(
                 ElectionState.withUnknownLeader(5, Collections.emptySet()),
                 ElectionState.withElectedLeader(5, 1, Collections.emptySet()),
-                ElectionState.withVotedCandidate(5, 1, Optional.of(votedDirectoryId), Collections.emptySet())
+                ElectionState.withVotedCandidate(5, votedKey, Collections.emptySet())
             );
         }
 

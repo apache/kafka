@@ -18,10 +18,10 @@ package org.apache.kafka.raft;
 
 import java.util.Optional;
 import java.util.Set;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.raft.internals.VoterSet;
 import org.slf4j.Logger;
 
 /**
@@ -33,8 +33,7 @@ import org.slf4j.Logger;
  */
 public class VotedState implements EpochState {
     private final int epoch;
-    private final int votedId;
-    private final Optional<Uuid> votedDirectoryId;
+    private final VoterSet.VoterKey votedKey;
     private final Set<Integer> voters;
     private final int electionTimeoutMs;
     private final Timer electionTimer;
@@ -44,16 +43,14 @@ public class VotedState implements EpochState {
     public VotedState(
         Time time,
         int epoch,
-        int votedId,
-        Optional<Uuid> votedDirectoryId,
+        VoterSet.VoterKey votedKey,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
         int electionTimeoutMs,
         LogContext logContext
     ) {
         this.epoch = epoch;
-        this.votedId = votedId;
-        this.votedDirectoryId = votedDirectoryId;
+        this.votedKey = votedKey;
         this.voters = voters;
         this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
@@ -63,15 +60,11 @@ public class VotedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withVotedCandidate(epoch, votedId, votedDirectoryId, voters);
+        return ElectionState.withVotedCandidate(epoch, votedKey, voters);
     }
 
-    public int votedId() {
-        return votedId;
-    }
-
-    public Optional<Uuid> votedDirectoryId() {
-        return votedDirectoryId;
+    public VoterSet.VoterKey votedKey() {
+        return votedKey;
     }
 
     @Override
@@ -95,24 +88,19 @@ public class VotedState implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(
-        int candidateId,
-        Optional<Uuid> candidateDirectoryId,
-        boolean isLogUpToDate
-    ) {
-        if (votedId() == candidateId) {
-            return !votedDirectoryId.isPresent() || votedDirectoryId.equals(candidateDirectoryId);
+    public boolean canGrantVote(VoterSet.VoterKey candidateKey, boolean isLogUpToDate) {
+        if (votedKey.id() == candidateKey.id()) {
+            return !votedKey.directoryId().isPresent() || votedKey.directoryId().equals(candidateKey.directoryId());
         }
 
         log.debug(
-            "Rejecting vote request from candidate ({}, {}), already have voted for another " +
-            "candidate ({}, {}) in epoch {}",
-            candidateId,
-            candidateDirectoryId,
-            votedId,
-            votedDirectoryId,
+            "Rejecting vote request from candidate ({}), already have voted for another " +
+            "candidate ({}) in epoch {}",
+            candidateKey,
+            votedKey,
             epoch
         );
+
         return false;
     }
 
@@ -124,10 +112,9 @@ public class VotedState implements EpochState {
     @Override
     public String toString() {
         return String.format(
-            "Voted(epoch=%d, votedId=%d, votedDirectoryId=%s, voters=%s, electionTimeoutMs=%d, highWatermark=%s)",
+            "Voted(epoch=%d, votedKey=%s, voters=%s, electionTimeoutMs=%d, highWatermark=%s)",
             epoch,
-            votedId,
-            votedDirectoryId,
+            votedKey,
             voters,
             electionTimeoutMs,
             highWatermark

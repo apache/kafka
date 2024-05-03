@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.raft.internals.VoterSet;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -45,8 +46,7 @@ class VotedStateTest {
         return new VotedState(
             time,
             epoch,
-            votedId,
-            votedDirectoryId,
+            VoterSet.VoterKey.of(votedId, votedDirectoryId),
             Collections.emptySet(),
             highWatermark,
             electionTimeoutMs,
@@ -57,11 +57,12 @@ class VotedStateTest {
     @Test
     public void testElectionTimeout() {
         VotedState state = newVotedState(Optional.empty(), Optional.empty());
+        VoterSet.VoterKey votedKey  = VoterSet.VoterKey.of(votedId, Optional.empty());
 
         assertEquals(epoch, state.epoch());
-        assertEquals(votedId, state.votedId());
+        assertEquals(votedKey, state.votedKey());
         assertEquals(
-            ElectionState.withVotedCandidate(epoch, votedId, Optional.empty(), Collections.emptySet()),
+            ElectionState.withVotedCandidate(epoch, votedKey, Collections.emptySet()),
             state.election()
         );
         assertEquals(electionTimeoutMs, state.remainingElectionTimeMs(time.milliseconds()));
@@ -81,10 +82,19 @@ class VotedStateTest {
     public void testCanGrantVoteWithoutDirectoryId(boolean isLogUpToDate) {
         VotedState state = newVotedState(Optional.empty(), Optional.empty());
 
-        assertTrue(state.canGrantVote(votedId, Optional.empty(), isLogUpToDate));
-        assertTrue(state.canGrantVote(votedId, Optional.of(Uuid.randomUuid()), isLogUpToDate));
+        assertTrue(
+            state.canGrantVote(VoterSet.VoterKey.of(votedId, Optional.empty()), isLogUpToDate)
+        );
+        assertTrue(
+            state.canGrantVote(
+                VoterSet.VoterKey.of(votedId, Optional.of(Uuid.randomUuid())),
+                isLogUpToDate
+            )
+        );
 
-        assertFalse(state.canGrantVote(votedId + 1, Optional.empty(), isLogUpToDate));
+        assertFalse(
+            state.canGrantVote(VoterSet.VoterKey.of(votedId + 1, Optional.empty()), isLogUpToDate)
+        );
     }
 
     @Test
@@ -92,12 +102,14 @@ class VotedStateTest {
         Optional<Uuid> votedDirectoryId = Optional.of(Uuid.randomUuid());
         VotedState state = newVotedState(votedDirectoryId, Optional.empty());
 
-        assertTrue(state.canGrantVote(votedId, votedDirectoryId, false));
+        assertTrue(state.canGrantVote(VoterSet.VoterKey.of(votedId, votedDirectoryId), false));
 
-        assertFalse(state.canGrantVote(votedId, Optional.of(Uuid.randomUuid()), false));
-        assertFalse(state.canGrantVote(votedId, Optional.empty(), false));
+        assertFalse(
+            state.canGrantVote(VoterSet.VoterKey.of(votedId, Optional.of(Uuid.randomUuid())), false)
+        );
+        assertFalse(state.canGrantVote(VoterSet.VoterKey.of(votedId, Optional.empty()), false));
 
-        assertFalse(state.canGrantVote(votedId + 1, votedDirectoryId, false));
-        assertFalse(state.canGrantVote(votedId + 1, Optional.empty(), false));
+        assertFalse(state.canGrantVote(VoterSet.VoterKey.of(votedId + 1, votedDirectoryId), false));
+        assertFalse(state.canGrantVote(VoterSet.VoterKey.of(votedId + 1, Optional.empty()), false));
     }
 }

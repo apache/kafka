@@ -544,8 +544,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         resetConnections();
     }
 
-    private void transitionToVoted(int candidateId, Optional<Uuid> candidateDirectoryId, int epoch) {
-        quorum.transitionToVoted(epoch, candidateId, candidateDirectoryId);
+    private void transitionToVoted(VoterSet.VoterKey candidateKey, int epoch) {
+        quorum.transitionToVoted(epoch, candidateKey);
         maybeFireLeaderChange();
         resetConnections();
     }
@@ -632,14 +632,14 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         OffsetAndEpoch lastEpochEndOffsetAndEpoch = new OffsetAndEpoch(lastEpochEndOffset, lastEpoch);
+        VoterSet.VoterKey candidateKey = VoterSet.VoterKey.of(candidateId, Optional.empty());
         boolean voteGranted = quorum.canGrantVote(
-            candidateId,
-            Optional.empty(),
+            candidateKey,
             lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0
         );
 
         if (voteGranted && quorum.isUnattached()) {
-            transitionToVoted(candidateId, Optional.empty(), candidateEpoch);
+            transitionToVoted(candidateKey, candidateEpoch);
         }
 
         logger.info("Vote request {} with epoch {} is {}", request, candidateEpoch, voteGranted ? "granted" : "rejected");

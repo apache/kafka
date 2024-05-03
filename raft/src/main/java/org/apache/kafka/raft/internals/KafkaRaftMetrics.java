@@ -27,7 +27,6 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
-import org.apache.kafka.raft.VotedState;
 
 import java.util.Arrays;
 import java.util.OptionalLong;
@@ -96,7 +95,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
                 return state.localIdOrThrow();
             } else {
                 return state.maybeVotedState()
-                    .map(VotedState::votedId)
+                    .map(votedState -> votedState.votedKey().id())
                     .orElse(-1);
             }
         });
@@ -111,7 +110,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
                 return state.localDirectoryId().toString();
             } else {
                 return state.maybeVotedState()
-                    .flatMap(VotedState::votedDirectoryId)
+                    .flatMap(votedState -> votedState.votedKey().directoryId())
                     .orElse(Uuid.ZERO_UUID)
                     .toString();
             }

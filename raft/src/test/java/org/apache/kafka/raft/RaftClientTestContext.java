@@ -55,6 +55,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
+import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -171,9 +172,9 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder withVotedCandidate(int epoch, int votedId, Optional<Uuid> votedDirectoryId) {
+        Builder withVotedCandidate(int epoch, VoterSet.VoterKey votedKey) {
             quorumStateStore.writeElectionState(
-                ElectionState.withVotedCandidate(epoch, votedId, votedDirectoryId, voters),
+                ElectionState.withVotedCandidate(epoch, votedKey, voters),
                 kraftVersion
             );
             return this;
@@ -453,7 +454,11 @@ public final class RaftClientTestContext {
 
     void assertVotedCandidate(int epoch, int candidateId) {
         assertEquals(
-            ElectionState.withVotedCandidate(epoch, candidateId, Optional.empty(), voters),
+            ElectionState.withVotedCandidate(
+                epoch,
+                VoterSet.VoterKey.of(candidateId, Optional.empty()),
+                voters
+            ),
             quorumStateStore.readElectionState().get()
         );
     }

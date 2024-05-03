@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.raft.generated.QuorumStateData;
+import org.apache.kafka.raft.internals.VoterSet;
 
 /**
  * Encapsulate election state stored on disk after every state change.
@@ -35,22 +36,19 @@ final public class ElectionState {
 
     private final int epoch;
     private final OptionalInt leaderId;
-    private final OptionalInt votedId;
-    private final Optional<Uuid> votedDirectoryId;
+    private final Optional<VoterSet.VoterKey> votedKey;
     // This is deprecated. It is only used when writing version 0 of the quorum state file
     private final Set<Integer> voters;
 
     ElectionState(
         int epoch,
         OptionalInt leaderId,
-        OptionalInt votedId,
-        Optional<Uuid> votedDirectoryId,
+        Optional<VoterSet.VoterKey> votedKey,
         Set<Integer> voters
     ) {
         this.epoch = epoch;
         this.leaderId = leaderId;
-        this.votedId = votedId;
-        this.votedDirectoryId = votedDirectoryId;
+        this.votedKey = votedKey;
         this.voters = voters;
     }
 
@@ -68,25 +66,26 @@ final public class ElectionState {
      * Return if the replica has voted for the given candidate.
      *
      * A replica has voted for a candidate if all of the following are true:
-     * 1. the nodeId and votedId match and
-     * 2. if the votedDirectoryId is set, it matches the nodeDirectoryId
+     * 1. the node's id and voted id match and
+     * 2. if the voted directory id is set, it matches the node's directory id
      *
-     * @param nodeId id of the replica
-     * @param nodeDirectoryId directory id of the replica if it exist
+     * @param nodeKey the id and directory id of the replica
      * @return true when the arguments match, otherwise false
      */
-    public boolean isVotedCandidate(int nodeId, Optional<Uuid> nodeDirectoryId) {
-        if (nodeId < 0) {
-            throw new IllegalArgumentException("Invalid negative nodeId: " + nodeId);
-        } else if (votedId.orElse(-1) != nodeId) {
+    public boolean isVotedCandidate(VoterSet.VoterKey nodeKey) {
+        if (nodeKey.id() < 0) {
+            throw new IllegalArgumentException("Invalid node key " + nodeKey);
+        } else if (!votedKey.isPresent()) {
             return false;
-        } else if (!votedDirectoryId.isPresent()) {
+        } else if (votedKey.get().id() != nodeKey.id()) {
+            return false;
+        } else if (!votedKey.get().directoryId().isPresent()) {
             // when the persisted voted uuid is not present assume that we voted for this candidate;
             // this happends when the kraft version is 0.
             return true;
         }
 
-        return votedDirectoryId.equals(nodeDirectoryId);
+        return votedKey.get().directoryId().equals(nodeKey.directoryId());
     }
 
     public int leaderId() {
@@ -96,25 +95,23 @@ final public class ElectionState {
     }
 
     public int leaderIdOrSentinel() {
-        return leaderId.orElse(-1);
+        return leaderId.orElse(unknownLeaderId);
     }
 
     public OptionalInt optionalLeaderId() {
         return leaderId;
     }
 
-    public int votedId() {
-        if (!votedId.isPresent())
+    public VoterSet.VoterKey votedKey() {
+        if (!votedKey.isPresent()) {
             throw new IllegalStateException("Attempt to access nil votedId");
-        return votedId.getAsInt();
+        }
+
+        return votedKey.get();
     }
 
-    public OptionalInt optionalVotedId() {
-        return votedId;
-    }
-
-    public Optional<Uuid> votedDirectoryId() {
-        return votedDirectoryId;
+    public Optional<VoterSet.VoterKey> optionalVotedKey() {
+        return votedKey;
     }
 
     public boolean hasLeader() {
@@ -122,14 +119,14 @@ final public class ElectionState {
     }
 
     public boolean hasVoted() {
-        return votedId.isPresent();
+        return votedKey.isPresent();
     }
 
     public QuorumStateData toQourumStateData(short version) {
         QuorumStateData data = new QuorumStateData()
             .setLeaderEpoch(epoch)
-            .setLeaderId(hasLeader() ? leaderId() : unknownLeaderId)
-            .setVotedId(hasVoted() ? votedId() : notVoted);
+            .setLeaderId(leaderIdOrSentinel())
+            .setVotedId(votedKey.map(VoterSet.VoterKey::id).orElse(notVoted));
 
         if (version == 0) {
             List<QuorumStateData.Voter> dataVoters = voters
@@ -138,7 +135,7 @@ final public class ElectionState {
                 .collect(Collectors.toList());
             data.setCurrentVoters(dataVoters);
         } else if (version == 1) {
-            data.setVotedDirectoryId(votedDirectoryId().isPresent() ? votedDirectoryId().get() : noVotedDirectoryId);
+            data.setVotedDirectoryId(votedKey.flatMap(VoterSet.VoterKey::directoryId).orElse(noVotedDirectoryId));
         } else {
             throw new IllegalStateException(
                 String.format(
@@ -153,11 +150,10 @@ final public class ElectionState {
     @Override
     public String toString() {
         return String.format(
-            "Election(epoch=%d, leaderId=%s, votedId=%s, votedDirectoryId=%s, voters=%s)",
+            "Election(epoch=%d, leaderId=%s, votedKey=%s, voters=%s)",
             epoch,
             leaderId,
-            votedId,
-            votedDirectoryId,
+            votedKey,
             voters
         );
     }
@@ -171,23 +167,22 @@ final public class ElectionState {
 
         if (epoch != that.epoch) return false;
         if (!leaderId.equals(that.leaderId)) return false;
-        if (!votedId.equals(that.votedId)) return false;
-        if (!votedDirectoryId.equals(that.votedDirectoryId)) return false;
+        if (!votedKey.equals(that.votedKey)) return false;
 
         return voters.equals(that.voters);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(epoch, leaderId, votedId, votedDirectoryId, voters);
+        return Objects.hash(epoch, leaderId, votedKey, voters);
     }
 
-    public static ElectionState withVotedCandidate(int epoch, int votedId, Optional<Uuid> votedDirectoryId, Set<Integer> voters) {
-        if (votedId < 0) {
-            throw new IllegalArgumentException("Illegal voted Id " + votedId + ": must be non-negative");
+    public static ElectionState withVotedCandidate(int epoch, VoterSet.VoterKey votedKey, Set<Integer> voters) {
+        if (votedKey.id() < 0) {
+            throw new IllegalArgumentException("Illegal voted Id " + votedKey.id() + ": must be non-negative");
         }
 
-        return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.of(votedId), votedDirectoryId, voters);
+        return new ElectionState(epoch, OptionalInt.empty(), Optional.of(votedKey), voters);
     }
 
     public static ElectionState withElectedLeader(int epoch, int leaderId, Set<Integer> voters) {
@@ -195,19 +190,26 @@ final public class ElectionState {
             throw new IllegalArgumentException("Illegal leader Id " + leaderId + ": must be non-negative");
         }
 
-        return new ElectionState(epoch, OptionalInt.of(leaderId), OptionalInt.empty(), Optional.empty(), voters);
+        return new ElectionState(epoch, OptionalInt.of(leaderId), Optional.empty(), voters);
     }
 
     public static ElectionState withUnknownLeader(int epoch, Set<Integer> voters) {
-        return new ElectionState(epoch, OptionalInt.empty(), OptionalInt.empty(), Optional.empty(), voters);
+        return new ElectionState(epoch, OptionalInt.empty(), Optional.empty(), voters);
     }
 
     public static ElectionState fromQuorumStateData(QuorumStateData data) {
+        Optional<Uuid> votedDirectoryId = data.votedDirectoryId().equals(noVotedDirectoryId) ?
+            Optional.empty() :
+            Optional.of(data.votedDirectoryId());
+
+        Optional<VoterSet.VoterKey> voterKey = data.votedId() == notVoted ?
+            Optional.empty() :
+            Optional.of(VoterSet.VoterKey.of(data.votedId(), votedDirectoryId));
+
         return new ElectionState(
             data.leaderEpoch(),
             data.leaderId() == unknownLeaderId ? OptionalInt.empty() : OptionalInt.of(data.leaderId()),
-            data.votedId() == notVoted ? OptionalInt.empty() : OptionalInt.of(data.votedId()),
-            data.votedDirectoryId().equals(noVotedDirectoryId) ? Optional.empty() : Optional.of(data.votedDirectoryId()),
+            voterKey,
             data.currentVoters().stream().map(QuorumStateData.Voter::voterId).collect(Collectors.toSet())
         );
     }

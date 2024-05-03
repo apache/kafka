@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.internals.VoterSet;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -178,10 +179,10 @@ public class CandidateStateTest {
     public void testGrantVote(boolean isLogUpToDate) {
         CandidateState state = newCandidateState(Utils.mkSet(localId, 1, 2, 3));
 
-        assertFalse(state.canGrantVote(0, Optional.empty(), isLogUpToDate));
-        assertFalse(state.canGrantVote(1, Optional.empty(), isLogUpToDate));
-        assertFalse(state.canGrantVote(2, Optional.empty(), isLogUpToDate));
-        assertFalse(state.canGrantVote(3, Optional.empty(), isLogUpToDate));
+        assertFalse(state.canGrantVote(VoterSet.VoterKey.of(0, Optional.empty()), isLogUpToDate));
+        assertFalse(state.canGrantVote(VoterSet.VoterKey.of(1, Optional.empty()), isLogUpToDate));
+        assertFalse(state.canGrantVote(VoterSet.VoterKey.of(2, Optional.empty()), isLogUpToDate));
+        assertFalse(state.canGrantVote(VoterSet.VoterKey.of(3, Optional.empty()), isLogUpToDate));
     }
 
     @Test
@@ -189,7 +190,11 @@ public class CandidateStateTest {
         Set<Integer> voters = Utils.mkSet(localId, 1, 2, 3);
         CandidateState state = newCandidateState(voters);
         assertEquals(
-            ElectionState.withVotedCandidate(epoch, localId, Optional.of(localDirectoryId), voters),
+            ElectionState.withVotedCandidate(
+                epoch,
+                VoterSet.VoterKey.of(localId, Optional.of(localDirectoryId)),
+                voters
+            ),
             state.election()
         );
     }

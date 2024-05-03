@@ -175,7 +175,7 @@ public class QuorumState {
             );
         } else if (
             localId.isPresent() &&
-            election.isVotedCandidate(localId.getAsInt(), Optional.of(localDirectoryId))
+            election.isVotedCandidate(VoterSet.VoterKey.of(localId.getAsInt(), Optional.of(localDirectoryId)))
         ) {
             initialState = new CandidateState(
                 time,
@@ -192,8 +192,7 @@ public class QuorumState {
             initialState = new VotedState(
                 time,
                 election.epoch(),
-                election.votedId(),
-                election.votedDirectoryId(),
+                election.votedKey(),
                 latestVoterSet.get().voterIds(),
                 Optional.empty(),
                 randomElectionTimeoutMs(),
@@ -352,21 +351,39 @@ public class QuorumState {
      */
     public void transitionToVoted(
         int epoch,
-        int candidateId,
-        Optional<Uuid> candidateDirectoryId
+        VoterSet.VoterKey candidateKey
     ) {
         int currentEpoch = state.epoch();
-        if (localId.isPresent() && candidateId == localId.getAsInt()) {
-            throw new IllegalStateException("Cannot transition to Voted with votedId=" + candidateId +
-                " and epoch=" + epoch + " since it matches the local broker.id");
+        if (localId.isPresent() && candidateKey.id() == localId.getAsInt()) {
+            throw new IllegalStateException(
+                String.format(
+                    "Cannot transition to Voted for %s and epoch %d since it matches the local " +
+                    "broker.id",
+                    candidateKey,
+                    epoch
+                )
+            );
         } else if (!localId.isPresent()) {
             throw new IllegalStateException("Cannot transition to voted without a replica id");
         } else if (epoch < currentEpoch) {
-            throw new IllegalStateException("Cannot transition to Voted with votedId=" + candidateId +
-                " and epoch=" + epoch + " since the current epoch " + currentEpoch + " is larger");
+            throw new IllegalStateException(
+                String.format(
+                    "Cannot transition to Voted for %s and epoch %d since the current epoch " +
+                    "({}) is larger",
+                    candidateKey,
+                    epoch,
+                    currentEpoch
+                )
+            );
         } else if (epoch == currentEpoch && !isUnattached()) {
-            throw new IllegalStateException("Cannot transition to Voted with votedId=" + candidateId +
-                " and epoch=" + epoch + " from the current state " + state);
+            throw new IllegalStateException(
+                String.format(
+                    "Cannot transition to Voted for %s and epoch %d from the current state (%s)",
+                    candidateKey,
+                    epoch,
+                    state
+                )
+            );
         }
 
         // Note that we reset the election timeout after voting for a candidate because we
@@ -375,8 +392,7 @@ public class QuorumState {
             new VotedState(
                 time,
                 epoch,
-                candidateId,
-                candidateDirectoryId,
+                candidateKey,
                 latestVoterSet.get().voterIds(),
                 state.highWatermark(),
                 randomElectionTimeoutMs(),
@@ -522,12 +538,8 @@ public class QuorumState {
         return electionTimeoutMs + random.nextInt(electionTimeoutMs);
     }
 
-    public boolean canGrantVote(
-        int candidateId,
-        Optional<Uuid> candidateDirectoryId,
-        boolean isLogUpToDate
-    ) {
-        return state.canGrantVote(candidateId, candidateDirectoryId, isLogUpToDate);
+    public boolean canGrantVote(VoterSet.VoterKey candidateKey, boolean isLogUpToDate) {
+        return state.canGrantVote(candidateKey, isLogUpToDate);
     }
 
     public FollowerState followerStateOrThrow() {

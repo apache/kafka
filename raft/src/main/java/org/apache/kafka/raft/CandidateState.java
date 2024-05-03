@@ -25,6 +25,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.raft.internals.VoterSet;
 import org.slf4j.Logger;
 
 public class CandidateState implements EpochState {
@@ -243,8 +244,7 @@ public class CandidateState implements EpochState {
     public ElectionState election() {
         return ElectionState.withVotedCandidate(
             epoch,
-            localId,
-            Optional.of(localDirectoryId),
+            VoterSet.VoterKey.of(localId, Optional.of(localDirectoryId)),
             voteStates.keySet()
         );
     }
@@ -261,16 +261,14 @@ public class CandidateState implements EpochState {
 
     @Override
     public boolean canGrantVote(
-        int candidateId,
-        Optional<Uuid> candidateDirectoryId,
+        VoterSet.VoterKey candidateKey,
         boolean isLogUpToDate
     ) {
         // Still reject vote request even candidateId = localId, Although the candidate votes for
         // itself, this vote is implicit and not "granted".
         log.debug(
-            "Rejecting vote request from candidate ({}, {}) since we are already candidate in epoch {}",
-            candidateId,
-            candidateDirectoryId,
+            "Rejecting vote request from candidate ({}) since we are already candidate in epoch {}",
+            candidateKey,
             epoch
         );
         return false;
