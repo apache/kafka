@@ -914,15 +914,12 @@ public class TaskManager {
     public void handleExceptionsFromStateUpdater() {
         final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
 
-        for (final StateUpdater.ExceptionAndTasks exceptionAndTasks : stateUpdater.drainExceptionsAndFailedTasks()) {
-            final RuntimeException exception = exceptionAndTasks.exception();
-            final Set<Task> failedTasks = exceptionAndTasks.getTasks();
-
-            for (final Task failedTask : failedTasks) {
-                // need to add task back to the bookkeeping to be handled by the stream thread
-                tasks.addTask(failedTask);
-                taskExceptions.put(failedTask.id(), exception);
-            }
+        for (final StateUpdater.ExceptionAndTask exceptionAndTask : stateUpdater.drainExceptionsAndFailedTasks()) {
+            final RuntimeException exception = exceptionAndTask.exception();
+            final Task failedTask = exceptionAndTask.task();
+            // need to add task back to the bookkeeping to be handled by the stream thread
+            tasks.addTask(failedTask);
+            taskExceptions.put(failedTask.id(), exception);
         }
 
         maybeThrowTaskExceptions(taskExceptions);
@@ -1440,7 +1437,7 @@ public class TaskManager {
 
     private void closeFailedTasksFromStateUpdater() {
         final Set<Task> tasksToCloseDirty = stateUpdater.drainExceptionsAndFailedTasks().stream()
-            .flatMap(exAndTasks -> exAndTasks.getTasks().stream()).collect(Collectors.toSet());
+            .map(StateUpdater.ExceptionAndTask::task).collect(Collectors.toSet());
 
         for (final Task task : tasksToCloseDirty) {
             try {
