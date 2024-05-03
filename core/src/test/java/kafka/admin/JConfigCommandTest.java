@@ -16,7 +16,6 @@
  */
 package kafka.admin;
 
-import kafka.admin.ConfigCommand.ConfigCommandOptions;
 import kafka.utils.TestUtils;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.config.ConfigType;
@@ -209,60 +208,60 @@ public class JConfigCommandTest {
         String connectOpts2 = bootstrapArguments.get(1);
 
         // Should parse correctly
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             "--entity-name", "1",
             "--entity-type", entityType,
             "--describe"));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--describe"));
         createOpts.checkArgs();
 
         // For --alter and added config
-        createOpts = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             "--entity-name", "1",
             "--entity-type", entityType,
             "--alter",
             "--add-config", "a=b,c=d"));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             "--entity-name", "1",
             "--entity-type", entityType,
             "--alter",
             "--add-config-file", "/tmp/new.properties"));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--add-config", "a=b,c=d"));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--add-config-file", "/tmp/new.properties"));
         createOpts.checkArgs();
 
         // For alter and deleted config
-        createOpts = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             "--entity-name", "1",
             "--entity-type", entityType,
             "--alter",
             "--delete-config", "a,b,c"));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--delete-config", "a,b,c"));
         createOpts.checkArgs();
 
         // For alter and both added, deleted config
-        createOpts = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             "--entity-name", "1",
             "--entity-type", entityType,
             "--alter",
@@ -270,7 +269,7 @@ public class JConfigCommandTest {
             "--delete-config", "a"));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--add-config", "a=b,c=d",
@@ -286,14 +285,14 @@ public class JConfigCommandTest {
         assertEquals(1, deletedProps.size());
         assertEquals("a", deletedProps.apply(0));
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             "--entity-name", "1",
             "--entity-type", entityType,
             "--alter",
             "--add-config", "a=b,c=,d=e,f="));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--add-config", "a._-c=b,c=,d=e,f="));
@@ -306,7 +305,7 @@ public class JConfigCommandTest {
         assertTrue(addedProps2.getProperty("c").isEmpty());
         assertTrue(addedProps2.getProperty("f").isEmpty());
 
-        ConfigCommandOptions inValidCreateOpts = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        ConfigCommand.ConfigCommandOptions inValidCreateOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--add-config", "a;c=b"));
@@ -314,7 +313,7 @@ public class JConfigCommandTest {
         assertThrows(IllegalArgumentException.class,
             () -> ConfigCommand.parseConfigsToBeAdded(inValidCreateOpts));
 
-        ConfigCommandOptions inValidCreateOpts2 = new ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
+        ConfigCommand.ConfigCommandOptions inValidCreateOpts2 = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--add-config", "a,=b"));
@@ -326,7 +325,7 @@ public class JConfigCommandTest {
     @Test
     public void shouldFailIfAddAndAddFile() {
         // Should not parse correctly
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-name", "1",
             "--entity-type", "brokers",
             "--alter",
@@ -348,7 +347,7 @@ public class JConfigCommandTest {
 
         List<String> addConfigFileArgs = Arrays.asList("--add-config-file", file.getPath());
 
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
                 "--entity-name", "1",
                 "--entity-type", "brokers",
                 "--alter"),
@@ -365,7 +364,7 @@ public class JConfigCommandTest {
 
     @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
     public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String...args) {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray(Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--describe"), Arrays.asList(args)));
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--describe"), Arrays.asList(args)));
         createOpts.checkArgs();
         assertEquals(createOpts.entityTypes().toSeq(), ConfigCommandIntegrationTest.seq(expectedTypes));
         assertEquals(createOpts.entityNames().toSeq(), ConfigCommandIntegrationTest.seq(expectedNames));

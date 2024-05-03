@@ -121,14 +121,11 @@
     <allow pkg="kafka.cluster"/>
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.zk"/>
-    <allow pkg="org.apache.kafka.clients.admin"/>
     <allow pkg="org.apache.kafka.security"/>
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="kafka.test"/>
     <allow pkg="kafka.test.annotation"/>
     <allow pkg="kafka.test.junit"/>
-    <allow class="kafka.admin.ConfigCommand.ConfigCommandOptions"/>
-    <allow class="kafka.admin.ConfigCommand.ConfigEntity"/>
   </subpackage>
 </import-control>
