@@ -172,7 +172,7 @@ public class QuorumState {
                 localId.getAsInt(),
                 localDirectoryId,
                 election.epoch(),
-                latestVoterSet.get().voterIds(),
+                latestVoterSet.get(),
                 Optional.empty(),
                 1,
                 randomElectionTimeoutMs(),
@@ -214,7 +214,9 @@ public class QuorumState {
 
     public boolean isOnlyVoter() {
         return localId.isPresent() &&
-            latestVoterSet.get().isOnlyVoter(localId.getAsInt(), Optional.of(localDirectoryId));
+            latestVoterSet.get().isOnlyVoter(
+                VoterSet.VoterKey.of(localId.getAsInt(), Optional.of(localDirectoryId))
+            );
     }
 
     public int localIdOrSentinel() {
@@ -267,11 +269,13 @@ public class QuorumState {
             return false;
         }
 
-        return latestVoterSet.get().isVoter(localId.getAsInt(), Optional.of(localDirectoryId));
+        return latestVoterSet
+            .get()
+            .isVoter(VoterSet.VoterKey.of(localId.getAsInt(), Optional.of(localDirectoryId)));
     }
 
-    public boolean isVoter(int nodeId, Optional<Uuid> nodeDirectoryId) {
-        return latestVoterSet.get().isVoter(nodeId, nodeDirectoryId);
+    public boolean isVoter(VoterSet.VoterKey nodeKey) {
+        return latestVoterSet.get().isVoter(nodeKey);
     }
 
     public boolean isObserver() {
@@ -449,7 +453,7 @@ public class QuorumState {
             localIdOrThrow(),
             localDirectoryId,
             newEpoch,
-            latestVoterSet.get().voterIds(),
+            latestVoterSet.get(),
             state.highWatermark(),
             retries,
             electionTimeoutMs,

@@ -55,16 +55,16 @@ public class CandidateState implements EpochState {
         int localId,
         Uuid localDirectoryId,
         int epoch,
-        Set<Integer> voters,
+        VoterSet voters,
         Optional<LogOffsetMetadata> highWatermark,
         int retries,
         int electionTimeoutMs,
         LogContext logContext
     ) {
-        if (!voters.contains(localId)) {
+        if (!voters.isVoter(VoterSet.VoterKey.of(localId, Optional.of(localDirectoryId)))) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Local replica ({}, {}) must be in the set of voters {}",
+                    "Local replica (%d, %s) must be in the set of voters %s",
                     localId,
                     localDirectoryId,
                     voters
@@ -83,7 +83,7 @@ public class CandidateState implements EpochState {
         this.backoffTimer = time.timer(0);
         this.log = logContext.logger(CandidateState.class);
 
-        for (Integer voterId : voters) {
+        for (Integer voterId : voters.voterIds()) {
             voteStates.put(voterId, State.UNRECORDED);
         }
         voteStates.put(localId, State.GRANTED);

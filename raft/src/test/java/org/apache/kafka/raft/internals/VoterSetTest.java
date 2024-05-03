@@ -86,12 +86,16 @@ final public class VoterSetTest {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2, 3), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
-        assertTrue(voterSet.isVoter(1, aVoterMap.get(1).voterKey().directoryId()));
-        assertFalse(voterSet.isVoter(1, Optional.of(Uuid.randomUuid())));
-        assertFalse(voterSet.isVoter(1, Optional.empty()));
-        assertFalse(voterSet.isVoter(2, aVoterMap.get(1).voterKey().directoryId()));
-        assertFalse(voterSet.isVoter(4, aVoterMap.get(1).voterKey().directoryId()));
-        assertFalse(voterSet.isVoter(4, Optional.empty()));
+        assertTrue(voterSet.isVoter(aVoterMap.get(1).voterKey()));
+        assertFalse(voterSet.isVoter(VoterSet.VoterKey.of(1, Optional.of(Uuid.randomUuid()))));
+        assertFalse(voterSet.isVoter(VoterSet.VoterKey.of(1, Optional.empty())));
+        assertFalse(
+            voterSet.isVoter(VoterSet.VoterKey.of(2, aVoterMap.get(1).voterKey().directoryId()))
+        );
+        assertFalse(
+            voterSet.isVoter(VoterSet.VoterKey.of(4, aVoterMap.get(1).voterKey().directoryId()))
+        );
+        assertFalse(voterSet.isVoter(VoterSet.VoterKey.of(4, Optional.empty())));
     }
 
     @Test
@@ -99,10 +103,10 @@ final public class VoterSetTest {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2, 3), false);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
-        assertTrue(voterSet.isVoter(1, Optional.empty()));
-        assertTrue(voterSet.isVoter(1, Optional.of(Uuid.randomUuid())));
-        assertFalse(voterSet.isVoter(4, Optional.of(Uuid.randomUuid())));
-        assertFalse(voterSet.isVoter(4, Optional.empty()));
+        assertTrue(voterSet.isVoter(VoterSet.VoterKey.of(1, Optional.empty())));
+        assertTrue(voterSet.isVoter(VoterSet.VoterKey.of(1, Optional.of(Uuid.randomUuid()))));
+        assertFalse(voterSet.isVoter(VoterSet.VoterKey.of(4, Optional.of(Uuid.randomUuid()))));
+        assertFalse(voterSet.isVoter(VoterSet.VoterKey.of(4, Optional.empty())));
     }
 
     @Test
@@ -110,11 +114,13 @@ final public class VoterSetTest {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
-        assertTrue(voterSet.isOnlyVoter(1, aVoterMap.get(1).voterKey().directoryId()));
-        assertFalse(voterSet.isOnlyVoter(1, Optional.of(Uuid.randomUuid())));
-        assertFalse(voterSet.isOnlyVoter(1, Optional.empty()));
-        assertFalse(voterSet.isOnlyVoter(4, aVoterMap.get(1).voterKey().directoryId()));
-        assertFalse(voterSet.isOnlyVoter(4, Optional.empty()));
+        assertTrue(voterSet.isOnlyVoter(aVoterMap.get(1).voterKey()));
+        assertFalse(voterSet.isOnlyVoter(VoterSet.VoterKey.of(1, Optional.of(Uuid.randomUuid()))));
+        assertFalse(voterSet.isOnlyVoter(VoterSet.VoterKey.of(1, Optional.empty())));
+        assertFalse(
+            voterSet.isOnlyVoter(VoterSet.VoterKey.of(4, aVoterMap.get(1).voterKey().directoryId()))
+        );
+        assertFalse(voterSet.isOnlyVoter(VoterSet.VoterKey.of(4, Optional.empty())));
     }
 
     @Test
@@ -122,12 +128,16 @@ final public class VoterSetTest {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
-        assertFalse(voterSet.isOnlyVoter(1, aVoterMap.get(1).voterKey().directoryId()));
-        assertFalse(voterSet.isOnlyVoter(1, Optional.of(Uuid.randomUuid())));
-        assertFalse(voterSet.isOnlyVoter(1, Optional.empty()));
-        assertFalse(voterSet.isOnlyVoter(2, aVoterMap.get(1).voterKey().directoryId()));
-        assertFalse(voterSet.isOnlyVoter(4, aVoterMap.get(1).voterKey().directoryId()));
-        assertFalse(voterSet.isOnlyVoter(4, Optional.empty()));
+        assertFalse(voterSet.isOnlyVoter(aVoterMap.get(1).voterKey()));
+        assertFalse(voterSet.isOnlyVoter(VoterSet.VoterKey.of(1, Optional.of(Uuid.randomUuid()))));
+        assertFalse(voterSet.isOnlyVoter(VoterSet.VoterKey.of(1, Optional.empty())));
+        assertFalse(
+            voterSet.isOnlyVoter(VoterSet.VoterKey.of(2, aVoterMap.get(1).voterKey().directoryId()))
+        );
+        assertFalse(
+            voterSet.isOnlyVoter(VoterSet.VoterKey.of(4, aVoterMap.get(1).voterKey().directoryId()))
+        );
+        assertFalse(voterSet.isOnlyVoter(VoterSet.VoterKey.of(4, Optional.empty())));
     }
 
     @Test
@@ -221,7 +231,7 @@ final public class VoterSetTest {
             );
     }
 
-    static VoterSet.VoterNode voterNode(int id, boolean withDirectoryId) {
+    public static VoterSet.VoterNode voterNode(int id, boolean withDirectoryId) {
         return new VoterSet.VoterNode(
             VoterSet.VoterKey.of(
                 id,
