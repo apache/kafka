@@ -27,7 +27,7 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetad
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.api.{AfterEach, Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 
@@ -38,6 +38,13 @@ import scala.collection.mutable.ArrayBuffer
 
 @Timeout(120)
 class FetchSessionTest {
+
+  @AfterEach
+  def afterEach(): Unit = {
+    FetchSessionCache.metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS)
+    FetchSessionCache.metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED)
+    FetchSessionCache.metricsGroup.removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC)
+  }
 
   @Test
   def testNewSessionId(): Unit = {
@@ -1937,8 +1944,9 @@ class FetchSessionTest {
   def testFetchManager_getShardedCache_retrievesCacheFromCorrectSegment(): Unit = {
     // Given
     val time = new MockTime()
-    val sessionIdRange = Int.MaxValue / 8
-    val caches = Range(0, 8).map(shardNum => new FetchSessionCache(10, 1000, sessionIdRange, shardNum))
+    val numShards = 8
+    val sessionIdRange = Int.MaxValue / numShards
+    val caches = (0 until numShards).map(shardNum => new FetchSessionCache(10, 1000, sessionIdRange, shardNum))
     val fetchManager = new FetchManager(time, caches)
 
     // When
@@ -1947,10 +1955,10 @@ class FetchSessionTest {
     val cache2 = fetchManager.getShardedCache(sessionIdRange * 2)
 
     // Then
-    assertEquals(cache0, caches.apply(0))
-    assertEquals(cache1, caches.apply(1))
-    assertEquals(cache2, caches.apply(2))
-    assertThrows(classOf[IndexOutOfBoundsException], () => fetchManager.getShardedCache(sessionIdRange * 8))
+    assertEquals(cache0, caches(0))
+    assertEquals(cache1, caches(1))
+    assertEquals(cache2, caches(2))
+    assertThrows(classOf[IndexOutOfBoundsException], () => fetchManager.getShardedCache(sessionIdRange * numShards))
   }
 }
 

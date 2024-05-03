@@ -543,10 +543,10 @@ class KafkaServer(
 
         // The FetchSessionCache is divided into config.numIoThreads shards, each responsible
         // for sessionIds falling in [Max(1, shardNum * sessionIdRange), (shardNum + 1) * sessionIdRange)
-        val sessionIdRange = Int.MaxValue / config.numIoThreads
-        val fetchSessionCaches = Range(0, config.numIoThreads)
+        val sessionIdRange = Int.MaxValue / NumFetchSessionCacheShards
+        val fetchSessionCaches = (0 until NumFetchSessionCacheShards)
           .map(shardNum => new FetchSessionCache(
-            config.maxIncrementalFetchSessionCacheSlots / config.numIoThreads,
+            config.maxIncrementalFetchSessionCacheSlots / NumFetchSessionCacheShards,
             KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS,
             sessionIdRange,
             shardNum

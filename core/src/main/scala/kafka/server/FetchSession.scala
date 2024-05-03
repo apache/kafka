@@ -18,6 +18,7 @@
 package kafka.server
 
 import com.typesafe.scalalogging.Logger
+import kafka.server.FetchSessionCache.metricsGroup
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
@@ -26,13 +27,11 @@ import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOC
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+
 import java.util
 import java.util.Optional
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
-
-
 import scala.collection.mutable
-import scala.jdk.CollectionConverters._
 import scala.math.Ordered.orderingToOrdered
 
 object FetchSession {
@@ -442,7 +441,7 @@ class FullFetchContext(private val time: Time,
     }
     // We select a shard randomly out of the available options
     val shard = ThreadLocalRandom.current().nextInt(caches.size)
-    val cache = caches.apply(shard);
+    val cache = caches(shard);
     val responseSessionId = cache.maybeCreateSession(time.milliseconds(), isFromFollower,
         updates.size, usesTopicIds, () => createNewSession)
     debug(s"Full fetch context with session id $responseSessionId returning " +
@@ -584,6 +583,10 @@ case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Compara
     (privileged, size, id) compare (other.privileged, other.size, other.id)
 }
 
+object FetchSessionCache {
+  private[server] val metricsGroup = new KafkaMetricsGroup(classOf[FetchSessionCache])
+}
+
 /**
   * Caches fetch sessions.
   *
@@ -603,7 +606,6 @@ class FetchSessionCache(private val maxEntries: Int,
                         private val evictionMs: Long,
                         val sessionIdRange: Int = Int.MaxValue,
                         private val shardNum: Int = 0) extends Logging {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   private var numPartitions: Long = 0
 
@@ -620,16 +622,10 @@ class FetchSessionCache(private val maxEntries: Int,
   // A map containing sessions which can be evicted by privileged sessions.
   private val evictableByPrivileged = new util.TreeMap[EvictableKey, FetchSession]
 
-  private val metricTag = Map("shard" -> s"$shardNum").asJava
-
-  // Set up metrics.
-  metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS, metricTag)
-  metricsGroup.newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS, () => FetchSessionCache.this.size, metricTag)
-  metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED, metricTag)
-  metricsGroup.newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED, () => FetchSessionCache.this.totalPartitions, metricTag)
-  metricsGroup.removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC, metricTag)
+  // This metric is shared across all shards because newMeter returns an existing metric
+  // if one exists with the same name. It's safe for concurrent use because Meter is thread-safe.
   private[server] val evictionsMeter = metricsGroup.newMeter(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC,
-    FetchSession.EVICTIONS, TimeUnit.SECONDS, metricTag)
+    FetchSession.EVICTIONS, TimeUnit.SECONDS)
 
   /**
     * Get a session by session ID.
@@ -812,9 +808,13 @@ class FetchManager(private val time: Time,
 
   def this(time: Time, cache: FetchSessionCache) = this(time, Seq(cache))
 
+  // Set up metrics.
+  FetchSessionCache.metricsGroup.newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS, () => caches.map(_.size).sum)
+  FetchSessionCache.metricsGroup.newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED, () => caches.map(_.totalPartitions).sum)
+
   def getShardedCache(sessionId: Int): FetchSessionCache = {
     val shard = sessionId / caches.head.sessionIdRange
-    caches.apply(shard)
+    caches(shard)
   }
 
   def newContext(reqVersion: Short,
