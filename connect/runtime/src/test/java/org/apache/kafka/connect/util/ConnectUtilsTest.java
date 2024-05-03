@@ -179,10 +179,12 @@ public class ConnectUtilsTest {
         HashMap<String, String> patch = new HashMap<>();
         patch.put("to-be-changed-key", "to-be-changed-value-new");
         patch.put("to-be-deleted-key", null);
+        patch.put("to-be-added-key", "to-be-added-value");
 
         HashMap<String, String> expectedResult = new HashMap<>();
         expectedResult.put("unaffected-key", "unaffected-value");
         expectedResult.put("to-be-changed-key", "to-be-changed-value-new");
+        expectedResult.put("to-be-added-key", "to-be-added-value");
 
         Map<String, String> result = ConnectUtils.patchConfig(config, patch);
         assertEquals(expectedResult, result);
