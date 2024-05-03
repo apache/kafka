@@ -110,7 +110,7 @@ public class RepartitionTopics {
             .collect(Collectors.toSet());
     }
 
-    public Set<String> missingSourceTopics(){
+    public Set<String> missingSourceTopics() {
         return missingInputTopicsBySubtopology.entrySet().stream()
                 .map(entry -> entry.getValue())
                 .flatMap(missingTopicSet -> missingTopicSet.stream())
