@@ -1620,18 +1620,11 @@ public class GroupMetadataManager {
         CompletableFuture<Void> appendFuture = new CompletableFuture<>();
         appendFuture.whenComplete((__, t) -> {
             if (t == null) {
-                responseFuture.complete(response);
-
                 scheduleConsumerGroupSessionTimeout(groupId, response.memberId(), request.sessionTimeoutMs());
                 // The sync timeout ensures that the member send sync request within the rebalance timeout.
                 scheduleConsumerGroupSyncTimeout(groupId, response.memberId(), request.rebalanceTimeoutMs());
-            } else {
-                // We failed to write the empty group metadata. This will revert the snapshot, removing
-                // the newly created group.
-                log.warn("Failed to write metadata for group {}: {}", group.groupId(), t.getMessage());
 
-                responseFuture.complete(new JoinGroupResponseData()
-                    .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
+                responseFuture.complete(response);
             }
         });
 
