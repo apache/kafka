@@ -80,19 +80,27 @@ public class RangeAssignor implements PartitionAssignor {
     /**
      * Returns a map of topic Ids to a list of members subscribed to them,
      * based on the given assignment specification and metadata.
+     * Initializes the new target assignment map.
      *
-     * @param assignmentSpec           The specification for member assignments.
-     * @param subscribedTopicDescriber The metadata describer for subscribed topics and clusters.
+     * @param assignmentSpec                The specification for member assignments.
+     * @param subscribedTopicDescriber      The metadata describer for subscribed topics and clusters.
      * @return A map of topic Ids to a list of member Ids subscribed to them.
      *
      * @throws PartitionAssignorException If a member is subscribed to a non-existent topic.
      */
-    private Map<Uuid, Collection<String>> membersPerTopic(final AssignmentSpec assignmentSpec, final SubscribedTopicDescriber subscribedTopicDescriber) {
+    private Map<Uuid, Collection<String>> membersPerTopic(
+        final AssignmentSpec assignmentSpec,
+        final SubscribedTopicDescriber subscribedTopicDescriber,
+        Map<String, MemberAssignment> newTargetAssignment
+    ) {
         Map<Uuid, Collection<String>> membersPerTopic = new HashMap<>();
         Map<String, AssignmentMemberSpec> membersData = assignmentSpec.members();
 
         if (assignmentSpec.subscriptionType().equals(HOMOGENEOUS)) {
             Set<String> allMembers = membersData.keySet();
+            allMembers.forEach(memberId ->
+                newTargetAssignment.put(memberId, new MemberAssignment(new HashMap<>()))
+            );
             Collection<Uuid> topics = membersData.values().iterator().next().subscribedTopicIds();
 
             for (Uuid topicId : topics) {
@@ -103,6 +111,7 @@ public class RangeAssignor implements PartitionAssignor {
             }
         } else {
             membersData.forEach((memberId, memberMetadata) -> {
+                newTargetAssignment.put(memberId, new MemberAssignment(new HashMap<>()));
                 Collection<Uuid> topics = memberMetadata.subscribedTopicIds();
                 for (Uuid topicId : topics) {
                     if (subscribedTopicDescriber.numPartitions(topicId) == -1) {
@@ -135,11 +144,19 @@ public class RangeAssignor implements PartitionAssignor {
      * </ol>
      */
     @Override
-    public GroupAssignment assign(final AssignmentSpec assignmentSpec, final SubscribedTopicDescriber subscribedTopicDescriber) throws PartitionAssignorException {
-        Map<String, MemberAssignment> newAssignment = new HashMap<>();
+    public GroupAssignment assign(
+        final AssignmentSpec assignmentSpec,
+        final SubscribedTopicDescriber subscribedTopicDescriber
+    ) throws PartitionAssignorException {
+
+        Map<String, MemberAssignment> newTargetAssignment = new HashMap<>();
 
         // Step 1
-        Map<Uuid, Collection<String>> membersPerTopic = membersPerTopic(assignmentSpec, subscribedTopicDescriber);
+        Map<Uuid, Collection<String>> membersPerTopic = membersPerTopic(
+            assignmentSpec,
+            subscribedTopicDescriber,
+            newTargetAssignment
+        );
 
         membersPerTopic.forEach((topicId, membersForTopic) -> {
             int numPartitionsForTopic = subscribedTopicDescriber.numPartitions(topicId);
@@ -167,7 +184,7 @@ public class RangeAssignor implements PartitionAssignor {
                     for (int i = 0; i < retainedPartitionsCount; i++) {
                         assignedStickyPartitionsForTopic
                             .add(currentAssignmentListForTopic.get(i));
-                        newAssignment.computeIfAbsent(memberId, k -> new MemberAssignment(new HashMap<>()))
+                        newTargetAssignment.get(memberId)
                             .targetPartitions()
                             .computeIfAbsent(topicId, k -> new HashSet<>())
                             .add(currentAssignmentListForTopic.get(i));
@@ -188,7 +205,7 @@ public class RangeAssignor implements PartitionAssignor {
                     // add the extra partition that will be present at the index right after min quota was satisfied.
                     assignedStickyPartitionsForTopic
                         .add(currentAssignmentListForTopic.get(minRequiredQuota));
-                    newAssignment.computeIfAbsent(memberId, k -> new MemberAssignment(new HashMap<>()))
+                    newTargetAssignment.get(memberId)
                         .targetPartitions()
                         .computeIfAbsent(topicId, k -> new HashSet<>())
                         .add(currentAssignmentListForTopic.get(minRequiredQuota));
@@ -223,7 +240,7 @@ public class RangeAssignor implements PartitionAssignor {
                     List<Integer> partitionsToAssign = unassignedPartitionsForTopic
                         .subList(unassignedPartitionsListStartPointer, unassignedPartitionsListStartPointer + remaining);
                     unassignedPartitionsListStartPointer += remaining;
-                    newAssignment.computeIfAbsent(memberId, k -> new MemberAssignment(new HashMap<>()))
+                    newTargetAssignment.get(memberId)
                         .targetPartitions()
                         .computeIfAbsent(topicId, k -> new HashSet<>())
                         .addAll(partitionsToAssign);
@@ -231,7 +248,7 @@ public class RangeAssignor implements PartitionAssignor {
             }
         });
 
-        return new GroupAssignment(newAssignment);
+        return new GroupAssignment(newTargetAssignment);
     }
 }
 

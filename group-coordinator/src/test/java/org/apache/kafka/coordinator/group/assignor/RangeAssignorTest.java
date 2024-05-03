@@ -35,7 +35,6 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssig
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RangeAssignorTest {
@@ -77,7 +76,7 @@ public class RangeAssignorTest {
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
         GroupAssignment groupAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
-        assertEquals(Collections.emptyMap(), groupAssignment.members());
+        assertEquals(createEmptyAssignment(consumerA), groupAssignment.members());
     }
 
     @Test
@@ -361,8 +360,8 @@ public class RangeAssignorTest {
             mkTopicAssignment(topic2Uuid, 1)
         ));
 
-        // Consumer C shouldn't get any assignment, due to stickiness A, B retain their assignments
-        assertNull(computedAssignment.members().get(consumerC));
+        expectedAssignment.put(consumerC, Collections.emptyMap());
+
         assertAssignment(expectedAssignment, computedAssignment);
     }
 
@@ -726,5 +725,15 @@ public class RangeAssignorTest {
             partitionRacks.put(i, emptySet);
         }
         return partitionRacks;
+    }
+
+    private static Map<String, MemberAssignment> createEmptyAssignment(String memberId) {
+        Map<String, MemberAssignment> newEmptyTargetAssignment = new HashMap<>(1);
+
+        newEmptyTargetAssignment.put(
+            memberId,
+            new MemberAssignment(Collections.emptyMap())
+        );
+        return newEmptyTargetAssignment;
     }
 }
