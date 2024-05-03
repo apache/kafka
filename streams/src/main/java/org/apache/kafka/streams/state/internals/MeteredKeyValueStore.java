@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -24,7 +23,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -58,7 +56,6 @@ import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 import static org.apache.kafka.streams.state.internals.StoreQueryUtils.getDeserializeValue;
 
@@ -175,33 +172,13 @@ public class MeteredKeyValueStore<K, V>
     protected void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        try {
-            serdes = new StateSerdes<>(
-                changelogTopic,
-                prepareKeySerde(keySerde, new SerdeGetter(context)),
-                prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
-            );
-        } catch (final ConfigException e) {
-            throw new ConfigException(String.format("Failed to initialize serdes for store %s", storeName), e);
-        } catch (final StreamsException e) {
-            throw new StreamsException(String.format("Failed to initialize serdes for store %s", storeName), e);
-        }
+        serdes = StoreSerdeInitializer.prepareStoreSerde(context, storeName, changelogTopic, keySerde, valueSerde);
     }
 
     protected void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        try {
-            serdes = new StateSerdes<>(
-                changelogTopic,
-                prepareKeySerde(keySerde, new SerdeGetter(context)),
-                prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
-            );
-        } catch (final ConfigException e) {
-            throw new ConfigException(String.format("Failed to initialize serdes for store %s", storeName), e);
-        } catch (final StreamsException e) {
-            throw new StreamsException(String.format("Failed to initialize serdes for store %s", storeName), e);
-        }
+        serdes = StoreSerdeInitializer.prepareStoreSerde(context, storeName, changelogTopic, keySerde, valueSerde);
     }
 
     @SuppressWarnings("unchecked")
