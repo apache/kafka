@@ -390,16 +390,16 @@ class BrokerServer(
       authorizer.foreach(_.configure(config.originals))
 
       // The FetchSessionCache is divided into config.numIoThreads shards, each responsible
-      // for sessionIds falling in [Max(1, shardNum * sessionIdRange), (shardNum + 1) * sessionIdRange)
+      // for Math.max(1, shardNum * sessionIdRange) <= sessionId < (shardNum + 1) * sessionIdRange
       val sessionIdRange = Int.MaxValue / NumFetchSessionCacheShards
-      val fetchSessionCaches = (0 until NumFetchSessionCacheShards)
-        .map(shardNum => new FetchSessionCache(
+      val fetchSessionCacheShards = (0 until NumFetchSessionCacheShards)
+        .map(shardNum => new FetchSessionCacheShard(
           config.maxIncrementalFetchSessionCacheSlots / NumFetchSessionCacheShards,
           KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS,
           sessionIdRange,
           shardNum
         ))
-      val fetchManager = new FetchManager(Time.SYSTEM, fetchSessionCaches)
+      val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
 
       // Create the request processor objects.
       val raftSupport = RaftSupport(forwardingManager, metadataCache)
