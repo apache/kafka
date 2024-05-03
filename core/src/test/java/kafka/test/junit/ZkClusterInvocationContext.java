@@ -374,6 +374,11 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
+        public int logDirCount() {
+            return clusterConfig.numDisksPerBroker();
+        }
+
+        @Override
         public Option<File> trustStoreFile() {
             return OptionConverters.toScala(clusterConfig.trustStoreFile());
         }

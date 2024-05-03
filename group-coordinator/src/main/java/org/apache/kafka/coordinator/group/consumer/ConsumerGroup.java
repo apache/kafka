@@ -328,7 +328,8 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Gets or creates a member.
+     * Gets or creates a new member but without adding it to the group. Adding a member
+     * is done via the {@link ConsumerGroup#updateMember(ConsumerGroupMember)} method.
      *
      * @param memberId          The member id.
      * @param createIfNotExists Booleans indicating whether the member must be
@@ -341,16 +342,15 @@ public class ConsumerGroup implements Group {
         boolean createIfNotExists
     ) {
         ConsumerGroupMember member = members.get(memberId);
-        if (member == null) {
-            if (!createIfNotExists) {
-                throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
-                    memberId, groupId));
-            }
-            member = new ConsumerGroupMember.Builder(memberId).build();
-            members.put(memberId, member);
+        if (member != null) return member;
+
+        if (!createIfNotExists) {
+            throw new UnknownMemberIdException(
+                String.format("Member %s is not a member of group %s.", memberId, groupId)
+            );
         }
 
-        return member;
+        return new ConsumerGroupMember.Builder(memberId).build();
     }
 
     /**
@@ -366,7 +366,7 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Updates the member.
+     * Adds or updates the member.
      *
      * @param newMember The new member state.
      */

@@ -252,14 +252,16 @@ public class TargetAssignmentBuilder {
             if (updatedMemberOrNull == null) {
                 memberSpecs.remove(memberId);
             } else {
-                ConsumerGroupMember member = members.get(memberId);
-                Assignment assignment;
+                Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+
                 // A new static member joins and needs to replace an existing departed one.
-                if (member == null && staticMembers.containsKey(updatedMemberOrNull.instanceId())) {
-                    assignment = targetAssignment.getOrDefault(staticMembers.get(updatedMemberOrNull.instanceId()), Assignment.EMPTY);
-                } else {
-                    assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+                if (updatedMemberOrNull.instanceId() != null) {
+                    String previousMemberId = staticMembers.get(updatedMemberOrNull.instanceId());
+                    if (previousMemberId != null && !previousMemberId.equals(memberId)) {
+                        assignment = targetAssignment.getOrDefault(previousMemberId, Assignment.EMPTY);
+                    }
                 }
+
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                     updatedMemberOrNull,
                     assignment,
