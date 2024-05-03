@@ -1565,14 +1565,14 @@ public class StreamsConfig extends AbstractConfig {
 
     private void validateConsumerPropertyMap(final Map<String, Object> props){
         if (eosEnabled){
-            // Iterate over CONSUMER_EOS_OVERRIDES
+            // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED and override values if set
             for (Map.Entry<String, Object> entry : KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED.entrySet()) {
                 overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
             }
             verifyMaxInFlightRequestPerConnection(props.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
 
         } else {
-            // Iterate over CONSUMER_DEFAULT_OVERRIDES
+            // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS and override values if set
             for (Map.Entry<String, Object> entry : KS_CONTROLLED_CONSUMER_CONFIGS.entrySet()) {
                 overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
             }
