@@ -383,7 +383,6 @@ public class DeleteConsumerGroupsTest {
     }
 
     private Map<String, Object> composeConfigs(String groupId, String groupProtocol, Map<String, Object> customConfigs) {
-        System.err.println(groupProtocol);
         Map<String, Object> configs = new HashMap<>();
         configs.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         configs.put(GROUP_ID_CONFIG, groupId);

@@ -50,7 +50,9 @@ class ConsumerGroupExecutor {
         AtomicBoolean closed = new AtomicBoolean(false);
         final AutoCloseable closeable = () -> releaseConsumers(closed, consumers, executor);
         try {
-            executor.execute(() -> initConsumer(topic, syncCommit, consumers, closed));
+            for (KafkaConsumer<T, T> consumer : consumers) {
+                executor.execute(() -> initConsumer(topic, syncCommit, consumer, closed));
+            }
             return closeable;
         } catch (Throwable e) {
             Utils.closeQuietly(closeable, "Release Consumer");
@@ -65,18 +67,16 @@ class ConsumerGroupExecutor {
         executor.awaitTermination(1, TimeUnit.MINUTES);
     }
 
-    private static <T> void initConsumer(String topic, boolean syncCommit, List<KafkaConsumer<T, T>> consumers, AtomicBoolean closed) {
-        for (KafkaConsumer<T, T> consumer : consumers) {
-            try (KafkaConsumer<T, T> kafkaConsumer = consumer) {
-                kafkaConsumer.subscribe(singleton(topic));
-                while (!closed.get()) {
-                    consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
-                    if (syncCommit)
-                        consumer.commitSync();
-                }
-            } catch (WakeupException e) {
-                // OK
+    private static <T> void initConsumer(String topic, boolean syncCommit, KafkaConsumer<T, T> consumer, AtomicBoolean closed) {
+        try (KafkaConsumer<T, T> kafkaConsumer = consumer) {
+            kafkaConsumer.subscribe(singleton(topic));
+            while (!closed.get()) {
+                consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+                if (syncCommit)
+                    consumer.commitSync();
             }
+        } catch (WakeupException e) {
+            // OK
         }
     }
 }
