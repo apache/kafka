@@ -494,7 +494,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final String BUILT_IN_METRICS_VERSION_DOC = "Version of the built-in metrics to use.";
 
     /** {@code cache.max.bytes.buffering}
-     * @deprecated since 3.4.0 Use {@link #CACHE_MAX_BYTES_CONFIG "cache.max.bytes"} instead. */
+     * @deprecated since 3.4.0 Use {@link #STATESTORE_CACHE_MAX_BYTES_CONFIG "statestore.cache.max.bytes"} instead. */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
