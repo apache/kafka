@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource;
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSynonym;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -38,6 +39,8 @@ import scala.None$;
 import scala.collection.JavaConverters;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Arrays;
 import java.util.Collection;
@@ -244,6 +247,75 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
             reporter.verifyState(1, 0, 2000);
             return null;
         });
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"zk", "kraft"})
+    public void testKeyStoreAlter(String quorum) {
+        String topic2 = "testtopic2";
+        TestUtils.createTopicWithAdmin(adminClients().head(), topic2, servers(), controllerServers(), numPartitions(), numServers());
+
+        // Start a producer and consumer that work with the current broker keystore.
+        // This should continue working while changes are made
+        val (producerThread, consumerThread) = startProduceConsume(retries = 0);
+        TestUtils.waitUntilTrue(() -> consumerThread.received >= 10, "Messages not received");
+
+        // Producer with new truststore should fail to connect before keystore update
+        KafkaProducer<String, String> producer1 = ProducerBuilder.apply().maxRetries(0).trustStoreProps(sslProperties2()).build();
+        verifyAuthenticationFailure(producer1);
+
+        // Update broker keystore for external listener
+        alterSslKeystoreUsingConfigCommand(sslProperties2(), SecureExternal());
+
+        // New producer with old truststore should fail to connect
+        KafkaProducer<String, String> producer2 = ProducerBuilder.apply().maxRetries(0).trustStoreProps(sslProperties1()).build();
+        verifyAuthenticationFailure(producer2);
+
+        // Produce/consume should work with new truststore with new producer/consumer
+        KafkaProducer<String, String> producer = ProducerBuilder.apply().maxRetries(0).trustStoreProps(sslProperties2()).build();
+        // Start the new consumer in a separate group than the continuous consumer started at the beginning of the test so
+        // that it is not disrupted by rebalance.
+        val consumer = ConsumerBuilder.apply("group2").trustStoreProps(sslProperties2()).topic(topic2).build();
+        verifyProduceConsume(producer, consumer, 10, topic2);
+
+        // Broker keystore update for internal listener with incompatible keystore should fail without update
+        alterSslKeystore(sslProperties2(), SecureInternal(), expectFailure = true);
+        verifyProduceConsume(producer, consumer, 10, topic2);
+
+        // Broker keystore update for internal listener with compatible keystore should succeed
+        Properties sslPropertiesCopy = (Properties)sslProperties1().clone();
+        File oldFile = new File(sslProperties1().getProperty(SSL_KEYSTORE_LOCATION_CONFIG));
+        File newFile = TestUtils.tempFile("keystore", ".jks");
+        Files.copy(oldFile.toPath(), newFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        sslPropertiesCopy.setProperty(SSL_KEYSTORE_LOCATION_CONFIG, newFile.getPath());
+        alterSslKeystore(sslPropertiesCopy, SecureInternal());
+        verifyProduceConsume(producer, consumer, 10, topic2);
+
+        // Verify that keystores can be updated using same file name.
+        Properties reusableProps = (Properties)sslProperties2().clone();
+        File reusableFile = TestUtils.tempFile("keystore", ".jks");
+        reusableProps.setProperty(SSL_KEYSTORE_LOCATION_CONFIG, reusableFile.getPath);
+        Files.copy(new File(sslProperties1().getProperty(SSL_KEYSTORE_LOCATION_CONFIG)).toPath,
+            reusableFile.toPath, StandardCopyOption.REPLACE_EXISTING);
+        alterSslKeystore(reusableProps, SecureExternal());
+        val producer3 = ProducerBuilder().trustStoreProps(sslProperties2()).maxRetries(0).build();
+        verifyAuthenticationFailure(producer3);
+        // Now alter using same file name. We can't check if the update has completed by comparing config on
+        // the broker, so we wait for producer operation to succeed to verify that the update has been performed.
+        Files.copy(new File(sslProperties2.getProperty(SSL_KEYSTORE_LOCATION_CONFIG)).toPath,
+            reusableFile.toPath, StandardCopyOption.REPLACE_EXISTING);
+        reusableFile.setLastModified(System.currentTimeMillis() + 1000);
+        alterSslKeystore(reusableProps, SecureExternal());
+        TestUtils.waitUntilTrue(() -> {
+            try {
+                return producer3.partitionsFor(topic).size() == numPartitions;
+            } catch (Exception e) {
+                return false;
+            }
+        }, "Keystore not updated");
+
+        // Verify that all messages sent with retries=0 while keystores were being altered were consumed
+        stopAndVerifyProduceConsume(producerThread, consumerThread);
     }
 
     @ParameterizedTest

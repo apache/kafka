@@ -20,7 +20,7 @@ package kafka.server
 
 import java.time.Duration
 import java.util
-import java.util.Properties
+import java.util.{Collections, Properties}
 import java.util.concurrent._
 import com.yammer.metrics.core.MetricName
 import kafka.api.SaslSetup
@@ -30,15 +30,17 @@ import kafka.utils.Implicits._
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.Consumer
-import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.SslConfigs._
 import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.errors.AuthenticationException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PROPS}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.{PasswordEncoder, PasswordEncoderConfigs}
 import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
@@ -294,6 +296,92 @@ abstract class AbstractDynamicBrokerReconfigurationTest extends QuorumTestHarnes
       case password: Password => password.value
       case list: util.List[_] => list.asScala.map(_.toString).mkString(",")
       case _ => value.toString
+    }
+  }
+
+  def verifyAuthenticationFailure(producer: KafkaProducer[_, _]): Unit = {
+    assertThrows(classOf[AuthenticationException], () => producer.partitionsFor(topic))
+  }
+
+  private abstract class ClientBuilder[T]() {
+    protected var _bootstrapServers: Option[String] = None
+    protected var _listenerName: String = SecureExternal
+    protected var _securityProtocol = SecurityProtocol.SASL_SSL
+    protected var _saslMechanism: String = kafkaClientSaslMechanism
+    protected var _clientId = "test-client"
+    protected val _propsOverride: Properties = new Properties
+
+    def bootstrapServers(bootstrap: String): this.type = { _bootstrapServers = Some(bootstrap); this }
+    def listenerName(listener: String): this.type = { _listenerName = listener; this }
+    def securityProtocol(protocol: SecurityProtocol): this.type = { _securityProtocol = protocol; this }
+    def saslMechanism(mechanism: String): this.type = { _saslMechanism = mechanism; this }
+    def clientId(id: String): this.type = { _clientId = id; this }
+    def keyStoreProps(props: Properties): this.type = { _propsOverride ++= securityProps(props, KEYSTORE_PROPS); this }
+    def trustStoreProps(props: Properties): this.type = { _propsOverride ++= securityProps(props, TRUSTSTORE_PROPS); this }
+
+    def bootstrapServers: String =
+      _bootstrapServers.getOrElse(TestUtils.bootstrapServers(servers, new ListenerName(_listenerName)))
+
+    def propsOverride: Properties = {
+      val props = clientProps(_securityProtocol, Some(_saslMechanism))
+      props.put(CommonClientConfigs.CLIENT_ID_CONFIG, _clientId)
+      props ++= _propsOverride
+      props
+    }
+
+    def build(): T
+  }
+
+  case class ProducerBuilder() extends ClientBuilder[KafkaProducer[String, String]] {
+    private var _retries = Int.MaxValue
+    private var _acks = -1
+    private var _requestTimeoutMs = 30000
+    private var _deliveryTimeoutMs = 30000
+
+    def maxRetries(retries: Int): ProducerBuilder = { _retries = retries; this }
+    def acks(acks: Int): ProducerBuilder = { _acks = acks; this }
+    def requestTimeoutMs(timeoutMs: Int): ProducerBuilder = { _requestTimeoutMs = timeoutMs; this }
+    def deliveryTimeoutMs(timeoutMs: Int): ProducerBuilder = { _deliveryTimeoutMs= timeoutMs; this }
+
+    override def build(): KafkaProducer[String, String] = {
+      val producerProps = propsOverride
+      producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+      producerProps.put(ProducerConfig.ACKS_CONFIG, _acks.toString)
+      producerProps.put(ProducerConfig.RETRIES_CONFIG, _retries.toString)
+      producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, _deliveryTimeoutMs.toString)
+      producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, _requestTimeoutMs.toString)
+      // disable the idempotence since some tests want to test the cases when retries=0, and these tests are not testing producers
+      producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
+
+      val producer = new KafkaProducer[String, String](producerProps, new StringSerializer, new StringSerializer)
+      producers += producer
+      producer
+    }
+  }
+
+  private case class ConsumerBuilder(group: String) extends ClientBuilder[Consumer[String, String]] {
+    private var _autoOffsetReset = "earliest"
+    private var _enableAutoCommit = false
+    private var _topic = AbstractDynamicBrokerReconfigurationTest.this.topic
+
+    def autoOffsetReset(reset: String): ConsumerBuilder = { _autoOffsetReset = reset; this }
+    def enableAutoCommit(enable: Boolean): ConsumerBuilder = { _enableAutoCommit = enable; this }
+    def topic(topic: String): ConsumerBuilder = { _topic = topic; this }
+
+    override def build(): Consumer[String, String] = {
+      val consumerProps = propsOverride
+      consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+      consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, _autoOffsetReset)
+      consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, group)
+      consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, _enableAutoCommit.toString)
+
+      val consumer = new KafkaConsumer[String, String](consumerProps, new StringDeserializer, new StringDeserializer)
+      consumers += consumer
+
+      consumer.subscribe(Collections.singleton(_topic))
+      if (_autoOffsetReset == "latest")
+        awaitInitialPositions(consumer)
+      consumer
     }
   }
 }
