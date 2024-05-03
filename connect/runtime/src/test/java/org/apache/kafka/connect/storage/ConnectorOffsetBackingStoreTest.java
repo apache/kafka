@@ -50,6 +50,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -62,6 +63,8 @@ public class ConnectorOffsetBackingStoreTest {
 
     // Serialized
     private static final byte[] OFFSET_KEY_SERIALIZED = "key-serialized".getBytes();
+
+    private static final byte[] OFFSET_KEY_SERIALIZED_1 = "key-serialized-1".getBytes();
     private static final byte[] OFFSET_VALUE_SERIALIZED = "value-serialized".getBytes();
 
     private static final KafkaException PRODUCE_EXCEPTION = new KafkaException();
@@ -86,19 +89,23 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, null), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
+            mkEntry(OFFSET_KEY_SERIALIZED, null),
+            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED))
+        ), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
         });
 
+        assertNoPrematureCallbackInvocation(callbackInvoked);
         workerStoreProducer.errorNext(PRODUCE_EXCEPTION);
         connectorStoreProducer.completeNext();
         assertFlushFailure(callbackInvoked, callbackResult, callbackError, setFuture, false);
     }
 
     @Test
-    public void testFlushSuccessWhenWritesSucceedToBothPrimaryAndSecondaryStoresForTombstoneOffsets() {
+    public void testFlushSuccessWhenWritesSucceedToBothPrimaryAndSecondaryStores() {
         MockProducer<byte[], byte[]> connectorStoreProducer = createMockProducer();
         MockProducer<byte[], byte[]> workerStoreProducer = createMockProducer();
         KafkaOffsetBackingStore connectorStore = createStore("topic1", connectorStoreProducer);
@@ -115,19 +122,25 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, null), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
+            mkEntry(OFFSET_KEY_SERIALIZED, null),
+            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
+        )), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
         });
 
+        assertNoPrematureCallbackInvocation(callbackInvoked);
         workerStoreProducer.completeNext();
         connectorStoreProducer.completeNext();
+        connectorStoreProducer.completeNext();
+        workerStoreProducer.completeNext();
         assertFlushSuccess(callbackInvoked, callbackResult, callbackError, setFuture);
     }
 
     @Test
-    public void testFlushSuccessWhenWriteToSecondaryStoreFailsForNonTombstoneOffsets() {
+    public void testFlushSuccessWhenWriteToSecondaryStoreFailsForRegularOffsets() {
         MockProducer<byte[], byte[]> connectorStoreProducer = createMockProducer();
         MockProducer<byte[], byte[]> workerStoreProducer = createMockProducer();
         KafkaOffsetBackingStore connectorStore = createStore("topic1", connectorStoreProducer);
@@ -144,48 +157,26 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
+            mkEntry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED),
+            mkEntry(OFFSET_KEY_SERIALIZED_1, null))
+        ), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
         });
 
+        assertNoPrematureCallbackInvocation(callbackInvoked);
+        // tombstone offset write succeeds.
+        workerStoreProducer.completeNext();
+        connectorStoreProducer.completeNext();
+        connectorStoreProducer.completeNext();
         workerStoreProducer.errorNext(PRODUCE_EXCEPTION);
-        connectorStoreProducer.completeNext();
         assertFlushSuccess(callbackInvoked, callbackResult, callbackError, setFuture);
     }
 
     @Test
-    public void testFlushSuccessWhenWritesToPrimaryAndSecondaryStoreSucceeds() {
-        MockProducer<byte[], byte[]> connectorStoreProducer = createMockProducer();
-        MockProducer<byte[], byte[]> workerStoreProducer = createMockProducer();
-        KafkaOffsetBackingStore connectorStore = createStore("topic1", connectorStoreProducer);
-        KafkaOffsetBackingStore workerStore = createStore("topic2", workerStoreProducer);
-
-        ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                () -> LoggingContext.forConnector("source-connector"),
-                workerStore,
-                connectorStore,
-                "offsets-topic",
-                mock(TopicAdmin.class));
-
-        AtomicBoolean callbackInvoked = new AtomicBoolean();
-        AtomicReference<Object> callbackResult = new AtomicReference<>();
-        AtomicReference<Throwable> callbackError = new AtomicReference<>();
-
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED), (error, result) -> {
-            callbackInvoked.set(true);
-            callbackResult.set(result);
-            callbackError.set(error);
-        });
-
-        workerStoreProducer.completeNext();
-        connectorStoreProducer.completeNext();
-        assertFlushSuccess(callbackInvoked, callbackResult, callbackError, setFuture);
-    }
-
-    @Test
-    public void testFlushFailureWhenWritesToPrimaryStoreFailsAndSecondarySucceeds() {
+    public void testFlushFailureWhenWritesToPrimaryStoreFailsAndSecondarySucceedsForRegularOffsets() {
         MockProducer<byte[], byte[]> connectorStoreProducer = createMockProducer();
         MockProducer<byte[], byte[]> workerStoreProducer = createMockProducer();
         KafkaOffsetBackingStore connectorStore = createStore("topic1", connectorStoreProducer);
@@ -202,19 +193,23 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
+            mkEntry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED),
+            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
+        )), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
         });
 
+        assertNoPrematureCallbackInvocation(callbackInvoked);
         workerStoreProducer.completeNext();
         connectorStoreProducer.errorNext(PRODUCE_EXCEPTION);
         assertFlushFailure(callbackInvoked, callbackResult, callbackError, setFuture, false);
     }
 
     @Test
-    public void testFlushFailureWhenWritesToPrimaryStoreFailsAndSecondarySucceedsForTombstoneRecords() {
+    public void testFlushFailureWhenWritesToPrimaryStoreFailsAndSecondarySucceedsForRegularAndTombstoneOffsets() {
         MockProducer<byte[], byte[]> connectorStoreProducer = createMockProducer();
         MockProducer<byte[], byte[]> workerStoreProducer = createMockProducer();
         KafkaOffsetBackingStore connectorStore = createStore("topic1", connectorStoreProducer);
@@ -231,12 +226,16 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, null), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
+            mkEntry(OFFSET_KEY_SERIALIZED, null),
+            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
+        )), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
         });
 
+        assertNoPrematureCallbackInvocation(callbackInvoked);
         workerStoreProducer.completeNext();
         connectorStoreProducer.errorNext(PRODUCE_EXCEPTION);
         assertFlushFailure(callbackInvoked, callbackResult, callbackError, setFuture, false);
@@ -257,12 +256,13 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(mkEntry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED))), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
         });
 
+        assertNoPrematureCallbackInvocation(callbackInvoked);
         connectorStoreProducer.completeNext();
         assertFlushSuccess(callbackInvoked, callbackResult, callbackError, setFuture);
     }
@@ -282,18 +282,19 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(mkEntry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED))), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
         });
 
+        assertNoPrematureCallbackInvocation(callbackInvoked);
         connectorStoreProducer.errorNext(PRODUCE_EXCEPTION);
         assertFlushFailure(callbackInvoked, callbackResult, callbackError, setFuture, false);
     }
 
     @Test
-    public void testFlushFailureWhenWritesToPrimaryStoreTimesoutAndSecondarySucceedsForTombstoneRecords() {
+    public void testFlushFailureWhenWritesToPrimaryStoreTimesoutAndSecondarySucceedsForTombstoneOffsets() {
         MockProducer<byte[], byte[]> connectorStoreProducer = createMockProducer();
         MockProducer<byte[], byte[]> workerStoreProducer = createMockProducer();
         KafkaOffsetBackingStore connectorStore = createStore("topic1", connectorStoreProducer);
@@ -310,19 +311,20 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, null), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(mkEntry(OFFSET_KEY_SERIALIZED, null))), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
         });
 
+        assertNoPrematureCallbackInvocation(callbackInvoked);
         workerStoreProducer.completeNext();
         // We don't invoke completeNext for Primary store producer which means the request isn't completed
         assertFlushFailure(callbackInvoked, callbackResult, callbackError, setFuture, true);
     }
 
     @Test
-    public void testFlushFailureWhenWritesToSecondaryStoreTimesoutForTombstoneRecords() {
+    public void testFlushFailureWhenWritesToSecondaryStoreTimesoutForTombstoneOffsets() {
         MockProducer<byte[], byte[]> connectorStoreProducer = createMockProducer();
         MockProducer<byte[], byte[]> workerStoreProducer = createMockProducer();
         KafkaOffsetBackingStore connectorStore = createStore("topic1", connectorStoreProducer);
@@ -339,14 +341,54 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY_SERIALIZED, null), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(mkEntry(OFFSET_KEY_SERIALIZED, null))), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
         });
 
+        assertNoPrematureCallbackInvocation(callbackInvoked);
         // We don't invoke completeNext for Primary or secondary store producer which means the request isn't completed
         assertFlushFailure(callbackInvoked, callbackResult, callbackError, setFuture, true);
+    }
+
+    @Test
+    public void testFlushSuccessWhenWritesToSecondaryStoreTimesoutForRegularOffsets() {
+        MockProducer<byte[], byte[]> connectorStoreProducer = createMockProducer();
+        MockProducer<byte[], byte[]> workerStoreProducer = createMockProducer();
+        KafkaOffsetBackingStore connectorStore = createStore("topic1", connectorStoreProducer);
+        KafkaOffsetBackingStore workerStore = createStore("topic2", workerStoreProducer);
+
+        ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
+            () -> LoggingContext.forConnector("source-connector"),
+            workerStore,
+            connectorStore,
+            "offsets-topic",
+            mock(TopicAdmin.class));
+
+        AtomicBoolean callbackInvoked = new AtomicBoolean();
+        AtomicReference<Object> callbackResult = new AtomicReference<>();
+        AtomicReference<Throwable> callbackError = new AtomicReference<>();
+
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
+            mkEntry(OFFSET_KEY_SERIALIZED, null),
+            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
+        )), (error, result) -> {
+            callbackInvoked.set(true);
+            callbackResult.set(result);
+            callbackError.set(error);
+        });
+
+        assertNoPrematureCallbackInvocation(callbackInvoked);
+        workerStoreProducer.completeNext();
+        connectorStoreProducer.completeNext();
+        connectorStoreProducer.completeNext();
+        // We don't invoke completeNext for secondary store write of regular offset to throw a timeout
+        assertFlushSuccess(callbackInvoked, callbackResult, callbackError, setFuture);
+    }
+
+    private void assertNoPrematureCallbackInvocation(AtomicBoolean callbackInvoked) {
+        assertFalse("Store callback should not be invoked before underlying producer callback", callbackInvoked.get());
     }
 
     private void assertFlushFailure(AtomicBoolean callbackInvoked, AtomicReference<Object> callbackResult, AtomicReference<Throwable> callbackError, Future<Void> setFuture, boolean timeout) {
@@ -403,8 +445,12 @@ public class ConnectorOffsetBackingStoreTest {
         return new MockProducer<>(Cluster.empty(), false, null, byteArraySerializer, byteArraySerializer);
     }
 
-    private Map<ByteBuffer, ByteBuffer> getSerialisedOffsets(byte[] keySerialized, byte[] valueSerialized) {
-        return Collections.singletonMap(ByteBuffer.wrap(keySerialized),
-            valueSerialized == null ? null : ByteBuffer.wrap(valueSerialized));
+    private Map<ByteBuffer, ByteBuffer> getSerialisedOffsets(Map<byte[], byte[]> offsets) {
+        Map<ByteBuffer, ByteBuffer> serialisedOffsets = new HashMap<>();
+        for (Map.Entry<byte[], byte[]> offsetEntry: offsets.entrySet()) {
+            serialisedOffsets.put(ByteBuffer.wrap(offsetEntry.getKey()),
+                offsetEntry.getValue() == null ? null : ByteBuffer.wrap(offsetEntry.getValue()));
+        }
+        return serialisedOffsets;
     }
 }
