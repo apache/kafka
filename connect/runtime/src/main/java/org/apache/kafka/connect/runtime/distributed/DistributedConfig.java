@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
@@ -467,7 +468,8 @@ public class DistributedConfig extends WorkerConfig {
                                         + "compatibility");
                             }
                         },
-                        () -> "[" + String.join(", ", Arrays.toString(ConnectProtocolCompatibility.values())) + "]"),
+                        () -> Arrays.stream(ConnectProtocolCompatibility.values()).map(ConnectProtocolCompatibility::toString)
+                                .collect(Collectors.joining(", ", "[", "]"))),
                     ConfigDef.Importance.LOW,
                     CONNECT_PROTOCOL_DOC)
             .define(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG,
