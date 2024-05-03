@@ -171,6 +171,7 @@ public class Defaults {
     public static final List<String> SHARE_GROUP_ASSIGNORS = Arrays.asList(
         SimpleAssignor.class.getName()
     );
+    public static final String SHARE_GROUP_PERSISTER_CLASS_NAME = "";
 
     /** ********* Offset management configuration *********/
     public static final int OFFSET_METADATA_MAX_SIZE = OffsetConfig.DEFAULT_MAX_METADATA_SIZE;

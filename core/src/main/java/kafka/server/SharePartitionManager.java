@@ -16,9 +16,11 @@
  */
 package kafka.server;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
@@ -30,6 +32,8 @@ import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.group.share.Persister;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
@@ -77,6 +81,7 @@ public class SharePartitionManager implements AutoCloseable {
     private final Timer timer;
     private final int maxInFlightMessages;
     private final int maxDeliveryCount;
+    private final String shareGroupPersisterClassName;
 
     public SharePartitionManager(
             ReplicaManager replicaManager,
@@ -84,14 +89,15 @@ public class SharePartitionManager implements AutoCloseable {
             ShareSessionCache cache,
             int recordLockDurationMs,
             int maxDeliveryCount,
-            int maxInFlightMessages
+            int maxInFlightMessages,
+            String shareGroupPersisterClassName
     ) {
-        this(replicaManager, time, cache, new ConcurrentHashMap<>(), recordLockDurationMs, maxDeliveryCount, maxInFlightMessages);
+        this(replicaManager, time, cache, new ConcurrentHashMap<>(), recordLockDurationMs, maxDeliveryCount, maxInFlightMessages, shareGroupPersisterClassName);
     }
 
     // Visible for testing
     SharePartitionManager(ReplicaManager replicaManager, Time time, ShareSessionCache cache, Map<SharePartitionKey, SharePartition> partitionCacheMap,
-                          int recordLockDurationMs, int maxDeliveryCount, int maxInFlightMessages) {
+                          int recordLockDurationMs, int maxDeliveryCount, int maxInFlightMessages, String shareGroupPersisterClassName) {
         this.replicaManager = replicaManager;
         this.time = time;
         this.cache = cache;
@@ -103,6 +109,7 @@ public class SharePartitionManager implements AutoCloseable {
                 new SystemTimer("share-group-lock-timeout"));
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
+        this.shareGroupPersisterClassName = shareGroupPersisterClassName;
     }
 
     // TODO: Move some part in share session context and change method signature to accept share
@@ -144,10 +151,8 @@ public class SharePartitionManager implements AutoCloseable {
                         shareFetchPartitionData.groupId,
                         topicIdPartition
                 );
-                // TODO: Fetch inflight and delivery count from config.
                 SharePartition sharePartition = partitionCacheMap.computeIfAbsent(sharePartitionKey,
-                    k -> new SharePartition(shareFetchPartitionData.groupId, topicIdPartition, maxDeliveryCount,
-                            maxInFlightMessages, recordLockDurationMs, timer, time, null));
+                    k -> sharePartition(shareFetchPartitionData, topicIdPartition));
                 int partitionMaxBytes = shareFetchPartitionData.partitionMaxBytes.getOrDefault(topicIdPartition, 0);
                 // Add the share partition to the list of partitions to be fetched only if we can
                 // acquire the fetch lock on it.
@@ -255,6 +260,21 @@ public class SharePartitionManager implements AutoCloseable {
             futures.forEach((topicIdPartition, future) -> processedResult.put(topicIdPartition, future.join()));
             return processedResult;
         });
+    }
+
+    // Visible for testing.
+    SharePartition sharePartition(ShareFetchPartitionData shareFetchPartitionData, TopicIdPartition topicIdPartition) {
+        try {
+            Persister persister = null;
+            if (!shareGroupPersisterClassName.isEmpty())
+                persister = Utils.newInstance(shareGroupPersisterClassName, Persister.class);
+            return new SharePartition(shareFetchPartitionData.groupId, topicIdPartition, maxInFlightMessages, maxDeliveryCount,
+                    recordLockDurationMs, timer, time, persister);
+        } catch (ClassNotFoundException e) {
+            throw new ConfigException("Could not instantiate class share partition " + e.getMessage());
+        } catch (RuntimeException e) {
+            throw new KafkaException("Could not instantiate class share partition " + e.getMessage());
+        }
     }
 
     // Visible for testing.

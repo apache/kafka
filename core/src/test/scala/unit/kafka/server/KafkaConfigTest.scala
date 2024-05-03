@@ -1048,6 +1048,8 @@ class KafkaConfigTest {
         case KafkaConfig.ShareGroupHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case KafkaConfig.ShareGroupMinHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case KafkaConfig.ShareGroupMaxHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case KafkaConfig.ShareGroupPersisterClassNameProp => //ignore string
+        case KafkaConfig.ShareGroupAssignorsProp => //ignore string
 
         case _ => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
       }
@@ -1893,5 +1895,16 @@ class KafkaConfigTest {
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, String.valueOf(true))
     props.put(KafkaConfig.LogDirsProp, "/tmp/a")
     assertDoesNotThrow(() => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testInvalidShareGroupPersisterClassName(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+    val configs = new util.HashMap[Object, Object](props)
+    configs.put(KafkaConfig.ShareGroupPersisterClassNameProp, null)
+    val ce = assertThrows(classOf[ConfigException], () => KafkaConfig.apply(configs))
+    assertTrue(ce.getMessage.contains(KafkaConfig.ShareGroupPersisterClassNameProp))
+
   }
 }

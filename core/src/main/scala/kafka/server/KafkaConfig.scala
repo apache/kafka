@@ -268,6 +268,7 @@ object KafkaConfig {
   val ShareGroupMinRecordLockDurationMsProp = "group.share.min.record.lock.duration.ms"
   val ShareGroupMaxRecordLockDurationMsProp = "group.share.max.record.lock.duration.ms"
   val ShareGroupAssignorsProp = "group.share.assignors"
+  val ShareGroupPersisterClassNameProp = "group.share.persister.class.name"
 
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeProp = "offset.metadata.max.bytes"
@@ -711,6 +712,8 @@ object KafkaConfig {
   val ShareGroupMinRecordLockDurationMsDoc = "The record acquisition lock minimum duration in milliseconds for share groups."
   val ShareGroupMaxRecordLockDurationMsDoc = "The record acquisition lock maximum duration in milliseconds for share groups."
   val ShareGroupAssignorsDoc = "The server-side assignors as a list of full class names. The first one in the list is considered as the default assignor to be used in the case where the share group does not specify an assignor."
+  val ShareGroupPersisterClassNameDoc = "The class name of share persister for share group. The class should implement " +
+    "the <code>org.apache.kafka.server.group.share.Persister</code> interface."
 
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeDoc = "The maximum size for a metadata entry associated with an offset commit."
@@ -1098,6 +1101,7 @@ object KafkaConfig {
       .define(ShareGroupMaxGroupsProp, SHORT, Defaults.SHARE_GROUP_MAX_GROUPS, between(1, 100), MEDIUM, ShareGroupMaxGroupsDoc)
       .define(ShareGroupMaxSizeProp, SHORT, Defaults.SHARE_GROUP_MAX_SIZE, between(10, 1000), MEDIUM, ShareGroupMaxSizeDoc)
       .define(ShareGroupAssignorsProp, LIST, Defaults.SHARE_GROUP_ASSIGNORS, null, MEDIUM, ShareGroupAssignorsDoc)
+      .defineInternal(ShareGroupPersisterClassNameProp, STRING, Defaults.SHARE_GROUP_PERSISTER_CLASS_NAME, new ConfigDef.NonNullValidator(), MEDIUM, ShareGroupPersisterClassNameDoc)
 
       /** ********* Offset management configuration ***********/
       .define(OffsetMetadataMaxSizeProp, INT, Defaults.OFFSET_METADATA_MAX_SIZE, HIGH, OffsetMetadataMaxSizeDoc)
@@ -1767,6 +1771,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val shareGroupMaxHeartbeatIntervalMs = getInt(KafkaConfig.ShareGroupMaxHeartbeatIntervalMsProp)
   val shareGroupRecordLockDurationMs = getInt(KafkaConfig.ShareGroupRecordLockDurationMsProp)
   val shareGroupMaxRecordLockDurationMs = getInt(KafkaConfig.ShareGroupMaxRecordLockDurationMsProp)
+  val shareGroupPersisterClassName = getString(KafkaConfig.ShareGroupPersisterClassNameProp)
 
   /** ********* Offset management configuration ***********/
   val offsetMetadataMaxSize = getInt(KafkaConfig.OffsetMetadataMaxSizeProp)
