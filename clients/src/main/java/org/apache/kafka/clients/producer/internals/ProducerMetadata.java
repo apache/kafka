@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -41,6 +42,7 @@ public class ProducerMetadata extends Metadata {
     private final Set<String> newTopics = new HashSet<>();
     private final Logger log;
     private final Time time;
+    private Map<String, Errors> errors;
 
     public ProducerMetadata(long refreshBackoffMs,
                             long refreshBackoffMaxMs,
@@ -53,6 +55,7 @@ public class ProducerMetadata extends Metadata {
         this.metadataIdleMs = metadataIdleMs;
         this.log = logContext.logger(ProducerMetadata.class);
         this.time = time;
+        this.errors = null;
     }
 
     @Override
@@ -130,6 +133,7 @@ public class ProducerMetadata extends Metadata {
     @Override
     public synchronized void update(int requestVersion, MetadataResponse response, boolean isPartialUpdate, long nowMs) {
         super.update(requestVersion, response, isPartialUpdate, nowMs);
+        errors = response.errors();
 
         // Remove all topics in the response that are in the new topic set. Note that if an error was encountered for a
         // new topic's metadata, then any work to resolve the error will include the topic in a full metadata update.
@@ -156,5 +160,19 @@ public class ProducerMetadata extends Metadata {
         super.close();
         notifyAll();
     }
+
+    public Errors getError(final String topic) {
+        if (errors != null) {
+            return errors.get(topic);
+        }
+        return null;
+    }
+
+    public void deleteError(final String topic) {
+        if (errors != null) {
+            errors.remove(topic);
+        }
+    }
+
 
 }
