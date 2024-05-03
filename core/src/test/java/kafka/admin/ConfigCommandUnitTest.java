@@ -16,13 +16,14 @@
  */
 package kafka.admin;
 
-import kafka.utils.TestUtils;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.config.ConfigType;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import scala.collection.Seq;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -35,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class JConfigCommandTest {
+public class ConfigCommandUnitTest {
     private static final String ZK_CONNECT = "localhost:2181";
 
     private static final List<String> ZOOKEEPER_BOOTSTRAP = Arrays.asList("--zookeeper", ZK_CONNECT);
@@ -336,7 +337,7 @@ public class JConfigCommandTest {
     }
 
     @Test
-    public void testParseConfigsToBeAddedForAddConfigFile() {
+    public void testParseConfigsToBeAddedForAddConfigFile() throws IOException {
         String fileContents =
             "a=b\n" +
             "c = d\n" +
