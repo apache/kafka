@@ -1609,6 +1609,12 @@ public class RemoteLogManagerTest {
         segment5Epochs.put(9, 101L);
         RemoteLogSegmentMetadata segment5 = createRemoteLogSegmentMetadata(15, 150, segment5Epochs);
         assertFalse(isRemoteSegmentWithinLeaderEpochs(segment5, 210, leaderEpochCache));
+
+        // segment6Epochs does not match with the leaderEpochCache
+        TreeMap<Integer, Long> segment6Epochs = new TreeMap<>();
+        segment6Epochs.put(9, 99L);
+        RemoteLogSegmentMetadata segment6 = createRemoteLogSegmentMetadata(99, 150, segment6Epochs);
+        assertFalse(isRemoteSegmentWithinLeaderEpochs(segment6, 210, leaderEpochCache));
     }
 
     @Test

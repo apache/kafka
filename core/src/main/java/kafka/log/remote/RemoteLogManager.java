@@ -1238,7 +1238,7 @@ public class RemoteLogManager implements Closeable {
         // When the segment1 gets deleted, then the log-start-offset = 51 and leader-epoch-file-cache gets updated to: {(7, 51), (9, 100)}.
         // While validating the segment2, we should ensure the overlapping remote log segments case.
         Integer segmentFirstEpoch = segmentLeaderEpochs.ceilingKey(leaderEpochs.firstKey());
-        if (segmentFirstEpoch == null || !leaderEpochs.containsKey(segmentFirstEpoch)) {
+        if (segmentFirstEpoch == null) {
             LOGGER.debug("Segment {} is not within the partition leader epoch lineage. " +
                             "Remote segment epochs: {} and partition leader epochs: {}",
                     segmentMetadata.remoteLogSegmentId(), segmentLeaderEpochs, leaderEpochs);
