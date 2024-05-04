@@ -1247,11 +1247,9 @@ public class RemoteLogManager implements Closeable {
         for (Map.Entry<Integer, Long> entry : segmentLeaderEpochs.entrySet()) {
             int epoch = entry.getKey();
             long offset = entry.getValue();
-
             if (epoch < segmentFirstEpoch) {
                 continue;
             }
-
             // If segment's epoch does not exist in the leader epoch lineage then it is not a valid segment.
             if (!leaderEpochs.containsKey(epoch)) {
                 LOGGER.debug("Segment {} epoch {} is not within the leader epoch lineage. " +
@@ -1259,7 +1257,6 @@ public class RemoteLogManager implements Closeable {
                         segmentMetadata.remoteLogSegmentId(), epoch, segmentLeaderEpochs, leaderEpochs);
                 return false;
             }
-
             // Two cases:
             // case-1: When the segment-first-epoch equals to the first-epoch in the leader-epoch-lineage, then the
             // offset value can lie anywhere between 0 to (next-epoch-start-offset - 1) is valid.
@@ -1272,7 +1269,6 @@ public class RemoteLogManager implements Closeable {
                         segmentLeaderEpochs, leaderEpochs);
                 return false;
             }
-
             // Segment's end offset should be less than or equal to the respective leader epoch's offset.
             if (epoch == segmentLastEpoch) {
                 Map.Entry<Integer, Long> nextEntry = leaderEpochs.higherEntry(epoch);
@@ -1284,7 +1280,6 @@ public class RemoteLogManager implements Closeable {
                     return false;
                 }
             }
-
             // Next segment epoch entry and next leader epoch entry should be same to ensure that the segment's epoch
             // is within the leader epoch lineage.
             if (epoch != segmentLastEpoch && !leaderEpochs.higherEntry(epoch).equals(segmentLeaderEpochs.higherEntry(epoch))) {
@@ -1345,11 +1340,9 @@ public class RemoteLogManager implements Closeable {
             }
             previousEpochAndOffset = currentEpochAndOffset;
         }
-
         if (epochsWithNoMessages.isEmpty()) {
             return leaderEpochs;
         }
-
         TreeMap<Integer, Long> filteredLeaderEpochs = new TreeMap<>(leaderEpochs);
         for (Integer epochWithNoMessage : epochsWithNoMessages) {
             filteredLeaderEpochs.remove(epochWithNoMessage);
