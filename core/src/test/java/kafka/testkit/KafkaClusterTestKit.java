@@ -244,7 +244,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
                         Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", () -> sharedServer.stopForController());
-                        if (controller != null) controller.shutdown();
                         throw e;
                     }
                     controllers.put(node.id(), controller);
