@@ -29,6 +29,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import java.util
 import java.util.Optional
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 import scala.collection.mutable
 import scala.math.Ordered.orderingToOrdered
@@ -438,9 +439,7 @@ class FullFetchContext(private val time: Time,
       }
       cachedPartitions
     }
-    // We select a shard randomly out of the available options
-    val shard = ThreadLocalRandom.current().nextInt(cache.size())
-    val cacheShard = cache(shard);
+    val cacheShard = cache.getNextCacheShard
     val responseSessionId = cacheShard.maybeCreateSession(time.milliseconds(), isFromFollower,
         updates.size, usesTopicIds, () => createNewSession)
     debug(s"Full fetch context with session id $responseSessionId returning " +
@@ -603,6 +602,8 @@ class FetchSessionCacheShard(private val maxEntries: Int,
                              val sessionIdRange: Int = Int.MaxValue,
                              private val shardNum: Int = 0) extends Logging {
 
+  this.logIdent = s"[Shard $shardNum] "
+
   private var numPartitions: Long = 0
 
   // A map of session ID to FetchSession.
@@ -700,6 +701,10 @@ class FetchSessionCacheShard(private val maxEntries: Int,
     * 1. A is privileged and B is not, or
     * 2. B is considered "stale" because it has been inactive for a long time, or
     * 3. A contains more partitions than B, and B is not recently created.
+    *
+    * Prior to KAFKA-9401, the session cache was not sharded and we looked at all
+    * entries while considering those eligible for eviction. Now eviction is done
+    * by considering entries on a per-shard basis.
     *
     * @param privileged True if the new entry we would like to add is privileged.
     * @param key        The EvictableKey for the new entry we would like to add.
@@ -800,6 +805,7 @@ class FetchSessionCacheShard(private val maxEntries: Int,
 }
 object FetchSessionCache {
   private[server] val metricsGroup = new KafkaMetricsGroup(classOf[FetchSessionCache])
+  private val counter = new AtomicLong(0)
 }
 
 class FetchSessionCache(private val cacheShards: Seq[FetchSessionCacheShard]) {
@@ -812,11 +818,13 @@ class FetchSessionCache(private val cacheShards: Seq[FetchSessionCacheShard]) {
     cacheShards(shard)
   }
 
-  def apply(i: Int): FetchSessionCacheShard = {
-    cacheShards(i)
+  // Returns the shard in round-robin
+  def getNextCacheShard: FetchSessionCacheShard = {
+    val shardNum = (FetchSessionCache.counter.getAndIncrement() % size).toInt
+    cacheShards(shardNum)
   }
 
-  def size(): Int = {
+  def size: Int = {
     cacheShards.size
   }
 }
