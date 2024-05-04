@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, MetricName, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
+import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException, TimeoutException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
@@ -858,5 +858,18 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(20, timestampTp1.offset)
     assertEquals(20, timestampTp1.timestamp)
     assertEquals(Optional.of(0), timestampTp1.leaderEpoch)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @Timeout(15)
+  def testPositionRespectsTimeout(quorum: String, groupProtocol: String): Unit = {
+    val topicPartition = new TopicPartition(topic, 15)
+    val consumer = createConsumer()
+    consumer.assign(List(topicPartition).asJava)
+
+    // When position() is called for a topic/partition that doesn't exist, the consumer will repeatedly update the
+    // local metadata. However, it should give up after the user-supplied timeout has past.
+    assertThrows(classOf[TimeoutException], () => consumer.position(topicPartition, Duration.ofSeconds(3)))
   }
 }
