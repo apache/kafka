@@ -32,7 +32,13 @@ import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
+import org.apache.kafka.snapshot.FileRawSnapshotReader
+import org.apache.kafka.snapshot.FileRawSnapshotWriter
+import org.apache.kafka.snapshot.NotifyingRawSnapshotWriter
+import org.apache.kafka.snapshot.RawSnapshotReader
+import org.apache.kafka.snapshot.RawSnapshotWriter
+import org.apache.kafka.snapshot.SnapshotPath
+import org.apache.kafka.snapshot.Snapshots
 import org.apache.kafka.storage.internals
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig}
 
@@ -264,10 +270,10 @@ final class KafkaMetadataLog private (
       )
     }
 
-    storeSnapshot(snapshotId)
+    createNewSnapshotUnchecked(snapshotId)
   }
 
-  override def storeSnapshot(snapshotId: OffsetAndEpoch): Optional[RawSnapshotWriter] = {
+  override def createNewSnapshotUnchecked(snapshotId: OffsetAndEpoch): Optional[RawSnapshotWriter] = {
     val containsSnapshotId = snapshots synchronized {
       snapshots.contains(snapshotId)
     }
@@ -275,7 +281,12 @@ final class KafkaMetadataLog private (
     if (containsSnapshotId) {
       Optional.empty()
     } else {
-      Optional.of(FileRawSnapshotWriter.create(log.dir.toPath, snapshotId, Optional.of(this)))
+      Optional.of(
+        new NotifyingRawSnapshotWriter(
+          FileRawSnapshotWriter.create(log.dir.toPath, snapshotId),
+          onSnapshotFrozen
+        )
+      )
     }
   }
 
