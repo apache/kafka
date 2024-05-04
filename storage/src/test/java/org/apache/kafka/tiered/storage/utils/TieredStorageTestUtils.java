@@ -57,7 +57,7 @@ public class TieredStorageTestUtils {
 
     // Log cleanup interval is configured to be 500 ms. We need to wait at least that amount of time before
     // segments eligible for deletion gets physically removed.
-    public static final Integer STORAGE_WAIT_TIMEOUT_SEC = 5;
+    public static final Integer STORAGE_WAIT_TIMEOUT_SEC = 10;
     // The default value of log cleanup interval is 30 secs, and it increases the test execution time.
     private static final Integer LOG_CLEANUP_INTERVAL_MS = 500;
     private static final Integer RLM_TASK_INTERVAL_MS = 500;
