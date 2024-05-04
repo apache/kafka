@@ -47,7 +47,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.Collections.emptyMap;
-import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static kafka.test.annotation.Type.CO_KRAFT;
 import static kafka.test.annotation.Type.KRAFT;
@@ -58,8 +57,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CO
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
-import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 import static org.apache.kafka.common.ConsumerGroupState.EMPTY;
 import static org.apache.kafka.common.ConsumerGroupState.STABLE;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
@@ -73,14 +70,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ExtendWith(value = ClusterTestExtensions.class)
 public class DeleteConsumerGroupsTest {
     private final ClusterInstance cluster;
-    private final Iterable<GroupProtocol> groupProtocols;
 
     public DeleteConsumerGroupsTest(ClusterInstance cluster) {
         this.cluster = cluster;
-        this.groupProtocols = cluster.config().serverProperties()
-                .get(NEW_GROUP_COORDINATOR_ENABLE_CONFIG).equals("true")
-                ? Arrays.asList(CLASSIC, CONSUMER)
-                : singletonList(CLASSIC);
     }
 
     private static void generator(ClusterGenerator clusterGenerator) {
@@ -113,7 +105,8 @@ public class DeleteConsumerGroupsTest {
         ClusterConfig raftWithNewGroupCoordinator = ClusterConfig.defaultBuilder()
                 .setType(KRAFT)
                 .setName("newGroupCoordinator")
-                .setServerProperties(serverProperties).build();
+                .setServerProperties(serverProperties)
+                .build();
         clusterGenerator.accept(raftWithNewGroupCoordinator);
 
         ClusterConfig combinedKRaftWithNewGroupCoordinator = ClusterConfig.defaultBuilder()
@@ -132,7 +125,7 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTemplate("generator")
     public void testDeleteCmdNonExistingGroup() {
-        String missingGroupId = composeMissingGroupId(CLASSIC);
+        String missingGroupId = getDummyGroupId();
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroupId};
         try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)) {
             String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
@@ -143,7 +136,7 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTemplate("generator")
     public void testDeleteNonExistingGroup() {
-        String missingGroupId = composeMissingGroupId(CLASSIC);
+        String missingGroupId = getDummyGroupId();
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroupId};
         try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)) {
             Map<String, Throwable> result = service.deleteGroups();
@@ -154,7 +147,7 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTemplate("generator")
     public void testDeleteNonEmptyGroup() throws Exception {
-        for (GroupProtocol groupProtocol : groupProtocols) {
+        for (GroupProtocol groupProtocol : cluster.supportedGroupProtocol()) {
             String groupId = composeGroupId(groupProtocol);
             String topicName = composeTopicName(groupProtocol);
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
@@ -184,7 +177,7 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTemplate("generator")
     void testDeleteEmptyGroup() throws Exception {
-        for (GroupProtocol groupProtocol : groupProtocols) {
+        for (GroupProtocol groupProtocol : cluster.supportedGroupProtocol()) {
             String groupId = composeGroupId(groupProtocol);
             String topicName = composeTopicName(groupProtocol);
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
@@ -217,9 +210,9 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTemplate("generator")
     public void testDeleteCmdAllGroups() throws Exception {
-        for (GroupProtocol groupProtocol : groupProtocols) {
+        for (GroupProtocol groupProtocol : cluster.supportedGroupProtocol()) {
             String topicName = composeTopicName(groupProtocol);
-            // Create 3 groups with 1 consumer per each
+            // Create 3 groups with 1 consumer each
             Map<String, AutoCloseable> groupIdToExecutor = IntStream.rangeClosed(1, 3)
                     .mapToObj(i -> composeGroupId(groupProtocol) + i)
                     .collect(Collectors.toMap(Function.identity(), group -> consumerGroupClosable(groupProtocol, group, topicName)));
@@ -255,7 +248,7 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTemplate("generator")
     public void testDeleteCmdWithMixOfSuccessAndError() throws Exception {
-        for (GroupProtocol groupProtocol : groupProtocols) {
+        for (GroupProtocol groupProtocol : cluster.supportedGroupProtocol()) {
             String groupId = composeGroupId(groupProtocol);
             String topicName = composeTopicName(groupProtocol);
             String missingGroupId = composeMissingGroupId(groupProtocol);
@@ -288,7 +281,7 @@ public class DeleteConsumerGroupsTest {
 
     @ClusterTemplate("generator")
     public void testDeleteWithMixOfSuccessAndError() throws Exception {
-        for (GroupProtocol groupProtocol : groupProtocols) {
+        for (GroupProtocol groupProtocol : cluster.supportedGroupProtocol()) {
             String groupId = composeGroupId(groupProtocol);
             String topicName = composeTopicName(groupProtocol);
             String missingGroupId = composeMissingGroupId(groupProtocol);
