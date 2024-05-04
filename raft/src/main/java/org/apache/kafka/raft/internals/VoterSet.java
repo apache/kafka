@@ -65,6 +65,43 @@ final public class VoterSet {
     }
 
     /**
+     * Returns if the node is a voter in the set of voters.
+     *
+     * If the voter set includes the directory id, the {@code nodeKey} directory id must match the
+     * directory id specified by the voter set.
+     *
+     * If the voter set doesn't include the directory id ({@code Optional.empty()}), a node is in
+     * the voter set as long as the node id matches. The directory id is not checked.
+     *
+     * @param nodeKey the node's id and directory id
+     * @return true if the node is a voter in the voter set, otherwise false
+     */
+    public boolean isVoter(VoterKey nodeKey) {
+        VoterNode node = voters.get(nodeKey.id());
+        if (node != null) {
+            if (node.voterKey().directoryId().isPresent()) {
+                return node.voterKey().directoryId().equals(nodeKey.directoryId());
+            } else {
+                // configured voter set doesn't an uuid so it is a voter as long as the node id
+                // matches
+                return true;
+            }
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Returns if the node is the only voter in the set of voters.
+     *
+     * @param nodeKey the node's id and directory id
+     * @return true if the node is the only voter in the voter set, otherwise false
+     */
+    public boolean isOnlyVoter(VoterKey nodeKey) {
+        return voters.size() == 1 && isVoter(nodeKey);
+    }
+
+    /**
      * Returns all of the voter ids.
      */
     public Set<Integer> voterIds() {
@@ -251,7 +288,7 @@ final public class VoterSet {
         }
     }
 
-    final static class VoterNode {
+    public final static class VoterNode {
         private final VoterKey voterKey;
         private final Map<String, InetSocketAddress> listeners;
         private final SupportedVersionRange supportedKRaftVersion;
@@ -266,7 +303,7 @@ final public class VoterSet {
             this.supportedKRaftVersion = supportedKRaftVersion;
         }
 
-        VoterKey voterKey() {
+        public VoterKey voterKey() {
             return voterKey;
         }
 

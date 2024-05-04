@@ -136,6 +136,15 @@ final public class KRaftControlRecordStateMachine {
     }
 
     /**
+     * Returns the last kraft version.
+     */
+    public short lastKraftVersion() {
+        synchronized (kraftVersionHistory) {
+            return kraftVersionHistory.lastEntry().map(LogHistory.Entry::value).orElse((short) 0);
+        }
+    }
+
+    /**
      * Returns the voter set at a given offset.
      *
      * @param offset the offset (inclusive)
