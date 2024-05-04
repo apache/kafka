@@ -47,7 +47,7 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
-import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTasks;
+import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTask;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
@@ -1790,10 +1790,7 @@ public class TaskManagerTest {
             .inState(State.RESTORING)
             .withInputPartitions(taskId00Partitions).build();
         final StreamsException exception = new StreamsException("boom!");
-        final StateUpdater.ExceptionAndTasks exceptionAndTasks = new StateUpdater.ExceptionAndTasks(
-            Collections.singleton(statefulTask),
-            exception
-        );
+        final ExceptionAndTask exceptionAndTasks = new ExceptionAndTask(exception, statefulTask);
         when(stateUpdater.hasExceptionsAndFailedTasks()).thenReturn(true);
         when(stateUpdater.drainExceptionsAndFailedTasks()).thenReturn(Collections.singletonList(exceptionAndTasks));
 
@@ -1815,10 +1812,7 @@ public class TaskManagerTest {
             .inState(State.RESTORING)
             .withInputPartitions(taskId00Partitions).build();
         final RuntimeException exception = new RuntimeException("boom!");
-        final StateUpdater.ExceptionAndTasks exceptionAndTasks = new StateUpdater.ExceptionAndTasks(
-            Collections.singleton(statefulTask),
-            exception
-        );
+        final ExceptionAndTask exceptionAndTasks = new ExceptionAndTask(exception, statefulTask);
         when(stateUpdater.hasExceptionsAndFailedTasks()).thenReturn(true);
         when(stateUpdater.drainExceptionsAndFailedTasks()).thenReturn(Collections.singletonList(exceptionAndTasks));
 
@@ -1843,13 +1837,13 @@ public class TaskManagerTest {
         final StreamTask statefulTask1 = statefulTask(taskId01, taskId01ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId01Partitions).build();
-        final StateUpdater.ExceptionAndTasks exceptionAndTasks0 = new StateUpdater.ExceptionAndTasks(
-            Collections.singleton(statefulTask0),
-            new TaskCorruptedException(Collections.singleton(taskId00))
+        final ExceptionAndTask exceptionAndTasks0 = new ExceptionAndTask(
+            new TaskCorruptedException(Collections.singleton(taskId00)),
+            statefulTask0
         );
-        final StateUpdater.ExceptionAndTasks exceptionAndTasks1 = new StateUpdater.ExceptionAndTasks(
-            Collections.singleton(statefulTask1),
-            new TaskCorruptedException(Collections.singleton(taskId01))
+        final ExceptionAndTask exceptionAndTasks1 = new ExceptionAndTask(
+            new TaskCorruptedException(Collections.singleton(taskId01)),
+            statefulTask1
         );
         when(stateUpdater.hasExceptionsAndFailedTasks()).thenReturn(true);
         when(stateUpdater.drainExceptionsAndFailedTasks()).thenReturn(Arrays.asList(exceptionAndTasks0, exceptionAndTasks1));
@@ -3749,8 +3743,8 @@ public class TaskManagerTest {
             .inState(State.RUNNING).build();
         when(stateUpdater.drainExceptionsAndFailedTasks())
             .thenReturn(Arrays.asList(
-                new ExceptionAndTasks(mkSet(failedStatefulTask), new RuntimeException()),
-                new ExceptionAndTasks(mkSet(failedStandbyTask), new RuntimeException()))
+                new ExceptionAndTask(new RuntimeException(), failedStatefulTask),
+                new ExceptionAndTask(new RuntimeException(), failedStandbyTask))
             );
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
 

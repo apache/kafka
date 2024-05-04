@@ -65,7 +65,6 @@ public class FileQuorumStateStore implements QuorumStateStore {
 
     private final File stateFile;
 
-
     public FileQuorumStateStore(final File stateFile) {
         this.stateFile = stateFile;
     }

@@ -21,24 +21,23 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
 public interface StateUpdater {
 
-    class ExceptionAndTasks {
-        private final Set<Task> tasks;
+    class ExceptionAndTask {
+        private final Task task;
         private final RuntimeException exception;
 
-        public ExceptionAndTasks(final Set<Task> tasks, final RuntimeException exception) {
-            this.tasks = Objects.requireNonNull(tasks);
+        public ExceptionAndTask(final RuntimeException exception, final Task task) {
             this.exception = Objects.requireNonNull(exception);
+            this.task = Objects.requireNonNull(task);
         }
 
-        public Set<Task> getTasks() {
-            return Collections.unmodifiableSet(tasks);
+        public Task task() {
+            return task;
         }
 
         public RuntimeException exception() {
@@ -48,14 +47,22 @@ public interface StateUpdater {
         @Override
         public boolean equals(final Object o) {
             if (this == o) return true;
-            if (!(o instanceof ExceptionAndTasks)) return false;
-            final ExceptionAndTasks that = (ExceptionAndTasks) o;
-            return tasks.equals(that.tasks) && exception.equals(that.exception);
+            if (!(o instanceof ExceptionAndTask)) return false;
+            final ExceptionAndTask that = (ExceptionAndTask) o;
+            return task.id().equals(that.task.id()) && exception.equals(that.exception);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(tasks, exception);
+            return Objects.hash(task, exception);
+        }
+
+        @Override
+        public String toString() {
+            return "ExceptionAndTask{" +
+                "task=" + task.id() +
+                ", exception=" + exception +
+                '}';
         }
     }
 
@@ -142,7 +149,7 @@ public interface StateUpdater {
      *
      * @return list of failed tasks and the corresponding exceptions
      */
-    List<ExceptionAndTasks> drainExceptionsAndFailedTasks();
+    List<ExceptionAndTask> drainExceptionsAndFailedTasks();
 
     /**
      * Checks if the state updater has any failed tasks that should be returned to the StreamThread
