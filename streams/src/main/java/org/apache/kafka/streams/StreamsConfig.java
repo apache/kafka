@@ -148,7 +148,7 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  */
 public class StreamsConfig extends AbstractConfig {
 
-    private static final java.util.logging.Logger log = LoggerFactory.getLogger(StreamsConfig.class);
+    private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
 
     private static final ConfigDef CONFIG;
 
@@ -824,18 +824,6 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public static final String TOPOLOGY_OPTIMIZATION = TOPOLOGY_OPTIMIZATION_CONFIG;
 
-
-    private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
-        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
-    private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
-        new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
-    private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS =
-        new String[] {
-            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
-            ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
-            ProducerConfig.TRANSACTIONAL_ID_CONFIG
-        };
-
     static {
         CONFIG = new ConfigDef()
 
@@ -1182,26 +1170,45 @@ public class StreamsConfig extends AbstractConfig {
                     WINDOW_SIZE_MS_DOC);
     }
 
-    // this is the list of configs for underlying clients
-    // that streams prefer different default values
-    private static final Map<String, Object> PRODUCER_DEFAULT_OVERRIDES;
+    // KS_DEFAULT_PRODUCER_CONFIGS - default producer configs for Kafka Streams
+    private static final Map<String, Object> KS_DEFAULT_PRODUCER_CONFIGS;
     static {
         final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
         tempProducerDefaultOverrides.put(ProducerConfig.LINGER_MS_CONFIG, "100");
-        PRODUCER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
+
+        KS_DEFAULT_PRODUCER_CONFIGS = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
 
-    private static final Map<String, Object> PRODUCER_EOS_OVERRIDES;
+    // KS_DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED - default producer configs for Kafka Streams with EOS enabled
+    private static final Map<String, Object> KS_DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED;
     static {
-        final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>(PRODUCER_DEFAULT_OVERRIDES);
+        final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>(KS_DEFAULT_PRODUCER_CONFIGS);
         tempProducerDefaultOverrides.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
-        tempProducerDefaultOverrides.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
-        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
         tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, DEFAULT_TRANSACTION_TIMEOUT);
 
-        PRODUCER_EOS_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
+        KS_DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
 
+    // KS_CONTROLLED_PRODUCER_CONFIGS - Kafka Streams producer configs that cannot be overridden by the user
+    private static final Map<String, Object> KS_CONTROLLED_PRODUCER_CONFIGS;
+    static {
+        final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
+        tempProducerDefaultOverrides.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, "StreamPartitioner");
+
+        KS_CONTROLLED_PRODUCER_CONFIGS = Collections.unmodifiableMap(tempProducerDefaultOverrides);
+    }
+
+    // KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED - Kafka Streams producer configs that cannot be overridden by the user with EOS enabled
+    private static final Map<String, Object> KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED;
+    static {
+        final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>(KS_CONTROLLED_PRODUCER_CONFIGS);
+        tempProducerDefaultOverrides.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, null);
+
+        KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED = Collections.unmodifiableMap(tempProducerDefaultOverrides);
+    }
+
+    // KS_DEFAULT_CONSUMER_CONFIGS - default consumer configs for Kafka Streams
     private static final Map<String, Object> KS_DEFAULT_CONSUMER_CONFIGS;
     static {
         final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>();
@@ -1209,9 +1216,10 @@ public class StreamsConfig extends AbstractConfig {
         tempConsumerDefaultOverrides.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         tempConsumerDefaultOverrides.put("internal.leave.group.on.close", false);
 
-        KS_CONTROLLED_CONSUMER_CONFIGS = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
+        KS_DEFAULT_CONSUMER_CONFIGS = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
+    // KS_CONTROLLED_CONSUMER_CONFIGS - Kafka Streams consumer configs that cannot be overridden by the user
     private static final Map<String, Object> KS_CONTROLLED_CONSUMER_CONFIGS;
     static {
         final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>();
@@ -1221,6 +1229,7 @@ public class StreamsConfig extends AbstractConfig {
         KS_CONTROLLED_CONSUMER_CONFIGS = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
+    // KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED - Kafka Streams consumer configs that cannot be overridden by the user with EOS enabled
     private static final Map<String, Object> KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED;
     static {
         final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>(KS_CONTROLLED_CONSUMER_CONFIGS);
@@ -1228,26 +1237,6 @@ public class StreamsConfig extends AbstractConfig {
         tempConsumerDefaultOverrides.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED.toString());
 
         KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
-    }
-
-    //TODO: Delete this
-    private static final Map<String, Object> CONSUMER_DEFAULT_OVERRIDES;
-    static {
-        final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>();
-        tempConsumerDefaultOverrides.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000");
-        tempConsumerDefaultOverrides.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        tempConsumerDefaultOverrides.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        tempConsumerDefaultOverrides.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
-        tempConsumerDefaultOverrides.put("internal.leave.group.on.close", false);
-        CONSUMER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
-    }
-
-    //TODO: Delete this
-    private static final Map<String, Object> CONSUMER_EOS_OVERRIDES;
-    static {
-        final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>(CONSUMER_DEFAULT_OVERRIDES);
-        tempConsumerDefaultOverrides.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED.toString());
-        CONSUMER_EOS_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
     public static class InternalConfig {
@@ -1535,7 +1524,9 @@ public class StreamsConfig extends AbstractConfig {
         final String overwritePropertyLogMessage = "Unexpected %s config: %s found. User setting (%s) will be ignored and the Streams default setting (%s) will be used";
         
         if (props.containsKey(key)) {
-            log.warn(String.format(overwritePropertyLogMessage, config, key, props.get(key), value));
+            if (!Objects.equals(props.get(key), value)) {
+                log.warn(String.format(overwritePropertyLogMessage, config, key, props.get(key), value));
+            }
         }
         props.put(key, value);
     }
@@ -1576,53 +1567,23 @@ public class StreamsConfig extends AbstractConfig {
             for (Map.Entry<String, Object> entry : KS_CONTROLLED_CONSUMER_CONFIGS.entrySet()) {
                 overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
             }
-        }   
+        }
     }
 
-    private void checkIfUnexpectedUserSpecifiedConsumerConfig(final Map<String, Object> clientProvidedProps,
-                                                              final String[] nonConfigurableConfigs) {
-        // Streams does not allow users to configure certain consumer/producer configurations, for example,
-        // enable.auto.commit. In cases where user tries to override such non-configurable
-        // consumer/producer configurations, log a warning and remove the user defined value from the Map.
-        // Thus the default values for these consumer/producer configurations that are suitable for
-        // Streams will be used instead.
-
-        final String nonConfigurableConfigMessage = "Unexpected user-specified %s config: %s found. %sUser setting (%s) will be ignored and the Streams default setting (%s) will be used ";
-        final String eosMessage = PROCESSING_GUARANTEE_CONFIG + " is set to " + getString(PROCESSING_GUARANTEE_CONFIG) + ". Hence, ";
-
-        for (final String config: nonConfigurableConfigs) {
-            if (clientProvidedProps.containsKey(config)) {
-
-                if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
-                    if (!clientProvidedProps.get(config).equals(CONSUMER_DEFAULT_OVERRIDES.get(config))) {
-                        log.warn(String.format(nonConfigurableConfigMessage, "consumer", config, "", clientProvidedProps.get(config),  CONSUMER_DEFAULT_OVERRIDES.get(config)));
-                        clientProvidedProps.remove(config);
-                    }
-                } else if (eosEnabled) {
-                    if (CONSUMER_EOS_OVERRIDES.containsKey(config)) {
-                        if (!clientProvidedProps.get(config).equals(CONSUMER_EOS_OVERRIDES.get(config))) {
-                            log.warn(String.format(nonConfigurableConfigMessage,
-                                    "consumer", config, eosMessage, clientProvidedProps.get(config), CONSUMER_EOS_OVERRIDES.get(config)));
-                            clientProvidedProps.remove(config);
-                        }
-                    } else if (PRODUCER_EOS_OVERRIDES.containsKey(config)) {
-                        if (!clientProvidedProps.get(config).equals(PRODUCER_EOS_OVERRIDES.get(config))) {
-                            log.warn(String.format(nonConfigurableConfigMessage,
-                                    "producer", config, eosMessage, clientProvidedProps.get(config), PRODUCER_EOS_OVERRIDES.get(config)));
-                            clientProvidedProps.remove(config);
-                        }
-                    } else if (ProducerConfig.TRANSACTIONAL_ID_CONFIG.equals(config)) {
-                        log.warn(String.format(nonConfigurableConfigMessage,
-                            "producer", config, eosMessage, clientProvidedProps.get(config), "<appId>-<generatedSuffix>"));
-                        clientProvidedProps.remove(config);
-                    }
-                }
+    private void validateProducerPropertyMap(final Map<String, Object> props){
+        if (eosEnabled){
+            // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED and override values if set
+            for (Map.Entry<String, Object> entry : KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED.entrySet()) {
+                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
             }
-        }
+            verifyMaxInFlightRequestPerConnection(props.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
 
-        if (eosEnabled) {
-            verifyMaxInFlightRequestPerConnection(clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
-        }
+        } else {
+            // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS and override values if set
+            for (Map.Entry<String, Object> entry : KS_CONTROLLED_PRODUCER_CONFIGS.entrySet()) {
+                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
+            }
+        }   
     }
 
     private void verifyMaxInFlightRequestPerConnection(final Object maxInFlightRequests) {
@@ -1743,7 +1704,7 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
         baseConsumerProps.putAll(restoreConsumerProps);
 
-        validateConsumerPropertyMap(restoreConsumerProps);
+        validateConsumerPropertyMap(baseConsumerProps);
 
         // no need to set group id for a restore consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -1778,7 +1739,7 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
         baseConsumerProps.putAll(globalConsumerProps);
 
-        validateConsumerPropertyMap(globalConsumerProps);
+        validateConsumerPropertyMap(baseConsumerProps);
 
         // no need to set group id for a global consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -1805,10 +1766,8 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getProducerConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());
 
-        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS);
-
         // generate producer configs from original properties and overridden maps
-        final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);
+        final Map<String, Object> props = new HashMap<>(eosEnabled ? KS_DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED : KS_DEFAULT_PRODUCER_CONFIGS);
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 
@@ -1817,7 +1776,15 @@ public class StreamsConfig extends AbstractConfig {
             props.put("internal.auto.downgrade.txn.commit", true);
         }
 
+        validateProducerPropertyMap(props);
+
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
+        overwritePropertyMap(
+            props,
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, 
+            originals().get(BOOTSTRAP_SERVERS_CONFIG),
+            "consumer"
+        );
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
 
