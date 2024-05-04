@@ -172,13 +172,15 @@ public class MeteredKeyValueStore<K, V>
     protected void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(context, storeName, changelogTopic, keySerde, valueSerde);
+        serdes = StoreSerdeInitializer.prepareStoreSerde(
+            context, storeName, changelogTopic, keySerde, valueSerde, this::prepareValueSerdeForStore);
     }
 
     protected void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(context, storeName, changelogTopic, keySerde, valueSerde);
+        serdes = StoreSerdeInitializer.prepareStoreSerde(
+            context, storeName, changelogTopic, keySerde, valueSerde, this::prepareValueSerdeForStore);
     }
 
     @SuppressWarnings("unchecked")

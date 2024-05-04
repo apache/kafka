@@ -86,6 +86,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
                             (query, positionBound, config, store) -> runTimestampedKeyQuery(query, positionBound, config)
                     )
             );
+
     @SuppressWarnings("unchecked")
     @Override
     protected Serde<ValueAndTimestamp<V>> prepareValueSerdeForStore(final Serde<ValueAndTimestamp<V>> valueSerde, final SerdeGetter getter) {
@@ -95,7 +96,6 @@ public class MeteredTimestampedKeyValueStore<K, V>
             return super.prepareValueSerdeForStore(valueSerde, getter);
         }
     }
-
 
     public RawAndDeserializedValue<V> getWithBinary(final K key) {
         try {

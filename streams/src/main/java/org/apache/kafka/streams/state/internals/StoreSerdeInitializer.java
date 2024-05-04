@@ -29,21 +29,23 @@ import org.apache.kafka.streams.state.StateSerdes;
 public class StoreSerdeInitializer {
     static <K, V> StateSerdes<K, V> prepareStoreSerde(final StateStoreContext context, final String storeName,
                                                       final String changelogTopic, final Serde<K> keySerde,
-                                                      final Serde<V> valueSerde) {
+                                                      final Serde<V> valueSerde,
+                                                      final PrepareFunc<V> prepareValueSerdeFunc) {
         return new StateSerdes<>(
             changelogTopic,
             prepareSerde(WrappingNullableUtils::prepareKeySerde, storeName, keySerde, new SerdeGetter(context), true),
-            prepareSerde(WrappingNullableUtils::prepareValueSerde, storeName, valueSerde, new SerdeGetter(context), false)
+            prepareSerde(prepareValueSerdeFunc, storeName, valueSerde, new SerdeGetter(context), false)
         );
     }
 
     static <K, V> StateSerdes<K, V> prepareStoreSerde(final ProcessorContext context, final String storeName,
                                                       final String changelogTopic, final Serde<K> keySerde,
-                                                      final Serde<V> valueSerde) {
+                                                      final Serde<V> valueSerde,
+                                                      final PrepareFunc<V> prepareValueSerdeFunc) {
         return new StateSerdes<>(
             changelogTopic,
             prepareSerde(WrappingNullableUtils::prepareKeySerde, storeName, keySerde, new SerdeGetter(context), true),
-            prepareSerde(WrappingNullableUtils::prepareValueSerde, storeName, valueSerde, new SerdeGetter(context), false)
+            prepareSerde(prepareValueSerdeFunc, storeName, valueSerde, new SerdeGetter(context), false)
         );
     }
 

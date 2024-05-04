@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -135,13 +136,15 @@ public class MeteredSessionStore<K, V>
     private void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(context, storeName, changelogTopic, keySerde, valueSerde);
+        serdes = StoreSerdeInitializer.prepareStoreSerde(
+            context, storeName, changelogTopic, keySerde, valueSerde, WrappingNullableUtils::prepareValueSerde);
     }
 
     private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(context, storeName, changelogTopic, keySerde, valueSerde);
+        serdes = StoreSerdeInitializer.prepareStoreSerde(
+            context, storeName, changelogTopic, keySerde, valueSerde, WrappingNullableUtils::prepareValueSerde);
     }
 
     @SuppressWarnings("unchecked")
