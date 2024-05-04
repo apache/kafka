@@ -1266,7 +1266,7 @@ public class RemoteLogManager implements Closeable {
             // case-2: When the segment-first-epoch is not equal to the first-epoch in the leader-epoch-lineage, then
             // the offset value should be between (current-epoch-start-offset) to (next-epoch-start-offset - 1).
             if (epoch == segmentFirstEpoch && leaderEpochs.lowerKey(epoch) != null && offset < leaderEpochs.get(epoch)) {
-                LOGGER.debug("Segment {} first-valid epoch {} offset is less than leader epoch offset {}." +
+                LOGGER.debug("Segment {} first-valid epoch {} offset is less than first leader epoch offset {}." +
                                 "Remote segment epochs: {} and partition leader epochs: {}",
                         segmentMetadata.remoteLogSegmentId(), epoch, leaderEpochs.get(epoch),
                         segmentLeaderEpochs, leaderEpochs);
