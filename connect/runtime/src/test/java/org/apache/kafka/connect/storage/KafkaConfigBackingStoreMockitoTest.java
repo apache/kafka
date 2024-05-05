@@ -42,6 +42,7 @@ import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TestFuture;
 import org.apache.kafka.connect.util.TopicAdmin;
@@ -55,6 +56,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -117,28 +119,37 @@ public class KafkaConfigBackingStoreMockitoTest {
 
     private static final List<String> CONNECTOR_IDS = Arrays.asList("connector1", "connector2");
     private static final List<String> CONNECTOR_CONFIG_KEYS = Arrays.asList("connector-connector1", "connector-connector2");
+    private static final List<String> COMMIT_TASKS_CONFIG_KEYS = Arrays.asList("commit-connector1", "commit-connector2");
+
     private static final List<String> TARGET_STATE_KEYS = Arrays.asList("target-state-connector1", "target-state-connector2");
-
-
     private static final List<String> CONNECTOR_TASK_COUNT_RECORD_KEYS = Arrays.asList("tasks-fencing-connector1", "tasks-fencing-connector2");
     private static final String CONNECTOR_1_NAME = "connector1";
     private static final String CONNECTOR_2_NAME = "connector2";
     private static final List<String> RESTART_CONNECTOR_KEYS = Arrays.asList(RESTART_KEY(CONNECTOR_1_NAME), RESTART_KEY(CONNECTOR_2_NAME));
 
-    private static final Struct ONLY_FAILED_MISSING_STRUCT = new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(INCLUDE_TASKS_FIELD_NAME, false);
-    private static final Struct INCLUDE_TASKS_MISSING_STRUCT = new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(ONLY_FAILED_FIELD_NAME, true);
-    private static final List<Struct> RESTART_REQUEST_STRUCTS = Arrays.asList(
-            new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(ONLY_FAILED_FIELD_NAME, true).put(INCLUDE_TASKS_FIELD_NAME, false),
-            ONLY_FAILED_MISSING_STRUCT,
-            INCLUDE_TASKS_MISSING_STRUCT);
-
-
+    // Need a) connector with multiple tasks and b) multiple connectors
+    private static final List<ConnectorTaskId> TASK_IDS = Arrays.asList(
+            new ConnectorTaskId("connector1", 0),
+            new ConnectorTaskId("connector1", 1),
+            new ConnectorTaskId("connector2", 0)
+    );
+    private static final List<String> TASK_CONFIG_KEYS = Arrays.asList("task-connector1-0", "task-connector1-1", "task-connector2-0");
     // Need some placeholders -- the contents don't matter here, just that they are restored properly
     private static final List<Map<String, String>> SAMPLE_CONFIGS = Arrays.asList(
             Collections.singletonMap("config-key-one", "config-value-one"),
             Collections.singletonMap("config-key-two", "config-value-two"),
             Collections.singletonMap("config-key-three", "config-value-three")
     );
+    private static final List<Struct> TASK_CONFIG_STRUCTS = Arrays.asList(
+            new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(0)),
+            new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(1))
+    );
+    private static final Struct ONLY_FAILED_MISSING_STRUCT = new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(INCLUDE_TASKS_FIELD_NAME, false);
+    private static final Struct INCLUDE_TASKS_MISSING_STRUCT = new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(ONLY_FAILED_FIELD_NAME, true);
+    private static final List<Struct> RESTART_REQUEST_STRUCTS = Arrays.asList(
+            new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(ONLY_FAILED_FIELD_NAME, true).put(INCLUDE_TASKS_FIELD_NAME, false),
+            ONLY_FAILED_MISSING_STRUCT,
+            INCLUDE_TASKS_MISSING_STRUCT);
 
     private static final List<Struct> CONNECTOR_CONFIG_STRUCTS = Arrays.asList(
             new Struct(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(0)),
@@ -161,6 +172,11 @@ public class KafkaConfigBackingStoreMockitoTest {
             "config-bytes-4".getBytes(), "config-bytes-5".getBytes(), "config-bytes-6".getBytes(),
             "config-bytes-7".getBytes(), "config-bytes-8".getBytes(), "config-bytes-9".getBytes()
     );
+    private static final Struct TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR
+            = new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 2);
+
+    private static final Struct TASKS_COMMIT_STRUCT_ZERO_TASK_CONNECTOR
+            = new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 0);
 
     private static final List<byte[]> TARGET_STATES_SERIALIZED = Arrays.asList(
             "started".getBytes(), "paused".getBytes(), "stopped".getBytes()
@@ -542,6 +558,72 @@ public class KafkaConfigBackingStoreMockitoTest {
     }
 
     @Test
+    public void testRestore() {
+        // Restoring data should notify only of the latest values after loading is complete. This also validates
+        // that inconsistent state is ignored.
+
+        // Overwrite each type at least once to ensure we see the latest data after loading
+        List<ConsumerRecord<String, byte[]>> existingRecords = Arrays.asList(
+                new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(1), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 2, 0L, TimestampType.CREATE_TIME, 0, 0, TASK_CONFIG_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(2), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 3, 0L, TimestampType.CREATE_TIME, 0, 0, TASK_CONFIG_KEYS.get(1),
+                        CONFIGS_SERIALIZED.get(3), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 4, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(4), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 5, 0L, TimestampType.CREATE_TIME, 0, 0, COMMIT_TASKS_CONFIG_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(5), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 6, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_TASK_COUNT_RECORD_KEYS.get(1),
+                        CONFIGS_SERIALIZED.get(6), new RecordHeaders(), Optional.empty()),
+                // Connector after root update should make it through, task update shouldn't
+                new ConsumerRecord<>(TOPIC, 0, 7, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(7), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 8, 0L, TimestampType.CREATE_TIME, 0, 0, TASK_CONFIG_KEYS.get(0),
+                        CONFIGS_SERIALIZED.get(8), new RecordHeaders(), Optional.empty()));
+        LinkedHashMap<byte[], Struct> deserialized = new LinkedHashMap<>();
+        deserialized.put(CONFIGS_SERIALIZED.get(0), CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(1), CONNECTOR_CONFIG_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(3), TASK_CONFIG_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(4), CONNECTOR_CONFIG_STRUCTS.get(1));
+        deserialized.put(CONFIGS_SERIALIZED.get(5), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(6), CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(1));
+        deserialized.put(CONFIGS_SERIALIZED.get(7), CONNECTOR_CONFIG_STRUCTS.get(2));
+        deserialized.put(CONFIGS_SERIALIZED.get(8), TASK_CONFIG_STRUCTS.get(1));
+        logOffset = 9;
+
+        expectStart(existingRecords, deserialized);
+        expectPartitionCount(1);
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+        configStorage.start();
+
+        // Should see a single connector and its config should be the last one seen anywhere in the log
+        ClusterConfigState configState = configStorage.snapshot();
+        assertEquals(logOffset, configState.offset()); // Should always be next to be read, even if uncommitted
+        assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
+        assertEquals(TargetState.STARTED, configState.targetState(CONNECTOR_IDS.get(0)));
+        // CONNECTOR_CONFIG_STRUCTS[2] -> SAMPLE_CONFIGS[2]
+        assertEquals(SAMPLE_CONFIGS.get(2), configState.connectorConfig(CONNECTOR_IDS.get(0)));
+        // Should see 2 tasks for that connector. Only config updates before the root key update should be reflected
+        assertEquals(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)), configState.tasks(CONNECTOR_IDS.get(0)));
+        // Both TASK_CONFIG_STRUCTS[0] -> SAMPLE_CONFIGS[0]
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(1)));
+        assertEquals(9, (int) configState.taskCountRecord(CONNECTOR_IDS.get(1)));
+        assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
+        assertEquals(Collections.singleton("connector1"), configState.connectorsPendingFencing);
+
+        // Shouldn't see any callbacks since this is during startup
+        configStorage.stop();
+        verify(configLog).stop();
+    }
+
+    @Test
     public void testRecordToRestartRequest() {
         ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
                 CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
@@ -623,7 +705,6 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertEquals(expectedClientId + "-leader", fencableProducerProps.get(CLIENT_ID_CONFIG));
     }
 
-
     @Test
     public void testExceptionOnStartWhenConfigTopicHasMultiplePartitions() {
         expectStart(Collections.emptyList(), Collections.emptyMap());
@@ -642,7 +723,6 @@ public class KafkaConfigBackingStoreMockitoTest {
         props.remove(TRANSACTIONAL_ID_CONFIG);
         props.remove(ENABLE_IDEMPOTENCE_CONFIG);
         createStore();
-
 
         Map<String, Object> fencableProducerProperties = configStorage.fencableProducerProps(config);
         assertEquals("connect-cluster-" + groupId, fencableProducerProperties.get(TRANSACTIONAL_ID_CONFIG));
