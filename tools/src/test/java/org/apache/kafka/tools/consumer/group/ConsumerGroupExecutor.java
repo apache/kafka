@@ -22,14 +22,13 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static java.util.Collections.singleton;
 
@@ -42,15 +41,14 @@ class ConsumerGroupExecutor {
                                             boolean syncCommit,
                                             String topic,
                                             Supplier<KafkaConsumer<T, T>> consumerSupplier) {
-        List<KafkaConsumer<T, T>> consumers = IntStream.range(0, numberOfConsumers)
-                .mapToObj(ignored -> consumerSupplier.get())
-                .collect(Collectors.toList());
-
-        ExecutorService executor = Executors.newFixedThreadPool(consumers.size());
+        List<KafkaConsumer<T, T>> consumers = new ArrayList<>(numberOfConsumers);
+        ExecutorService executor = Executors.newFixedThreadPool(numberOfConsumers);
         AtomicBoolean closed = new AtomicBoolean(false);
         final AutoCloseable closeable = () -> releaseConsumers(closed, consumers, executor);
         try {
-            for (KafkaConsumer<T, T> consumer : consumers) {
+            for (int i = 0; i < numberOfConsumers; i++) {
+                KafkaConsumer<T, T> consumer = consumerSupplier.get();
+                consumers.add(consumer);
                 executor.execute(() -> initConsumer(topic, syncCommit, consumer, closed));
             }
             return closeable;

@@ -24,11 +24,16 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.network.ListenerName;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
 
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 
 public interface ClusterInstance {
@@ -148,10 +153,20 @@ public interface ClusterInstance {
 
     void waitForReadyBrokers() throws InterruptedException;
 
-    default Iterable<GroupProtocol> supportedGroupProtocol() {
-        return this.config().serverProperties()
-                .get(NEW_GROUP_COORDINATOR_ENABLE_CONFIG).equals("true")
-                ? Arrays.asList(CLASSIC, CONSUMER)
-                : singletonList(CLASSIC);
+    default Set<GroupProtocol> supportedGroupProtocols() {
+        Map<String, String> serverProperties = this.config().serverProperties();
+        boolean enableNewGroupCoordinator = serverProperties.getOrDefault(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false")
+                .equals("true");
+        boolean enableConsumerAsRebalancedCoordinator = serverProperties.getOrDefault(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic")
+                .equals("classic,consumer");
+
+        HashSet<GroupProtocol> supportedGroupProtocols = new HashSet<>();
+        supportedGroupProtocols.add(CLASSIC);
+
+        if (enableNewGroupCoordinator || enableConsumerAsRebalancedCoordinator) {
+            supportedGroupProtocols.add(CONSUMER);
+        }
+
+        return supportedGroupProtocols;
     }
 }
