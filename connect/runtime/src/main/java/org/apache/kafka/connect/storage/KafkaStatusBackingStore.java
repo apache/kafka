@@ -142,11 +142,6 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
     private SharedTopicAdmin ownTopicAdmin;
     private ExecutorService sendRetryExecutor;
 
-    @Deprecated
-    public KafkaStatusBackingStore(Time time, Converter converter) {
-        this(time, converter, null, "connect-distributed-");
-    }
-
     public KafkaStatusBackingStore(Time time, Converter converter, Supplier<TopicAdmin> topicAdminSupplier, String clientIdBase) {
         this.time = time;
         this.converter = converter;
@@ -159,7 +154,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
 
     // visible for testing
     KafkaStatusBackingStore(Time time, Converter converter, String statusTopic, KafkaBasedLog<String, byte[]> kafkaLog) {
-        this(time, converter);
+        this(time, converter, null, "connect-distributed-");
         this.kafkaLog = kafkaLog;
         this.statusTopic = statusTopic;
         sendRetryExecutor = Executors.newSingleThreadExecutor(

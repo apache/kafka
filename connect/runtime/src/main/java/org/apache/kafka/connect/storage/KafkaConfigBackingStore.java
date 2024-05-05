@@ -334,11 +334,6 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         this.configLog = configLog;
     }
 
-    @Deprecated
-    public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer) {
-        this(converter, config, configTransformer, null, "connect-distributed-");
-    }
-
     public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer, Supplier<TopicAdmin> adminSupplier, String clientIdBase) {
         this(converter, config, configTransformer, adminSupplier, clientIdBase, Time.SYSTEM);
     }
