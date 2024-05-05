@@ -159,6 +159,7 @@ class LogCleaner(initialConfig: CleanerConfig,
       cleaners += cleaner
       cleaner.start()
     }
+    activateMetrics();
   }
 
   /**
@@ -180,6 +181,27 @@ class LogCleaner(initialConfig: CleanerConfig,
   def removeMetrics(): Unit = {
     LogCleaner.MetricNames.foreach(metricsGroup.removeMetric)
     cleanerManager.removeMetrics()
+  }
+
+  /**
+   * Activate metrics
+   */
+  def activateMetrics():Unit = {
+    metricsGroup.newGauge(MaxBufferUtilizationPercentMetricName,
+      () => maxOverCleanerThreads(_.lastStats.bufferUtilization) * 100)
+
+    metricsGroup.newGauge(CleanerRecopyPercentMetricName, () => {
+      val stats = cleaners.map(_.lastStats)
+      val recopyRate = stats.iterator.map(_.bytesWritten).sum.toDouble / math.max(stats.iterator.map(_.bytesRead).sum, 1)
+      (100 * recopyRate).toInt
+    })
+
+    metricsGroup.newGauge(MaxCleanTimeMetricName, () => maxOverCleanerThreads(_.lastStats.elapsedSecs))
+
+    metricsGroup.newGauge(MaxCompactionDelayMetricsName,
+      () => maxOverCleanerThreads(_.lastPreCleanStats.maxCompactionDelayMs.toDouble) / 1000)
+
+    metricsGroup.newGauge(DeadThreadCountMetricName, () => deadThreadCount)
   }
 
   /**
