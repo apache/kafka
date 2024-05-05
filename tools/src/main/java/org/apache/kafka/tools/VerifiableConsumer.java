@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.stream.Collectors;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -537,7 +538,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .setDefault(ConsumerConfig.DEFAULT_GROUP_PROTOCOL)
                 .metavar("GROUP_PROTOCOL")
                 .dest("groupProtocol")
-                .help(String.format("Group protocol (must be one of %s)", String.join(", ", Arrays.toString(GroupProtocol.values()))));
+                .help(String.format("Group protocol (must be one of %s)", Arrays.stream(GroupProtocol.values())
+                        .map(Object::toString).collect(Collectors.joining(", "))));
 
         parser.addArgument("--group-remote-assignor")
                 .action(store())
