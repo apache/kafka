@@ -250,7 +250,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
                         Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", () -> sharedServer.stopForController());
-                        if (controller != null) controller.shutdown();
                         throw e;
                     }
                     controllers.put(node.id(), controller);
@@ -277,7 +276,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
                         Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", () -> sharedServer.stopForBroker());
-                        if (broker != null) broker.shutdown();
                         throw e;
                     }
                     brokers.put(node.id(), broker);
