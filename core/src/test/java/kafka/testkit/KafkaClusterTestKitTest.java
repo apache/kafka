@@ -23,7 +23,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -65,6 +68,22 @@ public class KafkaClusterTestKitTest {
                 .build())
         );
         assertEquals("Invalid negative value for numBrokerNodes", e.getMessage());
+    }
+
+    @Test
+    public void testCreateClusterWithBadPerServerProperties() {
+        Map<Integer, Map<String, String>> perServerProperties = new HashMap<>();
+        perServerProperties.put(100, Collections.singletonMap("foo", "foo1"));
+        perServerProperties.put(200, Collections.singletonMap("bar", "bar1"));
+
+        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
+                new TestKitNodes.Builder()
+                        .setNumBrokerNodes(1)
+                        .setNumControllerNodes(1)
+                        .setPerServerProperties(perServerProperties)
+                        .build())
+        );
+        assertEquals("Unknown server id 100, 200 in perServerProperties", e.getMessage());
     }
 
     @ParameterizedTest

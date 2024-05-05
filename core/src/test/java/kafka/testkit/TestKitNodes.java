@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -35,6 +36,7 @@ import java.util.stream.IntStream;
 
 public class TestKitNodes {
     public static final int CONTROLLER_ID_OFFSET = 3000;
+    public static final int BROKER_ID_OFFSET = 0;
 
     public static class Builder {
         private boolean combined;
@@ -107,9 +109,18 @@ public class TestKitNodes {
             List<Integer> controllerNodeIds = IntStream.range(startControllerId(), startControllerId() + numControllerNodes)
                 .boxed()
                 .collect(Collectors.toList());
-            List<Integer> brokerNodeIds = IntStream.range(startBrokerId(), startBrokerId() + numBrokerNodes)
+            List<Integer> brokerNodeIds = IntStream.range(BROKER_ID_OFFSET, BROKER_ID_OFFSET + numBrokerNodes)
                 .boxed()
                 .collect(Collectors.toList());
+
+            Set<Integer> unknownIds = perServerProperties.keySet().stream()
+                    .filter(id -> !controllerNodeIds.contains(id))
+                    .filter(id -> !brokerNodeIds.contains(id))
+                    .collect(Collectors.toSet());
+            if (!unknownIds.isEmpty()) {
+                throw new RuntimeException(String.format("Unknown server id %s in perServerProperties",
+                        unknownIds.stream().map(Object::toString).collect(Collectors.joining(", "))));
+            }
 
             TreeMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
             for (int id : controllerNodeIds) {
@@ -143,15 +154,11 @@ public class TestKitNodes {
                 brokerNodes);
         }
 
-        private int startBrokerId() {
-            return 0;
-        }
-
         private int startControllerId() {
             if (combined) {
-                return startBrokerId();
+                return BROKER_ID_OFFSET;
             }
-            return startBrokerId() + CONTROLLER_ID_OFFSET;
+            return BROKER_ID_OFFSET + CONTROLLER_ID_OFFSET;
         }
     }
 

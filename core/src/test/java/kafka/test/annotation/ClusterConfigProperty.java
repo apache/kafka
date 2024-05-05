@@ -32,15 +32,19 @@ public @interface ClusterConfigProperty {
      * all controller/broker servers. Note that the "controller" here refers to the KRaft quorum controller.
      * The id can vary depending on the different {@link kafka.test.annotation.Type}.
      * <ul>
-     *  <li> Under {@link kafka.test.annotation.Type#ZK}, the broker id starts from 0 and increases by 1
+     *  <li> Under {@link kafka.test.annotation.Type#ZK}, the broker id starts from
+     *  {@link kafka.testkit.TestKitNodes#BROKER_ID_OFFSET 0} and increases by 1
      *  with each additional broker, and there is no controller server under this mode. </li>
-     *  <li> Under {@link kafka.test.annotation.Type#KRAFT}, the broker id starts from 0, the controller id
-     *  starts from 3000 and increases by 1 with each addition broker/controller.</li>
-     *  <li> Under {@link kafka.test.annotation.Type#CO_KRAFT}, the broker id and controller id both start from 0
+     *  <li> Under {@link kafka.test.annotation.Type#KRAFT}, the broker id starts from
+     *  {@link kafka.testkit.TestKitNodes#BROKER_ID_OFFSET 0}, the controller id
+     *  starts from {@link kafka.testkit.TestKitNodes#CONTROLLER_ID_OFFSET 3000}
+     *  and increases by 1 with each addition broker/controller.</li>
+     *  <li> Under {@link kafka.test.annotation.Type#CO_KRAFT}, the broker id and controller id both start from
+     *  {@link kafka.testkit.TestKitNodes#BROKER_ID_OFFSET 0}
      *  and increases by 1 with each additional broker/controller.</li>
      * </ul>
      *
-     * If the id doesn't correspond to any broker/controller server, the config will be ignored.
+     * If the id doesn't correspond to any broker/controller server, throw RuntimeException
      * @return the controller/broker id
      */
     int id() default -1;

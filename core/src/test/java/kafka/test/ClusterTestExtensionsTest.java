@@ -102,7 +102,7 @@ public class ClusterTestExtensionsTest {
         })
     })
     public void testClusterTests() throws ExecutionException, InterruptedException {
-        if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.ZK)) {
+        if (!clusterInstance.isKRaftTest()) {
             Assertions.assertEquals("bar", clusterInstance.config().serverProperties().get("foo"));
             Assertions.assertEquals("eggs", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("default.value", clusterInstance.config().serverProperties().get("default.key"));
@@ -113,7 +113,7 @@ public class ClusterTestExtensionsTest {
                 Assertions.assertEquals(1, configs.size());
                 Assertions.assertEquals("100", configs.get(configResource).get("queued.max.requests").value());
             }
-        } else if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.RAFT)) {
+        } else {
             Assertions.assertEquals("baz", clusterInstance.config().serverProperties().get("foo"));
             Assertions.assertEquals("eggz", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("overwrite.value", clusterInstance.config().serverProperties().get("default.key"));
@@ -133,8 +133,6 @@ public class ClusterTestExtensionsTest {
                     Assertions.assertEquals("300", configs.get(configResource).get("queued.max.requests").value());
                 }
             }
-        } else {
-            Assertions.fail("Unknown cluster type " + clusterInstance.clusterType());
         }
     }
 
