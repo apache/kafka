@@ -477,7 +477,7 @@ class KafkaZkClient private[zk] (
    * @throws ControllerMovedException if no controller is defined, or a KRaft controller is defined
    */
   def setOrCreateEntityConfigs(rootEntityType: String, sanitizedEntityName: String, config: Properties): Unit = {
-    val controllerZkVersion = if (!enableEntityConfigNoController) {
+    val controllerZkVersionOpt: Option[Int] = if (!enableEntityConfigNoController) {
       val controllerRegistration = getControllerRegistration match {
         case Some(registration) => registration
         case None =>
@@ -493,10 +493,10 @@ class KafkaZkClient private[zk] (
         throw new ControllerMovedException(s"Cannot set entity configs directly when there is a KRaft controller.")
       }
 
-      controllerRegistration.zkVersion
+      Some(controllerRegistration.zkVersion)
     } else {
       logger.warn("Setting entity configs without any checks on the controller.")
-      ZkVersion.MatchAnyVersion
+      None
     }
 
     def set(configData: Array[Byte]): SetDataResponse = {
@@ -504,12 +504,18 @@ class KafkaZkClient private[zk] (
       // changed during this method. We do that here by adding a CheckOp on the controller ZNode. The reason we
       // don't use the controller epoch zkVersion here is that we can't consistently read the controller and
       // controller epoch. This does _not_ guard against the existing "last writer wins" behavior of this method.
-      val multi = MultiRequest(Seq(
-        CheckOp(ControllerZNode.path, controllerZkVersion),
-        SetDataOp(ConfigEntityZNode.path(rootEntityType, sanitizedEntityName), configData, ZkVersion.MatchAnyVersion)
-      ))
-      val results = retryRequestUntilConnected(multi)
-      unwrapResponseWithControllerEpochCheck(results).asInstanceOf[SetDataResponse]
+      controllerZkVersionOpt match {
+        case Some(controllerZkVersion) =>
+          val multi = MultiRequest(Seq(
+            CheckOp(ControllerZNode.path, controllerZkVersion),
+            SetDataOp(ConfigEntityZNode.path(rootEntityType, sanitizedEntityName), configData, ZkVersion.MatchAnyVersion)
+          ))
+          val results = retryRequestUntilConnected(multi)
+          unwrapResponseWithControllerEpochCheck(results).asInstanceOf[SetDataResponse]
+        case None =>
+          val setDataRequest = SetDataRequest(ConfigEntityZNode.path(rootEntityType, sanitizedEntityName), configData, ZkVersion.MatchAnyVersion)
+          retryRequestUntilConnected(setDataRequest)
+      }
     }
 
     def createOrSet(configData: Array[Byte]): Unit = {
