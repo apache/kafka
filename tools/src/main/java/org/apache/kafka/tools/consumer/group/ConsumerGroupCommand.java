@@ -430,7 +430,7 @@ public class ConsumerGroupCommand {
                     String format = "\n%" + -coordinatorColLen + "s %-25s %-20s %-15s %s";
 
                     System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS");
-                    System.out.printf(format, state.group, coordinator, state.assignmentStrategy, state.state, state.numMembers);
+                    System.out.printf(format, state.group, coordinator, state.assignmentStrategy, state.state.name(), state.numMembers);
                     System.out.println();
                 }
             });
