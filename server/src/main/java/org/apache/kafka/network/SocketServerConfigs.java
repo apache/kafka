@@ -58,13 +58,17 @@ public class SocketServerConfigs {
 
     public static final String ADVERTISED_LISTENERS_CONFIG = "advertised.listeners";
     public static final String ADVERTISED_LISTENERS_DOC = String.format(
-            "Listeners to publish to ZooKeeper for clients to use, if different than the <code>%s</code> config property." +
-                    " In IaaS environments, this may need to be different from the interface to which the broker binds." +
-                    " If this is not set, the value for <code>%1$1s</code> will be used." +
-                    " Unlike <code>%1$1s</code>, it is not valid to advertise the 0.0.0.0 meta-address.%n" +
-                    " Also unlike <code>%1$1s</code>, there can be duplicated ports in this property," +
-                    " so that one listener can be configured to advertise another listener's address." +
-                    " This can be useful in some cases where external load balancers are used.", LISTENERS_CONFIG);
+            "Specifies the listener addresses that the Kafka brokers will advertise to clients and other brokers." +
+            " The config is useful where the actual listener configuration <code>%s</code> does not represent the addresses that clients should" +
+            " use to connect, such as in cloud environments. In environments using ZooKeeper, these addresses are published to ZooKeeper." +
+            " In KRaft mode, these addresses are managed internally by the Kafka brokers themselves. Regardless of the operating mode, this config" +
+            " still perform the essential function of informing clients and other brokers how to connect to this broker effectively." +
+            " In IaaS environments, this may need to be different from the interface to which the broker binds." +
+            " If this is not set, the value for <code>%1$1s</code> will be used." +
+            " Unlike <code>%1$1s</code>, it is not valid to advertise the 0.0.0.0 meta-address.%n" +
+            " Also unlike <code>%1$1s</code>, there can be duplicated ports in this property," +
+            " so that one listener can be configured to advertise another listener's address." +
+            " This can be useful in some cases where external load balancers are used.", LISTENERS_CONFIG);
 
 
     public static final String CONTROL_PLANE_LISTENER_NAME_CONFIG = "control.plane.listener.name";
