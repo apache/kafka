@@ -1554,33 +1554,33 @@ public class StreamsConfig extends AbstractConfig {
         return consumerProps;
     }
 
-    private void validateConsumerPropertyMap(final Map<String, Object> props){
-        if (eosEnabled){
+    private void validateConsumerPropertyMap(final Map<String, Object> props) {
+        if (eosEnabled) {
             // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED and override values if set
-            for (Map.Entry<String, Object> entry : KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED.entrySet()) {
+            for (final Map.Entry<String, Object> entry : KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED.entrySet()) {
                 overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
             }
             verifyMaxInFlightRequestPerConnection(props.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
 
         } else {
             // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS and override values if set
-            for (Map.Entry<String, Object> entry : KS_CONTROLLED_CONSUMER_CONFIGS.entrySet()) {
+            for (final Map.Entry<String, Object> entry : KS_CONTROLLED_CONSUMER_CONFIGS.entrySet()) {
                 overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
             }
         }
     }
 
-    private void validateProducerPropertyMap(final Map<String, Object> props){
-        if (eosEnabled){
+    private void validateProducerPropertyMap(final Map<String, Object> props) {
+        if (eosEnabled) {
             // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED and override values if set
-            for (Map.Entry<String, Object> entry : KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED.entrySet()) {
+            for (final Map.Entry<String, Object> entry : KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED.entrySet()) {
                 overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
             }
             verifyMaxInFlightRequestPerConnection(props.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
 
         } else {
             // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS and override values if set
-            for (Map.Entry<String, Object> entry : KS_CONTROLLED_PRODUCER_CONFIGS.entrySet()) {
+            for (final Map.Entry<String, Object> entry : KS_CONTROLLED_PRODUCER_CONFIGS.entrySet()) {
                 overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
             }
         }   
