@@ -661,51 +661,6 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testRestoreTargetStateUnexpectedDeletion() throws Exception {
-        expectConfigure();
-        List<ConsumerRecord<String, byte[]>> existingRecords = Arrays.asList(
-                new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
-                        CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty()),
-                new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TASK_CONFIG_KEYS.get(0),
-                        CONFIGS_SERIALIZED.get(1), new RecordHeaders(), Optional.empty()),
-                new ConsumerRecord<>(TOPIC, 0, 2, 0L, TimestampType.CREATE_TIME, 0, 0, TASK_CONFIG_KEYS.get(1),
-                        CONFIGS_SERIALIZED.get(2), new RecordHeaders(), Optional.empty()),
-                new ConsumerRecord<>(TOPIC, 0, 3, 0L, TimestampType.CREATE_TIME, 0, 0, TARGET_STATE_KEYS.get(0),
-                        CONFIGS_SERIALIZED.get(3), new RecordHeaders(), Optional.empty()),
-                new ConsumerRecord<>(TOPIC, 0, 4, 0L, TimestampType.CREATE_TIME, 0, 0, COMMIT_TASKS_CONFIG_KEYS.get(0),
-                        CONFIGS_SERIALIZED.get(4), new RecordHeaders(), Optional.empty()));
-        LinkedHashMap<byte[], Struct> deserialized = new LinkedHashMap<>();
-        deserialized.put(CONFIGS_SERIALIZED.get(0), CONNECTOR_CONFIG_STRUCTS.get(0));
-        deserialized.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(0));
-        deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
-        deserialized.put(CONFIGS_SERIALIZED.get(3), null);
-        deserialized.put(CONFIGS_SERIALIZED.get(4), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
-        logOffset = 5;
-
-        expectStart(existingRecords, deserialized);
-        expectPartitionCount(1);
-
-        // Shouldn't see any callbacks since this is during startup
-
-        expectStop();
-
-        PowerMock.replayAll();
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-        configStorage.start();
-
-        // The target state deletion should reset the state to STARTED
-        ClusterConfigState configState = configStorage.snapshot();
-        assertEquals(5, configState.offset()); // Should always be next to be read, even if uncommitted
-        assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
-        assertEquals(TargetState.STARTED, configState.targetState(CONNECTOR_IDS.get(0)));
-
-        configStorage.stop();
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
     public void testRestoreConnectorDeletion() throws Exception {
         // Restoring data should notify only of the latest values after loading is complete. This also validates
         // that inconsistent state is ignored.
