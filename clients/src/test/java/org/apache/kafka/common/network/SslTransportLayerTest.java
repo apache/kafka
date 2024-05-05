@@ -1562,6 +1562,7 @@ public class SslTransportLayerTest {
         verifyNoMoreInteractions(sslEngine);
     }
 
+    @Test
     public void testGatheringWrite() throws IOException {
         SSLEngine sslEngine = mock(SSLEngine.class);
         SelectionKey selectionKey = mock(SelectionKey.class);
