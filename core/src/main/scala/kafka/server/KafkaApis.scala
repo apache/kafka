@@ -2992,6 +2992,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     val preprocessingResponses = configManager.preprocess(original.data(),
       (rType, rName) => authHelper.authorize(request.context, ALTER_CONFIGS, rType, rName))
     val remaining = ConfigAdminManager.copyWithoutPreprocessed(original.data(), preprocessingResponses)
+
+    // Before deciding whether to forward or handle locally, a ZK broker needs to check if
+    // the active controller is ZK or KRaft. If the controller is KRaft, we need to forward.
+    // If the controller is ZK, we need to process the request locally.
     val isKRaftController = metadataSupport match {
       case ZkSupport(_, _, _, _, metadataCache, _) =>
         metadataCache.getControllerId.exists(_.isInstanceOf[KRaftCachedControllerId])

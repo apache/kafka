@@ -92,7 +92,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         if (clusterConfig.numControllers() != 1) {
             throw new IllegalArgumentException("For ZK clusters, please specify exactly 1 controller.");
         }
-        ZkClusterInstance clusterShim = new ZkClusterInstance(clusterConfig, clusterReference);
+        ClusterInstance clusterShim = new ZkClusterInstance(clusterConfig, clusterReference);
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
                 // We have to wait to actually create the underlying cluster until after our @BeforeEach methods
