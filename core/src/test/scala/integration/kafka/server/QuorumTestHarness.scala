@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -26,13 +26,13 @@ import javax.security.auth.login.Configuration
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
 import org.apache.kafka.clients.consumer.GroupProtocol
+import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
+import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
-import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
 import org.apache.kafka.network.SocketServerConfigs
@@ -90,7 +90,7 @@ class KRaftQuorumImplementation(
   val controllerServer: ControllerServer,
   val faultHandlerFactory: FaultHandlerFactory,
   val metadataDir: File,
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, QuorumConfig.AddressSpec]],
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, InetSocketAddress]],
   val clusterId: String,
   val log: Logging,
   val faultHandler: FaultHandler
@@ -355,7 +355,7 @@ abstract class QuorumTestHarness extends Logging {
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:0")
     val config = new KafkaConfig(props)
-    val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, QuorumConfig.AddressSpec]]
+    val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, InetSocketAddress]]
     val metaPropertiesEnsemble = new MetaPropertiesEnsemble.Loader().
       addMetadataLogDir(metadataDir.getAbsolutePath).
       load()
@@ -380,8 +380,9 @@ abstract class QuorumTestHarness extends Logging {
           error("Error completing controller socket server future", e)
           controllerQuorumVotersFuture.completeExceptionally(e)
         } else {
-          controllerQuorumVotersFuture.complete(Collections.singletonMap(nodeId,
-            new QuorumConfig.InetAddressSpec(new InetSocketAddress("localhost", port))))
+          controllerQuorumVotersFuture.complete(
+            Collections.singletonMap(nodeId, new InetSocketAddress("localhost", port))
+          )
         }
       })
       controllerServer.startup()
@@ -391,13 +392,15 @@ abstract class QuorumTestHarness extends Logging {
         CoreUtils.swallow(sharedServer.stopForController(), this)
         throw e
     }
-    new KRaftQuorumImplementation(controllerServer,
+    new KRaftQuorumImplementation(
+      controllerServer,
       faultHandlerFactory,
       metadataDir,
       controllerQuorumVotersFuture,
       metaProperties.clusterId.get(),
       this,
-      faultHandler)
+      faultHandler
+    )
   }
 
   private def newZooKeeperQuorum(): ZooKeeperQuorumImplementation = {
