@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.raft;
 
+import java.net.InetSocketAddress;
+
 /**
  * A simple network interface with few assumptions. We do not assume ordering
  * of requests or even that every outbound request will receive a response.
@@ -37,7 +39,7 @@ public interface NetworkChannel extends AutoCloseable {
     /**
      * Update connection information for the given id.
      */
-    void updateEndpoint(int id, QuorumConfig.InetAddressSpec address);
+    void updateEndpoint(int id, InetSocketAddress address);
 
     default void close() throws InterruptedException {}
 

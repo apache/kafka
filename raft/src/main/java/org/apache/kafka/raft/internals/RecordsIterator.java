@@ -214,7 +214,11 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             if (batch.isControlBatch()) {
                 List<ControlRecord> records = new ArrayList<>(numRecords);
                 for (int i = 0; i < numRecords; i++) {
-                    ControlRecord record = readRecord(input, batch.sizeInBytes(), RecordsIterator::decodeControlRecord);
+                    ControlRecord record = readRecord(
+                        input,
+                        batch.sizeInBytes(),
+                        RecordsIterator::decodeControlRecord
+                    );
                     records.add(record);
                 }
                 result = Batch.control(
@@ -365,6 +369,12 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
                 break;
             case SNAPSHOT_FOOTER:
                 message = ControlRecordUtils.deserializeSnapshotFooterRecord(value.get());
+                break;
+            case KRAFT_VERSION:
+                message = ControlRecordUtils.deserializeKRaftVersionRecord(value.get());
+                break;
+            case KRAFT_VOTERS:
+                message = ControlRecordUtils.deserializeVotersRecord(value.get());
                 break;
             default:
                 throw new IllegalArgumentException(String.format("Unknown control record type %s", type));

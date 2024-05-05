@@ -129,9 +129,6 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
                     shared,
                     String.format("LocalLogManager-%d_", nodeId)));
             }
-            for (LocalLogManager logManager : newLogManagers) {
-                logManager.initialize();
-            }
         } catch (Throwable t) {
             for (LocalLogManager logManager : newLogManagers) {
                 logManager.close();
