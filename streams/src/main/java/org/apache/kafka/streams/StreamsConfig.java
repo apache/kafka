@@ -1523,11 +1523,10 @@ public class StreamsConfig extends AbstractConfig {
     private void overwritePropertyMap(final Map<String, Object> props, final String key, final Object value, final String config) {
         final String overwritePropertyLogMessage = "Unexpected %s config: %s found. User setting (%s) will be ignored and the Streams default setting (%s) will be used";
         
-        if (props.containsKey(key)) {
-            if (!Objects.equals(props.get(key), value)) {
-                log.warn(String.format(overwritePropertyLogMessage, config, key, props.get(key), value));
-            }
+        if (props.containsKey(key) && (!Objects.equals(props.get(key), value))) {
+            log.warn(String.format(overwritePropertyLogMessage, config, key, props.get(key), value));
         }
+
         props.put(key, value);
     }
 
