@@ -19,9 +19,7 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
@@ -70,7 +68,6 @@ import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_K
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
@@ -173,8 +170,6 @@ public class KafkaConfigBackingStoreTest {
     @Mock
     KafkaBasedLog<String, byte[]> storeLog;
     @Mock
-    Producer<String, byte[]> fencableProducer;
-    @Mock
     Future<RecordMetadata> producerFuture;
     private KafkaConfigBackingStore configStorage;
 
@@ -213,7 +208,6 @@ public class KafkaConfigBackingStoreTest {
     public void setUp() {
         createStore();
     }
-
 
     @Test
     public void testTaskCountRecordsAndGenerations() throws Exception {

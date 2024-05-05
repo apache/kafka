@@ -398,13 +398,14 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertEquals(-1, configState.offset());
         assertEquals(0, configState.connectors().size());
 
-        when(producerFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(
-                new ExecutionException(new TopicAuthorizationException(Collections.singleton("test"))));
+        Exception thrownException = new ExecutionException(new TopicAuthorizationException(Collections.singleton("test")));
+        when(producerFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(thrownException);
 
         // verify that the producer exception from KafkaBasedLog::send is propagated
         ConnectException e = assertThrows(ConnectException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(0),
                 SAMPLE_CONFIGS.get(0), null));
         assertTrue(e.getMessage().contains("Error writing connector configuration to Kafka"));
+        assertEquals(thrownException, e.getCause());
 
         configStorage.stop();
         verify(configLog).stop();
@@ -536,6 +537,7 @@ public class KafkaConfigBackingStoreMockitoTest {
 
         configStorage.stop();
         verify(configLog).stop();
+        verify(configStorage, times(2)).createFencableProducer();
         verify(fencableProducer, times(2)).close(Duration.ZERO);
     }
 
