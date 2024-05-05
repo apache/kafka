@@ -27,17 +27,26 @@ import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeLogDirsResult;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 
+import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
+import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
+
+
 @ClusterTestDefaults(clusterType = Type.ZK, serverProperties = {
-    @ClusterConfigProperty(key = "default.key", value = "default.value"),
+        @ClusterConfigProperty(key = "default.key", value = "default.value"),
 })   // Set defaults for a few params in @ClusterTest(s)
 @ExtendWith(ClusterTestExtensions.class)
 public class ClusterTestExtensionsTest {
@@ -70,28 +79,28 @@ public class ClusterTestExtensionsTest {
     @ClusterTemplate("generate1")
     public void testClusterTemplate() {
         Assertions.assertEquals(ClusterInstance.ClusterType.ZK, clusterInstance.clusterType(),
-            "generate1 provided a Zk cluster, so we should see that here");
+                "generate1 provided a Zk cluster, so we should see that here");
         Assertions.assertEquals("Generated Test", clusterInstance.config().name().orElse(""),
-            "generate1 named this cluster config, so we should see that here");
+                "generate1 named this cluster config, so we should see that here");
         Assertions.assertEquals("bar", clusterInstance.config().serverProperties().get("foo"));
     }
 
     // Multiple @ClusterTest can be used with @ClusterTests
     @ClusterTests({
-        @ClusterTest(name = "cluster-tests-1", clusterType = Type.ZK, serverProperties = {
-            @ClusterConfigProperty(key = "foo", value = "bar"),
-            @ClusterConfigProperty(key = "spam", value = "eggs")
-        }),
-        @ClusterTest(name = "cluster-tests-2", clusterType = Type.KRAFT, serverProperties = {
-            @ClusterConfigProperty(key = "foo", value = "baz"),
-            @ClusterConfigProperty(key = "spam", value = "eggz"),
-            @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
-        }),
-        @ClusterTest(name = "cluster-tests-3", clusterType = Type.CO_KRAFT, serverProperties = {
-            @ClusterConfigProperty(key = "foo", value = "baz"),
-            @ClusterConfigProperty(key = "spam", value = "eggz"),
-            @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
-        })
+            @ClusterTest(name = "cluster-tests-1", clusterType = Type.ZK, serverProperties = {
+                    @ClusterConfigProperty(key = "foo", value = "bar"),
+                    @ClusterConfigProperty(key = "spam", value = "eggs")
+            }),
+            @ClusterTest(name = "cluster-tests-2", clusterType = Type.KRAFT, serverProperties = {
+                    @ClusterConfigProperty(key = "foo", value = "baz"),
+                    @ClusterConfigProperty(key = "spam", value = "eggz"),
+                    @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
+            }),
+            @ClusterTest(name = "cluster-tests-3", clusterType = Type.CO_KRAFT, serverProperties = {
+                    @ClusterConfigProperty(key = "foo", value = "baz"),
+                    @ClusterConfigProperty(key = "spam", value = "eggz"),
+                    @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
+            })
     })
     public void testClusterTests() {
         if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.ZK)) {
@@ -108,12 +117,12 @@ public class ClusterTestExtensionsTest {
     }
 
     @ClusterTests({
-        @ClusterTest(clusterType = Type.ZK),
-        @ClusterTest(clusterType = Type.ZK, disksPerBroker = 2),
-        @ClusterTest(clusterType = Type.KRAFT),
-        @ClusterTest(clusterType = Type.KRAFT, disksPerBroker = 2),
-        @ClusterTest(clusterType = Type.CO_KRAFT),
-        @ClusterTest(clusterType = Type.CO_KRAFT, disksPerBroker = 2)
+            @ClusterTest(clusterType = Type.ZK),
+            @ClusterTest(clusterType = Type.ZK, disksPerBroker = 2),
+            @ClusterTest(clusterType = Type.KRAFT),
+            @ClusterTest(clusterType = Type.KRAFT, disksPerBroker = 2),
+            @ClusterTest(clusterType = Type.CO_KRAFT),
+            @ClusterTest(clusterType = Type.CO_KRAFT, disksPerBroker = 2)
     })
     public void testClusterTestWithDisksPerBroker() throws ExecutionException, InterruptedException {
         Admin admin = clusterInstance.createAdminClient();
@@ -134,5 +143,50 @@ public class ClusterTestExtensionsTest {
     @ClusterTest
     public void testDefaults(ClusterInstance clusterInstance) {
         Assertions.assertEquals(MetadataVersion.IBP_3_8_IV0, clusterInstance.config().metadataVersion());
+    }
+
+    @ClusterTests({
+            @ClusterTest(name = "enable-new-coordinator", clusterType = Type.ALL, serverProperties = {
+                    @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+            }),
+            @ClusterTest(name = "enable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+                    @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+            }),
+            @ClusterTest(name = "enable-new-coordinator-and-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+                    @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+                    @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+            }),
+            @ClusterTest(name = "enable-new-coordinator-and-disable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+                    @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+                    @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
+            }),
+            @ClusterTest(name = "disable-new-coordinator-and-enable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+                    @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
+                    @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+            }),
+    })
+    public void testSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
+        Set<GroupProtocol> supportedGroupProtocols = new HashSet<>();
+        supportedGroupProtocols.add(CLASSIC);
+        supportedGroupProtocols.add(CONSUMER);
+        Assertions.assertTrue(clusterInstance.supportedGroupProtocols().containsAll(supportedGroupProtocols));
+        Assertions.assertEquals(clusterInstance.supportedGroupProtocols().size(), 2);
+    }
+
+    @ClusterTests({
+            @ClusterTest(name = "disable-new-coordinator", clusterType = Type.ALL, serverProperties = {
+                    @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
+            }),
+            @ClusterTest(name = "disable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+                    @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
+            }),
+            @ClusterTest(name = "disable-new-coordinator-and-disable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+                    @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
+                    @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
+            }),
+    })
+    public void testNotSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
+        Assertions.assertTrue(clusterInstance.supportedGroupProtocols().contains(CLASSIC));
+        Assertions.assertEquals(clusterInstance.supportedGroupProtocols().size(), 1);
     }
 }
