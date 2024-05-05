@@ -47,7 +47,6 @@ public class ClusterConfig {
     private final int controllers;
     private final int disksPerBroker;
     private final boolean autoStart;
-
     private final SecurityProtocol securityProtocol;
     private final String listenerName;
     private final File trustStoreFile;
@@ -210,7 +209,6 @@ public class ClusterConfig {
         private int brokers;
         private int controllers;
         private int disksPerBroker;
-        private String name;
         private boolean autoStart;
         private SecurityProtocol securityProtocol;
         private String listenerName;
@@ -243,11 +241,6 @@ public class ClusterConfig {
 
         public Builder setDisksPerBroker(int disksPerBroker) {
             this.disksPerBroker = disksPerBroker;
-            return this;
-        }
-
-        public Builder setName(String name) {
-            this.name = name;
             return this;
         }
 

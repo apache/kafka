@@ -26,7 +26,7 @@ import java.lang.annotation.Target;
 @Documented
 @Target({ElementType.ANNOTATION_TYPE})
 @Retention(RetentionPolicy.RUNTIME)
-public @interface ClusterConfigDisplayTag {
+public @interface Tags {
     String key();
     String value();
 }

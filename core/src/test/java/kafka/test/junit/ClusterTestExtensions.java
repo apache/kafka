@@ -163,7 +163,6 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 .setControllers(annot.controllers() == 0 ? defaults.controllers() : annot.controllers())
                 .setDisksPerBroker(annot.disksPerBroker() == 0 ? defaults.disksPerBroker() : annot.disksPerBroker())
                 .setAutoStart(annot.autoStart() == AutoStart.DEFAULT ? defaults.autoStart() : annot.autoStart() == AutoStart.YES)
-                .setName(annot.name().trim().isEmpty() ? null : annot.name())
                 .setListenerName(annot.listener().trim().isEmpty() ? null : annot.listener())
                 .setServerProperties(serverProperties)
                 .setPerServerProperties(perServerProperties)

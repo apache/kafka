@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -44,6 +45,8 @@ public class ClusterConfigTest {
     @Test
     public void testCopy() throws IOException {
         File trustStoreFile = TestUtils.tempFile();
+        Map<String, String> tags = new HashMap<>();
+        tags.put("name", "Generated Test");
 
         ClusterConfig clusterConfig = ClusterConfig.builder()
                 .setTypes(Collections.singleton(Type.KRAFT))
