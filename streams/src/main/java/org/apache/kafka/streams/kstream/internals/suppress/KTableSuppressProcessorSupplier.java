@@ -37,8 +37,6 @@ import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Maybe;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -177,7 +175,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements
                     throw new StreamsException("PunctuationType.WALL_CLOCK_TIME needs a nonnull and > 0 " +
                             "wallClockPunctuationInterval parameter");
                 }
-                context.schedule(wallClockPunctuationInterval, PunctuationType.WALL_CLOCK_TIME, (wallClockTs) -> {
+                context.schedule(wallClockPunctuationInterval, PunctuationType.WALL_CLOCK_TIME, wallClockTs -> {
                     final long expiryTime = wallClockTs - suppressDurationMillis;
                     buffer.evictWhile(() -> wallClockTs <= expiryTime, this::emit);
                 });

@@ -33,7 +33,12 @@ public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppr
         this(name, bufferConfig, PunctuationType.STREAM_TIME, Duration.ZERO);
     }
 
-    public FinalResultsSuppressionBuilder(final String name, final Suppressed.StrictBufferConfig bufferConfig, PunctuationType punctuationType, Duration wallClockPunctuationInterval) {
+    public FinalResultsSuppressionBuilder(
+            final String name,
+            final Suppressed.StrictBufferConfig bufferConfig,
+            final PunctuationType punctuationType,
+            final Duration wallClockPunctuationInterval
+    ) {
         this.name = name;
         this.bufferConfig = bufferConfig;
         this.punctuationType = punctuationType;
@@ -42,11 +47,11 @@ public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppr
 
     public SuppressedInternal<K> buildFinalResultsSuppression(final Duration gracePeriod) {
         return new SuppressedInternal<>(
-            name,
-            gracePeriod,
-            bufferConfig,
-            TimeDefinitions.WindowEndTimeDefinition.instance(),
-            true,
+                name,
+                gracePeriod,
+                bufferConfig,
+                TimeDefinitions.WindowEndTimeDefinition.instance(),
+                true,
                 punctuationType,
                 wallClockPunctuationInterval
         );
@@ -67,7 +72,7 @@ public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppr
         }
         final FinalResultsSuppressionBuilder<?> that = (FinalResultsSuppressionBuilder<?>) o;
         return Objects.equals(name, that.name) &&
-            Objects.equals(bufferConfig, that.bufferConfig);
+                Objects.equals(bufferConfig, that.bufferConfig);
     }
 
     @Override
@@ -83,8 +88,8 @@ public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppr
     @Override
     public String toString() {
         return "FinalResultsSuppressionBuilder{" +
-            "name='" + name + '\'' +
-            ", bufferConfig=" + bufferConfig +
-            '}';
+                "name='" + name + '\'' +
+                ", bufferConfig=" + bufferConfig +
+                '}';
     }
 }
