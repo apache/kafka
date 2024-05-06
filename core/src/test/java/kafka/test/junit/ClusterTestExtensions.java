@@ -33,11 +33,14 @@ import org.junit.platform.commons.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -141,15 +144,15 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private void processClusterTest(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults,
                                     Consumer<TestTemplateInvocationContext> testInvocations) {
         Type type = annot.clusterType() == Type.DEFAULT ? defaults.clusterType() : annot.clusterType();
+        Map<String, String> serverProperties = Stream.concat(Arrays.stream(defaults.serverProperties()), Arrays.stream(annot.serverProperties()))
+                .filter(e -> e.id() == -1)
+                .collect(Collectors.toMap(ClusterConfigProperty::key, ClusterConfigProperty::value, (a, b) -> b));
 
-        Map<String, String> serverProperties = new HashMap<>();
-        Map<Integer, Map<String, String>> perServerProperties = new HashMap<>();
-        for (ClusterConfigProperty property : defaults.serverProperties()) {
-            processClusterConfigProperty(property, serverProperties, perServerProperties);
-        }
-        for (ClusterConfigProperty property : annot.serverProperties()) {
-            processClusterConfigProperty(property, serverProperties, perServerProperties);
-        }
+        Map<Integer, Map<String, String>> perServerProperties = Stream.concat(Arrays.stream(defaults.serverProperties()), Arrays.stream(annot.serverProperties()))
+                .filter(e -> e.id() != -1)
+                .collect(Collectors.groupingBy(ClusterConfigProperty::id, Collectors.mapping(Function.identity(),
+                        Collectors.toMap(ClusterConfigProperty::key, ClusterConfigProperty::value, (a, b) -> b))));
+
         ClusterConfig config = ClusterConfig.builder()
                 .setType(type)
                 .setBrokers(annot.brokers() == 0 ? defaults.brokers() : annot.brokers())

@@ -28,11 +28,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 public class TestKitNodes {
     public static final int CONTROLLER_ID_OFFSET = 3000;
@@ -106,20 +106,26 @@ public class TestKitNodes {
                 clusterId = Uuid.randomUuid();
             }
 
-            List<Integer> controllerNodeIds = IntStream.range(startControllerId(), startControllerId() + numControllerNodes)
+            int controllerId = combined ? BROKER_ID_OFFSET : BROKER_ID_OFFSET + CONTROLLER_ID_OFFSET;
+            List<Integer> controllerNodeIds = IntStream.range(controllerId, controllerId + numControllerNodes)
                 .boxed()
                 .collect(Collectors.toList());
             List<Integer> brokerNodeIds = IntStream.range(BROKER_ID_OFFSET, BROKER_ID_OFFSET + numBrokerNodes)
                 .boxed()
                 .collect(Collectors.toList());
 
-            Set<Integer> unknownIds = perServerProperties.keySet().stream()
+            String unknownIds = perServerProperties.keySet().stream()
                     .filter(id -> !controllerNodeIds.contains(id))
                     .filter(id -> !brokerNodeIds.contains(id))
-                    .collect(Collectors.toSet());
+                    .map(Object::toString)
+                    .collect(Collectors.joining(", "));
             if (!unknownIds.isEmpty()) {
-                throw new RuntimeException(String.format("Unknown server id %s in perServerProperties",
-                        unknownIds.stream().map(Object::toString).collect(Collectors.joining(", "))));
+                throw new RuntimeException(
+                        String.format("Unknown server id %s in perServerProperties, the existent server ids are %s",
+                                unknownIds,
+                                Stream.concat(brokerNodeIds.stream(), controllerNodeIds.stream())
+                                        .map(Object::toString)
+                                        .collect(Collectors.joining(", "))));
             }
 
             TreeMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
@@ -152,13 +158,6 @@ public class TestKitNodes {
                 bootstrapMetadata,
                 controllerNodes,
                 brokerNodes);
-        }
-
-        private int startControllerId() {
-            if (combined) {
-                return BROKER_ID_OFFSET;
-            }
-            return BROKER_ID_OFFSET + CONTROLLER_ID_OFFSET;
         }
     }
 

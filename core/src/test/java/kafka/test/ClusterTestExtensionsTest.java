@@ -107,6 +107,7 @@ public class ClusterTestExtensionsTest {
             Assertions.assertEquals("eggs", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("default.value", clusterInstance.config().serverProperties().get("default.key"));
 
+            // assert broker server 0 contains property queued.max.requests 100 from ClusterTestDefaults
             try (Admin admin = clusterInstance.createAdminClient()) {
                 ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
                 Map<ConfigResource, Config> configs = admin.describeConfigs(Collections.singletonList(configResource)).all().get();
@@ -118,13 +119,16 @@ public class ClusterTestExtensionsTest {
             Assertions.assertEquals("eggz", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("overwrite.value", clusterInstance.config().serverProperties().get("default.key"));
 
+            // assert broker server 0 contains property queued.max.requests 200 from ClusterTest which overrides
+            // the value 100 in server property in ClusterTestDefaults
             try (Admin admin = clusterInstance.createAdminClient()) {
                 ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
                 Map<ConfigResource, Config> configs = admin.describeConfigs(Collections.singletonList(configResource)).all().get();
                 Assertions.assertEquals(1, configs.size());
                 Assertions.assertEquals("200", configs.get(configResource).get("queued.max.requests").value());
             }
-            if (clusterInstance.config().clusterType().equals(Type.KRAFT)) {
+            // In KRaft cluster non-combined mode, assert the controller server 3000 contains the property queued.max.requests 300
+            if (clusterInstance.config().clusterType() == Type.KRAFT) {
                 try (Admin admin = Admin.create(Collections.singletonMap(
                         AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()))) {
                     ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");

@@ -83,7 +83,7 @@ public class KafkaClusterTestKitTest {
                         .setPerServerProperties(perServerProperties)
                         .build())
         );
-        assertEquals("Unknown server id 100, 200 in perServerProperties", e.getMessage());
+        assertEquals("Unknown server id 100, 200 in perServerProperties, the existent server ids are 0, 3000", e.getMessage());
     }
 
     @ParameterizedTest
