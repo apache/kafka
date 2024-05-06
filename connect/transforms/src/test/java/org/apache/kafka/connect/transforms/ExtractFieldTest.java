@@ -166,7 +166,10 @@ public class ExtractFieldTest {
 
     @Test
     public void nonExistentNestedFieldWithSchemaShouldFail() {
-        xform.configure(Collections.singletonMap("field", "magic.nonexistent"));
+        Map<String, String> configs = new HashMap<>();
+        configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        configs.put("field", "magic.nonexistent");
+        xform.configure(configs);
 
         final Schema fooSchema = SchemaBuilder.struct().field("foo", Schema.INT32_SCHEMA).build();
         final Schema keySchema = SchemaBuilder.struct().field("magic", fooSchema).build();
