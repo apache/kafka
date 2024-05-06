@@ -272,7 +272,7 @@ subprojects {
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
     // temporary exclusions until all the warnings are fixed
-    if (!project.path.startsWith(":connect"))
+    if (!project.path.startsWith(":connect") && !project.path.startsWith(":storage"))
       options.compilerArgs << "-Xlint:-rawtypes"
     options.compilerArgs << "-Xlint:-serial"
     options.compilerArgs << "-Xlint:-try"
