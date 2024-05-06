@@ -64,9 +64,8 @@ public class ClusterTestExtensionsTest {
     // Static methods can generate cluster configurations
     static void generate1(ClusterGenerator clusterGenerator) {
         Map<String, String> serverProperties = new HashMap<>();
-        Map<String, String> tags = new HashMap<>();
+        String[] tags = {"name", "Generated Test"};
         serverProperties.put("foo", "bar");
-        tags.put("name", "Generated Test");
         clusterGenerator.accept(ClusterConfig.defaultBuilder()
                 .setTypes(Collections.singleton(Type.ZK))
                 .setServerProperties(serverProperties)

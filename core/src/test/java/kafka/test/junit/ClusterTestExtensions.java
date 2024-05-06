@@ -168,7 +168,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 .setPerServerProperties(perServerProperties)
                 .setSecurityProtocol(annot.securityProtocol())
                 .setMetadataVersion(annot.metadataVersion())
-                .setTags(tags)
+                .setTags(annot.tags())
                 .build();
         for (Type type : types) {
             type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
