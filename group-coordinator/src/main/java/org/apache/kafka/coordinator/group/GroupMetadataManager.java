@@ -1325,9 +1325,15 @@ public class GroupMetadataManager {
                 metadataImage.topics(),
                 metadataImage.cluster()
             );
+
+            int numMembers = group.numMembers();
+            if (!group.hasMember(updatedMember.memberId()) && !staticMemberReplaced) {
+                numMembers++;
+            }
+
             subscriptionType = ConsumerGroup.subscriptionType(
                 subscribedTopicNamesMap,
-                group.numMembers()
+                numMembers
             );
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
