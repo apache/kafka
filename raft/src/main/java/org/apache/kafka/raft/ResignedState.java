@@ -19,7 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.slf4j.Logger;
 
 import java.util.HashSet;
@@ -132,7 +132,7 @@ public class ResignedState implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(VoterSet.VoterKey candidateKey, boolean isLogUpToDate) {
+    public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
         log.debug(
             "Rejecting vote request from candidate ({}) since we have resigned as candidate/leader in epoch {}",
             candidateKey,

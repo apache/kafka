@@ -25,6 +25,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.slf4j.Logger;
 
@@ -61,7 +62,7 @@ public class CandidateState implements EpochState {
         int electionTimeoutMs,
         LogContext logContext
     ) {
-        if (!voters.isVoter(VoterSet.VoterKey.of(localId, Optional.of(localDirectoryId)))) {
+        if (!voters.isVoter(ReplicaKey.of(localId, Optional.of(localDirectoryId)))) {
             throw new IllegalArgumentException(
                 String.format(
                     "Local replica (%d, %s) must be in the set of voters %s",
@@ -244,7 +245,7 @@ public class CandidateState implements EpochState {
     public ElectionState election() {
         return ElectionState.withVotedCandidate(
             epoch,
-            VoterSet.VoterKey.of(localId, Optional.of(localDirectoryId)),
+            ReplicaKey.of(localId, Optional.of(localDirectoryId)),
             voteStates.keySet()
         );
     }
@@ -261,7 +262,7 @@ public class CandidateState implements EpochState {
 
     @Override
     public boolean canGrantVote(
-        VoterSet.VoterKey candidateKey,
+        ReplicaKey candidateKey,
         boolean isLogUpToDate
     ) {
         // Still reject vote request even candidateId = localId, Although the candidate votes for

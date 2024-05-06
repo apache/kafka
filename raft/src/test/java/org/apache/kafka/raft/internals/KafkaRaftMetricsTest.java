@@ -136,7 +136,7 @@ public class KafkaRaftMetricsTest {
         state.followerStateOrThrow().updateHighWatermark(OptionalLong.of(10L));
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToVoted(3, VoterSet.VoterKey.of(2, Optional.empty()));
+        state.transitionToVoted(3, ReplicaKey.of(2, Optional.empty()));
         assertEquals("voted", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) 2, getMetric(metrics, "current-vote").metricValue());

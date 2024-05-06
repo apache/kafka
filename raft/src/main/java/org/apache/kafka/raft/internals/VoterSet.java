@@ -76,7 +76,7 @@ final public class VoterSet {
      * @param nodeKey the node's id and directory id
      * @return true if the node is a voter in the voter set, otherwise false
      */
-    public boolean isVoter(VoterKey nodeKey) {
+    public boolean isVoter(ReplicaKey nodeKey) {
         VoterNode node = voters.get(nodeKey.id());
         if (node != null) {
             if (node.voterKey().directoryId().isPresent()) {
@@ -97,7 +97,7 @@ final public class VoterSet {
      * @param nodeKey the node's id and directory id
      * @return true if the node is the only voter in the voter set, otherwise false
      */
-    public boolean isOnlyVoter(VoterKey nodeKey) {
+    public boolean isOnlyVoter(ReplicaKey nodeKey) {
         return voters.size() == 1 && isVoter(nodeKey);
     }
 
@@ -139,7 +139,7 @@ final public class VoterSet {
      * @param voterKey the voter key
      * @return a new voter set if the voter was removed, otherwise {@code Optional.empty()}
      */
-    public Optional<VoterSet> removeVoter(VoterKey voterKey) {
+    public Optional<VoterSet> removeVoter(ReplicaKey voterKey) {
         VoterNode oldVoter = voters.get(voterKey.id());
         if (oldVoter != null && Objects.equals(oldVoter.voterKey(), voterKey)) {
             HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
@@ -205,20 +205,20 @@ final public class VoterSet {
      * @return true if they have an overlapping majority, false otherwise
      */
     public boolean hasOverlappingMajority(VoterSet that) {
-        Set<VoterKey> thisVoterKeys = voters
+        Set<ReplicaKey> thisReplicaKeys = voters
             .values()
             .stream()
             .map(VoterNode::voterKey)
             .collect(Collectors.toSet());
 
-        Set<VoterKey> thatVoterKeys = that.voters
+        Set<ReplicaKey> thatReplicaKeys = that.voters
             .values()
             .stream()
             .map(VoterNode::voterKey)
             .collect(Collectors.toSet());
 
-        if (Utils.diff(HashSet::new, thisVoterKeys, thatVoterKeys).size() > 1) return false;
-        if (Utils.diff(HashSet::new, thatVoterKeys, thisVoterKeys).size() > 1) return false;
+        if (Utils.diff(HashSet::new, thisReplicaKeys, thatReplicaKeys).size() > 1) return false;
+        if (Utils.diff(HashSet::new, thatReplicaKeys, thisReplicaKeys).size() > 1) return false;
 
         return true;
     }
@@ -243,58 +243,13 @@ final public class VoterSet {
         return String.format("VoterSet(voters=%s)", voters);
     }
 
-    public final static class VoterKey {
-        private final int id;
-        private final Optional<Uuid> directoryId;
-
-        private VoterKey(int id, Optional<Uuid> directoryId) {
-            this.id = id;
-            this.directoryId = directoryId;
-        }
-
-        public int id() {
-            return id;
-        }
-
-        public Optional<Uuid> directoryId() {
-            return directoryId;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-
-            VoterKey that = (VoterKey) o;
-
-            if (id != that.id) return false;
-            if (!Objects.equals(directoryId, that.directoryId)) return false;
-
-            return true;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(id, directoryId);
-        }
-
-        @Override
-        public String toString() {
-            return String.format("VoterKey(id=%d, directoryId=%s)", id, directoryId);
-        }
-
-        public static VoterKey of(int id, Optional<Uuid> directoryId) {
-            return new VoterKey(id, directoryId);
-        }
-    }
-
     public final static class VoterNode {
-        private final VoterKey voterKey;
+        private final ReplicaKey voterKey;
         private final Map<String, InetSocketAddress> listeners;
         private final SupportedVersionRange supportedKRaftVersion;
 
         VoterNode(
-            VoterKey voterKey,
+            ReplicaKey voterKey,
             Map<String, InetSocketAddress> listeners,
             SupportedVersionRange supportedKRaftVersion
         ) {
@@ -303,7 +258,7 @@ final public class VoterSet {
             this.supportedKRaftVersion = supportedKRaftVersion;
         }
 
-        public VoterKey voterKey() {
+        public ReplicaKey voterKey() {
             return voterKey;
         }
 
@@ -374,7 +329,7 @@ final public class VoterSet {
             voterNodes.put(
                 voter.voterId(),
                 new VoterNode(
-                    VoterKey.of(voter.voterId(), directoryId),
+                    ReplicaKey.of(voter.voterId(), directoryId),
                     listeners,
                     new SupportedVersionRange(
                         voter.kRaftVersionFeature().minSupportedVersion(),
@@ -402,7 +357,7 @@ final public class VoterSet {
                 Collectors.toMap(
                     Map.Entry::getKey,
                     entry -> new VoterNode(
-                        VoterKey.of(entry.getKey(), Optional.empty()),
+                        ReplicaKey.of(entry.getKey(), Optional.empty()),
                         Collections.singletonMap(listener, entry.getValue()),
                         new SupportedVersionRange((short) 0, (short) 0)
                     )

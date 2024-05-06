@@ -23,7 +23,7 @@ import java.util.Optional;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.generated.QuorumStateData;
-import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -35,38 +35,38 @@ final class ElectionStateTest {
     @Test
     void testVotedCandidateWithoutVotedId() {
         ElectionState electionState = ElectionState.withUnknownLeader(5, Collections.emptySet());
-        assertFalse(electionState.isVotedCandidate(VoterSet.VoterKey.of(1, Optional.empty())));
+        assertFalse(electionState.isVotedCandidate(ReplicaKey.of(1, Optional.empty())));
     }
 
     @Test
     void testVotedCandidateWithoutVotedDirectoryId() {
         ElectionState electionState = ElectionState.withVotedCandidate(
             5,
-            VoterSet.VoterKey.of(1, Optional.empty()),
+            ReplicaKey.of(1, Optional.empty()),
             Collections.emptySet()
         );
-        assertTrue(electionState.isVotedCandidate(VoterSet.VoterKey.of(1, Optional.empty())));
+        assertTrue(electionState.isVotedCandidate(ReplicaKey.of(1, Optional.empty())));
         assertTrue(
-            electionState.isVotedCandidate(VoterSet.VoterKey.of(1, Optional.of(Uuid.randomUuid())))
+            electionState.isVotedCandidate(ReplicaKey.of(1, Optional.of(Uuid.randomUuid())))
         );
     }
 
     @Test
     void testVotedCandidateWithVotedDirectoryId() {
-        VoterSet.VoterKey votedKey = VoterSet.VoterKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey votedKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
         ElectionState electionState = ElectionState.withVotedCandidate(
             5,
             votedKey,
             Collections.emptySet()
         );
-        assertFalse(electionState.isVotedCandidate(VoterSet.VoterKey.of(1, Optional.empty())));
+        assertFalse(electionState.isVotedCandidate(ReplicaKey.of(1, Optional.empty())));
         assertTrue(electionState.isVotedCandidate(votedKey));
     }
 
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     void testQuorumStateDataRoundTrip(short version) {
-        VoterSet.VoterKey votedKey = VoterSet.VoterKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey votedKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
         List<ElectionState> electionStates = Arrays.asList(
             ElectionState.withUnknownLeader(5, Utils.mkSet(1, 2, 3)),
             ElectionState.withElectedLeader(5, 1, Utils.mkSet(1, 2, 3)),
@@ -80,7 +80,7 @@ final class ElectionStateTest {
                 ElectionState.withElectedLeader(5, 1, Utils.mkSet(1, 2, 3)),
                 ElectionState.withVotedCandidate(
                     5,
-                    VoterSet.VoterKey.of(1, Optional.empty()),
+                    ReplicaKey.of(1, Optional.empty()),
                     Utils.mkSet(1, 2, 3)
                 )
             );

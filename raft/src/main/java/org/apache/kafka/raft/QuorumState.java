@@ -28,6 +28,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.slf4j.Logger;
 
@@ -165,7 +166,7 @@ public class QuorumState {
             );
         } else if (
             localId.isPresent() &&
-            election.isVotedCandidate(VoterSet.VoterKey.of(localId.getAsInt(), Optional.of(localDirectoryId)))
+            election.isVotedCandidate(ReplicaKey.of(localId.getAsInt(), Optional.of(localDirectoryId)))
         ) {
             initialState = new CandidateState(
                 time,
@@ -215,7 +216,7 @@ public class QuorumState {
     public boolean isOnlyVoter() {
         return localId.isPresent() &&
             latestVoterSet.get().isOnlyVoter(
-                VoterSet.VoterKey.of(localId.getAsInt(), Optional.of(localDirectoryId))
+                ReplicaKey.of(localId.getAsInt(), Optional.of(localDirectoryId))
             );
     }
 
@@ -271,10 +272,10 @@ public class QuorumState {
 
         return latestVoterSet
             .get()
-            .isVoter(VoterSet.VoterKey.of(localId.getAsInt(), Optional.of(localDirectoryId)));
+            .isVoter(ReplicaKey.of(localId.getAsInt(), Optional.of(localDirectoryId)));
     }
 
-    public boolean isVoter(VoterSet.VoterKey nodeKey) {
+    public boolean isVoter(ReplicaKey nodeKey) {
         return latestVoterSet.get().isVoter(nodeKey);
     }
 
@@ -345,7 +346,7 @@ public class QuorumState {
      */
     public void transitionToVoted(
         int epoch,
-        VoterSet.VoterKey candidateKey
+        ReplicaKey candidateKey
     ) {
         int currentEpoch = state.epoch();
         if (localId.isPresent() && candidateKey.id() == localId.getAsInt()) {
@@ -532,7 +533,7 @@ public class QuorumState {
         return electionTimeoutMs + random.nextInt(electionTimeoutMs);
     }
 
-    public boolean canGrantVote(VoterSet.VoterKey candidateKey, boolean isLogUpToDate) {
+    public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
         return state.canGrantVote(candidateKey, isLogUpToDate);
     }
 

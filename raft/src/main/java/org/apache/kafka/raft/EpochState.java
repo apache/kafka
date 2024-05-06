@@ -18,7 +18,7 @@ package org.apache.kafka.raft;
 
 import java.io.Closeable;
 import java.util.Optional;
-import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.raft.internals.ReplicaKey;
 
 public interface EpochState extends Closeable {
 
@@ -36,7 +36,7 @@ public interface EpochState extends Closeable {
      * @param isLogUpToDate whether the candidate’s log is at least as up-to-date as receiver’s log
      * @return true if it can grant the vote, false otherwise
      */
-    boolean canGrantVote(VoterSet.VoterKey candidateKey, boolean isLogUpToDate);
+    boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate);
 
     /**
      * Get the current election state, which is guaranteed to be immutable.

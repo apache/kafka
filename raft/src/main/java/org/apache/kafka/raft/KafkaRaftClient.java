@@ -70,6 +70,7 @@ import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.raft.internals.RecordsBatchReader;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -544,7 +545,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         resetConnections();
     }
 
-    private void transitionToVoted(VoterSet.VoterKey candidateKey, int epoch) {
+    private void transitionToVoted(ReplicaKey candidateKey, int epoch) {
         quorum.transitionToVoted(epoch, candidateKey);
         maybeFireLeaderChange();
         resetConnections();
@@ -632,7 +633,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         OffsetAndEpoch lastEpochEndOffsetAndEpoch = new OffsetAndEpoch(lastEpochEndOffset, lastEpoch);
-        VoterSet.VoterKey candidateKey = VoterSet.VoterKey.of(candidateId, Optional.empty());
+        ReplicaKey candidateKey = ReplicaKey.of(candidateId, Optional.empty());
         boolean voteGranted = quorum.canGrantVote(
             candidateKey,
             lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0

@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.raft.internals.VoterSetTest;
 import org.junit.jupiter.api.Test;
@@ -203,10 +204,10 @@ public class CandidateStateTest {
             voterSetWithLocal(Arrays.asList(1, 2, 3))
         );
 
-        assertFalse(state.canGrantVote(VoterSet.VoterKey.of(0, Optional.empty()), isLogUpToDate));
-        assertFalse(state.canGrantVote(VoterSet.VoterKey.of(1, Optional.empty()), isLogUpToDate));
-        assertFalse(state.canGrantVote(VoterSet.VoterKey.of(2, Optional.empty()), isLogUpToDate));
-        assertFalse(state.canGrantVote(VoterSet.VoterKey.of(3, Optional.empty()), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(0, Optional.empty()), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(1, Optional.empty()), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(2, Optional.empty()), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(3, Optional.empty()), isLogUpToDate));
     }
 
     @Test

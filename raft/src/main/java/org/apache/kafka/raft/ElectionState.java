@@ -24,7 +24,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.raft.generated.QuorumStateData;
-import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.raft.internals.ReplicaKey;
 
 /**
  * Encapsulate election state stored on disk after every state change.
@@ -36,14 +36,14 @@ final public class ElectionState {
 
     private final int epoch;
     private final OptionalInt leaderId;
-    private final Optional<VoterSet.VoterKey> votedKey;
+    private final Optional<ReplicaKey> votedKey;
     // This is deprecated. It is only used when writing version 0 of the quorum state file
     private final Set<Integer> voters;
 
     ElectionState(
         int epoch,
         OptionalInt leaderId,
-        Optional<VoterSet.VoterKey> votedKey,
+        Optional<ReplicaKey> votedKey,
         Set<Integer> voters
     ) {
         this.epoch = epoch;
@@ -72,7 +72,7 @@ final public class ElectionState {
      * @param nodeKey the id and directory id of the replica
      * @return true when the arguments match, otherwise false
      */
-    public boolean isVotedCandidate(VoterSet.VoterKey nodeKey) {
+    public boolean isVotedCandidate(ReplicaKey nodeKey) {
         if (nodeKey.id() < 0) {
             throw new IllegalArgumentException("Invalid node key " + nodeKey);
         } else if (!votedKey.isPresent()) {
@@ -102,7 +102,7 @@ final public class ElectionState {
         return leaderId;
     }
 
-    public VoterSet.VoterKey votedKey() {
+    public ReplicaKey votedKey() {
         if (!votedKey.isPresent()) {
             throw new IllegalStateException("Attempt to access nil votedId");
         }
@@ -110,7 +110,7 @@ final public class ElectionState {
         return votedKey.get();
     }
 
-    public Optional<VoterSet.VoterKey> optionalVotedKey() {
+    public Optional<ReplicaKey> optionalVotedKey() {
         return votedKey;
     }
 
@@ -126,7 +126,7 @@ final public class ElectionState {
         QuorumStateData data = new QuorumStateData()
             .setLeaderEpoch(epoch)
             .setLeaderId(leaderIdOrSentinel())
-            .setVotedId(votedKey.map(VoterSet.VoterKey::id).orElse(notVoted));
+            .setVotedId(votedKey.map(ReplicaKey::id).orElse(notVoted));
 
         if (version == 0) {
             List<QuorumStateData.Voter> dataVoters = voters
@@ -135,7 +135,7 @@ final public class ElectionState {
                 .collect(Collectors.toList());
             data.setCurrentVoters(dataVoters);
         } else if (version == 1) {
-            data.setVotedDirectoryId(votedKey.flatMap(VoterSet.VoterKey::directoryId).orElse(noVotedDirectoryId));
+            data.setVotedDirectoryId(votedKey.flatMap(ReplicaKey::directoryId).orElse(noVotedDirectoryId));
         } else {
             throw new IllegalStateException(
                 String.format(
@@ -177,7 +177,7 @@ final public class ElectionState {
         return Objects.hash(epoch, leaderId, votedKey, voters);
     }
 
-    public static ElectionState withVotedCandidate(int epoch, VoterSet.VoterKey votedKey, Set<Integer> voters) {
+    public static ElectionState withVotedCandidate(int epoch, ReplicaKey votedKey, Set<Integer> voters) {
         if (votedKey.id() < 0) {
             throw new IllegalArgumentException("Illegal voted Id " + votedKey.id() + ": must be non-negative");
         }
@@ -202,9 +202,9 @@ final public class ElectionState {
             Optional.empty() :
             Optional.of(data.votedDirectoryId());
 
-        Optional<VoterSet.VoterKey> voterKey = data.votedId() == notVoted ?
+        Optional<ReplicaKey> voterKey = data.votedId() == notVoted ?
             Optional.empty() :
-            Optional.of(VoterSet.VoterKey.of(data.votedId(), votedDirectoryId));
+            Optional.of(ReplicaKey.of(data.votedId(), votedDirectoryId));
 
         return new ElectionState(
             data.leaderEpoch(),

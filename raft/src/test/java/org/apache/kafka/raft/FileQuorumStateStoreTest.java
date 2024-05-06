@@ -22,7 +22,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.types.TaggedFields;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.generated.QuorumStateData;
-import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.BufferedWriter;
@@ -83,7 +83,7 @@ public class FileQuorumStateStoreTest {
         final int epoch = 2;
         final int voter1 = 1;
         final Optional<Uuid> voter1DirectoryId = Optional.of(Uuid.randomUuid());
-        final VoterSet.VoterKey voter1Key = VoterSet.VoterKey.of(voter1, voter1DirectoryId);
+        final ReplicaKey voter1Key = ReplicaKey.of(voter1, voter1DirectoryId);
         final int voter2 = 2;
         final int voter3 = 3;
         Set<Integer> voters = Utils.mkSet(voter1, voter2, voter3);
@@ -106,7 +106,7 @@ public class FileQuorumStateStoreTest {
             expected = Optional.of(
                 ElectionState.withVotedCandidate(
                     epoch,
-                    VoterSet.VoterKey.of(voter1, Optional.empty()),
+                    ReplicaKey.of(voter1, Optional.empty()),
                     voters
                 )
             );
