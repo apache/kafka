@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.CoordinatorState;
 
 import java.util.Arrays;
@@ -96,7 +97,7 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
         );
 
         this.numPartitionsFailed = kafkaMetricName(
-            NUM_PARTITIONS_METRIC_NAME,
+        NUM_PARTITIONS_METRIC_NAME,
             "The number of partitions in Failed state.",
             "state", "failed"
         );
@@ -122,13 +123,12 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
             ), new Avg());
 
         this.threadIdleSensor = metrics.sensor("ThreadIdleRatio");
-        this.threadIdleSensor.add(new Meter(TimeUnit.MILLISECONDS,
-            metrics.metricName("thread-idle-ratio",
-                METRICS_GROUP,
-                "The fraction of time the threads spent waiting for an event."),
-            metrics.metricName("thread-idle-time-ms-total",
-                METRICS_GROUP,
-                "The thread idle total time in milliseconds")));
+        this.threadIdleSensor.add(metrics.metricName(
+            "thread-idle-ratio-avg",
+            METRICS_GROUP,
+            "The fraction of time the threads spent waiting for an event. This is an average across " +
+                "all coordinator event processor threads."),
+            new Rate(TimeUnit.MILLISECONDS));
     }
 
     /**
