@@ -185,7 +185,7 @@ public class NodeApiVersions {
         bld.append("(");
         if (lineBreaks)
             bld.append("\n\t");
-        bld.append(Utils.join(apiKeysText.values(), separator));
+        bld.append(String.join(separator, apiKeysText.values()));
         if (lineBreaks)
             bld.append("\n");
         bld.append(")");

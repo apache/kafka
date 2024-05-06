@@ -23,7 +23,6 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Scheduler;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.common.CapturingCommandRunner;
@@ -361,7 +360,7 @@ public class CoordinatorTest {
 
         @Override
         public String toString() {
-            return Utils.join(expectedLines, ", ");
+            return String.join(", ", expectedLines);
         }
     }
 

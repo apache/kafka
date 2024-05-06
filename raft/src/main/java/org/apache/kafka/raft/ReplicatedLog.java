@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.Optional;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
-
-import java.util.Optional;
 
 public interface ReplicatedLog extends AutoCloseable {
 
@@ -236,14 +235,14 @@ public interface ReplicatedLog extends AutoCloseable {
      * snapshot already exists or it is less than log start offset then return an
      * {@link Optional#empty()}.
      *
-     * Snapshots created using this method will be validated against the existing snapshots
-     * and the replicated log.
+     * The snapshot id will be validated against the existing snapshots and the log. The snapshot id
+     * must not alread exist, it must be greater than the log start offset, it must be less than
+     * the high-watermark and it must exist in the log.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
-     * @return a writable snapshot if it doesn't already exist and greater than the log start
-     *         offset
-     * @throws IllegalArgumentException if validate is true and end offset is greater than the
-     *         high-watermark
+     * @return a writable snapshot
+     * @throws IllegalArgumentException if the snapshot id is greater than the high-watermark or not
+     *         a valid epoch and offset in the log
      */
     Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId);
 
@@ -254,14 +253,15 @@ public interface ReplicatedLog extends AutoCloseable {
      * this method is responsible for invoking {@link RawSnapshotWriter#close()}. If a
      * snapshot already exists then return an {@link Optional#empty()}.
      *
-     * Snapshots created using this method will not be validated against the existing snapshots
-     * and the replicated log. This is useful when creating snapshot from a trusted source like
-     * the quorum leader.
+     * The snapshot id will not be validated against the log. The snapshot id is not checked against
+     * the log start offset, the high-watermark or against existing epochs and offsets in the log.
+     *
+     * This is useful when creating snapshots from a trusted source like the quorum leader.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
      * @return a writable snapshot if it doesn't already exist
      */
-    Optional<RawSnapshotWriter> storeSnapshot(OffsetAndEpoch snapshotId);
+    Optional<RawSnapshotWriter> createNewSnapshotUnchecked(OffsetAndEpoch snapshotId);
 
     /**
      * Opens a readable snapshot for the given snapshot id.

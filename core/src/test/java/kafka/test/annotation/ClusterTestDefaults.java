@@ -38,6 +38,7 @@ public @interface ClusterTestDefaults {
     Type clusterType() default Type.ZK;
     int brokers() default 1;
     int controllers() default 1;
+    int disksPerBroker() default 1;
     boolean autoStart() default true;
     // Set default server properties for all @ClusterTest(s)
     ClusterConfigProperty[] serverProperties() default {};

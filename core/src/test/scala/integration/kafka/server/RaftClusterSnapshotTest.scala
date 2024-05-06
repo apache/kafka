@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.util.Collections
 import kafka.testkit.KafkaClusterTestKit
 import kafka.testkit.TestKitNodes
 import kafka.utils.TestUtils
@@ -88,9 +87,14 @@ class RaftClusterSnapshotTest {
 
           // Check that we can read the entire snapshot
           while (snapshot.hasNext) {
-            val batch = snapshot.next()
+            val batch = snapshot.next
             assertTrue(batch.sizeInBytes > 0)
-            assertNotEquals(Collections.emptyList(), batch.records())
+            // A batch must have at least one control records or at least one data records, but not both
+            assertNotEquals(
+              batch.records.isEmpty,
+              batch.controlRecords.isEmpty,
+              s"data records = ${batch.records}; control records = ${batch.controlRecords}"
+            )
           }
         }
       }
