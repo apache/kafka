@@ -220,9 +220,7 @@ public class RecordHeadersTest {
 
     private int getCount(Headers headers) {
         int count = 0;
-        Iterator<Header> headerIterator = headers.iterator();
-        while (headerIterator.hasNext()) {
-            headerIterator.next();
+        for (Header ignore : headers) {
             count++;
         }
         return count;

@@ -551,11 +551,10 @@ public class KafkaProducerTest {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.put(1, "not string key");
-        try (KafkaProducer<?, ?> ff = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer())) {
-            fail("Constructor should throw exception");
-        } catch (ConfigException e) {
-            assertTrue(e.getMessage().contains("not string key"), "Unexpected exception message: " + e.getMessage());
-        }
+        ConfigException ce = assertThrows(
+            ConfigException.class,
+            () -> new KafkaProducer<>(props, new StringSerializer(), new StringSerializer()));
+        assertTrue(ce.getMessage().contains("not string key"), "Unexpected exception message: " + ce.getMessage());
     }
 
     @Test
@@ -2085,7 +2084,6 @@ public class KafkaProducerTest {
 
                 assertNotNull(recordMetadata.topic(), "Topic name should be valid even on send failure");
                 assertEquals(invalidTopicName, recordMetadata.topic());
-                assertNotNull(recordMetadata.partition(), "Partition should be valid even on send failure");
 
                 assertFalse(recordMetadata.hasOffset());
                 assertEquals(ProduceResponse.INVALID_OFFSET, recordMetadata.offset());
@@ -2391,15 +2389,15 @@ public class KafkaProducerTest {
         private final TestInfo testInfo;
         private final Map<String, Object> configs;
         private final Serializer<T> serializer;
+        private final Partitioner partitioner = mock(Partitioner.class);
+        private final KafkaThread ioThread = mock(KafkaThread.class);
+        private final List<ProducerInterceptor<T, T>> interceptors = new ArrayList<>();
         private ProducerMetadata metadata = mock(ProducerMetadata.class);
         private RecordAccumulator accumulator = mock(RecordAccumulator.class);
         private Sender sender = mock(Sender.class);
         private TransactionManager transactionManager = mock(TransactionManager.class);
-        private Partitioner partitioner = mock(Partitioner.class);
-        private KafkaThread ioThread = mock(KafkaThread.class);
         private Time time = new MockTime();
-        private Metrics metrics = new Metrics(time);
-        private List<ProducerInterceptor<T, T>> interceptors = new ArrayList<>();
+        private final Metrics metrics = new Metrics(time);
 
         public KafkaProducerTestContext(
             TestInfo testInfo,

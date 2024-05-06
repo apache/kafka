@@ -149,16 +149,15 @@ public class SenderTest {
     private static final int DELIVERY_TIMEOUT_MS = 1500;
     private static final long TOPIC_IDLE_MS = 60 * 1000;
 
-    private TopicPartition tp0 = new TopicPartition("test", 0);
-    private TopicPartition tp1 = new TopicPartition("test", 1);
-
-    private TopicPartition tp2 = new TopicPartition("test", 2);
+    private final TopicPartition tp0 = new TopicPartition("test", 0);
+    private final TopicPartition tp1 = new TopicPartition("test", 1);
+    private final TopicPartition tp2 = new TopicPartition("test", 2);
     private MockTime time = new MockTime();
-    private int batchSize = 16 * 1024;
-    private ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, TOPIC_IDLE_MS,
+    private final int batchSize = 16 * 1024;
+    private final ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, TOPIC_IDLE_MS,
             new LogContext(), new ClusterResourceListeners(), time);
+    private final ApiVersions apiVersions = new ApiVersions();
     private MockClient client = new MockClient(time, metadata);
-    private ApiVersions apiVersions = new ApiVersions();
     private Metrics metrics = null;
     private RecordAccumulator accumulator = null;
     private Sender sender = null;
@@ -2956,7 +2955,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testTransactionAbortedExceptionOnAbortWithoutError() throws InterruptedException, ExecutionException {
+    public void testTransactionAbortedExceptionOnAbortWithoutError() throws InterruptedException {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         TransactionManager txnManager = new TransactionManager(logContext, "testTransactionAbortedExceptionOnAbortWithoutError", 60000, 100, apiVersions);
 
@@ -3232,7 +3231,7 @@ public class SenderTest {
             assertTrue(client.hasInFlightRequests());
             client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, 0));
             sender.runOnce(); // receive produce response, batch scheduled for retry
-            assertTrue(!futureIsProduced.isDone(), "Produce request is yet not done.");
+            assertFalse(futureIsProduced.isDone(), "Produce request is yet not done.");
 
             // TEST that as new-leader(with epochA) is discovered, the batch is retried immediately i.e. skips any backoff period.
             // Update leader epoch for tp0
@@ -3253,13 +3252,13 @@ public class SenderTest {
             assertTrue(client.hasInFlightRequests());
             client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, 0));
             sender.runOnce(); // receive produce response, schedule batch for retry.
-            assertTrue(!futureIsProduced.isDone(), "Produce request is yet not done.");
+            assertFalse(futureIsProduced.isDone(), "Produce request is yet not done.");
 
             // TEST that a subsequent retry to the same leader(epochA) waits the backoff period.
             sender.runOnce(); //send produce request
             // No batches in-flight
             assertEquals(0, sender.inFlightBatches(tp0).size());
-            assertTrue(!client.hasInFlightRequests());
+            assertFalse(client.hasInFlightRequests());
 
             // TEST that after waiting for longer than backoff period, batch is retried again.
             time.sleep(2 * retryBackoffMaxMs);
@@ -3279,7 +3278,7 @@ public class SenderTest {
     // This test is expected to run fast. If timeout, the sender is not able to close properly.
     @Timeout(5)
     @Test
-    public void testSenderShouldCloseWhenTransactionManagerInErrorState() throws Exception {
+    public void testSenderShouldCloseWhenTransactionManagerInErrorState() {
         metrics.close();
         Map<String, String> clientTags = Collections.singletonMap("client-id", "clientA");
         metrics = new Metrics(new MetricConfig().tags(clientTags));
@@ -3356,8 +3355,8 @@ public class SenderTest {
             responses.put(tp2, new OffsetAndError(100, Errors.NONE));
             client.respond(produceResponse(responses));
             sender.runOnce(); // receive produce response, batch scheduled for retry
-            assertTrue(!futureIsProducedTp0.isDone(), "Produce request to tp0 should be unfinished.");
-            assertTrue(!futureIsProducedTp1.isDone(), "Produce request to tp1 should be unfinished.");
+            assertFalse(futureIsProducedTp0.isDone(), "Produce request to tp0 should be unfinished.");
+            assertFalse(futureIsProducedTp1.isDone(), "Produce request to tp1 should be unfinished.");
             assertTrue(futureIsProducedTp2.isDone(), "Produce request to tp0 should be done.");
 
             // Validate metadata is unchanged as new leader info wasn't received.
@@ -3452,8 +3451,8 @@ public class SenderTest {
 
             client.respond(produceResponse(responses, partitionLeaderInfo, newNodes));
             sender.runOnce(); // receive produce response, batch scheduled for retry
-            assertTrue(!futureIsProducedTp0.isDone(), "Produce request to tp0 should be unfinished.");
-            assertTrue(!futureIsProducedTp1.isDone(), "Produce request to tp1 should be unfinished.");
+            assertFalse(futureIsProducedTp0.isDone(), "Produce request to tp0 should be unfinished.");
+            assertFalse(futureIsProducedTp1.isDone(), "Produce request to tp1 should be unfinished.");
             assertTrue(futureIsProducedTp2.isDone(), "Produce request to tp0 should be done.");
 
             // Validate metadata is unchanged as new leader info wasn't received.
@@ -3492,9 +3491,9 @@ public class SenderTest {
         assertEquals(expectedMessage, e1.getCause().getMessage());
     }
 
-    class AssertEndTxnRequestMatcher implements MockClient.RequestMatcher {
+    static class AssertEndTxnRequestMatcher implements MockClient.RequestMatcher {
 
-        private TransactionResult requiredResult;
+        private final TransactionResult requiredResult;
         private boolean matched = false;
 
         AssertEndTxnRequestMatcher(TransactionResult requiredResult) {
@@ -3513,7 +3512,7 @@ public class SenderTest {
         }
     }
 
-    private class MatchingBufferPool extends BufferPool {
+    private static class MatchingBufferPool extends BufferPool {
         IdentityHashMap<ByteBuffer, Boolean> allocatedBuffers;
 
         MatchingBufferPool(long totalSize, int batchSize, Metrics metrics, Time time, String metricGrpName) {

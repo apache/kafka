@@ -73,6 +73,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -80,9 +81,9 @@ import static org.mockito.Mockito.verify;
 
 public class MetadataTest {
 
-    private long refreshBackoffMs = 100;
-    private long refreshBackoffMaxMs = 1000;
-    private long metadataExpireMs = 1000;
+    private final long refreshBackoffMs = 100;
+    private final long refreshBackoffMaxMs = 1000;
+    private final long metadataExpireMs = 1000;
     private Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs,
             metadataExpireMs, new LogContext(), new ClusterResourceListeners());
 
@@ -1210,8 +1211,7 @@ public class MetadataTest {
         metadata.update(versionAndBuilder.requestVersion,
             RequestTestUtils.metadataUpdateWith(clusterId, numNodes, errorCounts, topicPartitionCounts, tp -> null, metadataSupplier, ApiKeys.METADATA.latestVersion(), topicIds),
             false, time.milliseconds());
-        List<Node> nodes = new ArrayList<>();
-        nodes.addAll(metadata.fetch().nodes());
+        List<Node> nodes = new ArrayList<>(metadata.fetch().nodes());
         Node controller = metadata.fetch().controller();
         assertEquals(numNodes, nodes.size());
         assertFalse(metadata.updateRequested());
@@ -1323,7 +1323,7 @@ public class MetadataTest {
                 } else { // Thread to read metadata snapshot, once its updated
                     try {
                         if (!atleastMetadataUpdatedOnceLatch.await(5, TimeUnit.MINUTES)) {
-                            assertFalse(true, "Test had to wait more than 5 minutes, something went wrong.");
+                            fail("Test had to wait more than 5 minutes, something went wrong.");
                         }
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
@@ -1335,7 +1335,7 @@ public class MetadataTest {
             });
         }
         if (!allThreadsDoneLatch.await(5, TimeUnit.MINUTES)) {
-            assertFalse(true, "Test had to wait more than 5 minutes, something went wrong.");
+            fail("Test had to wait more than 5 minutes, something went wrong.");
         }
 
         // Validate new snapshot is upto-date. And has higher partition counts, nodes & leader epoch than earlier.
