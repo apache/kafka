@@ -305,7 +305,8 @@ public class ConsumerTestBuilder implements Closeable {
                     time,
                     () -> applicationEventProcessor,
                     () -> networkClientDelegate,
-                    () -> requestManagers
+                    () -> requestManagers,
+                    backgroundEventHandler
             );
         }
 
