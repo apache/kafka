@@ -55,6 +55,7 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
     private static final String PURPOSE = "field extraction";
 
     private SingleFieldPath fieldPath;
+    private String originalPath;
 
     @Override
     public String version() {
@@ -64,7 +65,8 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-        fieldPath = new SingleFieldPath(config.getString(FIELD_CONFIG), FieldSyntaxVersion.fromConfig(config));
+        originalPath = config.getString(FIELD_CONFIG);
+        fieldPath = new SingleFieldPath(originalPath, FieldSyntaxVersion.fromConfig(config));
     }
 
     @Override
@@ -78,7 +80,7 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
             Field field = fieldPath.fieldFrom(schema);
 
             if (field == null) {
-                throw new IllegalArgumentException("Unknown field: " + fieldPath);
+                throw new IllegalArgumentException("Unknown field: " + originalPath);
             }
 
             return newRecord(record, field.schema(), value == null ? null : fieldPath.valueFrom(value));

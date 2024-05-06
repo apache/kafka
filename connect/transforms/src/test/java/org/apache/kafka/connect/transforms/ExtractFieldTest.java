@@ -157,7 +157,7 @@ public class ExtractFieldTest {
             xform.apply(record);
             fail("Expected exception wasn't raised");
         } catch (IllegalArgumentException iae) {
-            assertEquals("Unknown field: SingleFieldPath{version=V1, path=nonexistent}", iae.getMessage());
+            assertEquals("Unknown field: nonexistent", iae.getMessage());
         }
     }
 
@@ -174,7 +174,7 @@ public class ExtractFieldTest {
             xform.apply(record);
             fail("Expected exception wasn't raised");
         } catch (IllegalArgumentException iae) {
-            assertEquals("Unknown field: SingleFieldPath{version=V1, path=magic.nonexistent}", iae.getMessage());
+            assertEquals("Unknown field: magic.nonexistent", iae.getMessage());
         }
     }
 
