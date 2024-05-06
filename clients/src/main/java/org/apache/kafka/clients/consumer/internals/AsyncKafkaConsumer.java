@@ -907,6 +907,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 updateFetchPositions(timer);
                 timer.update();
+                wakeupTrigger.maybeTriggerWakeup();
             } while (timer.notExpired());
 
             throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the position " +
@@ -1703,12 +1704,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 new FetchCommittedOffsetsEvent(
                     initializingPartitions,
                     timer);
+            wakeupTrigger.setActiveTask(event.future());
             final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event, timer);
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
         } catch (TimeoutException e) {
             log.error("Couldn't refresh committed offsets before timeout expired");
             return false;
+        } finally {
+            wakeupTrigger.clearTask();
         }
     }
 
