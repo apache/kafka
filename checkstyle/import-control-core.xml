@@ -128,7 +128,5 @@
     <allow pkg="kafka.test"/>
     <allow pkg="kafka.test.annotation"/>
     <allow pkg="kafka.test.junit"/>
-    <allow class="kafka.admin.ConfigCommand.ConfigCommandOptions"/>
-    <allow class="kafka.admin.ConfigCommand.ConfigEntity"/>
   </subpackage>
 </import-control>
