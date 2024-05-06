@@ -120,7 +120,7 @@ public final class BrokerLocalStorage {
                             "in the log directory is %d which is %s the expected offset %s. The directory of %s is " +
                             "made of the following files: %s", brokerId, topicPartition,
                     offsetHolder.firstLogFileBaseOffset, pos, offset, topicPartition,
-                    Utils.join(offsetHolder.partitionFiles, System.lineSeparator()));
+                    String.join(System.lineSeparator(), offsetHolder.partitionFiles));
             throw new AssertionError(message);
         }
     }
