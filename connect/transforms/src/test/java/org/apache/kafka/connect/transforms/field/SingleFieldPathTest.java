@@ -30,7 +30,7 @@ import java.util.Map;
 class SingleFieldPathTest {
 
     @Test void shouldFindField() {
-        SchemaBuilder barSchema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA);
+        Schema barSchema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA).build();
         Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
 
         assertEquals(barSchema.field("bar"), pathV2("foo.bar").fieldFrom(schema));
@@ -38,7 +38,7 @@ class SingleFieldPathTest {
     }
 
     @Test void shouldReturnNullFieldWhenFieldNotFound() {
-        SchemaBuilder barSchema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA);
+        Schema barSchema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA).build();
         Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
 
         assertNull(pathV2("un.known").fieldFrom(schema));
@@ -73,11 +73,14 @@ class SingleFieldPathTest {
     }
 
     @Test void shouldFindValueInStruct() {
-        SchemaBuilder bazSchema = SchemaBuilder.struct()
-            .field("inner", Schema.STRING_SCHEMA);
-        SchemaBuilder barSchema = SchemaBuilder.struct()
+        Schema bazSchema = SchemaBuilder.struct()
+            .field("inner", Schema.STRING_SCHEMA)
+            .optional()
+            .build();
+        Schema barSchema = SchemaBuilder.struct()
             .field("bar", Schema.INT32_SCHEMA)
-            .field("baz", bazSchema.optional());
+            .field("baz", bazSchema)
+            .build();
         Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
         Struct foo = new Struct(barSchema)
             .put("bar", 42)
@@ -89,11 +92,14 @@ class SingleFieldPathTest {
     }
 
     @Test void shouldReturnNullValueWhenFieldNotFoundInStruct() {
-        SchemaBuilder bazSchema = SchemaBuilder.struct()
-            .field("inner", Schema.STRING_SCHEMA);
-        SchemaBuilder barSchema = SchemaBuilder.struct()
+        Schema bazSchema = SchemaBuilder.struct()
+            .field("inner", Schema.STRING_SCHEMA)
+            .optional()
+            .build();
+        Schema barSchema = SchemaBuilder.struct()
             .field("bar", Schema.INT32_SCHEMA)
-            .field("baz", bazSchema.optional());
+            .field("baz", bazSchema)
+            .build();
         Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
         Struct foo = new Struct(barSchema)
             .put("bar", 42)
