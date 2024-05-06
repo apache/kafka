@@ -187,10 +187,6 @@ public class SingleFieldPath {
         }
     }
 
-    List<String> stepsWithoutLast() {
-        return steps.subList(0, lastStepIndex());
-    }
-
     /**
      * Access a value at the current path within a schemaless {@code Map<String, Object>}.
      * If object is not found, then {@code null} is returned.
@@ -217,6 +213,10 @@ public class SingleFieldPath {
 
     private int lastStepIndex() {
         return steps.size() - 1;
+    }
+
+    private List<String> stepsWithoutLast() {
+        return steps.subList(0, lastStepIndex());
     }
 
     @Override
