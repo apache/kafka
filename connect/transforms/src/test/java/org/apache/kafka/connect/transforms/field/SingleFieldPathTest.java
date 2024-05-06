@@ -65,11 +65,11 @@ class SingleFieldPathTest {
         Map<String, Object> map = new HashMap<>();
         map.put("foo", foo);
 
-        assertNull(new SingleFieldPath("un.known", FieldSyntaxVersion.V2).valueFrom(map));
-        assertNull(new SingleFieldPath("foo.unknown", FieldSyntaxVersion.V2).valueFrom(map));
-        assertNull(new SingleFieldPath("unknown", FieldSyntaxVersion.V2).valueFrom(map));
-        assertNull(new SingleFieldPath("foo.baz", FieldSyntaxVersion.V2).valueFrom(map));
-        assertNull(new SingleFieldPath("foo.baz.inner", FieldSyntaxVersion.V2).valueFrom(map));
+        assertNull(pathV2("un.known").valueFrom(map));
+        assertNull(pathV2("foo.unknown").valueFrom(map));
+        assertNull(pathV2("unknown").valueFrom(map));
+        assertNull(pathV2("foo.baz").valueFrom(map));
+        assertNull(pathV2("foo.baz.inner").valueFrom(map));
     }
 
     @Test void shouldFindValueInStruct() {
@@ -106,11 +106,11 @@ class SingleFieldPathTest {
             .put("baz", null);
         Struct struct = new Struct(schema).put("foo", foo);
 
-        assertNull(new SingleFieldPath("un.known", FieldSyntaxVersion.V2).valueFrom(struct));
-        assertNull(new SingleFieldPath("foo.unknown", FieldSyntaxVersion.V2).valueFrom(struct));
-        assertNull(new SingleFieldPath("unknown", FieldSyntaxVersion.V2).valueFrom(struct));
-        assertNull(new SingleFieldPath("foo.baz", FieldSyntaxVersion.V2).valueFrom(struct));
-        assertNull(new SingleFieldPath("foo.baz.inner", FieldSyntaxVersion.V2).valueFrom(struct));
+        assertNull(pathV2("un.known").valueFrom(struct));
+        assertNull(pathV2("foo.unknown").valueFrom(struct));
+        assertNull(pathV2("unknown").valueFrom(struct));
+        assertNull(pathV2("foo.baz").valueFrom(struct));
+        assertNull(pathV2("foo.baz.inner").valueFrom(struct));
     }
 
     private static SingleFieldPath pathV2(String path) {
