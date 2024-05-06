@@ -73,6 +73,7 @@ import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSession;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -81,7 +82,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -1557,5 +1560,70 @@ public class SslTransportLayerTest {
         verify(sslEngine, times(1)).closeOutbound();
         verify(sslEngine, times(1)).closeInbound();
         verifyNoMoreInteractions(sslEngine);
+    }
+
+    @Test
+    public void testGatheringWrite() throws IOException {
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        SelectionKey selectionKey = mock(SelectionKey.class);
+        SslTransportLayer sslTransportLayer = spy(new SslTransportLayer(
+                "test-channel",
+                selectionKey,
+                sslEngine,
+                mock(ChannelMetadataRegistry.class)
+        ));
+        doReturn(false).when(sslTransportLayer).hasPendingWrites();
+
+        ByteBuffer mockSocket = ByteBuffer.allocate(1024);
+        when(sslTransportLayer.write(any(ByteBuffer.class))).then(invocation -> {
+            ByteBuffer buf = invocation.getArgument(0);
+            int written = buf.remaining();
+            mockSocket.put(buf);
+            return written;
+        });
+        ByteBuffer[] srcs = {
+                ByteBuffer.wrap("Hello, ".getBytes(StandardCharsets.UTF_8)),
+                ByteBuffer.wrap("World".getBytes(StandardCharsets.UTF_8)),
+                ByteBuffer.wrap("!".getBytes(StandardCharsets.UTF_8))
+        };
+
+        byte[] expected = "World!".getBytes(StandardCharsets.UTF_8);
+        assertEquals(expected.length, sslTransportLayer.write(srcs, 1, 2));
+
+        mockSocket.flip();
+        byte[] actual = new byte[expected.length];
+        mockSocket.get(actual);
+        assertArrayEquals(expected, actual);
+    }
+
+    @Test
+    public void testScatteringRead() throws IOException {
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        SelectionKey selectionKey = mock(SelectionKey.class);
+        SslTransportLayer sslTransportLayer = spy(new SslTransportLayer(
+                "test-channel",
+                selectionKey,
+                sslEngine,
+                mock(ChannelMetadataRegistry.class)
+        ));
+
+        ByteBuffer mockSocket = ByteBuffer.wrap("Hello, World!".getBytes(StandardCharsets.UTF_8));
+        when(sslTransportLayer.read(any(ByteBuffer.class))).then(invocation -> {
+            ByteBuffer buf = invocation.getArgument(0);
+            int read = buf.remaining();
+            for (int i = 0; i < read; i++) {
+                buf.put(mockSocket.get());
+            }
+            return read;
+        });
+        ByteBuffer[] dsts = {
+                ByteBuffer.allocate(2),
+                ByteBuffer.allocate(3),
+                ByteBuffer.allocate(4)
+        };
+
+        assertEquals(7, sslTransportLayer.read(dsts, 1, 2));
+        assertArrayEquals("Hel".getBytes(StandardCharsets.UTF_8), dsts[1].array());
+        assertArrayEquals("lo, ".getBytes(StandardCharsets.UTF_8), dsts[2].array());
     }
 }
