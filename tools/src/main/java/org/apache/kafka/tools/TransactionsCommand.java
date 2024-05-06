@@ -410,7 +410,7 @@ public abstract class TransactionsCommand {
                 String.valueOf(result.transactionTimeoutMs()),
                 transactionStartTimeMsColumnValue,
                 transactionDurationMsColumnValue,
-                Utils.join(result.topicPartitions(), ",")
+                result.topicPartitions().stream().map(TopicPartition::toString).collect(Collectors.joining(","))
             );
 
             ToolsUtils.prettyPrintTable(HEADERS, singletonList(row), out);
