@@ -64,7 +64,7 @@ class KafkaZkClient private[zk] (
   zooKeeperClient: ZooKeeperClient,
   isSecure: Boolean,
   time: Time,
-  enableEntityConfigNoController: Boolean
+  enableEntityConfigControllerCheck: Boolean
 ) extends AutoCloseable with Logging {
 
   private val metricsGroup: KafkaMetricsGroup = new KafkaMetricsGroup(this.getClass) {
@@ -463,8 +463,13 @@ class KafkaZkClient private[zk] (
    * Sets or creates the entity znode path with the given configs depending
    * on whether it already exists or not.
    *
-   * This method requires that a ZK controller is defined. This is done to prevent configs from being
+   * If enableEntityConfigControllerCheck is set, this method will ensure that a ZK controller is defined and
+   * that it is not modified within the duration of this call. This is done to prevent configs from being
    * created or modified while the ZK to KRaft migration is taking place.
+   *
+   * The only case where enableEntityConfigControllerCheck should be false is when being called by ConfigCommand,
+   * i.e., "kafka-configs.sh --zookeeper". This is an old behavior we have kept around to allow users to setup
+   * SCRAM credentials and other configs before the cluster is started for the first time.
    *
    * If this is method is called concurrently, the last writer wins. In cases where we update configs and then
    * partition assignment (i.e. create topic), it's possible for one thread to set this and the other to set the
@@ -477,20 +482,22 @@ class KafkaZkClient private[zk] (
    * @throws ControllerMovedException if no controller is defined, or a KRaft controller is defined
    */
   def setOrCreateEntityConfigs(rootEntityType: String, sanitizedEntityName: String, config: Properties): Unit = {
-    val controllerZkVersionOpt: Option[Int] = if (!enableEntityConfigNoController) {
+    val controllerZkVersionOpt: Option[Int] = if (enableEntityConfigControllerCheck) {
       val controllerRegistration = getControllerRegistration match {
         case Some(registration) => registration
         case None =>
           // This case is mainly here to make tests less flaky (by virtue of retries).
           // In practice, we always expect a /controller ZNode to exist
-          throw new ControllerMovedException(s"Cannot set entity configs when there is no controller.")
+          throw new ControllerMovedException(s"Cannot set entity configs for $rootEntityType $sanitizedEntityName " +
+            s"when there is no controller.")
       }
 
       // If there is a KRaft controller defined, don't even attempt this write. The broker will soon get a UMR
       // from the new KRaft controller that lets it know about the new controller. It will then forward
       // IncrementalAlterConfig requests instead of processing directly.
       if (controllerRegistration.kraftEpoch.exists(epoch => epoch > 0)) {
-        throw new ControllerMovedException(s"Cannot set entity configs directly when there is a KRaft controller.")
+        throw new ControllerMovedException(s"Cannot set entity configs for $rootEntityType $sanitizedEntityName " +
+          s"directly when there is a KRaft controller.")
       }
 
       Some(controllerRegistration.zkVersion)
@@ -2273,7 +2280,7 @@ object KafkaZkClient {
             metricGroup: String = "kafka.server",
             metricType: String = "SessionExpireListener",
             createChrootIfNecessary: Boolean = false,
-            enableEntityConfigNoController: Boolean = false
+            enableEntityConfigControllerCheck: Boolean = true
   ): KafkaZkClient = {
 
     /* ZooKeeper 3.6.0 changed the default configuration for JUTE_MAXBUFFER from 4 MB to 1 MB.
@@ -2308,7 +2315,7 @@ object KafkaZkClient {
     }
     val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
       time, metricGroup, metricType, zkClientConfig, name)
-    new KafkaZkClient(zooKeeperClient, isSecure, time, enableEntityConfigNoController)
+    new KafkaZkClient(zooKeeperClient, isSecure, time, enableEntityConfigControllerCheck)
   }
 
   // A helper function to transform a regular request into a MultiRequest

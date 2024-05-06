@@ -418,7 +418,7 @@ abstract class QuorumTestHarness extends Logging {
         Time.SYSTEM,
         name = "ZooKeeperTestHarness",
         new ZKClientConfig,
-        enableEntityConfigNoController = true)
+        enableEntityConfigControllerCheck = false)
       adminZkClient = new AdminZkClient(zkClient)
     } catch {
       case t: Throwable =>

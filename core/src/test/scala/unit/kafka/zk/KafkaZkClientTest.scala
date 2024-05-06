@@ -84,7 +84,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
     zkClient.createControllerEpochRaw(1)
     otherZkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient",
-      zkClientConfig = new ZKClientConfig, enableEntityConfigNoController = true)
+      zkClientConfig = new ZKClientConfig, enableEntityConfigControllerCheck = false)
     expiredSessionZkClient = ExpiredKafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled),
       zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
   }
