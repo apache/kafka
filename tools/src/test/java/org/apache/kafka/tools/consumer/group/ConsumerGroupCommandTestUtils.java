@@ -17,13 +17,17 @@
 
 package org.apache.kafka.tools.consumer.group;
 
+import kafka.test.ClusterConfig;
+import kafka.test.ClusterGenerator;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -31,10 +35,58 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 import static java.util.Collections.singleton;
+import static kafka.test.annotation.Type.CO_KRAFT;
+import static kafka.test.annotation.Type.KRAFT;
+import static kafka.test.annotation.Type.ZK;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 
-class ConsumerGroupExecutor {
+class ConsumerGroupCommandTestUtils {
 
-    private ConsumerGroupExecutor() {
+    private ConsumerGroupCommandTestUtils() {
+    }
+
+    static void generator(ClusterGenerator clusterGenerator) {
+        Map<String, String> serverProperties = new HashMap<>();
+        serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
+        serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
+        serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false");
+
+        ClusterConfig zk = ClusterConfig.defaultBuilder()
+                .setType(ZK)
+                .setServerProperties(serverProperties)
+                .build();
+        clusterGenerator.accept(zk);
+
+        ClusterConfig raftWithLegacyCoordinator = ClusterConfig.defaultBuilder()
+                .setType(KRAFT)
+                .setServerProperties(serverProperties)
+                .build();
+        clusterGenerator.accept(raftWithLegacyCoordinator);
+
+        ClusterConfig combinedKRaftWithLegacyCoordinator = ClusterConfig.defaultBuilder()
+                .setType(CO_KRAFT)
+                .setServerProperties(serverProperties)
+                .build();
+        clusterGenerator.accept(combinedKRaftWithLegacyCoordinator);
+
+        // Following are test case config with new group coordinator
+        serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true");
+
+        ClusterConfig raftWithNewGroupCoordinator = ClusterConfig.defaultBuilder()
+                .setType(KRAFT)
+                .setName("newGroupCoordinator")
+                .setServerProperties(serverProperties)
+                .build();
+        clusterGenerator.accept(raftWithNewGroupCoordinator);
+
+        ClusterConfig combinedKRaftWithNewGroupCoordinator = ClusterConfig.defaultBuilder()
+                .setType(CO_KRAFT)
+                .setName("newGroupCoordinator")
+                .setServerProperties(serverProperties)
+                .build();
+        clusterGenerator.accept(combinedKRaftWithNewGroupCoordinator);
     }
 
     static <T> AutoCloseable buildConsumers(int numberOfConsumers,
