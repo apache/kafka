@@ -18,7 +18,21 @@ package kafka.admin;
 
 import kafka.zk.AdminZkClient;
 import kafka.zk.KafkaZkClient;
+import org.apache.kafka.clients.admin.AlterClientQuotasOptions;
+import org.apache.kafka.clients.admin.AlterClientQuotasResult;
+import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.AlterConfigsOptions;
+import org.apache.kafka.clients.admin.AlterConfigsResult;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.DescribeClientQuotasOptions;
+import org.apache.kafka.clients.admin.DescribeClientQuotasResult;
+import org.apache.kafka.clients.admin.DescribeConfigsOptions;
+import org.apache.kafka.clients.admin.DescribeConfigsResult;
+import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.test.TestUtils;
@@ -28,8 +42,10 @@ import scala.collection.Seq;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
@@ -38,6 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 public class ConfigCommandUnitTest {
     private static final String ZK_CONNECT = "localhost:2181";
@@ -425,7 +442,7 @@ public class ConfigCommandUnitTest {
     public void shouldFailIfUnrecognisedEntityType() {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
             "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"});
-        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new JConfigCommandTest.DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
     }
 
     @Test
@@ -439,7 +456,7 @@ public class ConfigCommandUnitTest {
     public void shouldFailIfBrokerEntityTypeIsNotAnInteger() {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
             "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"});
-        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new JConfigCommandTest.DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
     }
 
     @Test
@@ -453,7 +470,7 @@ public class ConfigCommandUnitTest {
     public void shouldFailIfShortBrokerEntityTypeIsNotAnInteger() {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
             "--broker", "A", "--alter", "--add-config", "a=b,c=d"});
-        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new JConfigCommandTest.DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
     }
 
     @Test
@@ -531,6 +548,37 @@ public class ConfigCommandUnitTest {
 
         @Override
         public void changeTopicConfig(String topic, Properties configs) {
+        }
+    }
+
+    static class DummyAdminClient extends MockAdminClient {
+        public DummyAdminClient(Node node) {
+            super(Collections.singletonList(node), node);
+        }
+
+        @Override
+        public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+            return mock(DescribeConfigsResult.class);
+        }
+
+        @Override
+        public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
+            return mock(AlterConfigsResult.class);
+        }
+
+        @Override
+        public synchronized AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
+            return mock(AlterConfigsResult.class);
+        }
+
+        @Override
+        public DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter, DescribeClientQuotasOptions options) {
+            return mock(DescribeClientQuotasResult.class);
+        }
+
+        @Override
+        public AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options) {
+            return mock(AlterClientQuotasResult.class);
         }
     }
 }
