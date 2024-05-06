@@ -92,13 +92,13 @@ public class TestKitNodes {
 
         public TestKitNodes build() {
             if (numControllerNodes < 0) {
-                throw new RuntimeException("Invalid negative value for numControllerNodes");
+                throw new IllegalArgumentException("Invalid negative value for numControllerNodes");
             }
             if (numBrokerNodes < 0) {
-                throw new RuntimeException("Invalid negative value for numBrokerNodes");
+                throw new IllegalArgumentException("Invalid negative value for numBrokerNodes");
             }
             if (numDisksPerBroker <= 0) {
-                throw new RuntimeException("Invalid value for numDisksPerBroker");
+                throw new IllegalArgumentException("Invalid value for numDisksPerBroker");
             }
 
             String baseDirectory = TestUtils.tempDirectory().getAbsolutePath();
@@ -120,7 +120,7 @@ public class TestKitNodes {
                     .map(Object::toString)
                     .collect(Collectors.joining(", "));
             if (!unknownIds.isEmpty()) {
-                throw new RuntimeException(
+                throw new IllegalArgumentException(
                         String.format("Unknown server id %s in perServerProperties, the existent server ids are %s",
                                 unknownIds,
                                 Stream.concat(brokerNodeIds.stream(), controllerNodeIds.stream())

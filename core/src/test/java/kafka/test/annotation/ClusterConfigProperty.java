@@ -44,7 +44,7 @@ public @interface ClusterConfigProperty {
      *  and increases by 1 with each additional broker/controller.</li>
      * </ul>
      *
-     * If the id doesn't correspond to any broker/controller server, throw RuntimeException
+     * If the id doesn't correspond to any broker/controller server, throw IllegalArgumentException
      * @return the controller/broker id
      */
     int id() default -1;

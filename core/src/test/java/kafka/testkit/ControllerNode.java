@@ -74,10 +74,10 @@ public class ControllerNode implements TestKitNode {
 
         public ControllerNode build() {
             if (id == -1) {
-                throw new RuntimeException("You must set the node id.");
+                throw new IllegalArgumentException("You must set the node id.");
             }
             if (baseDirectory == null) {
-                throw new RuntimeException("You must set the base directory.");
+                throw new IllegalArgumentException("You must set the base directory.");
             }
             String metadataDirectory = new File(baseDirectory,
                 combined ? String.format("combined_%d_0", id) : String.format("controller_%d", id)).getAbsolutePath();

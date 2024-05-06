@@ -38,7 +38,7 @@ public class KafkaClusterTestKitTest {
     @ParameterizedTest
     @ValueSource(ints = {0, -1})
     public void testCreateClusterWithBadNumDisksThrows(int disks) {
-        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
+        IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder()
                         .setNumBrokerNodes(1)
                         .setNumDisksPerBroker(disks)
@@ -50,7 +50,7 @@ public class KafkaClusterTestKitTest {
 
     @Test
     public void testCreateClusterWithBadNumOfControllers() {
-        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
+        IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
                 .setNumBrokerNodes(1)
                 .setNumControllerNodes(-1)
@@ -61,7 +61,7 @@ public class KafkaClusterTestKitTest {
 
     @Test
     public void testCreateClusterWithBadNumOfBrokers() {
-        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
+        IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
                 .setNumBrokerNodes(-1)
                 .setNumControllerNodes(1)
@@ -76,7 +76,7 @@ public class KafkaClusterTestKitTest {
         perServerProperties.put(100, Collections.singletonMap("foo", "foo1"));
         perServerProperties.put(200, Collections.singletonMap("bar", "bar1"));
 
-        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
+        IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder()
                         .setNumBrokerNodes(1)
                         .setNumControllerNodes(1)
