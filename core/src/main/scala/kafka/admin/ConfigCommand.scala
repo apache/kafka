@@ -276,7 +276,7 @@ object ConfigCommand extends Logging {
   }
 
   @nowarn("cat=deprecation")
-  private[admin] def parseConfigsToBeAdded(opts: ConfigCommandOptions): Properties = {
+  def parseConfigsToBeAdded(opts: ConfigCommandOptions): Properties = {
     val props = new Properties
     if (opts.options.has(opts.addConfigFile)) {
       val file = opts.options.valueOf(opts.addConfigFile)
@@ -303,7 +303,7 @@ object ConfigCommand extends Logging {
     props
   }
 
-  private[admin] def parseConfigsToBeDeleted(opts: ConfigCommandOptions): Seq[String] = {
+  def parseConfigsToBeDeleted(opts: ConfigCommandOptions): Seq[String] = {
     if (opts.options.has(opts.deleteConfig)) {
       val configsToBeDeleted = opts.options.valuesOf(opts.deleteConfig).asScala.map(_.trim())
       configsToBeDeleted
