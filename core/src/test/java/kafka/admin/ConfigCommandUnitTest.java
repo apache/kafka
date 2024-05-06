@@ -16,6 +16,9 @@
  */
 package kafka.admin;
 
+import kafka.zk.AdminZkClient;
+import kafka.zk.KafkaZkClient;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.test.TestUtils;
@@ -38,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConfigCommandUnitTest {
     private static final String ZK_CONNECT = "localhost:2181";
+    private static final DummyAdminZkClient DUMMY_ADMIN_ZK_CLIENT = new DummyAdminZkClient(null);
 
     private static final List<String> ZOOKEEPER_BOOTSTRAP = Arrays.asList("--zookeeper", ZK_CONNECT);
     private static final List<String> BROKER_BOOTSTRAP = Arrays.asList("--bootstrap-server", "localhost:9092");
@@ -410,6 +414,90 @@ public class ConfigCommandUnitTest {
         doTestOptionEntityTypeNames(false);
     }
 
+    @Test
+    public void shouldFailIfUnrecognisedEntityTypeUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+            "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"});
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfigWithZk(null, createOpts, DUMMY_ADMIN_ZK_CLIENT));
+    }
+
+    @Test
+    public void shouldFailIfUnrecognisedEntityType() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
+            "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"});
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new JConfigCommandTest.DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
+    }
+
+    @Test
+    public void shouldFailIfBrokerEntityTypeIsNotAnIntegerUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+            "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"});
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfigWithZk(null, createOpts, DUMMY_ADMIN_ZK_CLIENT));
+    }
+
+    @Test
+    public void shouldFailIfBrokerEntityTypeIsNotAnInteger() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
+            "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"});
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new JConfigCommandTest.DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
+    }
+
+    @Test
+    public void shouldFailIfShortBrokerEntityTypeIsNotAnIntegerUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+            "--broker", "A", "--alter", "--add-config", "a=b,c=d"});
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfigWithZk(null, createOpts, DUMMY_ADMIN_ZK_CLIENT));
+    }
+
+    @Test
+    public void shouldFailIfShortBrokerEntityTypeIsNotAnInteger() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
+            "--broker", "A", "--alter", "--add-config", "a=b,c=d"});
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new JConfigCommandTest.DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
+    }
+
+    @Test
+    public void shouldFailIfMixedEntityTypeFlagsUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+            "--entity-name", "A", "--entity-type", "users", "--client", "B", "--describe"});
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+    }
+
+    @Test
+    public void shouldFailIfMixedEntityTypeFlags() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
+            "--entity-name", "A", "--entity-type", "users", "--client", "B", "--describe"});
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+    }
+
+    @Test
+    public void shouldFailIfInvalidHost() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
+            "--entity-name", "A,B", "--entity-type", "ips", "--describe"});
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+    }
+
+    @Test
+    public void shouldFailIfInvalidHostUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+            "--entity-name", "A,B", "--entity-type", "ips", "--describe"});
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+    }
+
+    @Test
+    public void shouldFailIfUnresolvableHost() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
+            "--entity-name", "RFC2606.invalid", "--entity-type", "ips", "--describe"});
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+    }
+
+    @Test
+    public void shouldFailIfUnresolvableHostUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+            "--entity-name", "RFC2606.invalid", "--entity-type", "ips", "--describe"});
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+    }
+
     public static String[] toArray(String... first) {
         return first;
     }
@@ -417,5 +505,32 @@ public class ConfigCommandUnitTest {
     @SafeVarargs
     public static String[] toArray(List<String>... lists) {
         return Stream.of(lists).flatMap(List::stream).toArray(String[]::new);
+    }
+
+    static class DummyAdminZkClient extends AdminZkClient {
+        public DummyAdminZkClient(KafkaZkClient zkClient) {
+            super(zkClient, scala.None$.empty());
+        }
+
+        @Override
+        public void changeBrokerConfig(Seq<Object> brokers, Properties configs) {
+        }
+
+        @Override
+        public Properties fetchEntityConfig(String rootEntityType, String sanitizedEntityName) {
+            return new Properties();
+        }
+
+        @Override
+        public void changeClientIdConfig(String sanitizedClientId, Properties configs) {
+        }
+
+        @Override
+        public void changeUserOrUserClientIdConfig(String sanitizedEntityName, Properties configs, boolean isUserClientId) {
+        }
+
+        @Override
+        public void changeTopicConfig(String topic, Properties configs) {
+        }
     }
 }
