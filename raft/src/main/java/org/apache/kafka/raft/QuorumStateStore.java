@@ -27,13 +27,14 @@ public interface QuorumStateStore {
     /**
      * Read the latest election state.
      *
-     * @return the latest written election state or `null` if there is none
+     * @return the latest written election state or {@code Optional.empty()} if there is none
      */
     Optional<ElectionState> readElectionState();
 
     /**
-     * Persist the updated election state. This must be atomic, both writing the full updated state
-     * and replacing the old state.
+     * Persist the updated election state.
+     *
+     * This must be atomic, both writing the full updated state and replacing the old state.
      *
      * @param latest the latest election state
      * @param kraftVersion the finalized kraft.version

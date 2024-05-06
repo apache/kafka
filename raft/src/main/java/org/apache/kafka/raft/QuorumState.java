@@ -128,7 +128,7 @@ public class QuorumState {
         if (election.hasVoted() && !localId.isPresent()) {
             throw new IllegalStateException(
                 String.format(
-                    "Initialized quorum state ({}) with a voted candidate but without a local id",
+                    "Initialized quorum state (%s) with a voted candidate but without a local id",
                     election
                 )
             );
@@ -364,7 +364,7 @@ public class QuorumState {
             throw new IllegalStateException(
                 String.format(
                     "Cannot transition to Voted for %s and epoch %d since the current epoch " +
-                    "({}) is larger",
+                    "(%d) is larger",
                     candidateKey,
                     epoch,
                     currentEpoch
