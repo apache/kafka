@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 
 public class NoOpPartitionAssignor implements PartitionAssignor {
     static final String NAME = "no-op";
+
     @Override
     public String name() {
         return NAME;

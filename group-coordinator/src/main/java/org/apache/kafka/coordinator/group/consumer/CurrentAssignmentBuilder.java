@@ -189,14 +189,23 @@ public class CurrentAssignmentBuilder {
         return member;
     }
 
+    /**
+     * Decides whether the current ownedTopicPartitions contains any partition that is pending revocation.
+     *
+     * @param assignment The assignment that has the partitions pending revocation.
+     * @return A boolean based on the condition mentioned above.
+     */
     private boolean ownsRevokedPartitions(
         Map<Uuid, Set<Integer>> assignment
     ) {
         if (ownedTopicPartitions == null) return true;
 
         for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
+            Set<Integer> partitionsPendingRevocation =
+                assignment.getOrDefault(topicPartitions.topicId(), Collections.emptySet());
+
             for (Integer partitionId : topicPartitions.partitions()) {
-                if (assignment.getOrDefault(topicPartitions.topicId(), Collections.emptySet()).contains(partitionId)) {
+                if (partitionsPendingRevocation.contains(partitionId)) {
                     return true;
                 }
             }
