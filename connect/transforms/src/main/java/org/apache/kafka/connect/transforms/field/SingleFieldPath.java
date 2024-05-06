@@ -207,7 +207,7 @@ public class SingleFieldPath {
         return steps.toArray(new String[0]);
     }
 
-    String lastStep() {
+    private String lastStep() {
         return steps.get(lastStepIndex());
     }
 
