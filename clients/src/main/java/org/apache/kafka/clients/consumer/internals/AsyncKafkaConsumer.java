@@ -133,7 +133,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSu
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
-import static org.apache.kafka.common.utils.Utils.join;
 import static org.apache.kafka.common.utils.Utils.swallow;
 
 /**
@@ -906,6 +905,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     return position.offset;
 
                 updateFetchPositions(timer);
+                timer.update();
+                wakeupTrigger.maybeTriggerWakeup();
             } while (timer.notExpired());
 
             throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the position " +
@@ -1491,7 +1492,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // See the ApplicationEventProcessor.process() method that handles this event for more detail.
             applicationEventHandler.add(new AssignmentChangeEvent(subscriptions.allConsumed(), time.milliseconds()));
 
-            log.info("Assigned to partition(s): {}", join(partitions, ", "));
+            log.info("Assigned to partition(s): {}", partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+
             if (subscriptions.assignFromUser(new HashSet<>(partitions)))
                 applicationEventHandler.add(new NewTopicsMetadataUpdateRequestEvent());
         } finally {
@@ -1702,12 +1704,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 new FetchCommittedOffsetsEvent(
                     initializingPartitions,
                     timer);
+            wakeupTrigger.setActiveTask(event.future());
             final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event, timer);
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
         } catch (TimeoutException e) {
             log.error("Couldn't refresh committed offsets before timeout expired");
             return false;
+        } finally {
+            wakeupTrigger.clearTask();
         }
     }
 
@@ -1840,7 +1845,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
 
                 fetchBuffer.retainAll(currentTopicPartitions);
-                log.info("Subscribed to topic(s): {}", join(topics, ", "));
+                log.info("Subscribed to topic(s): {}", String.join(", ", topics));
                 if (subscriptions.subscribe(new HashSet<>(topics), listener))
                     metadata.requestUpdateForNewTopics();
 

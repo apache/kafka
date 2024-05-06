@@ -2125,7 +2125,6 @@ public class OffsetMetadataManagerTest {
         // the transaction is committed.
         context.commitOffset(10L, "group", "bar", 1, 211L, 1, context.time.milliseconds());
 
-
         // Fetching offsets with "require stable" (Long.MAX_VALUE) should return the committed offset for
         // foo-0 and the UNSTABLE_OFFSET_COMMIT error for foo-1 and bar-0.
         assertEquals(Arrays.asList(
@@ -2184,7 +2183,7 @@ public class OffsetMetadataManagerTest {
         // Create consumer group.
         ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
         // Create member.
-        group.getOrMaybeCreateMember("member", true);
+        group.updateMember(new ConsumerGroupMember.Builder("member").build());
         // Commit offset.
         context.commitOffset("group", "foo", 0, 100L, 1);
 
@@ -2277,7 +2276,7 @@ public class OffsetMetadataManagerTest {
     public void testConsumerGroupOffsetFetchWithStaleMemberEpoch() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
-        group.getOrMaybeCreateMember("member", true);
+        group.updateMember(new ConsumerGroupMember.Builder("member").build());
 
         // Fetch offsets case.
         List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = Collections.singletonList(

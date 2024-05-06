@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -60,11 +61,13 @@ import java.util.stream.Collectors;
  * */
 public class FileBasedStateStore implements QuorumStateStore {
     private static final Logger log = LoggerFactory.getLogger(FileBasedStateStore.class);
+    private static final String DATA_VERSION = "data_version";
+
+    static final short HIGHEST_SUPPORTED_VERSION = 0;
+
+    public static final String DEFAULT_FILE_NAME = "quorum-state";
 
     private final File stateFile;
-
-    static final String DATA_VERSION = "data_version";
-    static final short HIGHEST_SUPPORTED_VERSION = 0;
 
     public FileBasedStateStore(final File stateFile) {
         this.stateFile = stateFile;
@@ -132,6 +135,11 @@ public class FileBasedStateStore implements QuorumStateStore {
             .setLeaderId(latest.hasLeader() ? latest.leaderId() : UNKNOWN_LEADER_ID)
             .setCurrentVoters(voters(latest.voters()));
         writeElectionStateToFile(stateFile, data);
+    }
+
+    @Override
+    public Path path() {
+        return stateFile.toPath();
     }
 
     private List<Voter> voters(Set<Integer> votersId) {

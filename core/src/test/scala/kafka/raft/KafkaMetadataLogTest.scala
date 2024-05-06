@@ -323,7 +323,7 @@ final class KafkaMetadataLogTest {
 
     append(log, numberOfRecords, epoch)
 
-    TestUtils.resource(log.storeSnapshot(sameEpochSnapshotId).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(sameEpochSnapshotId).get()) { snapshot =>
       snapshot.freeze()
     }
 
@@ -337,7 +337,7 @@ final class KafkaMetadataLogTest {
 
     append(log, numberOfRecords, epoch)
 
-    TestUtils.resource(log.storeSnapshot(greaterEpochSnapshotId).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(greaterEpochSnapshotId).get()) { snapshot =>
       snapshot.freeze()
     }
 
@@ -356,25 +356,25 @@ final class KafkaMetadataLogTest {
 
     append(log, 1, epoch - 1)
     val oldSnapshotId1 = new OffsetAndEpoch(1, epoch - 1)
-    TestUtils.resource(log.storeSnapshot(oldSnapshotId1).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(oldSnapshotId1).get()) { snapshot =>
       snapshot.freeze()
     }
 
     append(log, 1, epoch)
     val oldSnapshotId2 = new OffsetAndEpoch(2, epoch)
-    TestUtils.resource(log.storeSnapshot(oldSnapshotId2).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(oldSnapshotId2).get()) { snapshot =>
       snapshot.freeze()
     }
 
     append(log, numberOfRecords - 2, epoch)
     val oldSnapshotId3 = new OffsetAndEpoch(numberOfRecords, epoch)
-    TestUtils.resource(log.storeSnapshot(oldSnapshotId3).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(oldSnapshotId3).get()) { snapshot =>
       snapshot.freeze()
     }
 
     val greaterSnapshotId = new OffsetAndEpoch(3 * numberOfRecords, epoch)
     append(log, numberOfRecords, epoch)
-    TestUtils.resource(log.storeSnapshot(greaterSnapshotId).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(greaterSnapshotId).get()) { snapshot =>
       snapshot.freeze()
     }
 
@@ -467,12 +467,7 @@ final class KafkaMetadataLogTest {
     metadataDir: File,
     snapshotId: OffsetAndEpoch
   ): Unit = {
-    val writer = FileRawSnapshotWriter.create(
-      metadataDir.toPath,
-      snapshotId,
-      Optional.empty()
-    )
-    TestUtils.resource(writer)(_.freeze())
+    TestUtils.resource(FileRawSnapshotWriter.create(metadataDir.toPath, snapshotId))(_.freeze())
   }
 
   @Test
@@ -484,7 +479,7 @@ final class KafkaMetadataLogTest {
     append(log, numberOfRecords, epoch)
 
     val olderEpochSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch - 1)
-    TestUtils.resource(log.storeSnapshot(olderEpochSnapshotId).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(olderEpochSnapshotId).get()) { snapshot =>
       snapshot.freeze()
     }
 
@@ -493,7 +488,7 @@ final class KafkaMetadataLogTest {
     append(log, numberOfRecords, epoch)
 
     val olderOffsetSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch)
-    TestUtils.resource(log.storeSnapshot(olderOffsetSnapshotId).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(olderOffsetSnapshotId).get()) { snapshot =>
       snapshot.freeze()
     }
 
@@ -508,7 +503,7 @@ final class KafkaMetadataLogTest {
     val snapshotId = new OffsetAndEpoch(1, epoch)
 
     append(log, numberOfRecords, epoch)
-    TestUtils.resource(log.storeSnapshot(snapshotId).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(snapshotId).get()) { snapshot =>
       snapshot.freeze()
     }
 
@@ -545,25 +540,25 @@ final class KafkaMetadataLogTest {
 
     append(log, 1, epoch - 1)
     val oldSnapshotId1 = new OffsetAndEpoch(1, epoch - 1)
-    TestUtils.resource(log.storeSnapshot(oldSnapshotId1).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(oldSnapshotId1).get()) { snapshot =>
       snapshot.freeze()
     }
 
     append(log, 1, epoch)
     val oldSnapshotId2 = new OffsetAndEpoch(2, epoch)
-    TestUtils.resource(log.storeSnapshot(oldSnapshotId2).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(oldSnapshotId2).get()) { snapshot =>
       snapshot.freeze()
     }
 
     append(log, numberOfRecords - 2, epoch)
     val oldSnapshotId3 = new OffsetAndEpoch(numberOfRecords, epoch)
-    TestUtils.resource(log.storeSnapshot(oldSnapshotId3).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(oldSnapshotId3).get()) { snapshot =>
       snapshot.freeze()
     }
 
     val greaterSnapshotId = new OffsetAndEpoch(3 * numberOfRecords, epoch)
     append(log, numberOfRecords, epoch)
-    TestUtils.resource(log.storeSnapshot(greaterSnapshotId).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(greaterSnapshotId).get()) { snapshot =>
       snapshot.freeze()
     }
 
@@ -594,7 +589,7 @@ final class KafkaMetadataLogTest {
     val snapshotId = new OffsetAndEpoch(numberOfRecords + 1, epoch + 1)
 
     append(log, numberOfRecords, epoch)
-    TestUtils.resource(log.storeSnapshot(snapshotId).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(snapshotId).get()) { snapshot =>
       snapshot.freeze()
     }
 
@@ -752,7 +747,7 @@ final class KafkaMetadataLogTest {
     val log = buildMetadataLog(tempDir, mockTime)
     log.updateHighWatermark(new LogOffsetMetadata(offset))
     val snapshotId = new OffsetAndEpoch(offset, 1)
-    TestUtils.resource(log.storeSnapshot(snapshotId).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(snapshotId).get()) { snapshot =>
       snapshot.freeze()
     }
     log.truncateToLatestSnapshot()
@@ -776,7 +771,7 @@ final class KafkaMetadataLogTest {
     val log = buildMetadataLog(tempDir, mockTime)
     log.updateHighWatermark(new LogOffsetMetadata(offset))
     val snapshotId = new OffsetAndEpoch(offset, 1)
-    TestUtils.resource(log.storeSnapshot(snapshotId).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(snapshotId).get()) { snapshot =>
       snapshot.freeze()
     }
     log.truncateToLatestSnapshot()
@@ -858,13 +853,13 @@ final class KafkaMetadataLogTest {
     assertFalse(log.maybeClean(), "Should not clean since no snapshots exist")
 
     val snapshotId1 = new OffsetAndEpoch(1000, 1)
-    TestUtils.resource(log.storeSnapshot(snapshotId1).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(snapshotId1).get()) { snapshot =>
       append(snapshot, 100)
       snapshot.freeze()
     }
 
     val snapshotId2 = new OffsetAndEpoch(2000, 1)
-    TestUtils.resource(log.storeSnapshot(snapshotId2).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(snapshotId2).get()) { snapshot =>
       append(snapshot, 100)
       snapshot.freeze()
     }
@@ -896,7 +891,7 @@ final class KafkaMetadataLogTest {
 
     for (offset <- Seq(100, 200, 300, 400, 500, 600)) {
       val snapshotId = new OffsetAndEpoch(offset, 1)
-      TestUtils.resource(log.storeSnapshot(snapshotId).get()) { snapshot =>
+      TestUtils.resource(log.createNewSnapshotUnchecked(snapshotId).get()) { snapshot =>
         append(snapshot, 10)
         snapshot.freeze()
       }
@@ -931,14 +926,14 @@ final class KafkaMetadataLogTest {
 
     // Then generate two snapshots
     val snapshotId1 = new OffsetAndEpoch(1000, 1)
-    TestUtils.resource(log.storeSnapshot(snapshotId1).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(snapshotId1).get()) { snapshot =>
       append(snapshot, 500)
       snapshot.freeze()
     }
 
     // Then generate a snapshot
     val snapshotId2 = new OffsetAndEpoch(2000, 1)
-    TestUtils.resource(log.storeSnapshot(snapshotId2).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(snapshotId2).get()) { snapshot =>
       append(snapshot, 500)
       snapshot.freeze()
     }
@@ -978,7 +973,7 @@ final class KafkaMetadataLogTest {
       log.log.logSegments.asScala.drop(1).head.baseOffset,
       1
     )
-    TestUtils.resource(log.storeSnapshot(snapshotId1).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(snapshotId1).get()) { snapshot =>
       snapshot.freeze()
     }
     // Generate second snapshots that includes the second segment by using the base offset of the third segment
@@ -986,7 +981,7 @@ final class KafkaMetadataLogTest {
       log.log.logSegments.asScala.drop(2).head.baseOffset,
       1
     )
-    TestUtils.resource(log.storeSnapshot(snapshotId2).get()) { snapshot =>
+    TestUtils.resource(log.createNewSnapshotUnchecked(snapshotId2).get()) { snapshot =>
       snapshot.freeze()
     }
 

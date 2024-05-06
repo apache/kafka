@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 /**
  * Represents an immutable basic version range using 2 attributes: min and max, each of type short.
  * The min and max attributes need to satisfy 2 rules:
- *  - they are each expected to be >= 1, as we only consider positive version values to be valid.
+ *  - they are each expected to be >= 0, as we only consider positive version values to be valid.
  *  - max should be >= min.
  *
  * The class also provides API to convert the version range to a map.
@@ -48,7 +48,7 @@ class BaseVersionRange {
 
     /**
      * Raises an exception unless the following condition is met:
-     * minValue >= 1 and maxValue >= 1 and maxValue >= minValue.
+     * minValue >= 0 and maxValue >= 0 and maxValue >= minValue.
      *
      * @param minKeyLabel   Label for the min version key, that's used only to convert to/from a map.
      * @param minValue      The minimum version value.
@@ -56,14 +56,14 @@ class BaseVersionRange {
      * @param maxValue      The maximum version value.
      *
      * @throws IllegalArgumentException   If any of the following conditions are true:
-     *                                     - (minValue < 1) OR (maxValue < 1) OR (maxValue < minValue).
+     *                                     - (minValue < 0) OR (maxValue < 0) OR (maxValue < minValue).
      *                                     - minKeyLabel is empty, OR, minKeyLabel is empty.
      */
     protected BaseVersionRange(String minKeyLabel, short minValue, String maxKeyLabel, short maxValue) {
-        if (minValue < 1 || maxValue < 1 || maxValue < minValue) {
+        if (minValue < 0 || maxValue < 0 || maxValue < minValue) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Expected minValue >= 1, maxValue >= 1 and maxValue >= minValue, but received" +
+                    "Expected minValue >= 0, maxValue >= 0 and maxValue >= minValue, but received" +
                     " minValue: %d, maxValue: %d", minValue, maxValue));
         }
         if (minKeyLabel.isEmpty()) {
@@ -86,6 +86,7 @@ class BaseVersionRange {
         return maxValue;
     }
 
+    @Override
     public String toString() {
         return String.format(
             "%s[%s]",

@@ -30,7 +30,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -534,7 +533,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
 
         try {
             int taskNum = Integer.parseInt(parts[parts.length - 1]);
-            String connectorName = Utils.join(Arrays.copyOfRange(parts, 2, parts.length - 1), "-");
+            String connectorName = String.join("-", Arrays.copyOfRange(parts, 2, parts.length - 1));
             return new ConnectorTaskId(connectorName, taskNum);
         } catch (NumberFormatException e) {
             log.warn("Invalid task status key {}", key);

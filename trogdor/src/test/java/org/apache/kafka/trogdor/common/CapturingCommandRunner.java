@@ -17,7 +17,6 @@
 
 package org.apache.kafka.trogdor.common;
 
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.basic.BasicPlatform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,11 +44,11 @@ public class CapturingCommandRunner implements BasicPlatform.CommandRunner {
 
     @Override
     public String run(Node curNode, String[] command) {
-        String line = Utils.join(command, " ");
+        String line = String.join(" ", command);
         synchronized (this) {
             getOrCreate(curNode.name()).add(line);
         }
-        log.debug("RAN {}: {}", curNode, Utils.join(command, " "));
+        log.debug("RAN {}: {}", curNode, String.join(" ", command));
         return "";
     }
 

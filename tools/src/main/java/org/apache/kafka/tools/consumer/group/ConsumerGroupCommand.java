@@ -132,7 +132,7 @@ public class ConsumerGroupCommand {
         Set<ConsumerGroupState> parsedStates = Arrays.stream(input.split(",")).map(s -> ConsumerGroupState.parse(s.trim())).collect(Collectors.toSet());
         if (parsedStates.contains(ConsumerGroupState.UNKNOWN)) {
             Collection<ConsumerGroupState> validStates = Arrays.stream(ConsumerGroupState.values()).filter(s -> s != ConsumerGroupState.UNKNOWN).collect(Collectors.toList());
-            throw new IllegalArgumentException("Invalid state list '" + input + "'. Valid states are: " + Utils.join(validStates, ", "));
+            throw new IllegalArgumentException("Invalid state list '" + input + "'. Valid states are: " + validStates.stream().map(ConsumerGroupState::toString).collect(Collectors.joining(", ")));
         }
         return parsedStates;
     }
@@ -629,7 +629,7 @@ public class ConsumerGroupCommand {
 
             switch (topLevelResult) {
                 case NONE:
-                    System.out.println("Request succeed for deleting offsets with topic " + Utils.mkString(topics.stream(), "", "", ", ") + " group " + groupId);
+                    System.out.println("Request succeed for deleting offsets with topic " + String.join(", ", topics) + " group " + groupId);
                     break;
                 case INVALID_GROUP_ID:
                     printError("'" + groupId + "' is not valid.", Optional.empty());
@@ -1159,7 +1159,7 @@ public class ConsumerGroupCommand {
                 ? CsvUtils.writerFor(CsvUtils.CsvRecordNoGroup.class)
                 : CsvUtils.writerFor(CsvUtils.CsvRecordWithGroup.class);
 
-            return Utils.mkString(assignments.entrySet().stream().flatMap(e -> {
+            return assignments.entrySet().stream().flatMap(e -> {
                 String groupId = e.getKey();
                 Map<TopicPartition, OffsetAndMetadata> partitionInfo = e.getValue();
 
@@ -1176,7 +1176,7 @@ public class ConsumerGroupCommand {
                         throw new RuntimeException(err);
                     }
                 });
-            }), "", "", "");
+            }).collect(Collectors.joining());
         }
 
         Map<String, Throwable> deleteGroups() {
@@ -1202,13 +1202,13 @@ public class ConsumerGroupCommand {
             });
 
             if (failed.isEmpty())
-                System.out.println("Deletion of requested consumer groups (" + Utils.mkString(success.keySet().stream(), "'", "'", "', '") + ") was successful.");
+                System.out.println("Deletion of requested consumer groups (" + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "'" + ") was successful.");
             else {
                 printError("Deletion of some consumer groups failed:", Optional.empty());
                 failed.forEach((group, error) -> System.out.println("* Group '" + group + "' could not be deleted due to: " + error));
 
                 if (!success.isEmpty())
-                    System.out.println("\nThese consumer groups were deleted successfully: " + Utils.mkString(success.keySet().stream(), "'", "', '", "'"));
+                    System.out.println("\nThese consumer groups were deleted successfully: " + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("'")) + "', '");
             }
 
             failed.putAll(success);

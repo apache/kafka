@@ -27,7 +27,14 @@ import kafka.serializer.Decoder
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
-import org.apache.kafka.common.message.{ConsumerProtocolAssignment, ConsumerProtocolAssignmentJsonConverter, ConsumerProtocolSubscription, ConsumerProtocolSubscriptionJsonConverter, SnapshotFooterRecordJsonConverter, SnapshotHeaderRecordJsonConverter}
+import org.apache.kafka.common.message.ConsumerProtocolAssignment
+import org.apache.kafka.common.message.ConsumerProtocolAssignmentJsonConverter
+import org.apache.kafka.common.message.ConsumerProtocolSubscription
+import org.apache.kafka.common.message.ConsumerProtocolSubscriptionJsonConverter
+import org.apache.kafka.common.message.KRaftVersionRecordJsonConverter
+import org.apache.kafka.common.message.SnapshotFooterRecordJsonConverter
+import org.apache.kafka.common.message.SnapshotHeaderRecordJsonConverter
+import org.apache.kafka.common.message.VotersRecordJsonConverter
 import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordType}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, Message}
 import org.apache.kafka.common.record._
@@ -313,6 +320,12 @@ object DumpLogSegments {
                   case ControlRecordType.SNAPSHOT_FOOTER =>
                     val footer = ControlRecordUtils.deserializeSnapshotFooterRecord(record)
                     print(s" SnapshotFooter ${SnapshotFooterRecordJsonConverter.write(footer, footer.version())}")
+                  case ControlRecordType.KRAFT_VERSION =>
+                    val kraftVersion = ControlRecordUtils.deserializeKRaftVersionRecord(record)
+                    print(s" KRaftVersion ${KRaftVersionRecordJsonConverter.write(kraftVersion, kraftVersion.version())}")
+                  case ControlRecordType.KRAFT_VOTERS=>
+                    val voters = ControlRecordUtils.deserializeVotersRecord(record)
+                    print(s" KRaftVoters ${VotersRecordJsonConverter.write(voters, voters.version())}")
                   case controlType =>
                     print(s" controlType: $controlType($controlTypeId)")
                 }
