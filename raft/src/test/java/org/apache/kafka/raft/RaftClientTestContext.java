@@ -76,6 +76,7 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.raft.LeaderState.CHECK_QUORUM_TIMEOUT_FACTOR;
@@ -202,7 +203,7 @@ public final class RaftClientTestContext {
         }
 
         Builder withEmptySnapshot(OffsetAndEpoch snapshotId) {
-            try (RawSnapshotWriter snapshot = log.storeSnapshot(snapshotId).get()) {
+            try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(snapshotId).get()) {
                 snapshot.freeze();
             }
             return this;
@@ -231,31 +232,42 @@ public final class RaftClientTestContext {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel(voters);
             MockListener listener = new MockListener(localId);
-            Map<Integer, QuorumConfig.AddressSpec> voterAddressMap = voters.stream()
-                .collect(Collectors.toMap(id -> id, RaftClientTestContext::mockAddress));
-            QuorumConfig quorumConfig = new QuorumConfig(voterAddressMap, requestTimeoutMs, RETRY_BACKOFF_MS, electionTimeoutMs,
-                    ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs);
+            Map<Integer, InetSocketAddress> voterAddressMap = voters
+                .stream()
+                .collect(Collectors.toMap(Function.identity(), RaftClientTestContext::mockAddress));
+
+            QuorumConfig quorumConfig = new QuorumConfig(
+                requestTimeoutMs,
+                RETRY_BACKOFF_MS,
+                electionTimeoutMs,
+                ELECTION_BACKOFF_MAX_MS,
+                FETCH_TIMEOUT_MS,
+                appendLingerMs
+            );
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
+                localId,
                 SERDE,
                 channel,
                 messageQueue,
                 log,
-                quorumStateStore,
                 memoryPool,
                 time,
-                metrics,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
                 clusterId.toString(),
-                localId,
                 logContext,
                 random,
-                    quorumConfig
+                quorumConfig
             );
 
             client.register(listener);
-            client.initialize();
+            client.initialize(
+                voterAddressMap,
+                "CONTROLLER",
+                quorumStateStore,
+                metrics
+            );
 
             RaftClientTestContext context = new RaftClientTestContext(
                 clusterId,
@@ -811,8 +823,8 @@ public final class RaftClientTestContext {
         return requests;
     }
 
-    private static QuorumConfig.AddressSpec mockAddress(int id) {
-        return new QuorumConfig.InetAddressSpec(new InetSocketAddress("localhost", 9990 + id));
+    private static InetSocketAddress mockAddress(int id) {
+        return new InetSocketAddress("localhost", 9990 + id);
     }
 
     EndQuorumEpochResponseData endEpochResponse(

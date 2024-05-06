@@ -36,7 +36,6 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -226,7 +225,7 @@ public final class WorkerUtils {
             }
             if (Time.SYSTEM.milliseconds() > startMs + CREATE_TOPICS_CALL_TIMEOUT) {
                 String str = "Unable to create topic(s): " +
-                             Utils.join(topicsToCreate, ", ") + "after " + tries + " attempt(s)";
+                             String.join(", ", topicsToCreate) + "after " + tries + " attempt(s)";
                 log.warn(str);
                 throw new TimeoutException(str);
             }

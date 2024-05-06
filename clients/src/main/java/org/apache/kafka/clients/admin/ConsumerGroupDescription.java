@@ -21,13 +21,13 @@ import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclOperation;
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A detailed description of a single consumer group in the cluster.
@@ -161,7 +161,7 @@ public class ConsumerGroupDescription {
     public String toString() {
         return "(groupId=" + groupId +
             ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
-            ", members=" + Utils.join(members, ",") +
+            ", members=" + members.stream().map(MemberDescription::toString).collect(Collectors.joining(",")) +
             ", partitionAssignor=" + partitionAssignor +
             ", type=" + type +
             ", state=" + state +

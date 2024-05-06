@@ -65,15 +65,12 @@ class KafkaRaftServer(
     metaPropsEnsemble.clusterId().get()
   )
 
-  private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
-    QuorumConfig.parseVoterConnections(config.quorumVoters))
-
   private val sharedServer = new SharedServer(
     config,
     metaPropsEnsemble,
     time,
     metrics,
-    controllerQuorumVotersFuture,
+    CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
     new StandardFaultHandlerFactory(),
   )
 
