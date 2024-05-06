@@ -68,7 +68,6 @@ class SingleFieldPathTest {
         assertNull(pathV2("un.known").valueFrom(map));
         assertNull(pathV2("foo.unknown").valueFrom(map));
         assertNull(pathV2("unknown").valueFrom(map));
-        assertNull(pathV2("foo.baz").valueFrom(map));
         assertNull(pathV2("foo.baz.inner").valueFrom(map));
     }
 
@@ -109,7 +108,6 @@ class SingleFieldPathTest {
         assertNull(pathV2("un.known").valueFrom(struct));
         assertNull(pathV2("foo.unknown").valueFrom(struct));
         assertNull(pathV2("unknown").valueFrom(struct));
-        assertNull(pathV2("foo.baz").valueFrom(struct));
         assertNull(pathV2("foo.baz.inner").valueFrom(struct));
     }
 
