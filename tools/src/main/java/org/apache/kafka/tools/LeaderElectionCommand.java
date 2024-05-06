@@ -294,7 +294,7 @@ public class LeaderElectionCommand {
             electionType = parser
                 .accepts(
                     "election-type",
-                    "Type of election to attempt. Possible values are \"preferred\" for preferred leader election or \"unclean\" for unclean leader election. If preferred election is selection, the election is only performed if the current leader is not the preferred leader for the topic partition. If unclean election is selected, the election is only performed if there are no leader for the topic partition. REQUIRED.")
+                    "Type of election to attempt. Possible values are \"preferred\" for preferred leader election, \"unclean\" for unclean leader election, and \"designated\" for designated leader election. If preferred election is selection, the election is only performed if the current leader is not the preferred leader for the topic partition. If unclean election is selected, the election is only performed if there are no leader for the topic partition. REQUIRED.If designated election is selected, the election is the current leader is not the designated leader")
                 .withRequiredArg()
                 .describedAs("election type")
                 .withValuesConvertedBy(new ElectionTypeConverter());
@@ -378,7 +378,7 @@ public class LeaderElectionCommand {
         public void maybePrintHelpOrVersion() {
             CommandLineUtils.maybePrintHelpOrVersion(
                 this,
-                "This tool attempts to elect a new leader for a set of topic partitions. The type of elections supported are preferred replicas and unclean replicas."
+                "This tool attempts to elect a new leader for a set of topic partitions. The type of elections supported are preferred replicas, unclean replicas, and designated replicas."
             );
         }
 

@@ -77,7 +77,11 @@ public class PartitionChangeBuilder {
         /**
          * Prefer replicas in the ISR but keep the partition online even if it requires picking a leader that is not in the ISR.
          */
-        UNCLEAN
+        UNCLEAN,
+        /**
+         * Perform leader election for designated leader
+         */
+        DESIGNTATED
     }
 
     private final PartitionRegistration partition;
@@ -99,6 +103,7 @@ public class PartitionChangeBuilder {
     private boolean zkMigrationEnabled;
     private boolean eligibleLeaderReplicasEnabled;
     private DefaultDirProvider defaultDirProvider;
+    private int desiredLeader;
 
     // Whether allow electing last known leader in a Balanced recovery. Note, the last known leader will be stored in the
     // lastKnownElr field if enabled.
@@ -203,6 +208,11 @@ public class PartitionChangeBuilder {
         return this;
     }
 
+    public PartitionChangeBuilder setDesiredLeader(int desiredLeader) {
+        this.desiredLeader = desiredLeader;
+        return this;
+    }
+
     // VisibleForTesting
     static class ElectionResult {
         final int node;
@@ -225,8 +235,8 @@ public class PartitionChangeBuilder {
      * See documentation for the Election type to see more details on the election types supported.
      */
     ElectionResult electLeader() {
-        if (election == Election.PREFERRED) {
-            return electPreferredLeader();
+        if (election == Election.PREFERRED || election == Election.DESIGNTATED) {
+            return electPreferredOrDesignatedLeader();
         }
 
         return electAnyLeader();
@@ -235,10 +245,16 @@ public class PartitionChangeBuilder {
     /**
      * Assumes that the election type is Election.PREFERRED
      */
-    private ElectionResult electPreferredLeader() {
-        int preferredReplica = targetReplicas.get(0);
-        if (isValidNewLeader(preferredReplica)) {
-            return new ElectionResult(preferredReplica, false);
+    private ElectionResult electPreferredOrDesignatedLeader() {
+        if (election == Election.PREFERRED) {
+            int preferredReplica = targetReplicas.get(0);
+            if (isValidNewLeader(preferredReplica)) {
+                return new ElectionResult(preferredReplica, false);
+            }
+        } else if (election == Election.DESIGNTATED) {
+            if (isValidNewLeader(desiredLeader)) {
+                return new ElectionResult(desiredLeader, false);
+            }
         }
 
         if (isValidNewLeader(partition.leader)) {

@@ -348,6 +348,8 @@ public class PartitionRegistration {
         return leader != LeaderConstants.NO_LEADER;
     }
 
+    public int getLeader() { return leader; }
+
     public boolean hasPreferredLeader() {
         return leader == preferredReplica();
     }
