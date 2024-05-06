@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMapOrNull;
+import static org.apache.kafka.connect.transforms.util.Requirements.requireStructOrNull;
 
 /**
  * A SingleFieldPath is composed of one or more field names, known as path steps,
@@ -174,7 +175,8 @@ public class SingleFieldPath {
             if (current.schema().field(pathSegment) == null) {
                 return null;
             }
-            current = current.getStruct(pathSegment);
+            Object subValue = current.get(pathSegment);
+            current = requireStructOrNull(subValue, "nested field access");
             if (current == null) return null;
         }
 
