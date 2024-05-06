@@ -135,7 +135,10 @@ public class ExtractFieldTest {
 
     @Test
     public void nonExistentNestedFieldSchemalessShouldReturnNull() {
-        xform.configure(Collections.singletonMap("field", "magic.nonexistent"));
+        Map<String, String> configs = new HashMap<>();
+        configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        configs.put("field", "magic.nonexistent");
+        xform.configure(configs);
 
         final Map<String, Object> key = Collections.singletonMap("magic", Collections.singletonMap("foo", 42));
         final SinkRecord record = new SinkRecord("test", 0, null, key, null, null, 0);
