@@ -32,7 +32,7 @@ import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletion
 
 import java.util
 import java.util.concurrent.TimeUnit
-import scala.collection.{Set, Seq, mutable}
+import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
 object AddPartitionsToTxnManager {
@@ -42,6 +42,17 @@ object AddPartitionsToTxnManager {
   val VerificationTimeMsMetricName = "VerificationTimeMs"
 }
 
+/**
+ * This is an enum which handles the Partition Response based on the Request Version and the exact operation
+ *    defaultError:       This is the default workflow which maps to cases when the Produce Request Version or the Txn_offset_commit request was lower than the first version supporting the new Error Class
+ *    genericError:       This maps to the case when the clients are updated to handle the TransactionAbortableException
+ *    addPartition:       This is a WIP. To be updated as a part of KIP-890 Part 2
+ */
+sealed trait SupportedOperation
+case object defaultError extends SupportedOperation
+case object genericError extends SupportedOperation
+case object addPartition extends SupportedOperation
+
 /*
  * Data structure to hold the transactional data to send to a node. Note -- at most one request per transactional ID
  * will exist at a time in the map. If a given transactional ID exists in the map, and a new request with the same ID
@@ -49,7 +60,8 @@ object AddPartitionsToTxnManager {
  */
 class TransactionDataAndCallbacks(val transactionData: AddPartitionsToTxnTransactionCollection,
                                   val callbacks: mutable.Map[String, AddPartitionsToTxnManager.AppendCallback],
-                                  val startTimeMs: mutable.Map[String, Long])
+                                  val startTimeMs: mutable.Map[String, Long],
+                                  val supportedOperation: SupportedOperation)
 
 class AddPartitionsToTxnManager(
   config: KafkaConfig,
@@ -66,6 +78,7 @@ class AddPartitionsToTxnManager(
 
   this.logIdent = logPrefix
 
+  private val interBrokerListenerName = config.interBrokerListenerName
   private val inflightNodes = mutable.HashSet[Node]()
   private val nodesToTransactions = mutable.Map[Node, TransactionDataAndCallbacks]()
 
@@ -78,12 +91,12 @@ class AddPartitionsToTxnManager(
     producerId: Long,
     producerEpoch: Short,
     topicPartitions: Seq[TopicPartition],
-    callback: AddPartitionsToTxnManager.AppendCallback
+    callback: AddPartitionsToTxnManager.AppendCallback,
+    supportedOperation: SupportedOperation
   ): Unit = {
-    val (error, node) = getTransactionCoordinator(partitionFor(transactionalId))
-
-    if (error != Errors.NONE) {
-      callback(topicPartitions.map(tp => tp -> error).toMap)
+    val coordinatorNode = getTransactionCoordinator(partitionFor(transactionalId))
+    if (coordinatorNode.isEmpty) {
+      callback(topicPartitions.map(tp => tp -> Errors.COORDINATOR_NOT_AVAILABLE).toMap)
     } else {
       val topicCollection = new AddPartitionsToTxnTopicCollection()
       topicPartitions.groupBy(_.topic).forKeyValue { (topic, tps) =>
@@ -99,14 +112,16 @@ class AddPartitionsToTxnManager(
         .setVerifyOnly(true)
         .setTopics(topicCollection)
 
-      addTxnData(node, transactionData, callback)
+      addTxnData(coordinatorNode.get, transactionData, callback, supportedOperation)
+
     }
   }
 
   private def addTxnData(
     node: Node,
     transactionData: AddPartitionsToTxnTransaction,
-    callback: AddPartitionsToTxnManager.AppendCallback
+    callback: AddPartitionsToTxnManager.AppendCallback,
+    supportedOperation: SupportedOperation
   ): Unit = {
     nodesToTransactions.synchronized {
       val curTime = time.milliseconds()
@@ -115,7 +130,8 @@ class AddPartitionsToTxnManager(
         new TransactionDataAndCallbacks(
           new AddPartitionsToTxnTransactionCollection(1),
           mutable.Map[String, AddPartitionsToTxnManager.AppendCallback](),
-          mutable.Map[String, Long]()))
+          mutable.Map[String, Long](),
+          supportedOperation))
 
       val existingTransactionData = existingNodeAndTransactionData.transactionData.find(transactionData.transactionalId)
 
@@ -146,31 +162,10 @@ class AddPartitionsToTxnManager(
     }
   }
 
-  private def getTransactionCoordinator(partition: Int): (Errors, Node) = {
-    val listenerName = config.interBrokerListenerName
-
-    val topicMetadata = metadataCache.getTopicMetadata(Set(Topic.TRANSACTION_STATE_TOPIC_NAME), listenerName)
-
-    if (topicMetadata.headOption.isEmpty) {
-      // If topic is not created, then the transaction is definitely not started.
-      (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
-    } else {
-      if (topicMetadata.head.errorCode != Errors.NONE.code) {
-        (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
-      } else {
-        val coordinatorEndpoint = topicMetadata.head.partitions.asScala
-          .find(_.partitionIndex == partition)
-          .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
-          .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leaderId, listenerName))
-
-        coordinatorEndpoint match {
-          case Some(endpoint) =>
-            (Errors.NONE, endpoint)
-          case _ =>
-            (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
-        }
-      }
-    }
+  private def getTransactionCoordinator(partition: Int): Option[Node] = {
+   metadataCache.getPartitionInfo(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
+      .filter(_.leader != MetadataResponse.NO_LEADER_ID)
+      .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leader, interBrokerListenerName))
   }
 
   private def topicPartitionsToError(transactionData: AddPartitionsToTxnTransaction, error: Errors): Map[TopicPartition, Errors] = {
@@ -231,6 +226,8 @@ class AddPartitionsToTxnManager(
                   val code =
                     if (partitionResult.partitionErrorCode == Errors.PRODUCER_FENCED.code)
                       Errors.INVALID_PRODUCER_EPOCH.code
+                    else if (partitionResult.partitionErrorCode() == Errors.TRANSACTION_ABORTABLE.code && transactionDataAndCallbacks.supportedOperation != genericError) // For backward compatibility with clients.
+                      Errors.INVALID_TXN_STATE.code
                     else
                       partitionResult.partitionErrorCode
                   unverified.put(tp, Errors.forCode(code))

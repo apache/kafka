@@ -29,7 +29,7 @@ public class Csv {
      */
     public static Map<String, String> parseCsvMap(String str) {
         Map<String, String> map = new HashMap<>();
-        if (str == null || "".equals(str))
+        if (str == null || str.isEmpty())
             return map;
         String[] keyVals = str.split("\\s*,\\s*");
         for (String s : keyVals) {

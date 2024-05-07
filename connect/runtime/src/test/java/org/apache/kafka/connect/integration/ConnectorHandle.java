@@ -103,16 +103,6 @@ public class ConnectorHandle {
     }
 
     /**
-     * Delete the task handle for this task id.
-     *
-     * @param taskId the task id.
-     */
-    public void deleteTask(String taskId) {
-        log.info("Removing handle for {} task in connector {}", taskId, connectorName);
-        taskHandles.remove(taskId);
-    }
-
-    /**
      * Delete all task handles for this connector.
      */
     public void clearTasks() {

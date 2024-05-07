@@ -17,12 +17,12 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
+import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -165,8 +165,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        long expirationTimeoutMs = getExpirationTimeForTimeout(event.retryTimeoutMs());
-        CompletableFuture<Void> future = manager.commitSync(event.offsets(), expirationTimeoutMs);
+        CompletableFuture<Void> future = manager.commitSync(event.offsets(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
@@ -177,8 +176,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        long expirationTimeMs = getExpirationTimeForTimeout(event.timeout());
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), expirationTimeMs);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
@@ -199,10 +197,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         manager.maybeAutoCommitAsync();
     }
 
+    /**
+     * Handles ListOffsetsEvent by fetching the offsets for the given partitions and timestamps.
+     */
     private void process(final ListOffsetsEvent event) {
-        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
-                requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
-                        event.requireTimestamps());
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> future =
+            requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(), event.requireTimestamps());
         future.whenComplete(complete(event.future()));
     }
 
@@ -250,16 +250,14 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final TopicMetadataEvent event) {
-        final long expirationTimeMs = getExpirationTimeForTimeout(event.timeoutMs());
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), expirationTimeMs);
+                requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
     private void process(final AllTopicsMetadataEvent event) {
-        final long expirationTimeMs = getExpirationTimeForTimeout(event.timeoutMs());
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
+                requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
@@ -294,19 +292,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         CompletableFuture<Void> future = membershipManager.leaveGroup();
         // The future will be completed on heartbeat sent
         future.whenComplete(complete(event.future()));
-    }
-
-    /**
-     * @return Expiration time in milliseconds calculated with the current time plus the given
-     * timeout. Returns Long.MAX_VALUE if the expiration overflows it.
-     * Visible for testing.
-     */
-    long getExpirationTimeForTimeout(final long timeoutMs) {
-        long expiration = System.currentTimeMillis() + timeoutMs;
-        if (expiration < 0) {
-            return Long.MAX_VALUE;
-        }
-        return expiration;
     }
 
     private <T> BiConsumer<? super T, ? super Throwable> complete(final CompletableFuture<T> b) {

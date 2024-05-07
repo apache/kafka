@@ -34,6 +34,7 @@ import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrinci
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.junit.jupiter.api.{Test, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -55,14 +56,14 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   override def setUp(testInfo: TestInfo): Unit = {
     if (TestInfoUtils.isKRaft(testInfo)) {
       this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
-      if (testInfo.getDisplayName().contains("quorum=kraft-IBP_3_4")) {
+      if (testInfo.getDisplayName.contains("quorum=kraft-IBP_3_4")) {
         testMetadataVersion = MetadataVersion.IBP_3_4_IV0
       }
     } else {
       this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[AlterCredentialsTest.TestAuthorizer].getName)
 
     }
-    this.serverConfig.setProperty(KafkaConfig.PrincipalBuilderClassProp, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName)
+    this.serverConfig.setProperty(KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName)
     this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
 
     super.setUp(testInfo)
@@ -75,7 +76,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   private val user3 = "user3@user3.com"
   private val unknownUser = "unknownUser"
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testAlterNothing(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
@@ -88,7 +89,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(0, results.size)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testAlterSameThingTwice(quorum: String): Unit = {
     val deletion1 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
@@ -129,7 +130,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testAlterEmptyUser(quorum: String): Unit = {
     val deletionEmpty = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName("").setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
@@ -158,7 +159,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testAlterUnknownMechanism(quorum: String): Unit = {
     val deletionUnknown1 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.UNKNOWN.`type`)
@@ -186,7 +187,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     results.asScala.foreach(result => assertEquals("Unknown SCRAM mechanism", result.errorMessage))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testAlterTooFewIterations(quorum: String): Unit = {
     val upsertionTooFewIterations = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user1)
@@ -203,7 +204,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals("Too few iterations", results.get(0).errorMessage)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testAlterTooManyIterations(quorum: String): Unit = {
     val upsertionTooFewIterations = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user1)
@@ -220,7 +221,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals("Too many iterations", results.get(0).errorMessage)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testDeleteSomethingThatDoesNotExist(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
@@ -247,7 +248,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     checkAllErrorsAlteringCredentials(results, Errors.NOT_CONTROLLER, "when routed incorrectly to a non-Controller broker")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testAlterAndDescribe(quorum: String): Unit = {
     // create a bunch of credentials
@@ -295,7 +296,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     // KRaft is eventually consistent so it is possible to call describe before
     // the credential is propagated from the controller to the broker.
     TestUtils.waitUntilTrue(() => describeAllWithNoTopLevelErrorConfirmed().data.results.size == 3,
-                               "describeAllWithNoTopLevelErrorConfirmed does not see 3 users");
+                               "describeAllWithNoTopLevelErrorConfirmed does not see 3 users")
 
     // now describe them all
     val results2 = describeAllWithNoTopLevelErrorConfirmed().data.results
@@ -356,7 +357,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     checkUserAppearsInAlterResults(results4, user2)
 
     TestUtils.waitUntilTrue(() => describeAllWithNoTopLevelErrorConfirmed().data.results.size == 2,
-                               "describeAllWithNoTopLevelErrorConfirmed does not see only 2 users");
+                               "describeAllWithNoTopLevelErrorConfirmed does not see only 2 users")
 
     // now describe them all, which should just yield 2 credentials
     val results5 = describeAllWithNoTopLevelErrorConfirmed().data.results
@@ -380,7 +381,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     checkUserAppearsInAlterResults(results6, user3)
 
     TestUtils.waitUntilTrue(() => describeAllWithNoTopLevelErrorConfirmed().data.results.size == 0,
-                               "describeAllWithNoTopLevelErrorConfirmed does not see empty user");
+                               "describeAllWithNoTopLevelErrorConfirmed does not see empty user")
 
     // now describe them all, which should yield 0 credentials
     val results7 = describeAllWithNoTopLevelErrorConfirmed().data.results
@@ -390,7 +391,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   /*
    * Test that SCRAM alter command on KRaft cluster with IBP version less that IBP_3_5 fails
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft-IBP_3_4"))
   def testMetadataVersionTooLow(quorum: String): Unit = {
     val upsertionMetadataVersionTooLow = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user1)
@@ -405,7 +406,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(1, results.size)
     checkAllErrorsAlteringCredentials(results, Errors.UNSUPPORTED_VERSION,
                                       "when altering the credentials on unsupported IBP version")
-    assertEquals("The current metadata version does not support SCRAM", results.get(0).errorMessage)
+    assertEquals("The current metadata.version does not support SCRAM", results.get(0).errorMessage)
   }
 
   private def sendAlterUserScramCredentialsRequest(request: AlterUserScramCredentialsRequest, socketServer: SocketServer = adminSocketServer): AlterUserScramCredentialsResponse = {
@@ -416,17 +417,17 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     connectAndReceive[DescribeUserScramCredentialsResponse](request, destination = socketServer)
   }
 
-  private def checkAllErrorsAlteringCredentials(resultsToCheck: util.List[AlterUserScramCredentialsResult], expectedError: Errors, contextMsg: String) = {
+  private def checkAllErrorsAlteringCredentials(resultsToCheck: util.List[AlterUserScramCredentialsResult], expectedError: Errors, contextMsg: String): Unit = {
     assertEquals(0, resultsToCheck.asScala.filterNot(_.errorCode == expectedError.code).size,
       s"Expected all '${expectedError.name}' errors when altering credentials $contextMsg")
   }
 
-  private def checkNoErrorsAlteringCredentials(resultsToCheck: util.List[AlterUserScramCredentialsResult]) = {
+  private def checkNoErrorsAlteringCredentials(resultsToCheck: util.List[AlterUserScramCredentialsResult]): Unit = {
     assertEquals(0, resultsToCheck.asScala.filterNot(_.errorCode == Errors.NONE.code).size,
       "Expected no error when altering credentials")
   }
 
-  private def checkUserAppearsInAlterResults(resultsToCheck: util.List[AlterUserScramCredentialsResult], user: String) = {
+  private def checkUserAppearsInAlterResults(resultsToCheck: util.List[AlterUserScramCredentialsResult], user: String): Unit = {
     assertTrue(resultsToCheck.asScala.exists(_.user == user), s"Expected result to contain '$user'")
   }
 
@@ -437,11 +438,11 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     response
   }
 
-  private def checkNoTopLevelErrorDescribingCredentials(responseToCheck: DescribeUserScramCredentialsResponse) = {
+  private def checkNoTopLevelErrorDescribingCredentials(responseToCheck: DescribeUserScramCredentialsResponse): Unit = {
     assertEquals(Errors.NONE.code, responseToCheck.data.errorCode, "Expected no top-level error when describing the credentials")
   }
 
-  private def checkUserHasTwoCredentials(resultsToCheck: util.List[DescribeUserScramCredentialsResult], user: String) = {
+  private def checkUserHasTwoCredentials(resultsToCheck: util.List[DescribeUserScramCredentialsResult], user: String): Unit = {
     assertTrue(resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.size == 2 && result.errorCode == Errors.NONE.code),
       s"Expected result to contain '$user' with 2 credentials: $resultsToCheck")
     assertTrue(resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.asScala.exists(info =>
@@ -451,7 +452,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       s"Expected result to contain '$user' with SCRAM_SHA_256/4096 and SCRAM_SHA_512/8192 credentials: $resultsToCheck")
   }
 
-  private def checkForSingleSha512Iterations8192Credential(resultsToCheck: util.List[DescribeUserScramCredentialsResult], user: String) = {
+  private def checkForSingleSha512Iterations8192Credential(resultsToCheck: util.List[DescribeUserScramCredentialsResult], user: String): Unit = {
     assertTrue(resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.size == 1 && result.errorCode == Errors.NONE.code),
       s"Expected result to contain '$user' with 1 credential: $resultsToCheck")
     assertTrue(resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.asScala.exists(info =>
@@ -459,7 +460,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       s"Expected result to contain '$user' with SCRAM_SHA_512/8192 credential: $resultsToCheck")
   }
 
-  private def checkDescribeForError(resultsToCheck: util.List[DescribeUserScramCredentialsResult], user: String, expectedError: Errors) = {
+  private def checkDescribeForError(resultsToCheck: util.List[DescribeUserScramCredentialsResult], user: String, expectedError: Errors): Unit = {
     assertTrue(resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.size == 0 && result.errorCode == expectedError.code),
       s"Expected result to contain '$user' with a ${expectedError.name} error: $resultsToCheck")
   }

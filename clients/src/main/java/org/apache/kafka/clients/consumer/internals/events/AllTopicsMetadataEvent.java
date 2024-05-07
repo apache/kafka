@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.utils.Timer;
+
 public class AllTopicsMetadataEvent extends AbstractTopicMetadataEvent {
 
-    public AllTopicsMetadataEvent(final long timeoutMs) {
-        super(Type.ALL_TOPICS_METADATA, timeoutMs);
+    public AllTopicsMetadataEvent(final Timer timer) {
+        super(Type.ALL_TOPICS_METADATA, timer);
     }
 }

@@ -50,11 +50,11 @@ public class MetadataVersionChangeTest {
 
     @Test
     public void testMetadataVersionChangeExceptionToString() {
-        assertEquals("org.apache.kafka.image.MetadataVersionChangeException: The metadata " +
-            "version is changing from 3.0-IV1 to 3.3-IV0",
+        assertEquals("org.apache.kafka.image.MetadataVersionChangeException: The metadata.version " +
+            "is changing from 3.0-IV1 to 3.3-IV0",
                 new MetadataVersionChangeException(CHANGE_3_0_IV1_TO_3_3_IV0).toString());
-        assertEquals("org.apache.kafka.image.MetadataVersionChangeException: The metadata " +
-            "version is changing from 3.3-IV0 to 3.0-IV1",
+        assertEquals("org.apache.kafka.image.MetadataVersionChangeException: The metadata.version " +
+            "is changing from 3.3-IV0 to 3.0-IV1",
                 new MetadataVersionChangeException(CHANGE_3_3_IV0_TO_3_0_IV1).toString());
     }
 }

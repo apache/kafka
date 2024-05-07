@@ -18,8 +18,8 @@
 package kafka.server
 
 import kafka.cluster.Partition
-import kafka.server.ReplicaAlterLogDirsThread.{DirectoryEventRequestState, QUEUED}
-import org.apache.kafka.common.TopicPartition
+import kafka.server.ReplicaAlterLogDirsThread.{PromotionState, ReassignmentState}
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch, TopicIdPartition}
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
@@ -45,7 +45,8 @@ class ReplicaAlterLogDirsThread(name: String,
                                 isInterruptible = false,
                                 brokerTopicStats) {
 
-  private val assignmentRequestStates: ConcurrentHashMap[TopicPartition, DirectoryEventRequestState] = new ConcurrentHashMap()
+  // Visible for testing
+  private[server] val promotionStates: ConcurrentHashMap[TopicPartition, PromotionState] = new ConcurrentHashMap()
 
   override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
     replicaMgr.futureLocalLogOrException(topicPartition).latestEpoch
@@ -96,23 +97,27 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   override def removePartitions(topicPartitions: Set[TopicPartition]): Map[TopicPartition, PartitionFetchState] = {
-    // Schedule assignment request to revert any queued request before cancelling
-    for {
-      topicPartition <- topicPartitions
-      partitionState <- partitionAssignmentRequestState(topicPartition)
-      if partitionState == QUEUED
-      partition = replicaMgr.getPartitionOrException(topicPartition)
-      topicId <- partition.topicId
-      directoryId <- partition.logDirectoryId()
-      topicIdPartition = new TopicIdPartition(topicId, topicPartition.partition())
-    } directoryEventHandler.handleAssignment(topicIdPartition, directoryId, () => ())
+    for (topicPartition <- topicPartitions) {
+      if (this.promotionStates.containsKey(topicPartition)) {
+        val PromotionState(reassignmentState, topicId, originalDir) = this.promotionStates.get(topicPartition)
+        // Revert any reassignments for partitions that did not complete the future replica promotion
+        if (originalDir.isDefined && topicId.isDefined && reassignmentState.maybeInconsistentMetadata) {
+          directoryEventHandler.handleAssignment(new TopicIdPartition(topicId.get, topicPartition.partition()), originalDir.get,
+            "Reverting reassignment for canceled future replica", () => ())
+        }
+        this.promotionStates.remove(topicPartition)
+      }
+    }
 
     super.removePartitions(topicPartitions)
   }
 
+  private def reassignmentState(topicPartition: TopicPartition): ReassignmentState = promotionStates.get(topicPartition).reassignmentState
+
   // Visible for testing
-  private[server] def updatedAssignmentRequestState(topicPartition: TopicPartition)(state: ReplicaAlterLogDirsThread.DirectoryEventRequestState): Unit = {
-    assignmentRequestStates.put(topicPartition, state)
+  private[server] def updateReassignmentState(topicPartition: TopicPartition, state: ReassignmentState): Unit = {
+    log.debug(s"Updating future replica $topicPartition reassignment state to $state")
+    promotionStates.put(topicPartition, promotionStates.get(topicPartition).withAssignment(state))
   }
 
   private def maybePromoteFutureReplica(topicPartition: TopicPartition, partition: Partition) = {
@@ -120,31 +125,26 @@ class ReplicaAlterLogDirsThread(name: String,
     if (topicId.isEmpty)
       throw new IllegalStateException(s"Topic ${topicPartition.topic()} does not have an ID.")
 
-    partitionAssignmentRequestState(topicPartition) match {
-      case None =>
+    reassignmentState(topicPartition) match {
+      case ReassignmentState.None =>
         // Schedule assignment request and don't promote the future replica yet until the controller has accepted the request.
         partition.runCallbackIfFutureReplicaCaughtUp(_ => {
-          partition.futureReplicaDirectoryId()
-            .map(id => {
-              directoryEventHandler.handleAssignment(new TopicIdPartition(topicId.get, topicPartition.partition()), id,
-                () => updatedAssignmentRequestState(topicPartition)(ReplicaAlterLogDirsThread.COMPLETED))
-              // mark the assignment request state as queued.
-              updatedAssignmentRequestState(topicPartition)(ReplicaAlterLogDirsThread.QUEUED)
-            })
+          val targetDir = partition.futureReplicaDirectoryId().get
+          val topicIdPartition = new TopicIdPartition(topicId.get, topicPartition.partition())
+          directoryEventHandler.handleAssignment(topicIdPartition, targetDir, "Future replica promotion", () => updateReassignmentState(topicPartition, ReassignmentState.Accepted))
+          updateReassignmentState(topicPartition, ReassignmentState.Queued)
         })
-      case Some(ReplicaAlterLogDirsThread.COMPLETED) =>
+      case ReassignmentState.Accepted =>
         // Promote future replica if controller accepted the request and the replica caught-up with the original log.
         if (partition.maybeReplaceCurrentWithFutureReplica()) {
+          updateReassignmentState(topicPartition, ReassignmentState.Effective)
           removePartitions(Set(topicPartition))
-          assignmentRequestStates.remove(topicPartition)
         }
-      case _ =>
-        log.trace("Waiting for AssignmentRequest to succeed before promoting the future replica.")
+      case ReassignmentState.Queued =>
+        log.trace("Waiting for AssignReplicasToDirsRequest to succeed before promoting the future replica.")
+      case ReassignmentState.Effective =>
+        throw new IllegalStateException("BUG: trying to promote a future replica twice")
     }
-  }
-
-  private def partitionAssignmentRequestState(topicPartition: TopicPartition): Option[DirectoryEventRequestState] = {
-    Option(assignmentRequestStates.get(topicPartition))
   }
 
   override def addPartitions(initialFetchStates: Map[TopicPartition, InitialFetchState]): Set[TopicPartition] = {
@@ -154,6 +154,13 @@ class ReplicaAlterLogDirsThread(name: String,
       // filter only the partitions which still have a future log dir.
       val filteredFetchStates = initialFetchStates.filter { case (tp, _) =>
         replicaMgr.futureLogExists(tp)
+      }
+      filteredFetchStates.foreach {
+        case (topicPartition, state) =>
+          val topicId = state.topicId
+          val currentDirectoryId = replicaMgr.getPartitionOrException(topicPartition).logDirectoryId()
+          val promotionState = PromotionState(ReassignmentState.None, topicId, currentDirectoryId)
+          promotionStates.put(topicPartition, promotionState)
       }
       super.addPartitions(filteredFetchStates)
     } finally {
@@ -188,9 +195,52 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 }
 object ReplicaAlterLogDirsThread {
-  sealed trait DirectoryEventRequestState
+  /**
+   * @param reassignmentState Tracks the state of the replica-to-directory assignment update in the metadata
+   * @param topicId           The ID of the topic, which is useful if a reverting the assignment is required
+   * @param currentDir        The original directory ID from which the future replica fetches from
+   */
+  case class PromotionState(reassignmentState: ReassignmentState, topicId: Option[Uuid], currentDir: Option[Uuid]) {
+    def withAssignment(newDirReassignmentState: ReassignmentState): PromotionState =
+      PromotionState(newDirReassignmentState, topicId, currentDir)
+  }
 
-  case object QUEUED extends DirectoryEventRequestState
+  /**
+   * Represents the state of the request to update the directory assignment from the current replica directory
+   * to the future replica directory.
+   */
+  sealed trait ReassignmentState {
+    /**
+     * @return true if the directory assignment in the cluster metadata may be inconsistent with the actual
+     *         directory where the main replica is hosted.
+     */
+    def maybeInconsistentMetadata: Boolean = false
+  }
 
-  case object COMPLETED extends DirectoryEventRequestState
+  object ReassignmentState {
+
+    /**
+     * The request has not been created.
+     */
+    case object None extends ReassignmentState
+
+    /**
+     * The request has been queued, it may or may not yet have been sent to the Controller.
+     */
+    case object Queued extends ReassignmentState {
+      override def maybeInconsistentMetadata: Boolean = true
+    }
+
+    /**
+     * The controller has acknowledged the new directory assignment and persisted the change in metadata.
+     */
+    case object Accepted extends ReassignmentState {
+      override def maybeInconsistentMetadata: Boolean = true
+    }
+
+    /**
+     * The future replica has been promoted and replaced the current replica.
+     */
+    case object Effective extends ReassignmentState
+  }
 }

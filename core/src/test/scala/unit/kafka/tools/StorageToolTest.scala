@@ -31,6 +31,8 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -44,11 +46,11 @@ class StorageToolTest {
 
   private def newSelfManagedProperties() = {
     val properties = new Properties()
-    properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo,/tmp/bar")
-    properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
-    properties.setProperty(KafkaConfig.NodeIdProp, "2")
-    properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9092")
-    properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
+    properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, "/tmp/foo,/tmp/bar")
+    properties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9092")
+    properties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT")
     properties
   }
 
@@ -61,7 +63,7 @@ class StorageToolTest {
   @Test
   def testConfigToLogDirectoriesWithMetaLogDir(): Unit = {
     val properties = newSelfManagedProperties()
-    properties.setProperty(KafkaConfig.MetadataLogDirProp, "/tmp/baz")
+    properties.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, "/tmp/baz")
     val config = new KafkaConfig(properties)
     assertEquals(Seq("/tmp/bar", "/tmp/baz", "/tmp/foo"),
       StorageTool.configToLogDirectories(config))
@@ -190,6 +192,59 @@ Found problem:
         formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = true))
       assertEquals("All of the log directories are already formatted.%n".format(), stream2.toString())
     } finally Utils.delete(tempDir)
+  }
+
+  private def runFormatCommand(stream: ByteArrayOutputStream, directories: Seq[String], ignoreFormatted: Boolean = false): Int = {
+    val metaProperties = new MetaProperties.Builder().
+      setVersion(MetaPropertiesVersion.V1).
+      setClusterId("XcZZOzUqS4yHOjhMQB6JLQ").
+      setNodeId(2).
+      build()
+    val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
+    StorageTool.formatCommand(new PrintStream(stream), directories, metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted)
+  }
+
+  @Test
+  def testFormatSucceedsIfAllDirectoriesAreAvailable(): Unit = {
+    val availableDir1 = TestUtils.tempDir()
+    val availableDir2 = TestUtils.tempDir()
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFormatCommand(stream, Seq(availableDir1.toString, availableDir2.toString)))
+    assertTrue(stream.toString().contains("Formatting %s".format(availableDir1)))
+    assertTrue(stream.toString().contains("Formatting %s".format(availableDir2)))
+  }
+
+  @Test
+  def testFormatSucceedsIfAtLeastOneDirectoryIsAvailable(): Unit = {
+    val availableDir1 = TestUtils.tempDir()
+    val unavailableDir1 = TestUtils.tempFile()
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFormatCommand(stream, Seq(availableDir1.toString, unavailableDir1.toString)))
+    assertTrue(stream.toString().contains("I/O error trying to read log directory %s. Ignoring...".format(unavailableDir1)))
+    assertTrue(stream.toString().contains("Formatting %s".format(availableDir1)))
+    assertFalse(stream.toString().contains("Formatting %s".format(unavailableDir1)))
+  }
+
+  @Test
+  def testFormatFailsIfAllDirectoriesAreUnavailable(): Unit = {
+    val unavailableDir1 = TestUtils.tempFile()
+    val unavailableDir2 = TestUtils.tempFile()
+    val stream = new ByteArrayOutputStream()
+    assertEquals("No available log directories to format.", assertThrows(classOf[TerseFailure],
+      () => runFormatCommand(stream, Seq(unavailableDir1.toString, unavailableDir2.toString))).getMessage)
+    assertTrue(stream.toString().contains("I/O error trying to read log directory %s. Ignoring...".format(unavailableDir1)))
+    assertTrue(stream.toString().contains("I/O error trying to read log directory %s. Ignoring...".format(unavailableDir2)))
+  }
+
+  @Test
+  def testFormatSucceedsIfAtLeastOneFormattedDirectoryIsAvailable(): Unit = {
+    val availableDir1 = TestUtils.tempDir()
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFormatCommand(stream, Seq(availableDir1.toString)))
+
+    val stream2 = new ByteArrayOutputStream()
+    val unavailableDir1 = TestUtils.tempFile()
+    assertEquals(0, runFormatCommand(stream2, Seq(availableDir1.toString, unavailableDir1.toString), ignoreFormatted = true))
   }
 
   @Test
@@ -333,7 +388,7 @@ Found problem:
     try {
       assertEquals(1, StorageTool.main(args))
     } catch {
-      case e: StorageToolTestException => assertEquals(s"SCRAM is only supported in metadataVersion IBP_3_5_IV2 or later.", exitString)
+      case e: StorageToolTestException => assertEquals(s"SCRAM is only supported in metadata.version ${MetadataVersion.IBP_3_5_IV2} or later.", exitString)
     } finally {
       Exit.resetExitProcedure()
     }
@@ -354,7 +409,7 @@ Found problem:
     val propsFile = TestUtils.tempFile()
     val propsStream = Files.newOutputStream(propsFile.toPath)
     // This test does format the directory specified so use a tempdir
-    properties.setProperty(KafkaConfig.LogDirsProp, TestUtils.tempDir().toString)
+    properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDir().toString)
     properties.store(propsStream, "config.props")
     propsStream.close()
 
@@ -408,7 +463,7 @@ Found problem:
     val propsFile = TestUtils.tempFile()
     val propsStream = Files.newOutputStream(propsFile.toPath)
     try {
-      properties.setProperty(KafkaConfig.LogDirsProp, TestUtils.tempDir().toString)
+      properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDir().toString)
       properties.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, enableUnstable.toString)
       properties.store(propsStream, "config.props")
     } finally {
@@ -428,7 +483,7 @@ Found problem:
       assertEquals("", exitString)
       assertEquals(0, exitStatus)
     } else {
-      assertEquals(s"Metadata version ${MetadataVersion.latestTesting().toString} is not ready for " +
+      assertEquals(s"The metadata.version ${MetadataVersion.latestTesting().toString} is not ready for " +
         "production use yet.", exitString)
       assertEquals(1, exitStatus)
     }

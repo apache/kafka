@@ -102,7 +102,7 @@ class AlterPartitionManagerTest {
       .setTopicName(topic)
       .setTopicId(topicId)
 
-    if (metadataVersion.isTopicIdsSupported()) {
+    if (metadataVersion.isTopicIdsSupported) {
       val newIsrWithBrokerEpoch = new ListBuffer[BrokerState]()
       newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(1).setBrokerEpoch(101))
       newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(2).setBrokerEpoch(102))

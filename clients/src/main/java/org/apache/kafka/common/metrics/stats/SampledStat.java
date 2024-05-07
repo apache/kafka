@@ -76,13 +76,13 @@ public abstract class SampledStat implements MeasurableStat {
     }
 
     public Sample current(long timeMs) {
-        if (samples.size() == 0)
+        if (samples.isEmpty())
             this.samples.add(newSample(timeMs));
         return this.samples.get(this.current);
     }
 
     public Sample oldest(long now) {
-        if (samples.size() == 0)
+        if (samples.isEmpty())
             this.samples.add(newSample(now));
         Sample oldest = this.samples.get(0);
         for (int i = 1; i < this.samples.size(); i++) {

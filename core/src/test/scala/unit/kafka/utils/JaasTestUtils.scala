@@ -20,9 +20,9 @@ import java.io.{BufferedWriter, File, FileWriter}
 import java.util.Properties
 
 import scala.collection.Seq
-import kafka.server.KafkaConfig
 import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.utils.Java
+import org.apache.kafka.server.config.KafkaSecurityConfigs
 
 object JaasTestUtils {
 
@@ -161,8 +161,8 @@ object JaasTestUtils {
     val result = saslProperties.getOrElse(new Properties)
     // IBM Kerberos module doesn't support the serviceName JAAS property, hence it needs to be
     // passed as a Kafka property
-    if (isIbmSecurity && !result.contains(KafkaConfig.SaslKerberosServiceNameProp))
-      result.put(KafkaConfig.SaslKerberosServiceNameProp, serviceName)
+    if (isIbmSecurity && !result.contains(KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_CONFIG))
+      result.put(KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_CONFIG, serviceName)
     result
   }
 
@@ -236,8 +236,7 @@ object JaasTestUtils {
         if (ScramMechanism.fromMechanismName(mechanism) != ScramMechanism.UNKNOWN) {
           ScramLoginModule(
             KafkaScramAdmin,
-            KafkaScramAdminPassword,
-            debug = false)
+            KafkaScramAdminPassword)
         } else {
           throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
         }

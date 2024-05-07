@@ -52,8 +52,8 @@ class LogSegmentsTest {
   }
 
   private def assertEntry(segment: LogSegment, tested: java.util.Map.Entry[java.lang.Long, LogSegment]): Unit = {
-    assertEquals(segment.baseOffset, tested.getKey())
-    assertEquals(segment, tested.getValue())
+    assertEquals(segment.baseOffset, tested.getKey)
+    assertEquals(segment, tested.getValue)
   }
 
   @Test

@@ -27,6 +27,6 @@ import java.util.Map;
 public class AsyncCommitEvent extends CommitEvent {
 
     public AsyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        super(Type.COMMIT_ASYNC, offsets);
+        super(Type.COMMIT_ASYNC, offsets, Long.MAX_VALUE);
     }
 }

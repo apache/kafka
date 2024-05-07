@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -116,7 +117,7 @@ public class MirrorCheckpointTaskTest {
     }
 
     @Test
-    public void testSyncOffset() {
+    public void testSyncOffset() throws ExecutionException, InterruptedException {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
         Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
 
@@ -170,7 +171,7 @@ public class MirrorCheckpointTaskTest {
     }
 
     @Test
-    public void testSyncOffsetForTargetGroupWithNullOffsetAndMetadata() {
+    public void testSyncOffsetForTargetGroupWithNullOffsetAndMetadata() throws ExecutionException, InterruptedException {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
         Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
 
