@@ -225,8 +225,7 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
                     if (prevKey != null && !prevKey.equals(timestampedKeyAndJoinSide)) {
                         // blind-delete the previous key from the outer window store now it is emitted;
                         // we do this because this delete would remove the whole list of values of the same key,
-                        // and hence if we delete eagerly and then fail, we would miss emitting join results of the
-                        // later
+                        // and hence if we delete eagerly and then fail, we would miss emitting join results of the later
                         // values in the list.
                         // we do not use delete() calls since it would incur extra get()
                         store.put(prevKey, null);
@@ -270,7 +269,7 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
 
 
         private long getOuterJoinLookBackTimeMs(
-                final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide) {
+            final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide) {
             // depending on the JoinSide we fill in the outerJoinLookBackTimeMs
             if (timestampedKeyAndJoinSide.isLeftSide()) {
                 return windowsAfterMs; // On the left-JoinSide we look back in time
