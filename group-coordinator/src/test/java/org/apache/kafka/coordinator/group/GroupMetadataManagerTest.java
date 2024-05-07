@@ -62,7 +62,7 @@ import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ExpiredTimeout;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ScheduledTimeout;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.common.Assignment;
@@ -148,7 +148,7 @@ public class GroupMetadataManagerTest {
     public void testConsumerHeartbeatRequestValidation() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
         Exception ex;
 
@@ -238,7 +238,7 @@ public class GroupMetadataManagerTest {
     public void testMemberIdGeneration() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(MetadataImage.EMPTY)
             .build();
 
@@ -281,7 +281,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
 
         assertThrows(GroupIdNotFoundException.class, () ->
@@ -303,7 +303,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
@@ -341,7 +341,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
@@ -427,7 +427,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -517,7 +517,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -619,7 +619,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -759,7 +759,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -852,7 +852,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -1021,7 +1021,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -1192,7 +1192,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -1256,7 +1256,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -1349,7 +1349,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
@@ -1399,7 +1399,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .build())
@@ -1447,7 +1447,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .build())
@@ -1489,7 +1489,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
@@ -1580,7 +1580,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .build())
@@ -1626,7 +1626,7 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .build())
@@ -1670,7 +1670,7 @@ public class GroupMetadataManagerTest {
         // Create a context with an empty consumer group.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
                 .addRacks()
@@ -1771,7 +1771,7 @@ public class GroupMetadataManagerTest {
         // Create a context with one consumer group containing two members.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -2206,7 +2206,7 @@ public class GroupMetadataManagerTest {
         // Create a context with one consumer group containing two members.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -2269,7 +2269,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10))
             .build();
 
@@ -2319,12 +2319,12 @@ public class GroupMetadataManagerTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
-        PartitionAssignor assignor = mock(PartitionAssignor.class);
+        ConsumerGroupPartitionAssignor assignor = mock(ConsumerGroupPartitionAssignor.class);
         when(assignor.name()).thenReturn("range");
         when(assignor.assign(any(), any())).thenThrow(new PartitionAssignorException("Assignment failed."));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -2358,7 +2358,7 @@ public class GroupMetadataManagerTest {
         // Create a context with one consumer group containing one member.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withGroupMetadataRefreshIntervalMs(5 * 60 * 1000)
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
@@ -2469,7 +2469,7 @@ public class GroupMetadataManagerTest {
         // Create a context with one consumer group containing one member.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withGroupMetadataRefreshIntervalMs(5 * 60 * 1000)
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
@@ -2593,7 +2593,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
 
         assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
@@ -2692,7 +2692,7 @@ public class GroupMetadataManagerTest {
     @Test
     public void testOnNewMetadataImageWithEmptyDelta() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .build();
 
         MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
@@ -2705,7 +2705,7 @@ public class GroupMetadataManagerTest {
     @Test
     public void testOnNewMetadataImage() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .build();
 
         // M1 in group 1 subscribes to a and b.
@@ -2801,7 +2801,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
@@ -2876,7 +2876,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
@@ -2940,7 +2940,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
@@ -3022,7 +3022,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 3)
                 .addRacks()
@@ -3177,7 +3177,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 3)
                 .addRacks()
@@ -3314,7 +3314,7 @@ public class GroupMetadataManagerTest {
         String barTopicName = "bar";
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroupAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -8258,7 +8258,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withShareGroupAssignor(assignor)
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10))
             .build();
@@ -8436,7 +8436,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupIds.get(0), epoch))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupIds.get(1), epoch)
                 .withMember(memberBuilder.build()))
@@ -8471,7 +8471,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
 
         List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDescribe(Collections.singletonList(groupId));
@@ -8499,7 +8499,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(metadataImage)
             .build();
 
@@ -9294,7 +9294,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
@@ -9437,13 +9437,6 @@ public class GroupMetadataManagerTest {
             new ShareGroupHeartbeatRequestData()
                 .setGroupId("   ")));
         assertEquals("GroupId can't be empty.", ex.getMessage());
-
-        // RebalanceTimeoutMs must be present in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberEpoch(0)));
-        assertEquals("RebalanceTimeoutMs must be provided in first request.", ex.getMessage());
 
         // SubscribedTopicNames must be present and empty in the first request (epoch == 0).
         ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
@@ -9897,7 +9890,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
         ClassicGroup classicGroup = new ClassicGroup(
             new LogContext(),
@@ -9928,7 +9921,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
         ClassicGroup classicGroup = new ClassicGroup(
             new LogContext(),

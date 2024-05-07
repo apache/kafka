@@ -21,8 +21,8 @@ import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
 
 import java.util.HashMap;
@@ -33,7 +33,7 @@ import java.util.Set;
 /**
  * A simple partition assignor that assigns each member all partitions of the subscribed topics.
  */
-public class SimpleAssignor implements PartitionAssignor {
+public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
   public static final String SIMPLE_ASSIGNOR_NAME = "simple";
 

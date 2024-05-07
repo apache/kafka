@@ -4955,6 +4955,7 @@ class KafkaApisTest extends Logging {
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
+
     // First fetch request is to establish the share session with the broker
     kafkaApis = createKafkaApis(overrideProperties = Map(KafkaConfig.ShareGroupEnableProp -> "true"))
     kafkaApis.handleShareFetchRequest(request)
@@ -4976,16 +4977,26 @@ class KafkaApisTest extends Logging {
       topicResponses.get(0).partitions().get(0)
     )
 
-    //Not sending any topic partitions list in the subsequent share fetch request
     shareFetchRequestData = new ShareFetchRequestData().
       setGroupId("group").
       setMemberId(memberId.toString).
-      setShareSessionEpoch(1)
+      setShareSessionEpoch(1).
+      setTopics(List(new ShareFetchRequestData.FetchTopic().
+        setTopicId(topicId).
+        setPartitions(List(
+          new ShareFetchRequestData.FetchPartition().
+            setPartitionIndex(0).
+            setPartitionMaxBytes(40000).
+            setAcknowledgementBatches(List(
+              new ShareFetchRequestData.AcknowledgementBatch().
+                setFirstOffset(0).
+                setLastOffset(9).
+                setAcknowledgeType(1).
+                setAcknowledgeTypes(List[java.lang.Byte](1.toByte).asJava)).asJava)).asJava)).asJava)
 
     shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
-    kafkaApis = createKafkaApis(overrideProperties = Map(KafkaConfig.ShareGroupEnableProp -> "true"))
+
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
     responseData = response.data()
@@ -5005,17 +5016,26 @@ class KafkaApisTest extends Logging {
       topicResponses.get(0).partitions().get(0)
     )
 
-
-    //Not sending any topic partitions list in the subsequent share fetch request
     shareFetchRequestData = new ShareFetchRequestData().
       setGroupId("group").
       setMemberId(memberId.toString).
-      setShareSessionEpoch(2)
+      setShareSessionEpoch(2).
+      setTopics(List(new ShareFetchRequestData.FetchTopic().
+        setTopicId(topicId).
+        setPartitions(List(
+          new ShareFetchRequestData.FetchPartition().
+            setPartitionIndex(0).
+            setPartitionMaxBytes(40000).
+            setAcknowledgementBatches(List(
+              new ShareFetchRequestData.AcknowledgementBatch().
+                setFirstOffset(10).
+                setLastOffset(19).
+                setAcknowledgeType(1).
+                setAcknowledgeTypes(List[java.lang.Byte](1.toByte).asJava)).asJava)).asJava)).asJava)
 
     shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     request = buildRequest(shareFetchRequest)
-    // First fetch request is to establish the share session with the broker
-    kafkaApis = createKafkaApis(overrideProperties = Map(KafkaConfig.ShareGroupEnableProp -> "true"))
+
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
     responseData = response.data()

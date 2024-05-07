@@ -37,7 +37,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.Group.GroupType
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.security.PasswordEncoderConfigs
@@ -1755,7 +1755,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val consumerGroupMinHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupMinHeartbeatIntervalMsProp)
   val consumerGroupMaxHeartbeatIntervalMs = getInt(KafkaConfig.ConsumerGroupMaxHeartbeatIntervalMsProp)
   val consumerGroupMaxSize = getInt(KafkaConfig.ConsumerGroupMaxSizeProp)
-  val consumerGroupAssignors = getConfiguredInstances(KafkaConfig.ConsumerGroupAssignorsProp, classOf[PartitionAssignor])
+  val consumerGroupAssignors = getConfiguredInstances(KafkaConfig.ConsumerGroupAssignorsProp, classOf[ConsumerGroupPartitionAssignor])
 
   /** Share Group Configurations **/
   val isShareGroupEnabled = getBoolean(KafkaConfig.ShareGroupEnableProp)

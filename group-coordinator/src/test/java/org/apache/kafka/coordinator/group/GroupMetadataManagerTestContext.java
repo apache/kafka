@@ -47,7 +47,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.group.Group.GroupType;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupBuilder;
@@ -350,8 +351,8 @@ public class GroupMetadataManagerTestContext {
         final private LogContext logContext = new LogContext();
         final private SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         private MetadataImage metadataImage;
-        private List<PartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
-        private PartitionAssignor shareGroupAssignor = new MockPartitionAssignor("share");
+        private List<ConsumerGroupPartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
+        private ShareGroupPartitionAssignor shareGroupAssignor = new MockPartitionAssignor("share");
         final private List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int groupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -367,12 +368,12 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
-        public Builder withAssignors(List<PartitionAssignor> assignors) {
+        public Builder withConsumerGroupAssignors(List<ConsumerGroupPartitionAssignor> assignors) {
             this.consumerGroupAssignors = assignors;
             return this;
         }
 
-        public Builder withShareGroupAssignor(PartitionAssignor shareGroupAssignor) {
+        public Builder withShareGroupAssignor(ShareGroupPartitionAssignor shareGroupAssignor) {
             this.shareGroupAssignor = shareGroupAssignor;
             return this;
         }

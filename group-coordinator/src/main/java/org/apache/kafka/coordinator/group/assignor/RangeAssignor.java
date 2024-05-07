@@ -48,7 +48,7 @@ import static java.lang.Math.min;
  *           movements during reassignment. (Sticky) </li>
  * </ol>
  */
-public class RangeAssignor implements PartitionAssignor {
+public class RangeAssignor implements ConsumerGroupPartitionAssignor {
     public static final String RANGE_ASSIGNOR_NAME = "range";
 
     @Override

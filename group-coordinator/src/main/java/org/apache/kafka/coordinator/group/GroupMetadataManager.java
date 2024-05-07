@@ -57,8 +57,9 @@ import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.Group.GroupType;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.common.Assignment;
 import org.apache.kafka.coordinator.group.common.TopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
@@ -163,8 +164,8 @@ public class GroupMetadataManager {
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
         private CoordinatorTimer<Void, Record> timer = null;
-        private List<PartitionAssignor> consumerGroupAssignors = null;
-        private PartitionAssignor shareGroupAssignor = null;
+        private List<ConsumerGroupPartitionAssignor> consumerGroupAssignors = null;
+        private ShareGroupPartitionAssignor shareGroupAssignor = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupHeartbeatIntervalMs = 5000;
         private int groupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -199,12 +200,12 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withConsumerGroupAssignors(List<PartitionAssignor> consumerGroupAssignors) {
+        Builder withConsumerGroupAssignors(List<ConsumerGroupPartitionAssignor> consumerGroupAssignors) {
             this.consumerGroupAssignors = consumerGroupAssignors;
             return this;
         }
 
-        Builder withShareGroupAssignor(PartitionAssignor shareGroupAssignor) {
+        Builder withShareGroupAssignor(ShareGroupPartitionAssignor shareGroupAssignor) {
             this.shareGroupAssignor = shareGroupAssignor;
             return this;
         }
@@ -344,19 +345,19 @@ public class GroupMetadataManager {
     private final GroupCoordinatorMetricsShard metrics;
 
     /**
-     * The supported partition assignors keyed by their name.
+     * The supported consumer group partition assignors keyed by their name.
      */
-    private final Map<String, PartitionAssignor> assignors;
+    private final Map<String, ConsumerGroupPartitionAssignor> consumerGroupAssignors;
 
     /**
-     * The default assignor used.
+     * The default consumer group assignor used.
      */
-    private final PartitionAssignor defaultAssignor;
+    private final ConsumerGroupPartitionAssignor defaultConsumerGroupAssignor;
 
     /**
-     * The assignor for share groups.
+     * The share group partition assignor.
      */
-    private final PartitionAssignor shareGroupAssignor;
+    private final ShareGroupPartitionAssignor shareGroupAssignor;
 
     /**
      * The classic and consumer groups keyed by their name.
@@ -443,8 +444,8 @@ public class GroupMetadataManager {
         Time time,
         CoordinatorTimer<Void, Record> timer,
         GroupCoordinatorMetricsShard metrics,
-        List<PartitionAssignor> assignors,
-        PartitionAssignor shareGroupAssignor,
+        List<ConsumerGroupPartitionAssignor> consumerGroupAssignors,
+        ShareGroupPartitionAssignor shareGroupAssignor,
         MetadataImage metadataImage,
         int consumerGroupMaxSize,
         int consumerGroupSessionTimeoutMs,
@@ -465,9 +466,9 @@ public class GroupMetadataManager {
         this.timer = timer;
         this.metrics = metrics;
         this.metadataImage = metadataImage;
-        this.assignors = assignors.stream().collect(Collectors.toMap(PartitionAssignor::name, Function.identity()));
+        this.consumerGroupAssignors = consumerGroupAssignors.stream().collect(Collectors.toMap(ConsumerGroupPartitionAssignor::name, Function.identity()));
+        this.defaultConsumerGroupAssignor = consumerGroupAssignors.get(0);
         this.shareGroupAssignor = shareGroupAssignor;
-        this.defaultAssignor = assignors.get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.consumerGroupMaxSize = consumerGroupMaxSize;
@@ -574,7 +575,7 @@ public class GroupMetadataManager {
             try {
                 describedGroups.add(consumerGroup(groupId, committedOffset).asDescribedGroup(
                     committedOffset,
-                    defaultAssignor.name(),
+                    defaultConsumerGroupAssignor.name(),
                     metadataImage.topics()
                 ));
             } catch (GroupIdNotFoundException exception) {
@@ -1049,9 +1050,9 @@ public class GroupMetadataManager {
             throw new InvalidRequestException("MemberEpoch is invalid.");
         }
 
-        if (request.serverAssignor() != null && !assignors.containsKey(request.serverAssignor())) {
+        if (request.serverAssignor() != null && !consumerGroupAssignors.containsKey(request.serverAssignor())) {
             throw new UnsupportedAssignorException("ServerAssignor " + request.serverAssignor()
-                + " is not supported. Supported assignors: " + String.join(", ", assignors.keySet())
+                + " is not supported. Supported assignors: " + String.join(", ", consumerGroupAssignors.keySet())
                 + ".");
         }
     }
@@ -1414,10 +1415,10 @@ public class GroupMetadataManager {
             String preferredServerAssignor = group.computePreferredServerAssignor(
                 member,
                 updatedMember
-            ).orElse(defaultAssignor.name());
+            ).orElse(defaultConsumerGroupAssignor.name());
             try {
                 TargetAssignmentBuilder assignmentResultBuilder =
-                    new TargetAssignmentBuilder(groupId, groupEpoch, assignors.get(preferredServerAssignor))
+                    new TargetAssignmentBuilder(groupId, groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
                         .withMembers(group.members())
                         .withStaticMembers(group.staticMembers())
                         .withSubscriptionMetadata(subscriptionMetadata)

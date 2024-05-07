@@ -17,12 +17,13 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
 
-public class MockPartitionAssignor implements PartitionAssignor {
+public class MockPartitionAssignor implements ConsumerGroupPartitionAssignor, ShareGroupPartitionAssignor {
     private final String name;
     private GroupAssignment prepareGroupAssignment = null;
 
