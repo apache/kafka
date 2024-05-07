@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
@@ -71,6 +73,11 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMo
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
 
 public class TaskManager {
+
+    private final static String BUG_ERROR_MESSAGE = "This indicates a bug. " +
+        "Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the dev-mailing list (https://kafka.apache.org/contact).";
+    private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. " + BUG_ERROR_MESSAGE;
+
     // initialize the task list
     // activeTasks needs to be concurrent as it can be accessed
     // by QueryableState
@@ -600,6 +607,51 @@ public class TaskManager {
     private void removeUnusedTaskFromStateUpdater(final TaskId taskId) {
         stateUpdater.remove(taskId);
         tasks.addPendingTaskToCloseClean(taskId);
+    }
+
+    private void addToTasksToClose(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
+                                   final Set<Task> tasksToCloseCleanFromStateUpdater,
+                                   final Set<Task> tasksToCloseDirtyFromStateUpdater) {
+        iterateAndActOnFuture(futures, removedTaskResult -> {
+            final Task task = removedTaskResult.task();
+            final Optional<RuntimeException> exception = removedTaskResult.exception();
+            if (exception.isPresent()) {
+                tasksToCloseDirtyFromStateUpdater.add(task);
+            } else {
+                tasksToCloseCleanFromStateUpdater.add(task);
+            }
+        });
+    }
+
+    private void iterateAndActOnFuture(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
+                                       final java.util.function.Consumer<StateUpdater.RemovedTaskResult> action) {
+        for (final Map.Entry<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> entry : futures.entrySet()) {
+            final TaskId taskId = entry.getKey();
+            final CompletableFuture<StateUpdater.RemovedTaskResult> future = entry.getValue();
+            try {
+                final StateUpdater.RemovedTaskResult removedTaskResult = waitForFuture(taskId, future);
+                action.accept(removedTaskResult);
+            } catch (final ExecutionException executionException) {
+                log.warn("An exception happened when removing task {} from the state updater. The exception will be handled later: ",
+                    taskId, executionException);
+            } catch (final InterruptedException shouldNotHappen) {
+                Thread.currentThread().interrupt();
+                log.error(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
+                throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
+            }
+        }
+    }
+
+    private StateUpdater.RemovedTaskResult waitForFuture(final TaskId taskId,
+                                                         final CompletableFuture<StateUpdater.RemovedTaskResult> future)
+        throws ExecutionException, InterruptedException {
+
+        final StateUpdater.RemovedTaskResult removedTaskResult = future.get();
+        if (removedTaskResult == null) {
+            throw new IllegalStateException("Task " + taskId + " was not found in the state updater. "
+                + BUG_ERROR_MESSAGE);
+        }
+        return removedTaskResult;
     }
 
     private Map<TaskId, Set<TopicPartition>> pendingTasksToCreate(final Map<TaskId, Set<TopicPartition>> tasksToCreate) {
@@ -1186,11 +1238,22 @@ public class TaskManager {
 
     private void removeLostActiveTasksFromStateUpdater() {
         if (stateUpdater != null) {
+            final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
+            final Map<TaskId, RuntimeException> failedTasksDuringCleanClose = new HashMap<>();
+            final Set<Task> tasksToCloseClean = new HashSet<>();
+            final Set<Task> tasksToCloseDirty = new HashSet<>();
             for (final Task restoringTask : stateUpdater.getTasks()) {
                 if (restoringTask.isActive()) {
-                    tasks.addPendingTaskToCloseClean(restoringTask.id());
-                    stateUpdater.remove(restoringTask.id());
+                    futures.put(restoringTask.id(), stateUpdater.removeWithFuture(restoringTask.id()));
                 }
+            }
+
+            addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
+            for (final Task task : tasksToCloseClean) {
+                closeTaskClean(task, tasksToCloseDirty, failedTasksDuringCleanClose);
+            }
+            for (final Task task : tasksToCloseDirty) {
+                closeTaskDirty(task, false);
             }
         }
     }

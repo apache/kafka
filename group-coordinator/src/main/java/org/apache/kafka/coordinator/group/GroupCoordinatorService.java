@@ -327,6 +327,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
             );
         }
 
+        if (request.sessionTimeoutMs() < config.classicGroupMinSessionTimeoutMs ||
+            request.sessionTimeoutMs() > config.classicGroupMaxSessionTimeoutMs) {
+            return CompletableFuture.completedFuture(new JoinGroupResponseData()
+                .setMemberId(request.memberId())
+                .setErrorCode(Errors.INVALID_SESSION_TIMEOUT.code())
+            );
+        }
+
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
 
         runtime.scheduleWriteOperation(

@@ -16,41 +16,30 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
 
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.stream.Collectors;
 
-public class MockPartitionAssignor implements PartitionAssignor {
-    private final String name;
-    private GroupAssignment prepareGroupAssignment = null;
-
-    MockPartitionAssignor(String name) {
-        this.name = name;
-    }
-
-    public void prepareGroupAssignment(GroupAssignment prepareGroupAssignment) {
-        this.prepareGroupAssignment = prepareGroupAssignment;
-    }
+public class NoOpPartitionAssignor implements PartitionAssignor {
+    static final String NAME = "no-op";
 
     @Override
     public String name() {
-        return name;
+        return NAME;
     }
 
     @Override
-    public GroupAssignment assign(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) throws PartitionAssignorException {
-        return prepareGroupAssignment;
-    }
-
-    public Map<Uuid, Set<Integer>> targetPartitions(String memberId) {
-        Objects.requireNonNull(prepareGroupAssignment);
-        return prepareGroupAssignment.members().get(memberId).targetPartitions();
+    public GroupAssignment assign(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
+        return new GroupAssignment(assignmentSpec.members().entrySet()
+            .stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> new MemberAssignment(entry.getValue().assignedPartitions())
+            )));
     }
 }
