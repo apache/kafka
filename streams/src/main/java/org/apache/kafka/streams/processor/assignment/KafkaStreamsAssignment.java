@@ -56,11 +56,10 @@ public interface KafkaStreamsAssignment {
         }
 
         /**
-         * AssignedTasks can be either STATELESS, STATEFUL or STANDBY.
+         * AssignedTasks can be either ACTIVE or STANDBY.
          */
         public enum Type {
-            STATELESS,
-            STATEFUL,
+            ACTIVE,
             STANDBY
         }
 

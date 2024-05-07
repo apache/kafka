@@ -20,6 +20,7 @@ import java.util.Collection;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupAssignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 
 /**
  * A TaskAssignor is responsible for creating a TaskAssignment from a given
@@ -29,10 +30,21 @@ import org.apache.kafka.common.Configurable;
  */
 public interface TaskAssignor extends Configurable {
 
+    /**
+     * NONE: no error detected
+     * ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES: multiple KafkaStreams clients assigned with the same active task
+     * ACTIVE_AND_STANDBY_TASK_ASSIGNED_TO_SAME_KAFKASTREAMS: active task and standby task assigned to the same KafkaStreams client
+     * INVALID_STANDBY_TASK: stateless task assigned as a standby task
+     * UNKNOWN_PROCESS_ID: unrecognized ProcessId not matching any of the participating consumers
+     * UNKNOWN_TASK_ID: unrecognized TaskId not matching any of the tasks to be assigned
+     */
     enum AssignmentError {
-        OVERLAPPING_CLIENT,
-        OVERLAPPING_STANDBY,
-        UNKNOWN_PROCESS_ID
+        NONE,
+        ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES,
+        ACTIVE_AND_STANDBY_TASK_ASSIGNED_TO_SAME_KAFKASTREAMS,
+        INVALID_STANDBY_TASK,
+        UNKNOWN_PROCESS_ID,
+        UNKNOWN_TASK_ID
     }
 
     /**
@@ -47,15 +59,16 @@ public interface TaskAssignor extends Configurable {
     TaskAssignment assign(ApplicationState applicationState);
 
     /**
-     * This callback can be used to observe the final assignment returned to the brokers and observe any errors that
-     * were detected while processing the returned assignment. If any errors were found, the rebalance will be
-     * automatically retried by returning the same assignment as the input, scheduling an immediate followup rebalance,
-     * and passing in the corresponding AssignmentError in this callback.
+     * This callback can be used to observe the final assignment returned to the brokers and check for any errors that
+     * were detected while processing the returned assignment. If any errors were found, the corresponding
+     * will be returned and a StreamsException will be thrown after this callback returns. The StreamsException will
+     * be thrown up to kill the StreamThread and can be handled as any other uncaught exception would if the application
+     * has registered a {@link StreamsUncaughtExceptionHandler}.
      *
      * @param assignment:   the final assignment returned to the kafka broker
      * @param subscription: the original subscription passed into the assignor
      * @param error:        the corresponding error type if one was detected while processing the returned assignment,
-     *                      or null if the assignment was valid
+     *                      or AssignmentError.NONE if the returned assignment was valid
      */
     default void onAssignmentComputed(GroupAssignment assignment, GroupSubscription subscription, AssignmentError error) {}
 
