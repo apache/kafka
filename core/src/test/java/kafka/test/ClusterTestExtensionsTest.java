@@ -35,6 +35,8 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Arrays;
@@ -64,7 +66,8 @@ public class ClusterTestExtensionsTest {
     // Static methods can generate cluster configurations
     static void generate1(ClusterGenerator clusterGenerator) {
         Map<String, String> serverProperties = new HashMap<>();
-        String[] tags = {"name", "Generated Test"};
+        String[] array = {"name", "Generated Test"};
+        ArrayList<String> tags = new ArrayList<>(Arrays.asList(array));
         serverProperties.put("foo", "bar");
         clusterGenerator.accept(ClusterConfig.defaultBuilder()
                 .setTypes(Collections.singleton(Type.ZK))

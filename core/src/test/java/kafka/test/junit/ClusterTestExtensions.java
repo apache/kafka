@@ -32,13 +32,13 @@ import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
 import org.junit.platform.commons.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
+import java.util.function.Consumer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -168,7 +168,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 .setPerServerProperties(perServerProperties)
                 .setSecurityProtocol(annot.securityProtocol())
                 .setMetadataVersion(annot.metadataVersion())
-                .setTags(annot.tags())
+                .setTags(tags)
                 .build();
         for (Type type : types) {
             type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);

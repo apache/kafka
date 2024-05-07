@@ -38,8 +38,6 @@ public @interface ClusterTest {
     int controllers() default 0;
     int disksPerBroker() default 0;
     AutoStart autoStart() default AutoStart.DEFAULT;
-
-    String name() default "";
     SecurityProtocol securityProtocol() default SecurityProtocol.PLAINTEXT;
     String listener() default "";
     MetadataVersion metadataVersion() default MetadataVersion.IBP_3_8_IV0;
