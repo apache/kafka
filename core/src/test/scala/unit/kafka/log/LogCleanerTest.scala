@@ -26,7 +26,7 @@ import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
-import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
@@ -116,6 +116,23 @@ class LogCleanerTest extends Logging {
     } finally {
       mockMetricsGroupCtor.close()
     }
+  }
+
+  @Test
+  def testMetricsActiveAfterReconfiguration(): Unit = {
+    val logCleaner = new LogCleaner(new CleanerConfig(true),
+      logDirs = Array(TestUtils.tempDir()),
+      logs = new Pool[TopicPartition, UnifiedLog](),
+      logDirFailureChannel = new LogDirFailureChannel(1),
+      time = time)
+
+    try {
+      logCleaner.reconfigure(new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181")),
+        new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181")))
+
+      LogCleaner.MetricNames.foreach(name => assertNotNull(KafkaYammerMetrics.defaultRegistry.allMetrics().get(logCleaner.metricsGroup
+              .metricName(name, java.util.Collections.emptyMap())), s"$name is gone?"))
+    } finally logCleaner.shutdown()
   }
 
   /**
