@@ -36,7 +36,9 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RemoteLogInputStream;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ChildFirstClassLoader;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -120,6 +122,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
 
 /**
  * This class is responsible for
@@ -230,6 +233,7 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
+    @SuppressWarnings("removal")
     RemoteStorageManager createRemoteStorageManager() {
         return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteStorageManager>() {
             private final String classPath = rlmConfig.remoteStorageManagerClassPath();
@@ -252,6 +256,7 @@ public class RemoteLogManager implements Closeable {
         remoteLogStorageManager.configure(rsmProps);
     }
 
+    @SuppressWarnings("removal")
     RemoteLogMetadataManager createRemoteLogMetadataManager() {
         return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteLogMetadataManager>() {
             private final String classPath = rlmConfig.remoteLogMetadataManagerClassPath();
@@ -282,7 +287,7 @@ public class RemoteLogManager implements Closeable {
         rlmmProps.putAll(rlmConfig.remoteLogMetadataManagerProps());
 
         rlmmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
-        rlmmProps.put(KafkaConfig.LogDirProp(), logDir);
+        rlmmProps.put(LOG_DIR_CONFIG, logDir);
         rlmmProps.put("cluster.id", clusterId);
 
         remoteLogMetadataManager.configure(rlmmProps);
@@ -462,9 +467,12 @@ public class RemoteLogManager implements Closeable {
                 RecordBatch batch = remoteLogInputStream.nextBatch();
                 if (batch == null) break;
                 if (batch.maxTimestamp() >= timestamp && batch.lastOffset() >= startingOffset) {
-                    for (Record record : batch) {
-                        if (record.timestamp() >= timestamp && record.offset() >= startingOffset)
-                            return Optional.of(new FileRecords.TimestampAndOffset(record.timestamp(), record.offset(), maybeLeaderEpoch(batch.partitionLeaderEpoch())));
+                    try (CloseableIterator<Record> recordStreamingIterator = batch.streamingIterator(BufferSupplier.NO_CACHING)) {
+                        while (recordStreamingIterator.hasNext()) {
+                            Record record = recordStreamingIterator.next();
+                            if (record.timestamp() >= timestamp && record.offset() >= startingOffset)
+                                return Optional.of(new FileRecords.TimestampAndOffset(record.timestamp(), record.offset(), maybeLeaderEpoch(batch.partitionLeaderEpoch())));
+                        }
                     }
                 }
             }
@@ -484,9 +492,9 @@ public class RemoteLogManager implements Closeable {
      * <p>
      * This method returns an option of TimestampOffset. The returned value is determined using the following ordered list of rules:
      * <p>
-     * - If there are no messages in the remote storage, return None
-     * - If all the messages in the remote storage have smaller offsets, return None
-     * - If all the messages in the remote storage have smaller timestamps, return None
+     * - If there are no messages in the remote storage, return Empty
+     * - If all the messages in the remote storage have smaller offsets, return Empty
+     * - If all the messages in the remote storage have smaller timestamps, return Empty
      * - Otherwise, return an option of TimestampOffset. The offset is the offset of the first message whose timestamp
      * is greater than or equals to the target timestamp and whose offset is greater than or equals to the startingOffset.
      *
@@ -494,7 +502,7 @@ public class RemoteLogManager implements Closeable {
      * @param timestamp        The timestamp to search for.
      * @param startingOffset   The starting offset to search.
      * @param leaderEpochCache LeaderEpochFileCache of the topic partition.
-     * @return the timestamp and offset of the first message that meets the requirements. None will be returned if there
+     * @return the timestamp and offset of the first message that meets the requirements. Empty will be returned if there
      * is no such message.
      */
     public Optional<FileRecords.TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
@@ -1191,7 +1199,7 @@ public class RemoteLogManager implements Closeable {
         }
 
         public String toString() {
-            return this.getClass().toString() + "[" + topicIdPartition + "]";
+            return this.getClass() + "[" + topicIdPartition + "]";
         }
     }
 
@@ -1277,6 +1285,8 @@ public class RemoteLogManager implements Closeable {
      * does not contain any messages/records associated with them.
      *
      * For ex:
+     * <pre>
+     * {@code
      *  <epoch - start offset>
      *  0 - 0
      *  1 - 10
@@ -1286,8 +1296,12 @@ public class RemoteLogManager implements Closeable {
      *  5 - 60  // epoch 5 does not have records or messages associated with it
      *  6 - 60
      *  7 - 70
+     * }
+     * </pre>
      *
      *  When the above leaderEpochMap is passed to this method, it returns the following map:
+     * <pre>
+     * {@code
      *  <epoch - start offset>
      *  0 - 0
      *  1 - 10
@@ -1296,6 +1310,8 @@ public class RemoteLogManager implements Closeable {
      *  4 - 40
      *  6 - 60
      *  7 - 70
+     * }
+     * </pre>
      *
      * @param leaderEpochs The leader epoch map to be refined.
      */
@@ -1336,7 +1352,7 @@ public class RemoteLogManager implements Closeable {
 
         if (logOptional.isPresent()) {
             Option<LeaderEpochFileCache> leaderEpochCache = logOptional.get().leaderEpochCache();
-            if (leaderEpochCache.isDefined()) {
+            if (leaderEpochCache != null && leaderEpochCache.isDefined()) {
                 epoch = leaderEpochCache.get().epochForOffset(offset);
             }
         }

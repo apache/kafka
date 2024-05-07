@@ -13,7 +13,7 @@
 package kafka.api
 
 import java.util.{Locale, Properties}
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.KafkaServer
 import kafka.utils.{JaasTestUtils, TestUtils}
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 import org.apache.kafka.clients.consumer.Consumer
@@ -24,6 +24,8 @@ import org.apache.kafka.common.errors.{InvalidTopicException, UnknownTopicOrPart
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.TestJaasConfig
+import org.apache.kafka.server.config.ZkConfigs
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteStorageMetrics}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -43,9 +45,9 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   private val kafkaServerJaasEntryName =
     s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KafkaServerContextName}"
-  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "false")
-  this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
-  this.serverConfig.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
+  this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "false")
+  this.serverConfig.setProperty(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false")
+  this.serverConfig.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
   this.producerConfig.setProperty(ProducerConfig.LINGER_MS_CONFIG, "10")
   // intentionally slow message down conversion via gzip compression to ensure we can measure the time it takes
   this.producerConfig.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")
@@ -326,9 +328,9 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
   private def verifyRemoteStorageMetrics(shouldContainMetrics: Boolean): Unit = {
     val metrics = RemoteStorageMetrics.allMetrics().asScala.filter(name =>
-      KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.find(metric => {
-        metric._1.getMBeanName().equals(name.getMBeanName)
-      }).isDefined
+      KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.exists(metric => {
+        metric._1.getMBeanName.equals(name.getMBeanName)
+      })
     ).toList
     val aggregatedBrokerTopicStats = Set(
       RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName,
@@ -339,9 +341,9 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
       RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName,
       RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName)
     val aggregatedBrokerTopicMetrics = aggregatedBrokerTopicStats.filter(name =>
-      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.find(metric => {
-        metric._1.getMBeanName().equals(fromNameToBrokerTopicStatsMBean(name))
-      }).isDefined
+      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.exists(metric => {
+        metric._1.getMBeanName.equals(fromNameToBrokerTopicStatsMBean(name))
+      })
     ).toList
     if (shouldContainMetrics) {
       assertEquals(RemoteStorageMetrics.allMetrics().size(), metrics.size, s"Only $metrics appear in the metrics")

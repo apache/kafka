@@ -35,7 +35,7 @@ import scala.jdk.CollectionConverters._
 class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
   var listener: FinalizedFeatureChangeListener = _
   case class FinalizedFeaturesAndEpoch(features: Map[String, Short], epoch: Long) {
-    override def toString(): String = {
+    override def toString: String = {
       s"FinalizedFeaturesAndEpoch(features=$features, epoch=$epoch)"
     }
   }

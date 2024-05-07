@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -103,7 +103,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
    * Note that when a single batch is larger than FetchMaxBytes, it will be
    * returned in full even if this is larger than FetchMaxBytes.  See KIP-74.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testConsumeMultipleRecords(quorum: String): Unit = {
     createTopics()
@@ -129,7 +129,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
         val array = new Array[Byte](buffer.remaining())
         buffer.get(array)
         assertArrayEquals(expected(i),
-          array, s"expectNextRecords unexpected element ${i}")
+          array, s"expectNextRecords unexpected element $i")
       }
     }
   }

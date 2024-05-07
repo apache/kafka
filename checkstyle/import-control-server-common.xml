@@ -105,15 +105,19 @@
             <allow pkg="org.apache.kafka.server.util.json" />
 
             <allow class="org.apache.kafka.server.util.TopicFilter.IncludeList" />
+            <allow class="org.apache.kafka.test.TestUtils" />
             <subpackage name="timer">
                 <allow class="org.apache.kafka.server.util.MockTime" />
                 <allow class="org.apache.kafka.server.util.ShutdownableThread" />
-                <allow class="org.apache.kafka.test.TestUtils" />
             </subpackage>
+        </subpackage>
+        <subpackage name="config">
+            <allow pkg="org.apache.kafka.server"/>
         </subpackage>
     </subpackage>
 
     <subpackage name="admin">
         <allow pkg="org.apache.kafka.server.common" />
     </subpackage>
+
 </import-control>

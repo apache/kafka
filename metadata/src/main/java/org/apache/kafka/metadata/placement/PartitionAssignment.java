@@ -17,7 +17,6 @@
 
 package org.apache.kafka.metadata.placement;
 
-import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 
 import java.util.ArrayList;
@@ -38,11 +37,6 @@ public class PartitionAssignment {
 
     private final List<Integer> replicas;
     private final List<Uuid> directories;
-
-    // TODO remove -- just here for testing
-    public PartitionAssignment(List<Integer> replicas) {
-        this(replicas, brokerId -> DirectoryId.UNASSIGNED);
-    }
 
     public PartitionAssignment(List<Integer> replicas, DefaultDirProvider defaultDirProvider) {
         this.replicas = Collections.unmodifiableList(new ArrayList<>(replicas));

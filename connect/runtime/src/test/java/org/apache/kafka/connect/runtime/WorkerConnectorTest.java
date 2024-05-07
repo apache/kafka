@@ -51,6 +51,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -529,7 +530,7 @@ public class WorkerConnectorTest {
         ArgumentCaptor<Throwable> exceptionCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(listener).onFailure(eq(CONNECTOR), exceptionCapture.capture());
         Throwable e = exceptionCapture.getValue();
-        assertTrue(e instanceof ConnectException);
+        assertInstanceOf(ConnectException.class, e);
         assertTrue(e.getMessage().contains("must be a subclass of"));
     }
 

@@ -628,7 +628,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         log.info("{} client nodes and {} consumers participating in this rebalance: \n{}.",
                  clientStates.size(),
-                 clientStates.values().stream().map(ClientState::capacity).reduce(Integer::sum),
+                 clientStates.values().stream().map(ClientState::capacity).reduce(Integer::sum).orElse(0),
                  clientStates.entrySet().stream()
                      .sorted(comparingByKey())
                      .map(entry -> entry.getKey() + ": " + entry.getValue().consumers())

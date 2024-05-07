@@ -18,12 +18,12 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.RejectedExecutionException;
@@ -60,7 +60,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
     /**
      * The map of queues keyed by K.
      */
-    private final Map<K, Queue<T>> queues;
+    private final Map<K, Deque<T>> queues;
 
     /**
      * The list of available keys. Keys in this list can
@@ -110,17 +110,17 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
     }
 
     /**
-     * Adds an {{@link Event}} to the queue.
+     * Adds an {{@link Event}} at the end of the queue.
      *
      * @param event An {{@link Event}}.
      */
-    public void add(T event) throws RejectedExecutionException {
+    public void addLast(T event) throws RejectedExecutionException {
         lock.lock();
         try {
             if (closed) throw new RejectedExecutionException("Can't accept an event because the accumulator is closed.");
 
             K key = event.key();
-            Queue<T> queue = queues.get(key);
+            Deque<T> queue = queues.get(key);
             if (queue == null) {
                 queue = new LinkedList<>();
                 queues.put(key, queue);
@@ -128,7 +128,33 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
                     addAvailableKey(key);
                 }
             }
-            queue.add(event);
+            queue.addLast(event);
+            size++;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Adds an {{@link Event}} at the front of the queue.
+     *
+     * @param event An {{@link Event}}.
+     */
+    public void addFirst(T event) throws RejectedExecutionException {
+        lock.lock();
+        try {
+            if (closed) throw new RejectedExecutionException("Can't accept an event because the accumulator is closed.");
+
+            K key = event.key();
+            Deque<T> queue = queues.get(key);
+            if (queue == null) {
+                queue = new LinkedList<>();
+                queues.put(key, queue);
+                if (!inflightKeys.contains(key)) {
+                    addAvailableKey(key);
+                }
+            }
+            queue.addFirst(event);
             size++;
         } finally {
             lock.unlock();
@@ -147,7 +173,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
             K key = randomKey();
             if (key == null) return null;
 
-            Queue<T> queue = queues.get(key);
+            Deque<T> queue = queues.get(key);
             T event = queue.poll();
 
             if (queue.isEmpty()) queues.remove(key);
@@ -181,7 +207,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
 
             if (key == null) return null;
 
-            Queue<T> queue = queues.get(key);
+            Deque<T> queue = queues.get(key);
             T event = queue.poll();
 
             if (queue.isEmpty()) queues.remove(key);

@@ -19,11 +19,12 @@ package kafka.integration
 
 import java.util.Properties
 import kafka.server.KafkaConfig
-import kafka.utils.{Logging, TestInfoUtils, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 
 import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import com.yammer.metrics.core.Gauge
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -39,10 +40,10 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
 
   private val overridingProps = new Properties
   overridingProps.put(KafkaConfig.DeleteTopicEnableProp, "true")
-  overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
+  overridingProps.put(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false")
   // speed up the test for UnderReplicatedPartitions, which relies on the ISR expiry thread to execute concurrently with topic creation
   // But the replica.lag.time.max.ms value still need to consider the slow Jenkins testing environment
-  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, "4000")
+  overridingProps.put(ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG, "4000")
 
   private val testedMetrics = List("OfflinePartitionsCount","PreferredReplicaImbalanceCount","UnderReplicatedPartitions")
   private val topics = List.tabulate(topicNum) (n => topicName + n)
@@ -68,7 +69,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   /*
    * checking all metrics we care in a single test is faster though it would be more elegant to have 3 @Test methods
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testMetricsDuringTopicCreateDelete(quorum: String): Unit = {
 
@@ -109,14 +110,14 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
         }
       }
     })
-    thread.start
+    thread.start()
 
     // breakable loop that creates and deletes topics
     createDeleteTopics()
 
     // if the thread checking the gauge is still run, stop it
-    running = false;
-    thread.join
+    running = false
+    thread.join()
 
     assert(offlinePartitionsCount==0, s"Expect offlinePartitionsCount to be 0, but got: $offlinePartitionsCount")
     assert(preferredReplicaImbalanceCount==0, s"Expect PreferredReplicaImbalanceCount to be 0, but got: $preferredReplicaImbalanceCount")
@@ -137,7 +138,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
         try {
           createTopic(t, partitionNum, replicationFactor)
         } catch {
-          case e: Exception => e.printStackTrace
+          case e: Exception => e.printStackTrace()
         }
       }
 
@@ -147,7 +148,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
             adminZkClient.deleteTopic(t)
             TestUtils.verifyTopicDeletion(zkClient, t, partitionNum, servers)
           } catch {
-          case e: Exception => e.printStackTrace
+          case e: Exception => e.printStackTrace()
           }
       }
     }

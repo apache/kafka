@@ -65,7 +65,7 @@ class ThrottlerTest {
     val throttleCheckIntervalMs = 100
     val desiredCountPerSec = 1000.0
     val desiredCountPerInterval = desiredCountPerSec * throttleCheckIntervalMs / 1000.0
-    val updatedDesiredCountPerSec = 1500.0;
+    val updatedDesiredCountPerSec = 1500.0
     val updatedDesiredCountPerInterval = updatedDesiredCountPerSec * throttleCheckIntervalMs / 1000.0
 
     val mockTime = new MockTime()
@@ -89,7 +89,7 @@ class ThrottlerTest {
     assertTrue(actualCountPerSec <= desiredCountPerSec)
 
     // Update ThrottleDesiredRate
-    throttler.updateDesiredRatePerSec(updatedDesiredCountPerSec);
+    throttler.updateDesiredRatePerSec(updatedDesiredCountPerSec)
 
     // Observe updatedDesiredCountPerInterval at t2
     throttler.maybeThrottle(updatedDesiredCountPerInterval)

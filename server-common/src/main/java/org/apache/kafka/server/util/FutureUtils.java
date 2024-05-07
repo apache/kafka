@@ -19,11 +19,13 @@ package org.apache.kafka.server.util;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 
@@ -124,5 +126,22 @@ public class FutureUtils {
             futures.forEach(future -> add.accept(res, future.join()));
             return res;
         });
+    }
+
+    /**
+     * Applies the given exception handler to all the futures provided in the list
+     * and returns a new list of futures.
+     *
+     * @param futures   A list of futures.
+     * @param fn        A function taking an exception to handle it.
+     * @return A list of futures.
+     */
+    public static <T> List<CompletableFuture<T>> mapExceptionally(
+        List<CompletableFuture<T>> futures,
+        Function<Throwable, ? extends T> fn
+    ) {
+        final List<CompletableFuture<T>> results = new ArrayList<>(futures.size());
+        futures.forEach(future -> results.add(future.exceptionally(fn)));
+        return results;
     }
 }

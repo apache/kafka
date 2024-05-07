@@ -22,8 +22,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.OptionalLong;
 import java.util.concurrent.CountDownLatch;
 import java.util.regex.Pattern;
 import java.util.Collections;
@@ -68,11 +66,8 @@ public class ConsoleConsumer {
 
     public static void run(ConsoleConsumerOptions opts) {
         messageCount = 0;
-        long timeoutMs = opts.timeoutMs() >= 0 ? opts.timeoutMs() : Long.MAX_VALUE;
         Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(opts.consumerProps(), new ByteArrayDeserializer(), new ByteArrayDeserializer());
-        ConsumerWrapper consumerWrapper = opts.partitionArg().isPresent()
-            ? new ConsumerWrapper(Optional.of(opts.topicArg()), opts.partitionArg(), OptionalLong.of(opts.offsetArg()), Optional.empty(), consumer, timeoutMs)
-            : new ConsumerWrapper(Optional.of(opts.topicArg()), OptionalInt.empty(), OptionalLong.empty(), Optional.ofNullable(opts.includedTopicsArg()), consumer, timeoutMs);
+        ConsumerWrapper consumerWrapper = new ConsumerWrapper(opts, consumer);
 
         addShutdownHook(consumerWrapper, opts);
 
@@ -148,43 +143,25 @@ public class ConsoleConsumer {
     }
 
     public static class ConsumerWrapper {
-        final Optional<String> topic;
-        final OptionalInt partitionId;
-        final OptionalLong offset;
-        final Optional<String> includedTopics;
-        final Consumer<byte[], byte[]> consumer;
-        final long timeoutMs;
         final Time time = Time.SYSTEM;
+        final long timeoutMs;
+        final Consumer<byte[], byte[]> consumer;
 
         Iterator<ConsumerRecord<byte[], byte[]>> recordIter = Collections.emptyIterator();
 
-        public ConsumerWrapper(Optional<String> topic,
-                               OptionalInt partitionId,
-                               OptionalLong offset,
-                               Optional<String> includedTopics,
-                               Consumer<byte[], byte[]> consumer,
-                               long timeoutMs) {
-            this.topic = topic;
-            this.partitionId = partitionId;
-            this.offset = offset;
-            this.includedTopics = includedTopics;
+        public ConsumerWrapper(ConsoleConsumerOptions opts, Consumer<byte[], byte[]> consumer) {
             this.consumer = consumer;
-            this.timeoutMs = timeoutMs;
+            timeoutMs = opts.timeoutMs();
+            Optional<String> topic = opts.topicArg();
 
-            if (topic.isPresent() && partitionId.isPresent() && offset.isPresent() && !includedTopics.isPresent()) {
-                seek(topic.get(), partitionId.getAsInt(), offset.getAsLong());
-            } else if (topic.isPresent() && partitionId.isPresent() && !offset.isPresent() && !includedTopics.isPresent()) {
-                // default to latest if no offset is provided
-                seek(topic.get(), partitionId.getAsInt(), ListOffsetsRequest.LATEST_TIMESTAMP);
-            } else if (topic.isPresent() && !partitionId.isPresent() && !offset.isPresent() && !includedTopics.isPresent()) {
-                consumer.subscribe(Collections.singletonList(topic.get()));
-            } else if (!topic.isPresent() && !partitionId.isPresent() && !offset.isPresent() && includedTopics.isPresent()) {
-                consumer.subscribe(Pattern.compile(includedTopics.get()));
+            if (topic.isPresent()) {
+                if (opts.partitionArg().isPresent()) {
+                    seek(topic.get(), opts.partitionArg().getAsInt(), opts.offsetArg());
+                } else {
+                    consumer.subscribe(Collections.singletonList(topic.get()));
+                }
             } else {
-                throw new IllegalArgumentException("An invalid combination of arguments is provided. " +
-                        "Exactly one of 'topic' or 'include' must be provided. " +
-                        "If 'topic' is provided, an optional 'partition' may also be provided. " +
-                        "If 'partition' is provided, an optional 'offset' may also be provided, otherwise, consumption starts from the end of the partition.");
+                opts.includedTopicsArg().ifPresent(topics -> consumer.subscribe(Pattern.compile(topics)));
             }
         }
 

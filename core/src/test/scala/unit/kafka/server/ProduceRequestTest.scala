@@ -19,7 +19,7 @@ package kafka.server
 
 import java.nio.ByteBuffer
 import java.util.{Collections, Properties}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.ProduceRequestData
@@ -44,7 +44,7 @@ class ProduceRequestTest extends BaseRequestTest {
 
   val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testSimpleProduceRequest(quorum: String): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
@@ -129,7 +129,7 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals("One or more records have been rejected due to invalid timestamp", partitionProduceResponse.errorMessage)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceToNonReplica(quorum: String): Unit = {
     val topic = "topic"
@@ -172,7 +172,7 @@ class ProduceRequestTest extends BaseRequestTest {
     }.getOrElse(throw new AssertionError(s"No leader elected for topic $topic"))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCorruptLz4ProduceRequest(quorum: String): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
@@ -207,7 +207,7 @@ class ProduceRequestTest extends BaseRequestTest {
     assertTrue(TestUtils.meterCount(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}") > 0)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testZSTDProduceRequest(quorum: String): Unit = {
     val topic = "topic"

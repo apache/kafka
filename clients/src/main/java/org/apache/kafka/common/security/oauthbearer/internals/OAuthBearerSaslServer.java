@@ -229,8 +229,8 @@ public class OAuthBearerSaslServer implements SaslServer {
         public SaslServer createSaslServer(String mechanism, String protocol, String serverName, Map<String, ?> props,
                 CallbackHandler callbackHandler) {
             String[] mechanismNamesCompatibleWithPolicy = getMechanismNames(props);
-            for (int i = 0; i < mechanismNamesCompatibleWithPolicy.length; i++) {
-                if (mechanismNamesCompatibleWithPolicy[i].equals(mechanism)) {
+            for (String name : mechanismNamesCompatibleWithPolicy) {
+                if (name.equals(mechanism)) {
                     return new OAuthBearerSaslServer(callbackHandler);
                 }
             }

@@ -130,15 +130,9 @@ public class FileBasedStateStoreTest {
         // We initialized a state from the metadata log
         assertTrue(stateFile.exists());
 
-        final int epoch = 3012;
-        final int leaderId = 9990;
-        final int follower1 = leaderId + 1;
-        final int follower2 = follower1 + 1;
-        Set<Integer> voters = Utils.mkSet(leaderId, follower1, follower2);
         writeToStateFile(stateFile, jsonString);
 
-        assertThrows(UnsupportedVersionException.class, () -> {
-            stateStore.readElectionState(); });
+        assertThrows(UnsupportedVersionException.class, () -> stateStore.readElectionState());
 
         stateStore.clear();
         assertFalse(stateFile.exists());

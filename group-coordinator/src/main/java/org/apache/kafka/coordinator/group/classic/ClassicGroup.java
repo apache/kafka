@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.coordinator.group.classic;
 
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -32,15 +35,22 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -70,16 +80,6 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABL
  * consist of JoinGroup, SyncGroup, and LeaveGroup.
  */
 public class ClassicGroup implements Group {
-
-    /**
-     * Empty generation.
-     */
-    public static final int NO_GENERATION = -1;
-
-    /**
-     * Protocol with empty name.
-     */
-    public static final String NO_PROTOCOL_NAME = "";
 
     /**
      * No leader.
@@ -376,6 +376,13 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * @return the current supportedProtocols.
+     */
+    public Map<String, Integer> supportedProtocols() {
+        return supportedProtocols;
+    }
+
+    /**
      * Sets newMemberAdded.
      *
      * @param value the value to set.
@@ -391,6 +398,15 @@ public class ClassicGroup implements Group {
      */
     public void setSubscribedTopics(Optional<Set<String>> subscribedTopics) {
         this.subscribedTopics = subscribedTopics;
+    }
+
+    /**
+     * Sets protocolName.
+     *
+     * @param protocolName the value to set.
+     */
+    public void setProtocolName(Optional<String> protocolName) {
+        this.protocolName = protocolName;
     }
 
     /**
@@ -545,7 +561,6 @@ public class ClassicGroup implements Group {
         JoinGroupResponseData joinGroupResponse = new JoinGroupResponseData()
             .setMembers(Collections.emptyList())
             .setMemberId(oldMemberId)
-            .setGenerationId(NO_GENERATION)
             .setProtocolName(null)
             .setProtocolType(null)
             .setLeader(NO_LEADER)
@@ -1143,12 +1158,12 @@ public class ClassicGroup implements Group {
 
     /**
      * Collects the set of topics that the members are subscribed to when the Protocol Type is equal
-     * to 'consumer'. None is returned if
+     * to 'consumer'. Empty is returned if
      * - the protocol type is not equal to 'consumer';
      * - the protocol is not defined yet; or
      * - the protocol metadata does not comply with the schema.
      *
-     * @return the subscribed topics or None based on the condition above.
+     * @return the subscribed topics or Empty based on the condition above.
      */
     public Optional<Set<String>> computeSubscribedTopics() {
         if (!protocolType.isPresent()) {
@@ -1237,6 +1252,22 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * Complete all the awaiting join future with the given error.
+     *
+     * @param error  the error to complete the future with.
+     */
+    public void completeAllJoinFutures(
+        Errors error
+    ) {
+        members.forEach((memberId, member) -> completeJoinFuture(
+            member,
+            new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setErrorCode(error.code())
+        ));
+    }
+
+    /**
      * Complete a member's sync future.
      *
      * @param member    the member.
@@ -1256,16 +1287,31 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * Complete all the awaiting sync future with the give error.
+     *
+     * @param error  the error to complete the future with.
+     */
+    public void completeAllSyncFutures(
+        Errors error
+    ) {
+        members.forEach((__, member) -> completeSyncFuture(
+            member,
+            new SyncGroupResponseData()
+                .setErrorCode(error.code())
+        ));
+    }
+
+    /**
      * Initiate the next generation for the group.
      */
     public void initNextGeneration() {
         generationId++;
         if (!members.isEmpty()) {
-            protocolName = Optional.of(selectProtocol());
+            setProtocolName(Optional.of(selectProtocol()));
             subscribedTopics = computeSubscribedTopics();
             transitionTo(COMPLETING_REBALANCE);
         } else {
-            protocolName = Optional.empty();
+            setProtocolName(Optional.empty());
             subscribedTopics = computeSubscribedTopics();
             transitionTo(EMPTY);
         }
@@ -1309,6 +1355,116 @@ public class ClassicGroup implements Group {
         return allMembers().stream().collect(Collectors.toMap(
             ClassicGroupMember::memberId, ClassicGroupMember::assignment
         ));
+    }
+
+    /**
+     * Convert the given ConsumerGroup to a corresponding ClassicGroup.
+     * The member with leavingMemberId will not be converted to the new ClassicGroup as it's the last
+     * member using new consumer protocol that left and triggered the downgrade.
+     *
+     * @param consumerGroup                 The converted ConsumerGroup.
+     * @param leavingMemberId               The member that will not be converted in the ClassicGroup.
+     * @param logContext                    The logContext to create the ClassicGroup.
+     * @param time                          The time to create the ClassicGroup.
+     * @param consumerGroupSessionTimeoutMs The consumerGroupSessionTimeoutMs.
+     * @param metadataImage                 The MetadataImage.
+     * @return  The created ClassicGroup.
+     */
+    public static ClassicGroup fromConsumerGroup(
+        ConsumerGroup consumerGroup,
+        String leavingMemberId,
+        LogContext logContext,
+        Time time,
+        GroupCoordinatorMetricsShard metrics,
+        int consumerGroupSessionTimeoutMs,
+        MetadataImage metadataImage
+    ) {
+        ClassicGroup classicGroup = new ClassicGroup(
+            logContext,
+            consumerGroup.groupId(),
+            ClassicGroupState.STABLE,
+            time,
+            metrics,
+            consumerGroup.groupEpoch(),
+            Optional.ofNullable(ConsumerProtocol.PROTOCOL_TYPE),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(time.milliseconds())
+        );
+
+        consumerGroup.members().forEach((memberId, member) -> {
+            if (!memberId.equals(leavingMemberId)) {
+                classicGroup.add(
+                    new ClassicGroupMember(
+                        memberId,
+                        Optional.ofNullable(member.instanceId()),
+                        member.clientId(),
+                        member.clientHost(),
+                        member.rebalanceTimeoutMs(),
+                        consumerGroupSessionTimeoutMs,
+                        ConsumerProtocol.PROTOCOL_TYPE,
+                        member.supportedJoinGroupRequestProtocols(),
+                        null
+                    )
+                );
+            }
+        });
+
+        classicGroup.setProtocolName(Optional.of(classicGroup.selectProtocol()));
+        classicGroup.setSubscribedTopics(classicGroup.computeSubscribedTopics());
+
+        classicGroup.allMembers().forEach(classicGroupMember -> {
+            // Set the assignment with serializing the ConsumerGroup's targetAssignment.
+            // The serializing version should align with that of the member's JoinGroupRequestProtocol.
+            byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(
+                new ConsumerPartitionAssignor.Assignment(ClassicGroup.topicPartitionListFromMap(
+                    consumerGroup.targetAssignment().get(classicGroupMember.memberId()).partitions(),
+                    metadataImage.topics()
+                )),
+                ConsumerProtocol.deserializeVersion(
+                    ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().orElse("")))
+                )
+            ));
+
+            classicGroupMember.setAssignment(assignment);
+        });
+
+        return classicGroup;
+    }
+
+    /**
+     * Populate the record list with the records needed to create the given classic group.
+     *
+     * @param metadataVersion   The MetadataVersion.
+     * @param records           The list to which the new records are added.
+     */
+    public void createClassicGroupRecords(
+        MetadataVersion metadataVersion,
+        List<Record> records
+    ) {
+        Map<String, byte[]> assignments = new HashMap<>();
+        allMembers().forEach(classicGroupMember ->
+            assignments.put(classicGroupMember.memberId(), classicGroupMember.assignment())
+        );
+
+        records.add(RecordHelpers.newGroupMetadataRecord(this, assignments, metadataVersion));
+    }
+
+    /**
+     * @return The list of TopicPartition converted from the map of topic id and partition set.
+     */
+    private static List<TopicPartition> topicPartitionListFromMap(
+        Map<Uuid, Set<Integer>> topicPartitions,
+        TopicsImage topicsImage
+    ) {
+        List<TopicPartition> topicPartitionList = new ArrayList<>();
+        topicPartitions.forEach((topicId, partitionSet) -> {
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            if (topicImage != null) {
+                partitionSet.forEach(partition -> topicPartitionList.add(new TopicPartition(topicImage.name(), partition)));
+            }
+        });
+        return topicPartitionList;
     }
 
     /**

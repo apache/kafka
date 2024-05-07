@@ -19,6 +19,7 @@ package kafka.test.junit;
 
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterGenerator;
+import kafka.test.annotation.AutoStart;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTemplate;
@@ -32,9 +33,10 @@ import org.junit.platform.commons.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -90,7 +92,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         ClusterTemplate clusterTemplateAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTemplate.class);
         if (clusterTemplateAnnot != null) {
             processClusterTemplate(context, clusterTemplateAnnot, generatedContexts::add);
-            if (generatedContexts.size() == 0) {
+            if (generatedContexts.isEmpty()) {
                 throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
             }
         }
@@ -109,7 +111,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             }
         }
 
-        if (generatedContexts.size() == 0) {
+        if (generatedContexts.isEmpty()) {
             throw new IllegalStateException("Please annotate test methods with @ClusterTemplate, @ClusterTest, or " +
                     "@ClusterTests when using the ClusterTestExtensions provider");
         }
@@ -117,16 +119,14 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return generatedContexts.stream();
     }
 
-    private void processClusterTemplate(ExtensionContext context, ClusterTemplate annot,
+    void processClusterTemplate(ExtensionContext context, ClusterTemplate annot,
                                         Consumer<TestTemplateInvocationContext> testInvocations) {
         // If specified, call cluster config generated method (must be static)
         List<ClusterConfig> generatedClusterConfigs = new ArrayList<>();
-        if (!annot.value().isEmpty()) {
-            generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
-        } else {
-            // Ensure we have at least one cluster config
-            generatedClusterConfigs.add(ClusterConfig.defaultClusterBuilder().build());
+        if (annot.value().trim().isEmpty()) {
+            throw new IllegalStateException("ClusterTemplate value can't be empty string.");
         }
+        generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
 
         String baseDisplayName = context.getRequiredTestMethod().getName();
         generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(baseDisplayName, config, testInvocations));
@@ -140,62 +140,27 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
     private void processClusterTest(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults,
                                     Consumer<TestTemplateInvocationContext> testInvocations) {
-        final Type type;
-        if (annot.clusterType() == Type.DEFAULT) {
-            type = defaults.clusterType();
-        } else {
-            type = annot.clusterType();
-        }
+        Type type = annot.clusterType() == Type.DEFAULT ? defaults.clusterType() : annot.clusterType();
 
-        final int brokers;
-        if (annot.brokers() == 0) {
-            brokers = defaults.brokers();
-        } else {
-            brokers = annot.brokers();
+        Map<String, String> serverProperties = new HashMap<>();
+        for (ClusterConfigProperty property : defaults.serverProperties()) {
+            serverProperties.put(property.key(), property.value());
         }
-
-        final int controllers;
-        if (annot.controllers() == 0) {
-            controllers = defaults.controllers();
-        } else {
-            controllers = annot.controllers();
-        }
-
-        if (brokers <= 0 || controllers <= 0) {
-            throw new IllegalArgumentException("Number of brokers/controllers must be greater than zero.");
-        }
-
-        final boolean autoStart;
-        switch (annot.autoStart()) {
-            case YES:
-                autoStart = true;
-                break;
-            case NO:
-                autoStart = false;
-                break;
-            case DEFAULT:
-                autoStart = defaults.autoStart();
-                break;
-            default:
-                throw new IllegalStateException();
-        }
-
-        ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, autoStart,
-            annot.securityProtocol(), annot.metadataVersion());
-        if (!annot.name().isEmpty()) {
-            builder.name(annot.name());
-        }
-        if (!annot.listener().isEmpty()) {
-            builder.listenerName(annot.listener());
-        }
-
-        Properties properties = new Properties();
         for (ClusterConfigProperty property : annot.serverProperties()) {
-            properties.put(property.key(), property.value());
+            serverProperties.put(property.key(), property.value());
         }
-
-        ClusterConfig config = builder.build();
-        config.serverProperties().putAll(properties);
+        ClusterConfig config = ClusterConfig.builder()
+                .setType(type)
+                .setBrokers(annot.brokers() == 0 ? defaults.brokers() : annot.brokers())
+                .setControllers(annot.controllers() == 0 ? defaults.controllers() : annot.controllers())
+                .setDisksPerBroker(annot.disksPerBroker() == 0 ? defaults.disksPerBroker() : annot.disksPerBroker())
+                .setAutoStart(annot.autoStart() == AutoStart.DEFAULT ? defaults.autoStart() : annot.autoStart() == AutoStart.YES)
+                .setName(annot.name().trim().isEmpty() ? null : annot.name())
+                .setListenerName(annot.listener().trim().isEmpty() ? null : annot.listener())
+                .setServerProperties(serverProperties)
+                .setSecurityProtocol(annot.securityProtocol())
+                .setMetadataVersion(annot.metadataVersion())
+                .build();
         type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
     }
 

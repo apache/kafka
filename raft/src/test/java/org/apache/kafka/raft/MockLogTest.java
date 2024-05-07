@@ -35,7 +35,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -217,12 +216,12 @@ public class MockLogTest {
     }
 
     @Test
-    public void testAppendAsFollower() throws IOException {
+    public void testAppendAsFollower() {
         final long initialOffset = 5;
         final int epoch = 3;
         SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
 
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(new OffsetAndEpoch(initialOffset, 0)).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(new OffsetAndEpoch(initialOffset, 0)).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -332,8 +331,6 @@ public class MockLogTest {
         LogFetchInfo readInfo = log.read(5, Isolation.UNCOMMITTED);
         assertEquals(5L, readInfo.startOffsetMetadata.offset);
         assertTrue(readInfo.startOffsetMetadata.metadata.isPresent());
-        MockLog.MockOffsetMetadata offsetMetadata = (MockLog.MockOffsetMetadata)
-            readInfo.startOffsetMetadata.metadata.get();
 
         // Update to a high watermark with valid offset metadata
         log.updateHighWatermark(readInfo.startOffsetMetadata);
@@ -381,12 +378,12 @@ public class MockLogTest {
     }
 
     @Test
-    public void testReadOutOfRangeOffset() throws IOException {
+    public void testReadOutOfRangeOffset() {
         final long initialOffset = 5L;
         final int epoch = 3;
         SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
 
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(new OffsetAndEpoch(initialOffset, 0)).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(new OffsetAndEpoch(initialOffset, 0)).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -431,7 +428,7 @@ public class MockLogTest {
     }
 
     @Test
-    public void testCreateSnapshot() throws IOException {
+    public void testCreateSnapshot() {
         int numberOfRecords = 10;
         int epoch = 0;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
@@ -588,7 +585,7 @@ public class MockLogTest {
     }
 
     @Test
-    public void testUpdateLogStartOffset() throws IOException {
+    public void testUpdateLogStartOffset() {
         int offset = 10;
         int epoch = 0;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(offset, epoch);
@@ -634,7 +631,7 @@ public class MockLogTest {
     }
 
     @Test
-    public void testFailToIncreaseLogStartPastHighWatermark() throws IOException {
+    public void testFailToIncreaseLogStartPastHighWatermark() {
         int offset = 10;
         int epoch = 0;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(2 * offset, epoch);
@@ -642,7 +639,7 @@ public class MockLogTest {
         appendBatch(3 * offset, epoch);
         log.updateHighWatermark(new LogOffsetMetadata(offset));
 
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(snapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(snapshotId).get()) {
             snapshot.freeze();
         }
 
@@ -653,14 +650,14 @@ public class MockLogTest {
     }
 
     @Test
-    public void testTruncateFullyToLatestSnapshot() throws IOException {
+    public void testTruncateFullyToLatestSnapshot() {
         int numberOfRecords = 10;
         int epoch = 0;
         OffsetAndEpoch sameEpochSnapshotId = new OffsetAndEpoch(2 * numberOfRecords, epoch);
 
         appendBatch(numberOfRecords, epoch);
 
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(sameEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(sameEpochSnapshotId).get()) {
             snapshot.freeze();
         }
 
@@ -674,7 +671,7 @@ public class MockLogTest {
 
         appendBatch(numberOfRecords, epoch);
 
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(greaterEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(greaterEpochSnapshotId).get()) {
             snapshot.freeze();
         }
 
@@ -686,14 +683,14 @@ public class MockLogTest {
     }
 
     @Test
-    public void testDoesntTruncateFully() throws IOException {
+    public void testDoesntTruncateFully() {
         int numberOfRecords = 10;
         int epoch = 1;
 
         appendBatch(numberOfRecords, epoch);
 
         OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch - 1);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderEpochSnapshotId).get()) {
             snapshot.freeze();
         }
 
@@ -702,7 +699,7 @@ public class MockLogTest {
         appendBatch(numberOfRecords, epoch);
 
         OffsetAndEpoch olderOffsetSnapshotId = new OffsetAndEpoch(numberOfRecords, epoch);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderOffsetSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderOffsetSnapshotId).get()) {
             snapshot.freeze();
         }
 
@@ -710,7 +707,7 @@ public class MockLogTest {
     }
 
     @Test
-    public void testTruncateWillRemoveOlderSnapshot() throws IOException {
+    public void testTruncateWillRemoveOlderSnapshot() {
         int numberOfRecords = 10;
         int epoch = 1;
 
@@ -725,7 +722,7 @@ public class MockLogTest {
         OffsetAndEpoch greaterEpochSnapshotId = new OffsetAndEpoch(2 * numberOfRecords, epoch + 1);
         appendBatch(numberOfRecords, epoch);
 
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(greaterEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(greaterEpochSnapshotId).get()) {
             snapshot.freeze();
         }
 
@@ -734,7 +731,7 @@ public class MockLogTest {
     }
 
     @Test
-    public void testUpdateLogStartOffsetWillRemoveOlderSnapshot() throws IOException {
+    public void testUpdateLogStartOffsetWillRemoveOlderSnapshot() {
         int numberOfRecords = 10;
         int epoch = 1;
 
@@ -771,12 +768,12 @@ public class MockLogTest {
     }
 
     @Test
-    public void testValidateEpochLessThanOldestSnapshotEpoch() throws IOException {
+    public void testValidateEpochLessThanOldestSnapshotEpoch() {
         int offset = 1;
         int epoch = 1;
 
         OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, epoch);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderEpochSnapshotId).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -786,12 +783,12 @@ public class MockLogTest {
     }
 
     @Test
-    public void testValidateOffsetLessThanOldestSnapshotOffset() throws IOException {
+    public void testValidateOffsetLessThanOldestSnapshotOffset() {
         int offset = 2;
         int epoch = 1;
 
         OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, epoch);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderEpochSnapshotId).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -801,12 +798,12 @@ public class MockLogTest {
     }
 
     @Test
-    public void testValidateOffsetEqualToOldestSnapshotOffset() throws IOException {
+    public void testValidateOffsetEqualToOldestSnapshotOffset() {
         int offset = 2;
         int epoch = 1;
 
         OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, epoch);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderEpochSnapshotId).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -816,12 +813,12 @@ public class MockLogTest {
     }
 
     @Test
-    public void testValidateUnknownEpochLessThanLastKnownGreaterThanOldestSnapshot() throws IOException {
+    public void testValidateUnknownEpochLessThanLastKnownGreaterThanOldestSnapshot() {
         int numberOfRecords = 5;
         int offset = 10;
 
         OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, 1);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderEpochSnapshotId).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -836,12 +833,12 @@ public class MockLogTest {
     }
 
     @Test
-    public void testValidateEpochLessThanFirstEpochInLog() throws IOException {
+    public void testValidateEpochLessThanFirstEpochInLog() {
         int numberOfRecords = 5;
         int offset = 10;
 
         OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, 1);
-        try (RawSnapshotWriter snapshot = log.storeSnapshot(olderEpochSnapshotId).get()) {
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(olderEpochSnapshotId).get()) {
             snapshot.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -980,7 +977,7 @@ public class MockLogTest {
             Records records = log.read(currentOffset, Isolation.UNCOMMITTED).records;
             List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
 
-            assertTrue(batches.size() > 0);
+            assertFalse(batches.isEmpty());
             for (RecordBatch batch : batches) {
                 assertTrue(batch.countOrNull() > 0);
                 assertEquals(currentOffset, batch.baseOffset());
