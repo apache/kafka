@@ -54,16 +54,6 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     val groupId = "grp"
     val (memberId, _) = joinDynamicConsumerGroupWithOldProtocol(groupId)
 
-    // The joining request from a consumer group member is rejected.
-    val responseData = consumerGroupHeartbeat(
-      groupId = groupId,
-      rebalanceTimeoutMs = 5 * 60 * 1000,
-      subscribedTopicNames = List("foo"),
-      topicPartitions = List.empty,
-      expectedError = Errors.GROUP_ID_NOT_FOUND
-    )
-    assertEquals("Group grp is not a consumer group.", responseData.errorMessage)
-
     // The member leaves the group.
     leaveGroup(
       groupId = groupId,
@@ -132,10 +122,6 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     // Create a consumer group by joining a member.
     val groupId = "grp"
     val (memberId, _) = joinConsumerGroupWithNewProtocol(groupId)
-
-    // The joining request from a classic group member is rejected.
-    val joinGroupResponseData = sendJoinRequest(groupId = groupId)
-    assertEquals(Errors.GROUP_ID_NOT_FOUND.code, joinGroupResponseData.errorCode)
 
     // The member leaves the group.
     leaveGroup(

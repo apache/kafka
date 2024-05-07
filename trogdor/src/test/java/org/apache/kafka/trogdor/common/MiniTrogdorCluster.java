@@ -19,7 +19,6 @@ package org.apache.kafka.trogdor.common;
 
 import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.ThreadUtils;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.agent.Agent;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.agent.AgentRestResource;
@@ -134,7 +133,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
          */
         public MiniTrogdorCluster build() throws Exception {
             log.info("Creating MiniTrogdorCluster with agents: {} and coordinator: {}",
-                Utils.join(agentNames, ", "), coordinatorName);
+                String.join(", ", agentNames), coordinatorName);
             TreeMap<String, NodeData> nodes = new TreeMap<>();
             for (String agentName : agentNames) {
                 NodeData node = getOrCreate(agentName, nodes);

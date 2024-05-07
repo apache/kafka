@@ -16,16 +16,10 @@
   */
 package kafka.api
 
-import java.security.AccessController
-import java.util.Properties
-
-import javax.security.auth.callback._
-import javax.security.auth.Subject
-import javax.security.auth.login.AppConfigurationEntry
-
-import scala.collection.Seq
-import kafka.utils.TestUtils
 import kafka.utils.JaasTestUtils._
+import kafka.utils.TestUtils
+import kafka.utils.TestUtils.isAclSecure
+import kafka.zk.ZkData
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.Mode
@@ -33,8 +27,15 @@ import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback
 import org.apache.kafka.server.config.KafkaSecurityConfigs
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
+
+import java.security.AccessController
+import java.util.Properties
+import javax.security.auth.Subject
+import javax.security.auth.callback._
+import javax.security.auth.login.AppConfigurationEntry
+import scala.collection.Seq
 
 object SaslPlainSslEndToEndAuthorizationTest {
 
@@ -149,6 +150,16 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
    */
   @Test
   def testAcls(): Unit = {
-    TestUtils.verifySecureZkAcls(zkClient, 1)
+    TestUtils.secureZkPaths(zkClient).foreach(path => {
+      if (zkClient.pathExists(path)) {
+        val sensitive = ZkData.sensitivePath(path)
+        // usersWithAccess have ALL access to path. For paths that are
+        // not sensitive, world has READ access.
+        val aclCount = if (sensitive) 1 else 1 + 1
+        val acls = zkClient.getAcl(path)
+        assertEquals(aclCount, acls.size, s"Invalid ACLs for $path $acls")
+        acls.foreach(acl => isAclSecure(acl, sensitive))
+      }
+    })
   }
 }

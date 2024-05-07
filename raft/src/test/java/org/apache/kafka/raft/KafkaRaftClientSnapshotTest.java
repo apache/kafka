@@ -18,12 +18,10 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
@@ -1948,15 +1946,10 @@ final public class KafkaRaftClientSnapshotTest {
     }
 
     private static SnapshotWriter<String> snapshotWriter(RaftClientTestContext context, RawSnapshotWriter snapshot) {
-        return RecordsSnapshotWriter.createWithHeader(
-            snapshot,
-            4 * 1024,
-            MemoryPool.NONE,
-            context.time,
-            0,
-            CompressionType.NONE,
-            new StringSerde()
-        );
+        return new RecordsSnapshotWriter.Builder()
+            .setTime(context.time)
+            .setRawSnapshotWriter(snapshot)
+            .build(new StringSerde());
     }
 
     private final static class MemorySnapshotWriter implements RawSnapshotWriter {
