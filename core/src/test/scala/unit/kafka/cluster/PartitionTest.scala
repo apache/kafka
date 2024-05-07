@@ -435,7 +435,7 @@ class PartitionTest extends AbstractPartitionTest {
         val segments = new LogSegments(log.topicPartition)
         val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxTransactionTimeoutMs = 5 * 60 * 1000
-        val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, true)
+        val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT, true)
         val producerStateManager = new ProducerStateManager(
           log.topicPartition,
           log.dir,
@@ -3688,7 +3688,6 @@ class PartitionTest extends AbstractPartitionTest {
     logStartOffset,
     localLog,
     new BrokerTopicStats,
-    log.producerIdExpirationCheckIntervalMs,
     leaderEpochCache,
     producerStateManager,
     _topicId = None,

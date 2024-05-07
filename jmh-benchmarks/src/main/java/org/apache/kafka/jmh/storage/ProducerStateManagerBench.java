@@ -53,6 +53,7 @@ import java.util.concurrent.TimeUnit;
 public class ProducerStateManagerBench {
     Time time = new MockTime();
     final int producerIdExpirationMs = 1000;
+    final int producerIdExpirationCheckIntervalMs = 60000;
 
     ProducerStateManager manager;
     Path tempDirectory;
@@ -67,7 +68,7 @@ public class ProducerStateManagerBench {
             new TopicPartition("t1", 0),
             tempDirectory.toFile(),
             Integer.MAX_VALUE,
-            new ProducerStateManagerConfig(producerIdExpirationMs, false),
+            new ProducerStateManagerConfig(producerIdExpirationMs, producerIdExpirationCheckIntervalMs, false),
             time
         );
     }

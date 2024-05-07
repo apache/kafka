@@ -100,7 +100,6 @@ import scala.jdk.CollectionConverters._
 class UnifiedLog(@volatile var logStartOffset: Long,
                  private val localLog: LocalLog,
                  val brokerTopicStats: BrokerTopicStats,
-                 val producerIdExpirationCheckIntervalMs: Int,
                  @volatile var leaderEpochCache: Option[LeaderEpochFileCache],
                  val producerStateManager: ProducerStateManager,
                  @volatile private var _topicId: Option[Uuid],
@@ -468,8 +467,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   }
 
-  val producerExpireCheck: ScheduledFuture[_] = scheduler.schedule("PeriodicProducerExpirationCheck", () => removeExpiredProducers(time.milliseconds),
-    producerIdExpirationCheckIntervalMs, producerIdExpirationCheckIntervalMs)
+  val producerExpireCheck: ScheduledFuture[_] = scheduler.schedule(
+    "PeriodicProducerExpirationCheck",
+    () => removeExpiredProducers(time.milliseconds),
+    producerStateManager.producerStateManagerConfig().producerIdExpirationCheckIntervalMs(),
+    producerStateManager.producerStateManagerConfig().producerIdExpirationCheckIntervalMs(),
+  )
 
   // Visible for testing
   def removeExpiredProducers(currentTimeMs: Long): Unit = {
@@ -1991,7 +1994,6 @@ object UnifiedLog extends Logging {
             time: Time,
             maxTransactionTimeoutMs: Int,
             producerStateManagerConfig: ProducerStateManagerConfig,
-            producerIdExpirationCheckIntervalMs: Int,
             logDirFailureChannel: LogDirFailureChannel,
             lastShutdownClean: Boolean = true,
             topicId: Option[Uuid],
@@ -2033,7 +2035,6 @@ object UnifiedLog extends Logging {
     new UnifiedLog(offsets.logStartOffset,
       localLog,
       brokerTopicStats,
-      producerIdExpirationCheckIntervalMs,
       leaderEpochCache,
       producerStateManager,
       topicId,
