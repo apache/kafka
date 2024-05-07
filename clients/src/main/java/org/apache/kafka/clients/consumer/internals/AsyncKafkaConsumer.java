@@ -76,6 +76,7 @@ import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -1599,7 +1600,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             fetchBuffer.awaitNotEmpty(pollTimer);
         } catch (InterruptException e) {
-            log.trace("Timeout during fetch", e);
+            log.trace("Interrupt during fetch", e);
+            throw e;
         } finally {
             timer.update(pollTimer.currentTimeMs());
             wakeupTrigger.clearTask();
@@ -1631,7 +1633,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * Set the fetch position to the committed position (if there is one)
      * or reset it using the offset reset policy the user has configured.
      *
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws AuthenticationException If authentication fails. See the exception for more details
      * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
      *             defined
      * @return true iff the operation completed without timing out
@@ -1658,12 +1660,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // If there are partitions still needing a position and a reset policy is defined,
             // request reset using the default policy. If no reset strategy is defined and there
             // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
-            //
-            // Note: this will *not* initialize the position for any partitions that are in the process
-            // of being assigned and awaiting ConsumerRebalanceListener callbacks. We don't want to reset
-            // positions until the partition has been fully assigned *and* we want to wait until
-            // initWithCommittedOffsetsIfNeeded has had a chance to look up the partition's committed
-            // offset, if applicable.
             subscriptions.resetInitializingPositions();
 
             // Reset positions using partition offsets retrieved from the leader, for any partitions

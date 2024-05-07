@@ -260,6 +260,9 @@
         <allow pkg="org.apache.kafka.common.metrics" />
         <allow pkg="org.apache.kafka.server.metrics" />
       </subpackage>
+      <subpackage name="generated">
+        <allow pkg="com.fasterxml.jackson" />
+      </subpackage>
     </subpackage>
   </subpackage>
 

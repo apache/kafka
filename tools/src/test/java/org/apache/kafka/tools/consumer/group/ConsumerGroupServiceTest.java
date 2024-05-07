@@ -90,8 +90,8 @@ public class ConsumerGroupServiceTest {
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
 
-        Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
-        assertEquals(Optional.of("Stable"), statesAndAssignments.getKey());
+        Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
+        assertEquals(Optional.of(ConsumerGroupState.STABLE), statesAndAssignments.getKey());
         assertTrue(statesAndAssignments.getValue().isPresent());
         assertEquals(TOPIC_PARTITIONS.size(), statesAndAssignments.getValue().get().size());
 
@@ -163,8 +163,8 @@ public class ConsumerGroupServiceTest {
         )).thenReturn(new ListOffsetsResult(endOffsets.entrySet().stream().filter(e -> unassignedTopicPartitions.contains(e.getKey()))
                 .collect(Collectors.toMap(Entry::getKey, Entry::getValue))));
 
-        Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
-        Optional<String> state = statesAndAssignments.getKey();
+        Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
+        Optional<ConsumerGroupState> state = statesAndAssignments.getKey();
         Optional<Collection<PartitionAssignmentState>> assignments = statesAndAssignments.getValue();
 
         Map<TopicPartition, Optional<Long>> returnedOffsets = assignments.map(results ->
@@ -182,7 +182,7 @@ public class ConsumerGroupServiceTest {
         expectedOffsets.put(testTopicPartition4, Optional.of(100L));
         expectedOffsets.put(testTopicPartition5, Optional.empty());
 
-        assertEquals(Optional.of("Stable"), state);
+        assertEquals(Optional.of(ConsumerGroupState.STABLE), state);
         assertEquals(expectedOffsets, returnedOffsets);
 
         verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any());

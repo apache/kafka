@@ -1213,14 +1213,16 @@ public class ConsumerGroup implements Group {
      * @return A boolean based on the condition mentioned above.
      */
     public boolean supportsClassicProtocols(String memberProtocolType, Set<String> memberProtocols) {
-        if (isEmpty()) {
-            return !memberProtocolType.isEmpty() && !memberProtocols.isEmpty();
-        } else {
-            return ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType) &&
-                memberProtocols.stream().anyMatch(
+        if (ConsumerProtocol.PROTOCOL_TYPE.equals(memberProtocolType)) {
+            if (isEmpty()) {
+                return !memberProtocols.isEmpty();
+            } else {
+                return memberProtocols.stream().anyMatch(
                     name -> classicProtocolMembersSupportedProtocols.getOrDefault(name, 0) == numClassicProtocolMembers()
                 );
+            }
         }
+        return false;
     }
 
     /**
