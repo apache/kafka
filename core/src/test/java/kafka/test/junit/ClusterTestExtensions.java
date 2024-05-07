@@ -34,7 +34,6 @@ import org.junit.platform.commons.util.ReflectionUtils;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -167,17 +166,6 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 .setMetadataVersion(annot.metadataVersion())
                 .build();
         type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
-    }
-
-    private void processClusterConfigProperty(ClusterConfigProperty property,
-                                              Map<String, String> serverProperties,
-                                              Map<Integer, Map<String, String>> perServerProperties) {
-        if (property.id() == -1) {
-            serverProperties.put(property.key(), property.value());
-        } else {
-            perServerProperties.computeIfAbsent(property.id(), ignored -> new HashMap<>())
-                    .put(property.key(), property.value());
-        }
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {
