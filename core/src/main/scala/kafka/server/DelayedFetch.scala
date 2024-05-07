@@ -92,7 +92,10 @@ class DelayedFetch(
             // has just rolled, then the high watermark offset will remain the same but be on the old segment,
             // which would incorrectly be seen as an instance of Case F.
             if (endOffset.messageOffset != fetchOffset.messageOffset) {
-              if (endOffset.onOlderSegment(fetchOffset)) {
+              if (endOffset.messageOffsetOnly() || fetchOffset.messageOffsetOnly()) {
+                // This case is to handle the stale high-watermark on the leader until it gets updated with the correct value
+                accumulatedSize += 1
+              } else if (endOffset.onOlderSegment(fetchOffset)) {
                 // Case F, this can happen when the new fetch operation is on a truncated leader
                 debug(s"Satisfying fetch $this since it is fetching later segments of partition $topicIdPartition.")
                 return forceComplete()

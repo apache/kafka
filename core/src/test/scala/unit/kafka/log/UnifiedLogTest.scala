@@ -4211,6 +4211,49 @@ class UnifiedLogTest {
     assertEquals(31, log.localLogStartOffset())
   }
 
+  @Test
+  def testConvertToOffsetMetadataDoesNotThrowOffsetOutOfRangeError(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(localRetentionBytes = 1, fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+
+    var offset = 0L
+    for(_ <- 0 until 50) {
+      val records = TestUtils.singletonRecords("test".getBytes())
+      val info = log.appendAsLeader(records, leaderEpoch = 0)
+      offset = info.lastOffset
+      if (offset != 0 && offset % 10 == 0)
+        log.roll()
+    }
+    assertEquals(5, log.logSegments.size)
+    log.updateHighWatermark(log.logEndOffset)
+    // simulate calls to upload 3 segments to remote storage
+    log.updateHighestOffsetInRemoteStorage(30)
+
+    log.deleteOldSegments()
+    assertEquals(2, log.logSegments.size())
+    assertEquals(0, log.logStartOffset)
+    assertEquals(31, log.localLogStartOffset())
+
+    log.updateLogStartOffsetFromRemoteTier(15)
+    assertEquals(15, log.logStartOffset)
+
+    // case-1: offset is higher than the local-log-start-offset.
+    // log-start-offset < local-log-start-offset < offset-to-be-converted < log-end-offset
+    val offsetMetadata = log.convertToOffsetMetadataOrThrow(35)
+    assertEquals(new LogOffsetMetadata(35, 31, 288), offsetMetadata)
+    // case-2: offset is lesser than the local-log-start-offset
+    // log-start-offset < offset-to-be-converted < local-log-start-offset < log-end-offset
+    val offsetMetadata1 = log.convertToOffsetMetadataOrThrow(29)
+    assertEquals(new LogOffsetMetadata(29, -1L, -1), offsetMetadata1)
+    // case-3: offset is higher than the log-end-offset
+    // log-start-offset < local-log-start-offset < log-end-offset < offset-to-be-converted
+    val offsetMetadata2 = log.convertToOffsetMetadataOrThrow(log.logEndOffset + 1)
+    assertEquals(new LogOffsetMetadata(log.logEndOffset + 1, -1L, -1), offsetMetadata2)
+    // case-4: offset is lesser than the log-start-offset
+    // offset-to-be-converted < log-start-offset < local-log-start-offset < log-end-offset
+    assertThrows(classOf[OffsetOutOfRangeException], () => log.convertToOffsetMetadataOrThrow(14))
+  }
+
   private def appendTransactionalToBuffer(buffer: ByteBuffer,
                                           producerId: Long,
                                           producerEpoch: Short,
