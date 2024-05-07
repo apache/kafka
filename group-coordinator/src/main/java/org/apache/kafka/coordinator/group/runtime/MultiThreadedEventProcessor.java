@@ -126,9 +126,16 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
 
         private void handleEvents() {
             while (!shuttingDown) {
-                recordPollStartTime(time.milliseconds());
+                // We use a single meter for aggregate idle percentage for the thread pool.
+                // Since meter is calculated as total_recorded_value / time_window and
+                // time_window is independent of the number of threads, each recorded idle
+                // time should be discounted by # threads.
+
+                long idleStartTimeMs = time.milliseconds();
                 CoordinatorEvent event = accumulator.take();
-                recordPollEndTime(time.milliseconds());
+                long idleEndTimeMs = time.milliseconds();
+                long idleTimeMs = idleEndTimeMs - idleStartTimeMs;
+                metrics.recordThreadIdleTime(idleTimeMs / threads.size());
                 if (event != null) {
                     try {
                         log.debug("Executing event: {}.", event);
@@ -182,18 +189,6 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
                 }
                 log.info("Shutdown completed");
             }
-        }
-
-        private void recordPollStartTime(long pollStartMs) {
-            this.pollStartMs = pollStartMs;
-            this.timeSinceLastPollMs = lastPollMs != 0L ? pollStartMs - lastPollMs : 0;
-            this.lastPollMs = pollStartMs;
-        }
-
-        private void recordPollEndTime(long pollEndMs) {
-            long pollTimeMs = pollEndMs - pollStartMs;
-            double pollIdleRatio = pollTimeMs * 1.0 / (pollTimeMs + timeSinceLastPollMs);
-            metrics.recordThreadIdleRatio(pollIdleRatio);
         }
     }
 
