@@ -42,10 +42,13 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
     private final TxnOffsetCommitRequestData data;
 
+    public static final short TRANSACTION_V2_MINIMAL_VERSION = 5;
+
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {
 
         public final TxnOffsetCommitRequestData data;
 
+        private short desiredMaximumVersion = Short.MAX_VALUE;
 
         public Builder(final String transactionalId,
                        final String consumerGroupId,
@@ -82,6 +85,28 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                             .setGroupInstanceId(groupInstanceId.orElse(null));
         }
 
+        public Builder(final String transactionalId,
+                       final String consumerGroupId,
+                       final long producerId,
+                       final short producerEpoch,
+                       final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits,
+                       final String memberId,
+                       final int generationId,
+                       final Optional<String> groupInstanceId,
+                       final short desiredMaximumVersion) {
+            super(ApiKeys.TXN_OFFSET_COMMIT);
+            this.desiredMaximumVersion = desiredMaximumVersion;
+            this.data = new TxnOffsetCommitRequestData()
+                    .setTransactionalId(transactionalId)
+                    .setGroupId(consumerGroupId)
+                    .setProducerId(producerId)
+                    .setProducerEpoch(producerEpoch)
+                    .setTopics(getTopics(pendingTxnOffsetCommits))
+                    .setMemberId(memberId)
+                    .setGenerationId(generationId)
+                    .setGroupInstanceId(groupInstanceId.orElse(null));
+        }
+
         public Builder(final TxnOffsetCommitRequestData data) {
             super(ApiKeys.TXN_OFFSET_COMMIT);
             this.data = data;
@@ -93,7 +118,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                 throw new UnsupportedVersionException("Broker doesn't support group metadata commit API on version " + version
                 + ", minimum supported request version is 3 which requires brokers to be on version 2.5 or above.");
             }
-            return new TxnOffsetCommitRequest(data, version);
+
+            return new TxnOffsetCommitRequest(data, (short) Math.min(desiredMaximumVersion, version));
         }
 
         private boolean groupMetadataSet() {
@@ -156,6 +182,10 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return data;
     }
 
+    public boolean isTransactionV2Requested() {
+        return version() >= TRANSACTION_V2_MINIMAL_VERSION;
+    }
+
     static List<TxnOffsetCommitResponseTopic> getErrorResponseTopics(List<TxnOffsetCommitRequestTopic> requestTopics,
                                                                      Errors e) {
         List<TxnOffsetCommitResponseTopic> responseTopicData = new ArrayList<>();
@@ -211,6 +241,10 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     public static TxnOffsetCommitRequest parse(ByteBuffer buffer, short version) {
         return new TxnOffsetCommitRequest(new TxnOffsetCommitRequestData(
             new ByteBufferAccessor(buffer), version), version);
+    }
+
+    public static boolean isTransactionV2Requested(short version) {
+        return version >= TRANSACTION_V2_MINIMAL_VERSION;
     }
 
     public static class CommittedOffset {
