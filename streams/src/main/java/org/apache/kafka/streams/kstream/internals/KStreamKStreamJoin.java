@@ -102,9 +102,9 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
 
                 sharedTimeTracker.setEmitInterval(
                     StreamsConfig.InternalConfig.getLong(
-                            context.appConfigs(),
-                            EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
-                            1000L
+                        context.appConfigs(),
+                        EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
+                        1000L
                     )
                 );
             }
