@@ -38,6 +38,7 @@ import java.util.concurrent.ExecutionException
 import java.util.{Collections, Optional, Properties}
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 class DeleteTopicTest extends QuorumTestHarness {
 
@@ -219,7 +220,7 @@ class DeleteTopicTest extends QuorumTestHarness {
       // increase the partition count for topic
       val props = new Properties()
       props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(partitionHostingBrokers))
-      TestUtils.resource(Admin.create(props)) { adminClient =>
+      Using(Admin.create(props)) { adminClient =>
         try {
           adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
         } catch {
@@ -254,7 +255,7 @@ class DeleteTopicTest extends QuorumTestHarness {
       // increase the partition count for topic
       val props = new Properties()
       props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(partitionHostingServers))
-      TestUtils.resource(Admin.create(props)) { adminClient =>
+      Using(Admin.create(props)) { adminClient =>
         try {
           adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
         } catch {
