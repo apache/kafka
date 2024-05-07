@@ -22,16 +22,21 @@ import org.apache.kafka.common.protocol.Errors;
 import java.util.List;
 
 public class PartitionFactory {
+
+  public static final int DEFAULT_STATE_EPOCH = 0;
+  public static final int DEFAULT_START_OFFSET = 0;
+  public static final short DEFAULT_ERROR_CODE = Errors.NONE.code();
+
   public static PartitionIdData newPartitionIdData(int partition) {
-    return new PartitionData(partition, -1, -1, Errors.NONE.code(), null);
+    return new PartitionData(partition, DEFAULT_STATE_EPOCH, DEFAULT_START_OFFSET, DEFAULT_ERROR_CODE, null);
   }
 
   public static PartitionStateData newPartitionStateData(int partition, int stateEpoch, long startOffset) {
-    return new PartitionData(partition, stateEpoch, startOffset, Errors.NONE.code(), null);
+    return new PartitionData(partition, stateEpoch, startOffset, DEFAULT_ERROR_CODE, null);
   }
 
   public static PartitionErrorData newPartitionErrorData(int partition, short errorCode) {
-    return new PartitionData(partition, -1, -1, errorCode, null);
+    return new PartitionData(partition, DEFAULT_STATE_EPOCH, DEFAULT_START_OFFSET, errorCode, null);
   }
 
   public static PartitionStateErrorData newPartitionStateErrorData(int partition, int stateEpoch, long startOffset, short errorCode) {
@@ -39,7 +44,7 @@ public class PartitionFactory {
   }
 
   public static PartitionStateBatchData newPartitionStateBatchData(int partition, int stateEpoch, long startOffset, List<PersisterStateBatch> stateBatches) {
-    return new PartitionData(partition, stateEpoch, startOffset, Errors.NONE.code(), stateBatches);
+    return new PartitionData(partition, stateEpoch, startOffset, DEFAULT_ERROR_CODE, stateBatches);
   }
 
   public static PartitionAllData newPartitionAllData(int partition, int stateEpoch, long startOffset, short errorCode, List<PersisterStateBatch> stateBatches) {
