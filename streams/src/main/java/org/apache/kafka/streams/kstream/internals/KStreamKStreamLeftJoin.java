@@ -32,8 +32,8 @@ class KStreamKStreamLeftJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL, 
                            final boolean outer,
                            final Optional<String> outerJoinWindowName,
                            final TimeTrackerSupplier sharedTimeTrackerSupplier) {
-        super(otherWindowName, sharedTimeTrackerSupplier, outerJoinWindowName,
-                windows.beforeMs, windows.afterMs, windows, outer, joiner);
+        super(otherWindowName, windows, joiner, outer, outerJoinWindowName, windows.beforeMs, windows.afterMs,
+                sharedTimeTrackerSupplier);
     }
 
     @Override

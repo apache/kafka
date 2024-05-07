@@ -269,7 +269,8 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
         }
 
 
-        private long getOuterJoinLookBackTimeMs(final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide) {
+        private long getOuterJoinLookBackTimeMs(
+                final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide) {
             // depending on the JoinSide we fill in the outerJoinLookBackTimeMs
             if (timestampedKeyAndJoinSide.isLeftSide()) {
                 return windowsAfterMs; // On the left-JoinSide we look back in time
