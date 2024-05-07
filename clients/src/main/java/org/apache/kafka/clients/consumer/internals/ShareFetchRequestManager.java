@@ -232,6 +232,9 @@ public class ShareFetchRequestManager implements RequestManager, MemberStateList
                                          ShareSessionHandler.ShareFetchRequestData data,
                                          Throwable error) {
         try {
+            data.sessionPartitions().values().forEach(tip -> {
+                shareFetchBuffer.handleAcknowledgementResponses(tip, Errors.forException(error));
+            });
             final ShareSessionHandler handler = sessionHandler(fetchTarget.id());
 
             if (handler != null) {
