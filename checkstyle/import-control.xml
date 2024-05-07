@@ -658,6 +658,7 @@
       <allow class="org.apache.kafka.connect.source.SourceRecord" />
       <allow class="org.apache.kafka.connect.sink.SinkRecord" />
       <allow pkg="org.apache.kafka.connect.transforms.util" />
+      <allow pkg="org.apache.kafka.connect.transforms.field" />
     </subpackage>
   </subpackage>
 
