@@ -72,6 +72,7 @@ public final class DeleteSegmentsDueToLogStartOffsetBreachTest extends TieredSto
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 1)
                 .consume(topicA, p0, 3L, 2, 1)
 
+
                 // switch leader to change the leader-epoch from 0 to 1
                 .expectLeader(topicA, p0, broker1, true)
                 // produce some more messages and move the log-start-offset such that earliest-epoch changes from 0 to 1
