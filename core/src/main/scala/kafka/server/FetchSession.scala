@@ -24,12 +24,12 @@ import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
-import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time}
+import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time, Utils}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import java.util
 import java.util.Optional
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 import scala.collection.mutable
 import scala.math.Ordered.orderingToOrdered
@@ -805,7 +805,7 @@ class FetchSessionCacheShard(private val maxEntries: Int,
 }
 object FetchSessionCache {
   private[server] val metricsGroup = new KafkaMetricsGroup(classOf[FetchSessionCache])
-  private val counter = new AtomicLong(0)
+  private[server] val counter = new AtomicInteger(0)
 }
 
 class FetchSessionCache(private val cacheShards: Seq[FetchSessionCacheShard]) {
@@ -815,12 +815,13 @@ class FetchSessionCache(private val cacheShards: Seq[FetchSessionCacheShard]) {
 
   def getCacheShard(sessionId: Int): FetchSessionCacheShard = {
     val shard = sessionId / cacheShards.head.sessionIdRange
+    // This assumes that cacheShards is sorted by shardNum
     cacheShards(shard)
   }
 
   // Returns the shard in round-robin
   def getNextCacheShard: FetchSessionCacheShard = {
-    val shardNum = (FetchSessionCache.counter.getAndIncrement() % size).toInt
+    val shardNum = Utils.toPositive(FetchSessionCache.counter.getAndIncrement()) % size
     cacheShards(shardNum)
   }
 

@@ -44,6 +44,7 @@ class FetchSessionTest {
     FetchSessionCache.metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS)
     FetchSessionCache.metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED)
     FetchSessionCache.metricsGroup.removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC)
+    FetchSessionCache.counter.set(0)
   }
 
   @Test
@@ -1958,6 +1959,35 @@ class FetchSessionTest {
     assertEquals(cache1, cacheShards(1))
     assertEquals(cache2, cacheShards(2))
     assertThrows(classOf[IndexOutOfBoundsException], () => cache.getCacheShard(sessionIdRange * numShards))
+  }
+
+  @Test
+  def testFetchSessionCache_RoundRobinsIntoShards(): Unit = {
+    // Given
+    val numShards = 8
+    val sessionIdRange = Int.MaxValue / numShards
+    val cacheShards = (0 until numShards).map(shardNum => new FetchSessionCacheShard(10, 1000, sessionIdRange, shardNum))
+    val cache = new FetchSessionCache(cacheShards)
+
+    // When / Then
+    (0 until numShards*2).foreach { shardNum =>
+      assertEquals(cacheShards(shardNum % numShards), cache.getNextCacheShard)
+    }
+  }
+
+  @Test
+  def testFetchSessionCache_RoundRobinsIntoShards_WhenIntegerOverflows(): Unit = {
+    // Given
+    FetchSessionCache.counter.set(Int.MaxValue+1)
+    val numShards = 8
+    val sessionIdRange = Int.MaxValue / numShards
+    val cacheShards = (0 until numShards).map(shardNum => new FetchSessionCacheShard(10, 1000, sessionIdRange, shardNum))
+    val cache = new FetchSessionCache(cacheShards)
+
+    // When / Then
+    (0 until numShards*2).foreach { shardNum =>
+      assertEquals(cacheShards(shardNum % numShards), cache.getNextCacheShard)
+    }
   }
 }
 
