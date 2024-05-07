@@ -556,6 +556,7 @@ public class ConfigCommandUnitTest {
             }
         }
 
+        // Changing USER configs don't use `KafkaZkClient` so it safe to pass `null`.
         ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient));
     }
 
@@ -583,6 +584,7 @@ public class ConfigCommandUnitTest {
             }
         }
 
+        // Changing USER configs don't use `KafkaZkClient` so it safe to pass `null`.
         ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient));
     }
 
