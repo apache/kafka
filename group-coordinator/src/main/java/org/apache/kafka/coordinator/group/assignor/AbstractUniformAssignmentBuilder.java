@@ -211,6 +211,7 @@ public abstract class AbstractUniformAssignmentBuilder {
          * @return {@code true} for a mismatch; {@code false} if member and partition racks exist and align.
          */
         protected boolean racksMismatch(String memberId, TopicIdPartition tp) {
+            if (!useRackStrategy) return false;
             String memberRack = memberRacks.get(memberId);
             Set<String> replicaRacks = partitionRacks.get(tp);
             return memberRack == null || (replicaRacks == null || !replicaRacks.contains(memberRack));

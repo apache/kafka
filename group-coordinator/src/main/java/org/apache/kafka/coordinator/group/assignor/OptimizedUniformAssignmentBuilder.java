@@ -21,7 +21,6 @@ import org.apache.kafka.server.common.TopicIdPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -32,9 +31,6 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import static java.lang.Math.min;
 
 /**
  * The optimized uniform assignment builder is used to generate the target assignment for a consumer group with
@@ -200,87 +196,91 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      * @return  Members mapped to the remaining number of partitions needed to meet the minimum quota,
      *          including members that are eligible to receive an extra partition.
      */
+    @SuppressWarnings({"checkstyle:cyclomaticComplexity", "checkstyle:NPathComplexity"})
     private Map<String, Integer> assignStickyPartitions(int minQuota) {
         Map<String, Integer> potentiallyUnfilledMembers = new HashMap<>();
 
-        assignmentSpec.members().forEach((memberId, assignmentMemberSpec) -> {
-            List<TopicIdPartition> validCurrentMemberAssignment = validCurrentMemberAssignment(
-                memberId,
-                assignmentMemberSpec.assignedPartitions()
-            );
+        for (Map.Entry<String, AssignmentMemberSpec> entry : assignmentSpec.members().entrySet()) {
+            String memberId = entry.getKey();
+            AssignmentMemberSpec assignmentMemberSpec = entry.getValue();
+            int assignmentSize = 0;
+            boolean staleAssignment = false;
 
-            int currentAssignmentSize = validCurrentMemberAssignment.size();
-            // Number of partitions required to meet the minimum quota.
-            int remaining = minQuota - currentAssignmentSize;
-
-            if (currentAssignmentSize > 0) {
-                int retainedPartitionsCount = min(currentAssignmentSize, minQuota);
-                IntStream.range(0, retainedPartitionsCount).forEach(i -> {
-                    TopicIdPartition topicIdPartition = validCurrentMemberAssignment.get(i);
-                    addPartitionToAssignment(
-                        targetAssignment,
-                        memberId,
-                        topicIdPartition.topicId(),
-                        topicIdPartition.partitionId()
-                    );
-                    unassignedPartitions.remove(topicIdPartition);
-                });
-
-                // The extra partition is located at the last index from the previous step.
-                if (remaining < 0 && remainingMembersToGetAnExtraPartition > 0) {
-                    TopicIdPartition topicIdPartition = validCurrentMemberAssignment.get(retainedPartitionsCount);
-                    addPartitionToAssignment(
-                        targetAssignment,
-                        memberId,
-                        topicIdPartition.topicId(),
-                        topicIdPartition.partitionId()
-                    );
-                    unassignedPartitions.remove(topicIdPartition);
-                    remainingMembersToGetAnExtraPartition--;
+            for (Map.Entry<Uuid, Set<Integer>> topicPartitionsEntry : assignmentMemberSpec.assignedPartitions().entrySet()) {
+                Uuid topicId = topicPartitionsEntry.getKey();
+                if (subscribedTopicIds.contains(topicId)) {
+                    assignmentSize += topicPartitionsEntry.getValue().size();
+                    if (rackInfo.useRackStrategy) {
+                        for (Integer partition : topicPartitionsEntry.getValue()) {
+                            TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, partition);
+                            if (rackInfo.racksMismatch(memberId, topicIdPartition)) {
+                                currentPartitionOwners.put(topicIdPartition, memberId);
+                                staleAssignment = true;
+                                assignmentSize--;
+                            }
+                        }
+                    }
+                } else {
+                    staleAssignment = true;
+                }
+                if (staleAssignment) {
+                    break;
                 }
             }
 
-            if (remaining >= 0) {
-                potentiallyUnfilledMembers.put(memberId, remaining);
+            int quota = minQuota;
+            if (remainingMembersToGetAnExtraPartition > 0) {
+                quota++;
+                remainingMembersToGetAnExtraPartition--;
             }
-        });
+
+            if (!staleAssignment && quota == assignmentSize) {
+                targetAssignment.put(memberId, new MemberAssignment(assignmentMemberSpec.assignedPartitions()));
+
+                for (Map.Entry<Uuid, Set<Integer>> topicPartitionsEntry2 : assignmentMemberSpec.assignedPartitions().entrySet()) {
+                    for (Integer partition : topicPartitionsEntry2.getValue()) {
+                        unassignedPartitions.remove(new TopicIdPartition(topicPartitionsEntry2.getKey(), partition));
+                    }
+                }
+            } else {
+                Map<Uuid, Set<Integer>> target = new HashMap<>();
+                targetAssignment.put(memberId, new MemberAssignment(target));
+
+                for (Map.Entry<Uuid, Set<Integer>> topicPartitionsEntry2 : assignmentMemberSpec.assignedPartitions().entrySet()) {
+                    Uuid topicId = topicPartitionsEntry2.getKey();
+                    Set<Integer> partitions = topicPartitionsEntry2.getValue();
+
+                    if (subscribedTopicIds.contains(topicId)) {
+                        if (partitions.size() <= quota && !rackInfo.useRackStrategy) {
+                            target.put(topicId, partitions);
+                            quota -= partitions.size();
+                            for (Integer partition : partitions) {
+                                unassignedPartitions.remove(new TopicIdPartition(topicId, partition));
+                            }
+                        } else {
+                            Set<Integer> newPartitions = new HashSet<>(partitions.size());
+                            for (Integer partition : partitions) {
+                                TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, partition);
+                                if (quota > 0 && !rackInfo.racksMismatch(memberId, topicIdPartition)) {
+                                    newPartitions.add(partition);
+                                    quota--;
+                                    unassignedPartitions.remove(topicIdPartition);
+                                }
+                            }
+                            if (newPartitions.size() > 0) {
+                                target.put(topicId, newPartitions);
+                            }
+                        }
+                    }
+                }
+
+                if (quota > 0) {
+                    potentiallyUnfilledMembers.put(memberId, quota);
+                }
+            }
+        }
 
         return potentiallyUnfilledMembers;
-    }
-
-    /**
-     * Filters the current assignment of partitions for a given member based on certain criteria.
-     *
-     * Any partition that still belongs to the member's subscribed topics list is considered valid.
-     * If rack aware strategy can be used: Only partitions with matching rack are valid and non-matching partitions are
-     * tracked with their current owner for future use.
-     *
-     * @param memberId                      The Id of the member whose assignment is being validated.
-     * @param currentMemberAssignment       The map of topics to partitions currently assigned to the member.
-     *
-     * @return List of valid partitions after applying the filters.
-     */
-    private List<TopicIdPartition> validCurrentMemberAssignment(
-        String memberId,
-        Map<Uuid, Set<Integer>> currentMemberAssignment
-    ) {
-        List<TopicIdPartition> validCurrentAssignmentList = new ArrayList<>();
-        currentMemberAssignment.forEach((topicId, partitions) -> {
-            if (subscribedTopicIds.contains(topicId)) {
-                partitions.forEach(partition -> {
-                    TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, partition);
-                    if (rackInfo.useRackStrategy && rackInfo.racksMismatch(memberId, topicIdPartition)) {
-                        currentPartitionOwners.put(topicIdPartition, memberId);
-                    } else {
-                        validCurrentAssignmentList.add(topicIdPartition);
-                    }
-                });
-            } else {
-                LOG.debug("The topic " + topicId + " is no longer present in the subscribed topics list");
-            }
-        });
-
-        return validCurrentAssignmentList;
     }
 
     /**
