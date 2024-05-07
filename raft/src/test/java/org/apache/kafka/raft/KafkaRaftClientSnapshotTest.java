@@ -18,12 +18,10 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
@@ -51,6 +49,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -699,6 +699,97 @@ final public class KafkaRaftClientSnapshotTest {
         UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.slice(0, Math.toIntExact(snapshot.sizeInBytes()));
 
         assertEquals(memoryRecords.buffer(), ((UnalignedMemoryRecords) response.unalignedRecords()).buffer());
+    }
+
+    @Test
+    public void testLeaderShouldResignLeadershipIfNotGetFetchSnapshotRequestFromMajorityVoters() throws Exception {
+        int localId = 0;
+        int voter1 = 1;
+        int voter2 = 2;
+        int observerId3 = 3;
+        Set<Integer> voters = Utils.mkSet(localId, voter1, voter2);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
+        List<String> records = Arrays.asList("foo", "bar");
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+                .appendToLog(snapshotId.epoch(), Arrays.asList("a"))
+                .build();
+
+        int resignLeadershipTimeout = context.checkQuorumTimeoutMs;
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        FetchSnapshotRequestData voter1FetchSnapshotRequest = fetchSnapshotRequest(
+                context.clusterId.toString(),
+                voter1,
+                context.metadataPartition,
+                epoch,
+                snapshotId,
+                Integer.MAX_VALUE,
+                0
+        );
+
+        FetchSnapshotRequestData voter2FetchSnapshotRequest = fetchSnapshotRequest(
+                context.clusterId.toString(),
+                voter2,
+                context.metadataPartition,
+                epoch,
+                snapshotId,
+                Integer.MAX_VALUE,
+                0
+        );
+
+        FetchSnapshotRequestData observerFetchSnapshotRequest = fetchSnapshotRequest(
+                context.clusterId.toString(),
+                observerId3,
+                context.metadataPartition,
+                epoch,
+                snapshotId,
+                Integer.MAX_VALUE,
+                0
+        );
+
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId, 0).get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
+            snapshot.append(records);
+            snapshot.freeze();
+        }
+
+        // fetch timeout is not expired, the leader should not get resigned
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+        assertFalse(context.client.quorum().isResigned());
+
+        // voter1 sends fetchSnapshotRequest, the fetch timer should be reset
+        context.deliverRequest(voter1FetchSnapshotRequest);
+        context.client.poll();
+        context.assertSentFetchSnapshotResponse(context.metadataPartition);
+
+        // Since the fetch timer is reset, the leader should not get resigned
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+        assertFalse(context.client.quorum().isResigned());
+
+        // voter2 sends fetchSnapshotRequest, the fetch timer should be reset
+        context.deliverRequest(voter2FetchSnapshotRequest);
+        context.client.poll();
+        context.assertSentFetchSnapshotResponse(context.metadataPartition);
+
+        // Since the fetch timer is reset, the leader should not get resigned
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+        assertFalse(context.client.quorum().isResigned());
+
+        // An observer sends fetchSnapshotRequest, but the fetch timer should not be reset.
+        context.deliverRequest(observerFetchSnapshotRequest);
+        context.client.poll();
+        context.assertSentFetchSnapshotResponse(context.metadataPartition);
+
+        // After this sleep, the fetch timeout should expire since we don't receive fetch request from the majority voters within fetchTimeoutMs
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+        assertTrue(context.client.quorum().isResigned());
     }
 
     @Test
@@ -1589,6 +1680,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverRequest(
             fetchSnapshotRequest(
                 context.clusterId.toString(),
+                otherNodeId,
                 context.metadataPartition,
                 epoch,
                 new OffsetAndEpoch(0, 0),
@@ -1603,6 +1695,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverRequest(
             fetchSnapshotRequest(
                 null,
+                otherNodeId,
                 context.metadataPartition,
                 epoch,
                 new OffsetAndEpoch(0, 0),
@@ -1617,6 +1710,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverRequest(
             fetchSnapshotRequest(
                 "",
+                otherNodeId,
                 context.metadataPartition,
                 epoch,
                 new OffsetAndEpoch(0, 0),
@@ -1631,6 +1725,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverRequest(
             fetchSnapshotRequest(
                 "invalid-uuid",
+                otherNodeId,
                 context.metadataPartition,
                 epoch,
                 new OffsetAndEpoch(0, 0),
@@ -1756,11 +1851,12 @@ final public class KafkaRaftClientSnapshotTest {
             int maxBytes,
             long position
     ) {
-        return fetchSnapshotRequest(null, topicPartition, epoch, offsetAndEpoch, maxBytes, position);
+        return fetchSnapshotRequest(null, -1, topicPartition, epoch, offsetAndEpoch, maxBytes, position);
     }
 
     private static FetchSnapshotRequestData fetchSnapshotRequest(
         String clusterId,
+        int replicaId,
         TopicPartition topicPartition,
         int epoch,
         OffsetAndEpoch offsetAndEpoch,
@@ -1773,13 +1869,12 @@ final public class KafkaRaftClientSnapshotTest {
 
         FetchSnapshotRequestData request = FetchSnapshotRequest.singleton(
             clusterId,
+            replicaId,
             topicPartition,
-            snapshotPartition -> {
-                return snapshotPartition
-                    .setCurrentLeaderEpoch(epoch)
-                    .setSnapshotId(snapshotId)
-                    .setPosition(position);
-            }
+            snapshotPartition -> snapshotPartition
+                .setCurrentLeaderEpoch(epoch)
+                .setSnapshotId(snapshotId)
+                .setPosition(position)
         );
 
         return request.setMaxBytes(maxBytes);
@@ -1840,7 +1935,7 @@ final public class KafkaRaftClientSnapshotTest {
         int replicaId,
         int maxBytes
     ) {
-        assertTrue(request.data() instanceof FetchSnapshotRequestData);
+        assertInstanceOf(FetchSnapshotRequestData.class, request.data());
 
         FetchSnapshotRequestData data = (FetchSnapshotRequestData) request.data();
 
@@ -1851,21 +1946,16 @@ final public class KafkaRaftClientSnapshotTest {
     }
 
     private static SnapshotWriter<String> snapshotWriter(RaftClientTestContext context, RawSnapshotWriter snapshot) {
-        return RecordsSnapshotWriter.createWithHeader(
-            snapshot,
-            4 * 1024,
-            MemoryPool.NONE,
-            context.time,
-            0,
-            CompressionType.NONE,
-            new StringSerde()
-        );
+        return new RecordsSnapshotWriter.Builder()
+            .setTime(context.time)
+            .setRawSnapshotWriter(snapshot)
+            .build(new StringSerde());
     }
 
     private final static class MemorySnapshotWriter implements RawSnapshotWriter {
         private final OffsetAndEpoch snapshotId;
+        private final AtomicLong frozenPosition;
         private ByteBuffer data;
-        private AtomicLong frozenPosition;
 
         public MemorySnapshotWriter(OffsetAndEpoch snapshotId) {
             this.snapshotId = snapshotId;

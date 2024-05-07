@@ -327,8 +327,8 @@ public class MemoryRecordsBuilderTest {
             if (args.compressionType == CompressionType.NONE) {
                 assertEquals(1.0, builder.compressionRatio(), 0.00001);
             } else {
-                int recordHeaad = magic == MAGIC_VALUE_V0 ? LegacyRecord.RECORD_OVERHEAD_V0 : LegacyRecord.RECORD_OVERHEAD_V1;
-                int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - recordHeaad;
+                int recordHead = magic == MAGIC_VALUE_V0 ? LegacyRecord.RECORD_OVERHEAD_V0 : LegacyRecord.RECORD_OVERHEAD_V1;
+                int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - recordHead;
                 double computedCompressionRate = (double) compressedSize / uncompressedSize;
                 assertEquals(computedCompressionRate, builder.compressionRatio(), 0.00001);
             }
@@ -415,7 +415,9 @@ public class MemoryRecordsBuilderTest {
             assertEquals(2L, info.maxTimestamp);
         }
 
-        if (args.compressionType == CompressionType.NONE && magic == MAGIC_VALUE_V1)
+        if (magic == MAGIC_VALUE_V0)
+            assertEquals(-1, info.shallowOffsetOfMaxTimestamp);
+        else if (args.compressionType == CompressionType.NONE && magic == MAGIC_VALUE_V1)
             assertEquals(1L, info.shallowOffsetOfMaxTimestamp);
         else
             assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
@@ -495,12 +497,13 @@ public class MemoryRecordsBuilderTest {
         MemoryRecords records = builder.build();
 
         MemoryRecordsBuilder.RecordsInfo info = builder.info();
-        if (magic == MAGIC_VALUE_V0)
+        if (magic == MAGIC_VALUE_V0) {
+            assertEquals(-1, info.shallowOffsetOfMaxTimestamp);
             assertEquals(-1, info.maxTimestamp);
-        else
+        } else {
+            assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
             assertEquals(2L, info.maxTimestamp);
-
-        assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
+        }
 
         long i = 0L;
         for (RecordBatch batch : records.batches()) {
@@ -801,7 +804,7 @@ public class MemoryRecordsBuilderTest {
         }
     }
 
-    private void verifyRecordsProcessingStats(CompressionType compressionType, RecordConversionStats processingStats,
+    private void verifyRecordsProcessingStats(CompressionType compressionType, RecordValidationStats processingStats,
                                               int numRecords, int numRecordsConverted, long finalBytes,
                                               long preConvertedBytes) {
         assertNotNull(processingStats, "Records processing info is null");

@@ -183,6 +183,7 @@ public class ActivationRecordsGenerator {
                             .append("'zookeeper.metadata.migration.enable' set to 'false'. ");
                         records.add(ZkMigrationState.POST_MIGRATION.toRecord());
                     } else {
+                        // This log message is used in zookeeper_migration_test.py
                         logMessageBuilder
                             .append("Staying in ZK migration mode since 'zookeeper.metadata.migration.enable' ")
                             .append("is still 'true'. ");

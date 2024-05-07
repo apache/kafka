@@ -35,7 +35,7 @@ class DelegationTokenPublisher(
 
   var _firstPublish = true
 
-  override def name(): String = s"DelegationTokenPublisher ${nodeType} id=${conf.nodeId}"
+  override def name(): String = s"DelegationTokenPublisher $nodeType id=${conf.nodeId}"
 
   override def onMetadataUpdate(
     delta: MetadataDelta,
@@ -58,7 +58,7 @@ class DelegationTokenPublisher(
       if (_firstPublish) {
         // Initialize the tokenCache with the Image
         Option(newImage.delegationTokens()).foreach { delegationTokenImage =>
-          delegationTokenImage.tokens().forEach { (tokenId, delegationTokenData) =>
+          delegationTokenImage.tokens().forEach { (_, delegationTokenData) =>
             tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.tokenInformation()))
           }
         }
@@ -77,7 +77,7 @@ class DelegationTokenPublisher(
       }
     } catch {
       case t: Throwable => faultHandler.handleFault("Uncaught exception while " +
-        s"publishing DelegationToken changes from ${deltaName}", t)
+        s"publishing DelegationToken changes from $deltaName", t)
     }
   }
 }

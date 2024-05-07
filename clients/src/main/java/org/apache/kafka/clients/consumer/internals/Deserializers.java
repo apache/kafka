@@ -75,4 +75,12 @@ public class Deserializers<K, V> implements AutoCloseable {
             throw new KafkaException("Failed to close deserializers", exception);
         }
     }
+
+    @Override
+    public String toString() {
+        return "Deserializers{" +
+                "keyDeserializer=" + keyDeserializer +
+                ", valueDeserializer=" + valueDeserializer +
+                '}';
+    }
 }

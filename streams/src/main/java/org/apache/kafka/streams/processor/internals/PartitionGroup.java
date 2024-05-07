@@ -56,7 +56,7 @@ import java.util.function.Function;
  * As a consequence of the definition, the PartitionGroup's stream-time is non-decreasing
  * (i.e., it increases or stays the same over time).
  */
-public class PartitionGroup {
+class PartitionGroup extends AbstractPartitionGroup {
 
     private final Logger logger;
     private final Map<TopicPartition, RecordQueue> partitionQueues;
@@ -71,22 +71,6 @@ public class PartitionGroup {
     private boolean allBuffered;
     private final Map<TopicPartition, Long> idlePartitionDeadlines = new HashMap<>();
     private final Map<TopicPartition, Long> fetchedLags = new HashMap<>();
-
-    static class RecordInfo {
-        RecordQueue queue;
-
-        ProcessorNode<?, ?, ?, ?> node() {
-            return queue.source();
-        }
-
-        TopicPartition partition() {
-            return queue.partition();
-        }
-
-        RecordQueue queue() {
-            return queue;
-        }
-    }
 
     PartitionGroup(final LogContext logContext,
                    final Map<TopicPartition, RecordQueue> partitionQueues,
@@ -106,7 +90,8 @@ public class PartitionGroup {
         streamTime = RecordQueue.UNKNOWN;
     }
 
-    public boolean readyToProcess(final long wallClockTime) {
+    @Override
+    boolean readyToProcess(final long wallClockTime) {
         if (maxTaskIdleMs == StreamsConfig.MAX_TASK_IDLE_MS_DISABLED) {
             if (logger.isTraceEnabled() && !allBuffered && totalBuffered > 0) {
                 final Set<TopicPartition> bufferedPartitions = new HashSet<>();
@@ -209,7 +194,7 @@ public class PartitionGroup {
         }
     }
 
-    // visible for testing
+    @Override
     long partitionTimestamp(final TopicPartition partition) {
         final RecordQueue queue = partitionQueues.get(partition);
         if (queue == null) {
@@ -219,6 +204,7 @@ public class PartitionGroup {
     }
 
     // creates queues for new partitions, removes old queues, saves cached records for previously assigned partitions
+    @Override
     void updatePartitions(final Set<TopicPartition> inputPartitions, final Function<TopicPartition, RecordQueue> recordQueueCreator) {
         final Set<TopicPartition> removedPartitions = new HashSet<>();
         final Set<TopicPartition> newInputPartitions = new HashSet<>(inputPartitions);
@@ -241,6 +227,7 @@ public class PartitionGroup {
         allBuffered = allBuffered && newInputPartitions.isEmpty();
     }
 
+    @Override
     void setPartitionTime(final TopicPartition partition, final long partitionTime) {
         final RecordQueue queue = partitionQueues.get(partition);
         if (queue == null) {
@@ -252,11 +239,7 @@ public class PartitionGroup {
         queue.setPartitionTime(partitionTime);
     }
 
-    /**
-     * Get the next record and queue
-     *
-     * @return StampedRecord
-     */
+    @Override
     StampedRecord nextRecord(final RecordInfo info, final long wallClockTime) {
         StampedRecord record = null;
 
@@ -290,13 +273,7 @@ public class PartitionGroup {
         return record;
     }
 
-    /**
-     * Adds raw records to this partition group
-     *
-     * @param partition  the partition
-     * @param rawRecords the raw records
-     * @return the queue size for the partition
-     */
+    @Override
     int addRawRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
         final RecordQueue recordQueue = partitionQueues.get(partition);
 
@@ -328,13 +305,12 @@ public class PartitionGroup {
         return Collections.unmodifiableSet(partitionQueues.keySet());
     }
 
-    /**
-     * Return the stream-time of this partition group defined as the largest timestamp seen across all partitions
-     */
+    @Override
     long streamTime() {
         return streamTime;
     }
 
+    @Override
     Long headRecordOffset(final TopicPartition partition) {
         final RecordQueue recordQueue = partitionQueues.get(partition);
 
@@ -348,6 +324,7 @@ public class PartitionGroup {
     /**
      * @throws IllegalStateException if the record's partition does not belong to this partition group
      */
+    @Override
     int numBuffered(final TopicPartition partition) {
         final RecordQueue recordQueue = partitionQueues.get(partition);
 
@@ -358,6 +335,7 @@ public class PartitionGroup {
         return recordQueue.size();
     }
 
+    @Override
     int numBuffered() {
         return totalBuffered;
     }
@@ -367,6 +345,7 @@ public class PartitionGroup {
         return allBuffered;
     }
 
+    @Override
     void clear() {
         for (final RecordQueue queue : partitionQueues.values()) {
             queue.clear();
@@ -377,12 +356,14 @@ public class PartitionGroup {
         fetchedLags.clear();
     }
 
+    @Override
     void close() {
         for (final RecordQueue queue : partitionQueues.values()) {
             queue.close();
         }
     }
 
+    @Override
     void updateLags() {
         if (maxTaskIdleMs != StreamsConfig.MAX_TASK_IDLE_MS_DISABLED) {
             for (final TopicPartition tp : partitionQueues.keySet()) {

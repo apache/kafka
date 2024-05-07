@@ -80,7 +80,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -146,7 +145,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
     @Mock private HeaderConverter headerConverter;
-    @Mock private TransformationChain<SourceRecord> transformationChain;
+    @Mock private TransformationChain<SourceRecord, SourceRecord> transformationChain;
     @Mock private Producer<byte[], byte[]> producer;
     @Mock private TopicAdmin admin;
     @Mock private CloseableOffsetStorageReader offsetReader;
@@ -290,7 +289,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
         workerTask = new ExactlyOnceWorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
-                config, clusterConfigState, metrics, errorHandlingMetrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore,
+                config, clusterConfigState, metrics, errorHandlingMetrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.noopOperator(), statusBackingStore,
                 sourceConfig, Runnable::run, preProducerCheck, postProducerCheck, Collections::emptyList);
     }
 
@@ -1027,11 +1026,11 @@ public class ExactlyOnceWorkerSourceTaskTest {
         ConcurrencyUtils.awaitLatch(pollLatch.get(), "task was not polled " + minimum + " time(s) quickly enough");
     }
 
-    private void awaitEmptyPolls(int minimum) throws InterruptedException {
+    private void awaitEmptyPolls(int minimum) {
         awaitPolls(minimum, Collections.emptyList());
     }
 
-    private void awaitPolls(int minimum) throws InterruptedException {
+    private void awaitPolls(int minimum) {
         awaitPolls(minimum, RECORDS);
     }
 
@@ -1051,7 +1050,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         workerTaskFuture = executor.submit(workerTask);
     }
 
-    private void expectSuccessfulFlushes() throws InterruptedException, TimeoutException {
+    private void expectSuccessfulFlushes() {
         when(offsetWriter.beginFlush()).thenReturn(true);
         when(offsetWriter.doFlush(any())).thenAnswer(invocation -> {
             Callback<Void> cb = invocation.getArgument(0);
@@ -1101,8 +1100,8 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     private void expectApplyTransformationChain() {
-        when(transformationChain.apply(any()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(transformationChain.apply(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
     }
 
     private void expectTaskGetTopic() {

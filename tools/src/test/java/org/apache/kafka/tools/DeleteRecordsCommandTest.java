@@ -120,19 +120,26 @@ public class DeleteRecordsCommandTest {
 class DeleteRecordsCommandUnitTest {
     @Test
     public void testOffsetFileNotExists() {
-        assertThrows(IOException.class, () -> DeleteRecordsCommand.main(new String[]{
+        assertThrows(IOException.class, () -> DeleteRecordsCommand.execute(new String[]{
             "--bootstrap-server", "localhost:9092",
             "--offset-json-file", "/not/existing/file"
-        }));
+        }, System.out));
+        assertEquals(1, DeleteRecordsCommand.mainNoExit(
+            "--bootstrap-server", "localhost:9092",
+            "--offset-json-file", "/not/existing/file"));
     }
 
     @Test
     public void testCommandConfigNotExists() {
-        assertThrows(NoSuchFileException.class, () -> DeleteRecordsCommand.main(new String[] {
+        assertThrows(NoSuchFileException.class, () -> DeleteRecordsCommand.execute(new String[] {
             "--bootstrap-server", "localhost:9092",
             "--offset-json-file", "/not/existing/file",
             "--command-config", "/another/not/existing/file"
-        }));
+        }, System.out));
+        assertEquals(1, DeleteRecordsCommand.mainNoExit(
+            "--bootstrap-server", "localhost:9092",
+            "--offset-json-file", "/not/existing/file",
+            "--command-config", "/another/not/existing/file"));
     }
 
     @Test

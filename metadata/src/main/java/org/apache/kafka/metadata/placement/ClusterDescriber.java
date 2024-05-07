@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metadata.placement;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Iterator;
@@ -26,9 +27,14 @@ import java.util.Iterator;
  * Can describe a cluster to a ReplicaPlacer.
  */
 @InterfaceStability.Unstable
-public interface ClusterDescriber {
+public interface ClusterDescriber extends DefaultDirProvider {
     /**
      * Get an iterator through the usable brokers.
      */
     Iterator<UsableBroker> usableBrokers();
+
+    /**
+     * Get the default directory for new partitions placed in a given broker.
+     */
+    Uuid defaultDir(int brokerId);
 }

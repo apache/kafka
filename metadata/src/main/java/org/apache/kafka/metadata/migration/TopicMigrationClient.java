@@ -42,6 +42,13 @@ public interface TopicMigrationClient {
 
     void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor);
 
+    Set<String> readPendingTopicDeletions();
+
+    ZkMigrationLeadershipState clearPendingTopicDeletions(
+        Set<String> pendingTopicDeletions,
+        ZkMigrationLeadershipState state
+    );
+
     ZkMigrationLeadershipState deleteTopic(
         String topicName,
         ZkMigrationLeadershipState state

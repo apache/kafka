@@ -646,7 +646,7 @@ public class TopologyMetadata {
         }
     }
 
-    public static class Subtopology {
+    public static class Subtopology implements Comparable<Subtopology> {
         final int nodeGroupId;
         final String namedTopology;
 
@@ -671,6 +671,22 @@ public class TopologyMetadata {
         @Override
         public int hashCode() {
             return Objects.hash(nodeGroupId, namedTopology);
+        }
+
+        @Override
+        public int compareTo(final Subtopology other) {
+            if (nodeGroupId != other.nodeGroupId) {
+                return Integer.compare(nodeGroupId, other.nodeGroupId);
+            }
+            if (namedTopology == null) {
+                return other.namedTopology == null ? 0 : -1;
+            }
+            if (other.namedTopology == null) {
+                return 1;
+            }
+
+            // Both not null
+            return namedTopology.compareTo(other.namedTopology);
         }
     }
 }

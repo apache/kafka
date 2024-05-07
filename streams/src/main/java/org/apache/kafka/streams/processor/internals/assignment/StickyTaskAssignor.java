@@ -115,10 +115,8 @@ public class StickyTaskAssignor implements TaskAssignor {
             rackAwareTaskAssignor.optimizeActiveTasks(statefulTasks, clientStates, trafficCost, nonOverlapCost);
 
             final TreeSet<TaskId> statelessTasks = (TreeSet<TaskId>) diff(TreeSet::new, allTaskIds, statefulTasks);
-            if (!statelessTasks.isEmpty()) {
-                rackAwareTaskAssignor.optimizeActiveTasks(statelessTasks, clientStates,
-                    STATELESS_TRAFFIC_COST, STATELESS_NON_OVERLAP_COST);
-            }
+            // No-op if statelessTasks is empty
+            rackAwareTaskAssignor.optimizeActiveTasks(statelessTasks, clientStates, STATELESS_TRAFFIC_COST, STATELESS_NON_OVERLAP_COST);
         }
     }
 

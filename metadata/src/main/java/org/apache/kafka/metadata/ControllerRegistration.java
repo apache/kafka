@@ -41,11 +41,11 @@ import java.util.stream.Collectors;
  */
 public class ControllerRegistration {
     public static class Builder {
-        private int id = 0;
-        private Uuid incarnationId = null;
-        private boolean zkMigrationReady = false;
-        private Map<String, Endpoint> listeners = null;
-        private Map<String, VersionRange> supportedFeatures = null;
+        private int id;
+        private Uuid incarnationId;
+        private boolean zkMigrationReady;
+        private Map<String, Endpoint> listeners;
+        private Map<String, VersionRange> supportedFeatures;
 
         public Builder() {
             this.id = 0;
@@ -112,7 +112,7 @@ public class ControllerRegistration {
                 supportedFeatures = new HashMap<>();
                 supportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                         MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
-                        MetadataVersion.latest().featureLevel()));
+                        MetadataVersion.latestProduction().featureLevel()));
             }
             return new ControllerRegistration(id,
                 incarnationId,
@@ -189,7 +189,7 @@ public class ControllerRegistration {
                 setMaxSupportedVersion(entry.getValue().max()));
         }
         return new ApiMessageAndVersion(registrationRecord,
-            options.metadataVersion().registerBrokerRecordVersion());
+            options.metadataVersion().registerControllerRecordVersion());
     }
 
     @Override

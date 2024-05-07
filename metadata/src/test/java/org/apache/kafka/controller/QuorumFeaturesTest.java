@@ -50,6 +50,24 @@ public class QuorumFeaturesTest {
     }
 
     @Test
+    public void testDefaultFeatureMap() {
+        Map<String, VersionRange> expectedFeatures = new HashMap<>(1);
+        expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
+            MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+            MetadataVersion.LATEST_PRODUCTION.featureLevel()));
+        assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(false));
+    }
+
+    @Test
+    public void testDefaultFeatureMapWithUnstable() {
+        Map<String, VersionRange> expectedFeatures = new HashMap<>(1);
+        expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
+            MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+            MetadataVersion.latestTesting().featureLevel()));
+        assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(true));
+    }
+
+    @Test
     public void testLocalSupportedFeature() {
         assertEquals(VersionRange.of(0, 3), QUORUM_FEATURES.localSupportedFeature("foo"));
         assertEquals(VersionRange.of(0, 4), QUORUM_FEATURES.localSupportedFeature("bar"));
@@ -77,7 +95,7 @@ public class QuorumFeaturesTest {
 
     @Test
     public void testZkMigrationNotReadyIfMetadataVersionTooLow() {
-        assertEquals(Optional.of("Metadata version too low at 3.0-IV1"),
+        assertEquals(Optional.of("The metadata.version too low at 3.0-IV1"),
             QUORUM_FEATURES.reasonAllControllersZkMigrationNotReady(
                 MetadataVersion.IBP_3_0_IV1, Collections.emptyMap()));
     }

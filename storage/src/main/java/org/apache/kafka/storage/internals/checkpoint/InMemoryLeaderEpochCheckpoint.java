@@ -42,7 +42,7 @@ import java.util.List;
 public class InMemoryLeaderEpochCheckpoint implements LeaderEpochCheckpoint {
     private List<EpochEntry> epochs = Collections.emptyList();
 
-    public void write(Collection<EpochEntry> epochs) {
+    public void write(Collection<EpochEntry> epochs, boolean ignored) {
         this.epochs = new ArrayList<>(epochs);
     }
 
@@ -52,7 +52,7 @@ public class InMemoryLeaderEpochCheckpoint implements LeaderEpochCheckpoint {
 
     public ByteBuffer readAsByteBuffer() throws IOException {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream, StandardCharsets.UTF_8));) {
+        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream, StandardCharsets.UTF_8))) {
             CheckpointFile.CheckpointWriteBuffer<EpochEntry> writeBuffer = new CheckpointFile.CheckpointWriteBuffer<>(writer, 0, LeaderEpochCheckpointFile.FORMATTER);
             writeBuffer.write(epochs);
             writer.flush();

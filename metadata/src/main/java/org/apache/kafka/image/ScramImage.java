@@ -35,7 +35,6 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Map.Entry;
-import java.util.stream.Collectors;
 
 
 /**
@@ -61,12 +60,12 @@ public final class ScramImage {
             }
         } else {
             boolean isEmpty = true;
-            StringBuffer scramImageString = new StringBuffer("ScramImage({");
+            StringBuilder scramImageString = new StringBuilder("ScramImage({");
             for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : mechanisms.entrySet()) {
                 if (!mechanismEntry.getValue().isEmpty()) {
                     scramImageString.append(mechanismEntry.getKey() + ":");
                     List<String> users = new ArrayList<>(mechanismEntry.getValue().keySet());
-                    scramImageString.append(users.stream().collect(Collectors.joining(", ")));
+                    scramImageString.append(String.join(", ", users));
                     scramImageString.append("},{");
                     isEmpty = false;
                 }
@@ -84,9 +83,9 @@ public final class ScramImage {
 
     public DescribeUserScramCredentialsResponseData describe(DescribeUserScramCredentialsRequestData request) {
         List<UserName> users = request.users();
-        Map<String, Boolean> uniqueUsers = new HashMap<String, Boolean>();
+        Map<String, Boolean> uniqueUsers = new HashMap<>();
 
-        if ((users == null) || (users.size() == 0)) {
+        if ((users == null) || (users.isEmpty())) {
             // If there are no users listed then get all the users
             for (Map<String, ScramCredentialData> scramCredentialDataSet : mechanisms.values()) {
                 for (String user : scramCredentialDataSet.keySet()) {
@@ -111,7 +110,7 @@ public final class ScramImage {
 
             if (!user.getValue()) {
                 boolean datafound = false;
-                List<CredentialInfo> credentialInfos = new ArrayList<CredentialInfo>();
+                List<CredentialInfo> credentialInfos = new ArrayList<>();
                 for (Map.Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismsEntry : mechanisms.entrySet()) {
                     Map<String, ScramCredentialData> credentialDataSet = mechanismsEntry.getValue();
                     if (credentialDataSet.containsKey(user.getKey())) {

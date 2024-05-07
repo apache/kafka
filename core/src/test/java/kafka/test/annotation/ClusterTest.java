@@ -36,11 +36,12 @@ public @interface ClusterTest {
     Type clusterType() default Type.DEFAULT;
     int brokers() default 0;
     int controllers() default 0;
+    int disksPerBroker() default 0;
     AutoStart autoStart() default AutoStart.DEFAULT;
 
     String name() default "";
     SecurityProtocol securityProtocol() default SecurityProtocol.PLAINTEXT;
     String listener() default "";
-    MetadataVersion metadataVersion() default MetadataVersion.IBP_3_7_IV0;
+    MetadataVersion metadataVersion() default MetadataVersion.IBP_3_8_IV0;
     ClusterConfigProperty[] serverProperties() default {};
 }

@@ -20,5 +20,5 @@ package kafka.common
 /**
  * An exception that indicates a thread is being shut down normally.
  */
-class ThreadShutdownException() extends RuntimeException {
+class ThreadShutdownException extends RuntimeException {
 }

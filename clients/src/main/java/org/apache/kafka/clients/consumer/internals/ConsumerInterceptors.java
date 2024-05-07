@@ -40,6 +40,11 @@ public class ConsumerInterceptors<K, V> implements Closeable {
         this.interceptors = interceptors;
     }
 
+    /** Returns true if no interceptors are defined. All other methods will be no-ops in this case. */
+    public boolean isEmpty() {
+        return interceptors.isEmpty();
+    }
+
     /**
      * This is called when the records are about to be returned to the user.
      * <p>

@@ -47,11 +47,6 @@ public class SnapshotEmitterTest {
         TreeMap<OffsetAndEpoch, FakeSnapshotWriter> writers = new TreeMap<>();
 
         @Override
-        public void initialize() {
-            // nothing to do
-        }
-
-        @Override
         public void register(Listener<ApiMessageAndVersion> listener) {
             // nothing to do
         }
@@ -135,7 +130,7 @@ public class SnapshotEmitterTest {
     }
 
     @Test
-    public void testEmit() throws Exception {
+    public void testEmit() {
         MockRaftClient mockRaftClient = new MockRaftClient();
         MockTime time = new MockTime(0, 10000L, 20000L);
         SnapshotEmitter emitter = new SnapshotEmitter.Builder().

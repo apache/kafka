@@ -81,13 +81,6 @@ public class ConnectPluginPathTest {
     @TempDir
     public Path workspace;
 
-    @BeforeAll
-    public static void setUp() {
-        // Work around a circular-dependency in TestPlugins.
-        TestPlugins.pluginPath();
-    }
-
-
     @Test
     public void testNoArguments() {
         CommandResult res = runCommand();

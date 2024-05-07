@@ -112,7 +112,7 @@ public class StoreQueryIntegrationTest {
 
     @BeforeEach
     public void before(final TestInfo testInfo) throws InterruptedException, IOException {
-        this.appId = safeUniqueTestName(getClass(), testInfo);
+        this.appId = safeUniqueTestName(testInfo);
     }
 
     @AfterEach

@@ -34,6 +34,7 @@ import kafka.server.metadata.ConfigRepository;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
+import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.authorizer.Authorizer;
 
 import java.util.Collections;
@@ -62,6 +63,7 @@ public class KafkaApisBuilder {
     private Time time = Time.SYSTEM;
     private DelegationTokenManager tokenManager = null;
     private ApiVersionManager apiVersionManager = null;
+    private Optional<ClientMetricsManager> clientMetricsManager = Optional.empty();
 
     public KafkaApisBuilder setRequestChannel(RequestChannel requestChannel) {
         this.requestChannel = requestChannel;
@@ -158,6 +160,11 @@ public class KafkaApisBuilder {
         return this;
     }
 
+    public KafkaApisBuilder setClientMetricsManager(Optional<ClientMetricsManager> clientMetricsManager) {
+        this.clientMetricsManager = clientMetricsManager;
+        return this;
+    }
+
     public KafkaApis build() {
         if (requestChannel == null) throw new RuntimeException("you must set requestChannel");
         if (metadataSupport == null) throw new RuntimeException("you must set metadataSupport");
@@ -193,6 +200,7 @@ public class KafkaApisBuilder {
                              clusterId,
                              time,
                              tokenManager,
-                             apiVersionManager);
+                             apiVersionManager,
+                             OptionConverters.toScala(clientMetricsManager));
     }
 }

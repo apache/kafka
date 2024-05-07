@@ -24,20 +24,12 @@
       "about": "The current member epoch that is expected from the member in the heartbeat request." },
     { "name": "PreviousMemberEpoch", "versions": "0+", "type": "int32",
       "about": "If the last epoch bump is lost before reaching the member, the member will retry with the previous epoch." },
-    { "name": "TargetMemberEpoch", "versions": "0+", "type": "int32",
-      "about": "The target epoch corresponding to the assignment used to compute the AssignedPartitions, the PartitionsPendingRevocation and the PartitionsPendingAssignment fields." },
+    { "name": "State", "versions": "0+", "type": "int8",
+      "about": "The member state. See ConsumerGroupMember.MemberState for the possible values." },
     { "name": "AssignedPartitions", "versions": "0+", "type": "[]TopicPartitions",
       "about": "The partitions assigned to (or owned by) this member." },
     { "name": "PartitionsPendingRevocation", "versions": "0+", "type": "[]TopicPartitions",
-      "about": "The partitions that must be revoked by this member." },
-    { "name": "PartitionsPendingAssignment", "versions": "0+", "type": "[]TopicPartitions",
-      "about": "The partitions that will be assigned to this member when they are freed up by their current owners." },
-    { "name": "Error", "versions": "0+", "type": "int8",
-      "about": "The error reported by the assignor." },
-    { "name": "MetadataVersion", "versions": "0+", "type": "int16",
-      "about": "The version of the metadata bytes." },
-    { "name": "MetadataBytes", "versions": "0+", "type": "bytes",
-      "about": "The metadata bytes." }
+      "about": "The partitions that must be revoked by this member." }
   ],
   "commonStructs": [
     { "name": "TopicPartitions", "versions": "0+", "fields": [

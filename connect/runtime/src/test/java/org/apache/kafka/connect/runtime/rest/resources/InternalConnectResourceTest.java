@@ -21,6 +21,7 @@ import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.util.Callback;
 import org.junit.Before;
 import org.junit.Test;
@@ -74,7 +75,7 @@ public class InternalConnectResourceTest {
 
     @Before
     public void setup() {
-        internalResource = new InternalConnectResource(herder, restClient);
+        internalResource = new InternalConnectResource(herder, restClient, () -> RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS);
         internalResource.uriInfo = uriInfo;
     }
 
@@ -187,7 +188,7 @@ public class InternalConnectResourceTest {
     }
 
     @Test
-    public void testFenceZombiesConnectorNotFound() throws Throwable {
+    public void testFenceZombiesConnectorNotFound() {
         @SuppressWarnings("unchecked")
         final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
 

@@ -18,7 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.RecordConversionStats;
+import org.apache.kafka.common.record.RecordValidationStats;
 import org.apache.kafka.common.requests.ProduceResponse.RecordError;
 
 import java.util.Collections;
@@ -32,15 +32,15 @@ public class LogAppendInfo {
 
     public static final LogAppendInfo UNKNOWN_LOG_APPEND_INFO = new LogAppendInfo(-1, -1, OptionalInt.empty(),
             RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
-            RecordConversionStats.EMPTY, CompressionType.NONE, -1, -1L);
+            RecordValidationStats.EMPTY, CompressionType.NONE, -1, -1L);
 
     private long firstOffset;
     private long lastOffset;
     private long maxTimestamp;
-    private long offsetOfMaxTimestamp;
+    private long shallowOffsetOfMaxTimestamp;
     private long logAppendTime;
     private long logStartOffset;
-    private RecordConversionStats recordConversionStats;
+    private RecordValidationStats recordValidationStats;
 
     private final OptionalInt lastLeaderEpoch;
     private final CompressionType sourceCompression;
@@ -52,62 +52,62 @@ public class LogAppendInfo {
     /**
      * Creates an instance with the given params.
      *
-     * @param firstOffset            The first offset in the message set unless the message format is less than V2 and we are appending
-     *                               to the follower.
-     * @param lastOffset             The last offset in the message set
-     * @param lastLeaderEpoch        The partition leader epoch corresponding to the last offset, if available.
-     * @param maxTimestamp           The maximum timestamp of the message set.
-     * @param offsetOfMaxTimestamp   The offset of the message with the maximum timestamp.
-     * @param logAppendTime          The log append time (if used) of the message set, otherwise Message.NoTimestamp
-     * @param logStartOffset         The start offset of the log at the time of this append.
-     * @param recordConversionStats  Statistics collected during record processing, `null` if `assignOffsets` is `false`
-     * @param sourceCompression      The source codec used in the message set (send by the producer)
-     * @param validBytes             The number of valid bytes
-     * @param lastOffsetOfFirstBatch The last offset of the first batch
+     * @param firstOffset                   The first offset in the message set unless the message format is less than V2 and we are appending
+     *                                      to the follower.
+     * @param lastOffset                    The last offset in the message set
+     * @param lastLeaderEpoch               The partition leader epoch corresponding to the last offset, if available.
+     * @param maxTimestamp                  The maximum timestamp of the message set.
+     * @param shallowOffsetOfMaxTimestamp   The last offset of the batch with the maximum timestamp.
+     * @param logAppendTime                 The log append time (if used) of the message set, otherwise Message.NoTimestamp
+     * @param logStartOffset                The start offset of the log at the time of this append.
+     * @param recordValidationStats         Statistics collected during record processing, `null` if `assignOffsets` is `false`
+     * @param sourceCompression             The source codec used in the message set (send by the producer)
+     * @param validBytes                    The number of valid bytes
+     * @param lastOffsetOfFirstBatch        The last offset of the first batch
      */
     public LogAppendInfo(long firstOffset,
                          long lastOffset,
                          OptionalInt lastLeaderEpoch,
                          long maxTimestamp,
-                         long offsetOfMaxTimestamp,
+                         long shallowOffsetOfMaxTimestamp,
                          long logAppendTime,
                          long logStartOffset,
-                         RecordConversionStats recordConversionStats,
+                         RecordValidationStats recordValidationStats,
                          CompressionType sourceCompression,
                          int validBytes,
                          long lastOffsetOfFirstBatch) {
-        this(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, offsetOfMaxTimestamp, logAppendTime, logStartOffset,
-                recordConversionStats, sourceCompression, validBytes, lastOffsetOfFirstBatch, Collections.<RecordError>emptyList(),
+        this(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, shallowOffsetOfMaxTimestamp, logAppendTime, logStartOffset,
+            recordValidationStats, sourceCompression, validBytes, lastOffsetOfFirstBatch, Collections.emptyList(),
                 LeaderHwChange.NONE);
     }
 
     /**
      * Creates an instance with the given params.
      *
-     * @param firstOffset            The first offset in the message set unless the message format is less than V2 and we are appending
-     *                               to the follower.
-     * @param lastOffset             The last offset in the message set
-     * @param lastLeaderEpoch        The partition leader epoch corresponding to the last offset, if available.
-     * @param maxTimestamp           The maximum timestamp of the message set.
-     * @param offsetOfMaxTimestamp   The offset of the message with the maximum timestamp.
-     * @param logAppendTime          The log append time (if used) of the message set, otherwise Message.NoTimestamp
-     * @param logStartOffset         The start offset of the log at the time of this append.
-     * @param recordConversionStats  Statistics collected during record processing, `null` if `assignOffsets` is `false`
-     * @param sourceCompression      The source codec used in the message set (send by the producer)
-     * @param validBytes             The number of valid bytes
-     * @param lastOffsetOfFirstBatch The last offset of the first batch
-     * @param recordErrors           List of record errors that caused the respective batch to be dropped
-     * @param leaderHwChange         Incremental if the high watermark needs to be increased after appending record
-     *                               Same if high watermark is not changed. None is the default value and it means append failed
+     * @param firstOffset                   The first offset in the message set unless the message format is less than V2 and we are appending
+     *                                      to the follower.
+     * @param lastOffset                    The last offset in the message set
+     * @param lastLeaderEpoch               The partition leader epoch corresponding to the last offset, if available.
+     * @param maxTimestamp                  The maximum timestamp of the message set.
+     * @param shallowOffsetOfMaxTimestamp   The last offset of the batch with the maximum timestamp.
+     * @param logAppendTime                 The log append time (if used) of the message set, otherwise Message.NoTimestamp
+     * @param logStartOffset                The start offset of the log at the time of this append.
+     * @param recordValidationStats         Statistics collected during record processing, `null` if `assignOffsets` is `false`
+     * @param sourceCompression             The source codec used in the message set (send by the producer)
+     * @param validBytes                    The number of valid bytes
+     * @param lastOffsetOfFirstBatch        The last offset of the first batch
+     * @param recordErrors                  List of record errors that caused the respective batch to be dropped
+     * @param leaderHwChange                Incremental if the high watermark needs to be increased after appending record
+     *                                      Same if high watermark is not changed. None is the default value and it means append failed
      */
     public LogAppendInfo(long firstOffset,
                          long lastOffset,
                          OptionalInt lastLeaderEpoch,
                          long maxTimestamp,
-                         long offsetOfMaxTimestamp,
+                         long shallowOffsetOfMaxTimestamp,
                          long logAppendTime,
                          long logStartOffset,
-                         RecordConversionStats recordConversionStats,
+                         RecordValidationStats recordValidationStats,
                          CompressionType sourceCompression,
                          int validBytes,
                          long lastOffsetOfFirstBatch,
@@ -117,10 +117,10 @@ public class LogAppendInfo {
         this.lastOffset = lastOffset;
         this.lastLeaderEpoch = lastLeaderEpoch;
         this.maxTimestamp = maxTimestamp;
-        this.offsetOfMaxTimestamp = offsetOfMaxTimestamp;
+        this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
         this.logAppendTime = logAppendTime;
         this.logStartOffset = logStartOffset;
-        this.recordConversionStats = recordConversionStats;
+        this.recordValidationStats = recordValidationStats;
         this.sourceCompression = sourceCompression;
         this.validBytes = validBytes;
         this.lastOffsetOfFirstBatch = lastOffsetOfFirstBatch;
@@ -156,12 +156,12 @@ public class LogAppendInfo {
         this.maxTimestamp = maxTimestamp;
     }
 
-    public long offsetOfMaxTimestamp() {
-        return offsetOfMaxTimestamp;
+    public long shallowOffsetOfMaxTimestamp() {
+        return shallowOffsetOfMaxTimestamp;
     }
 
-    public void setOffsetOfMaxTimestamp(long offsetOfMaxTimestamp) {
-        this.offsetOfMaxTimestamp = offsetOfMaxTimestamp;
+    public void setShallowOffsetOfMaxTimestamp(long shallowOffsetOfMaxTimestamp) {
+        this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
     }
 
     public long logAppendTime() {
@@ -180,12 +180,12 @@ public class LogAppendInfo {
         this.logStartOffset = logStartOffset;
     }
 
-    public RecordConversionStats recordConversionStats() {
-        return recordConversionStats;
+    public RecordValidationStats recordValidationStats() {
+        return recordValidationStats;
     }
 
-    public void setRecordConversionStats(RecordConversionStats recordConversionStats) {
-        this.recordConversionStats = recordConversionStats;
+    public void setRecordValidationStats(RecordValidationStats recordValidationStats) {
+        this.recordValidationStats = recordValidationStats;
     }
 
     public CompressionType sourceCompression() {
@@ -233,13 +233,13 @@ public class LogAppendInfo {
      * @return a new instance with the given LeaderHwChange
      */
     public LogAppendInfo copy(LeaderHwChange newLeaderHwChange) {
-        return new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, offsetOfMaxTimestamp, logAppendTime, logStartOffset, recordConversionStats,
+        return new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, shallowOffsetOfMaxTimestamp, logAppendTime, logStartOffset, recordValidationStats,
                 sourceCompression, validBytes, lastOffsetOfFirstBatch, recordErrors, newLeaderHwChange);
     }
 
     public static LogAppendInfo unknownLogAppendInfoWithLogStartOffset(long logStartOffset) {
         return new LogAppendInfo(-1, -1, OptionalInt.empty(), RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-                RecordConversionStats.EMPTY, CompressionType.NONE, -1, -1L);
+                RecordValidationStats.EMPTY, CompressionType.NONE, -1, -1L);
     }
 
     /**
@@ -249,7 +249,7 @@ public class LogAppendInfo {
      */
     public static LogAppendInfo unknownLogAppendInfoWithAdditionalInfo(long logStartOffset, List<RecordError> recordErrors) {
         return new LogAppendInfo(-1, -1, OptionalInt.empty(), RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-                RecordConversionStats.EMPTY, CompressionType.NONE, -1, -1L, recordErrors, LeaderHwChange.NONE);
+                RecordValidationStats.EMPTY, CompressionType.NONE, -1, -1L, recordErrors, LeaderHwChange.NONE);
     }
 
     @Override
@@ -259,10 +259,10 @@ public class LogAppendInfo {
                 ", lastOffset=" + lastOffset +
                 ", lastLeaderEpoch=" + lastLeaderEpoch +
                 ", maxTimestamp=" + maxTimestamp +
-                ", offsetOfMaxTimestamp=" + offsetOfMaxTimestamp +
+                ", shallowOffsetOfMaxTimestamp=" + shallowOffsetOfMaxTimestamp +
                 ", logAppendTime=" + logAppendTime +
                 ", logStartOffset=" + logStartOffset +
-                ", recordConversionStats=" + recordConversionStats +
+                ", recordConversionStats=" + recordValidationStats +
                 ", sourceCompression=" + sourceCompression +
                 ", validBytes=" + validBytes +
                 ", lastOffsetOfFirstBatch=" + lastOffsetOfFirstBatch +

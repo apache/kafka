@@ -29,48 +29,48 @@ import java.util.NoSuchElementException;
  * We handle divergences between the current state and historical state by copying a
  * reference to elements that have been deleted or overwritten into the most recent
  * snapshot tier.
- *
+ * <br>
  * Note that there are no keys in SnapshottableHashTable, only values.  So it more similar
  * to a hash set than a hash map.  The subclasses implement full-featured maps and sets
  * using this class as a building block.
- *
+ * <br>
  * Each snapshot tier contains a size and a hash table.  The size reflects the size at
  * the time the snapshot was taken.  Note that, as an optimization, snapshot tiers will
  * be null if they don't contain anything.  So for example, if snapshot 20 of Object O
  * contains the same entries as snapshot 10 of that object, the snapshot 20 tier for
  * object O will be null.
- *
+ * <br>
  * The current tier's data is stored in the fields inherited from BaseHashTable.  It
  * would be conceptually simpler to have a separate BaseHashTable object, but since Java
  * doesn't have value types, subclassing is the only way to avoid another pointer
  * indirection and the associated extra memory cost.
- *
+ * <br>
  * Note that each element in the hash table contains a start epoch, and a value.  The
  * start epoch is there to identify when the object was first inserted.  This in turn
  * determines which snapshots it is a member of.
- *
+ * <br>
  * In order to retrieve an object from snapshot E, we start by checking to see if the
  * object exists in the "current" hash tier.  If it does, and its startEpoch extends back
  * to E, we return that object.  Otherwise, we check all the snapshot tiers, starting
  * with E, and ending with the most recent snapshot, to see if the object is there.
  * As an optimization, if we encounter the object in a snapshot tier but its epoch is too
  * new, we know that its value at epoch E must be null, so we can return that immediately.
- *
+ * <br>
  * The class hierarchy looks like this:
- *
+ * <pre>
  *        Revertable       BaseHashTable
  *              ↑              ↑
  *           SnapshottableHashTable → SnapshotRegistry → Snapshot
  *               ↑             ↑
  *   TimelineHashSet       TimelineHashMap
- *
+ * </pre>
  * BaseHashTable is a simple hash table that uses separate chaining.  The interface is
  * pretty bare-bones since this class is not intended to be used directly by end-users.
- *
+ * <br>
  * This class, SnapshottableHashTable, has the logic for snapshotting and iterating over
  * snapshots.  This is the core of the snapshotted hash table code and handles the
  * tiering.
- *
+ * <br>
  * TimelineHashSet and TimelineHashMap are mostly wrappers around this
  * SnapshottableHashTable class.  They implement standard Java APIs for Set and Map,
  * respectively.  There's a fair amount of boilerplate for this, but it's necessary so
@@ -78,11 +78,11 @@ import java.util.NoSuchElementException;
  * The accessor APIs have two versions -- one that looks at the current state, and one
  * that looks at a historical snapshotted state.  Mutation APIs only ever mutate the
  * current state.
- *
+ * <br>
  * One very important feature of SnapshottableHashTable is that we support iterating
  * over a snapshot even while changes are being made to the current state.  See the
  * Javadoc for the iterator for more information about how this is accomplished.
- *
+ * <br>
  * All of these classes require external synchronization, and don't support null keys or
  * values.
  */

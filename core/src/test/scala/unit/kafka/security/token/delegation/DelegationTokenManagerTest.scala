@@ -20,10 +20,8 @@ package kafka.security.token.delegation
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.{Base64, Properties}
-import kafka.network.RequestChannel.Session
-import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils}
-import kafka.security.authorizer.AclEntry.WildcardHost
-import kafka.server.{CreateTokenResult, Defaults, DelegationTokenManager, DelegationTokenManagerZk, KafkaConfig, QuorumTestHarness}
+import kafka.security.authorizer.AclAuthorizer
+import kafka.server.{CreateTokenResult, DelegationTokenManager, DelegationTokenManagerZk, KafkaConfig, QuorumTestHarness}
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclOperation}
@@ -38,12 +36,16 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{MockTime, SecurityUtils, Time}
+import org.apache.kafka.network.Session
+import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
+import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.config.{Defaults, KafkaSecurityConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.Buffer
 
 /*
  * These tests are only for the Zk DelegationTokenManager.
@@ -54,11 +56,11 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
   val time = new MockTime()
   val owner = SecurityUtils.parseKafkaPrincipal("User:owner")
   val renewer = List(SecurityUtils.parseKafkaPrincipal("User:renewer1"))
-  val tokenManagers = Buffer[DelegationTokenManager]()
+  val tokenManagers = mutable.Buffer[DelegationTokenManager]()
 
   val secretKey = "secretKey"
-  val maxLifeTimeMsDefault = Defaults.DelegationTokenMaxLifeTimeMsDefault
-  val renewTimeMsDefault = Defaults.DelegationTokenExpiryTimeMsDefault
+  val maxLifeTimeMsDefault = Defaults.DELEGATION_TOKEN_MAX_LIFE_TIME_MS
+  val renewTimeMsDefault = Defaults.DELEGATION_TOKEN_EXPIRY_TIME_MS
   var tokenCache: DelegationTokenCache = _
   var props: Properties = _
 
@@ -70,7 +72,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     props = TestUtils.createBrokerConfig(0, zkConnect, enableToken = true)
-    props.put(KafkaConfig.SaslEnabledMechanismsProp, ScramMechanism.mechanismNames().asScala.mkString(","))
+    props.put(KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, ScramMechanism.mechanismNames().asScala.mkString(","))
     props.put(KafkaConfig.DelegationTokenSecretKeyProp, secretKey)
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames())
   }
@@ -302,7 +304,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
 
     //get all tokens for multiple owners (owner1, renewer4) and with permission
     createAcl(new AclBinding(new ResourcePattern(DELEGATION_TOKEN, tokenId3, LITERAL),
-      new AccessControlEntry(owner1.toString, WildcardHost, DESCRIBE, ALLOW)))
+      new AccessControlEntry(owner1.toString, WILDCARD_HOST, DESCRIBE, ALLOW)))
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, List(owner1, renewer4))
     assertEquals(3, tokens.size)
 
@@ -315,9 +317,9 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     assertEquals(1, tokens.size)
 
     //get all tokens for multiple owners (renewer2, renewer3) which are token renewers principals and with permissions
-    hostSession = Session(renewer2, InetAddress.getByName("192.168.1.1"))
+    hostSession = new Session(renewer2, InetAddress.getByName("192.168.1.1"))
     createAcl(new AclBinding(new ResourcePattern(DELEGATION_TOKEN, tokenId2, LITERAL),
-      new AccessControlEntry(renewer2.toString, WildcardHost, DESCRIBE, ALLOW)))
+      new AccessControlEntry(renewer2.toString, WILDCARD_HOST, DESCRIBE, ALLOW)))
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession,  renewer2, List(renewer2, renewer3))
     assertEquals(2, tokens.size)
 

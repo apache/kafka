@@ -64,6 +64,7 @@ public class MirrorSourceTask extends SourceTask {
     private ReplicationPolicy replicationPolicy;
     private MirrorSourceMetrics metrics;
     private boolean stopping = false;
+    private final Map<TopicPartition, OffsetSync> delayedOffsetSyncs = new LinkedHashMap<>();
     private final Map<TopicPartition, OffsetSync> pendingOffsetSyncs = new LinkedHashMap<>();
     private Semaphore outstandingOffsetSyncs;
     private Semaphore consumerAccess;
@@ -103,18 +104,17 @@ public class MirrorSourceTask extends SourceTask {
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
         offsetProducer = MirrorUtils.newProducer(config.offsetSyncsTopicProducerConfig());
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
-        Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(taskTopicPartitions);
-        consumer.assign(topicPartitionOffsets.keySet());
-        log.info("Starting with {} previously uncommitted partitions.", topicPartitionOffsets.entrySet().stream()
-            .filter(x -> x.getValue() == 0L).count());
-        log.trace("Seeking offsets: {}", topicPartitionOffsets);
-        topicPartitionOffsets.forEach(consumer::seek);
+        initializeConsumer(taskTopicPartitions);
+
         log.info("{} replicating {} topic-partitions {}->{}: {}.", Thread.currentThread().getName(),
             taskTopicPartitions.size(), sourceClusterAlias, config.targetClusterAlias(), taskTopicPartitions);
     }
 
     @Override
     public void commit() {
+        // Offset syncs which were not emitted immediately due to their offset spacing should be sent periodically
+        // This ensures that low-volume topics aren't left with persistent lag at the end of the topic
+        promoteDelayedOffsetSyncs();
         // Publish any offset syncs that we've queued up, but have not yet been able to publish
         // (likely because we previously reached our limit for number of outstanding syncs)
         firePendingOffsetSyncs();
@@ -210,13 +210,25 @@ public class MirrorSourceTask extends SourceTask {
                                        long downstreamOffset) {
         PartitionState partitionState =
             partitionStates.computeIfAbsent(topicPartition, x -> new PartitionState(maxOffsetLag));
+        OffsetSync offsetSync = new OffsetSync(topicPartition, upstreamOffset, downstreamOffset);
         if (partitionState.update(upstreamOffset, downstreamOffset)) {
-            OffsetSync offsetSync = new OffsetSync(topicPartition, upstreamOffset, downstreamOffset);
+            // Queue this sync for an immediate send, as downstream state is sufficiently stale
             synchronized (this) {
+                delayedOffsetSyncs.remove(topicPartition);
                 pendingOffsetSyncs.put(topicPartition, offsetSync);
             }
             partitionState.reset();
+        } else {
+            // Queue this sync to be delayed until the next periodic offset commit
+            synchronized (this) {
+                delayedOffsetSyncs.put(topicPartition, offsetSync);
+            }
         }
+    }
+
+    private synchronized void promoteDelayedOffsetSyncs() {
+        pendingOffsetSyncs.putAll(delayedOffsetSyncs);
+        delayedOffsetSyncs.clear();
     }
 
     private void firePendingOffsetSyncs() {
@@ -266,7 +278,26 @@ public class MirrorSourceTask extends SourceTask {
     private Long loadOffset(TopicPartition topicPartition) {
         Map<String, Object> wrappedPartition = MirrorUtils.wrapPartition(topicPartition, sourceClusterAlias);
         Map<String, Object> wrappedOffset = context.offsetStorageReader().offset(wrappedPartition);
-        return MirrorUtils.unwrapOffset(wrappedOffset) + 1;
+        return MirrorUtils.unwrapOffset(wrappedOffset);
+    }
+
+    // visible for testing
+    void initializeConsumer(Set<TopicPartition> taskTopicPartitions) {
+        Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(taskTopicPartitions);
+        consumer.assign(topicPartitionOffsets.keySet());
+        log.info("Starting with {} previously uncommitted partitions.", topicPartitionOffsets.values().stream()
+                .filter(this::isUncommitted).count());
+
+        topicPartitionOffsets.forEach((topicPartition, offset) -> {
+            // Do not call seek on partitions that don't have an existing offset committed.
+            if (isUncommitted(offset)) {
+                log.trace("Skipping seeking offset for topicPartition: {}", topicPartition);
+                return;
+            }
+            long nextOffsetToCommittedOffset = offset + 1L;
+            log.trace("Seeking to offset {} for topicPartition: {}", nextOffsetToCommittedOffset, topicPartition);
+            consumer.seek(topicPartition, nextOffsetToCommittedOffset);
+        });
     }
 
     // visible for testing 
@@ -300,6 +331,10 @@ public class MirrorSourceTask extends SourceTask {
         } else {
             return bytes.length;
         }
+    }
+
+    private boolean isUncommitted(Long offset) {
+        return offset == null || offset < 0;
     }
 
     static class PartitionState {

@@ -20,7 +20,7 @@ from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.services.kafka import KafkaService, quorum
+from kafkatest.services.kafka import KafkaService, quorum, consumer_group
 from kafkatest.services.monitor.jmx import JmxTool
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
@@ -70,8 +70,16 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         self.kafka.start()
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_consumer_preferred_read_replica(self, metadata_quorum=quorum.zk):
+    @matrix(
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_consumer_preferred_read_replica(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         This test starts up brokers with "broker.rack" and "replica.selector.class" configurations set. The replica
         selector is set to the rack-aware implementation. One of the brokers has a different rack than the other two.
@@ -91,10 +99,15 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
 
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic,
                                            throughput=self.producer_throughput)
+        consumer_properties = consumer_group.maybe_set_group_protocol(group_protocol,
+                                                                      config={
+                                                                          "client.rack": non_leader_rack,
+                                                                          "metadata.max.age.ms": self.METADATA_MAX_AGE_MS
+                                                                      })
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic,
                                         client_id="console-consumer", group_id="test-consumer-group-1",
                                         consumer_timeout_ms=60000, message_validator=is_int,
-                                        consumer_properties={"client.rack": non_leader_rack, "metadata.max.age.ms": self.METADATA_MAX_AGE_MS})
+                                        consumer_properties=consumer_properties)
 
         # Start up and let some data get produced
         self.start_producer_and_consumer()

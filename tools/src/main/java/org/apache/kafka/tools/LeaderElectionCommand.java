@@ -28,6 +28,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ElectionNotNeededException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
@@ -62,11 +63,17 @@ public class LeaderElectionCommand {
     private static final DecodeJson.DecodeInteger INT = new DecodeJson.DecodeInteger();
 
     public static void main(String... args) {
+        Exit.exit(mainNoExit(args));
+    }
+
+    static int mainNoExit(String... args) {
         try {
             run(Duration.ofMillis(30000), args);
-        } catch (Exception e) {
+            return 0;
+        } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
+            return 1;
         }
     }
 
@@ -79,7 +86,7 @@ public class LeaderElectionCommand {
         ElectionType electionType = commandOptions.getElectionType();
         Optional<Set<TopicPartition>> jsonFileTopicPartitions =
             Optional.ofNullable(commandOptions.getPathToJsonFile())
-                .map(path -> parseReplicaElectionData(path));
+                .map(LeaderElectionCommand::parseReplicaElectionData);
 
         Optional<String> topicOption = Optional.ofNullable(commandOptions.getTopic());
         Optional<Integer> partitionOption = Optional.ofNullable(commandOptions.getPartition());
@@ -99,8 +106,12 @@ public class LeaderElectionCommand {
             props.putAll(Utils.loadProps(commandOptions.getAdminClientConfig()));
         }
         props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, commandOptions.getBootstrapServer());
-        props.setProperty(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, Long.toString(timeoutMs.toMillis()));
-        props.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, Long.toString(timeoutMs.toMillis() / 2));
+        if (!props.containsKey(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG)) {
+            props.setProperty(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, Integer.toString((int) timeoutMs.toMillis()));
+        }
+        if (!props.containsKey(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG)) {
+            props.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, Integer.toString((int) (timeoutMs.toMillis() / 2)));
+        }
 
         try (Admin adminClient = Admin.create(props)) {
             electLeaders(adminClient, electionType, topicPartitions);
@@ -133,16 +144,15 @@ public class LeaderElectionCommand {
         Set<TopicPartition> noop = new HashSet<>();
         Map<TopicPartition, Throwable> failed = new HashMap<>();
 
-        electionResults.entrySet().stream().forEach(entry -> {
-            Optional<Throwable> error = entry.getValue();
+        electionResults.forEach((key, error) -> {
             if (error.isPresent()) {
                 if (error.get() instanceof ElectionNotNeededException) {
-                    noop.add(entry.getKey());
+                    noop.add(key);
                 } else {
-                    failed.put(entry.getKey(), error.get());
+                    failed.put(key, error.get());
                 }
             } else {
-                succeeded.add(entry.getKey());
+                succeeded.add(key);
             }
         });
 
@@ -164,10 +174,16 @@ public class LeaderElectionCommand {
         if (!failed.isEmpty()) {
             AdminCommandFailedException rootException =
                 new AdminCommandFailedException(String.format("%s replica(s) could not be elected", failed.size()));
-            failed.entrySet().forEach(entry -> {
-                System.out.println(String.format("Error completing leader election (%s) for partition: %s: %s",
-                    electionType, entry.getKey(), entry.getValue()));
-                rootException.addSuppressed(entry.getValue());
+            failed.forEach((key, value) -> {
+                System.out.println(
+                        String.format(
+                                "Error completing leader election (%s) for partition: %s: %s",
+                                electionType,
+                                key,
+                                value
+                        )
+                );
+                rootException.addSuppressed(value);
             });
             throw rootException;
         }

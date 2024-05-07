@@ -40,7 +40,7 @@ import static org.junit.Assert.assertFalse;
 @RunWith(Parameterized.class)
 public class PluginScannerTest {
 
-    private enum ScannerType { Reflection, ServiceLoader };
+    private enum ScannerType { Reflection, ServiceLoader }
 
     @Rule
     public TemporaryFolder pluginDir = new TemporaryFolder();
@@ -67,12 +67,6 @@ public class PluginScannerTest {
             default:
                 throw new IllegalArgumentException("Unknown type " + scannerType);
         }
-    }
-
-    @BeforeClass
-    public static void setUp() {
-        // Work around a circular-dependency in TestPlugins.
-        TestPlugins.pluginPath();
     }
 
     @Test

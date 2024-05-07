@@ -361,7 +361,7 @@ public class RecordCollectorImpl implements RecordCollector {
         // transaction during handleRevocation and thus there is no transaction in flight, or else none of the revoked
         // tasks had any data in the current transaction and therefore there is no need to commit or abort it.
 
-        checkForException();
+        close();
     }
 
     /**
@@ -377,6 +377,11 @@ public class RecordCollectorImpl implements RecordCollector {
             streamsProducer.abortTransaction();
         }
 
+        close();
+    }
+
+    private void close() {
+        offsets.clear();
         checkForException();
     }
 

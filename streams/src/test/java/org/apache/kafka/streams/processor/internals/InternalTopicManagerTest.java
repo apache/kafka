@@ -708,22 +708,22 @@ public class InternalTopicManagerTest {
         assertEquals(mkSet(topic1, topic2, topic3, topic4), mockAdminClient.listTopics().names().get());
         assertEquals(new TopicDescription(topic1, false, new ArrayList<TopicPartitionInfo>() {
             {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic1)).topicNameValues().get(topic1).get());
         assertEquals(new TopicDescription(topic2, false, new ArrayList<TopicPartitionInfo>() {
             {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic2)).topicNameValues().get(topic2).get());
         assertEquals(new TopicDescription(topic3, false, new ArrayList<TopicPartitionInfo>() {
             {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic3)).topicNameValues().get(topic3).get());
         assertEquals(new TopicDescription(topic4, false, new ArrayList<TopicPartitionInfo>() {
             {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic4)).topicNameValues().get(topic4).get());
 

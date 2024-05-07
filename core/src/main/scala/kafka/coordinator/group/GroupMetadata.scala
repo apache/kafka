@@ -29,12 +29,14 @@ import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMe
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.coordinator.group.Group
 
 import scala.collection.{Seq, immutable, mutable}
 import scala.jdk.CollectionConverters._
 
 private[group] sealed trait GroupState {
   val validPreviousStates: Set[GroupState]
+  val toLowerCaseString: String = toString.toLowerCase
 }
 
 /**
@@ -157,7 +159,8 @@ private object GroupMetadata extends Logging {
  */
 case class GroupOverview(groupId: String,
                          protocolType: String,
-                         state: String)
+                         state: String,
+                         groupType: String)
 
 /**
  * Case class used to represent group metadata for the DescribeGroup API
@@ -420,18 +423,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  /**
-    * Verify the member.id is up to date for static members. Return true if both conditions met:
-    *   1. given member is a known static member to group
-    *   2. group stored member.id doesn't match with given member.id
-    */
-  def isStaticMemberFenced(
-    groupInstanceId: String,
-    memberId: String
-  ): Boolean = {
-    currentStaticMemberId(groupInstanceId).exists(_ != memberId)
-  }
-
   def canRebalance: Boolean = PreparingRebalance.validPreviousStates.contains(state)
 
   def transitionTo(groupState: GroupState): Unit = {
@@ -622,7 +613,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def overview: GroupOverview = {
-    GroupOverview(groupId, protocolType.getOrElse(""), state.toString)
+    GroupOverview(groupId, protocolType.getOrElse(""), state.toString, Group.GroupType.CLASSIC.toString)
   }
 
   def initializeOffsets(offsets: collection.Map[TopicPartition, CommitRecordMetadataAndOffset],
@@ -851,6 +842,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     if (!targetState.validPreviousStates.contains(state))
       throw new IllegalStateException("Group %s should be in the %s states before moving to %s state. Instead it is in %s state"
         .format(groupId, targetState.validPreviousStates.mkString(","), targetState, state))
+  }
+
+  def isInStates(states: collection.Set[String]): Boolean = {
+    states.contains(state.toLowerCaseString)
   }
 
   override def toString: String = {

@@ -27,7 +27,6 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
@@ -164,7 +163,7 @@ public final class Agent {
      * @return              True if the task run successfully; false otherwise.
      */
     boolean exec(TaskSpec spec, PrintStream out) throws Exception {
-        TaskController controller = null;
+        TaskController controller;
         try {
             controller = spec.newController(EXEC_TASK_ID);
         } catch (Exception e) {
@@ -175,11 +174,11 @@ public final class Agent {
         Set<String> nodes = controller.targetNodes(platform.topology());
         if (!nodes.contains(platform.curNode().name())) {
             out.println("This task is not configured to run on this node.  It runs on node(s): " +
-                Utils.join(nodes, ", ") + ", whereas this node is " +
+                String.join(", ", nodes) + ", whereas this node is " +
                 platform.curNode().name());
             return false;
         }
-        KafkaFuture<String> future = null;
+        KafkaFuture<String> future;
         try {
             future = workerManager.createWorker(EXEC_WORKER_ID, EXEC_TASK_ID, spec);
         } catch (Throwable e) {

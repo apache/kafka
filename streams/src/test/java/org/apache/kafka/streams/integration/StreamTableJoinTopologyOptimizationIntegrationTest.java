@@ -110,7 +110,7 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
     public void before() throws InterruptedException {
         streamsConfiguration = new Properties();
 
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(testName);
 
         tableTopic = "table-topic" + safeTestName;
         inputTopic = "stream-topic-" + safeTestName;
@@ -241,7 +241,7 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
                                                  final Deserializer<V> valueSerializer,
                                                  final List<KeyValue<K, V>> expectedRecords) throws Exception {
 
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);

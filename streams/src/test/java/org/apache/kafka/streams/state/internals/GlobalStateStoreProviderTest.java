@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
@@ -38,6 +37,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -47,17 +48,16 @@ import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.niceMock;
-import static org.easymock.EasyMock.replay;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class GlobalStateStoreProviderTest {
     private final Map<String, StateStore> stores = new HashMap<>();
     private final static Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, "appId"));
@@ -105,26 +105,17 @@ public class GlobalStateStoreProviderTest {
                 Serdes.String(),
                 Serdes.String()).build());
 
-        final ProcessorContextImpl mockContext = niceMock(ProcessorContextImpl.class);
-        expect(mockContext.applicationId()).andStubReturn("appId");
-        expect(mockContext.metrics())
-            .andStubReturn(
+        final ProcessorContextImpl mockContext = mock(ProcessorContextImpl.class);
+        when(mockContext.applicationId()).thenReturn("appId");
+        when(mockContext.metrics())
+            .thenReturn(
                 new StreamsMetricsImpl(new Metrics(), "threadName", StreamsConfig.METRICS_LATEST, new MockTime())
             );
-        expect(mockContext.taskId()).andStubReturn(new TaskId(0, 0));
-        expect(mockContext.recordCollector()).andStubReturn(null);
-        expect(mockContext.appConfigs()).andStubReturn(CONFIGS);
-        expectSerdes(mockContext);
-        replay(mockContext);
+        when(mockContext.taskId()).thenReturn(new TaskId(0, 0));
+        when(mockContext.appConfigs()).thenReturn(CONFIGS);
         for (final StateStore store : stores.values()) {
             store.init((StateStoreContext) mockContext, null);
         }
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static void expectSerdes(final ProcessorContextImpl context) {
-        expect(context.keySerde()).andStubReturn((Serde) Serdes.String());
-        expect(context.valueSerde()).andStubReturn((Serde) Serdes.Long());
     }
 
     @Test

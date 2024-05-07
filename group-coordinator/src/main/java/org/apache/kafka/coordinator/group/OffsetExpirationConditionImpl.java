@@ -33,7 +33,7 @@ public class OffsetExpirationConditionImpl implements OffsetExpirationCondition 
     /**
      * Determine whether an offset is expired. Older versions have an expire timestamp per partition. If this
      * exists, compare against the current timestamp. Otherwise, use the base timestamp (either commit timestamp
-     * or current state timestamp if group is empty for generic groups) and check whether the offset has
+     * or current state timestamp if group is empty for classic groups) and check whether the offset has
      * exceeded the offset retention.
      *
      * @param offset              The offset and metadata.

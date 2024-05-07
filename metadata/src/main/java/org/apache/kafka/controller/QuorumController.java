@@ -37,6 +37,8 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
+import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
+import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.ControllerRegistrationRequestData;
@@ -203,6 +205,7 @@ public final class QuorumController implements Controller {
         private QuorumFeatures quorumFeatures = null;
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
+        private int defaultMinIsr = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
@@ -215,6 +218,7 @@ public final class QuorumController implements Controller {
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
         private boolean zkMigrationEnabled = false;
+        private boolean eligibleLeaderReplicasEnabled = false;
         private DelegationTokenCache tokenCache;
         private String tokenSecretKeyString;
         private long delegationTokenMaxLifeMs;
@@ -280,6 +284,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setDefaultMinIsr(int defaultMinIsr) {
+            this.defaultMinIsr = defaultMinIsr;
+            return this;
+        }
+
         public Builder setReplicaPlacer(ReplicaPlacer replicaPlacer) {
             this.replicaPlacer = replicaPlacer;
             return this;
@@ -340,6 +349,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setEligibleLeaderReplicasEnabled(boolean eligibleLeaderReplicasEnabled) {
+            this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
+            return this;
+        }
+
         public Builder setDelegationTokenCache(DelegationTokenCache tokenCache) {
             this.tokenCache = tokenCache;
             return this;
@@ -365,7 +379,6 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
                 throw new IllegalStateException("You must set a raft client.");
@@ -405,6 +418,7 @@ public final class QuorumController implements Controller {
                     quorumFeatures,
                     defaultReplicationFactor,
                     defaultNumPartitions,
+                    defaultMinIsr,
                     replicaPlacer,
                     leaderImbalanceCheckIntervalNs,
                     maxIdleIntervalNs,
@@ -421,7 +435,8 @@ public final class QuorumController implements Controller {
                     tokenSecretKeyString,
                     delegationTokenMaxLifeMs,
                     delegationTokenExpiryTimeMs,
-                    delegationTokenExpiryCheckIntervalMs
+                    delegationTokenExpiryCheckIntervalMs,
+                    eligibleLeaderReplicasEnabled
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -599,7 +614,7 @@ public final class QuorumController implements Controller {
 
         ControllerReadEvent(String name, Supplier<T> handler) {
             this.name = name;
-            this.future = new CompletableFuture<T>();
+            this.future = new CompletableFuture<>();
             this.handler = handler;
         }
 
@@ -662,7 +677,7 @@ public final class QuorumController implements Controller {
         OptionalLong deadlineNs,
         Supplier<T> handler
     ) {
-        ControllerReadEvent<T> event = new ControllerReadEvent<T>(name, handler);
+        ControllerReadEvent<T> event = new ControllerReadEvent<>(name, handler);
         if (deadlineNs.isPresent()) {
             queue.appendWithDeadline(deadlineNs.getAsLong(), event);
         } else {
@@ -742,7 +757,7 @@ public final class QuorumController implements Controller {
             EnumSet<ControllerOperationFlag> flags
         ) {
             this.name = name;
-            this.future = new CompletableFuture<T>();
+            this.future = new CompletableFuture<>();
             this.op = op;
             this.flags = flags;
             this.resultAndOffset = null;
@@ -799,36 +814,34 @@ public final class QuorumController implements Controller {
                 // Pass the records to the Raft layer. This will start the process of committing
                 // them to the log.
                 long offset = appendRecords(log, result, maxRecordsPerBatch,
-                    new Function<List<ApiMessageAndVersion>, Long>() {
-                        @Override
-                        public Long apply(List<ApiMessageAndVersion> records) {
-                            // Start by trying to apply the record to our in-memory state. This should always
-                            // succeed; if it does not, that's a fatal error. It is important to do this before
-                            // scheduling the record for Raft replication.
-                            int recordIndex = 0;
-                            long nextWriteOffset = offsetControl.nextWriteOffset();
-                            for (ApiMessageAndVersion message : records) {
-                                long recordOffset = nextWriteOffset + recordIndex;
-                                try {
-                                    replay(message.message(), Optional.empty(), recordOffset);
-                                } catch (Throwable e) {
-                                    String failureMessage = String.format("Unable to apply %s " +
-                                        "record at offset %d on active controller, from the " +
-                                        "batch with baseOffset %d",
-                                        message.message().getClass().getSimpleName(),
-                                        recordOffset, nextWriteOffset);
-                                    throw fatalFaultHandler.handleFault(failureMessage, e);
-                                }
-                                recordIndex++;
+                    records -> {
+                        // Start by trying to apply the record to our in-memory state. This should always
+                        // succeed; if it does not, that's a fatal error. It is important to do this before
+                        // scheduling the record for Raft replication.
+                        int recordIndex = 0;
+                        long nextWriteOffset = offsetControl.nextWriteOffset();
+                        for (ApiMessageAndVersion message : records) {
+                            long recordOffset = nextWriteOffset + recordIndex;
+                            try {
+                                replay(message.message(), Optional.empty(), recordOffset);
+                            } catch (Throwable e) {
+                                String failureMessage = String.format("Unable to apply %s " +
+                                    "record at offset %d on active controller, from the " +
+                                    "batch with baseOffset %d",
+                                    message.message().getClass().getSimpleName(),
+                                    recordOffset, nextWriteOffset);
+                                throw fatalFaultHandler.handleFault(failureMessage, e);
                             }
-                            long nextEndOffset = nextWriteOffset - 1 + recordIndex;
-                            raftClient.scheduleAtomicAppend(controllerEpoch,
-                                OptionalLong.of(nextWriteOffset),
-                                records);
-                            offsetControl.handleScheduleAtomicAppend(nextEndOffset);
-                            return nextEndOffset;
+                            recordIndex++;
                         }
-                    });
+                        long nextEndOffset = nextWriteOffset - 1 + recordIndex;
+                        raftClient.scheduleAtomicAppend(controllerEpoch,
+                            OptionalLong.of(nextWriteOffset),
+                            records);
+                        offsetControl.handleScheduleAtomicAppend(nextEndOffset);
+                        return nextEndOffset;
+                    }
+                );
                 op.processBatchEndOffset(offset);
                 resultAndOffset = ControllerResultAndOffset.of(offset, result);
 
@@ -1699,7 +1712,7 @@ public final class QuorumController implements Controller {
      * from this callbacks need to compare against this value to verify that the event
      * was not from a previous registration.
      */
-    private QuorumMetaLogListener metaLogListener;
+    private final QuorumMetaLogListener metaLogListener;
 
     /**
      * If this controller is active, this is the non-negative controller epoch.
@@ -1746,6 +1759,8 @@ public final class QuorumController implements Controller {
 
     private final boolean zkMigrationEnabled;
 
+    private final boolean eligibleLeaderReplicasEnabled;
+
     /**
      * The maximum number of records per batch to allow.
      */
@@ -1769,6 +1784,7 @@ public final class QuorumController implements Controller {
         QuorumFeatures quorumFeatures,
         short defaultReplicationFactor,
         int defaultNumPartitions,
+        int defaultMinIsr,
         ReplicaPlacer replicaPlacer,
         OptionalLong leaderImbalanceCheckIntervalNs,
         OptionalLong maxIdleIntervalNs,
@@ -1785,7 +1801,8 @@ public final class QuorumController implements Controller {
         String tokenSecretKeyString,
         long delegationTokenMaxLifeMs,
         long delegationTokenExpiryTimeMs,
-        long delegationTokenExpiryCheckIntervalMs
+        long delegationTokenExpiryCheckIntervalMs,
+        boolean eligibleLeaderReplicasEnabled
     ) {
         this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
@@ -1841,6 +1858,7 @@ public final class QuorumController implements Controller {
             setReplicaPlacer(replicaPlacer).
             setFeatureControlManager(featureControl).
             setZkMigrationEnabled(zkMigrationEnabled).
+            setBrokerUncleanShutdownHandler(this::handleUncleanBrokerShutdown).
             build();
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
             setLogContext(logContext).
@@ -1854,6 +1872,8 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
+            setDefaultMinIsr(defaultMinIsr).
+            setEligibleLeaderReplicasEnabled(eligibleLeaderReplicasEnabled).
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).
@@ -1887,9 +1907,11 @@ public final class QuorumController implements Controller {
         this.zkRecordConsumer = new MigrationRecordConsumer();
         this.zkMigrationEnabled = zkMigrationEnabled;
         this.recordRedactor = new RecordRedactor(configSchema);
+        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
 
-        log.info("Creating new QuorumController with clusterId {}.{}",
-                clusterId, zkMigrationEnabled ? " ZK migration mode is enabled." : "");
+        log.info("Creating new QuorumController with clusterId {}.{}{}",
+            clusterId, zkMigrationEnabled ? " ZK migration mode is enabled." : "",
+            eligibleLeaderReplicasEnabled ? " Eligible leader replicas enabled." : "");
 
         this.raftClient.register(metaLogListener);
     }
@@ -2157,7 +2179,7 @@ public final class QuorumController implements Controller {
             () -> {
                 ControllerResult<BrokerRegistrationReply> result = clusterControl.
                     registerBroker(request, offsetControl.nextWriteOffset(), featureControl.
-                        finalizedFeatures(Long.MAX_VALUE));
+                        finalizedFeatures(Long.MAX_VALUE), context.requestHeader().requestApiVersion());
                 rescheduleMaybeFenceStaleBrokers();
                 return result;
             },
@@ -2274,6 +2296,15 @@ public final class QuorumController implements Controller {
     }
 
     @Override
+    public CompletableFuture<AssignReplicasToDirsResponseData> assignReplicasToDirs(
+        ControllerRequestContext context,
+        AssignReplicasToDirsRequestData request
+    ) {
+        return appendWriteEvent("assignReplicasToDirs", context.deadlineNs(),
+                () -> replicationControl.handleAssignReplicasToDirs(request));
+    }
+
+    @Override
     public CompletableFuture<Void> waitForReadyBrokers(int minBrokers) {
         final CompletableFuture<Void> future = new CompletableFuture<>();
         appendControlEvent("waitForReadyBrokers", () -> {
@@ -2321,5 +2352,9 @@ public final class QuorumController implements Controller {
         appendControlEvent("setNewNextWriteOffset", () -> {
             offsetControl.setNextWriteOffset(newNextWriteOffset);
         });
+    }
+
+    void handleUncleanBrokerShutdown(int brokerId, List<ApiMessageAndVersion> records) {
+        replicationControl.handleBrokerUncleanShutdown(brokerId, records);
     }
 }

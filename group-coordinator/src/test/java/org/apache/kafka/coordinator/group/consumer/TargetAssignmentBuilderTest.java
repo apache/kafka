@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentEpochRecord;
@@ -57,6 +58,7 @@ public class TargetAssignmentBuilderTest {
         private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
         private final Map<String, Assignment> targetAssignment = new HashMap<>();
         private final Map<String, MemberAssignment> memberAssignments = new HashMap<>();
+        private final Map<String, String> staticMembers = new HashMap<>();
 
         public TargetAssignmentBuilderTestContext(
             String groupId,
@@ -71,15 +73,24 @@ public class TargetAssignmentBuilderTest {
             List<String> subscriptions,
             Map<Uuid, Set<Integer>> targetPartitions
         ) {
-            members.put(memberId, new ConsumerGroupMember.Builder(memberId)
-                .setSubscribedTopicNames(subscriptions)
-                .build());
+            addGroupMember(memberId, null, subscriptions, targetPartitions);
+        }
 
-            targetAssignment.put(memberId, new Assignment(
-                (byte) 0,
-                targetPartitions,
-                VersionedMetadata.EMPTY
-            ));
+        private void addGroupMember(
+            String memberId,
+            String instanceId,
+            List<String> subscriptions,
+            Map<Uuid, Set<Integer>> targetPartitions
+        ) {
+            ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder(memberId)
+                .setSubscribedTopicNames(subscriptions);
+
+            if (instanceId != null) {
+                memberBuilder.setInstanceId(instanceId);
+                staticMembers.put(instanceId, memberId);
+            }
+            members.put(memberId, memberBuilder.build());
+            targetAssignment.put(memberId, new Assignment(targetPartitions));
         }
 
         public Uuid addTopicMetadata(
@@ -161,9 +172,19 @@ public class TargetAssignmentBuilderTest {
                 if (updatedMemberOrNull == null) {
                     memberSpecs.remove(memberId);
                 } else {
+                    Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+
+                    // A new static member joins and needs to replace an existing departed one.
+                    if (updatedMemberOrNull.instanceId() != null) {
+                        String previousMemberId = staticMembers.get(updatedMemberOrNull.instanceId());
+                        if (previousMemberId != null && !previousMemberId.equals(memberId)) {
+                            assignment = targetAssignment.getOrDefault(previousMemberId, Assignment.EMPTY);
+                        }
+                    }
+
                     memberSpecs.put(memberId, createAssignmentMemberSpec(
                         updatedMemberOrNull,
-                        targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+                        assignment,
                         subscriptionMetadata
                     ));
                 }
@@ -185,10 +206,10 @@ public class TargetAssignmentBuilderTest {
             when(assignor.assign(any(), any()))
                 .thenReturn(new GroupAssignment(memberAssignments));
 
-
             // Create and populate the assignment builder.
             TargetAssignmentBuilder builder = new TargetAssignmentBuilder(groupId, groupEpoch, assignor)
                 .withMembers(members)
+                .withStaticMembers(staticMembers)
                 .withSubscriptionMetadata(subscriptionMetadata)
                 .withTargetAssignment(targetAssignment);
 
@@ -349,7 +370,7 @@ public class TargetAssignmentBuilderTest {
 
         assertEquals(3, result.records().size());
 
-        assertUnorderedList(Arrays.asList(
+        assertUnorderedListEquals(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTopicAssignment(fooTopicId, 4, 5, 6),
                 mkTopicAssignment(barTopicId, 4, 5, 6)
@@ -419,7 +440,7 @@ public class TargetAssignmentBuilderTest {
 
         assertEquals(4, result.records().size());
 
-        assertUnorderedList(Arrays.asList(
+        assertUnorderedListEquals(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2),
                 mkTopicAssignment(barTopicId, 1, 2)
@@ -506,7 +527,7 @@ public class TargetAssignmentBuilderTest {
 
         assertEquals(4, result.records().size());
 
-        assertUnorderedList(Arrays.asList(
+        assertUnorderedListEquals(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2),
                 mkTopicAssignment(barTopicId, 1, 2)
@@ -588,7 +609,7 @@ public class TargetAssignmentBuilderTest {
         assertEquals(3, result.records().size());
 
         // Member 1 has no record because its assignment did not change.
-        assertUnorderedList(Arrays.asList(
+        assertUnorderedListEquals(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-2", mkAssignment(
                 mkTopicAssignment(fooTopicId, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 3, 4, 5)
@@ -662,7 +683,7 @@ public class TargetAssignmentBuilderTest {
 
         assertEquals(3, result.records().size());
 
-        assertUnorderedList(Arrays.asList(
+        assertUnorderedListEquals(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3),
                 mkTopicAssignment(barTopicId, 1, 2, 3)
@@ -691,11 +712,83 @@ public class TargetAssignmentBuilderTest {
         assertEquals(expectedAssignment, result.targetAssignment());
     }
 
-    private static <T> void assertUnorderedList(
-        List<T> expected,
-        List<T> actual
-    ) {
-        assertEquals(expected.size(), actual.size());
-        assertEquals(new HashSet<>(expected), new HashSet<>(actual));
+    @Test
+    public void testReplaceStaticMember() {
+        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
+            "my-group",
+            20
+        );
+
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
+        Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
+
+        context.addGroupMember("member-1", "instance-member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+            mkTopicAssignment(fooTopicId, 1, 2),
+            mkTopicAssignment(barTopicId, 1, 2)
+        ));
+
+        context.addGroupMember("member-2", "instance-member-2", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+            mkTopicAssignment(fooTopicId, 3, 4),
+            mkTopicAssignment(barTopicId, 3, 4)
+        ));
+
+        context.addGroupMember("member-3", "instance-member-3", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+            mkTopicAssignment(fooTopicId, 5, 6),
+            mkTopicAssignment(barTopicId, 5, 6)
+        ));
+
+        // Static member 3 leaves
+        context.removeMemberSubscription("member-3");
+
+        // Another static member joins with the same instance id as the departed one
+        context.updateMemberSubscription("member-3-a", Arrays.asList("foo", "bar", "zar"), Optional.of("instance-member-3"), Optional.empty());
+
+        context.prepareMemberAssignment("member-1", mkAssignment(
+            mkTopicAssignment(fooTopicId, 1, 2),
+            mkTopicAssignment(barTopicId, 1, 2)
+        ));
+
+        context.prepareMemberAssignment("member-2", mkAssignment(
+            mkTopicAssignment(fooTopicId, 3, 4),
+            mkTopicAssignment(barTopicId, 3, 4)
+        ));
+
+        context.prepareMemberAssignment("member-3-a", mkAssignment(
+            mkTopicAssignment(fooTopicId, 5, 6),
+            mkTopicAssignment(barTopicId, 5, 6)
+        ));
+
+        TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
+
+        assertEquals(2, result.records().size());
+
+        assertUnorderedListEquals(Collections.singletonList(
+            newTargetAssignmentRecord("my-group", "member-3-a", mkAssignment(
+                mkTopicAssignment(fooTopicId, 5, 6),
+                mkTopicAssignment(barTopicId, 5, 6)
+            ))
+        ), result.records().subList(0, 1));
+
+        assertEquals(newTargetAssignmentEpochRecord(
+            "my-group",
+            20
+        ), result.records().get(1));
+
+        Map<String, Assignment> expectedAssignment = new HashMap<>();
+        expectedAssignment.put("member-1", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 1, 2),
+            mkTopicAssignment(barTopicId, 1, 2)
+        )));
+        expectedAssignment.put("member-2", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 3, 4),
+            mkTopicAssignment(barTopicId, 3, 4)
+        )));
+
+        expectedAssignment.put("member-3-a", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 5, 6),
+            mkTopicAssignment(barTopicId, 5, 6)
+        )));
+
+        assertEquals(expectedAssignment, result.targetAssignment());
     }
 }

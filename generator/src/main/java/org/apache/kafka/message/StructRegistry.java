@@ -66,7 +66,7 @@ final class StructRegistry {
     /**
      * Register all the structures contained a message spec.
      */
-    void register(MessageSpec message) throws Exception {
+    void register(MessageSpec message) {
         // Register common structures.
         for (StructSpec struct : message.commonStructs()) {
             if (!MessageGenerator.firstIsCapitalized(struct.name())) {
@@ -83,7 +83,6 @@ final class StructRegistry {
         addStructSpecs(message.validVersions(), message.fields());
     }
 
-    @SuppressWarnings("unchecked")
     private void addStructSpecs(Versions parentVersions, List<FieldSpec> fields) {
         for (FieldSpec field : fields) {
             String typeName = null;
@@ -110,6 +109,7 @@ final class StructRegistry {
                     // Synthesize a StructSpec object out of the fields.
                     StructSpec spec = new StructSpec(typeName,
                         field.versions().toString(),
+                        Versions.NONE_STRING, // version deprecations not supported at field level
                         field.fields());
                     structs.put(typeName, new StructInfo(spec, parentVersions));
                 }
@@ -122,7 +122,6 @@ final class StructRegistry {
     /**
      * Locate the struct corresponding to a field.
      */
-    @SuppressWarnings("unchecked")
     StructSpec findStruct(FieldSpec field) {
         String structFieldName;
         if (field.type().isArray()) {
@@ -146,7 +145,6 @@ final class StructRegistry {
     /**
      * Return true if the field is a struct array with keys.
      */
-    @SuppressWarnings("unchecked")
     boolean isStructArrayWithKeys(FieldSpec field) {
         if (!field.type().isArray()) {
             return false;

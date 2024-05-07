@@ -34,14 +34,14 @@ public class OAuthBearerClientInitialResponse {
     private static final String VALUE = "[\\x21-\\x7E \t\r\n]+";
 
     private static final String KVPAIRS = String.format("(%s=%s%s)*", KEY, VALUE, SEPARATOR);
-    private static final Pattern AUTH_PATTERN = Pattern.compile("(?<scheme>[\\w]+)[ ]+(?<token>[-_\\.a-zA-Z0-9]+)");
+    private static final Pattern AUTH_PATTERN = Pattern.compile("(?<scheme>[\\w]+)[ ]+(?<token>[-_~+/\\.a-zA-Z0-9]+([=]*))");
     private static final Pattern CLIENT_INITIAL_RESPONSE_PATTERN = Pattern.compile(
             String.format("n,(a=(?<authzid>%s))?,%s(?<kvpairs>%s)%s", SASLNAME, SEPARATOR, KVPAIRS, SEPARATOR));
     public static final String AUTH_KEY = "auth";
 
     private final String tokenValue;
     private final String authorizationId;
-    private SaslExtensions saslExtensions;
+    private final SaslExtensions saslExtensions;
 
     public static final Pattern EXTENSION_KEY_PATTERN = Pattern.compile(KEY);
     public static final Pattern EXTENSION_VALUE_PATTERN = Pattern.compile(VALUE);
@@ -123,7 +123,7 @@ public class OAuthBearerClientInitialResponse {
     public byte[] toBytes() {
         String authzid = authorizationId.isEmpty() ? "" : "a=" + authorizationId;
         String extensions = extensionsMessage();
-        if (extensions.length() > 0)
+        if (!extensions.isEmpty())
             extensions = SEPARATOR + extensions;
 
         String message = String.format("n,%s,%sauth=Bearer %s%s%s%s", authzid,

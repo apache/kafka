@@ -67,7 +67,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -271,6 +270,14 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
             .field(ONLY_FAILED_FIELD_NAME, Schema.BOOLEAN_SCHEMA)
             .build();
 
+    public static final String LOGGER_CLUSTER_PREFIX = "logger-cluster-";
+    public static String LOGGER_CLUSTER_KEY(String namespace) {
+        return LOGGER_CLUSTER_PREFIX + namespace;
+    }
+    public static final Schema LOGGER_LEVEL_V0 = SchemaBuilder.struct()
+            .field("level", Schema.STRING_SCHEMA)
+            .build();
+
     // Visible for testing
     static final long READ_WRITE_TOTAL_TIMEOUT_MS = 30000;
 
@@ -286,7 +293,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     private final String topic;
     // Data is passed to the log already serialized. We use a converter to handle translating to/from generic Connect
     // format to serialized form
-    private final KafkaBasedLog<String, byte[]> configLog;
+    private KafkaBasedLog<String, byte[]> configLog;
     // Connector -> # of tasks
     final Map<String, Integer> connectorTaskCounts = new HashMap<>();
     // Connector and task configs: name or id -> config map
@@ -322,6 +329,11 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     private final Map<String, Object> fencableProducerProps;
     private final Time time;
 
+    //VisibleForTesting
+    void setConfigLog(KafkaBasedLog<String, byte[]> configLog) {
+        this.configLog = configLog;
+    }
+
     @Deprecated
     public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer) {
         this(converter, config, configTransformer, null, "connect-distributed-");
@@ -353,7 +365,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
         this.usesFencableWriter = config.transactionalLeaderEnabled();
         this.topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
-        if (this.topic == null || this.topic.trim().length() == 0)
+        if (this.topic == null || this.topic.trim().isEmpty())
             throw new ConfigException("Must specify topic for connector configuration.");
 
         configLog = setupAndCreateKafkaBasedLog(this.topic, config);
@@ -489,26 +501,34 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     }
 
     /**
-     * Write this connector configuration to persistent storage and wait until it has been acknowledged and read back by
-     * tailing the Kafka log with a consumer. {@link #claimWritePrivileges()} must be successfully invoked before calling
+     * Write this connector configuration (and optionally a target state) to persistent storage and wait until it has been acknowledged and read
+     * back by tailing the Kafka log with a consumer. {@link #claimWritePrivileges()} must be successfully invoked before calling
      * this method if the worker is configured to use a fencable producer for writes to the config topic.
      *
      * @param connector  name of the connector to write data for
      * @param properties the configuration to write
+     * @param targetState the desired target state for the connector; may be {@code null} if no target state change is desired. Note that the default
+     *                    target state is {@link TargetState#STARTED} if no target state exists previously
      * @throws IllegalStateException if {@link #claimWritePrivileges()} is required, but was not successfully invoked before
      * this method was called
      * @throws PrivilegedWriteException if the worker is configured to use a fencable producer for writes to the config topic
      * and the write fails
      */
     @Override
-    public void putConnectorConfig(String connector, Map<String, String> properties) {
+    public void putConnectorConfig(String connector, Map<String, String> properties, TargetState targetState) {
         log.debug("Writing connector configuration for connector '{}'", connector);
         Struct connectConfig = new Struct(CONNECTOR_CONFIGURATION_V0);
         connectConfig.put("properties", properties);
         byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_CONFIGURATION_V0, connectConfig);
         try {
             Timer timer = time.timer(READ_WRITE_TOTAL_TIMEOUT_MS);
-            sendPrivileged(CONNECTOR_KEY(connector), serializedConfig, timer);
+            List<ProducerKeyValue> keyValues = new ArrayList<>();
+            if (targetState != null) {
+                log.debug("Writing target state {} for connector {}", targetState, connector);
+                keyValues.add(new ProducerKeyValue(TARGET_STATE_KEY(connector), serializeTargetState(targetState)));
+            }
+            keyValues.add(new ProducerKeyValue(CONNECTOR_KEY(connector), serializedConfig));
+            sendPrivileged(keyValues, timer);
             configLog.readToEnd().get(timer.remainingMs(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write connector configuration to Kafka: ", e);
@@ -639,18 +659,22 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
      */
     @Override
     public void putTargetState(String connector, TargetState state) {
-        Struct connectTargetState = new Struct(TARGET_STATE_V1);
-        // Older workers don't support the STOPPED state; fall back on PAUSED
-        connectTargetState.put("state", state == STOPPED ? PAUSED.name() : state.name());
-        connectTargetState.put("state.v2", state.name());
-        byte[] serializedTargetState = converter.fromConnectData(topic, TARGET_STATE_V1, connectTargetState);
         log.debug("Writing target state {} for connector {}", state, connector);
         try {
-            configLog.sendWithReceipt(TARGET_STATE_KEY(connector), serializedTargetState).get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            configLog.sendWithReceipt(TARGET_STATE_KEY(connector), serializeTargetState(state))
+                .get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write target state to Kafka", e);
             throw new ConnectException("Error writing target state to Kafka", e);
         }
+    }
+
+    private byte[] serializeTargetState(TargetState state) {
+        Struct connectTargetState = new Struct(TARGET_STATE_V1);
+        // Older workers don't support the STOPPED state; fall back on PAUSED
+        connectTargetState.put("state", state == STOPPED ? PAUSED.name() : state.name());
+        connectTargetState.put("state.v2", state.name());
+        return converter.fromConnectData(topic, TARGET_STATE_V1, connectTargetState);
     }
 
     /**
@@ -732,6 +756,20 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         }
     }
 
+    @Override
+    public void putLoggerLevel(String namespace, String level) {
+        log.debug("Writing level {} for logging namespace {} to Kafka", level, namespace);
+        Struct value = new Struct(LOGGER_LEVEL_V0);
+        value.put("level", level);
+        byte[] serializedValue = converter.fromConnectData(topic, value.schema(), value);
+        try {
+            configLog.sendWithReceipt(LOGGER_CLUSTER_KEY(namespace), serializedValue).get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            log.error("Failed to write logger level to Kafka", e);
+            throw new ConnectException("Error writing logger level to Kafka", e);
+        }
+    }
+
     // package private for testing
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
         String clusterId = config.kafkaClusterId();
@@ -747,7 +785,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
         if (config.exactlyOnceSourceEnabled()) {
             ConnectUtils.ensureProperty(
-                    consumerProps, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                    consumerProps, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString(),
                     "for the worker's config topic consumer when exactly-once source support is enabled",
                     true
             );
@@ -901,6 +939,9 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                 processTaskCountRecord(connectorName, value);
             } else if (record.key().equals(SESSION_KEY_KEY)) {
                 processSessionKeyRecord(value);
+            } else if (record.key().startsWith(LOGGER_CLUSTER_PREFIX)) {
+                String loggingNamespace = record.key().substring(LOGGER_CLUSTER_PREFIX.length());
+                processLoggerLevelRecord(loggingNamespace, value);
             } else {
                 log.error("Discarding config update record with invalid key: {}", record.key());
             }
@@ -960,7 +1001,9 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
         // Note that we do not notify the update listener if the target state has been removed.
         // Instead we depend on the removal callback of the connector config itself to notify the worker.
-        if (started && !removed && stateChanged)
+        // We also don't notify the update listener if the connector doesn't exist yet - a scenario that can
+        // occur if an explicit initial target state is specified in the connector creation request.
+        if (started && !removed && stateChanged && connectorConfigs.containsKey(connectorName))
             updateListener.onConnectorTargetStateChange(connectorName);
     }
 
@@ -1185,13 +1228,44 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
             updateListener.onSessionKeyUpdate(KafkaConfigBackingStore.this.sessionKey);
     }
 
+    private void processLoggerLevelRecord(String namespace, SchemaAndValue value) {
+        if (value.value() == null) {
+            log.error("Ignoring logging level for namespace {} because it is unexpectedly null", namespace);
+            return;
+        }
+        if (!(value.value() instanceof Map)) {
+            log.error("Ignoring logging level for namespace {} because the value is not a Map but is {}", namespace, className(value.value()));
+            return;
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
+
+        Object level = valueAsMap.get("level");
+        if (!(level instanceof String)) {
+            log.error("Invalid data for logging level key 'level' field with namespace {}; should be a String but it is {}", namespace, className(level));
+            return;
+        }
+
+        if (started) {
+            updateListener.onLoggingLevelUpdate(namespace, (String) level);
+        } else {
+            // TRACE level since there may be many of these records in the config topic
+            log.trace(
+                    "Ignoring old logging level {} for namespace {} that was writen to the config topic before this worker completed startup",
+                    level,
+                    namespace
+            );
+        }
+    }
+
     private ConnectorTaskId parseTaskId(String key) {
         String[] parts = key.split("-");
         if (parts.length < 3) return null;
 
         try {
             int taskNum = Integer.parseInt(parts[parts.length - 1]);
-            String connectorName = Utils.join(Arrays.copyOfRange(parts, 1, parts.length - 1), "-");
+            String connectorName = String.join("-", Arrays.copyOfRange(parts, 1, parts.length - 1));
             return new ConnectorTaskId(connectorName, taskNum);
         } catch (NumberFormatException e) {
             return null;

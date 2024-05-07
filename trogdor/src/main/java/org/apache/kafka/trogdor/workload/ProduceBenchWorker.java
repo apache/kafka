@@ -186,11 +186,11 @@ public class ProduceBenchWorker implements TaskWorker {
         private final Optional<TransactionGenerator> transactionGenerator;
 
         private final Throttle throttle;
+        private final AtomicLong transactionsCommitted;
+        private final boolean enableTransactions;
 
         private Iterator<TopicPartition> partitionsIterator;
         private Future<RecordMetadata> sendFuture;
-        private AtomicLong transactionsCommitted;
-        private boolean enableTransactions;
 
         SendRecords(HashSet<TopicPartition> activePartitions) {
             this.activePartitions = activePartitions;

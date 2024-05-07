@@ -117,7 +117,7 @@ class JsonTest {
   }
 
   @Test
-  def testParseTo() = {
+  def testParseTo(): Unit = {
     val foo = "baz"
     val bar = 1
 
@@ -127,7 +127,7 @@ class JsonTest {
   }
 
   @Test
-  def testParseToWithInvalidJson() = {
+  def testParseToWithInvalidJson(): Unit = {
     val result = Json.parseStringAs[TestObject]("{invalid json}")
     assertEquals(Left(classOf[JsonParseException]), result.left.map(_.getClass))
   }

@@ -17,8 +17,8 @@
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -77,8 +77,8 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
                     + (includeOptionalIssuedAtClaim ? comma(ISSUED_AT_CLAIM_TEXT) : "") + "}";
             Object validationResult = validationResult(UNSECURED_JWT_HEADER_JSON, claimsJson,
                     MODULE_OPTIONS_MAP_NO_SCOPE_REQUIRED);
-            assertTrue(validationResult instanceof OAuthBearerValidatorCallback);
-            assertTrue(((OAuthBearerValidatorCallback) validationResult).token() instanceof OAuthBearerUnsecuredJws);
+            assertInstanceOf(OAuthBearerValidatorCallback.class, validationResult);
+            assertInstanceOf(OAuthBearerUnsecuredJws.class, ((OAuthBearerValidatorCallback) validationResult).token());
         }
     }
 
@@ -103,8 +103,8 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
         String claimsJson = "{" + SUB_CLAIM_TEXT + comma(EXPIRATION_TIME_CLAIM_TEXT) + comma(SCOPE_CLAIM_TEXT) + "}";
         Object validationResult = validationResult(UNSECURED_JWT_HEADER_JSON, claimsJson,
                 MODULE_OPTIONS_MAP_REQUIRE_EXISTING_SCOPE);
-        assertTrue(validationResult instanceof OAuthBearerValidatorCallback);
-        assertTrue(((OAuthBearerValidatorCallback) validationResult).token() instanceof OAuthBearerUnsecuredJws);
+        assertInstanceOf(OAuthBearerValidatorCallback.class, validationResult);
+        assertInstanceOf(OAuthBearerUnsecuredJws.class, ((OAuthBearerValidatorCallback) validationResult).token());
     }
 
     @Test
@@ -123,7 +123,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
             Map<String, String> moduleOptionsMap, String optionalFailureScope) throws OAuthBearerConfigException,
             OAuthBearerIllegalTokenException {
         Object validationResultObj = validationResult(headerJson, claimsJson, moduleOptionsMap);
-        assertTrue(validationResultObj instanceof OAuthBearerValidatorCallback);
+        assertInstanceOf(OAuthBearerValidatorCallback.class, validationResultObj);
         OAuthBearerValidatorCallback callback = (OAuthBearerValidatorCallback) validationResultObj;
         assertNull(callback.token());
         assertNull(callback.errorOpenIDConfiguration());

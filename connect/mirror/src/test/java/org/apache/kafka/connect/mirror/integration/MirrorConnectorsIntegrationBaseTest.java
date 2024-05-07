@@ -81,6 +81,7 @@ import org.junit.jupiter.api.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -204,7 +205,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 .brokerProps(primaryBrokerProps)
                 .workerProps(primaryWorkerProps)
                 .maskExitProcedures(false)
-                .clientConfigs(additionalPrimaryClusterClientsConfigs)
+                .clientProps(additionalPrimaryClusterClientsConfigs)
                 .build();
 
         backup = new EmbeddedConnectCluster.Builder()
@@ -214,7 +215,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 .brokerProps(backupBrokerProps)
                 .workerProps(backupWorkerProps)
                 .maskExitProcedures(false)
-                .clientConfigs(additionalBackupClusterClientsConfigs)
+                .clientProps(additionalBackupClusterClientsConfigs)
                 .build();
         
         primary.start();
@@ -561,27 +562,30 @@ public class MirrorConnectorsIntegrationBaseTest {
         String remoteTopic = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
 
         // Check offsets are pushed to the checkpoint topic
-        Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
-                "auto.offset.reset", "earliest"), PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal");
-        waitForCondition(() -> {
-            ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(Duration.ofSeconds(1L));
-            for (ConsumerRecord<byte[], byte[]> record : records) {
-                Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
-                if (remoteTopic.equals(checkpoint.topicPartition().topic())) {
-                    return true;
+        try (Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
+                "auto.offset.reset", "earliest"), PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal")) {
+            waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(Duration.ofSeconds(1L));
+                for (ConsumerRecord<byte[], byte[]> record : records) {
+                    Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
+                    if (remoteTopic.equals(checkpoint.topicPartition().topic())) {
+                        return true;
+                    }
                 }
-            }
-            return false;
-        }, 30_000,
-            "Unable to find checkpoints for " + PRIMARY_CLUSTER_ALIAS + ".test-topic-1"
-        );
+                return false;
+            }, 30_000,
+                "Unable to find checkpoints for " + PRIMARY_CLUSTER_ALIAS + ".test-topic-1"
+            );
+        }
 
         assertMonotonicCheckpoints(backup, PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal");
 
         // Ensure no offset-syncs topics have been created on the primary cluster
-        Set<String> primaryTopics = primary.kafka().createAdminClient().listTopics().names().get();
-        assertFalse(primaryTopics.contains("mm2-offset-syncs." + PRIMARY_CLUSTER_ALIAS + ".internal"));
-        assertFalse(primaryTopics.contains("mm2-offset-syncs." + BACKUP_CLUSTER_ALIAS + ".internal"));
+        try (Admin adminClient = primary.kafka().createAdminClient()) {
+            Set<String> primaryTopics = adminClient.listTopics().names().get();
+            assertFalse(primaryTopics.contains("mm2-offset-syncs." + PRIMARY_CLUSTER_ALIAS + ".internal"));
+            assertFalse(primaryTopics.contains("mm2-offset-syncs." + BACKUP_CLUSTER_ALIAS + ".internal"));
+        }
     }
 
     @Test
@@ -647,6 +651,8 @@ public class MirrorConnectorsIntegrationBaseTest {
             return translatedOffsets.containsKey(remoteTopicPartition(tp1, PRIMARY_CLUSTER_ALIAS)) &&
                    translatedOffsets.containsKey(remoteTopicPartition(tp2, PRIMARY_CLUSTER_ALIAS));
         }, OFFSET_SYNC_DURATION_MS, "Checkpoints were not emitted correctly to backup cluster");
+
+        backupClient.close();
     }
 
     @Test
@@ -728,6 +734,8 @@ public class MirrorConnectorsIntegrationBaseTest {
                     backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic, partialCheckpoints);
             log.info("Final checkpoints: {}", finalCheckpoints);
         }
+
+        backupClient.close();
 
         for (TopicPartition tp : partialCheckpoints.keySet()) {
             assertTrue(finalCheckpoints.get(tp).offset() < partialCheckpoints.get(tp).offset(),
@@ -872,6 +880,34 @@ public class MirrorConnectorsIntegrationBaseTest {
                     "`retention.bytes` should be synced with target's default value!");
             return true;
         }, 30000, "Topic configurations were not synced");
+    }
+
+    @Test
+    public void testReplicateFromLatest() throws Exception {
+        // populate topic with records that should not be replicated
+        String topic = "test-topic-1";
+        produceMessages(primaryProducer, topic, NUM_PARTITIONS);
+
+        // consume from the ends of topics when no committed offsets are found
+        mm2Props.put(PRIMARY_CLUSTER_ALIAS + ".consumer." + AUTO_OFFSET_RESET_CONFIG, "latest");
+        // one way replication from primary to backup
+        mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
+        mm2Config = new MirrorMakerConfig(mm2Props);
+        waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
+
+        // produce some more messages to the topic, now that MM2 is running and replication should be taking place
+        produceMessages(primaryProducer, topic, NUM_PARTITIONS);
+
+        String backupTopic = remoteTopicName(topic, PRIMARY_CLUSTER_ALIAS);
+        // wait for at least the expected number of records to be replicated to the backup cluster
+        backup.kafka().consume(NUM_PARTITIONS * NUM_RECORDS_PER_PARTITION, RECORD_TRANSFER_DURATION_MS, backupTopic);
+        // consume all records from backup cluster
+        ConsumerRecords<byte[], byte[]> replicatedRecords = backup.kafka().consumeAll(RECORD_TRANSFER_DURATION_MS, backupTopic);
+        // ensure that we only replicated the records produced after startup
+        replicatedRecords.partitions().forEach(topicPartition -> {
+            int replicatedCount = replicatedRecords.records(topicPartition).size();
+            assertEquals(NUM_RECORDS_PER_PARTITION, replicatedCount);
+        });
     }
 
     private TopicPartition remoteTopicPartition(TopicPartition tp, String alias) {

@@ -100,7 +100,7 @@ public class AdjustStreamThreadCountTest {
 
     @BeforeEach
     public void setup(final TestInfo testInfo) {
-        final String testId = safeUniqueTestName(getClass(), testInfo);
+        final String testId = safeUniqueTestName(testInfo);
         appId = "appId_" + testId;
         inputTopic = "input" + testId;
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
@@ -442,7 +442,7 @@ public class AdjustStreamThreadCountTest {
                 @Override
                 public void init(final ProcessorContext context) {
                     context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, timestamp -> {
-                        if (Thread.currentThread().getName().endsWith("StreamThread-1") && injectError.get()) {
+                        if (Thread.currentThread().getName().contains("StreamThread-1") && injectError.get()) {
                             injectError.set(false);
                             throw new RuntimeException("BOOM");
                         }

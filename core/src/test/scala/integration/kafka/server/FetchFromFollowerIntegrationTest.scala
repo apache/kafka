@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package integration.kafka.server
+package kafka.server
 
-import kafka.server.{BaseFetchRequestTest, KafkaConfig}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.NewPartitionReassignment
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -25,8 +24,10 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{Test, Timeout}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.server.config.ServerLogConfigs
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{Disabled, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -45,8 +46,8 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
 
   def overridingProps: Properties = {
     val props = new Properties
-    props.put(KafkaConfig.NumPartitionsProp, numParts.toString)
-    props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, numNodes.toString)
+    props.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, numParts.toString)
+    props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, numNodes.toString)
     props
   }
 
@@ -55,18 +56,21 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   @Timeout(15)
   def testFollowerCompleteDelayedFetchesOnReplication(quorum: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
-    TestUtils.createTopicWithAdmin(
+    val partitionLeaders = TestUtils.createTopicWithAdmin(
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
+    TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic, 0))
+    assertTrue(partitionLeaders.values.forall(_ == leaderBrokerId))
 
     val version = ApiKeys.FETCH.latestVersion()
     val topicPartition = new TopicPartition(topic, 0)
@@ -97,14 +101,16 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     }
   }
 
-  @Test
-  def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(quorum: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
 
@@ -123,14 +129,16 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     assertEquals(-1, getPreferredReplica)
   }
 
-  @Test
-  def testFetchFromFollowerWithRoll(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFetchFromFollowerWithRoll(quorum: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
 
@@ -172,20 +180,22 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     }
   }
 
-  @Test
-  def testRackAwareRangeAssignor(): Unit = {
-    val partitionList = servers.indices.toList
+  @Disabled
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testRackAwareRangeAssignor(quorum: String): Unit = {
+    val partitionList = brokers.indices.toList
 
     val topicWithAllPartitionsOnAllRacks = "topicWithAllPartitionsOnAllRacks"
-    createTopic(topicWithAllPartitionsOnAllRacks, servers.size, servers.size)
+    createTopic(topicWithAllPartitionsOnAllRacks, brokers.size, brokers.size)
 
     // Racks are in order of broker ids, assign leaders in reverse order
     val topicWithSingleRackPartitions = "topicWithSingleRackPartitions"
-    createTopicWithAssignment(topicWithSingleRackPartitions, partitionList.map(i => (i, Seq(servers.size - i - 1))).toMap)
+    createTopicWithAssignment(topicWithSingleRackPartitions, partitionList.map(i => (i, Seq(brokers.size - i - 1))).toMap)
 
     // Create consumers with instance ids in ascending order, with racks in the same order.
     consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RangeAssignor].getName)
-    val consumers = servers.map { server =>
+    val consumers = brokers.map { server =>
       consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
       consumerConfig.setProperty(ConsumerConfig.CLIENT_RACK_CONFIG, server.config.rack.orNull)
       consumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, s"instance-${server.config.brokerId}")

@@ -18,6 +18,7 @@
 package org.apache.kafka.controller.metrics;
 
 import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
@@ -73,6 +74,7 @@ public class ControllerMetricsTestUtils {
         }
         return new PartitionRegistration.Builder().
             setReplicas(new int[] {0, 1, 2}).
+            setDirectories(DirectoryId.migratingArray(3)).
             setIsr(new int[] {0, 1, 2}).
             setLeader(leader).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
