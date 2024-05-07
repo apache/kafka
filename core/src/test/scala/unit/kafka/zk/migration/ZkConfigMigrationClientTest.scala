@@ -250,6 +250,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     props.put(TopicConfig.RETENTION_MS_CONFIG, "300000")
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, "test", props)
 
+    migrationState = migrationClient.claimControllerLeadership(migrationState)
     migrationState = migrationClient.configClient().writeConfigs(new ConfigResource(ConfigResource.Type.TOPIC, "test"),
       java.util.Collections.singletonMap(TopicConfig.SEGMENT_MS_CONFIG, "100000"), migrationState)
     assertEquals(1, migrationState.migrationZkVersion())
