@@ -27,13 +27,22 @@ import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeLogDirsResult;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
+
+
+import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
+import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 
 
 @ClusterTestDefaults(clusterType = Type.ZK, serverProperties = {
@@ -134,5 +143,50 @@ public class ClusterTestExtensionsTest {
     @ClusterTest
     public void testDefaults(ClusterInstance clusterInstance) {
         Assertions.assertEquals(MetadataVersion.IBP_3_8_IV0, clusterInstance.config().metadataVersion());
+    }
+
+    @ClusterTests({
+        @ClusterTest(name = "enable-new-coordinator", clusterType = Type.ALL, serverProperties = {
+            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+        }),
+        @ClusterTest(name = "enable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+        }),
+        @ClusterTest(name = "enable-new-coordinator-and-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+        }),
+        @ClusterTest(name = "enable-new-coordinator-and-disable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
+        }),
+        @ClusterTest(name = "disable-new-coordinator-and-enable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
+            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+        }),
+    })
+    public void testSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
+        Set<GroupProtocol> supportedGroupProtocols = new HashSet<>();
+        supportedGroupProtocols.add(CLASSIC);
+        supportedGroupProtocols.add(CONSUMER);
+        Assertions.assertTrue(clusterInstance.supportedGroupProtocols().containsAll(supportedGroupProtocols));
+        Assertions.assertEquals(2, clusterInstance.supportedGroupProtocols().size());
+    }
+
+    @ClusterTests({
+        @ClusterTest(name = "disable-new-coordinator", clusterType = Type.ALL, serverProperties = {
+            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
+        }),
+        @ClusterTest(name = "disable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
+        }),
+        @ClusterTest(name = "disable-new-coordinator-and-disable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
+            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
+        }),
+    })
+    public void testNotSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
+        Assertions.assertTrue(clusterInstance.supportedGroupProtocols().contains(CLASSIC));
+        Assertions.assertEquals(1, clusterInstance.supportedGroupProtocols().size());
     }
 }
