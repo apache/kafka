@@ -163,11 +163,6 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
             }
         }
 
-        @Override
-        public void close() {
-            sharedTimeTrackerSupplier.remove(context().taskId());
-        }
-
         protected abstract TimestampedKeyAndJoinSide<K> makeThisKey(final K key, final long inputRecordTimestamp);
 
         protected abstract LeftOrRightValue<VL, VR> makeThisValue(final VThis thisValue);
@@ -306,6 +301,11 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
                 final LeftOrRightValue<VL, VR> thisValue = makeThisValue(thisRecord.value());
                 store.put(thisKey, thisValue);
             });
+        }
+
+        @Override
+        public void close() {
+            sharedTimeTrackerSupplier.remove(context().taskId());
         }
     }
 }
