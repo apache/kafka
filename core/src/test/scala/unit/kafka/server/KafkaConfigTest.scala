@@ -1864,5 +1864,8 @@ class KafkaConfigTest {
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, String.valueOf(true))
     props.put(ServerLogConfigs.LOG_DIRS_CONFIG, "/tmp/a")
     assertDoesNotThrow(() => KafkaConfig.fromProps(props))
+
+    props.put(ServerLogConfigs.LOG_DIRS_CONFIG, "/tmp/a,/tmp/b")
+    assertDoesNotThrow(() => KafkaConfig.fromProps(props))
   }
 }
