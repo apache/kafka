@@ -174,8 +174,8 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
         protected abstract VOther getOtherValue(final LeftOrRightValue<? extends VL, ? extends VR> leftOrRightValue);
 
         private void emitNonJoinedOuterRecords(
-                final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>> store,
-                final Record<K, ?> record) {
+            final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>> store,
+            final Record<K, ?> record) {
 
             // calling `store.all()` creates an iterator what is an expensive operation on RocksDB;
             // to reduce runtime cost, we try to avoid paying those cost
