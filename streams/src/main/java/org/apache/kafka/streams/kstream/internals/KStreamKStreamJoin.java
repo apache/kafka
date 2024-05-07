@@ -44,51 +44,56 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 
 abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements ProcessorSupplier<K, VThis, K, VOut> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
-    private final boolean outer;
-    private final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner;
+
+    private final String otherWindowName;
     private final long joinBeforeMs;
     private final long joinAfterMs;
     private final long joinGraceMs;
-    private final String otherWindowName;
-    private final TimeTrackerSupplier sharedTimeTrackerSupplier;
     private final boolean enableSpuriousResultFix;
-    private final Optional<String> outerJoinWindowName;
     private final long windowsBeforeMs;
     private final long windowsAfterMs;
 
-    KStreamKStreamJoin(final String otherWindowName, final TimeTrackerSupplier sharedTimeTrackerSupplier,
-                       final Optional<String> outerJoinWindowName, final long joinBeforeMs,
-                       final long joinAfterMs, final JoinWindowsInternal windows, final boolean outer,
-                       final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner) {
+    private final boolean outer;
+    private final Optional<String> outerJoinWindowName;
+    private final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner;
+
+    private final TimeTrackerSupplier sharedTimeTrackerSupplier;
+
+    KStreamKStreamJoin(final String otherWindowName,
+                       final JoinWindowsInternal windows,
+                       final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner,
+                       final boolean outer,
+                       final Optional<String> outerJoinWindowName,
+                       final long joinBeforeMs,
+                       final long joinAfterMs,
+                       final TimeTrackerSupplier sharedTimeTrackerSupplier) {
         this.otherWindowName = otherWindowName;
-        this.sharedTimeTrackerSupplier = sharedTimeTrackerSupplier;
-        this.enableSpuriousResultFix = windows.spuriousResultFixEnabled();
-        this.outerJoinWindowName = outerJoinWindowName;
         this.joinBeforeMs = joinBeforeMs;
         this.joinAfterMs = joinAfterMs;
-        this.joinGraceMs = windows.gracePeriodMs();
-        this.windowsBeforeMs = windows.beforeMs;
         this.windowsAfterMs = windows.afterMs;
-        this.outer = outer;
+        this.windowsBeforeMs = windows.beforeMs;
+        this.joinGraceMs = windows.gracePeriodMs();
+        this.enableSpuriousResultFix = windows.spuriousResultFixEnabled();
         this.joiner = joiner;
+        this.outer = outer;
+        this.outerJoinWindowName = outerJoinWindowName;
+        this.sharedTimeTrackerSupplier = sharedTimeTrackerSupplier;
     }
 
     protected abstract class KStreamKStreamJoinProcessor extends ContextualProcessor<K, VThis, K, VOut> {
-        private InternalProcessorContext<K, VOut> internalProcessorContext;
-        private Sensor droppedRecordsSensor;
-
-        private TimeTracker sharedTimeTracker;
-        private Optional<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>>> outerJoinStore =
-                Optional.empty();
         private WindowStore<K, VOther> otherWindowStore;
+        private Sensor droppedRecordsSensor;
+        private Optional<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>>> outerJoinStore = Optional.empty();
+        private InternalProcessorContext<K, VOut> internalProcessorContext;
+        private TimeTracker sharedTimeTracker;
 
         @Override
         public void init(final ProcessorContext<K, VOut> context) {
             super.init(context);
             internalProcessorContext = (InternalProcessorContext<K, VOut>) context;
+
             final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
-            droppedRecordsSensor =
-                    droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
+            droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
             otherWindowStore = context.getStateStore(otherWindowName);
             sharedTimeTracker = sharedTimeTrackerSupplier.get(context.taskId());
 
@@ -96,19 +101,22 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
                 outerJoinStore = outerJoinWindowName.map(context::getStateStore);
 
                 sharedTimeTracker.setEmitInterval(
-                        StreamsConfig.InternalConfig.getLong(
-                                context.appConfigs(),
-                                EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
-                                1000L
-                        )
+                    StreamsConfig.InternalConfig.getLong(
+                            context.appConfigs(),
+                            EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
+                            1000L
+                    )
                 );
             }
         }
 
         @Override
         public void process(final Record<K, VThis> record) {
-            final long recordTimestamp = record.timestamp();
-            sharedTimeTracker.advanceStreamTime(recordTimestamp);
+
+            final long inputRecordTimestamp = record.timestamp();
+
+            sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
+
             if (outer && record.key() == null && record.value() != null) {
                 context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                 return;
@@ -117,15 +125,15 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
             }
 
             // Emit all non-joined records which window has closed
-            if (recordTimestamp == sharedTimeTracker.streamTime) {
+            if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
                 outerJoinStore.ifPresent(store -> emitNonJoinedOuterRecords(store, record));
             }
 
-            final long timeFrom = Math.max(0L, recordTimestamp - joinBeforeMs);
-            final long timeTo = Math.max(0L, recordTimestamp + joinAfterMs);
+            final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
+            final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
             try (final WindowStoreIterator<VOther> iter = otherWindowStore.fetch(record.key(), timeFrom, timeTo)) {
                 final boolean needOuterJoin = outer && !iter.hasNext();
-                iter.forEachRemaining(otherRecord -> emitInnerJoin(record, otherRecord, recordTimestamp));
+                iter.forEachRemaining(otherRecord -> emitInnerJoin(record, otherRecord, inputRecordTimestamp));
 
                 if (needOuterJoin) {
                     // The maxStreamTime contains the max time observed in both sides of the join.
@@ -146,11 +154,10 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
                     // This condition below allows us to process the out-of-order records without the need
                     // to hold it in the temporary outer store
                     if (!outerJoinStore.isPresent() || timeTo < sharedTimeTracker.streamTime) {
-                        context().forward(
-                                record.withValue(joiner.apply(record.key(), record.value(), null)));
+                        context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                     } else {
-                        sharedTimeTracker.updatedMinTime(recordTimestamp);
-                        putInOuterJoinStore(record, recordTimestamp);
+                        sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
+                        putInOuterJoinStore(record, inputRecordTimestamp);
                     }
                 }
             }

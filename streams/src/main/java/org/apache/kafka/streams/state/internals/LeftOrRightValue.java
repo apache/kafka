@@ -74,8 +74,8 @@ public class LeftOrRightValue<V1, V2> {
     @Override
     public String toString() {
         return "<"
-                + ((leftValue != null) ? "left," + leftValue : "right," + rightValue)
-                + ">";
+            + ((leftValue != null) ? "left," + leftValue : "right," + rightValue)
+            + ">";
     }
 
     @Override
@@ -88,7 +88,7 @@ public class LeftOrRightValue<V1, V2> {
         }
         final LeftOrRightValue<?, ?> that = (LeftOrRightValue<?, ?>) o;
         return Objects.equals(leftValue, that.leftValue) &&
-                Objects.equals(rightValue, that.rightValue);
+            Objects.equals(rightValue, that.rightValue);
     }
 
     @Override
