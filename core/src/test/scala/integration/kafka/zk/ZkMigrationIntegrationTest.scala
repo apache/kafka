@@ -515,7 +515,7 @@ class ZkMigrationIntegrationTest {
     val clusterId = zkCluster.clusterId()
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.IBP_3_8_IV0).
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_8_IV1).
         setClusterId(Uuid.fromString(clusterId)).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
