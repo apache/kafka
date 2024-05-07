@@ -33,17 +33,13 @@ import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
 import java.text.StringCharacterIterator;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.Calendar;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
 import java.util.TimeZone;
 import java.util.regex.Pattern;
 
@@ -83,16 +79,6 @@ public class Values {
     static final String ISO_8601_DATE_FORMAT_PATTERN = "yyyy-MM-dd";
     static final String ISO_8601_TIME_FORMAT_PATTERN = "HH:mm:ss.SSS'Z'";
     static final String ISO_8601_TIMESTAMP_FORMAT_PATTERN = ISO_8601_DATE_FORMAT_PATTERN + "'T'" + ISO_8601_TIME_FORMAT_PATTERN;
-    private static final Set<String> TEMPORAL_LOGICAL_TYPE_NAMES =
-            Collections.unmodifiableSet(
-                    new HashSet<>(
-                            Arrays.asList(Time.LOGICAL_NAME,
-                            Timestamp.LOGICAL_NAME,
-                            Date.LOGICAL_NAME
-                            )
-                    )
-            );
-
     private static final String QUOTE_DELIMITER = "\"";
     private static final String COMMA_DELIMITER = ",";
     private static final String ENTRY_DELIMITER = ":";
@@ -919,8 +905,8 @@ public class Values {
         String content = sb.toString();
         // We can parse string literals as temporal logical types, but all others
         // are treated as strings
-        SchemaAndValue parsed = parseString(content);
-        if (parsed != null && TEMPORAL_LOGICAL_TYPE_NAMES.contains(parsed.schema().name())) {
+        SchemaAndValue parsed = parseAsTemporal(content);
+        if (parsed != null) {
             return parsed;
         }
         return new SchemaAndValue(Schema.STRING_SCHEMA, content);
