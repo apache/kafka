@@ -32,7 +32,6 @@ import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.DescribeUserScramCredentialsOptions;
 import org.apache.kafka.clients.admin.DescribeUserScramCredentialsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -61,6 +60,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -754,7 +754,7 @@ public class ConfigCommandUnitTest {
             new ClientQuotaAlteration.Op("request_percentage", null)
         ));
 
-        KafkaFuture.BiConsumer<Optional<String>, Optional<String>> verifyAlterUserClientQuotas = (userOpt, clientOpt) -> {
+        BiConsumer<Optional<String>, Optional<String>> verifyAlterUserClientQuotas = (userOpt, clientOpt) -> {
             Map.Entry<List<String>, Map<String, String>> t = toValues(userOpt, ClientQuotaEntity.USER);
             List<String> userArgs = t.getKey();
             Map<String, String> userEntry = t.getValue();
