@@ -36,6 +36,7 @@ public @interface ClusterTest {
     Type clusterType() default Type.DEFAULT;
     int brokers() default 0;
     int controllers() default 0;
+    int disksPerBroker() default 0;
     AutoStart autoStart() default AutoStart.DEFAULT;
 
     String name() default "";

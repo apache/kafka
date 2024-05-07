@@ -33,13 +33,12 @@ public class ConnectProtocolCompatibilityTest {
     private static final String LEADER_URL = "leaderUrl:8083";
     private static final long CONFIG_OFFSET = 1;
 
-    private String connectorId1 = "connector1";
-    private String connectorId2 = "connector2";
-    private String connectorId3 = "connector3";
-    private ConnectorTaskId taskId1x0 = new ConnectorTaskId(connectorId1, 0);
-    private ConnectorTaskId taskId1x1 = new ConnectorTaskId(connectorId1, 1);
-    private ConnectorTaskId taskId2x0 = new ConnectorTaskId(connectorId2, 0);
-    private ConnectorTaskId taskId3x0 = new ConnectorTaskId(connectorId3, 0);
+    private final String connectorId1 = "connector1";
+    private final String connectorId2 = "connector2";
+    private final String connectorId3 = "connector3";
+    private final ConnectorTaskId taskId1x0 = new ConnectorTaskId(connectorId1, 0);
+    private final ConnectorTaskId taskId2x0 = new ConnectorTaskId(connectorId2, 0);
+    private final ConnectorTaskId taskId3x0 = new ConnectorTaskId(connectorId3, 0);
 
     @Test
     public void testEagerToEagerMetadata() {

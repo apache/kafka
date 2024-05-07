@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.raft;
 
+import java.nio.file.Path;
+
 /**
  *  Maintain the save and retrieval of quorum state information, so far only supports
  *  read and write of election states.
@@ -38,6 +40,11 @@ public interface QuorumStateStore {
      * @param latest The latest election state
      */
     void writeElectionState(ElectionState latest);
+
+    /**
+     * Path to the quorum state store
+     */
+    Path path();
 
     /**
      * Clear any state associated to the store for a fresh start

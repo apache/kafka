@@ -17,28 +17,29 @@
 
 package kafka.server
 
-import java.lang.{Byte => JByte}
-import java.util.Properties
 import kafka.network.SocketServer
-import kafka.security.authorizer.AclEntry
-import kafka.utils.TestInfoUtils
 import org.apache.kafka.common.message.{DescribeClusterRequestData, DescribeClusterResponseData}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.lang.{Byte => JByte}
+import java.util.Properties
 import scala.jdk.CollectionConverters._
 
 class DescribeClusterRequestTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.setProperty(KafkaConfig.DefaultReplicationFactorProp, "2")
+    properties.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
+    properties.setProperty(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "2")
     properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
   }
 
@@ -47,13 +48,13 @@ class DescribeClusterRequestTest extends BaseRequestTest {
     doSetup(testInfo, createOffsetsTopic = false)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeClusterRequestIncludingClusterAuthorizedOperations(quorum: String): Unit = {
     testDescribeClusterRequest(true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeClusterRequestExcludingClusterAuthorizedOperations(quorum: String): Unit = {
     testDescribeClusterRequest(false)
@@ -77,7 +78,7 @@ class DescribeClusterRequestTest extends BaseRequestTest {
 
     val expectedClusterAuthorizedOperations = if (includeClusterAuthorizedOperations) {
       Utils.to32BitField(
-        AclEntry.supportedOperations(ResourceType.CLUSTER)
+        AclEntry.supportedOperations(ResourceType.CLUSTER).asScala
           .map(_.code.asInstanceOf[JByte]).asJava)
     } else {
       Int.MinValue

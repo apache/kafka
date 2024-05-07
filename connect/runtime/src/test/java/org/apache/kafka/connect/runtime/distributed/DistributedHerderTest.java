@@ -127,6 +127,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.AdditionalMatchers.leq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -869,7 +870,7 @@ public class DistributedHerderTest {
 
         ArgumentCaptor<Throwable> error = ArgumentCaptor.forClass(Throwable.class);
         verify(putConnectorCallback).onCompletion(error.capture(), isNull());
-        assertTrue(error.getValue() instanceof BadRequestException);
+        assertInstanceOf(BadRequestException.class, error.getValue());
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
 
         assertEquals(
@@ -1170,7 +1171,7 @@ public class DistributedHerderTest {
         herder.restartConnectorAndTasks(restartRequest, callback);
         herder.tick();
         ExecutionException ee = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(ee.getCause() instanceof NotFoundException);
+        assertInstanceOf(NotFoundException.class, ee.getCause());
         assertTrue(ee.getMessage().contains("Unknown connector:"));
 
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
@@ -1196,7 +1197,7 @@ public class DistributedHerderTest {
         herder.restartConnectorAndTasks(restartRequest, callback);
         herder.tick();
         ExecutionException ee = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(ee.getCause() instanceof NotLeaderException);
+        assertInstanceOf(NotLeaderException.class, ee.getCause());
 
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
     }
@@ -1224,7 +1225,7 @@ public class DistributedHerderTest {
         herder.restartConnectorAndTasks(restartRequest, callback);
         herder.tick();
         ExecutionException ee = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(ee.getCause() instanceof NotFoundException);
+        assertInstanceOf(NotFoundException.class, ee.getCause());
         assertTrue(ee.getMessage().contains("Status for connector"));
 
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
@@ -1833,7 +1834,7 @@ public class DistributedHerderTest {
                 ExecutionException.class,
                 () -> cb.get(0, TimeUnit.SECONDS)
         );
-        assertTrue(e.getCause() instanceof NotLeaderException);
+        assertInstanceOf(NotLeaderException.class, e.getCause());
 
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
     }
@@ -2466,7 +2467,7 @@ public class DistributedHerderTest {
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
-        assertTrue(errorCapture.getValue() instanceof BadRequestException);
+        assertInstanceOf(BadRequestException.class, errorCapture.getValue());
 
         verifyNoMoreInteractions(member, taskConfigCb);
     }
@@ -2483,7 +2484,7 @@ public class DistributedHerderTest {
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
-        assertTrue(errorCapture.getValue() instanceof BadRequestException);
+        assertInstanceOf(BadRequestException.class, errorCapture.getValue());
 
         verifyNoMoreInteractions(member, taskConfigCb);
     }
@@ -2509,7 +2510,7 @@ public class DistributedHerderTest {
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
-        assertTrue(errorCapture.getValue() instanceof ConnectRestException);
+        assertInstanceOf(ConnectRestException.class, errorCapture.getValue());
         assertEquals(FORBIDDEN.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
 
         verifyNoMoreInteractions(member, taskConfigCb);
@@ -2527,7 +2528,7 @@ public class DistributedHerderTest {
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
-        assertTrue(errorCapture.getValue() instanceof ConnectRestException);
+        assertInstanceOf(ConnectRestException.class, errorCapture.getValue());
         assertEquals(SERVICE_UNAVAILABLE.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
 
         verifyNoMoreInteractions(member, taskConfigCb);
@@ -2663,7 +2664,7 @@ public class DistributedHerderTest {
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
-        assertTrue(errorCapture.getValue() instanceof ConnectRestException);
+        assertInstanceOf(ConnectRestException.class, errorCapture.getValue());
         assertEquals(FORBIDDEN.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
 
         verifyNoMoreInteractions(member);
@@ -2719,7 +2720,7 @@ public class DistributedHerderTest {
         if (!succeed) {
             ExecutionException fencingException =
                     assertThrows(ExecutionException.class, () -> fencing.get(10, TimeUnit.SECONDS));
-            assertTrue(fencingException.getCause() instanceof ConnectException);
+            assertInstanceOf(ConnectException.class, fencingException.getCause());
         } else {
             fencing.get(10, TimeUnit.SECONDS);
         }
@@ -2955,7 +2956,7 @@ public class DistributedHerderTest {
         herderFencingCallbacks.getAllValues().forEach(cb -> cb.accept(null, fencingException));
 
         ExecutionException exception = assertThrows(ExecutionException.class, () -> fencing.get(10, TimeUnit.SECONDS));
-        assertTrue(exception.getCause() instanceof ConnectException);
+        assertInstanceOf(ConnectException.class, exception.getCause());
 
         stopBackgroundHerder();
 
@@ -3653,7 +3654,7 @@ public class DistributedHerderTest {
         herder.modifyConnectorOffsets("connector-does-not-exist", new HashMap<>(), callback);
         herder.tick();
         ExecutionException e = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(e.getCause() instanceof NotFoundException);
+        assertInstanceOf(NotFoundException.class, e.getCause());
     }
 
     @Test
@@ -3671,7 +3672,7 @@ public class DistributedHerderTest {
         herder.modifyConnectorOffsets(CONN1, null, callback);
         herder.tick();
         ExecutionException e = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(e.getCause() instanceof BadRequestException);
+        assertInstanceOf(BadRequestException.class, e.getCause());
     }
 
     @Test
@@ -3689,7 +3690,7 @@ public class DistributedHerderTest {
         herder.modifyConnectorOffsets(CONN1, new HashMap<>(), callback);
         herder.tick();
         ExecutionException e = assertThrows(ExecutionException.class, () -> callback.get(1000L, TimeUnit.MILLISECONDS));
-        assertTrue(e.getCause() instanceof NotLeaderException);
+        assertInstanceOf(NotLeaderException.class, e.getCause());
     }
 
     @Test
@@ -4117,10 +4118,10 @@ public class DistributedHerderTest {
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class
-    private abstract class BogusSourceConnector extends SourceConnector {
+    private static abstract class BogusSourceConnector extends SourceConnector {
     }
 
-    private abstract class BogusSourceTask extends SourceTask {
+    private static abstract class BogusSourceTask extends SourceTask {
     }
 
     /**

@@ -28,6 +28,7 @@ import org.apache.kafka.clients.admin.CreatePartitionsOptions;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsOptions;
+import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewPartitions;
@@ -208,9 +209,9 @@ public abstract class TopicCommand {
      *                           If set to true, the command will throw an exception if the topic with the
      *                           requested name does not exist.
      */
-    private static void ensureTopicExists(List<String> foundTopics, String requestedTopic, Boolean requireTopicExists) {
+    private static void ensureTopicExists(List<String> foundTopics, Optional<String> requestedTopic, Boolean requireTopicExists) {
         // If no topic name was mentioned, do not need to throw exception.
-        if (!(requestedTopic.isEmpty() || !Optional.ofNullable(requestedTopic).isPresent()) && requireTopicExists && foundTopics.isEmpty()) {
+        if (requestedTopic.isPresent() && !requestedTopic.get().isEmpty() && requireTopicExists && foundTopics.isEmpty()) {
             // If given topic doesn't exist then throw exception
             throw new IllegalArgumentException(String.format("Topic '%s' does not exist as expected", requestedTopic));
         }
@@ -296,7 +297,7 @@ public abstract class TopicCommand {
                 .map(ce -> ce.name() + "=" + ce.value())
                 .collect(Collectors.joining(","));
             System.out.print("Topic: " +  topic);
-            if (topicId != Uuid.ZERO_UUID)
+            if (!topicId.equals(Uuid.ZERO_UUID))
                 System.out.print("\tTopicId: " + topicId);
             System.out.print("\tPartitionCount: " + numPartitions);
             System.out.print("\tReplicationFactor: " + replicationFactor);
@@ -366,6 +367,22 @@ public abstract class TopicCommand {
                 System.out.print("\tRemoving Replicas: " + reassignment.removingReplicas().stream()
                     .map(node -> node.toString())
                     .collect(Collectors.joining(",")));
+            }
+
+            if (info.elr() != null) {
+                System.out.print("\tElr: " + info.elr().stream()
+                    .map(node -> Integer.toString(node.id()))
+                    .collect(Collectors.joining(",")));
+            } else {
+                System.out.print("\tElr: N/A");
+            }
+
+            if (info.lastKnownElr() != null) {
+                System.out.print("\tLastKnownElr: " + info.lastKnownElr().stream()
+                    .map(node -> Integer.toString(node.id()))
+                    .collect(Collectors.joining(",")));
+            } else {
+                System.out.print("\tLastKnownElr: N/A");
             }
             System.out.print(markedForDeletion ? "\tMarkedForDeletion: true" : "");
             System.out.println();
@@ -490,7 +507,7 @@ public abstract class TopicCommand {
         public void alterTopic(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
             CommandTopicPartition topic = new CommandTopicPartition(opts);
             List<String> topics = getTopics(opts.topic(), opts.excludeInternalTopics());
-            ensureTopicExists(topics, opts.topic().orElse(""), !opts.ifExists());
+            ensureTopicExists(topics, opts.topic(), !opts.ifExists());
 
             if (!topics.isEmpty()) {
                 Map<String, KafkaFuture<org.apache.kafka.clients.admin.TopicDescription>> topicsInfo = adminClient.describeTopics(topics).topicNameValues();
@@ -539,7 +556,7 @@ public abstract class TopicCommand {
         public void describeTopic(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
             // If topicId is provided and not zero, will use topicId regardless of topic name
             Optional<Uuid> inputTopicId = opts.topicId()
-                .map(Uuid::fromString).filter(uuid -> uuid != Uuid.ZERO_UUID);
+                .map(Uuid::fromString).filter(uuid -> !uuid.equals(Uuid.ZERO_UUID));
             Boolean useTopicId = inputTopicId.isPresent();
 
             List<Uuid> topicIds;
@@ -556,7 +573,7 @@ public abstract class TopicCommand {
             if (useTopicId) {
                 ensureTopicIdExists(topicIds, inputTopicId.get(), !opts.ifExists());
             } else {
-                ensureTopicExists(topics, opts.topic().orElse(""), !opts.ifExists());
+                ensureTopicExists(topics, opts.topic(), !opts.ifExists());
             }
             List<org.apache.kafka.clients.admin.TopicDescription> topicDescriptions = new ArrayList<>();
 
@@ -568,7 +585,9 @@ public abstract class TopicCommand {
 
             if (!topics.isEmpty()) {
                 Map<String, org.apache.kafka.clients.admin.TopicDescription> descTopics =
-                    adminClient.describeTopics(TopicCollection.ofTopicNames(topics)).allTopicNames().get();
+                    adminClient.describeTopics(TopicCollection.ofTopicNames(topics),
+                        new DescribeTopicsOptions()
+                            .partitionSizeLimitPerResponse(opts.partitionSizeLimitPerResponse().orElse(2000))).allTopicNames().get();
                 topicDescriptions = new ArrayList<>(descTopics.values());
             }
 
@@ -632,7 +651,7 @@ public abstract class TopicCommand {
 
         public void deleteTopic(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
             List<String> topics = getTopics(opts.topic(), opts.excludeInternalTopics());
-            ensureTopicExists(topics, opts.topic().orElse(""), !opts.ifExists());
+            ensureTopicExists(topics, opts.topic(), !opts.ifExists());
             adminClient.deleteTopics(Collections.unmodifiableList(topics),
                 new DeleteTopicsOptions().retryOnQuotaViolation(false)
             ).all().get();
@@ -716,6 +735,8 @@ public abstract class TopicCommand {
 
         private final OptionSpecBuilder excludeInternalTopicOpt;
 
+        private final ArgumentAcceptingOptionSpec<Integer> partitionSizeLimitPerResponseOpt;
+
         private final Set<OptionSpec<?>> allTopicLevelOpts;
 
         private final Set<OptionSpecBuilder> allReplicationReportOpts;
@@ -752,7 +773,7 @@ public abstract class TopicCommand {
                 .withRequiredArg()
                 .describedAs("topic-id")
                 .ofType(String.class);
-            nl = System.getProperty("line.separator");
+            nl = System.lineSeparator();
 
             String logConfigNames = LogConfig.configNames().stream().map(config -> "\t" + config).collect(Collectors.joining(nl));
             configOpt = parser.accepts("config",  "A topic configuration override for the topic being created." +
@@ -799,6 +820,11 @@ public abstract class TopicCommand {
                 "if set when creating topics, the action will only execute if the topic does not already exist.");
             excludeInternalTopicOpt = parser.accepts("exclude-internal",
                 "exclude internal topics when running list or describe command. The internal topics will be listed by default");
+            partitionSizeLimitPerResponseOpt = parser.accepts("partition-size-limit-per-response",
+                "the maximum partition size to be included in one DescribeTopicPartitions response.")
+                    .withRequiredArg()
+                    .describedAs("maximum number of partitions in one response.")
+                    .ofType(java.lang.Integer.class);
             options = parser.parse(args);
 
             allTopicLevelOpts = new HashSet<>(Arrays.asList(alterOpt, createOpt, describeOpt, listOpt, deleteOpt));
@@ -916,6 +942,10 @@ public abstract class TopicCommand {
 
         public Boolean excludeInternalTopics() {
             return has(excludeInternalTopicOpt);
+        }
+
+        public Optional<Integer> partitionSizeLimitPerResponse() {
+            return valueAsOption(partitionSizeLimitPerResponseOpt);
         }
 
         public Optional<List<String>> topicConfig() {

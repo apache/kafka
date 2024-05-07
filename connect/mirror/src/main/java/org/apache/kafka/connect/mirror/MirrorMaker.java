@@ -117,7 +117,6 @@ public class MirrorMaker {
     private final Time time;
     private final MirrorMakerConfig config;
     private final Set<String> clusters;
-    private final Set<SourceAndTarget> herderPairs;
     private final MirrorRestServer internalServer;
     private final RestClient restClient;
 
@@ -149,13 +148,13 @@ public class MirrorMaker {
             this.clusters = config.clusters();
         }
         log.info("Targeting clusters {}", this.clusters);
-        this.herderPairs = config.clusterPairs().stream()
+        Set<SourceAndTarget> herderPairs = config.clusterPairs().stream()
             .filter(x -> this.clusters.contains(x.target()))
             .collect(Collectors.toSet());
         if (herderPairs.isEmpty()) {
             throw new IllegalArgumentException("No source->target replication flows.");
         }
-        this.herderPairs.forEach(this::addHerder);
+        herderPairs.forEach(this::addHerder);
         shutdownHook = new ShutdownHook();
     }
 

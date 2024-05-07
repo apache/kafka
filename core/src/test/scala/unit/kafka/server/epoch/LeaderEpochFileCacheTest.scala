@@ -62,7 +62,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldAddEpochAndMessageOffsetToCache() = {
+  def shouldAddEpochAndMessageOffsetToCache(): Unit = {
     //When
     cache.assign(2, 10)
     val logEndOffset = 11
@@ -74,7 +74,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnLogEndOffsetIfLatestEpochRequested() = {
+  def shouldReturnLogEndOffsetIfLatestEpochRequested(): Unit = {
     //When just one epoch
     cache.assign(2, 11)
     cache.assign(2, 12)
@@ -85,7 +85,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnUndefinedOffsetIfUndefinedEpochRequested() = {
+  def shouldReturnUndefinedOffsetIfUndefinedEpochRequested(): Unit = {
     val expectedEpochEndOffset = (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
 
     // assign couple of epochs
@@ -101,7 +101,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldNotOverwriteLogEndOffsetForALeaderEpochOnceItHasBeenAssigned() = {
+  def shouldNotOverwriteLogEndOffsetForALeaderEpochOnceItHasBeenAssigned(): Unit = {
     //Given
     val logEndOffset = 9
 
@@ -116,7 +116,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldEnforceMonotonicallyIncreasingStartOffsets() = {
+  def shouldEnforceMonotonicallyIncreasingStartOffsets(): Unit = {
     //Given
     cache.assign(2, 9)
 
@@ -128,7 +128,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldNotOverwriteOffsetForALeaderEpochOnceItHasBeenAssigned() = {
+  def shouldNotOverwriteOffsetForALeaderEpochOnceItHasBeenAssigned(): Unit = {
     cache.assign(2, 6)
 
     //When called again later with a greater offset
@@ -181,7 +181,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldGetFirstOffsetOfSubsequentEpochWhenOffsetRequestedForPreviousEpoch() = {
+  def shouldGetFirstOffsetOfSubsequentEpochWhenOffsetRequestedForPreviousEpoch(): Unit = {
     //When several epochs
     cache.assign(1, 11)
     cache.assign(1, 12)
@@ -208,7 +208,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldNotUpdateEpochAndStartOffsetIfItDidNotChange() = {
+  def shouldNotUpdateEpochAndStartOffsetIfItDidNotChange(): Unit = {
     //When
     cache.assign(2, 6)
     cache.assign(2, 7)
@@ -260,9 +260,9 @@ class LeaderEpochFileCacheTest {
   @Test
   def shouldEnforceMonotonicallyIncreasingEpochs(): Unit = {
     //Given
-    cache.assign(1, 5);
+    cache.assign(1, 5)
     var logEndOffset = 6
-    cache.assign(2, 6);
+    cache.assign(2, 6)
     logEndOffset = 7
 
     //When we update an epoch in the past with a different offset, the log has already reached
@@ -270,7 +270,7 @@ class LeaderEpochFileCacheTest {
     //or truncate the cached epochs to the point of conflict. We take this latter approach in
     //order to guarantee that epochs and offsets in the cache increase monotonically, which makes
     //the search logic simpler to reason about.
-    cache.assign(1, 7);
+    cache.assign(1, 7)
     logEndOffset = 8
 
     //Then later epochs will be removed
@@ -289,7 +289,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldEnforceOffsetsIncreaseMonotonically() = {
+  def shouldEnforceOffsetsIncreaseMonotonically(): Unit = {
     //When epoch goes forward but offset goes backwards
     cache.assign(2, 6)
     cache.assign(3, 5)
@@ -341,11 +341,11 @@ class LeaderEpochFileCacheTest {
   @Test
   def shouldIncreaseAndTrackEpochsAsFollowerReceivesManyMessages(): Unit = {
     //When Messages come in
-    cache.assign(0, 0);
+    cache.assign(0, 0)
     var logEndOffset = 1
-    cache.assign(0, 1);
+    cache.assign(0, 1)
     logEndOffset = 2
-    cache.assign(0, 2);
+    cache.assign(0, 2)
     logEndOffset = 3
 
     //Then epoch should stay, offsets should grow
@@ -353,22 +353,22 @@ class LeaderEpochFileCacheTest {
     assertEquals((0, logEndOffset), toTuple(cache.endOffsetFor(0, logEndOffset)))
 
     //When messages arrive with greater epoch
-    cache.assign(1, 3);
+    cache.assign(1, 3)
     logEndOffset = 4
-    cache.assign(1, 4);
+    cache.assign(1, 4)
     logEndOffset = 5
-    cache.assign(1, 5);
+    cache.assign(1, 5)
     logEndOffset = 6
 
     assertEquals(OptionalInt.of(1), cache.latestEpoch)
     assertEquals((1, logEndOffset), toTuple(cache.endOffsetFor(1, logEndOffset)))
 
     //When
-    cache.assign(2, 6);
+    cache.assign(2, 6)
     logEndOffset = 7
-    cache.assign(2, 7);
+    cache.assign(2, 7)
     logEndOffset = 8
-    cache.assign(2, 8);
+    cache.assign(2, 8)
     logEndOffset = 9
 
     assertEquals(OptionalInt.of(2), cache.latestEpoch)

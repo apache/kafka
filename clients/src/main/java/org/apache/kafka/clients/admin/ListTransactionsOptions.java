@@ -35,6 +35,7 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
     private Set<TransactionState> filteredStates = Collections.emptySet();
     private Set<Long> filteredProducerIds = Collections.emptySet();
 
+    private long filteredDuration = -1L;
     /**
      * Filter only the transactions that are in a specific set of states. If no filter
      * is specified or if the passed set of states is empty, then transactions in all
@@ -62,6 +63,19 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
     }
 
     /**
+     * Filter only the transactions that are running longer than the specified duration.
+     * If no filter is specified or if the passed duration ms is less than 0,
+     * then the all transactions will be returned.
+     *
+     * @param durationMs the duration in milliseconds to filter by
+     * @return this object
+     */
+    public ListTransactionsOptions filterOnDuration(long durationMs) {
+        this.filteredDuration = durationMs;
+        return this;
+    }
+
+    /**
      * Returns the set of states to be filtered or empty if no states have been specified.
      *
      * @return the current set of filtered states (empty means that no states are filtered and all
@@ -81,11 +95,21 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
         return filteredProducerIds;
     }
 
+    /**
+     * Returns the duration ms value being filtered.
+     *
+     * @return the current duration filter value in ms (negative value means transactions are not filtered by duration)
+     */
+    public long filteredDuration() {
+        return filteredDuration;
+    }
+
     @Override
     public String toString() {
         return "ListTransactionsOptions(" +
             "filteredStates=" + filteredStates +
             ", filteredProducerIds=" + filteredProducerIds +
+            ", filteredDuration=" + filteredDuration +
             ", timeoutMs=" + timeoutMs +
             ')';
     }
@@ -96,11 +120,12 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
         if (o == null || getClass() != o.getClass()) return false;
         ListTransactionsOptions that = (ListTransactionsOptions) o;
         return Objects.equals(filteredStates, that.filteredStates) &&
-            Objects.equals(filteredProducerIds, that.filteredProducerIds);
+            Objects.equals(filteredProducerIds, that.filteredProducerIds) &&
+            Objects.equals(filteredDuration, that.filteredDuration);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(filteredStates, filteredProducerIds);
+        return Objects.hash(filteredStates, filteredProducerIds, filteredDuration);
     }
 }

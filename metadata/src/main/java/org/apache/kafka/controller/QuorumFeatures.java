@@ -108,7 +108,7 @@ public final class QuorumFeatures {
         Map<Integer, ControllerRegistration> controllers
     ) {
         if (!metadataVersion.isMigrationSupported()) {
-            return Optional.of("Metadata version too low at " + metadataVersion);
+            return Optional.of("The metadata.version too low at " + metadataVersion);
         } else if (!metadataVersion.isControllerRegistrationSupported()) {
             return Optional.empty();
         }
@@ -141,7 +141,7 @@ public final class QuorumFeatures {
     @Override
     public String toString() {
         List<String> features = new ArrayList<>();
-        localSupportedFeatures.entrySet().forEach(f -> features.add(f.getKey() + ": " + f.getValue()));
+        localSupportedFeatures.forEach((key, value) -> features.add(key + ": " + value));
         features.sort(String::compareTo);
         List<String> nodeIds = new ArrayList<>();
         quorumNodeIds.forEach(id -> nodeIds.add("" + id));

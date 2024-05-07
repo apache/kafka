@@ -68,7 +68,7 @@ object Kafka extends Logging {
     config.migrationEnabled && config.interBrokerProtocolVersion.isApiForwardingEnabled
 
   private def buildServer(props: Properties): Server = {
-    val config = KafkaConfig.fromProps(props, false)
+    val config = KafkaConfig.fromProps(props, doLog = false)
     if (config.requiresZookeeper) {
       new KafkaServer(
         config,

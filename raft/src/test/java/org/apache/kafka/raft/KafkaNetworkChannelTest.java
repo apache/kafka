@@ -83,7 +83,6 @@ public class KafkaNetworkChannelTest {
         ApiKeys.FETCH
     );
 
-    private final String clusterId = "clusterId";
     private final int requestTimeoutMs = 30000;
     private final Time time = new MockTime();
     private final MockClient client = new MockClient(time, new StubMetadataUpdater());
@@ -108,8 +107,7 @@ public class KafkaNetworkChannelTest {
     public void testSendToBlackedOutDestination() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
-                new InetSocketAddress(destinationNode.host(), destinationNode.port())));
+        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
         client.backoff(destinationNode, 500);
         assertBrokerNotAvailable(destinationId);
     }
@@ -118,8 +116,7 @@ public class KafkaNetworkChannelTest {
     public void testWakeupClientOnSend() throws InterruptedException, ExecutionException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
-                new InetSocketAddress(destinationNode.host(), destinationNode.port())));
+        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
 
         client.enableBlockingUntilWakeup(1);
 
@@ -145,8 +142,7 @@ public class KafkaNetworkChannelTest {
     public void testSendAndDisconnect() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
-                new InetSocketAddress(destinationNode.host(), destinationNode.port())));
+        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
 
         for (ApiKeys apiKey : RAFT_APIS) {
             AbstractResponse response = buildResponse(buildTestErrorResponse(apiKey, Errors.INVALID_REQUEST));
@@ -159,8 +155,7 @@ public class KafkaNetworkChannelTest {
     public void testSendAndFailAuthentication() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
-                new InetSocketAddress(destinationNode.host(), destinationNode.port())));
+        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
 
         for (ApiKeys apiKey : RAFT_APIS) {
             client.createPendingAuthenticationError(destinationNode, 100);
@@ -181,8 +176,7 @@ public class KafkaNetworkChannelTest {
     public void testSendAndReceiveOutboundRequest() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
-                new InetSocketAddress(destinationNode.host(), destinationNode.port())));
+        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
 
         for (ApiKeys apiKey : RAFT_APIS) {
             Errors expectedError = Errors.INVALID_REQUEST;
@@ -197,8 +191,7 @@ public class KafkaNetworkChannelTest {
     public void testUnsupportedVersionError() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
-                new InetSocketAddress(destinationNode.host(), destinationNode.port())));
+        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
 
         for (ApiKeys apiKey : RAFT_APIS) {
             client.prepareUnsupportedVersionResponse(request -> request.apiKey() == apiKey);
@@ -211,8 +204,7 @@ public class KafkaNetworkChannelTest {
     public void testFetchRequestDowngrade(short version) {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new RaftConfig.InetAddressSpec(
-                new InetSocketAddress(destinationNode.host(), destinationNode.port())));
+        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
         sendTestRequest(ApiKeys.FETCH, destinationId);
         channel.pollOnce();
 
@@ -220,11 +212,11 @@ public class KafkaNetworkChannelTest {
         AbstractRequest request = client.requests().peek().requestBuilder().build(version);
 
         if (version < 15) {
-            assertTrue(((FetchRequest) request).data().replicaId() == 1);
-            assertTrue(((FetchRequest) request).data().replicaState().replicaId() == -1);
+            assertEquals(1, ((FetchRequest) request).data().replicaId());
+            assertEquals(-1, ((FetchRequest) request).data().replicaState().replicaId());
         } else {
-            assertTrue(((FetchRequest) request).data().replicaId() == -1);
-            assertTrue(((FetchRequest) request).data().replicaState().replicaId() == 1);
+            assertEquals(-1, ((FetchRequest) request).data().replicaId());
+            assertEquals(1, ((FetchRequest) request).data().replicaState().replicaId());
         }
     }
 
@@ -256,6 +248,7 @@ public class KafkaNetworkChannelTest {
     private ApiMessage buildTestRequest(ApiKeys key) {
         int leaderEpoch = 5;
         int leaderId = 1;
+        String clusterId = "clusterId";
         switch (key) {
             case BEGIN_QUORUM_EPOCH:
                 return BeginQuorumEpochRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId);

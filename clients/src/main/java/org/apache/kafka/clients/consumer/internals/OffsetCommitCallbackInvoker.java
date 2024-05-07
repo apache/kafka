@@ -19,21 +19,19 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.FencedInstanceIdException;
 
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
- * Utility class that helps the application thread to invoke user registered {@link OffsetCommitCallback} amd
+ * Utility class that helps the application thread to invoke user registered {@link OffsetCommitCallback} and
  * {@link org.apache.kafka.clients.consumer.ConsumerInterceptor}s. This is
  * achieved by having the background thread register a {@link OffsetCommitCallbackTask} to the invoker upon the
  * future completion, and execute the callbacks when user polls/commits/closes the consumer.
  */
 public class OffsetCommitCallbackInvoker {
     private final ConsumerInterceptors<?, ?> interceptors;
-    private boolean hasFencedException = false;
 
     OffsetCommitCallbackInvoker(ConsumerInterceptors<?, ?> interceptors) {
         this.interceptors = interceptors;
@@ -62,17 +60,9 @@ public class OffsetCommitCallbackInvoker {
         while (!callbackQueue.isEmpty()) {
             OffsetCommitCallbackTask task = callbackQueue.poll();
             if (task != null) {
-
-                if (task.exception instanceof FencedInstanceIdException)
-                    hasFencedException = true;
-
                 task.callback.onComplete(task.offsets, task.exception);
             }
         }
-    }
-
-    public boolean hasFencedException() {
-        return hasFencedException;
     }
 
     private static class OffsetCommitCallbackTask {

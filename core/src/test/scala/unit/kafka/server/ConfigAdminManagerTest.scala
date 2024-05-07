@@ -247,13 +247,13 @@ class ConfigAdminManagerTest {
     manager.validateResourceNameIsCurrentNodeId("5")
     assertEquals("Node id must be an integer, but it is: ",
       Assertions.assertThrows(classOf[InvalidRequestException],
-        () => manager.validateResourceNameIsCurrentNodeId("")).getMessage())
+        () => manager.validateResourceNameIsCurrentNodeId("")).getMessage)
     assertEquals("Unexpected broker id, expected 5, but received 3",
       Assertions.assertThrows(classOf[InvalidRequestException],
-        () => manager.validateResourceNameIsCurrentNodeId("3")).getMessage())
+        () => manager.validateResourceNameIsCurrentNodeId("3")).getMessage)
     assertEquals("Node id must be an integer, but it is: e",
       Assertions.assertThrows(classOf[InvalidRequestException],
-        () => manager.validateResourceNameIsCurrentNodeId("e")).getMessage())
+        () => manager.validateResourceNameIsCurrentNodeId("e")).getMessage)
   }
 
   def brokerLogger1Incremental(): IAlterConfigsResource = new IAlterConfigsResource().

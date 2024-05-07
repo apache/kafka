@@ -17,16 +17,17 @@
 
 package kafka.utils
 
-import java.util.{Arrays, Base64, UUID}
+import java.util
+import java.util.{Base64, UUID}
 import java.util.concurrent.{ConcurrentHashMap, Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
 import java.util.regex.Pattern
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.KafkaException
-import org.junit.jupiter.api.Test
 import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
@@ -40,14 +41,42 @@ class CoreUtilsTest extends Logging {
 
   @Test
   def testSwallow(): Unit = {
-    CoreUtils.swallow(throw new KafkaException("test"), this, Level.INFO)
+    var loggedMessage: Option[String] = None
+    val testLogging: Logging = new Logging {
+      override def info(msg: => String, e: => Throwable): Unit = {
+        loggedMessage = Some(msg+Level.INFO)
+      }
+      override def debug(msg: => String, e: => Throwable): Unit = {
+        loggedMessage = Some(msg+Level.DEBUG)
+      }
+      override def warn(msg: => String, e: => Throwable): Unit = {
+        loggedMessage = Some(msg+Level.WARN)
+      }
+      override def error(msg: => String, e: => Throwable): Unit = {
+        loggedMessage = Some(msg+Level.ERROR)
+      }
+      override def trace(msg: => String, e: => Throwable): Unit = {
+        loggedMessage = Some(msg+Level.TRACE)
+      }
+    }
+
+    CoreUtils.swallow(throw new KafkaException("test"), testLogging, Level.TRACE)
+    assertEquals(Some("test"+Level.TRACE), loggedMessage)
+    CoreUtils.swallow(throw new KafkaException("test"), testLogging, Level.DEBUG)
+    assertEquals(Some("test"+Level.DEBUG), loggedMessage)
+    CoreUtils.swallow(throw new KafkaException("test"), testLogging, Level.INFO)
+    assertEquals(Some("test"+Level.INFO), loggedMessage)
+    CoreUtils.swallow(throw new KafkaException("test"), testLogging, Level.WARN)
+    assertEquals(Some("test"+Level.WARN),loggedMessage)
+    CoreUtils.swallow(throw new KafkaException("test"), testLogging, Level.ERROR)
+    assertEquals(Some("test"+Level.ERROR),loggedMessage)
   }
 
   @Test
   def testReadBytes(): Unit = {
     for (testCase <- List("", "a", "abcd")) {
       val bytes = testCase.getBytes
-      assertTrue(Arrays.equals(bytes, Utils.readBytes(ByteBuffer.wrap(bytes))))
+      assertTrue(util.Arrays.equals(bytes, Utils.readBytes(ByteBuffer.wrap(bytes))))
     }
   }
 
