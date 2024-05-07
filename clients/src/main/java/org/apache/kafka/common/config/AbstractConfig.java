@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,6 +34,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * A convenient base class for configurations to extend.
@@ -57,6 +60,8 @@ public class AbstractConfig {
     private final Map<String, Object> values;
 
     private final ConfigDef definition;
+
+    public static final String AUTOMATIC_CONFIG_PROVIDERS_PROPERTY = "org.apache.kafka.automatic.config.providers";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
 
@@ -101,14 +106,11 @@ public class AbstractConfig {
      *                            the constructor to resolve any variables in {@code originals}; may be null or empty
      * @param doLog               whether the configurations should be logged
      */
-    @SuppressWarnings({"unchecked", "this-escape"})
+    @SuppressWarnings({"this-escape"})
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
-        /* check that all the keys are really strings */
-        for (Map.Entry<?, ?> entry : originals.entrySet())
-            if (!(entry.getKey() instanceof String))
-                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
+        Map<String, Object> originalMap = Utils.castToStringObjectMap(originals);
 
-        this.originals = resolveConfigVariables(configProviderProps, (Map<String, Object>) originals);
+        this.originals = resolveConfigVariables(configProviderProps, originalMap);
         this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
         for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
@@ -374,9 +376,9 @@ public class AbstractConfig {
      * Info level log for any unused configurations
      */
     public void logUnused() {
-        Set<String> unusedkeys = unused();
-        if (!unusedkeys.isEmpty()) {
-            log.info("These configurations '{}' were supplied but are not used yet.", unusedkeys);
+        Set<String> unusedKeys = unused();
+        if (!unusedKeys.isEmpty()) {
+            log.info("These configurations '{}' were supplied but are not used yet.", unusedKeys);
         }
     }
 
@@ -521,6 +523,7 @@ public class AbstractConfig {
     private Map<String, ?> resolveConfigVariables(Map<String, ?> configProviderProps, Map<String, Object> originals) {
         Map<String, String> providerConfigString;
         Map<String, ?> configProperties;
+        Predicate<String> classNameFilter;
         Map<String, Object> resolvedOriginals = new HashMap<>();
         // As variable configs are strings, parse the originals and obtain the potential variable configs.
         Map<String, String> indirectVariables = extractPotentialVariables(originals);
@@ -529,11 +532,13 @@ public class AbstractConfig {
         if (configProviderProps == null || configProviderProps.isEmpty()) {
             providerConfigString = indirectVariables;
             configProperties = originals;
+            classNameFilter = automaticConfigProvidersFilter();
         } else {
             providerConfigString = extractPotentialVariables(configProviderProps);
             configProperties = configProviderProps;
+            classNameFilter = ignored -> true;
         }
-        Map<String, ConfigProvider> providers = instantiateConfigProviders(providerConfigString, configProperties);
+        Map<String, ConfigProvider> providers = instantiateConfigProviders(providerConfigString, configProperties, classNameFilter);
 
         if (!providers.isEmpty()) {
             ConfigTransformer configTransformer = new ConfigTransformer(providers);
@@ -545,6 +550,17 @@ public class AbstractConfig {
         providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
 
         return new ResolvingMap<>(resolvedOriginals, originals);
+    }
+
+    private Predicate<String> automaticConfigProvidersFilter() {
+        String systemProperty = System.getProperty(AUTOMATIC_CONFIG_PROVIDERS_PROPERTY);
+        if (systemProperty == null) {
+            return ignored -> true;
+        } else {
+            return Arrays.stream(systemProperty.split(","))
+                    .map(String::trim)
+                    .collect(Collectors.toSet())::contains;
+        }
     }
 
     private Map<String, Object> configProviderProperties(String configProviderPrefix, Map<String, ?> providerConfigProperties) {
@@ -567,9 +583,14 @@ public class AbstractConfig {
      *
      * @param indirectConfigs          The map of potential variable configs
      * @param providerConfigProperties The map of config provider configs
-     * @return map map of config provider name and its instance.
+     * @param classNameFilter          Filter for config provider class names
+     * @return map of config provider name and its instance.
      */
-    private Map<String, ConfigProvider> instantiateConfigProviders(Map<String, String> indirectConfigs, Map<String, ?> providerConfigProperties) {
+    private Map<String, ConfigProvider> instantiateConfigProviders(
+            Map<String, String> indirectConfigs,
+            Map<String, ?> providerConfigProperties,
+            Predicate<String> classNameFilter
+    ) {
         final String configProviders = indirectConfigs.get(CONFIG_PROVIDERS_CONFIG);
 
         if (configProviders == null || configProviders.isEmpty()) {
@@ -580,9 +601,15 @@ public class AbstractConfig {
 
         for (String provider : configProviders.split(",")) {
             String providerClass = providerClassProperty(provider);
-            if (indirectConfigs.containsKey(providerClass))
-                providerMap.put(provider, indirectConfigs.get(providerClass));
-
+            if (indirectConfigs.containsKey(providerClass)) {
+                String providerClassName = indirectConfigs.get(providerClass);
+                if (classNameFilter.test(providerClassName)) {
+                    providerMap.put(provider, providerClassName);
+                } else {
+                    throw new ConfigException(providerClassName + " is not allowed. Update System property '"
+                            + AUTOMATIC_CONFIG_PROVIDERS_PROPERTY + "' to allow " + providerClassName);
+                }
+            }
         }
         // Instantiate Config Providers
         Map<String, ConfigProvider> configProviderInstances = new HashMap<>();

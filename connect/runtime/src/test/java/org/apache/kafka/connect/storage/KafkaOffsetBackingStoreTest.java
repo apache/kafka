@@ -65,6 +65,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -404,7 +405,7 @@ public class KafkaOffsetBackingStoreTest {
         callback0.getValue().onCompletion(null, null);
         ExecutionException e = assertThrows(ExecutionException.class, () -> setFuture.get(10000, TimeUnit.MILLISECONDS));
         assertNotNull(e.getCause());
-        assertTrue(e.getCause() instanceof KafkaException);
+        assertInstanceOf(KafkaException.class, e.getCause());
 
         store.stop();
 

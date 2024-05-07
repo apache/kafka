@@ -56,6 +56,8 @@ import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.MetadataVersionValidator;
+import org.apache.kafka.server.config.QuotaConfigs;
+import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
 import org.apache.kafka.server.record.BrokerCompressionType;
 
@@ -159,43 +161,24 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_SEGMENT_MS = 24 * 7 * 60 * 60 * 1000L;
     public static final long DEFAULT_SEGMENT_JITTER_MS = 0;
     public static final long DEFAULT_RETENTION_MS = 24 * 7 * 60 * 60 * 1000L;
-    public static final long DEFAULT_RETENTION_BYTES = -1L;
-    public static final int DEFAULT_SEGMENT_INDEX_BYTES = 10 * 1024 * 1024;
-    public static final int DEFAULT_INDEX_INTERVAL_BYTES = 4096;
-    public static final long DEFAULT_FILE_DELETE_DELAY_MS = 60000L;
-    public static final String DEFAULT_CLEANUP_POLICY = TopicConfig.CLEANUP_POLICY_DELETE;
-    public static final long DEFAULT_FLUSH_MESSAGES_INTERVAL = Long.MAX_VALUE;
-    public static final long DEFAULT_FLUSH_MS = Long.MAX_VALUE;
     public static final long DEFAULT_DELETE_RETENTION_MS = 24 * 60 * 60 * 1000L;
     public static final long DEFAULT_MIN_COMPACTION_LAG_MS = 0;
     public static final long DEFAULT_MAX_COMPACTION_LAG_MS = Long.MAX_VALUE;
     public static final double DEFAULT_MIN_CLEANABLE_DIRTY_RATIO = 0.5;
     public static final boolean DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE = false;
-    public static final int DEFAULT_MIN_IN_SYNC_REPLICAS = 1;
     public static final String DEFAULT_COMPRESSION_TYPE = BrokerCompressionType.PRODUCER.name;
     public static final boolean DEFAULT_PREALLOCATE = false;
-    public static final String DEFAULT_MESSAGE_TIMESTAMP_TYPE = "CreateTime";
-    /* See `TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG` for details */
     @Deprecated
-    public static final long DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS = Long.MAX_VALUE;
-
-    public static final long DEFAULT_MESSAGE_TIMESTAMP_BEFORE_MAX_MS = Long.MAX_VALUE;
-    public static final long DEFAULT_MESSAGE_TIMESTAMP_AFTER_MAX_MS = Long.MAX_VALUE;
-    public static final boolean DEFAULT_MESSAGE_DOWNCONVERSION_ENABLE = true;
+    public static final long DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS = ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DEFAULT;
 
     public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
-    public static final List<String> DEFAULT_LEADER_REPLICATION_THROTTLED_REPLICAS = Collections.emptyList();
-    public static final List<String> DEFAULT_FOLLOWER_REPLICATION_THROTTLED_REPLICAS = Collections.emptyList();
 
-    /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
+    /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details
+    * Keep DEFAULT_MESSAGE_FORMAT_VERSION as a way to handlee the deprecated value */
     @Deprecated
-    public static final String DEFAULT_MESSAGE_FORMAT_VERSION = IBP_3_0_IV1.version();
-
-    // Leave these out of TopicConfig for now as they are replication quota configs
-    public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG = "leader.replication.throttled.replicas";
-    public static final String FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG = "follower.replication.throttled.replicas";
+    public static final String DEFAULT_MESSAGE_FORMAT_VERSION = ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_DEFAULT;
 
     /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
     @SuppressWarnings("deprecation")
@@ -210,23 +193,13 @@ public class LogConfig extends AbstractConfig {
     // Visible for testing
     public static final Set<String> CONFIGS_WITH_NO_SERVER_DEFAULTS = Collections.unmodifiableSet(Utils.mkSet(
         TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG,
-        LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
-        FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
+        QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
+        QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     ));
-
-    public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_DOC = "A list of replicas for which log replication should be throttled on " +
-        "the leader side. The list should describe a set of replicas in the form " +
-        "[PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle " +
-        "all replicas for this topic.";
-    public static final String FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DOC = "A list of replicas for which log replication should be throttled on " +
-        "the follower side. The list should describe a set of " + "replicas in the form " +
-        "[PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle " +
-        "all replicas for this topic.";
 
     @SuppressWarnings("deprecation")
     private static final String MESSAGE_FORMAT_VERSION_DOC = TopicConfig.MESSAGE_FORMAT_VERSION_DOC;
 
-    @SuppressWarnings("deprecation")
     private static final LogConfigDef CONFIG = new LogConfigDef();
     static {
         CONFIG.
@@ -235,20 +208,20 @@ public class LogConfig extends AbstractConfig {
             .define(TopicConfig.SEGMENT_MS_CONFIG, LONG, DEFAULT_SEGMENT_MS, atLeast(1), MEDIUM, TopicConfig.SEGMENT_MS_DOC)
             .define(TopicConfig.SEGMENT_JITTER_MS_CONFIG, LONG, DEFAULT_SEGMENT_JITTER_MS, atLeast(0), MEDIUM,
                 TopicConfig.SEGMENT_JITTER_MS_DOC)
-            .define(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, INT, DEFAULT_SEGMENT_INDEX_BYTES, atLeast(4), MEDIUM,
+            .define(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, INT, ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT, atLeast(4), MEDIUM,
                 TopicConfig.SEGMENT_INDEX_BYTES_DOC)
-            .define(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, LONG, DEFAULT_FLUSH_MESSAGES_INTERVAL, atLeast(1), MEDIUM,
+            .define(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, LONG, ServerLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_DEFAULT, atLeast(1), MEDIUM,
                 TopicConfig.FLUSH_MESSAGES_INTERVAL_DOC)
-            .define(TopicConfig.FLUSH_MS_CONFIG, LONG, DEFAULT_FLUSH_MS, atLeast(0), MEDIUM,
+            .define(TopicConfig.FLUSH_MS_CONFIG, LONG, ServerLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM,
                 TopicConfig.FLUSH_MS_DOC)
             // can be negative. See kafka.log.LogManager.cleanupSegmentsToMaintainSize
-            .define(TopicConfig.RETENTION_BYTES_CONFIG, LONG, DEFAULT_RETENTION_BYTES, MEDIUM, TopicConfig.RETENTION_BYTES_DOC)
+            .define(TopicConfig.RETENTION_BYTES_CONFIG, LONG, ServerLogConfigs.LOG_RETENTION_BYTES_DEFAULT, MEDIUM, TopicConfig.RETENTION_BYTES_DOC)
             // can be negative. See kafka.log.LogManager.cleanupExpiredSegments
             .define(TopicConfig.RETENTION_MS_CONFIG, LONG, DEFAULT_RETENTION_MS, atLeast(-1), MEDIUM,
                 TopicConfig.RETENTION_MS_DOC)
             .define(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, INT, DEFAULT_MAX_MESSAGE_BYTES, atLeast(0), MEDIUM,
                 TopicConfig.MAX_MESSAGE_BYTES_DOC)
-            .define(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, INT, DEFAULT_INDEX_INTERVAL_BYTES, atLeast(0), MEDIUM,
+            .define(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, INT, ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT, atLeast(0), MEDIUM,
                 TopicConfig.INDEX_INTERVAL_BYTES_DOC)
             .define(TopicConfig.DELETE_RETENTION_MS_CONFIG, LONG, DEFAULT_DELETE_RETENTION_MS, atLeast(0), MEDIUM,
                 TopicConfig.DELETE_RETENTION_MS_DOC)
@@ -256,34 +229,34 @@ public class LogConfig extends AbstractConfig {
                 TopicConfig.MIN_COMPACTION_LAG_MS_DOC)
             .define(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, LONG, DEFAULT_MAX_COMPACTION_LAG_MS, atLeast(1), MEDIUM,
                 TopicConfig.MAX_COMPACTION_LAG_MS_DOC)
-            .define(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, LONG, DEFAULT_FILE_DELETE_DELAY_MS, atLeast(0), MEDIUM,
+            .define(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT, atLeast(0), MEDIUM,
                 TopicConfig.FILE_DELETE_DELAY_MS_DOC)
             .define(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, DOUBLE, DEFAULT_MIN_CLEANABLE_DIRTY_RATIO, between(0, 1), MEDIUM,
                 TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_DOC)
-            .define(TopicConfig.CLEANUP_POLICY_CONFIG, LIST, DEFAULT_CLEANUP_POLICY, ValidList.in(TopicConfig.CLEANUP_POLICY_COMPACT,
+            .define(TopicConfig.CLEANUP_POLICY_CONFIG, LIST, ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT, ValidList.in(TopicConfig.CLEANUP_POLICY_COMPACT,
                 TopicConfig.CLEANUP_POLICY_DELETE), MEDIUM, TopicConfig.CLEANUP_POLICY_DOC)
             .define(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE,
                 MEDIUM, TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
-            .define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, INT, DEFAULT_MIN_IN_SYNC_REPLICAS, atLeast(1), MEDIUM,
+            .define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, INT, ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DEFAULT, atLeast(1), MEDIUM,
                 TopicConfig.MIN_IN_SYNC_REPLICAS_DOC)
             .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names().toArray(new String[0])),
                 MEDIUM, TopicConfig.COMPRESSION_TYPE_DOC)
             .define(TopicConfig.PREALLOCATE_CONFIG, BOOLEAN, DEFAULT_PREALLOCATE, MEDIUM, TopicConfig.PREALLOCATE_DOC)
             .define(MESSAGE_FORMAT_VERSION_CONFIG, STRING, DEFAULT_MESSAGE_FORMAT_VERSION, new MetadataVersionValidator(), MEDIUM,
                 MESSAGE_FORMAT_VERSION_DOC)
-            .define(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, STRING, DEFAULT_MESSAGE_TIMESTAMP_TYPE,
+            .define(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, STRING, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_DEFAULT,
                 in("CreateTime", "LogAppendTime"), MEDIUM, TopicConfig.MESSAGE_TIMESTAMP_TYPE_DOC)
             .define(MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, LONG, DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS,
                 atLeast(0), MEDIUM, MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC)
-            .define(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, LONG, DEFAULT_MESSAGE_TIMESTAMP_BEFORE_MAX_MS,
+            .define(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, LONG, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DEFAULT,
                 atLeast(0), MEDIUM, TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC)
-            .define(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, LONG, DEFAULT_MESSAGE_TIMESTAMP_AFTER_MAX_MS,
+            .define(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, LONG, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT,
                 atLeast(0), MEDIUM, TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_DOC)
-            .define(LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, LIST, DEFAULT_LEADER_REPLICATION_THROTTLED_REPLICAS,
-                ThrottledReplicaListValidator.INSTANCE, MEDIUM, LEADER_REPLICATION_THROTTLED_REPLICAS_DOC)
-            .define(FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, LIST, DEFAULT_FOLLOWER_REPLICATION_THROTTLED_REPLICAS,
-                ThrottledReplicaListValidator.INSTANCE, MEDIUM, FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DOC)
-            .define(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, DEFAULT_MESSAGE_DOWNCONVERSION_ENABLE, LOW,
+            .define(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, LIST, QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_DEFAULT,
+                ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_DOC)
+            .define(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, LIST, QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DEFAULT,
+                ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DOC)
+            .define(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_DEFAULT, LOW,
                 TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC)
             .define(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, BOOLEAN, DEFAULT_REMOTE_STORAGE_ENABLE, null,
                 MEDIUM, TopicConfig.REMOTE_LOG_STORAGE_ENABLE_DOC)
@@ -381,8 +354,8 @@ public class LogConfig extends AbstractConfig {
         this.messageTimestampDifferenceMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG);
         this.messageTimestampBeforeMaxMs = getMessageTimestampBeforeMaxMs();
         this.messageTimestampAfterMaxMs = getMessageTimestampAfterMaxMs();
-        this.leaderReplicationThrottledReplicas = Collections.unmodifiableList(getList(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
-        this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
+        this.leaderReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
+        this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.messageDownConversionEnable = getBoolean(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
 
         remoteLogConfig = new RemoteLogConfig(this);
@@ -390,7 +363,6 @@ public class LogConfig extends AbstractConfig {
 
     //In the transition period before messageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
     // we are using its value if messageTimestampBeforeMaxMs default value hasn't changed.
-    @SuppressWarnings("deprecation")
     private long getMessageTimestampBeforeMaxMs() {
         final Long messageTimestampBeforeMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG);
         if (!messageTimestampBeforeMaxMs.equals(Long.MAX_VALUE)) {
@@ -402,7 +374,6 @@ public class LogConfig extends AbstractConfig {
 
     //In the transition period before messageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
     // we are using its value if messageTimestampAfterMaxMs default value hasn't changed.
-    @SuppressWarnings("deprecation")
     private long getMessageTimestampAfterMaxMs() {
         final Long messageTimestampAfterMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
         if (!messageTimestampAfterMaxMs.equals(Long.MAX_VALUE)) {
@@ -412,7 +383,6 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    @SuppressWarnings("deprecation")
     public RecordVersion recordVersion() {
         return messageFormatVersion.highestSupportedRecordVersion();
     }

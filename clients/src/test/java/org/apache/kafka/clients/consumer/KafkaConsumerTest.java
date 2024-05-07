@@ -146,6 +146,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.common.utils.Utils.propsToMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -262,7 +263,7 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         assertEquals(1, consumer.metricsRegistry().reporters().size());
-        assertTrue(consumer.metricsRegistry().reporters().get(0) instanceof JmxReporter);
+        assertInstanceOf(JmxReporter.class, consumer.metricsRegistry().reporters().get(0));
     }
 
     @ParameterizedTest
@@ -275,7 +276,7 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         assertEquals(1, consumer.metricsRegistry().reporters().size());
-        assertTrue(consumer.metricsRegistry().reporters().get(0) instanceof ClientTelemetryReporter);
+        assertInstanceOf(ClientTelemetryReporter.class, consumer.metricsRegistry().reporters().get(0));
     }
 
     // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
@@ -1258,8 +1259,6 @@ public class KafkaConsumerTest {
         exec.awaitTermination(5L, TimeUnit.SECONDS);
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testPollThrowsInterruptExceptionIfInterrupted(GroupProtocol groupProtocol) {
@@ -1281,7 +1280,8 @@ public class KafkaConsumerTest {
             Thread.currentThread().interrupt();
             assertThrows(InterruptException.class, () -> consumer.poll(Duration.ZERO));
         } finally {
-            // clear interrupted state again since this thread may be reused by JUnit
+            // ensure this test doesn't exit with the thread still in an interrupted state
+            // so that it cannot interfere with subsequent tests since this thread may be reused by JUnit
             Thread.interrupted();
         }
     }
@@ -2074,7 +2074,7 @@ public class KafkaConsumerTest {
                 TestUtils.waitForCondition(
                     () -> closeException.get() != null, "InterruptException did not occur within timeout.");
 
-                assertTrue(closeException.get() instanceof InterruptException, "Expected exception not thrown " + closeException);
+                assertInstanceOf(InterruptException.class, closeException.get(), "Expected exception not thrown " + closeException);
             } else {
                 future.get(closeTimeoutMs, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
                 assertNull(closeException.get(), "Unexpected exception during close");

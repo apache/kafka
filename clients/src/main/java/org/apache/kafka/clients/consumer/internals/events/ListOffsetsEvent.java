@@ -17,7 +17,9 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -31,13 +33,14 @@ import java.util.Map;
  * {@link OffsetAndTimestamp} found (offset of the first message whose timestamp is greater than
  * or equals to the target timestamp)
  */
-public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndTimestamp>> {
-
+public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndTimestampInternal>> {
     private final Map<TopicPartition, Long> timestampsToSearch;
     private final boolean requireTimestamps;
 
-    public ListOffsetsEvent(final Map<TopicPartition, Long> timestampToSearch, final boolean requireTimestamps) {
-        super(Type.LIST_OFFSETS);
+    public ListOffsetsEvent(Map<TopicPartition, Long> timestampToSearch,
+                            Timer timer,
+                            boolean requireTimestamps) {
+        super(Type.LIST_OFFSETS, timer);
         this.timestampsToSearch = Collections.unmodifiableMap(timestampToSearch);
         this.requireTimestamps = requireTimestamps;
     }
@@ -48,11 +51,10 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
      * @return Map containing all the partitions the event was trying to get offsets for, and
      * null {@link OffsetAndTimestamp} as value
      */
-    public Map<TopicPartition, OffsetAndTimestamp> emptyResult() {
-        HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(timestampsToSearch.size());
-        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
-            offsetsByTimes.put(entry.getKey(), null);
-        return offsetsByTimes;
+    public <T> Map<TopicPartition, T> emptyResults() {
+        Map<TopicPartition, T> result = new HashMap<>();
+        timestampsToSearch.keySet().forEach(tp -> result.put(tp, null));
+        return result;
     }
 
     public Map<TopicPartition, Long> timestampsToSearch() {
@@ -69,5 +71,4 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
                 ", timestampsToSearch=" + timestampsToSearch +
                 ", requireTimestamps=" + requireTimestamps;
     }
-
 }

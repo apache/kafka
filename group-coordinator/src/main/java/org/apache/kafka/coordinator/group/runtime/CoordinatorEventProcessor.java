@@ -24,10 +24,18 @@ import java.util.concurrent.RejectedExecutionException;
 public interface CoordinatorEventProcessor extends AutoCloseable {
 
     /**
-     * Enqueues a new {{@link CoordinatorEvent}}.
+     * Enqueues a new {{@link CoordinatorEvent}} at the end of the processor.
      *
      * @param event The event.
      * @throws RejectedExecutionException If the event processor is closed.
      */
-    void enqueue(CoordinatorEvent event) throws RejectedExecutionException;
+    void enqueueLast(CoordinatorEvent event) throws RejectedExecutionException;
+
+    /**
+     * Enqueues a new {{@link CoordinatorEvent}} at the front of the processor.
+     *
+     * @param event The event.
+     * @throws RejectedExecutionException If the event processor is closed.
+     */
+    void enqueueFirst(CoordinatorEvent event) throws RejectedExecutionException;
 }

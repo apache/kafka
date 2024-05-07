@@ -40,18 +40,22 @@ public class BoundedList<E> implements List<E> {
     }
 
     public static <E> BoundedList<E> newArrayBacked(int maxLength, int initialCapacity) {
+        if (initialCapacity <= 0) {
+            throw new IllegalArgumentException("Invalid non-positive initialCapacity of " + initialCapacity);
+        }
         return new BoundedList<>(maxLength, new ArrayList<>(initialCapacity));
     }
 
-    public BoundedList(int maxLength, List<E> underlying) {
+    private BoundedList(int maxLength, List<E> underlying) {
         if (maxLength <= 0) {
             throw new IllegalArgumentException("Invalid non-positive maxLength of " + maxLength);
         }
-        this.maxLength = maxLength;
+
         if (underlying.size() > maxLength) {
             throw new BoundedListTooLongException("Cannot wrap list, because it is longer than " +
                 "the maximum length " + maxLength);
         }
+        this.maxLength = maxLength;
         this.underlying = underlying;
     }
 

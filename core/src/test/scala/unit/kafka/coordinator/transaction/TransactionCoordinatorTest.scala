@@ -22,7 +22,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
-import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig
+import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfigs
 import org.apache.kafka.server.util.MockScheduler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -283,7 +283,7 @@ class TransactionCoordinatorTest {
 
     coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
     errors.foreach { case (_, error) =>
-      assertEquals(Errors.INVALID_TXN_STATE, error)
+      assertEquals(Errors.TRANSACTION_ABORTABLE, error)
     }
   }
 
@@ -399,7 +399,7 @@ class TransactionCoordinatorTest {
     val extraPartitions = partitions ++ Set(new TopicPartition("topic2", 0))
     
     coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, extraPartitions, verifyPartitionsInTxnCallback)
-    assertEquals(Errors.INVALID_TXN_STATE, errors(new TopicPartition("topic2", 0)))
+    assertEquals(Errors.TRANSACTION_ABORTABLE, errors(new TopicPartition("topic2", 0)))
     assertEquals(Errors.NONE, errors(new TopicPartition("topic1", 0)))
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
@@ -1004,7 +1004,7 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
     val expectedTransition = TxnTransitMetadata(producerId, producerId, (producerEpoch + 1).toShort, RecordBatch.NO_PRODUCER_EPOCH,
-      txnTimeoutMs, PrepareAbort, partitions.toSet, now, now + TransactionStateManagerConfig.DEFAULT_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS)
+      txnTimeoutMs, PrepareAbort, partitions.toSet, now, now + TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT)
 
     when(transactionManager.appendTransactionToLog(ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(coordinatorEpoch),
@@ -1015,7 +1015,7 @@ class TransactionCoordinatorTest {
     ).thenAnswer(_ => {})
 
     coordinator.startup(() => transactionStatePartitionCount, false)
-    time.sleep(TransactionStateManagerConfig.DEFAULT_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS)
+    time.sleep(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT)
     scheduler.tick()
     verify(transactionManager).timedOutTransactions()
     verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
@@ -1064,7 +1064,7 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, metadata))))
 
     coordinator.startup(() => transactionStatePartitionCount, false)
-    time.sleep(TransactionStateManagerConfig.DEFAULT_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS)
+    time.sleep(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT)
     scheduler.tick()
     verify(transactionManager).timedOutTransactions()
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
@@ -1088,7 +1088,7 @@ class TransactionCoordinatorTest {
 
     val bumpedEpoch = (producerEpoch + 1).toShort
     val expectedTransition = TxnTransitMetadata(producerId, producerId, bumpedEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs,
-      PrepareAbort, partitions.toSet, now, now + TransactionStateManagerConfig.DEFAULT_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS)
+      PrepareAbort, partitions.toSet, now, now + TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT)
 
     when(transactionManager.appendTransactionToLog(ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(coordinatorEpoch),
@@ -1099,7 +1099,7 @@ class TransactionCoordinatorTest {
     ).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NOT_ENOUGH_REPLICAS))
 
     coordinator.startup(() => transactionStatePartitionCount, false)
-    time.sleep(TransactionStateManagerConfig.DEFAULT_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS)
+    time.sleep(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT)
     scheduler.tick()
 
     verify(transactionManager).timedOutTransactions()

@@ -415,7 +415,7 @@ public class ClientCompatibilityTest {
             new ClientCompatibilityTestDeserializer(testConfig.expectClusterId);
         try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps, deserializer, deserializer)) {
             final List<PartitionInfo> partitionInfos = consumer.partitionsFor(testConfig.topic);
-            if (partitionInfos.size() < 1)
+            if (partitionInfos.isEmpty())
                 throw new RuntimeException("Expected at least one partition for topic " + testConfig.topic);
             final Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
             final LinkedList<TopicPartition> topicPartitions = new LinkedList<>();

@@ -214,7 +214,7 @@ public class GroupCoordinatorMetricsShardTest {
 
         // Set member2 to ASSIGNING state.
         new ConsumerGroupMember.Builder(member2)
-            .setPartitionsPendingAssignment(Collections.singletonMap(Uuid.ZERO_UUID, Collections.singleton(0)))
+            .setPartitionsPendingRevocation(Collections.singletonMap(Uuid.ZERO_UUID, Collections.singleton(0)))
             .build();
 
         snapshotRegistry.getOrCreateSnapshot(4000);

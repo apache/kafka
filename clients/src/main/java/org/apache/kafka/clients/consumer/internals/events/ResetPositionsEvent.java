@@ -17,6 +17,8 @@
 
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.utils.Timer;
+
 /**
  * Event for resetting offsets for all assigned partitions that require it. This is an
  * asynchronous event that generates ListOffsets requests, and completes by updating in-memory
@@ -24,7 +26,7 @@ package org.apache.kafka.clients.consumer.internals.events;
  */
 public class ResetPositionsEvent extends CompletableApplicationEvent<Void> {
 
-    public ResetPositionsEvent() {
-        super(Type.RESET_POSITIONS);
+    public ResetPositionsEvent(final Timer timer) {
+        super(Type.RESET_POSITIONS, timer);
     }
 }

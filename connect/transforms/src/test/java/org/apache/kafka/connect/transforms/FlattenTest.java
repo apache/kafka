@@ -34,10 +34,10 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FlattenTest {
     private final Flatten<SourceRecord> xformKey = new Flatten.Key<>();
@@ -51,21 +51,21 @@ public class FlattenTest {
 
     @Test
     public void topLevelStructRequired() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
         assertThrows(DataException.class, () -> xformValue.apply(new SourceRecord(null, null,
                 "topic", 0, Schema.INT32_SCHEMA, 42)));
     }
 
     @Test
     public void topLevelMapRequired() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
         assertThrows(DataException.class, () -> xformValue.apply(new SourceRecord(null, null,
                 "topic", 0, null, 42)));
     }
 
     @Test
     public void testNestedStruct() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct();
         builder.field("int8", Schema.INT8_SCHEMA);
@@ -145,7 +145,7 @@ public class FlattenTest {
                 null, twoLevelNestedMap));
 
         assertNull(transformed.valueSchema());
-        assertTrue(transformed.value() instanceof Map);
+        assertInstanceOf(Map.class, transformed.value());
         @SuppressWarnings("unchecked")
         Map<String, Object> transformedMap = (Map<String, Object>) transformed.value();
         assertEquals(9, transformedMap.size());
@@ -162,7 +162,7 @@ public class FlattenTest {
 
     @Test
     public void testOptionalFieldStruct() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct();
         builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
@@ -189,7 +189,7 @@ public class FlattenTest {
 
     @Test
     public void testOptionalStruct() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct().optional();
         builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
@@ -205,7 +205,7 @@ public class FlattenTest {
 
     @Test
     public void testOptionalNestedStruct() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct().optional();
         builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
@@ -229,7 +229,7 @@ public class FlattenTest {
 
     @Test
     public void testOptionalFieldMap() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         Map<String, Object> supportedTypes = new HashMap<>();
         supportedTypes.put("opt_int32", null);
@@ -241,7 +241,7 @@ public class FlattenTest {
                 null, oneLevelNestedMap));
 
         assertNull(transformed.valueSchema());
-        assertTrue(transformed.value() instanceof Map);
+        assertInstanceOf(Map.class, transformed.value());
         @SuppressWarnings("unchecked")
         Map<String, Object> transformedMap = (Map<String, Object>) transformed.value();
 
@@ -250,14 +250,14 @@ public class FlattenTest {
 
     @Test
     public void testKey() {
-        xformKey.configure(Collections.<String, String>emptyMap());
+        xformKey.configure(Collections.emptyMap());
 
         Map<String, Map<String, Integer>> key = Collections.singletonMap("A", Collections.singletonMap("B", 12));
         SourceRecord src = new SourceRecord(null, null, "topic", null, key, null, null);
         SourceRecord transformed = xformKey.apply(src);
 
         assertNull(transformed.keySchema());
-        assertTrue(transformed.key() instanceof Map);
+        assertInstanceOf(Map.class, transformed.key());
         @SuppressWarnings("unchecked")
         Map<String, Object> transformedMap = (Map<String, Object>) transformed.key();
         assertEquals(12, transformedMap.get("A.B"));
@@ -295,7 +295,7 @@ public class FlattenTest {
         // children should also be optional. Similarly, if the parent Struct has a default value, the default value for
         // the flattened field
 
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct().optional();
         builder.field("req_field", Schema.STRING_SCHEMA);
@@ -324,7 +324,7 @@ public class FlattenTest {
 
     @Test
     public void tombstoneEventWithoutSchemaShouldPassThrough() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
                 null, null);
@@ -336,7 +336,7 @@ public class FlattenTest {
 
     @Test
     public void tombstoneEventWithSchemaShouldPassThrough() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        xformValue.configure(Collections.emptyMap());
 
         final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
         final SourceRecord record = new SourceRecord(null, null, "test", 0,

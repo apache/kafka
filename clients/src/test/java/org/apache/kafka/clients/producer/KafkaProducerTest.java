@@ -127,6 +127,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -491,7 +492,7 @@ public class KafkaProducerTest {
         props.setProperty(ProducerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
         assertEquals(1, producer.metrics.reporters().size());
-        assertTrue(producer.metrics.reporters().get(0) instanceof JmxReporter);
+        assertInstanceOf(JmxReporter.class, producer.metrics.reporters().get(0));
         producer.close();
     }
 
@@ -503,7 +504,7 @@ public class KafkaProducerTest {
         props.setProperty(ProducerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
         assertEquals(1, producer.metrics.reporters().size());
-        assertTrue(producer.metrics.reporters().get(0) instanceof ClientTelemetryReporter);
+        assertInstanceOf(ClientTelemetryReporter.class, producer.metrics.reporters().get(0));
         producer.close();
     }
 
@@ -692,7 +693,7 @@ public class KafkaProducerTest {
             TestUtils.waitForCondition(() -> closeException.get() != null,
                     "InterruptException did not occur within timeout.");
 
-            assertTrue(closeException.get() instanceof InterruptException, "Expected exception not thrown " + closeException);
+            assertInstanceOf(InterruptException.class, closeException.get(), "Expected exception not thrown " + closeException);
         } finally {
             executor.shutdownNow();
         }
@@ -848,9 +849,7 @@ public class KafkaProducerTest {
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
         try {
-            future.get();
-        } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof TimeoutException);
+            assertInstanceOf(TimeoutException.class, assertThrows(ExecutionException.class, future::get).getCause());
         } finally {
             producer.close(Duration.ofMillis(0));
         }
@@ -917,9 +916,7 @@ public class KafkaProducerTest {
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
         try {
-            future.get();
-        } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof TimeoutException);
+            assertInstanceOf(TimeoutException.class, assertThrows(ExecutionException.class, future::get).getCause());
         } finally {
             producer.close(Duration.ofMillis(0));
         }

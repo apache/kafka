@@ -22,7 +22,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.server.{ActionQueue, DelayedOperationPurgatory, HostedPartition, KafkaConfig, KafkaRequestHandler, ReplicaManager, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest, OffsetFetchResponse, TransactionResult}
@@ -36,7 +36,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.coordinator.group.OffsetConfig
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, VerificationGuard}
@@ -99,10 +99,10 @@ class GroupCoordinatorTest {
   @BeforeEach
   def setUp(): Unit = {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
-    props.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, GroupMinSessionTimeout.toString)
-    props.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, GroupMaxSessionTimeout.toString)
-    props.setProperty(KafkaConfig.GroupMaxSizeProp, GroupMaxSize.toString)
-    props.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, GroupInitialRebalanceDelay.toString)
+    props.setProperty(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, GroupMinSessionTimeout.toString)
+    props.setProperty(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, GroupMaxSessionTimeout.toString)
+    props.setProperty(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG, GroupMaxSize.toString)
+    props.setProperty(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupInitialRebalanceDelay.toString)
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
     val ret = mutable.Map[String, Map[Int, Seq[Int]]]()
     ret += (Topic.GROUP_METADATA_TOPIC_NAME -> Map(0 -> Seq(1), 1 -> Seq(1)))
@@ -199,7 +199,7 @@ class GroupCoordinatorTest {
   @Test
   def testOffsetsRetentionMsIntegerOverflow(): Unit = {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
-    props.setProperty(KafkaConfig.OffsetsRetentionMinutesProp, Integer.MAX_VALUE.toString)
+    props.setProperty(GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG, Integer.MAX_VALUE.toString)
     val config = KafkaConfig.fromProps(props)
     val offsetConfig = GroupCoordinator.offsetConfig(config)
     assertEquals(offsetConfig.offsetsRetentionMs, Integer.MAX_VALUE * 60L * 1000L)
@@ -3844,6 +3844,7 @@ class GroupCoordinatorTest {
 
     verifyErrors(Errors.INVALID_PRODUCER_ID_MAPPING, Errors.INVALID_PRODUCER_ID_MAPPING)
     verifyErrors(Errors.INVALID_TXN_STATE, Errors.INVALID_TXN_STATE)
+    verifyErrors(Errors.NETWORK_EXCEPTION, Errors.COORDINATOR_LOAD_IN_PROGRESS)
     verifyErrors(Errors.NOT_ENOUGH_REPLICAS, Errors.COORDINATOR_NOT_AVAILABLE)
     verifyErrors(Errors.NOT_LEADER_OR_FOLLOWER, Errors.NOT_COORDINATOR)
     verifyErrors(Errors.KAFKA_STORAGE_ERROR, Errors.NOT_COORDINATOR)
@@ -3857,7 +3858,7 @@ class GroupCoordinatorTest {
     val producerEpoch: Short = 3
 
     val offsets = Map(
-      tip -> OffsetAndMetadata(offset, "s" * (OffsetConfig.DEFAULT_MAX_METADATA_SIZE + 1), 0)
+      tip -> OffsetAndMetadata(offset, "s" * (GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_DEFAULT + 1), 0)
     )
 
     val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, offsets)
@@ -4173,7 +4174,8 @@ class GroupCoordinatorTest {
       ArgumentMatchers.eq(producerId),
       ArgumentMatchers.eq(producerEpoch),
       any(),
-      postVerificationCallback.capture()
+      postVerificationCallback.capture(),
+      any()
     )).thenAnswer(
       _ => postVerificationCallback.getValue()((verificationError, VerificationGuard.SENTINEL))
     )
@@ -4198,7 +4200,7 @@ class GroupCoordinatorTest {
     when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
     groupCoordinator.handleTxnCommitOffsets(groupId, transactionalId, producerId, producerEpoch,
-      memberId, groupInstanceId, generationId, offsets, responseCallback)
+      memberId, groupInstanceId, generationId, offsets, responseCallback, RequestLocal.NoCaching, ApiKeys.TXN_OFFSET_COMMIT.latestVersion())
     val result = Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
     result
   }

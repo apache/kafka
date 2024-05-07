@@ -346,7 +346,7 @@ public class ConnectorConfig extends AbstractConfig {
         ConfigDef newDef = new ConfigDef(baseConfigDef);
         new EnrichablePlugin<Transformation<?>>("Transformation", TRANSFORMS_CONFIG, TRANSFORMS_GROUP, (Class) Transformation.class,
                 props, requireFullConfig) {
-            @SuppressWarnings("rawtypes")
+
             @Override
             protected Set<PluginDesc<Transformation<?>>> plugins() {
                 return plugins.transformations();
@@ -529,13 +529,13 @@ public class ConnectorConfig extends AbstractConfig {
             }
             Utils.ensureConcreteSubclass(baseClass, cls);
 
-            T transformation;
+            T pluginInstance;
             try {
-                transformation = Utils.newInstance(cls, baseClass);
+                pluginInstance = Utils.newInstance(cls, baseClass);
             } catch (Exception e) {
                 throw new ConfigException(key, String.valueOf(cls), "Error getting config definition from " + baseClass.getSimpleName() + ": " + e.getMessage());
             }
-            ConfigDef configDef = config(transformation);
+            ConfigDef configDef = config(pluginInstance);
             if (null == configDef) {
                 throw new ConnectException(
                     String.format(

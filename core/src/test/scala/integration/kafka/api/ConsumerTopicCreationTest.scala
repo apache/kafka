@@ -27,6 +27,8 @@ import kafka.utils.{EmptyTestInfo, TestUtils}
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.server.config.ServerLogConfigs
+
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
@@ -56,7 +58,7 @@ object ConsumerTopicCreationTest {
 
     // configure server properties
     this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
-    this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, brokerAutoTopicCreationEnable.toString)
+    this.serverConfig.setProperty(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, brokerAutoTopicCreationEnable.toString)
 
     // configure client properties
     this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)

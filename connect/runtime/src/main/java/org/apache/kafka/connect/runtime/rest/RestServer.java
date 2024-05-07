@@ -159,7 +159,7 @@ public abstract class RestServer {
         ServerConnector connector;
 
         if (PROTOCOL_HTTPS.equals(protocol)) {
-            SslContextFactory ssl;
+            SslContextFactory.Server ssl;
             if (isAdmin) {
                 ssl = SSLUtils.createServerSideSslContextFactory(config, RestServerConfig.ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX);
             } else {
@@ -398,7 +398,7 @@ public abstract class RestServer {
         String advertisedHostname = config.advertisedHostName();
         if (advertisedHostname != null && !advertisedHostname.isEmpty())
             builder.host(advertisedHostname);
-        else if (serverConnector != null && serverConnector.getHost() != null && serverConnector.getHost().length() > 0)
+        else if (serverConnector != null && serverConnector.getHost() != null && !serverConnector.getHost().isEmpty())
             builder.host(serverConnector.getHost());
 
         Integer advertisedPort = config.advertisedPort();

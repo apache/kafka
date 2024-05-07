@@ -43,6 +43,7 @@ import java.util.Map;
 
 import static java.lang.String.format;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 // Marked integration for flakiness
@@ -170,7 +171,7 @@ public class JmxToolTest {
         assertNormalExit();
 
         Map<String, String> csv = parseCsv(out);
-        assertTrue(csv.size() > 0);
+        assertFalse(csv.isEmpty());
     }
 
     @Test

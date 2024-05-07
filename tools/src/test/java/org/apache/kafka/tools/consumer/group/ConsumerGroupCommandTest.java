@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumer.group;
 
 import kafka.api.BaseConsumerTest;
-import kafka.admin.ConsumerGroupCommand;
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -29,6 +28,7 @@ import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
@@ -41,7 +41,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -87,10 +86,7 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
             0,
             false
         ).foreach(props -> {
-            if (isNewGroupCoordinatorEnabled()) {
-                props.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp(), "true");
-            }
-
+            props.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, isNewGroupCoordinatorEnabled() + "");
             cfgs.add(KafkaConfig.fromProps(props));
             return null;
         });
@@ -133,10 +129,10 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
     }
 
     ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
-        ConsumerGroupCommand.ConsumerGroupCommandOptions opts = new ConsumerGroupCommand.ConsumerGroupCommandOptions(args);
+        ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         ConsumerGroupCommand.ConsumerGroupService service = new ConsumerGroupCommand.ConsumerGroupService(
             opts,
-            asScala(Collections.singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE)))
+            Collections.singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
 
         consumerGroupService.add(0, service);
@@ -354,15 +350,5 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
     @SuppressWarnings({"deprecation"})
     static <T> Seq<T> seq(Collection<T> seq) {
         return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
-    }
-
-    @SuppressWarnings("deprecation")
-    static <K, V> scala.collection.Map<K, V> asScala(Map<K, V> jmap) {
-        return JavaConverters.mapAsScalaMap(jmap);
-    }
-
-    @SuppressWarnings({"deprecation"})
-    static <T> scala.collection.immutable.Set<T> set(final Collection<T> set) {
-        return JavaConverters.asScalaSet(new HashSet<>(set)).toSet();
     }
 }

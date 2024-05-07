@@ -18,13 +18,27 @@ package org.apache.kafka.security;
 
 public class PasswordEncoderConfigs {
     
-    public static final String SECRET = "password.encoder.secret";
-    public static final String OLD_SECRET = "password.encoder.old.secret";
-    public static final String KEYFACTORY_ALGORITHM = "password.encoder.keyfactory.algorithm";
-    public static final String CIPHER_ALGORITHM = "password.encoder.cipher.algorithm";
-    public static final String DEFAULT_CIPHER_ALGORITHM = "AES/CBC/PKCS5Padding";
-    public static final String KEY_LENGTH =  "password.encoder.key.length";
-    public static final int DEFAULT_KEY_LENGTH = 128;
-    public static final String ITERATIONS =  "password.encoder.iterations";
-    public static final int DEFAULT_ITERATIONS = 4096;
+    public static final String PASSWORD_ENCODER_SECRET_CONFIG = "password.encoder.secret";
+    public static final String PASSWORD_ENCODER_SECRET_DOC = "The secret used for encoding dynamically configured passwords for this broker.";
+
+    public static final String PASSWORD_ENCODER_OLD_SECRET_CONFIG = "password.encoder.old.secret";
+    public static final String PASSWORD_ENCODER_OLD_SECRET_DOC = "The old secret that was used for encoding dynamically configured passwords. " +
+            "This is required only when the secret is updated. If specified, all dynamically encoded passwords are " +
+            "decoded using this old secret and re-encoded using " + PASSWORD_ENCODER_SECRET_CONFIG + " when broker starts up.";
+
+    public static final String PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_CONFIG = "password.encoder.keyfactory.algorithm";
+    public static final String PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_DOC = "The SecretKeyFactory algorithm used for encoding dynamically configured passwords. " +
+            "Default is PBKDF2WithHmacSHA512 if available and PBKDF2WithHmacSHA1 otherwise.";
+
+    public static final String PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG = "password.encoder.cipher.algorithm";
+    public static final String PASSWORD_ENCODER_CIPHER_ALGORITHM_DOC = "The Cipher algorithm used for encoding dynamically configured passwords.";
+    public static final String PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT = "AES/CBC/PKCS5Padding";
+
+    public static final String PASSWORD_ENCODER_KEY_LENGTH_CONFIG =  "password.encoder.key.length";
+    public static final String PASSWORD_ENCODER_KEY_LENGTH_DOC =  "The key length used for encoding dynamically configured passwords.";
+    public static final int PASSWORD_ENCODER_KEY_LENGTH_DEFAULT = 128;
+
+    public static final String PASSWORD_ENCODER_ITERATIONS_CONFIG =  "password.encoder.iterations";
+    public static final String PASSWORD_ENCODER_ITERATIONS_DOC =  "The iteration count used for encoding dynamically configured passwords.";
+    public static final int PASSWORD_ENCODER_ITERATIONS_DEFAULT = 4096;
 }
