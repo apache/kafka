@@ -1193,7 +1193,9 @@ public class StreamsConfig extends AbstractConfig {
     private static final Map<String, Object> KS_CONTROLLED_PRODUCER_CONFIGS;
     static {
         final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
-        tempProducerDefaultOverrides.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, "StreamPartitioner");
+        
+        // How to add PARTITIONER_CLASS_CONFIG to the list of controlled producer configs?
+        // tempProducerDefaultOverrides.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, "StreamPartitioner");
 
         KS_CONTROLLED_PRODUCER_CONFIGS = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
