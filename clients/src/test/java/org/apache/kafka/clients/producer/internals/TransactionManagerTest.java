@@ -29,7 +29,9 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -131,6 +133,7 @@ public class TransactionManagerTest {
     private final int transactionTimeoutMs = 1121;
 
     private final String topic = "test";
+    private static final Uuid TOPIC_ID = Uuid.randomUuid();
     private final TopicPartition tp0 = new TopicPartition(topic, 0);
     private final TopicPartition tp1 = new TopicPartition(topic, 1);
     private final long producerId = 13131L;
@@ -3882,7 +3885,7 @@ public class TransactionManagerTest {
     @SuppressWarnings("deprecation")
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, int logStartOffset) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset);
-        Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(tp, resp);
+        Map<TopicIdPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(new TopicIdPartition(TOPIC_ID, tp), resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 

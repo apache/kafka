@@ -27,7 +27,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, _}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidationStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -182,7 +182,7 @@ object AbstractCoordinatorConcurrencyTest {
       logManager,
       None,
       quotaManagers,
-      null,
+      mock(classOf[MetadataCache]),
       null,
       null,
       delayedProducePurgatoryParam = Some(producePurgatory),
@@ -213,10 +213,10 @@ object AbstractCoordinatorConcurrencyTest {
                                requiredAcks: Short,
                                internalTopicsAllowed: Boolean,
                                origin: AppendOrigin,
-                               entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                               responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                               entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
+                               responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,
-                               processingStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
+                               processingStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                                requestLocal: RequestLocal = RequestLocal.NoCaching,
                                actionQueue: ActionQueue = null,
                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {

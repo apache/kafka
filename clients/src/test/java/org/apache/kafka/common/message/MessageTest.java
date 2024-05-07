@@ -928,7 +928,6 @@ public final class MessageTest {
         testAllMessageRoundTrips(new ProduceResponseData()
             .setResponses(new ProduceResponseData.TopicProduceResponseCollection(singletonList(
                 new ProduceResponseData.TopicProduceResponse()
-                    .setName(topicName)
                     .setPartitionResponses(singletonList(
                         new ProduceResponseData.PartitionProduceResponse()
                             .setIndex(partitionIndex)
@@ -938,7 +937,6 @@ public final class MessageTest {
         Supplier<ProduceResponseData> response = () -> new ProduceResponseData()
                 .setResponses(new ProduceResponseData.TopicProduceResponseCollection(singletonList(
                     new ProduceResponseData.TopicProduceResponse()
-                        .setName(topicName)
                         .setPartitionResponses(singletonList(
                              new ProduceResponseData.PartitionProduceResponse()
                                  .setIndex(partitionIndex)
@@ -973,10 +971,20 @@ public final class MessageTest {
                 responseData.setThrottleTimeMs(0);
             }
 
+            if (version <= 11) {
+                responseData.responses().iterator().next().setName(topicName);
+            }
+
+            if (version >= 12) {
+                responseData.responses().iterator().next().setTopicId(Uuid.randomUuid());
+            }
+
             if (version >= 3 && version <= 4) {
                 testAllMessageRoundTripsBetweenVersions(version, (short) 5, responseData, responseData);
             } else if (version >= 6 && version <= 7) {
                 testAllMessageRoundTripsBetweenVersions(version, (short) 8, responseData, responseData);
+            } else if (version < 12) {
+                testAllMessageRoundTripsBetweenVersions(version, (short) 12, responseData, responseData);
             } else {
                 testEquivalentMessageRoundTrip(version, responseData);
             }

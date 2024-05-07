@@ -37,7 +37,8 @@
   // Version 10 is the same as version 9 (KIP-951).
   //
   // Version 11 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
-  "validVersions": "0-11",
+  // Version 12 replaces topic names with topic IDs (KIP-516). May return UNKNOWN_TOPIC_ID error code.
+  "validVersions": "0-12",
   "deprecatedVersions": "0-6",
   "flexibleVersions": "9+",
   "fields": [
@@ -49,8 +50,9 @@
       "about": "The timeout to await a response in milliseconds." },
     { "name": "TopicData", "type": "[]TopicProduceData", "versions": "0+",
       "about": "Each topic to produce to.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
+      { "name": "Name", "type": "string", "versions": "0-11", "entityType": "topicName", "mapKey": true, "ignorable": true,
         "about": "The topic name." },
+      { "name": "TopicId", "type": "uuid", "versions": "12+", "mapKey": true, "ignorable": true, "about": "The unique topic ID" },
       { "name": "PartitionData", "type": "[]PartitionProduceData", "versions": "0+",
         "about": "Each partition to produce to.", "fields": [
         { "name": "Index", "type": "int32", "versions": "0+",

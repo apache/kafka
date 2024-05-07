@@ -18,7 +18,7 @@ package kafka.coordinator.group
 
 import kafka.cluster.PartitionListener
 import kafka.server.{ActionQueue, ReplicaManager, RequestLocal, defaultError, genericError}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, TimestampType}
@@ -217,13 +217,13 @@ class CoordinatorPartitionWriter[T](
     memoryRecords: MemoryRecords,
     verificationGuard: VerificationGuard = VerificationGuard.SENTINEL
   ): Long = {
-    var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
+    var appendResults: Map[TopicIdPartition, PartitionResponse] = Map.empty
     replicaManager.appendRecords(
       timeout = 0L,
       requiredAcks = 1,
       internalTopicsAllowed = true,
       origin = AppendOrigin.COORDINATOR,
-      entriesPerPartition = Map(tp -> memoryRecords),
+      entriesPerPartition = Map(replicaManager.getTopicIdPartition(tp) -> memoryRecords),
       responseCallback = results => appendResults = results,
       requestLocal = RequestLocal.NoCaching,
       verificationGuards = Map(tp -> verificationGuard),
@@ -233,7 +233,7 @@ class CoordinatorPartitionWriter[T](
       actionQueue = directActionQueue
     )
 
-    val partitionResult = appendResults.getOrElse(tp,
+    val partitionResult = appendResults.getOrElse(replicaManager.getTopicIdPartition(tp),
       throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
 
     if (partitionResult.error != Errors.NONE) {

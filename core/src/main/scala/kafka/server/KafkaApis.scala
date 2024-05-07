@@ -604,40 +604,54 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val unauthorizedTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
-    val nonExistingTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
-    val invalidRequestResponses = mutable.Map[TopicPartition, PartitionResponse]()
-    val authorizedRequestInfo = mutable.Map[TopicPartition, MemoryRecords]()
-    // cache the result to avoid redundant authorization calls
-    val authorizedTopics = authHelper.filterByAuthorized(request.context, WRITE, TOPIC,
-      produceRequest.data().topicData().asScala)(_.name())
+    val unauthorizedTopicResponses = mutable.Map[TopicIdPartition, PartitionResponse]()
+    val nonExistingTopicResponses = mutable.Map[TopicIdPartition, PartitionResponse]()
+    val invalidRequestResponses = mutable.Map[TopicIdPartition, PartitionResponse]()
+    val authorizedRequestInfo = mutable.Map[TopicIdPartition, MemoryRecords]()
+    val partitionDatas = new mutable.ArrayBuffer[(TopicIdPartition, ProduceRequestData.PartitionProduceData)]
 
-    produceRequest.data.topicData.forEach(topic => topic.partitionData.forEach { partition =>
-      val topicPartition = new TopicPartition(topic.name, partition.index)
+    produceRequest.data.topicData.forEach { topic =>
+      topic.partitionData.forEach { partition =>
+        val topicIdIsMissing = topic.topicId == null || topic.topicId == Uuid.ZERO_UUID
+
+        val topicName: String = metadataCache.getTopicName(topic.topicId).getOrElse(topic.name)
+        val topicId: Uuid = if (topicIdIsMissing) metadataCache.getTopicId(topicName)  else topic.topicId
+
+        val topicPartition = new TopicPartition(topicName, partition.index())
+        if (topicName == null || topicName.isEmpty)
+          nonExistingTopicResponses += new TopicIdPartition(topicId, topicPartition) -> new PartitionResponse(Errors.UNKNOWN_TOPIC_ID)
+        else if (!metadataCache.contains(topicPartition))
+          nonExistingTopicResponses += new TopicIdPartition(topicId, topicPartition) -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+        else
+          partitionDatas += new TopicIdPartition(topicId, topicPartition) -> partition
+      }
+    }
+    // cache the result to avoid redundant authorization calls
+    val authorizedTopics = authHelper.filterByAuthorized(request.context, WRITE, TOPIC, partitionDatas)(_._1.topic)
+
+    partitionDatas.foreach { case (topicIdPartition, partition) =>
       // This caller assumes the type is MemoryRecords and that is true on current serialization
       // We cast the type to avoid causing big change to code base.
       // https://issues.apache.org/jira/browse/KAFKA-10698
       val memoryRecords = partition.records.asInstanceOf[MemoryRecords]
-      if (!authorizedTopics.contains(topicPartition.topic))
-        unauthorizedTopicResponses += topicPartition -> new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
-      else if (!metadataCache.contains(topicPartition))
-        nonExistingTopicResponses += topicPartition -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+      if (!authorizedTopics.contains(topicIdPartition.topic))
+        unauthorizedTopicResponses += topicIdPartition -> new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
       else
         try {
           ProduceRequest.validateRecords(request.header.apiVersion, memoryRecords)
-          authorizedRequestInfo += (topicPartition -> memoryRecords)
+          authorizedRequestInfo += (topicIdPartition -> memoryRecords)
         } catch {
           case e: ApiException =>
-            invalidRequestResponses += topicPartition -> new PartitionResponse(Errors.forException(e))
+            invalidRequestResponses += topicIdPartition -> new PartitionResponse(Errors.forException(e))
         }
-    })
+    }
 
     // the callback for sending a produce response
     // The construction of ProduceResponse is able to accept auto-generated protocol data so
     // KafkaApis#handleProduceRequest should apply auto-generated protocol to avoid extra conversion.
     // https://issues.apache.org/jira/browse/KAFKA-10730
     @nowarn("cat=deprecation")
-    def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
+    def sendResponseCallback(responseStatus: Map[TopicIdPartition, PartitionResponse]): Unit = {
       val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses ++ invalidRequestResponses
       var errorInResponse = false
 
@@ -654,7 +668,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (request.header.apiVersion >= 10) {
             status.error match {
               case Errors.NOT_LEADER_OR_FOLLOWER =>
-                val leaderNode = getCurrentLeader(topicPartition, request.context.listenerName)
+                val leaderNode = getCurrentLeader(topicPartition.topicPartition(), request.context.listenerName)
                 leaderNode.node.foreach { node =>
                   nodeEndpoints.put(node.id(), node)
                 }
@@ -730,7 +744,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         transactionalId = produceRequest.transactionalId,
         entriesPerPartition = authorizedRequestInfo,
         responseCallback = sendResponseCallback,
-        recordValidationStatsCallback = processingStatsCallback,
+        recordValidationStatsCallback = result => processingStatsCallback(result.map {
+          case (partition, response) => (partition.topicPartition(), response)
+        }),
         requestLocal = requestLocal,
         supportedOperation = supportedOperation)
 
@@ -2454,7 +2470,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         }
 
-        val controlRecords = mutable.Map.empty[TopicPartition, MemoryRecords]
+        val controlRecords = mutable.Map.empty[TopicIdPartition, MemoryRecords]
         partitionsWithCompatibleMessageFormat.foreach { partition =>
           if (config.isNewGroupCoordinatorEnabled && partition.topic == GROUP_METADATA_TOPIC_NAME) {
             // When the new group coordinator is used, writing the end marker is fully delegated
@@ -2485,7 +2501,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           } else {
             // Otherwise, the regular appendRecords path is used for all the non __consumer_offsets
             // partitions or for all partitions when the new group coordinator is disabled.
-            controlRecords += partition -> MemoryRecords.withEndTransactionMarker(
+            controlRecords += replicaManager.getTopicIdPartition(partition) -> MemoryRecords.withEndTransactionMarker(
               producerId,
               marker.producerEpoch,
               new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
@@ -2502,7 +2518,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestLocal = requestLocal,
           responseCallback = errors => {
             errors.forKeyValue { (tp, partitionResponse) =>
-              markerResults.put(tp, partitionResponse.error)
+              markerResults.put(tp.topicPartition(), partitionResponse.error)
             }
             maybeComplete()
           }

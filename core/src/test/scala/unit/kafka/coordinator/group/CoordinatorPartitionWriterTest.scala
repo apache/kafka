@@ -18,7 +18,7 @@ package kafka.coordinator.group
 
 import kafka.server.ReplicaManager
 import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{NotLeaderOrFollowerException, RecordTooLargeException}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -99,11 +99,13 @@ class CoordinatorPartitionWriterTest {
       Collections.emptyMap(),
       new Properties()
     )))
+    val topicId = Uuid.randomUuid()
+    when(replicaManager.getTopicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
 
-    val recordsCapture: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
-    val callbackCapture: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+    val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
+    val callbackCapture: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
 
     when(replicaManager.appendRecords(
       ArgumentMatchers.eq(0L),
@@ -119,7 +121,7 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
     )).thenAnswer( _ => {
       callbackCapture.getValue.apply(Map(
-        tp -> new PartitionResponse(
+        new TopicIdPartition(topicId, tp) -> new PartitionResponse(
           Errors.NONE,
           5,
           10,
@@ -145,8 +147,9 @@ class CoordinatorPartitionWriterTest {
       records.asJava
     ))
 
-    val batch = recordsCapture.getValue.getOrElse(tp,
-      throw new AssertionError(s"No records for $tp"))
+    val batch = recordsCapture.getValue.find(_._1.topicPartition() == tp)
+      .getOrElse(throw new AssertionError(s"No records for $tp"))
+      ._2
     assertEquals(1, batch.batches().asScala.toList.size)
 
     val receivedRecords = batch.records.asScala.map { record =>
@@ -176,11 +179,13 @@ class CoordinatorPartitionWriterTest {
       Collections.emptyMap(),
       new Properties()
     )))
+    val topicId = Uuid.randomUuid()
+    when(replicaManager.getTopicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
 
-    val recordsCapture: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
-    val callbackCapture: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+    val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
+    val callbackCapture: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
 
     when(replicaManager.appendRecords(
       ArgumentMatchers.eq(0L),
@@ -196,7 +201,7 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.eq(Map(tp -> verificationGuard)),
     )).thenAnswer(_ => {
       callbackCapture.getValue.apply(Map(
-        tp -> new PartitionResponse(
+        new TopicIdPartition(topicId, tp) -> new PartitionResponse(
           Errors.NONE,
           5,
           10,
@@ -222,8 +227,8 @@ class CoordinatorPartitionWriterTest {
       records.asJava
     ))
 
-    val batch = recordsCapture.getValue.getOrElse(tp,
-      throw new AssertionError(s"No records for $tp"))
+    val batch = recordsCapture.getValue.find(_._1.topicPartition() == tp)
+      .getOrElse(throw new AssertionError(s"No records for $tp"))._2
     assertEquals(1, batch.batches().asScala.toList.size)
 
     val firstBatch = batch.batches.asScala.head
@@ -258,11 +263,13 @@ class CoordinatorPartitionWriterTest {
       Collections.emptyMap(),
       new Properties()
     )))
+    val topicId = Uuid.randomUuid()
+    when(replicaManager.getTopicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
 
-    val recordsCapture: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
-    val callbackCapture: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+    val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
+    val callbackCapture: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
 
     when(replicaManager.appendRecords(
       ArgumentMatchers.eq(0L),
@@ -278,7 +285,7 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
     )).thenAnswer(_ => {
       callbackCapture.getValue.apply(Map(
-        tp -> new PartitionResponse(
+        new TopicIdPartition(topicId, tp) -> new PartitionResponse(
           Errors.NONE,
           5,
           10,
@@ -298,8 +305,8 @@ class CoordinatorPartitionWriterTest {
       if (controlRecordType == ControlRecordType.COMMIT) TransactionResult.COMMIT else TransactionResult.ABORT
     ))
 
-    val batch = recordsCapture.getValue.getOrElse(tp,
-      throw new AssertionError(s"No records for $tp"))
+    val batch = recordsCapture.getValue.find(_._1.topicPartition() == tp)
+      .getOrElse(throw new AssertionError(s"No records for $tp"))._2
     assertEquals(1, batch.batches.asScala.toList.size)
 
     val firstBatch = batch.batches.asScala.head
@@ -383,11 +390,13 @@ class CoordinatorPartitionWriterTest {
       Collections.emptyMap(),
       new Properties()
     )))
+    val topicId = Uuid.randomUuid()
+    when(replicaManager.getTopicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
 
-    val recordsCapture: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
-    val callbackCapture: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+    val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
+    val callbackCapture: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
 
     when(replicaManager.appendRecords(
       ArgumentMatchers.eq(0L),
@@ -403,7 +412,7 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
     )).thenAnswer(_ => {
       callbackCapture.getValue.apply(Map(
-        tp -> new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER)
+        new TopicIdPartition(topicId, tp) -> new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER)
       ))
     })
 

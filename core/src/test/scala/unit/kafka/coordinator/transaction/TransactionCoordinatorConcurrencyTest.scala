@@ -26,6 +26,7 @@ import kafka.log.UnifiedLog
 import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -33,7 +34,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -103,6 +104,10 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       txnStateManager,
       time)
 
+    val transactionStateTopicId = Uuid.randomUuid()
+    when(replicaManager.metadataCache.getTopicName(transactionStateTopicId)).thenReturn(Some(Topic.TRANSACTION_STATE_TOPIC_NAME))
+    when(replicaManager.metadataCache.getTopicId(Topic.TRANSACTION_STATE_TOPIC_NAME)).thenReturn(transactionStateTopicId)
+    
     transactionCoordinator = new TransactionCoordinator(
       txnConfig,
       scheduler,

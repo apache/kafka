@@ -1695,6 +1695,15 @@ public final class Utils {
     }
 
     /**
+     * Convert map keys to another type.
+     */
+    public static <K1, K2, V> Map<K2, V> convertKeys(Map<K1, V> originalMap, Function<K1, K2> converter) {
+        Map<K2, V> newMap = new HashMap<>();
+        originalMap.forEach((key, value) -> newMap.put(converter.apply(key), value));
+        return newMap;
+    }
+
+    /**
      * A runnable that can throw checked exception.
      */
     @FunctionalInterface

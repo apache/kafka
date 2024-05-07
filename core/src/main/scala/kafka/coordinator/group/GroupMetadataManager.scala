@@ -267,18 +267,19 @@ class GroupMetadataManager(brokerId: Int,
         }
 
         val groupMetadataPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
-        val groupMetadataRecords = Map(groupMetadataPartition -> records)
+        val groupMetadataTopicIdPartition = replicaManager.getTopicIdPartition(groupMetadataPartition)
+        val groupMetadataRecords = Map(groupMetadataTopicIdPartition -> records)
         val generationId = group.generationId
 
         // set the callback function to insert the created group into cache after log append completed
-        def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
+        def putCacheCallback(responseStatus: Map[TopicIdPartition, PartitionResponse]): Unit = {
           // the append response should only contain the topics partition
-          if (responseStatus.size != 1 || !responseStatus.contains(groupMetadataPartition))
+          if (responseStatus.size != 1 || !responseStatus.contains(groupMetadataTopicIdPartition))
             throw new IllegalStateException("Append status %s should only have one partition %s"
               .format(responseStatus, groupMetadataPartition))
 
           // construct the error status in the propagated assignment response in the cache
-          val status = responseStatus(groupMetadataPartition)
+          val status = responseStatus(groupMetadataTopicIdPartition)
 
           val responseError = if (status.error == Errors.NONE) {
             Errors.NONE
@@ -329,9 +330,9 @@ class GroupMetadataManager(brokerId: Int,
   // This method should be called under the group lock to ensure atomicity of the update to the the in-memory and persisted state.
   private def appendForGroup(
     group: GroupMetadata,
-    records: Map[TopicPartition, MemoryRecords],
+    records: Map[TopicIdPartition, MemoryRecords],
     requestLocal: RequestLocal,
-    callback: Map[TopicPartition, PartitionResponse] => Unit,
+    callback: Map[TopicIdPartition, PartitionResponse] => Unit,
     verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty
   ): Unit = {
     // call replica manager to append the group message
@@ -384,18 +385,19 @@ class GroupMetadataManager(brokerId: Int,
                              responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
                              producerId: Long,
                              records: Map[TopicPartition, MemoryRecords],
-                             preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Map[TopicPartition, PartitionResponse] => Unit = {
+                             preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Map[TopicIdPartition, PartitionResponse] => Unit = {
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
+    val offsetTopicIdPartition = replicaManager.getTopicIdPartition(offsetTopicPartition)
     // set the callback function to insert offsets into cache after log append completed
-    def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
+    def putCacheCallback(responseStatus: Map[TopicIdPartition, PartitionResponse]): Unit = {
       // the append response should only contain the topics partition
-      if (responseStatus.size != 1 || !responseStatus.contains(offsetTopicPartition))
+      if (responseStatus.size != 1 || !responseStatus.contains(offsetTopicIdPartition))
         throw new IllegalStateException("Append status %s should only have one partition %s"
           .format(responseStatus, offsetTopicPartition))
 
       // construct the commit response status and insert
       // the offset and metadata to cache if the append status has no error
-      val status = responseStatus(offsetTopicPartition)
+      val status = responseStatus(offsetTopicIdPartition)
 
       val responseError = group.inLock {
         if (status.error == Errors.NONE) {
@@ -499,7 +501,8 @@ class GroupMetadataManager(brokerId: Int,
       group.prepareOffsetCommit(offsetMetadata)
     }
 
-    appendForGroup(group, records, requestLocal, putCacheCallback, verificationGuards)
+    val topicIdPartitionsToRecords = Utils.convertKeys(records.asJava, replicaManager.getTopicIdPartition).asScala
+    appendForGroup(group, topicIdPartitionsToRecords, requestLocal, putCacheCallback, verificationGuards)
   }
 
   /**

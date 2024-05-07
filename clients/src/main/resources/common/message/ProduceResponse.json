@@ -36,13 +36,15 @@
   // Version 10 adds 'CurrentLeader' and 'NodeEndpoints' as tagged fields (KIP-951)
   //
   // Version 11 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
-  "validVersions": "0-11",
+  // Version 12 replaces topic names with topic IDs (KIP-516). May return UNKNOWN_TOPIC_ID error code.
+  "validVersions": "0-12",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "Responses", "type": "[]TopicProduceResponse", "versions": "0+",
       "about": "Each produce response", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
+      { "name": "Name", "type": "string", "versions": "0-11", "entityType": "topicName", "mapKey": true, "ignorable": true,
         "about": "The topic name" },
+      { "name": "TopicId", "type": "uuid", "versions": "12+", "mapKey": true, "ignorable": true, "about": "The unique topic ID" },
       { "name": "PartitionResponses", "type": "[]PartitionProduceResponse", "versions": "0+",
         "about": "Each partition that we produced to within the topic.", "fields": [
         { "name": "Index", "type": "int32", "versions": "0+",

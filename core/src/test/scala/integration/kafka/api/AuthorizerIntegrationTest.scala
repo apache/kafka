@@ -92,9 +92,10 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   val requestKeyToError = (topicNames: Map[Uuid, String], version: Short) => Map[ApiKeys, Nothing => Errors](
     ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
     ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => {
+      val topicId: Uuid = topicNames.find(topicName => topicName._2 == topic).map(_._1).getOrElse(Uuid.ZERO_UUID)
       Errors.forCode(
         resp.data
-          .responses.find(topic)
+          .responses.find(topic, topicId)
           .partitionResponses.asScala.find(_.index == part).get
           .errorCode
       )

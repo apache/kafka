@@ -33,6 +33,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
@@ -610,7 +611,9 @@ public class Sender implements Runnable {
                 // This will be set by completeBatch.
                 Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
                 produceResponse.data().responses().forEach(r -> r.partitionResponses().forEach(p -> {
-                    TopicPartition tp = new TopicPartition(r.name(), p.index());
+                    // Version 12 drop topic name and add support to topic id. However, metadata can be used to map topic id to topic name.
+                    String topicName = (r.name() == null || r.name().isEmpty()) ? metadata.topicNames().get(r.topicId()) : r.name();
+                    TopicPartition tp = new TopicPartition(topicName, p.index());
                     ProduceResponse.PartitionResponse partResp = new ProduceResponse.PartitionResponse(
                             Errors.forCode(p.errorCode()),
                             p.baseOffset(),
@@ -880,6 +883,7 @@ public class Sender implements Runnable {
         ProduceRequestData.TopicProduceDataCollection tpd = new ProduceRequestData.TopicProduceDataCollection();
         for (ProducerBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
+            Uuid topicId = metadata.topicIds().getOrDefault(tp.topic(), Uuid.ZERO_UUID);
             MemoryRecords records = batch.records();
 
             // down convert if necessary to the minimum magic used. In general, there can be a delay between the time
@@ -891,9 +895,9 @@ public class Sender implements Runnable {
             // which is supporting the new magic version to one which doesn't, then we will need to convert.
             if (!records.hasMatchingMagic(minUsedMagic))
                 records = batch.records().downConvert(minUsedMagic, 0, time).records();
-            ProduceRequestData.TopicProduceData tpData = tpd.find(tp.topic());
+            ProduceRequestData.TopicProduceData tpData = tpd.find(tp.topic(), topicId);
             if (tpData == null) {
-                tpData = new ProduceRequestData.TopicProduceData().setName(tp.topic());
+                tpData = new ProduceRequestData.TopicProduceData().setName(tp.topic()).setTopicId(topicId);
                 tpd.add(tpData);
             }
             tpData.partitionData().add(new ProduceRequestData.PartitionProduceData()

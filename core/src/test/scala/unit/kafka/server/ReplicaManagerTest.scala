@@ -221,7 +221,7 @@ class ReplicaManagerTest {
       alterPartitionManager = alterPartitionManager,
       threadNamePrefix = Option(this.getClass.getName))
     try {
-      def callback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
+      def callback(responseStatus: Map[TopicIdPartition, PartitionResponse]): Unit = {
         assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS)
       }
       rm.appendRecords(
@@ -229,7 +229,7 @@ class ReplicaManagerTest {
         requiredAcks = 3,
         internalTopicsAllowed = false,
         origin = AppendOrigin.CLIENT,
-        entriesPerPartition = Map(new TopicPartition("test1", 0) -> MemoryRecords.withRecords(CompressionType.NONE,
+        entriesPerPartition = Map(new TopicIdPartition(Uuid.randomUuid(), 0, "test1") -> MemoryRecords.withRecords(CompressionType.NONE,
           new SimpleRecord("first message".getBytes))),
         responseCallback = callback)
     } finally {
@@ -261,6 +261,9 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), new LogConfig(new Properties()))
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
+    topicNames.foreach { case (topicId, topicName) =>
+      when(metadataCache.getTopicId(topicName)).thenReturn(topicId)
+    }
     mockGetAliveBrokerFunctions(metadataCache, Seq(new Node(0, "host0", 0)))
     when(metadataCache.metadataVersion()).thenReturn(config.interBrokerProtocolVersion)
     val rm = new ReplicaManager(
@@ -2125,6 +2128,7 @@ class ReplicaManagerTest {
 
     try {
       val tp0 = new TopicPartition(topic, 0)
+      val topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), tp0)
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
@@ -2144,7 +2148,7 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
-      val produceResult = sendProducerAppend(replicaManager, tp0, 3)
+      val produceResult = sendProducerAppend(replicaManager, topicIdPartition0, 3)
       assertNull(produceResult.get)
 
       when(replicaManager.metadataCache.contains(tp0)).thenReturn(true)
@@ -2284,7 +2288,6 @@ class ReplicaManagerTest {
       replicaManager.becomeLeaderOrFollower(1,
         makeLeaderAndIsrRequest(topicIds(tp0.topic), tp0, Seq(0, 1), LeaderAndIsr(1, List(0, 1))),
         (_, _) => ())
-
       // Start with sequence 6
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
@@ -2777,11 +2780,11 @@ class ReplicaManagerTest {
 
   private def sendProducerAppend(
     replicaManager: ReplicaManager,
-    topicPartition: TopicPartition,
+    topicPartition: TopicIdPartition,
     numOfRecords: Int
   ): AtomicReference[PartitionResponse] = {
     val produceResult = new AtomicReference[PartitionResponse]()
-    def callback(response: Map[TopicPartition, PartitionResponse]): Unit = {
+    def callback(response: Map[TopicIdPartition, PartitionResponse]): Unit = {
       produceResult.set(response(topicPartition))
     }
 
@@ -3024,10 +3027,15 @@ class ReplicaManagerTest {
                             origin: AppendOrigin = AppendOrigin.CLIENT,
                             requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
-    def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
-      val response = responses.get(partition)
+    val topicIdPartition = new TopicIdPartition(topicId, partition)
+    def appendCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
+      val response = responses.get(topicIdPartition)
       assertTrue(response.isDefined)
       result.fire(response.get)
+    }
+
+    topicNames.foreach { case (topicId, topicName) =>
+      when(replicaManager.metadataCache.getTopicId(topicName)).thenReturn(topicId)
     }
 
     replicaManager.appendRecords(
@@ -3035,7 +3043,7 @@ class ReplicaManagerTest {
       requiredAcks = requiredAcks,
       internalTopicsAllowed = false,
       origin = origin,
-      entriesPerPartition = Map(partition -> records),
+      entriesPerPartition = Map(new TopicIdPartition(topicId, partition) -> records),
       responseCallback = appendCallback,
     )
 
@@ -3046,19 +3054,22 @@ class ReplicaManagerTest {
                                                   entriesToAppend: Map[TopicPartition, MemoryRecords],
                                                   transactionalId: String,
                                                   origin: AppendOrigin = AppendOrigin.CLIENT,
-                                                  requiredAcks: Short = -1): CallbackResult[Map[TopicPartition, PartitionResponse]] = {
-    val result = new CallbackResult[Map[TopicPartition, PartitionResponse]]()
-    def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
+                                                  requiredAcks: Short = -1): CallbackResult[Map[TopicIdPartition, PartitionResponse]] = {
+    val result = new CallbackResult[Map[TopicIdPartition, PartitionResponse]]()
+    def appendCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
       responses.foreach( response => assertTrue(responses.get(response._1).isDefined))
       result.fire(responses)
     }
 
+    topicNames.foreach { case (topicId, topicName) =>
+      when(replicaManager.metadataCache.getTopicId(topicName)).thenReturn(topicId)
+    }
     replicaManager.handleProduceAppend(
       timeout = 1000,
       requiredAcks = requiredAcks,
       internalTopicsAllowed = false,
       transactionalId = transactionalId,
-      entriesPerPartition = entriesToAppend,
+      entriesPerPartition = entriesToAppend.map(e => replicaManager.getTopicIdPartition(e._1) -> e._2),
       responseCallback = appendCallback,
       supportedOperation = supportedOperation
     )
@@ -3074,10 +3085,15 @@ class ReplicaManagerTest {
                                   transactionalId: String): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
 
-    def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
-      val response = responses.get(partition)
+    val topicIdPartition = new TopicIdPartition(topicIds.get(partition.topic()).getOrElse(Uuid.ZERO_UUID), partition)
+    def appendCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
+      val response = responses.get(topicIdPartition)
       assertTrue(response.isDefined)
       result.fire(response.get)
+    }
+
+    topicNames.foreach { case (topicId, topicName) =>
+      when(replicaManager.metadataCache.getTopicId(topicName)).thenReturn(topicId)
     }
 
     val entriesPerPartition = Map(partition -> records)
@@ -3086,7 +3102,7 @@ class ReplicaManagerTest {
       requiredAcks = requiredAcks,
       internalTopicsAllowed = false,
       transactionalId = transactionalId,
-      entriesPerPartition = entriesPerPartition,
+      entriesPerPartition = entriesPerPartition.map(e => replicaManager.getTopicIdPartition(e._1) -> e._2),
       responseCallback = appendCallback,
       supportedOperation = supportedOperation
     )
@@ -3246,7 +3262,9 @@ class ReplicaManagerTest {
                                                                      config: KafkaConfig = config): ReplicaManager = {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
     val metadataCache = mock(classOf[MetadataCache])
-
+    topicNames.foreach { case (topicId, topicName) =>
+      when(metadataCache.getTopicId(topicName)).thenReturn(topicId)
+    }
     val replicaManager = new ReplicaManager(
       metrics = metrics,
       config = config,
@@ -3324,6 +3342,9 @@ class ReplicaManagerTest {
     when(metadataCache.topicNamesToIds()).thenReturn(topicIds.asJava)
     when(metadataCache.topicIdsToNames()).thenReturn(topicNames.asJava)
     when(metadataCache.metadataVersion()).thenReturn(config.interBrokerProtocolVersion)
+    topicNames.foreach { case (topicId, topicName) =>
+      when(metadataCache.getTopicId(topicName)).thenReturn(topicId)
+    }
     mockGetAliveBrokerFunctions(metadataCache, aliveBrokers)
     val mockProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
       purgatoryName = "Produce", timer, reaperEnabled = false)
@@ -5122,7 +5143,8 @@ class ReplicaManagerTest {
     val localId = 1
     val otherId = localId + 1
     val numOfRecords = 3
-    val topicPartition = new TopicPartition("foo", 0)
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
+    val topicPartition = topicIdPartition.topicPartition()
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
@@ -5148,7 +5170,7 @@ class ReplicaManagerTest {
       }
 
       // Send a produce request and advance the highwatermark
-      val leaderResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+      val leaderResponse = sendProducerAppend(replicaManager, topicIdPartition, numOfRecords)
       fetchPartitionAsFollower(
         replicaManager,
         topicIdPartition,
@@ -5163,7 +5185,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Append on a follower should fail
-      val followerResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+      val followerResponse = sendProducerAppend(replicaManager, topicIdPartition, numOfRecords)
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, followerResponse.get.error)
 
       // Check the state of that partition and fetcher
@@ -5213,18 +5235,21 @@ class ReplicaManagerTest {
       assertEquals(Some(BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port())), fetcher.map(_.leader.brokerEndPoint()))
 
       // Append on a follower should fail
-      val followerResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+      val followerResponse = sendProducerAppend(replicaManager,
+        new TopicIdPartition(followerMetadataImage.topics().topicsByName().get("foo").id, topicPartition),
+        numOfRecords)
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, followerResponse.get.error)
 
       // Change the local replica to leader
       val leaderTopicsDelta = topicsChangeDelta(followerMetadataImage.topics(), localId, true)
       val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
-      val topicId = leaderMetadataImage.topics().topicsByName.get("foo").id
-      val topicIdPartition = new TopicIdPartition(topicId, topicPartition)
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
+      val topicIdPartition = new TopicIdPartition(leaderMetadataImage.topics().topicsByName().get("foo").id, topicPartition)
       // Send a produce request and advance the highwatermark
-      val leaderResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+      val leaderResponse = sendProducerAppend(replicaManager,
+        topicIdPartition
+        , numOfRecords)
       fetchPartitionAsFollower(
         replicaManager,
         topicIdPartition,
@@ -5490,7 +5515,8 @@ class ReplicaManagerTest {
     val localId = 1
     val otherId = localId + 1
     val numOfRecords = 3
-    val topicPartition = new TopicPartition("foo", 0)
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
+    val topicPartition = topicIdPartition.topicPartition()
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
@@ -5513,7 +5539,7 @@ class ReplicaManagerTest {
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
 
       // Send a produce request
-      val leaderResponse = sendProducerAppend(replicaManager, topicPartition, numOfRecords)
+      val leaderResponse = sendProducerAppend(replicaManager, topicIdPartition, numOfRecords)
 
       // Change the local replica to follower
       val followerTopicsDelta = topicsChangeDelta(leaderMetadataImage.topics(), localId, false)
