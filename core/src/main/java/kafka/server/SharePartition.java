@@ -238,6 +238,22 @@ public class SharePartition {
         initialize();
     }
 
+    long startOffset() {
+        long startOffset;
+        lock.readLock().lock();
+        startOffset = this.startOffset;
+        lock.readLock().unlock();
+        return startOffset;
+    }
+
+    long endOffset() {
+        long endOffset;
+        lock.readLock().lock();
+        endOffset = this.endOffset;
+        lock.readLock().unlock();
+        return endOffset;
+    }
+
     /**
      * The next fetch offset is used to determine the next offset that should be fetched from the leader.
      * The offset should be the next offset after the last fetched batch but there could be batches/
@@ -1182,16 +1198,6 @@ public class SharePartition {
     // Visible for testing.
     Timer timer() {
         return timer;
-    }
-
-    // Visible for testing
-    long startOffset() {
-        return this.startOffset;
-    }
-
-    // Visible for testing
-    long endOffset() {
-        return this.endOffset;
     }
 
     // Visible for testing.

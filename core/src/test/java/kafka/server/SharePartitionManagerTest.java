@@ -1506,6 +1506,75 @@ public class SharePartitionManagerTest {
     }
 
     @Test
+    public void testReplicaManagerFetchShouldNotProceed() {
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+                1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
+        Uuid fooId = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+
+        SharePartition sp0 = Mockito.mock(SharePartition.class);
+        when(sp0.maybeAcquireFetchLock()).thenReturn(true);
+        // Simulating the case where the SharePartition has reached the maximum in-flight records limit, and the
+        // nextFetchOffset points to endOffset + 1
+        when(sp0.nextFetchOffset()).thenReturn((long) 200);
+        when(sp0.canAcquireMore()).thenReturn(false);
+        when(sp0.endOffset()).thenReturn((long) 199);
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp0), sp0);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withPartitionCacheMap(partitionCacheMap).withReplicaManager(replicaManager).build();
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
+                sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, Collections.singletonList(tp0), partitionMaxBytes);
+        // Since the nextFetchOffset points to endOffset + 1, i.e. none of the records in the cachedState are AVAILABLE,
+        // and the maxInFlightMessages limit is exceeded, replicaManager.fetchMessages should not be called
+        Mockito.verify(replicaManager, times(0)).fetchMessages(
+                any(), any(), any(ReplicaQuota.class), any());
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result = future.join();
+        assertEquals(0, result.size());
+    }
+
+    @Test
+    public void testReplicaManagerFetchShouldProceed() {
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+                1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
+        Uuid fooId = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+
+        SharePartition sp0 = Mockito.mock(SharePartition.class);
+        when(sp0.maybeAcquireFetchLock()).thenReturn(true);
+        // Simulating the case where the SharePartition has reached the maximum in-flight records limit, and the
+        // nextFetchOffset does not point to endOffset + 1
+        when(sp0.nextFetchOffset()).thenReturn((long) 100);
+        when(sp0.canAcquireMore()).thenReturn(false);
+        when(sp0.endOffset()).thenReturn((long) 199);
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp0), sp0);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withPartitionCacheMap(partitionCacheMap).withReplicaManager(replicaManager).build();
+
+        sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, Collections.singletonList(tp0), partitionMaxBytes);
+        // Since the nextFetchOffset does not point to endOffset + 1, i.e. some of the records in the cachedState are AVAILABLE,
+        // even though the maxInFlightMessages limit is exceeded, replicaManager.fetchMessages should be called
+        Mockito.verify(replicaManager, times(1)).fetchMessages(
+                any(), any(), any(ReplicaQuota.class), any());
+    }
+
+    @Test
     public void testCachedTopicPartitionsForInvalidShareSession() {
         SharePartitionManager.ShareSessionCache cache = new SharePartitionManager.ShareSessionCache(10, 1000);
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()

@@ -157,13 +157,22 @@ public class SharePartitionManager implements AutoCloseable {
                 // Add the share partition to the list of partitions to be fetched only if we can
                 // acquire the fetch lock on it.
                 if (sharePartition.maybeAcquireFetchLock()) {
-                    if (sharePartition.canAcquireMore()) {
-                        topicPartitionData.put(topicIdPartition, new FetchRequest.PartitionData(
-                                topicIdPartition.topicId(),
-                                sharePartition.nextFetchOffset(),
-                                0,
-                                partitionMaxBytes,
-                                Optional.empty()));
+                    // Fetching over a topic should be able to proceed if any one of the following 2 conditions are met:
+                    // 1. The fetch is to happen somewhere in between the record states cached in the share partition.
+                    //    This is because in this case we don't need to check for the partition limit for in flight messages
+                    // 2. If condition 1 is not true, then that means we will be fetching new records which haven't been cached before.
+                    //    In this case it is necessary to check if the partition limit for in flight messages has been reached.
+                    if (sharePartition.nextFetchOffset() != (sharePartition.endOffset() + 1) || sharePartition.canAcquireMore()) {
+                        topicPartitionData.put(
+                            topicIdPartition,
+                            new FetchRequest.PartitionData(
+                                    topicIdPartition.topicId(),
+                                    sharePartition.nextFetchOffset(),
+                                    0,
+                                    partitionMaxBytes,
+                                    Optional.empty()
+                            )
+                        );
                     } else {
                         sharePartition.releaseFetchLock();
                         log.info("Record lock partition limit exceeded for SharePartition with key {}, " +
