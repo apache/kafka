@@ -731,7 +731,6 @@ public class TaskManagerTest {
             Collections.emptyMap(),
             mkMap(mkEntry(standbyTaskToUpdateInputPartitions.id(), taskId03Partitions))
         );
-
         verify(stateUpdater, never()).removeWithFuture(standbyTaskToUpdateInputPartitions.id());
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
@@ -1147,7 +1146,6 @@ public class TaskManagerTest {
             StreamsException.class,
             () -> taskManager.checkStateUpdater(time.milliseconds(), noOpResetter)
         );
-
         verify(stateUpdater, never()).add(task00);
         verify(tasks).addTask(task00);
         assertTrue(streamsException.taskId().isPresent());
@@ -1446,10 +1444,8 @@ public class TaskManagerTest {
     @Test
     public void shouldReturnCorrectBooleanWhenTryingToCompleteRestorationWithStateUpdater() {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, true);
-
         when(stateUpdater.restoresActiveTasks()).thenReturn(false);
         assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
-
         when(stateUpdater.restoresActiveTasks()).thenReturn(true);
         assertFalse(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
     }
@@ -1502,8 +1498,6 @@ public class TaskManagerTest {
         assertEquals(mkSet(taskId00, taskId01), thrown.corruptedTasks());
         assertEquals("Tasks [0_1, 0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
     }
-
-    @Test
     public void shouldAddSubscribedTopicsFromAssignmentToTopologyMetadata() {
         final Map<TaskId, Set<TopicPartition>> activeTasksAssignment = mkMap(
             mkEntry(taskId01, mkSet(t1p1)),
