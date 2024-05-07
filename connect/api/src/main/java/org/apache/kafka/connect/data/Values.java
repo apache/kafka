@@ -60,35 +60,16 @@ import java.util.regex.Pattern;
  */
 public class Values {
 
-    private static final Logger LOG = LoggerFactory.getLogger(Values.class);
-
     private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
     private static final SchemaAndValue NULL_SCHEMA_AND_VALUE = new SchemaAndValue(null, null);
-    private static final SchemaAndValue TRUE_SCHEMA_AND_VALUE = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, Boolean.TRUE);
-    private static final SchemaAndValue FALSE_SCHEMA_AND_VALUE = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, Boolean.FALSE);
     private static final Schema ARRAY_SELECTOR_SCHEMA = SchemaBuilder.array(Schema.STRING_SCHEMA).build();
     private static final Schema MAP_SELECTOR_SCHEMA = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).build();
     private static final Schema STRUCT_SELECTOR_SCHEMA = SchemaBuilder.struct().build();
-    private static final String TRUE_LITERAL = Boolean.TRUE.toString();
-    private static final String FALSE_LITERAL = Boolean.FALSE.toString();
-    private static final BigInteger LONG_MIN = BigInteger.valueOf(Long.MIN_VALUE);
-
-    private static final BigInteger LONG_MAX = BigInteger.valueOf(Long.MAX_VALUE);
     private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
     private static final String NULL_VALUE = "null";
     static final String ISO_8601_DATE_FORMAT_PATTERN = "yyyy-MM-dd";
     static final String ISO_8601_TIME_FORMAT_PATTERN = "HH:mm:ss.SSS'Z'";
     static final String ISO_8601_TIMESTAMP_FORMAT_PATTERN = ISO_8601_DATE_FORMAT_PATTERN + "'T'" + ISO_8601_TIME_FORMAT_PATTERN;
-    private static final String QUOTE_DELIMITER = "\"";
-    private static final String COMMA_DELIMITER = ",";
-    private static final String ENTRY_DELIMITER = ":";
-    private static final String ARRAY_BEGIN_DELIMITER = "[";
-    private static final String ARRAY_END_DELIMITER = "]";
-    private static final String MAP_BEGIN_DELIMITER = "{";
-    private static final String MAP_END_DELIMITER = "}";
-    private static final int ISO_8601_DATE_LENGTH = ISO_8601_DATE_FORMAT_PATTERN.length();
-    private static final int ISO_8601_TIME_LENGTH = ISO_8601_TIME_FORMAT_PATTERN.length() - 2; // subtract single quotes
-    private static final int ISO_8601_TIMESTAMP_LENGTH = ISO_8601_TIMESTAMP_FORMAT_PATTERN.length() - 4; // subtract single quotes
 
     private static final Pattern TWO_BACKSLASHES = Pattern.compile("\\\\");
 
@@ -430,8 +411,8 @@ public class Values {
         if (value.isEmpty()) {
             return new SchemaAndValue(Schema.STRING_SCHEMA, value);
         }
-        Parser parser = new Parser(value);
-        return parse(parser, false);
+        Parser parser = new Parser(new Tokenizer(value));
+        return parser.parse(false);
     }
 
     /**
@@ -816,272 +797,299 @@ public class Values {
         return new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN);
     }
 
-    protected static boolean canParseSingleTokenLiteral(Parser parser, boolean embedded, String tokenLiteral) {
-        int startPosition = parser.mark();
-        // If the next token is what we expect, then either...
-        if (parser.canConsume(tokenLiteral)) {
-            //   ...we're reading an embedded value, in which case the next token will be handled appropriately
-            //      by the caller if it's something like an end delimiter for a map or array, or a comma to
-            //      separate multiple embedded values...
-            //   ...or it's being parsed as part of a top-level string, in which case, any other tokens should
-            //      cause use to stop parsing this single-token literal as such and instead just treat it like
-            //      a string. For example, the top-level string "true}" will be tokenized as the tokens "true" and
-            //      "}", but should ultimately be parsed as just the string "true}" instead of the boolean true.
-            if (embedded || !parser.hasNext()) {
-                return true;
+    private static class Parser {
+
+        private static final Logger log = LoggerFactory.getLogger(Parser.class);
+        private static final SchemaAndValue TRUE_SCHEMA_AND_VALUE = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, Boolean.TRUE);
+        private static final SchemaAndValue FALSE_SCHEMA_AND_VALUE = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, Boolean.FALSE);
+        private static final String TRUE_LITERAL = Boolean.TRUE.toString();
+        private static final String FALSE_LITERAL = Boolean.FALSE.toString();
+        private static final BigInteger LONG_MIN = BigInteger.valueOf(Long.MIN_VALUE);
+        private static final BigInteger LONG_MAX = BigInteger.valueOf(Long.MAX_VALUE);
+        private static final String QUOTE_DELIMITER = "\"";
+        private static final String COMMA_DELIMITER = ",";
+        private static final String ENTRY_DELIMITER = ":";
+        private static final String ARRAY_BEGIN_DELIMITER = "[";
+        private static final String ARRAY_END_DELIMITER = "]";
+        private static final String MAP_BEGIN_DELIMITER = "{";
+        private static final String MAP_END_DELIMITER = "}";
+        private static final int ISO_8601_DATE_LENGTH = ISO_8601_DATE_FORMAT_PATTERN.length();
+        private static final int ISO_8601_TIME_LENGTH = ISO_8601_TIME_FORMAT_PATTERN.length() - 2; // subtract single quotes
+        private static final int ISO_8601_TIMESTAMP_LENGTH = ISO_8601_TIMESTAMP_FORMAT_PATTERN.length() - 4; // subtract single quotes
+
+        private final Tokenizer tokenizer;
+
+        private Parser(Tokenizer tokenizer) {
+            this.tokenizer = tokenizer;
+        }
+
+        private boolean canParseSingleTokenLiteral(boolean embedded, String tokenLiteral) {
+            int startPosition = tokenizer.mark();
+            // If the next token is what we expect, then either...
+            if (tokenizer.canConsume(tokenLiteral)) {
+                //   ...we're reading an embedded value, in which case the next token will be handled appropriately
+                //      by the caller if it's something like an end delimiter for a map or array, or a comma to
+                //      separate multiple embedded values...
+                //   ...or it's being parsed as part of a top-level string, in which case, any other tokens should
+                //      cause use to stop parsing this single-token literal as such and instead just treat it like
+                //      a string. For example, the top-level string "true}" will be tokenized as the tokens "true" and
+                //      "}", but should ultimately be parsed as just the string "true}" instead of the boolean true.
+                if (embedded || !tokenizer.hasNext()) {
+                    return true;
+                }
             }
-        }
-        parser.rewindTo(startPosition);
-        return false;
-    }
-
-    protected static SchemaAndValue parse(Parser parser, boolean embedded) throws NoSuchElementException {
-        if (!parser.hasNext()) {
-            return null;
-        } else if (embedded && parser.canConsume(QUOTE_DELIMITER)) {
-            return parseQuotedString(parser);
-        } else if (canParseSingleTokenLiteral(parser, embedded, NULL_VALUE)) {
-            return null;
-        } else if (canParseSingleTokenLiteral(parser, embedded, TRUE_LITERAL)) {
-            return TRUE_SCHEMA_AND_VALUE;
-        } else if (canParseSingleTokenLiteral(parser, embedded, FALSE_LITERAL)) {
-            return FALSE_SCHEMA_AND_VALUE;
+            tokenizer.rewindTo(startPosition);
+            return false;
         }
 
-        int startPosition = parser.mark();
-
-        try {
-            if (parser.canConsume(ARRAY_BEGIN_DELIMITER)) {
-                return parseArray(parser);
-            } else if (parser.canConsume(MAP_BEGIN_DELIMITER)) {
-                return parseMap(parser);
+        public SchemaAndValue parse(boolean embedded) throws NoSuchElementException {
+            if (!tokenizer.hasNext()) {
+                return null;
+            } else if (embedded && tokenizer.canConsume(QUOTE_DELIMITER)) {
+                return parseQuotedString();
+            } else if (canParseSingleTokenLiteral(embedded, NULL_VALUE)) {
+                return null;
+            } else if (canParseSingleTokenLiteral(embedded, TRUE_LITERAL)) {
+                return TRUE_SCHEMA_AND_VALUE;
+            } else if (canParseSingleTokenLiteral(embedded, FALSE_LITERAL)) {
+                return FALSE_SCHEMA_AND_VALUE;
             }
-        } catch (DataException e) {
-            LOG.trace("Unable to parse the value as a map or an array; reverting to string", e);
-            parser.rewindTo(startPosition);
-        }
 
-        String token = parser.next();
-        if (Utils.isBlank(token)) {
-            return new SchemaAndValue(Schema.STRING_SCHEMA, token);
-        } else {
-            return parseNextToken(parser, embedded, token.trim());
-        }
-    }
+            int startPosition = tokenizer.mark();
 
-    private static SchemaAndValue parseNextToken(Parser parser, boolean embedded, String token) {
-        char firstChar = token.charAt(0);
-        boolean firstCharIsDigit = Character.isDigit(firstChar);
-
-        // Temporal types are more restrictive, so try them first
-        if (firstCharIsDigit) {
-            SchemaAndValue temporal = parseMultipleTokensAsTemporal(parser, token);
-            if (temporal != null) {
-                return temporal;
-            }
-        }
-        if (firstCharIsDigit || firstChar == '+' || firstChar == '-') {
             try {
-                return parseAsNumber(token);
-            } catch (NumberFormatException e) {
-                // can't parse as a number
-            }
-        }
-        if (embedded) {
-            throw new DataException("Failed to parse embedded value");
-        }
-        // At this point, the only thing this non-embedded value can be is a string.
-        return new SchemaAndValue(Schema.STRING_SCHEMA, parser.original());
-    }
-
-    private static SchemaAndValue parseQuotedString(Parser parser) {
-        StringBuilder sb = new StringBuilder();
-        while (parser.hasNext()) {
-            if (parser.canConsume(QUOTE_DELIMITER)) {
-                break;
-            }
-            sb.append(parser.next());
-        }
-        String content = sb.toString();
-        // We can parse string literals as temporal logical types, but all others
-        // are treated as strings
-        SchemaAndValue parsed = parseAsTemporal(content);
-        if (parsed != null) {
-            return parsed;
-        }
-        return new SchemaAndValue(Schema.STRING_SCHEMA, content);
-    }
-
-    private static SchemaAndValue parseArray(Parser parser) {
-        List<Object> result = new ArrayList<>();
-        SchemaMerger elementSchema = new SchemaMerger();
-        while (parser.hasNext()) {
-            if (parser.canConsume(ARRAY_END_DELIMITER)) {
-                Schema listSchema;
-                if (elementSchema.hasCommonSchema()) {
-                    listSchema = SchemaBuilder.array(elementSchema.schema()).schema();
-                    result = alignListEntriesWithSchema(listSchema, result);
-                } else {
-                    // Every value is null
-                    listSchema = SchemaBuilder.arrayOfNull().build();
+                if (tokenizer.canConsume(ARRAY_BEGIN_DELIMITER)) {
+                    return parseArray();
+                } else if (tokenizer.canConsume(MAP_BEGIN_DELIMITER)) {
+                    return parseMap();
                 }
-                return new SchemaAndValue(listSchema, result);
+            } catch (DataException e) {
+                log.trace("Unable to parse the value as a map or an array; reverting to string", e);
+                tokenizer.rewindTo(startPosition);
             }
 
-            if (parser.canConsume(COMMA_DELIMITER)) {
-                throw new DataException("Unable to parse an empty array element: " + parser.original());
-            }
-            SchemaAndValue element = parse(parser, true);
-            elementSchema.merge(element);
-            result.add(element != null ? element.value() : null);
-
-            int currentPosition = parser.mark();
-            if (parser.canConsume(ARRAY_END_DELIMITER)) {
-                parser.rewindTo(currentPosition);
-            } else if (!parser.canConsume(COMMA_DELIMITER)) {
-                throw new DataException("Array elements missing '" + COMMA_DELIMITER + "' delimiter");
+            String token = tokenizer.next();
+            if (Utils.isBlank(token)) {
+                return new SchemaAndValue(Schema.STRING_SCHEMA, token);
+            } else {
+                return parseNextToken(embedded, token.trim());
             }
         }
 
-        // Missing either a comma or an end delimiter
-        if (COMMA_DELIMITER.equals(parser.previous())) {
-            throw new DataException("Array is missing element after ',': " + parser.original());
-        }
-        throw new DataException("Array is missing terminating ']': " + parser.original());
-    }
+        private SchemaAndValue parseNextToken(boolean embedded, String token) {
+            char firstChar = token.charAt(0);
+            boolean firstCharIsDigit = Character.isDigit(firstChar);
 
-    private static SchemaAndValue parseMap(Parser parser) {
-        Map<Object, Object> result = new LinkedHashMap<>();
-        SchemaMerger keySchema = new SchemaMerger();
-        SchemaMerger valueSchema = new SchemaMerger();
-        while (parser.hasNext()) {
-            if (parser.canConsume(MAP_END_DELIMITER)) {
-                Schema mapSchema;
-                if (keySchema.hasCommonSchema() && valueSchema.hasCommonSchema()) {
-                    mapSchema = SchemaBuilder.map(keySchema.schema(), valueSchema.schema()).build();
-                    result = alignMapKeysAndValuesWithSchema(mapSchema, result);
-                } else if (keySchema.hasCommonSchema()) {
-                    mapSchema = SchemaBuilder.mapWithNullValues(keySchema.schema());
-                    result = alignMapKeysWithSchema(mapSchema, result);
-                } else {
-                    mapSchema = SchemaBuilder.mapOfNull().build();
+            // Temporal types are more restrictive, so try them first
+            if (firstCharIsDigit) {
+                SchemaAndValue temporal = parseMultipleTokensAsTemporal(token);
+                if (temporal != null) {
+                    return temporal;
                 }
-                return new SchemaAndValue(mapSchema, result);
+            }
+            if (firstCharIsDigit || firstChar == '+' || firstChar == '-') {
+                try {
+                    return parseAsNumber(token);
+                } catch (NumberFormatException e) {
+                    // can't parse as a number
+                }
+            }
+            if (embedded) {
+                throw new DataException("Failed to parse embedded value");
+            }
+            // At this point, the only thing this non-embedded value can be is a string.
+            return new SchemaAndValue(Schema.STRING_SCHEMA, tokenizer.original());
+        }
+
+        private SchemaAndValue parseQuotedString() {
+            StringBuilder sb = new StringBuilder();
+            while (tokenizer.hasNext()) {
+                if (tokenizer.canConsume(QUOTE_DELIMITER)) {
+                    break;
+                }
+                sb.append(tokenizer.next());
+            }
+            String content = sb.toString();
+            // We can parse string literals as temporal logical types, but all others
+            // are treated as strings
+            SchemaAndValue parsed = parseAsTemporal(content);
+            if (parsed != null) {
+                return parsed;
+            }
+            return new SchemaAndValue(Schema.STRING_SCHEMA, content);
+        }
+
+        private SchemaAndValue parseArray() {
+            List<Object> result = new ArrayList<>();
+            SchemaMerger elementSchema = new SchemaMerger();
+            while (tokenizer.hasNext()) {
+                if (tokenizer.canConsume(ARRAY_END_DELIMITER)) {
+                    Schema listSchema;
+                    if (elementSchema.hasCommonSchema()) {
+                        listSchema = SchemaBuilder.array(elementSchema.schema()).schema();
+                        result = alignListEntriesWithSchema(listSchema, result);
+                    } else {
+                        // Every value is null
+                        listSchema = SchemaBuilder.arrayOfNull().build();
+                    }
+                    return new SchemaAndValue(listSchema, result);
+                }
+
+                if (tokenizer.canConsume(COMMA_DELIMITER)) {
+                    throw new DataException("Unable to parse an empty array element: " + tokenizer.original());
+                }
+                SchemaAndValue element = parse(true);
+                elementSchema.merge(element);
+                result.add(element != null ? element.value() : null);
+
+                int currentPosition = tokenizer.mark();
+                if (tokenizer.canConsume(ARRAY_END_DELIMITER)) {
+                    tokenizer.rewindTo(currentPosition);
+                } else if (!tokenizer.canConsume(COMMA_DELIMITER)) {
+                    throw new DataException("Array elements missing '" + COMMA_DELIMITER + "' delimiter");
+                }
             }
 
-            if (parser.canConsume(COMMA_DELIMITER)) {
-                throw new DataException("Unable to parse a map entry with no key or value: " + parser.original());
+            // Missing either a comma or an end delimiter
+            if (COMMA_DELIMITER.equals(tokenizer.previous())) {
+                throw new DataException("Array is missing element after ',': " + tokenizer.original());
             }
-            SchemaAndValue key = parse(parser, true);
-            if (key == null || key.value() == null) {
-                throw new DataException("Map entry may not have a null key: " + parser.original());
-            } else if (!parser.canConsume(ENTRY_DELIMITER)) {
-                throw new DataException("Map entry is missing '" + ENTRY_DELIMITER
-                        + "' at " + parser.position()
-                        + " in " + parser.original());
+            throw new DataException("Array is missing terminating ']': " + tokenizer.original());
+        }
+
+        private SchemaAndValue parseMap() {
+            Map<Object, Object> result = new LinkedHashMap<>();
+            SchemaMerger keySchema = new SchemaMerger();
+            SchemaMerger valueSchema = new SchemaMerger();
+            while (tokenizer.hasNext()) {
+                if (tokenizer.canConsume(MAP_END_DELIMITER)) {
+                    Schema mapSchema;
+                    if (keySchema.hasCommonSchema() && valueSchema.hasCommonSchema()) {
+                        mapSchema = SchemaBuilder.map(keySchema.schema(), valueSchema.schema()).build();
+                        result = alignMapKeysAndValuesWithSchema(mapSchema, result);
+                    } else if (keySchema.hasCommonSchema()) {
+                        mapSchema = SchemaBuilder.mapWithNullValues(keySchema.schema());
+                        result = alignMapKeysWithSchema(mapSchema, result);
+                    } else {
+                        mapSchema = SchemaBuilder.mapOfNull().build();
+                    }
+                    return new SchemaAndValue(mapSchema, result);
+                }
+
+                if (tokenizer.canConsume(COMMA_DELIMITER)) {
+                    throw new DataException("Unable to parse a map entry with no key or value: " + tokenizer.original());
+                }
+                SchemaAndValue key = parse(true);
+                if (key == null || key.value() == null) {
+                    throw new DataException("Map entry may not have a null key: " + tokenizer.original());
+                } else if (!tokenizer.canConsume(ENTRY_DELIMITER)) {
+                    throw new DataException("Map entry is missing '" + ENTRY_DELIMITER
+                            + "' at " + tokenizer.position()
+                            + " in " + tokenizer.original());
+                }
+                SchemaAndValue value = parse(true);
+                Object entryValue = value != null ? value.value() : null;
+                result.put(key.value(), entryValue);
+
+                tokenizer.canConsume(COMMA_DELIMITER);
+                keySchema.merge(key);
+                valueSchema.merge(value);
             }
-            SchemaAndValue value = parse(parser, true);
-            Object entryValue = value != null ? value.value() : null;
-            result.put(key.value(), entryValue);
-
-            parser.canConsume(COMMA_DELIMITER);
-            keySchema.merge(key);
-            valueSchema.merge(value);
+            // Missing either a comma or an end delimiter
+            if (COMMA_DELIMITER.equals(tokenizer.previous())) {
+                throw new DataException("Map is missing element after ',': " + tokenizer.original());
+            }
+            throw new DataException("Map is missing terminating '}': " + tokenizer.original());
         }
-        // Missing either a comma or an end delimiter
-        if (COMMA_DELIMITER.equals(parser.previous())) {
-            throw new DataException("Map is missing element after ',': " + parser.original());
-        }
-        throw new DataException("Map is missing terminating '}': " + parser.original());
-    }
 
-    private static SchemaAndValue parseMultipleTokensAsTemporal(Parser parser, String token) {
-        // The time and timestamp literals may be split into 5 tokens since an unescaped colon
-        // is a delimiter. Check these first since the first of these tokens is a simple numeric
-        int position = parser.mark();
-        String remainder = parser.next(4);
-        if (remainder != null) {
-            String timeOrTimestampStr = token + remainder;
-            SchemaAndValue temporal = parseAsTemporal(timeOrTimestampStr);
-            if (temporal != null) {
-                return temporal;
+        private SchemaAndValue parseMultipleTokensAsTemporal(String token) {
+            // The time and timestamp literals may be split into 5 tokens since an unescaped colon
+            // is a delimiter. Check these first since the first of these tokens is a simple numeric
+            int position = tokenizer.mark();
+            String remainder = tokenizer.next(4);
+            if (remainder != null) {
+                String timeOrTimestampStr = token + remainder;
+                SchemaAndValue temporal = parseAsTemporal(timeOrTimestampStr);
+                if (temporal != null) {
+                    return temporal;
+                }
+            }
+            // No match was found using the 5 tokens, so rewind and see if the current token has a date, time, or timestamp
+            tokenizer.rewindTo(position);
+            return parseAsTemporal(token);
+        }
+
+        private static SchemaAndValue parseAsNumber(String token) {
+            // Try to parse as a number ...
+            BigDecimal decimal = new BigDecimal(token);
+            SchemaAndValue exactDecimal = parseAsExactDecimal(decimal);
+            float fValue = decimal.floatValue();
+            double dValue = decimal.doubleValue();
+            if (exactDecimal != null) {
+                return exactDecimal;
+            } else if (fValue != Float.NEGATIVE_INFINITY && fValue != Float.POSITIVE_INFINITY
+                    && decimal.scale() != 0) {
+                return new SchemaAndValue(Schema.FLOAT32_SCHEMA, fValue);
+            } else if (dValue != Double.NEGATIVE_INFINITY && dValue != Double.POSITIVE_INFINITY
+                    && decimal.scale() != 0) {
+                return new SchemaAndValue(Schema.FLOAT64_SCHEMA, dValue);
+            } else {
+                Schema schema = Decimal.schema(decimal.scale());
+                return new SchemaAndValue(schema, decimal);
             }
         }
-        // No match was found using the 5 tokens, so rewind and see if the current token has a date, time, or timestamp
-        parser.rewindTo(position);
-        return parseAsTemporal(token);
-    }
 
-    private static SchemaAndValue parseAsNumber(String token) {
-        // Try to parse as a number ...
-        BigDecimal decimal = new BigDecimal(token);
-        SchemaAndValue exactDecimal = parseAsExactDecimal(decimal);
-        float fValue = decimal.floatValue();
-        double dValue = decimal.doubleValue();
-        if (exactDecimal != null) {
-            return exactDecimal;
-        } else if (fValue != Float.NEGATIVE_INFINITY && fValue != Float.POSITIVE_INFINITY
-                && decimal.scale() != 0) {
-            return new SchemaAndValue(Schema.FLOAT32_SCHEMA, fValue);
-        } else if (dValue != Double.NEGATIVE_INFINITY && dValue != Double.POSITIVE_INFINITY
-                && decimal.scale() != 0) {
-            return new SchemaAndValue(Schema.FLOAT64_SCHEMA, dValue);
-        } else {
-            Schema schema = Decimal.schema(decimal.scale());
-            return new SchemaAndValue(schema, decimal);
+        private static SchemaAndValue parseAsExactDecimal(BigDecimal decimal) {
+            BigDecimal ceil = decimal.setScale(0, RoundingMode.CEILING);
+            BigDecimal floor = decimal.setScale(0, RoundingMode.FLOOR);
+            if (ceil.equals(floor)) {
+                BigInteger num = ceil.toBigIntegerExact();
+                if (ceil.precision() >= 19 && (num.compareTo(LONG_MIN) < 0 || num.compareTo(LONG_MAX) > 0)) {
+                    return null;
+                }
+                long integral = num.longValue();
+                byte int8 = (byte) integral;
+                short int16 = (short) integral;
+                int int32 = (int) integral;
+                if (int8 == integral) {
+                    return new SchemaAndValue(Schema.INT8_SCHEMA, int8);
+                } else if (int16 == integral) {
+                    return new SchemaAndValue(Schema.INT16_SCHEMA, int16);
+                } else if (int32 == integral) {
+                    return new SchemaAndValue(Schema.INT32_SCHEMA, int32);
+                } else {
+                    return new SchemaAndValue(Schema.INT64_SCHEMA, integral);
+                }
+            }
+            return null;
         }
-    }
 
-    private static SchemaAndValue parseAsExactDecimal(BigDecimal decimal) {
-        BigDecimal ceil = decimal.setScale(0, RoundingMode.CEILING);
-        BigDecimal floor = decimal.setScale(0, RoundingMode.FLOOR);
-        if (ceil.equals(floor)) {
-            BigInteger num = ceil.toBigIntegerExact();
-            if (ceil.precision() >= 19 && (num.compareTo(LONG_MIN) < 0 || num.compareTo(LONG_MAX) > 0)) {
+        private static SchemaAndValue parseAsTemporal(String token) {
+            if (token == null) {
                 return null;
             }
-            long integral = num.longValue();
-            byte int8 = (byte) integral;
-            short int16 = (short) integral;
-            int int32 = (int) integral;
-            if (int8 == integral) {
-                return new SchemaAndValue(Schema.INT8_SCHEMA, int8);
-            } else if (int16 == integral) {
-                return new SchemaAndValue(Schema.INT16_SCHEMA, int16);
-            } else if (int32 == integral) {
-                return new SchemaAndValue(Schema.INT32_SCHEMA, int32);
+            // If the colons were escaped, we'll see the escape chars and need to remove them
+            token = token.replace("\\:", ":");
+            int tokenLength = token.length();
+            if (tokenLength == ISO_8601_TIME_LENGTH) {
+                return parseAsTemporalType(token, Time.SCHEMA, ISO_8601_TIME_FORMAT_PATTERN);
+            } else if (tokenLength == ISO_8601_TIMESTAMP_LENGTH) {
+                return parseAsTemporalType(token, Timestamp.SCHEMA, ISO_8601_TIMESTAMP_FORMAT_PATTERN);
+            } else if (tokenLength == ISO_8601_DATE_LENGTH) {
+                return parseAsTemporalType(token, Date.SCHEMA, ISO_8601_DATE_FORMAT_PATTERN);
             } else {
-                return new SchemaAndValue(Schema.INT64_SCHEMA, integral);
+                return null;
             }
         }
-        return null;
-    }
 
-    private static SchemaAndValue parseAsTemporal(String token) {
-        if (token == null) {
+        private static SchemaAndValue parseAsTemporalType(String token, Schema schema, String pattern) {
+            ParsePosition pos = new ParsePosition(0);
+            java.util.Date result = new SimpleDateFormat(pattern).parse(token, pos);
+            if (pos.getIndex() != 0) {
+                return new SchemaAndValue(schema, result);
+            }
             return null;
         }
-        // If the colons were escaped, we'll see the escape chars and need to remove them
-        token = token.replace("\\:", ":");
-        int tokenLength = token.length();
-        if (tokenLength == ISO_8601_TIME_LENGTH) {
-            return parseAsTemporalType(token, Time.SCHEMA, ISO_8601_TIME_FORMAT_PATTERN);
-        } else if (tokenLength == ISO_8601_TIMESTAMP_LENGTH) {
-            return parseAsTemporalType(token, Timestamp.SCHEMA, ISO_8601_TIMESTAMP_FORMAT_PATTERN);
-        } else if (tokenLength == ISO_8601_DATE_LENGTH) {
-            return parseAsTemporalType(token, Date.SCHEMA, ISO_8601_DATE_FORMAT_PATTERN);
-        } else {
-            return null;
-        }
-    }
-
-    private static SchemaAndValue parseAsTemporalType(String token, Schema schema, String pattern) {
-        ParsePosition pos = new ParsePosition(0);
-        java.util.Date result = new SimpleDateFormat(pattern).parse(token, pos);
-        if (pos.getIndex() != 0) {
-            return new SchemaAndValue(schema, result);
-        }
-        return null;
     }
 
     /**
@@ -1279,13 +1287,13 @@ public class Values {
         }
     }
 
-    protected static class Parser {
+    protected static class Tokenizer {
         private final String original;
         private final CharacterIterator iter;
         private String nextToken = null;
         private String previousToken = null;
 
-        public Parser(String original) {
+        public Tokenizer(String original) {
             this.original = original;
             this.iter = new StringCharacterIterator(this.original);
         }
