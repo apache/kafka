@@ -1509,8 +1509,6 @@ public class TaskManager {
                 final Task failedTask = exceptionAndTask.task();
                 closeTaskDirty(failedTask, false);
             }
-        }
-    }
 
     private void shutdownSchedulingTaskManager() {
         if (schedulingTaskManager != null) {
