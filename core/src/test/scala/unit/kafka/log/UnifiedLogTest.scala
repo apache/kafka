@@ -773,6 +773,32 @@ class UnifiedLogTest {
     }
   }
 
+  /**
+   * Test that "PeriodicProducerExpirationCheck" scheduled task gets restarted
+   */
+  @Test
+  def testProducerExpireCheckIsRestarted(): Unit = {
+    val scheduler = new KafkaScheduler(1)
+    try {
+      scheduler.startup()
+      val logConfig = LogTestUtils.createLogConfig()
+      val log = createLog(logDir, logConfig, scheduler = scheduler)
+
+      val producerExpireCheck = log.producerExpireCheck
+      assertTrue(scheduler.taskRunning(producerExpireCheck), "producerExpireCheck isn't as part of scheduled tasks")
+
+      log.restartProducerExpireCheck(log.producerStateManager.producerStateManagerConfig())
+      assertFalse(scheduler.taskRunning(producerExpireCheck),
+        "producerExpireCheck is part of scheduled tasks even after log deletion")
+
+      val nextProducerExpireCheck = log.producerExpireCheck
+      assertTrue(scheduler.taskRunning(nextProducerExpireCheck), "nextProducerExpireCheck isn't as part of scheduled tasks")
+      assertNotEquals(nextProducerExpireCheck, producerExpireCheck)
+    } finally {
+      scheduler.shutdown()
+    }
+  }
+
   @Test
   def testProducerIdMapOffsetUpdatedForNonIdempotentData(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)

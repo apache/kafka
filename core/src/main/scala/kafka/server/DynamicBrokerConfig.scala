@@ -279,7 +279,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager, kafkaServer))
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
     addBrokerReconfigurable(kafkaServer.socketServer)
-    addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
+    addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager))
     addBrokerReconfigurable(new DynamicRemoteLogConfig(kafkaServer))
   }
 
@@ -1136,11 +1136,21 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
 
 }
 
-class DynamicProducerStateManagerConfig(val producerStateManagerConfig: ProducerStateManagerConfig) extends BrokerReconfigurable with Logging {
+class DynamicProducerStateManagerConfig(val logManager: LogManager) extends BrokerReconfigurable with Logging {
+  val producerStateManagerConfig: ProducerStateManagerConfig = logManager.producerStateManagerConfig
+
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     if (producerStateManagerConfig.producerIdExpirationMs != newConfig.producerIdExpirationMs) {
       info(s"Reconfigure ${TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG} from ${producerStateManagerConfig.producerIdExpirationMs} to ${newConfig.producerIdExpirationMs}")
       producerStateManagerConfig.setProducerIdExpirationMs(newConfig.producerIdExpirationMs)
+    }
+    if (producerStateManagerConfig.producerIdExpirationCheckIntervalMs != newConfig.producerIdExpirationCheckIntervalMs) {
+      info(s"Reconfigure ${TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG} from ${producerStateManagerConfig.producerIdExpirationCheckIntervalMs} to ${newConfig.producerIdExpirationCheckIntervalMs}")
+      producerStateManagerConfig.setProducerIdExpirationCheckIntervalMs(newConfig.producerIdExpirationCheckIntervalMs)
+
+      logManager.allLogs.foreach { log =>
+        log.restartProducerExpireCheck(producerStateManagerConfig)
+      }
     }
     if (producerStateManagerConfig.transactionVerificationEnabled != newConfig.transactionPartitionVerificationEnable) {
       info(s"Reconfigure ${TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG} from ${producerStateManagerConfig.transactionVerificationEnabled} to ${newConfig.transactionPartitionVerificationEnable}")
