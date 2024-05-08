@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.admin.Admin;
