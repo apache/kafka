@@ -1574,7 +1574,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   private def deleteRetentionSizeBreachedSegments(): Int = {
     val retentionSize: Long = localRetentionSize(config, remoteLogEnabled())
-    System.err.print(s"$name $size ")
+    if (name.contains("topicB")) {
+      System.err.print(s"$name $parentDir $size ")
+    }
     if (retentionSize < 0 || size < retentionSize) return 0
     var diff = size - retentionSize
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
