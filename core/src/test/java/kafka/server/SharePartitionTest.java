@@ -2331,6 +2331,275 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testAcquisitionLockReleaseExceedsMaxDeliveryCount() throws InterruptedException {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+                .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+                .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
+                .build();
+        MemoryRecords records1 = memoryRecords(10, 0);
+        MemoryRecords records2 = memoryRecords(10, 10);
+
+        // Adding records1 in the sharePartition to make sure that SPSO doesn't move forward when delivery count of records2
+        // exceed the max delivery count.
+        CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
+                MEMBER_ID,
+                new FetchPartitionData(Errors.NONE, 3, 0, records1,
+                        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertFalse(result.isCompletedExceptionally());
+
+        result = sharePartition.acquire(
+                MEMBER_ID,
+                new FetchPartitionData(Errors.NONE, 3, 0, records2,
+                        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertFalse(result.isCompletedExceptionally());
+
+        List<AcquiredRecords> acquiredRecordsList = result.join();
+        assertArrayEquals(expectedAcquiredRecords(records2, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(20, sharePartition.nextFetchOffset());
+        assertEquals(2, sharePartition.cachedState().size());
+        assertEquals(10, sharePartition.cachedState().get(10L).firstOffset());
+        assertEquals(19, sharePartition.cachedState().get(10L).lastOffset());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(1, sharePartition.cachedState().get(10L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(10L).gapOffsets());
+        assertNull(sharePartition.cachedState().get(10L).offsetState());
+        assertNotNull(sharePartition.cachedState().get(10L).acquisitionLockTimeoutTask());
+        assertEquals(2, sharePartition.timer().size());
+
+        // Allowing acquisition lock to expire.
+        Thread.sleep(200);
+        assertEquals(0, sharePartition.nextFetchOffset());
+        assertEquals(2, sharePartition.cachedState().size());
+        assertEquals(10, sharePartition.cachedState().get(10L).firstOffset());
+        assertEquals(19, sharePartition.cachedState().get(10L).lastOffset());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(1, sharePartition.cachedState().get(10L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(10L).gapOffsets());
+        assertNull(sharePartition.cachedState().get(10L).offsetState());
+        assertNull(sharePartition.cachedState().get(10L).acquisitionLockTimeoutTask());
+        assertEquals(0, sharePartition.timer().size());
+
+        result = sharePartition.acquire(
+                MEMBER_ID,
+                new FetchPartitionData(Errors.NONE, 3, 0, records2,
+                        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertFalse(result.isCompletedExceptionally());
+
+        acquiredRecordsList = result.join();
+        assertArrayEquals(expectedAcquiredRecords(records2, 2).toArray(), acquiredRecordsList.toArray());
+        assertEquals(0, sharePartition.nextFetchOffset());
+        assertEquals(2, sharePartition.cachedState().size());
+        assertEquals(10, sharePartition.cachedState().get(10L).firstOffset());
+        assertEquals(19, sharePartition.cachedState().get(10L).lastOffset());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(2, sharePartition.cachedState().get(10L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(10L).gapOffsets());
+        assertNull(sharePartition.cachedState().get(10L).offsetState());
+        assertNotNull(sharePartition.cachedState().get(10L).acquisitionLockTimeoutTask());
+        assertEquals(1, sharePartition.timer().size());
+
+        // Allowing acquisition lock to expire.
+        Thread.sleep(200);
+        assertEquals(0, sharePartition.nextFetchOffset());
+        assertEquals(2, sharePartition.cachedState().size());
+        assertEquals(10, sharePartition.cachedState().get(10L).firstOffset());
+        assertEquals(19, sharePartition.cachedState().get(10L).lastOffset());
+        //After the second delivery attempt fails to acknowledge the record correctly, the record should be archived.
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(2, sharePartition.cachedState().get(10L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(10L).gapOffsets());
+        assertNull(sharePartition.cachedState().get(10L).offsetState());
+        assertNull(sharePartition.cachedState().get(10L).acquisitionLockTimeoutTask());
+        assertEquals(0, sharePartition.timer().size());
+    }
+
+    @Test
+    public void testAcquisitionLockReleaseSPSOMovesForward() throws InterruptedException {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+                .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+                .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
+                .build();
+        MemoryRecords records = memoryRecords(10, 0);
+
+        CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
+                MEMBER_ID,
+                new FetchPartitionData(Errors.NONE, 3, 0, records,
+                        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertFalse(result.isCompletedExceptionally());
+
+        List<AcquiredRecords> acquiredRecordsList = result.join();
+        assertArrayEquals(expectedAcquiredRecords(records, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(10, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(0, sharePartition.cachedState().get(0L).firstOffset());
+        assertEquals(9, sharePartition.cachedState().get(0L).lastOffset());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(0L).gapOffsets());
+        assertNull(sharePartition.cachedState().get(0L).offsetState());
+        assertNotNull(sharePartition.cachedState().get(0L).acquisitionLockTimeoutTask());
+        assertEquals(1, sharePartition.timer().size());
+
+        // Allowing acquisition lock to expire.
+        Thread.sleep(200);
+        assertEquals(0, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(0, sharePartition.cachedState().get(0L).firstOffset());
+        assertEquals(9, sharePartition.cachedState().get(0L).lastOffset());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(0L).gapOffsets());
+        assertNull(sharePartition.cachedState().get(0L).offsetState());
+        assertNull(sharePartition.cachedState().get(0L).acquisitionLockTimeoutTask());
+        assertEquals(0, sharePartition.timer().size());
+
+        MemoryRecords subsetRecords = memoryRecords(5, 0);
+
+        result = sharePartition.acquire(
+                MEMBER_ID,
+                new FetchPartitionData(Errors.NONE, 3, 0, subsetRecords,
+                        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertFalse(result.isCompletedExceptionally());
+
+        assertEquals(5, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(0, sharePartition.cachedState().get(0L).firstOffset());
+        assertEquals(9, sharePartition.cachedState().get(0L).lastOffset());
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(0L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(1L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(2L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(3L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(4L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).offsetState().get(5L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).offsetState().get(6L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).offsetState().get(7L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).offsetState().get(8L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).offsetState().get(9L).state());
+        assertEquals(2, sharePartition.cachedState().get(0L).offsetState().get(0L).deliveryCount());
+        assertEquals(2, sharePartition.cachedState().get(0L).offsetState().get(1L).deliveryCount());
+        assertEquals(2, sharePartition.cachedState().get(0L).offsetState().get(2L).deliveryCount());
+        assertEquals(2, sharePartition.cachedState().get(0L).offsetState().get(3L).deliveryCount());
+        assertEquals(2, sharePartition.cachedState().get(0L).offsetState().get(4L).deliveryCount());
+
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState().get(0L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState().get(1L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState().get(2L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState().get(3L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState().get(4L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(5L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(6L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(7L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(8L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(9L).acquisitionLockTimeoutTask());
+
+        // Allowing acquisition lock to expire.
+        Thread.sleep(200);
+        assertEquals(5, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(0, sharePartition.cachedState().get(0L).firstOffset());
+        assertEquals(9, sharePartition.cachedState().get(0L).lastOffset());
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(0L).offsetState().get(0L).state());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(0L).offsetState().get(1L).state());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(0L).offsetState().get(2L).state());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(0L).offsetState().get(3L).state());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(0L).offsetState().get(4L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).offsetState().get(5L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).offsetState().get(6L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).offsetState().get(7L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).offsetState().get(8L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).offsetState().get(9L).state());
+        assertEquals(2, sharePartition.cachedState().get(0L).offsetState().get(0L).deliveryCount());
+        assertEquals(2, sharePartition.cachedState().get(0L).offsetState().get(1L).deliveryCount());
+        assertEquals(2, sharePartition.cachedState().get(0L).offsetState().get(2L).deliveryCount());
+        assertEquals(2, sharePartition.cachedState().get(0L).offsetState().get(3L).deliveryCount());
+        assertEquals(2, sharePartition.cachedState().get(0L).offsetState().get(4L).deliveryCount());
+
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(0L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(1L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(2L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(3L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(4L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(5L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(6L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(7L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(8L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(0L).offsetState().get(9L).acquisitionLockTimeoutTask());
+
+        // Since only first 5 records from the batch are archived, the batch remains in the cachedState, but the
+        // start offset is updated
+        assertEquals(5, sharePartition.startOffset());
+    }
+
+    @Test
+    public void testAcquisitionLockReleaseSPSOMovesForwardAndCachedStateCleared() throws InterruptedException {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+                .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+                .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
+                .build();
+        MemoryRecords records = memoryRecords(10, 0);
+
+        CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
+                MEMBER_ID,
+                new FetchPartitionData(Errors.NONE, 3, 0, records,
+                        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertFalse(result.isCompletedExceptionally());
+
+        List<AcquiredRecords> acquiredRecordsList = result.join();
+        assertArrayEquals(expectedAcquiredRecords(records, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(10, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(0, sharePartition.cachedState().get(0L).firstOffset());
+        assertEquals(9, sharePartition.cachedState().get(0L).lastOffset());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(0L).gapOffsets());
+        assertNull(sharePartition.cachedState().get(0L).offsetState());
+        assertNotNull(sharePartition.cachedState().get(0L).acquisitionLockTimeoutTask());
+        assertEquals(1, sharePartition.timer().size());
+
+        // Allowing acquisition lock to expire.
+        Thread.sleep(200);
+        assertEquals(0, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(0, sharePartition.cachedState().get(0L).firstOffset());
+        assertEquals(9, sharePartition.cachedState().get(0L).lastOffset());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(0L).gapOffsets());
+        assertNull(sharePartition.cachedState().get(0L).offsetState());
+        assertNull(sharePartition.cachedState().get(0L).acquisitionLockTimeoutTask());
+        assertEquals(0, sharePartition.timer().size());
+
+        result = sharePartition.acquire(
+                MEMBER_ID,
+                new FetchPartitionData(Errors.NONE, 3, 0, records,
+                        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertFalse(result.isCompletedExceptionally());
+
+        acquiredRecordsList = result.join();
+        assertArrayEquals(expectedAcquiredRecords(records, 2).toArray(), acquiredRecordsList.toArray());
+        assertEquals(10, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(0, sharePartition.cachedState().get(0L).firstOffset());
+        assertEquals(9, sharePartition.cachedState().get(0L).lastOffset());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(2, sharePartition.cachedState().get(0L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(0L).gapOffsets());
+        assertNull(sharePartition.cachedState().get(0L).offsetState());
+        assertNotNull(sharePartition.cachedState().get(0L).acquisitionLockTimeoutTask());
+        assertEquals(1, sharePartition.timer().size());
+
+        // Allowing acquisition lock to expire.
+        Thread.sleep(200);
+        assertEquals(10, sharePartition.nextFetchOffset());
+        // After the second failed attempt to acknowledge the record batch successfully, the record batch is archived.
+        // Since this is the first batch in the share partition, SPSO moves forward and the cachedState is cleared
+        assertEquals(0, sharePartition.cachedState().size());
+    }
+
+    @Test
     public void testAcknowledgeAfterAcquisitionLockTimeout() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
         MemoryRecords records = memoryRecords(5, 5);
