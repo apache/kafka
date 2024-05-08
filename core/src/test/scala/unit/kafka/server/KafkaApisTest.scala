@@ -3061,8 +3061,9 @@ class KafkaApisTest extends Logging {
     assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
   }
 
-  @Test
-  def shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion_allowedWithAlterCluster(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("ALTER", "CLUSTER_ACTION"))
+  def shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion(allowedAclOperation: String): Unit = {
     val topicPartition = new TopicPartition("t", 0)
     val request = createWriteTxnMarkersRequest(asList(topicPartition))._2
     when(replicaManager.getMagic(topicPartition))
@@ -3073,57 +3074,16 @@ class KafkaApisTest extends Logging {
     // Allowing WriteTxnMarkers API with the help of AlterCluster ACL.
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
-    val alterActions = Collections.singletonList(new Action(AclOperation.ALTER, clusterResource, 1, true, true))
-    val clusterActions = Collections.singletonList(new Action(AclOperation.CLUSTER_ACTION, clusterResource, 1, true, true))
+    val allowedAction = Collections.singletonList(new Action(AclOperation.fromString(allowedAclOperation), clusterResource, 1, true, true))
     val deniedList = Collections.singletonList(AuthorizationResult.DENIED)
     val allowedList = Collections.singletonList(AuthorizationResult.ALLOWED)
     when(authorizer.authorize(
-      request.context,
-      alterActions
-    )).thenReturn(allowedList)
-    when(authorizer.authorize(
-      request.context,
-      clusterActions
-    )).thenReturn(deniedList)
-    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
-
-    kafkaApis.handleWriteTxnMarkersRequest(request, requestLocal)
-    verify(replicaManager).appendRecords(anyLong,
-      anyShort,
-      ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
-      any(),
-      any(),
-      any(),
-      any(),
-      ArgumentMatchers.eq(requestLocal),
-      any(),
-      any())
-  }
-
-  @Test
-  def shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion_allowedWithClusterAction(): Unit = {
-    val topicPartition = new TopicPartition("t", 0)
-    val request = createWriteTxnMarkersRequest(asList(topicPartition))._2
-    when(replicaManager.getMagic(topicPartition))
-      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
-
-    val requestLocal = RequestLocal.withThreadConfinedCaching
-
-    // Allowing WriteTxnMarkers API with the help of ClusterAction ACL.
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-    val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
-    val alterActions = Collections.singletonList(new Action(AclOperation.ALTER, clusterResource, 1, true, true))
-    val clusterActions = Collections.singletonList(new Action(AclOperation.CLUSTER_ACTION, clusterResource, 1, true, true))
-    val deniedList = Collections.singletonList(AuthorizationResult.DENIED)
-    val allowedList = Collections.singletonList(AuthorizationResult.ALLOWED)
-    when(authorizer.authorize(
-      request.context,
-      alterActions
+      ArgumentMatchers.eq(request.context),
+      any()
     )).thenReturn(deniedList)
     when(authorizer.authorize(
       request.context,
-      clusterActions
+      allowedAction
     )).thenReturn(allowedList)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
 
