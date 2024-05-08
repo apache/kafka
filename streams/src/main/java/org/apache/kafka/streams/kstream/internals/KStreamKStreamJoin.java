@@ -157,7 +157,7 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
                         context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                     } else {
                         sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
-                        putInOuterJoinStore(record, inputRecordTimestamp);
+                        putInOuterJoinStore(record);
                     }
                 }
             }
@@ -202,13 +202,14 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
             try (final KeyValueIterator<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>> it = store.all()) {
                 TimestampedKeyAndJoinSide<K> prevKey = null;
 
+                boolean outerJoinLeftWindowOpen = false;
+                boolean outerJoinRightWindowOpen = false;
                 while (it.hasNext()) {
                     final KeyValue<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>> nextKeyValue = it.next();
                     final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = nextKeyValue.key;
                     sharedTimeTracker.minTime = timestampedKeyAndJoinSide.getTimestamp();
-                    if (isOuterJoinWindowOpenForSide(timestampedKeyAndJoinSide, true) && isOuterJoinWindowOpenForSide(timestampedKeyAndJoinSide, false)) {
-                        // if windows are open for both joinSides we can break since there are no more candidates to
-                        // emit
+                    if (outerJoinLeftWindowOpen && outerJoinRightWindowOpen) {
+                        // if windows are open for both joinSides we can break since there are no more candidates to emit
                         break;
                     }
 
@@ -216,6 +217,11 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
                     // There might be an outer record for the other joinSide which window has not closed yet
                     // We rely on the <timestamp><left/right-boolean><key> ordering of KeyValueIterator
                     if (isOuterJoinWindowOpen(timestampedKeyAndJoinSide)) {
+                        if (timestampedKeyAndJoinSide.isLeftSide()) {
+                            outerJoinLeftWindowOpen = true; // there are no more candidates to emit on left-outerJoin-side
+                        } else {
+                            outerJoinRightWindowOpen = true; // there are no more candidates to emit on right-outerJoin-side
+                        }
                         // We continue with the next outer record
                         continue;
                     }
@@ -240,14 +246,6 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
             }
         }
 
-        private boolean isOuterJoinWindowOpenForSide(final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide, final boolean isLeftSide) {
-            if (isOuterJoinWindowOpen(timestampedKeyAndJoinSide)) {
-                // there are no more candidates to emit on left-outerJoin-side
-                return timestampedKeyAndJoinSide.isLeftSide() == isLeftSide;
-            }
-            return false;
-        }
-
         private void forwardNonJoinedOuterRecords(final Record<K, ?> record, final KeyValue<? extends TimestampedKeyAndJoinSide<K>, ? extends LeftOrRightValue<VL, VR>> nextKeyValue) {
             final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = nextKeyValue.key;
             final K key = timestampedKeyAndJoinSide.getKey();
@@ -263,10 +261,8 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
 
         private boolean isOuterJoinWindowOpen(final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide) {
             final long outerJoinLookBackTimeMs = getOuterJoinLookBackTimeMs(timestampedKeyAndJoinSide);
-            return sharedTimeTracker.minTime + outerJoinLookBackTimeMs + joinGraceMs
-                    >= sharedTimeTracker.streamTime;
+            return sharedTimeTracker.minTime + outerJoinLookBackTimeMs + joinGraceMs >= sharedTimeTracker.streamTime;
         }
-
 
         private long getOuterJoinLookBackTimeMs(
             final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide) {
@@ -295,9 +291,9 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
                             .withTimestamp(Math.max(inputRecordTimestamp, otherRecord.key)));
         }
 
-        private void putInOuterJoinStore(final Record<K, VThis> thisRecord, final long inputRecordTimestamp) {
+        private void putInOuterJoinStore(final Record<K, VThis> thisRecord) {
             outerJoinStore.ifPresent(store -> {
-                final TimestampedKeyAndJoinSide<K> thisKey = makeThisKey(thisRecord.key(), inputRecordTimestamp);
+                final TimestampedKeyAndJoinSide<K> thisKey = makeThisKey(thisRecord.key(), thisRecord.timestamp());
                 final LeftOrRightValue<VL, VR> thisValue = makeThisValue(thisRecord.value());
                 store.put(thisKey, thisValue);
             });
