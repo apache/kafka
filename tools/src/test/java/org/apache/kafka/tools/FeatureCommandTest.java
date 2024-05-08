@@ -155,6 +155,10 @@ public class FeatureCommandTest {
         return (pos > 0) ? output.substring(0, pos) : output;
     }
 
+    /**
+     * Unit test of {@link FeatureCommand} tool.
+     */
+
     @Test
     public void testLevelToString() {
         assertEquals("5", FeatureCommand.levelToString("foo.bar", (short) 5));

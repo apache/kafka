@@ -108,6 +108,10 @@ public class DeleteRecordsCommandTest {
         assertTrue(output.contains(expOut));
     }
 
+    /**
+     * Unit test of {@link DeleteRecordsCommand} tool.
+     */
+
     @Test
     public void testOffsetFileNotExists() {
         assertThrows(IOException.class, () -> DeleteRecordsCommand.execute(new String[]{
