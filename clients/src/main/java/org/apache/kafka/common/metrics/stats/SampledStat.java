@@ -108,7 +108,7 @@ public abstract class SampledStat implements MeasurableStat {
 
     /**
      * Purges any windows that started before the configured period.
-     * Returns the end of the latest purged window.
+     * Returns the end of the most recent of purged windows.
      */
     protected long purgeObsoleteSamples(MetricConfig config, long now) {
         long expireAge = config.samples() * config.timeWindowMs();
