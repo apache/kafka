@@ -573,6 +573,7 @@ class ReplicaManager(val config: KafkaConfig,
    *                         If no errors occurred, the map will be empty.
    */
   private def stopPartitions(partitionsToStop: Set[StopPartition]): Map[TopicPartition, Throwable] = {
+    System.err.print(s"stop:$partitionsToStop")
     // First stop fetchers for all partitions.
     val partitions = partitionsToStop.map(_.topicPartition)
     replicaFetcherManager.removeFetcherForPartitions(partitions)

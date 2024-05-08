@@ -1247,6 +1247,7 @@ class LogManager(logDirs: Seq[File],
     // Update the cached map and log cleaner as appropriate.
     futureLogs.remove(topicPartition)
     currentLogs.put(topicPartition, destLog)
+    System.err.print(s"c:${currentLogs.get(topicPartition)}")
     if (cleaner != null) {
       sourceLog.foreach { srcLog =>
         cleaner.alterCheckpointDir(topicPartition, srcLog.parentDirFile, destLog.parentDirFile)
@@ -1409,9 +1410,14 @@ class LogManager(logDirs: Seq[File],
       }
     }
 
+    System.err.print(s"c1:${currentLogs.get(new TopicPartition("topicB", 0))}")
+
     try {
       deletableLogs.foreach {
         case (topicPartition, log) =>
+          if (topicPartition.topic().contains("topicB")) {
+            System.err.print(s"d:${topicPartition} $log")
+          }
           debug(s"Garbage collecting '${log.name}'")
           total += log.deleteOldSegments()
 
