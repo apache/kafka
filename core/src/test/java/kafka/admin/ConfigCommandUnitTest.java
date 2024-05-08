@@ -47,7 +47,7 @@ import scala.collection.Seq;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.AbstractMap;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -55,12 +55,12 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -588,7 +588,7 @@ public class ConfigCommandUnitTest {
         ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient));
     }
 
-    private Map.Entry<List<String>, Map<String, String>> toValues(Optional<String> entityName, String entityType) {
+    private Entry<List<String>, Map<String, String>> argsAndExpectedEntity(Optional<String> entityName, String entityType) {
         String command;
         switch (entityType) {
             case ClientQuotaEntity.USER:
@@ -606,9 +606,9 @@ public class ConfigCommandUnitTest {
 
         return entityName.map(name -> {
             if (name.isEmpty())
-                return new AbstractMap.SimpleImmutableEntry<>(Arrays.asList("--entity-type", command, "--entity-default"), Collections.singletonMap(entityType, (String) null));
-            return new AbstractMap.SimpleImmutableEntry<>(Arrays.asList("--entity-type", command, "--entity-name", name), Collections.singletonMap(entityType, name));
-        }).orElse(new AbstractMap.SimpleImmutableEntry<>(Collections.emptyList(), Collections.emptyMap()));
+                return new SimpleImmutableEntry<>(Arrays.asList("--entity-type", command, "--entity-default"), Collections.singletonMap(entityType, (String) null));
+            return new SimpleImmutableEntry<>(Arrays.asList("--entity-type", command, "--entity-name", name), Collections.singletonMap(entityType, name));
+        }).orElse(new SimpleImmutableEntry<>(Collections.emptyList(), Collections.emptyMap()));
     }
 
     private void verifyAlterCommandFails(String expectedErrorMessage, List<String> alterOpts) {
@@ -722,14 +722,9 @@ public class ConfigCommandUnitTest {
 
     @Test
     public void testAlterIpConfig() {
-        Map.Entry<List<String>, Map<String, String>> t = toValues(Optional.of("1.2.3.4"), ClientQuotaEntity.IP);
-        List<String> singleIpArgs = t.getKey();
-        Map<String, String> singleIpEntry = t.getValue();
-        ClientQuotaEntity singleIpEntity = new ClientQuotaEntity(singleIpEntry);
-        t = toValues(Optional.of(""), ClientQuotaEntity.IP);
-        List<String> defaultIpArgs = t.getKey();
-        Map<String, String> defaultIpEntry = t.getValue();
-        ClientQuotaEntity defaultIpEntity = new ClientQuotaEntity(defaultIpEntry);
+        Entry<List<String>, Map<String, String>> singleIpArgsAndEntity = argsAndExpectedEntity(Optional.of("1.2.3.4"), ClientQuotaEntity.IP);
+        Entry<List<String>, Map<String, String>> defaultIpArgsAndEntity = argsAndExpectedEntity(Optional.of(""), ClientQuotaEntity.IP);
+
 
         List<String> deleteArgs = Arrays.asList("--delete-config", "connection_creation_rate");
         Set<ClientQuotaAlteration.Op> deleteAlterationOps = new HashSet<>(Collections.singletonList(new ClientQuotaAlteration.Op("connection_creation_rate", null)));
@@ -738,14 +733,29 @@ public class ConfigCommandUnitTest {
         List<String> addArgs = Arrays.asList("--add-config", "connection_creation_rate=100");
         Set<ClientQuotaAlteration.Op> addAlterationOps = new HashSet<>(Collections.singletonList(new ClientQuotaAlteration.Op("connection_creation_rate", 100.0)));
 
-        verifyAlterQuotas(concat(singleIpArgs, deleteArgs), singleIpEntity, propsToDelete, deleteAlterationOps);
-        verifyAlterQuotas(concat(singleIpArgs, addArgs), singleIpEntity, Collections.emptyMap(), addAlterationOps);
-        verifyAlterQuotas(concat(defaultIpArgs, deleteArgs), defaultIpEntity, propsToDelete, deleteAlterationOps);
-        verifyAlterQuotas(concat(defaultIpArgs, addArgs), defaultIpEntity, Collections.emptyMap(), addAlterationOps);
+        verifyAlterQuotas(
+            concat(singleIpArgsAndEntity.getKey(), deleteArgs),
+            new ClientQuotaEntity(singleIpArgsAndEntity.getValue()),
+            propsToDelete,
+            deleteAlterationOps);
+        verifyAlterQuotas(
+            concat(singleIpArgsAndEntity.getKey(), addArgs),
+            new ClientQuotaEntity(singleIpArgsAndEntity.getValue()),
+            Collections.emptyMap(),
+            addAlterationOps);
+        verifyAlterQuotas(
+            concat(defaultIpArgsAndEntity.getKey(), deleteArgs),
+            new ClientQuotaEntity(defaultIpArgsAndEntity.getValue()),
+            propsToDelete,
+            deleteAlterationOps);
+        verifyAlterQuotas(
+            concat(defaultIpArgsAndEntity.getKey(), addArgs),
+            new ClientQuotaEntity(defaultIpArgsAndEntity.getValue()),
+            Collections.emptyMap(),
+            addAlterationOps);
     }
 
-    @Test
-    public void shouldAddClientConfig() {
+    private void verifyAlterUserClientQuotas(String user, String client) {
         List<String> alterArgs = Arrays.asList("--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000",
             "--delete-config", "request_percentage");
         Map<String, Double> propsToDelete = Collections.singletonMap("request_percentage", 50.0);
@@ -756,31 +766,26 @@ public class ConfigCommandUnitTest {
             new ClientQuotaAlteration.Op("request_percentage", null)
         ));
 
-        BiConsumer<Optional<String>, Optional<String>> verifyAlterUserClientQuotas = (userOpt, clientOpt) -> {
-            Map.Entry<List<String>, Map<String, String>> t = toValues(userOpt, ClientQuotaEntity.USER);
-            List<String> userArgs = t.getKey();
-            Map<String, String> userEntry = t.getValue();
-            t = toValues(clientOpt, ClientQuotaEntity.CLIENT_ID);
-            List<String> clientArgs = t.getKey();
-            Map<String, String> clientEntry = t.getValue();
+        Entry<List<String>, Map<String, String>> userArgsAndEntity = argsAndExpectedEntity(Optional.ofNullable(user), ClientQuotaEntity.USER);
+        Entry<List<String>, Map<String, String>> clientArgsAndEntry = argsAndExpectedEntity(Optional.ofNullable(client), ClientQuotaEntity.CLIENT_ID);
 
-            List<String> commandArgs = concat(alterArgs, userArgs, clientArgs);
-            ClientQuotaEntity clientQuotaEntity = new ClientQuotaEntity(concat(userEntry, clientEntry));
-            try {
-                verifyAlterQuotas(commandArgs, clientQuotaEntity, propsToDelete, alterationOps);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        };
+        verifyAlterQuotas(
+            concat(alterArgs, userArgsAndEntity.getKey(), clientArgsAndEntry.getKey()),
+            new ClientQuotaEntity(concat(userArgsAndEntity.getValue(), clientArgsAndEntry.getValue())),
+            propsToDelete,
+            alterationOps);
+    }
 
-        verifyAlterUserClientQuotas.accept(Optional.of("test-user-1"), Optional.of("test-client-1"));
-        verifyAlterUserClientQuotas.accept(Optional.of("test-user-2"), Optional.of(""));
-        verifyAlterUserClientQuotas.accept(Optional.of("test-user-3"), Optional.empty());
-        verifyAlterUserClientQuotas.accept(Optional.of(""), Optional.of("test-client-2"));
-        verifyAlterUserClientQuotas.accept(Optional.of(""), Optional.of(""));
-        verifyAlterUserClientQuotas.accept(Optional.of(""), Optional.empty());
-        verifyAlterUserClientQuotas.accept(Optional.empty(), Optional.of("test-client-3"));
-        verifyAlterUserClientQuotas.accept(Optional.empty(), Optional.of(""));
+    @Test
+    public void shouldAddClientConfig() {
+        verifyAlterUserClientQuotas("test-user-1", "test-client-1");
+        verifyAlterUserClientQuotas("test-user-2", "");
+        verifyAlterUserClientQuotas("test-user-3", null);
+        verifyAlterUserClientQuotas("", "test-client-2");
+        verifyAlterUserClientQuotas("", "");
+        verifyAlterUserClientQuotas("", null);
+        verifyAlterUserClientQuotas(null, "test-client-3");
+        verifyAlterUserClientQuotas(null, "");
     }
 
     private final List<String> userEntityOpts = Arrays.asList("--entity-type", "users", "--entity-name", "admin");
