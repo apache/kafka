@@ -35,6 +35,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssig
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RangeAssignorTest {
@@ -76,7 +77,7 @@ public class RangeAssignorTest {
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
         GroupAssignment groupAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
-        assertEquals(createEmptyAssignment(consumerA), groupAssignment.members());
+        assertEquals(Collections.emptyMap(), groupAssignment.members());
     }
 
     @Test
@@ -360,8 +361,8 @@ public class RangeAssignorTest {
             mkTopicAssignment(topic2Uuid, 1)
         ));
 
-        expectedAssignment.put(consumerC, Collections.emptyMap());
-
+        // Consumer C shouldn't get any assignment, due to stickiness A, B retain their assignments
+        assertNull(computedAssignment.members().get(consumerC));
         assertAssignment(expectedAssignment, computedAssignment);
     }
 
@@ -649,6 +650,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+
         // Let initial subscriptions be A -> T1, T2 // B -> T2 // C -> T2, T3
         // Change the subscriptions to A -> T1 // B -> T1, T2, T3 // C -> T2
 
@@ -725,15 +727,5 @@ public class RangeAssignorTest {
             partitionRacks.put(i, emptySet);
         }
         return partitionRacks;
-    }
-
-    private static Map<String, MemberAssignment> createEmptyAssignment(String memberId) {
-        Map<String, MemberAssignment> newEmptyTargetAssignment = new HashMap<>(1);
-
-        newEmptyTargetAssignment.put(
-            memberId,
-            new MemberAssignment(Collections.emptyMap())
-        );
-        return newEmptyTargetAssignment;
     }
 }
