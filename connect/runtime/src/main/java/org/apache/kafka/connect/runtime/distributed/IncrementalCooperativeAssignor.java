@@ -255,10 +255,11 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         ConnectorsAndTasks lostAssignments = diff(previousAssignment, activeAssignments, deleted);
         log.debug("Lost assignments: {}", lostAssignments);
 
-        // Derived set: The set of new connectors-and-tasks is a derived set from the set
-        // difference of configured - previous - active
-        ConnectorsAndTasks created = diff(configured, previousAssignment, activeAssignments);
-        log.debug("Created: {}", created);
+        // Derived set: The set of unassigned connectors-and-tasks is a derived set from the set
+        // difference of configured - previous - active. This contains both newly created connectors
+        // and tasks and connectors and tasks revoked in the previous round.
+        ConnectorsAndTasks unassigned = diff(configured, previousAssignment, activeAssignments);
+        log.debug("Unassigned: {}", unassigned);
 
         // A collection of the current assignment excluding the connectors-and-tasks to be deleted
         List<WorkerLoad> currentWorkerAssignment = workerAssignment(memberAssignments, deleted);
@@ -338,7 +339,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         // The complete set of connectors and tasks that should be newly-assigned during this round
         ConnectorsAndTasks toAssign = new ConnectorsAndTasks.Builder()
-                .addAll(created)
+                .addAll(unassigned)
                 .addAll(lostAssignmentsToReassign)
                 .build();
 
