@@ -2353,17 +2353,21 @@ case class RetentionMsBreach(log: UnifiedLog, remoteLogEnabled: Boolean) extends
     val retentionMs = UnifiedLog.localRetentionMs(log.config, remoteLogEnabled)
     toDelete.foreach { segment =>
       if (segment.largestRecordTimestamp.isPresent)
-        if (remoteLogEnabled)
+        if (remoteLogEnabled) {
           log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the largest " +
             s"record timestamp in the segment")
-        else
+          System.err.println(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the largest " +
+            s"record timestamp in the segment")
+        } else
           log.info(s"Deleting segment $segment due to log retention time ${retentionMs}ms breach based on the largest " +
             s"record timestamp in the segment")
       else {
-        if (remoteLogEnabled)
+        if (remoteLogEnabled) {
           log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the " +
             s"last modified time of the segment")
-        else
+          System.err.println(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the " +
+            s"last modified time of the segment")
+        } else
           log.info(s"Deleting segment $segment due to log retention time ${retentionMs}ms breach based on the " +
             s"last modified time of the segment")
       }
@@ -2376,8 +2380,12 @@ case class RetentionSizeBreach(log: UnifiedLog, remoteLogEnabled: Boolean) exten
     var size = log.size
     toDelete.foreach { segment =>
       size -= segment.size
-      if (remoteLogEnabled) log.info(s"Deleting segment $segment due to local log retention size ${UnifiedLog.localRetentionSize(log.config, remoteLogEnabled)} breach. " +
-        s"Local log size after deletion will be $size.")
+      if (remoteLogEnabled) {
+        log.info(s"Deleting segment $segment due to local log retention size ${UnifiedLog.localRetentionSize(log.config, remoteLogEnabled)} breach. " +
+          s"Local log size after deletion will be $size.")
+        System.err.println(s"Deleting segment $segment due to local log retention size ${UnifiedLog.localRetentionSize(log.config, remoteLogEnabled)} breach. " +
+          s"Local log size after deletion will be $size.")
+      }
       else log.info(s"Deleting segment $segment due to log retention size ${log.config.retentionSize} breach. Log size " +
         s"after deletion will be $size.")
     }
