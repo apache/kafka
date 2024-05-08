@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import org.junit.jupiter.api.Tag;
+
+// Marked integration for flakiness
+@Tag("integration")
 public class SaslAuthenticatorFailureNoDelayTest extends SaslAuthenticatorFailureDelayTest {
     public SaslAuthenticatorFailureNoDelayTest() {
         super(0);

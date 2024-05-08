@@ -31,6 +31,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +46,8 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
+// Marked integration for flakiness
+@Tag("integration")
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 public class TopicBasedRemoteLogMetadataManagerTest {
     private static final Logger log = LoggerFactory.getLogger(TopicBasedRemoteLogMetadataManagerTest.class);

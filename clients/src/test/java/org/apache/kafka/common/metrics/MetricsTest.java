@@ -62,10 +62,13 @@ import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// Marked integration for flakiness
+@Tag("integration")
 public class MetricsTest {
     private static final Logger log = LoggerFactory.getLogger(MetricsTest.class);
 

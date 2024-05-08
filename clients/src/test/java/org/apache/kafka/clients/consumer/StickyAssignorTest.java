@@ -42,6 +42,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -50,6 +51,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import static java.util.Collections.emptyList;
 
+// Marked integration for flakiness
+@Tag("integration")
 public class StickyAssignorTest extends AbstractStickyAssignorTest {
 
     @Override

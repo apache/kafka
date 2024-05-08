@@ -32,7 +32,7 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
-import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.api.{Tag, Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -42,6 +42,8 @@ import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
 
 @Timeout(value = 60)
+// Marked integration for flakiness
+@Tag("integration")
 class ControllerRegistrationManagerTest {
   private val controller1 = new Node(1, "localhost", 7000)
 

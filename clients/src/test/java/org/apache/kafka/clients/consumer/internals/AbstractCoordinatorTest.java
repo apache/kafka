@@ -59,6 +59,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -86,6 +87,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+// Marked integration for flakiness
+@Tag("integration")
 public class AbstractCoordinatorTest {
     private static final ByteBuffer EMPTY_DATA = ByteBuffer.wrap(new byte[0]);
     private static final int REBALANCE_TIMEOUT_MS = 60000;

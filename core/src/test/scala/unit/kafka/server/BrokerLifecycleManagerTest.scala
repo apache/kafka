@@ -28,12 +28,14 @@ import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.api.{Tag, Test, Timeout}
 
 import java.util.concurrent.{CompletableFuture, Future}
 import scala.jdk.CollectionConverters._
 
 @Timeout(value = 12)
+// Marked integration for flakiness
+@Tag("integration")
 class BrokerLifecycleManagerTest {
   def configProperties = {
     val properties = new Properties()

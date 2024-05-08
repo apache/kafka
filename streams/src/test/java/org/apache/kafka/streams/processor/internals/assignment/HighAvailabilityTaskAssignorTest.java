@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.apache.kafka.test.IntegrationTest;
 import org.hamcrest.Matchers;
 import org.junit.Before;
 import org.junit.Test;
@@ -40,6 +41,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
@@ -97,6 +100,8 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.spy;
 
 @RunWith(Parameterized.class)
+// Marked integration for runtime
+@Category({IntegrationTest.class})
 public class HighAvailabilityTaskAssignorTest {
     private AssignmentConfigs getConfigWithoutStandbys() {
         return new AssignmentConfigs(

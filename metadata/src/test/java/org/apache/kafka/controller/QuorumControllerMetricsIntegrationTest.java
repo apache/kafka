@@ -26,6 +26,7 @@ import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -50,6 +51,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
+// Marked integration for flakiness
+@Tag("integration")
 public class QuorumControllerMetricsIntegrationTest {
 
     static class MockControllerMetrics extends QuorumControllerMetrics {

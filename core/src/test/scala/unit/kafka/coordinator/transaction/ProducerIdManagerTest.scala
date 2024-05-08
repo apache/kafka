@@ -28,7 +28,7 @@ import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.common.ProducerIdsBlock
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentCaptor
@@ -40,6 +40,8 @@ import java.util.concurrent.{ConcurrentLinkedQueue, CountDownLatch, Executors, T
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 
+// Marked integration for flakiness
+@Tag("integration")
 class ProducerIdManagerTest {
 
   var brokerToController: NodeToControllerChannelManager = mock(classOf[NodeToControllerChannelManager])

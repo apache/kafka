@@ -97,6 +97,7 @@ import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.MockedStatic;
@@ -165,6 +166,8 @@ import static org.mockito.Mockito.when;
  * Note to future authors in this class. If you close the consumer, close with DURATION.ZERO to reduce the duration of
  * the test.
  */
+// Marked integration for flakiness
+@Tag("integration")
 public class KafkaConsumerTest {
 
     private final String topic = "test";

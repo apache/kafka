@@ -68,7 +68,7 @@ import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile
 import org.apache.kafka.storage.internals.log._
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers._
@@ -96,6 +96,8 @@ object ReplicaManagerTest {
   }
 }
 
+// Marked integration for flakiness
+@Tag("integration")
 class ReplicaManagerTest {
 
   private val topic = "test-topic"
