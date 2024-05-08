@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FieldPathNotationTest {
     final static String[] EMPTY_PATH = new String[] {};
@@ -43,6 +44,11 @@ class FieldPathNotationTest {
         assertParseV2("foo..", "foo", "", "");
         assertParseV2(".bar.", "", "bar", "");
         assertParseV2("..baz", "", "", "baz");
+    }
+
+    @Test void shouldCheckPathIsEmpty() {
+        assertTrue(new SingleFieldPath("", FieldSyntaxVersion.V1).isEmpty());
+        assertTrue(new SingleFieldPath("", FieldSyntaxVersion.V2).isEmpty());
     }
 
     @Test
