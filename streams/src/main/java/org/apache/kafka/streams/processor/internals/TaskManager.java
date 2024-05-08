@@ -369,34 +369,13 @@ public class TaskManager {
         if (stateUpdater == null) {
             handleTasksWithoutStateUpdater(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
         } else {
-            final Map<Task, Set<TopicPartition>> tasksToRecycleFromStateUpdater = new HashMap<>();
-            final Set<Task> tasksToCloseCleanFromStateUpdater = new HashSet<>();
-            final Set<Task> tasksToCloseDirtyFromStateUpdater = new HashSet<>();
             handleTasksWithStateUpdater(
                 activeTasksToCreate,
                 standbyTasksToCreate,
                 tasksToRecycle,
                 tasksToCloseClean,
-                tasksToRecycleFromStateUpdater,
-                tasksToCloseCleanFromStateUpdater,
-                tasksToCloseDirtyFromStateUpdater,
                 failedTasks
             );
-            tasksToRecycleFromStateUpdater.forEach((task, inputPartitions) ->
-                recycleTaskFromStateUpdater(
-                    task,
-                    inputPartitions,
-                    tasksToCloseDirtyFromStateUpdater,
-                    failedTasks
-                )
-            );
-            tasksToCloseCleanFromStateUpdater.forEach(task ->
-                closeTaskClean(task, tasksToCloseDirtyFromStateUpdater, failedTasks)
-            );
-            tasksToCloseDirtyFromStateUpdater.forEach(task ->
-                closeTaskDirty(task, false)
-            );
-
             failedTasks.putAll(collectExceptionsAndFailedTasksFromStateUpdater());
         }
 
@@ -526,20 +505,10 @@ public class TaskManager {
                                              final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                              final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                              final Set<Task> tasksToCloseClean,
-                                             final Map<Task, Set<TopicPartition>> tasksToRecycleFromStateUpdater,
-                                             final Set<Task> tasksToCloseCleanFromStateUpdater,
-                                             final Set<Task> tasksToCloseDirtyFromStateUpdater,
                                              final Map<TaskId, RuntimeException> failedTasks) {
         handleTasksPendingInitialization();
         handleRunningAndSuspendedTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
-        handleTasksInStateUpdater(
-            activeTasksToCreate,
-            standbyTasksToCreate,
-            tasksToRecycleFromStateUpdater,
-            tasksToCloseCleanFromStateUpdater,
-            tasksToCloseDirtyFromStateUpdater,
-            failedTasks
-        );
+        handleRestoringAndUpdatingTasks(activeTasksToCreate, standbyTasksToCreate, failedTasks);
     }
 
     private void handleTasksPendingInitialization() {
@@ -582,6 +551,36 @@ public class TaskManager {
             task.resume();
             stateUpdater.add(task);
         }
+    }
+
+    private void handleRestoringAndUpdatingTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                                 final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
+                                                 final Map<TaskId, RuntimeException> failedTasks) {
+        final Map<Task, Set<TopicPartition>> tasksToRecycleFromStateUpdater = new HashMap<>();
+        final Set<Task> tasksToCloseCleanFromStateUpdater = new HashSet<>();
+        final Set<Task> tasksToCloseDirtyFromStateUpdater = new HashSet<>();
+        handleTasksInStateUpdater(
+            activeTasksToCreate,
+            standbyTasksToCreate,
+            tasksToRecycleFromStateUpdater,
+            tasksToCloseCleanFromStateUpdater,
+            tasksToCloseDirtyFromStateUpdater,
+            failedTasks
+        );
+        tasksToRecycleFromStateUpdater.forEach((task, inputPartitions) ->
+            recycleTaskFromStateUpdater(
+                task,
+                inputPartitions,
+                tasksToCloseDirtyFromStateUpdater,
+                failedTasks
+            )
+        );
+        tasksToCloseCleanFromStateUpdater.forEach(task ->
+            closeTaskClean(task, tasksToCloseDirtyFromStateUpdater, failedTasks)
+        );
+        tasksToCloseDirtyFromStateUpdater.forEach(task ->
+            closeTaskDirty(task, false)
+        );
     }
 
     private void handleTasksInStateUpdater(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
