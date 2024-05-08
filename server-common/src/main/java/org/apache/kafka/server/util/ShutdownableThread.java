@@ -88,7 +88,6 @@ public abstract class ShutdownableThread extends Thread {
         synchronized (this) {
             if (isRunning()) {
                 log.info("Shutting down");
-                System.err.println(logPrefix + " shutting down");
                 shutdownInitiated.countDown();
                 if (isInterruptible)
                     interrupt();
@@ -108,7 +107,6 @@ public abstract class ShutdownableThread extends Thread {
             if (isStarted)
                 shutdownComplete.await();
             log.info("Shutdown completed");
-            System.err.println(logPrefix + " shutted down");
         }
     }
 
