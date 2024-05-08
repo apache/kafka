@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -632,10 +633,12 @@ public class TaskManager {
     private void updateInputPartitions(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
                                        final Map<TaskId, Set<TopicPartition>> newInputPartitions,
                                        final Map<TaskId, RuntimeException> failedTasks) {
-        iterateAndActOnRemovedTask(
-            futures,
-            failedTasks,
-            task -> {
+        futures.entrySet().stream()
+            .map(entry -> waitForFuture(entry.getKey(), entry.getValue()))
+            .filter(Objects::nonNull)
+            .map(removedTaskResult -> checkIfTaskFailed(removedTaskResult, failedTasks))
+            .filter(Objects::nonNull)
+            .forEach(task -> {
                 task.updateInputPartitions(
                     newInputPartitions.get(task.id()),
                     topologyMetadata.nodeToSourceTopics(task.id())
@@ -648,75 +651,76 @@ public class TaskManager {
                                            final Map<TaskId, Set<TopicPartition>> standbyInputPartitions,
                                            final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                            final Map<TaskId, RuntimeException> failedTasks) {
-        iterateAndActOnRemovedTask(futures, failedTasks, task -> tasksToRecycle.put(task, standbyInputPartitions.get(task.id())));
+        futures.entrySet().stream()
+            .map(entry -> waitForFuture(entry.getKey(), entry.getValue()))
+            .filter(Objects::nonNull)
+            .map(removedTaskResult -> checkIfTaskFailed(removedTaskResult, failedTasks))
+            .filter(Objects::nonNull)
+            .forEach(task -> {
+                tasksToRecycle.put(task, standbyInputPartitions.get(task.id()));
+            });
     }
 
     private void addToStandbyTasksToRecycle(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
                                             final Map<TaskId, Set<TopicPartition>> activeInputPartitions,
                                             final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                             final Map<TaskId, RuntimeException> failedTasks) {
-        iterateAndActOnRemovedTask(futures, failedTasks, task -> tasksToRecycle.put(task, activeInputPartitions.get(task.id())));
+        futures.entrySet().stream()
+            .map(entry -> waitForFuture(entry.getKey(), entry.getValue()))
+            .filter(Objects::nonNull)
+            .map(removedTaskResult -> checkIfTaskFailed(removedTaskResult, failedTasks))
+            .filter(Objects::nonNull)
+            .forEach(task -> {
+                tasksToRecycle.put(task, activeInputPartitions.get(task.id()));
+            });
     }
 
     private void addToTasksToClose(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
                                    final Set<Task> tasksToCloseCleanFromStateUpdater,
                                    final Set<Task> tasksToCloseDirtyFromStateUpdater) {
-        iterateAndActOnFuture(futures, removedTaskResult -> {
-            final Task task = removedTaskResult.task();
-            final Optional<RuntimeException> exception = removedTaskResult.exception();
-            if (exception.isPresent()) {
-                tasksToCloseDirtyFromStateUpdater.add(task);
-            } else {
-                tasksToCloseCleanFromStateUpdater.add(task);
-            }
-        });
+        futures.entrySet().stream()
+            .map(entry -> waitForFuture(entry.getKey(), entry.getValue()))
+            .filter(Objects::nonNull)
+            .forEach(removedTaskResult -> {
+                if (removedTaskResult.exception().isPresent()) {
+                    tasksToCloseDirtyFromStateUpdater.add(removedTaskResult.task());
+                } else {
+                    tasksToCloseCleanFromStateUpdater.add(removedTaskResult.task());
+                }
+            });
     }
 
-    private void iterateAndActOnRemovedTask(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
-                                            final Map<TaskId, RuntimeException> failedTasks,
-                                            final java.util.function.Consumer<Task> action) {
-        iterateAndActOnFuture(futures, removedTaskResult -> {
-            final Task task = removedTaskResult.task();
-            final Optional<RuntimeException> exception = removedTaskResult.exception();
-            if (exception.isPresent()) {
-                failedTasks.put(task.id(), exception.get());
-                tasks.addTask(task);
-            } else {
-                action.accept(task);
-            }
-        });
-    }
-
-    private void iterateAndActOnFuture(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
-                                       final java.util.function.Consumer<StateUpdater.RemovedTaskResult> action) {
-        for (final Map.Entry<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> entry : futures.entrySet()) {
-            final TaskId taskId = entry.getKey();
-            final CompletableFuture<StateUpdater.RemovedTaskResult> future = entry.getValue();
-            try {
-                final StateUpdater.RemovedTaskResult removedTaskResult = waitForFuture(taskId, future);
-                action.accept(removedTaskResult);
-            } catch (final ExecutionException executionException) {
-                log.warn("An exception happened when removing task {} from the state updater. The task was added to the " +
-                        "failed task in the state updater: ",
-                    taskId, executionException);
-            } catch (final InterruptedException shouldNotHappen) {
-                Thread.currentThread().interrupt();
-                log.error(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
-                throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
-            }
+    private Task checkIfTaskFailed(final StateUpdater.RemovedTaskResult removedTaskResult,
+                                   final Map<TaskId, RuntimeException> failedTasks) {
+        final Task task = removedTaskResult.task();
+        if (removedTaskResult.exception().isPresent()) {
+            failedTasks.put(task.id(), removedTaskResult.exception().get());
+            tasks.addTask(task);
+            return null;
         }
+        return task;
     }
 
     private StateUpdater.RemovedTaskResult waitForFuture(final TaskId taskId,
-                                                         final CompletableFuture<StateUpdater.RemovedTaskResult> future)
-        throws ExecutionException, InterruptedException {
-
-        final StateUpdater.RemovedTaskResult removedTaskResult = future.get();
-        if (removedTaskResult == null) {
-            throw new IllegalStateException("Task " + taskId + " was not found in the state updater. "
-                + BUG_ERROR_MESSAGE);
+                                                         final CompletableFuture<StateUpdater.RemovedTaskResult> future) {
+        final StateUpdater.RemovedTaskResult removedTaskResult;
+        try {
+            removedTaskResult = future.get();
+            if (removedTaskResult == null) {
+                throw new IllegalStateException("Task " + taskId + " was not found in the state updater. "
+                    + BUG_ERROR_MESSAGE);
+            }
+            return removedTaskResult;
+        } catch (final ExecutionException executionException) {
+            log.warn("An exception happened when removing task {} from the state updater. The task was added to the " +
+                    "failed task in the state updater: ",
+                taskId, executionException);
+            return null;
+        } catch (final InterruptedException shouldNotHappen) {
+            Thread.currentThread().interrupt();
+            log.error(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
+            throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
         }
-        return removedTaskResult;
     }
 
     private Map<TaskId, Set<TopicPartition>> pendingTasksToCreate(final Map<TaskId, Set<TopicPartition>> tasksToCreate) {
@@ -1222,14 +1226,16 @@ public class TaskManager {
                     }
                 }
             }
-            iterateAndActOnRemovedTask(
-                futures,
-                failedTasksFromStateUpdater,
-                task -> {
+            futures.entrySet().stream()
+                .map(entry -> waitForFuture(entry.getKey(), entry.getValue()))
+                .filter(Objects::nonNull)
+                .map(removedTaskResult -> checkIfTaskFailed(removedTaskResult, failedTasksFromStateUpdater))
+                .filter(Objects::nonNull)
+                .forEach(task -> {
                     task.suspend();
                     tasks.addTask(task);
-                }
-            );
+                });
+
             maybeThrowTaskExceptions(failedTasksFromStateUpdater);
         }
     }
