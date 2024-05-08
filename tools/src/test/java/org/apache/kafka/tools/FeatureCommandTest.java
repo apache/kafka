@@ -169,7 +169,7 @@ public class FeatureCommandTest {
     }
 
     @Test
-    public void testdowngradeType() {
+    public void testDowngradeType() {
         assertEquals(SAFE_DOWNGRADE, FeatureCommand.downgradeType(
             new Namespace(singletonMap("unsafe", Boolean.FALSE))));
         assertEquals(UNSAFE_DOWNGRADE, FeatureCommand.downgradeType(
