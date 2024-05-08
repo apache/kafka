@@ -32,6 +32,7 @@ import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
+import kafka.server.KafkaServer.{EXPONENTIAL_BACKOFF_JITTER, EXPONENTIAL_BACKOFF_MAX_INTERVAL_MS, EXPONENTIAL_BACKOFF_MULTIPLIER}
 import kafka.server.metadata.ZkConfigRepository
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
@@ -46,7 +47,7 @@ import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledSh
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, PoisonPill, Time, Utils}
+import org.apache.kafka.common.utils.{AppInfoParser, ExponentialBackoff, LogContext, PoisonPill, Time, Utils}
 import org.apache.kafka.common.{Endpoint, Node, TopicPartition}
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.Authorizer
@@ -81,6 +82,9 @@ object KafkaServer {
   }
 
   val MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS: Long = 120000
+  private val EXPONENTIAL_BACKOFF_MULTIPLIER = 2
+  private val EXPONENTIAL_BACKOFF_MAX_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
+  private val EXPONENTIAL_BACKOFF_JITTER = -0.01 // no randomness
 }
 
 /**
@@ -197,6 +201,12 @@ class KafkaServer(
   private val kafkaActions: KafkaActions = actions
 
   @volatile private var poisonPill: PoisonPill = null
+
+  private val retryExponentialBackoff = new ExponentialBackoff(
+    config.controlledShutdownRetryBackoffMs,
+    EXPONENTIAL_BACKOFF_MULTIPLIER,
+    EXPONENTIAL_BACKOFF_MAX_INTERVAL_MS,
+    EXPONENTIAL_BACKOFF_JITTER)
 
   // populate the global flag
   GlobalConfig.liDropCorruptedFilesEnable = config.liDropCorruptedFilesEnable
@@ -753,8 +763,15 @@ class KafkaServer(
             }
           }
           if (!shutdownSucceeded) {
-            Thread.sleep(config.controlledShutdownRetryBackoffMs)
-            warn("Retrying controlled shutdown after the previous attempt failed...")
+            var attempts = retries - remainingRetries
+            if (attempts < 1) {
+              // This should never happen, but just in case there is unexpected change to retries or remainingRetries in future.
+              attempts = 1
+            }
+            val retryWaitMs = retryExponentialBackoff.backoff(attempts - 1)
+            warn(s"Controlled shutdown failed for $attempts times. Retry in $retryWaitMs ms.")
+            Thread.sleep(retryWaitMs)
+            warn("Retrying controlled shutdown.")
           }
           /** In case {@link KafkaController} reported that it's not safe to shutdown,
            * the delegate KafkaAction will invoke Cruise-Control to demote this broker in Azure environment only. */
