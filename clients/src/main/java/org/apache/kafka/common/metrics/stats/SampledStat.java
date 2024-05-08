@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A SampledStat records a single scalar value measured over one or more samples. Each sample is recorded over a
@@ -87,7 +87,7 @@ public abstract class SampledStat implements MeasurableStat {
         Sample oldest = this.samples.get(0);
         for (int i = 1; i < this.samples.size(); i++) {
             Sample curr = this.samples.get(i);
-            if (curr.lastWindowMs < oldest.lastWindowMs)
+            if (curr.startTimeMs < oldest.startTimeMs)
                 oldest = curr;
         }
         return oldest;
@@ -106,36 +106,47 @@ public abstract class SampledStat implements MeasurableStat {
 
     public abstract double combine(List<Sample> samples, MetricConfig config, long now);
 
-    /* Timeout any windows that have expired in the absence of any events */
-    protected void purgeObsoleteSamples(MetricConfig config, long now) {
+    /**
+     * Purges any windows that started before the configured period.
+     * Returns the end of the latest purged window.
+     */
+    protected long purgeObsoleteSamples(MetricConfig config, long now) {
         long expireAge = config.samples() * config.timeWindowMs();
+        long purgedUpToMs = 0;
         for (Sample sample : samples) {
-            if (now - sample.lastWindowMs >= expireAge)
+            if (now - sample.startTimeMs >= expireAge) {
+                purgedUpToMs = Math.max(purgedUpToMs, sample.endTimeMs(config));
                 sample.reset(now);
+            }
         }
+        return purgedUpToMs;
     }
 
     protected static class Sample {
         public double initialValue;
         public long eventCount;
-        public long lastWindowMs;
+        public long startTimeMs;
         public double value;
 
         public Sample(double initialValue, long now) {
             this.initialValue = initialValue;
             this.eventCount = 0;
-            this.lastWindowMs = now;
+            this.startTimeMs = now;
             this.value = initialValue;
         }
 
         public void reset(long now) {
             this.eventCount = 0;
-            this.lastWindowMs = now;
+            this.startTimeMs = now;
             this.value = initialValue;
         }
 
         public boolean isComplete(long timeMs, MetricConfig config) {
-            return timeMs - lastWindowMs >= config.timeWindowMs() || eventCount >= config.eventWindow();
+            return timeMs - startTimeMs >= config.timeWindowMs() || eventCount >= config.eventWindow();
+        }
+        
+        public long endTimeMs(MetricConfig config) {
+            return startTimeMs + config.timeWindowMs();
         }
 
         @Override
@@ -143,7 +154,7 @@ public abstract class SampledStat implements MeasurableStat {
             return "Sample(" +
                 "value=" + value +
                 ", eventCount=" + eventCount +
-                ", lastWindowMs=" + lastWindowMs +
+                ", startTimeMs=" + startTimeMs +
                 ", initialValue=" + initialValue +
                 ')';
         }
