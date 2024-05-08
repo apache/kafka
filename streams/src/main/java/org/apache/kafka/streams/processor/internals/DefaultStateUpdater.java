@@ -150,9 +150,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 handleRuntimeException(anyOtherException);
             } finally {
                 clearInputQueue();
-                updatingTasks.clear();
-                pausedTasks.clear();
-                changelogReader.clear();
+                clearUpdatingAndPausedTasks();
                 updaterMetrics.clear();
                 shutdownGate.countDown();
                 log.info("State updater thread stopped");
@@ -455,17 +453,10 @@ public class DefaultStateUpdater implements StateUpdater {
                 !isTopologyResumed.get();
         }
 
-        private void removeUpdatingAndPausedTasks() {
-            changelogReader.clear();
-            measureCheckpointLatency(() -> updatingTasks.forEach((id, task) -> {
-                task.maybeCheckpoint(true);
-                removedTasks.add(task);
-            }));
+        private void clearUpdatingAndPausedTasks() {
             updatingTasks.clear();
-            pausedTasks.forEach((id, task) -> {
-                removedTasks.add(task);
-            });
             pausedTasks.clear();
+            changelogReader.clear();
         }
 
         private List<TaskAndAction> getTasksAndActions() {

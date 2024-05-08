@@ -948,8 +948,8 @@ public class TaskManager {
     }
 
     private void closeTaskClean(final Task task,
-                                   final Set<Task> tasksToCloseDirty,
-                                   final Map<TaskId, RuntimeException> taskExceptions) {
+                                final Set<Task> tasksToCloseDirty,
+                                final Map<TaskId, RuntimeException> taskExceptions) {
         try {
             task.suspend();
             task.closeClean();
