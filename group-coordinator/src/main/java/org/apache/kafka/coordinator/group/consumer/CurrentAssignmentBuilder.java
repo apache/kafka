@@ -147,24 +147,10 @@ public class CurrentAssignmentBuilder {
                 // considered revoked when they are not anymore reported in the
                 // owned partitions set in the ConsumerGroupHeartbeat API.
 
-                // If the member does not provide its owned partitions. We cannot
-                // progress.
-                if (ownedTopicPartitions == null) {
-                    return member;
-                }
-
                 // If the member provides its owned partitions. We verify if it still
                 // owns any of the revoked partitions. If it does, we cannot progress.
-                for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
-                    for (Integer partitionId : topicPartitions.partitions()) {
-                        boolean stillHasRevokedPartition = member
-                            .partitionsPendingRevocation()
-                            .getOrDefault(topicPartitions.topicId(), Collections.emptySet())
-                            .contains(partitionId);
-                        if (stillHasRevokedPartition) {
-                            return member;
-                        }
-                    }
+                if (ownsRevokedPartitions(member.partitionsPendingRevocation())) {
+                    return member;
                 }
 
                 // When the member has revoked all the pending partitions, it can
@@ -201,6 +187,31 @@ public class CurrentAssignmentBuilder {
         }
 
         return member;
+    }
+
+    /**
+     * Decides whether the current ownedTopicPartitions contains any partition that is pending revocation.
+     *
+     * @param assignment The assignment that has the partitions pending revocation.
+     * @return A boolean based on the condition mentioned above.
+     */
+    private boolean ownsRevokedPartitions(
+        Map<Uuid, Set<Integer>> assignment
+    ) {
+        if (ownedTopicPartitions == null) return true;
+
+        for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
+            Set<Integer> partitionsPendingRevocation =
+                assignment.getOrDefault(topicPartitions.topicId(), Collections.emptySet());
+
+            for (Integer partitionId : topicPartitions.partitions()) {
+                if (partitionsPendingRevocation.contains(partitionId)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -257,7 +268,7 @@ public class CurrentAssignmentBuilder {
             }
         }
 
-        if (!newPartitionsPendingRevocation.isEmpty()) {
+        if (!newPartitionsPendingRevocation.isEmpty() && ownsRevokedPartitions(newPartitionsPendingRevocation)) {
             // If there are partitions to be revoked, the member remains in its current
             // epoch and requests the revocation of those partitions. It transitions to
             // the UNREVOKED_PARTITIONS state to wait until the client acknowledges the

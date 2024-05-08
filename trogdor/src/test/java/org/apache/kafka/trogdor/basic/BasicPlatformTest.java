@@ -18,8 +18,6 @@
 package org.apache.kafka.trogdor.basic;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.common.Platform;
 
@@ -57,7 +55,7 @@ public class BasicPlatformTest {
             Platform platform = Platform.Config.parse("bob01", configFile.getPath());
             assertEquals("BasicPlatform", platform.name());
             assertEquals(2, platform.topology().nodes().size());
-            assertEquals("bob01, bob02", Utils.join(platform.topology().nodes().keySet(), ", "));
+            assertEquals("bob01, bob02", String.join(", ", platform.topology().nodes().keySet()));
         } finally {
             Files.delete(configFile.toPath());
         }

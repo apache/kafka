@@ -23,7 +23,9 @@ import org.apache.kafka.streams.processor.TaskId;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 public interface StateUpdater {
 
@@ -66,6 +68,50 @@ public interface StateUpdater {
         }
     }
 
+    class RemovedTaskResult {
+
+        private final Task task;
+        private final Optional<RuntimeException> exception;
+
+        public RemovedTaskResult(final Task task) {
+            this(task, null);
+        }
+
+        public RemovedTaskResult(final Task task, final RuntimeException exception) {
+            this.task = Objects.requireNonNull(task);
+            this.exception = Optional.ofNullable(exception);
+        }
+
+        public Task task() {
+            return task;
+        }
+
+        public Optional<RuntimeException> exception() {
+            return exception;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) return true;
+            if (!(o instanceof RemovedTaskResult)) return false;
+            final RemovedTaskResult that = (RemovedTaskResult) o;
+            return Objects.equals(task.id(), that.task.id()) && Objects.equals(exception, that.exception);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(task, exception);
+        }
+
+        @Override
+        public String toString() {
+            return "RemovedTaskResult{" +
+                "task=" + task.id() +
+                ", exception=" + exception +
+                '}';
+        }
+    }
+
     /**
      * Starts the state updater.
      */
@@ -102,6 +148,17 @@ public interface StateUpdater {
      * @param taskId ID of the task to remove
      */
     void remove(final TaskId taskId);
+
+    /**
+     * Removes a task (active or standby) from the state updater.
+     *
+     * This method does not block until the removed task is removed from the state updater. But it returns a future on
+     * which processing can be blocked. The task to remove is removed from the updating tasks, paused tasks,
+     * restored tasks, or failed tasks.
+     *
+     * @param taskId ID of the task to remove
+     */
+    CompletableFuture<RemovedTaskResult> removeWithFuture(final TaskId taskId);
 
     /**
      * Wakes up the state updater if it is currently dormant, to check if a paused task should be resumed.

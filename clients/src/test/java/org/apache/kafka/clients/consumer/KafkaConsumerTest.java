@@ -1256,8 +1256,6 @@ public class KafkaConsumerTest {
         exec.awaitTermination(5L, TimeUnit.SECONDS);
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testPollThrowsInterruptExceptionIfInterrupted(GroupProtocol groupProtocol) {
@@ -1279,7 +1277,8 @@ public class KafkaConsumerTest {
             Thread.currentThread().interrupt();
             assertThrows(InterruptException.class, () -> consumer.poll(Duration.ZERO));
         } finally {
-            // clear interrupted state again since this thread may be reused by JUnit
+            // ensure this test doesn't exit with the thread still in an interrupted state
+            // so that it cannot interfere with subsequent tests since this thread may be reused by JUnit
             Thread.interrupted();
         }
     }
