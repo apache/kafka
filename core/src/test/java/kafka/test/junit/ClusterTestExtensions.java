@@ -109,6 +109,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             for (ClusterTest annot : clusterTestsAnnot.value()) {
                 processClusterTest(context, annot, defaults, generatedContexts::add);
             }
+            if (!clusterTestsAnnot.clusterTemplate().value().isEmpty()) {
+                processClusterTemplate(context, clusterTestsAnnot.clusterTemplate(), generatedContexts::add);
+            }
         }
 
         if (generatedContexts.isEmpty()) {

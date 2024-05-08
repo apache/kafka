@@ -31,5 +31,6 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Retention(RUNTIME)
 @TestTemplate
 public @interface ClusterTests {
-    ClusterTest[] value();
+    ClusterTest[] value() default {};
+    ClusterTemplate clusterTemplate() default @ClusterTemplate(value = "");
 }
