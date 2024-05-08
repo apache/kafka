@@ -55,6 +55,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.util.Using
 import scala.util.matching.Regex
 
 case class BatchInfo(records: Seq[SimpleRecord], hasKeys: Boolean, hasValues: Boolean)
@@ -331,7 +332,7 @@ class DumpLogSegmentsTest {
 
     val lastContainedLogTimestamp = 10000
 
-    TestUtils.resource(
+    Using(
       new RecordsSnapshotWriter.Builder()
         .setTime(new MockTime)
         .setLastContainedLogTimestamp(lastContainedLogTimestamp)
