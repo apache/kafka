@@ -632,47 +632,38 @@ public class TaskManager {
     private void updateInputPartitions(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
                                        final Map<TaskId, Set<TopicPartition>> newInputPartitions,
                                        final Map<TaskId, RuntimeException> failedTasks) {
-        futures.entrySet().stream()
-            .map(entry -> waitForFuture(entry.getKey(), entry.getValue()))
-            .filter(Objects::nonNull)
-            .map(removedTaskResult -> checkIfTaskFailed(removedTaskResult, failedTasks))
-            .filter(Objects::nonNull)
-            .forEach(task -> {
-                task.updateInputPartitions(
-                    newInputPartitions.get(task.id()),
-                    topologyMetadata.nodeToSourceTopics(task.id())
-                );
-                stateUpdater.add(task);
-            });
+        getNonFailedTasks(futures, failedTasks).forEach(task -> {
+            task.updateInputPartitions(
+                newInputPartitions.get(task.id()),
+                topologyMetadata.nodeToSourceTopics(task.id())
+            );
+            stateUpdater.add(task);
+        });
     }
 
     private void addToActiveTasksToRecycle(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
                                            final Map<TaskId, Set<TopicPartition>> standbyInputPartitions,
                                            final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                            final Map<TaskId, RuntimeException> failedTasks) {
-        futures.entrySet().stream()
-            .map(entry -> waitForFuture(entry.getKey(), entry.getValue()))
-            .filter(Objects::nonNull)
-            .map(removedTaskResult -> checkIfTaskFailed(removedTaskResult, failedTasks))
-            .filter(Objects::nonNull)
-            .forEach(task -> {
-                tasksToRecycle.put(task, standbyInputPartitions.get(task.id()));
-            });
+        getNonFailedTasks(futures, failedTasks).forEach(task -> tasksToRecycle.put(task, standbyInputPartitions.get(task.id())));
     }
 
     private void addToStandbyTasksToRecycle(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
                                             final Map<TaskId, Set<TopicPartition>> activeInputPartitions,
                                             final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                             final Map<TaskId, RuntimeException> failedTasks) {
-        futures.entrySet().stream()
+        getNonFailedTasks(futures, failedTasks).forEach(task -> tasksToRecycle.put(task, activeInputPartitions.get(task.id())));
+    }
+
+    private Stream<Task> getNonFailedTasks(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
+                                           final Map<TaskId, RuntimeException> failedTasks) {
+        return futures.entrySet().stream()
             .map(entry -> waitForFuture(entry.getKey(), entry.getValue()))
             .filter(Objects::nonNull)
             .map(removedTaskResult -> checkIfTaskFailed(removedTaskResult, failedTasks))
-            .filter(Objects::nonNull)
-            .forEach(task -> {
-                tasksToRecycle.put(task, activeInputPartitions.get(task.id()));
-            });
+            .filter(Objects::nonNull);
     }
+
 
     private void addToTasksToClose(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
                                    final Set<Task> tasksToCloseCleanFromStateUpdater,
@@ -1225,15 +1216,10 @@ public class TaskManager {
                     }
                 }
             }
-            futures.entrySet().stream()
-                .map(entry -> waitForFuture(entry.getKey(), entry.getValue()))
-                .filter(Objects::nonNull)
-                .map(removedTaskResult -> checkIfTaskFailed(removedTaskResult, failedTasksFromStateUpdater))
-                .filter(Objects::nonNull)
-                .forEach(task -> {
-                    task.suspend();
-                    tasks.addTask(task);
-                });
+            getNonFailedTasks(futures, failedTasksFromStateUpdater).forEach(task -> {
+                task.suspend();
+                tasks.addTask(task);
+            });
 
             maybeThrowTaskExceptions(failedTasksFromStateUpdater);
         }
