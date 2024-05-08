@@ -18,9 +18,11 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.data.Schema;
@@ -29,6 +31,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
 
+import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,6 +51,7 @@ import java.util.concurrent.ExecutionException;
 import java.time.Duration;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.connect.mirror.MirrorCheckpointConfig.CHECKPOINTS_TARGET_CONSUMER_ROLE;
 import static org.apache.kafka.connect.mirror.MirrorUtils.adminCall;
 
 /** Emits checkpoints for upstream consumer groups. */
@@ -70,6 +75,7 @@ public class MirrorCheckpointTask extends SourceTask {
     private Scheduler scheduler;
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset;
     private Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup;
+
     public MirrorCheckpointTask() {}
 
     // for testing
@@ -106,6 +112,7 @@ public class MirrorCheckpointTask extends SourceTask {
         checkpointsPerConsumerGroup = new HashMap<>();
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(() -> {
+            loadOldCheckpoints(config);
             offsetSyncStore.start();
             scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
                     "refreshing idle consumers group offsets at target cluster");
@@ -115,6 +122,43 @@ public class MirrorCheckpointTask extends SourceTask {
         log.info("{} checkpointing {} consumer groups {}->{}: {}.", Thread.currentThread().getName(),
                 consumerGroups.size(), sourceClusterAlias, config.targetClusterAlias(), consumerGroups);
     }
+
+    private void loadOldCheckpoints(MirrorCheckpointTaskConfig config) {
+        TopicAdmin cpAdmin = null;
+        KafkaBasedLog<byte[], byte[]> oldCheckpoints = null;
+
+        try {
+            cpAdmin = new TopicAdmin(
+                    config.targetAdminConfig("checkpoint-target-admin"),
+                    config.forwardingAdmin(config.targetAdminConfig("checkpoint-target-admin")));
+
+            oldCheckpoints = KafkaBasedLog.withExistingClients(
+                    config.checkpointsTopic(),
+                    MirrorUtils.newConsumer(config.targetConsumerConfig(CHECKPOINTS_TARGET_CONSUMER_ROLE)),
+                    null,
+                    cpAdmin,
+                    (error, cpRecord) -> this.handleCPRecord(cpRecord),
+                    Time.SYSTEM,
+                    ignored -> {
+                    },
+                    topicPartition -> topicPartition.partition() == 0);
+
+            oldCheckpoints.start();
+            oldCheckpoints.stop();
+        } finally {
+            Utils.closeQuietly(cpAdmin, "admin client for old CPs");
+            Utils.closeQuietly(oldCheckpoints != null ? oldCheckpoints::stop : null, "backing store for old CPs");
+        }
+    }
+
+    private void handleCPRecord(ConsumerRecord<byte[], byte[]> cpRecord) {
+        Checkpoint cp = Checkpoint.deserializeRecord(cpRecord);
+        if (consumerGroups.contains(cp.consumerGroupId())) {
+            Map<TopicPartition, Checkpoint> cps = checkpointsPerConsumerGroup.computeIfAbsent(cp.consumerGroupId(), ignored -> new HashMap<>());
+            cps.put(cp.topicPartition(), cp);
+        }
+    }
+
 
     @Override
     public void commit() {

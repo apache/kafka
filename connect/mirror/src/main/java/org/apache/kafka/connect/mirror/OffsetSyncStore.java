@@ -214,7 +214,7 @@ class OffsetSyncStore implements AutoCloseable {
         // While reading to the end of the topic, ensure that our earliest sync is later than
         // any earlier sync that could have been used for translation, to preserve monotonicity
         // If the upstream offset rewinds, all previous offsets are invalid, so overwrite them all.
-        if (!readToEnd || syncs[0].upstreamOffset() > upstreamOffset) {
+        if (syncs[0].upstreamOffset() > upstreamOffset) {
             clearSyncArray(syncs, offsetSync);
             return;
         }
