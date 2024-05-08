@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.Stage;
 
 import java.util.Collection;
 
@@ -36,4 +37,15 @@ public interface WorkerRebalanceListener {
      * or tasks might refer to all or some of the connectors and tasks running on the worker.
      */
     void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks);
+
+
+    /**
+     * Invoked when a worker experiences a poll timeout expiry. Invoking this method allows getting
+     * the stage which was currently being executed when the poll timeout happened. The default implementation
+     * returns null
+     * @return The current stage being executed. Could be null
+     */
+    default Stage onPollTimeoutExpiry() {
+        return null;
+    }
 }

@@ -850,6 +850,22 @@ public class ConnectWorkerIntegrationTest {
         );
     }
 
+    @Test
+    public void testPollTimeoutExpiry() throws Exception {
+        final String configTopic = "test-poll-timeout-expiry-config";
+        workerProps.put(CONFIG_TOPIC_CONFIG, configTopic);
+
+        workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "0");
+        connect = connectBuilder
+            .numBrokers(1)
+            .numWorkers(2)
+            .build();
+        connect.start();
+        connect.assertions().assertAtLeastNumWorkersAreUp(2,
+            "Worker did not start in time");
+
+    }
+
     private void assertTimeoutException(Runnable operation, String expectedStageDescription) throws InterruptedException {
         connect.requestTimeout(1_000);
         AtomicReference<Throwable> latestError = new AtomicReference<>();

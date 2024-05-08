@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.Stage;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -269,12 +270,14 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     @Override
     protected void handlePollTimeoutExpiry() {
+        Stage currentStage = listener.onPollTimeoutExpiry();
         log.warn("worker poll timeout has expired. This means the time between subsequent calls to poll() " +
             "in DistributedHerder tick() method was longer than the configured rebalance.timeout.ms. " +
-            "If you see this happening consistently, then it can be addressed by either adding more workers " +
-            "to the connect cluster or by increasing the rebalance.timeout.ms configuration value. Please note that " +
+            "The last known stage executing on the tick thread is : {}. " +
+            "Please review the last known stage for tick thread (if known) for any corrective actions. " +
+            "One of the ways of addressing this can be increasing the rebalance.timeout.ms configuration value. Please note that " +
             "rebalance.timeout.ms also controls the maximum allowed time for each worker to join the group once a " +
-            "rebalance has begun so the set value should not be very high");
+            "rebalance has begun so the set value should not be very high", currentStage == null ? "not known" : currentStage.description());
 
         maybeLeaveGroup("worker poll timeout has expired.");
     }

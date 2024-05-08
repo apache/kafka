@@ -2704,6 +2704,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
         }
 
+        @Override
+        public Stage onPollTimeoutExpiry() {
+            return tickThreadStage;
+        }
+
         private void resetActiveTopics(Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
             String stageDescription = "resetting the list of active topics for " + connectors.size() + " and " + tasks.size() + " tasks";
             try (TickThreadStage stage = new TickThreadStage(stageDescription)) {
