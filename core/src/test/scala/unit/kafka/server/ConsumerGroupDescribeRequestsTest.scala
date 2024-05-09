@@ -22,9 +22,10 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDef
 import kafka.test.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.common.ConsumerGroupState
-import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.{Assignment, DescribedGroup, TopicPartitions}
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.message.{ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{Tag, Timeout}
@@ -36,6 +37,28 @@ import scala.jdk.CollectionConverters._
 @ClusterTestDefaults(clusterType = Type.KRAFT, brokers = 1)
 @Tag("integration")
 class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
+
+  @ClusterTest(clusterType = Type.ZK)
+  def testConsumerGroupDescribeWithZookeeperCluster(): Unit = {
+    val consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
+      new ConsumerGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava)
+    ).build(ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled))
+
+    val consumerGroupDescribeResponse = connectAndReceive[ConsumerGroupDescribeResponse](consumerGroupDescribeRequest)
+    val expectedResponse = new ConsumerGroupDescribeResponseData()
+    expectedResponse.groups().add(
+      new ConsumerGroupDescribeResponseData.DescribedGroup()
+        .setGroupId("grp-1")
+        .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+    )
+    expectedResponse.groups.add(
+      new ConsumerGroupDescribeResponseData.DescribedGroup()
+        .setGroupId("grp-2")
+        .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+    )
+
+    assertEquals(expectedResponse, consumerGroupDescribeResponse.data)
+  }
 
   @ClusterTest(clusterType = Type.KRAFT, serverProperties = Array(
     new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
