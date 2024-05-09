@@ -394,20 +394,13 @@ public class StreamTaskTest {
 
         shouldNotSeek.set(new AssertionError("Should not seek"));
 
-        @SuppressWarnings("unchecked")
-        final java.util.function.Consumer<Set<TopicPartition>> resetter =
-            mock(java.util.function.Consumer.class);
         // We need to keep a separate reference to the arguments of Consumer#accept
         // because the underlying data-structure is emptied and on verification time
         // it is reported as empty.
         final Set<TopicPartition> partitionsAtCall = new HashSet<>();
-        doAnswer(invocation -> {
-            partitionsAtCall.addAll(invocation.getArgument(0));
-            return null;
-        }).when(resetter).accept(Collections.singleton(partition1));
 
         task.initializeIfNeeded();
-        task.completeRestoration(resetter);
+        task.completeRestoration(partitionsAtCall::addAll);
 
         // because we mocked the `resetter` positions don't change
         assertThat(consumer.position(partition1), equalTo(5L));
@@ -1429,6 +1422,7 @@ public class StreamTaskTest {
         assertThat("task is not idling", !task.timeCurrentIdlingStarted().isPresent());
     }
 
+    @Test
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
