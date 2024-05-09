@@ -161,7 +161,7 @@ final public class VoterSet {
      * An overlapping majority means that for all majorities in {@code this} set of voters and for
      * all majority in {@code that} set of voters, they have at least one voter in common.
      *
-     * If this function returns true, it means that if one of the set of voters commits an offset, the
+     * If this function returns true, it means that if one of the set of voters commits an offset,
      * the other set of voters cannot commit a conflicting offset.
      *
      * @param that the other voter set to compare
