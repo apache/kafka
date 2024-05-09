@@ -24,11 +24,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerWrapperWithHarness;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.api.Test;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -48,9 +45,10 @@ public class RemoteLogMetadataManagerTest {
 
     private final Time time = new MockTime(1);
 
-    @ParameterizedTest(name = "remoteLogMetadataManager = {0}")
-    @MethodSource("remoteLogMetadataManagers")
-    public void testFetchSegments(RemoteLogMetadataManager remoteLogMetadataManager) throws Exception {
+    private RemoteLogMetadataManager remoteLogMetadataManager = new TopicBasedRemoteLogMetadataManagerWrapperWithHarness();
+
+    @Test
+    public void testFetchSegments() throws Exception {
         try {
             remoteLogMetadataManager.configure(Collections.emptyMap());
             remoteLogMetadataManager.onPartitionLeadershipChanges(Collections.singleton(TP0), Collections.emptySet());
@@ -83,9 +81,8 @@ public class RemoteLogMetadataManagerTest {
         }
     }
 
-    @ParameterizedTest(name = "remoteLogMetadataManager = {0}")
-    @MethodSource("remoteLogMetadataManagers")
-    public void testRemotePartitionDeletion(RemoteLogMetadataManager remoteLogMetadataManager) throws Exception {
+    @Test
+    public void testRemotePartitionDeletion() throws Exception {
         try {
             remoteLogMetadataManager.configure(Collections.emptyMap());
             remoteLogMetadataManager.onPartitionLeadershipChanges(Collections.singleton(TP0), Collections.emptySet());
@@ -149,9 +146,5 @@ public class RemoteLogMetadataManagerTest {
 
     private RemotePartitionDeleteMetadata createRemotePartitionDeleteMetadata(RemotePartitionDeleteState state) {
         return new RemotePartitionDeleteMetadata(TP0, state, time.milliseconds(), BROKER_ID_0);
-    }
-
-    private static Collection<Arguments> remoteLogMetadataManagers() {
-        return Collections.singletonList(Arguments.of(new TopicBasedRemoteLogMetadataManagerWrapperWithHarness()));
     }
 }
