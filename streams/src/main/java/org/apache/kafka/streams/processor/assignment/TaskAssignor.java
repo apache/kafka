@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupAssignme
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
+import org.apache.kafka.streams.errors.TaskAssignmentException;
 
 /**
  * A TaskAssignor is responsible for creating a TaskAssignment from a given

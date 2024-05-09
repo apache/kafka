@@ -19,11 +19,11 @@ package org.apache.kafka.streams.processor.assignment;
 import org.apache.kafka.common.protocol.types.Field.UUID;
 
 /** A simple wrapper around UUID that abstracts a Process ID */
-public class ProcessID {
+public class ProcessId {
 
     private final UUID id;
 
-    public ProcessID(final UUID id) {
+    public ProcessId(final UUID id) {
         this.id = id;
     }
 

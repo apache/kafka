@@ -37,7 +37,7 @@ public interface ApplicationState {
      *                                 this exception to have Kafka Streams retry the rebalance by returning the same
      *                                 assignment and scheduling an immediate followup rebalance
      */
-    Map<ProcessID, KafkaStreamsState> kafkaStreamsStates(boolean computeTaskLags);
+    Map<ProcessId, KafkaStreamsState> kafkaStreamsStates(boolean computeTaskLags);
 
     /**
      * @return a simple container class with the Streams configs relevant to assignment

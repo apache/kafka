@@ -17,143 +17,120 @@
 package org.apache.kafka.streams.processor.assignment;
 
 import java.util.List;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.streams.StreamsConfig;
 
 /**
- * Configuration for the KafkaStreams Task Assignor.
+ * Assignment related configs for the Kafka Streams {@link TaskAssignor}.
  */
 public class AssignmentConfigs {
+    private final long acceptableRecoveryLag;
+    private final int maxWarmupReplicas;
+    private final int nonOverlapCost;
+    private final int numStandbyReplicas;
+    private final long probingRebalanceIntervalMs;
+    private final List<String> rackAwareAssignmentTags;
+    private final int trafficCost;
+    private final String assignmentStrategy;
 
-    private long acceptableRecoveryLag;
-    private int maxWarmupReplicas;
-    private int nonOverlapCost;
-    private int numStandbyReplicas;
-    private long probingRebalanceIntervalMs;
-    private List<String> rackAwareAssignmentTags;
-    private int trafficCost;
+    public AssignmentConfigs(final StreamsConfig configs) {
+        acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
+        maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
+        numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+        probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
+        rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        trafficCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG);
+        nonOverlapCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG);
+        assignmentStrategy = configs.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG);
+    }
+
+    public AssignmentConfigs(final Long acceptableRecoveryLag,
+                      final Integer maxWarmupReplicas,
+                      final Integer numStandbyReplicas,
+                      final Long probingRebalanceIntervalMs,
+                      final List<String> rackAwareAssignmentTags,
+                      final Integer trafficCost,
+                      final Integer nonOverlapCost,
+                      final String assignmentStrategy) {
+        this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
+        this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
+        this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
+        this.probingRebalanceIntervalMs = validated(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, probingRebalanceIntervalMs);
+        this.rackAwareAssignmentTags = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rackAwareAssignmentTags);
+        this.trafficCost = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG, trafficCost);
+        this.nonOverlapCost = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG, nonOverlapCost);
+        this.assignmentStrategy = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, assignmentStrategy);
+    }
 
     /**
-     * Returns the acceptable lag in the task recovery process in milliseconds.
-     *
-     * @return the number of milliseconds of acceptable recovery lag.
+     * The configured acceptable recovery lag according to
+     * {@link StreamsConfig#ACCEPTABLE_RECOVERY_LAG_CONFIG}
      */
     public long acceptableRecoveryLag() {
         return acceptableRecoveryLag;
     }
 
     /**
-     * Sets the acceptable lag in the task recovery process.
-     *
-     * @param acceptableRecoveryLag the acceptable recovery lag to set, in milliseconds.
-     */
-    public void setAcceptableRecoveryLag(final long acceptableRecoveryLag) {
-        this.acceptableRecoveryLag = acceptableRecoveryLag;
-    }
-
-    /**
-     * Returns the maximum number of warmup replicas allowed.
-     *
-     * @return the maximum number of warmup replicas.
+     * The maximum warmup replicas as configured via
+     * {@link StreamsConfig#MAX_WARMUP_REPLICAS_CONFIG}
      */
     public int maxWarmupReplicas() {
         return maxWarmupReplicas;
     }
 
     /**
-     * Sets the maximum number of warmup replicas allowed.
-     *
-     * @param maxWarmupReplicas the maximum number of warmup replicas to set.
-     */
-    public void setMaxWarmupReplicas(final int maxWarmupReplicas) {
-        this.maxWarmupReplicas = maxWarmupReplicas;
-    }
-
-    /**
-     * Returns the number of standby replicas.
-     *
-     * @return the number of standby replicas.
+     * The number of standby replicas as configured via
+     * {@link StreamsConfig#NUM_STANDBY_REPLICAS_CONFIG}
      */
     public int numStandbyReplicas() {
         return numStandbyReplicas;
     }
 
     /**
-     * Sets the number of standby replicas.
-     *
-     * @param numStandbyReplicas the number of standby replicas to set.
-     */
-    public void setNumStandbyReplicas(final int numStandbyReplicas) {
-        this.numStandbyReplicas = numStandbyReplicas;
-    }
-
-    /**
-     * Returns the interval between probing rebalances in milliseconds.
-     *
-     * @return the interval between probing rebalances.
+     * The probing rebalance interval in milliseconds as configured via
+     * {@link StreamsConfig#PROBING_REBALANCE_INTERVAL_MS_CONFIG}
      */
     public long probingRebalanceIntervalMs() {
         return probingRebalanceIntervalMs;
     }
 
     /**
-     * Sets the interval between probing rebalances.
-     *
-     * @param probingRebalanceIntervalMs the interval between probing rebalances to set, in milliseconds.
-     */
-    public void setProbingRebalanceIntervalMs(final long probingRebalanceIntervalMs) {
-        this.probingRebalanceIntervalMs = probingRebalanceIntervalMs;
-    }
-
-    /**
-     * Returns the list of rack-aware assignment tags.
-     *
-     * @return the list of rack-aware assignment tags.
+     * The rack-aware assignment tags as configured via
+     * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_TAGS_CONFIG}
      */
     public List<String> rackAwareAssignmentTags() {
         return rackAwareAssignmentTags;
     }
 
     /**
-     * Sets the list of rack-aware assignment tags.
-     *
-     * @param rackAwareAssignmentTags the list of rack-aware assignment tags to set.
-     */
-    public void setRackAwareAssignmentTags(final List<String> rackAwareAssignmentTags) {
-        this.rackAwareAssignmentTags = rackAwareAssignmentTags;
-    }
-
-    /**
-     * Returns the traffic cost.
-     *
-     * @return the traffic cost.
+     * The rack-aware assignment traffic cost as configured via
+     * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG}
      */
     public int trafficCost() {
         return trafficCost;
     }
 
     /**
-     * Sets the traffic cost.
-     *
-     * @param trafficCost the traffic cost to set.
-     */
-    public void setTrafficCost(final int trafficCost) {
-        this.trafficCost = trafficCost;
-    }
-
-    /**
-     * Returns the non-overlap cost.
-     *
-     * @return the non-overlap cost.
+     * The rack-aware assignment non-overlap cost as configured via
+     * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG}
      */
     public int nonOverlapCost() {
         return nonOverlapCost;
     }
 
     /**
-     * Sets the non-overlap cost.
-     *
-     * @param nonOverlapCost the non-overlap cost to set.
+     * The rack-aware assignment strategy as configured via
+     * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG}
      */
-    public void setNonOverlapCost(final int nonOverlapCost) {
-        this.nonOverlapCost = nonOverlapCost;
+    public String assignmentStrategy() {
+        return assignmentStrategy;
+    }
+
+    private static <T> T validated(final String configKey, final T value) {
+        final ConfigDef.Validator validator = StreamsConfig.configDef().configKeys().get(configKey).validator;
+        if (validator != null) {
+            validator.ensureValid(configKey, value);
+        }
+        return value;
     }
 }

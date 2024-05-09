@@ -21,7 +21,7 @@ import java.util.SortedSet;
 import org.apache.kafka.streams.processor.TaskId;
 
 /**
- * A set of utilities to help implement task assignment.
+ * A set of utilities to help implement task assignment via the {@link TaskAssignor}
  */
 public final class TaskAssignmentUtils {
     /**
@@ -35,9 +35,9 @@ public final class TaskAssignmentUtils {
      * @return a new map containing the mappings from KafkaStreamsAssignments updated with the default
      *         standby assignment
      */
-    public static Map<ProcessID, KafkaStreamsAssignment> defaultStandbyTaskAssignment(
+    public static Map<ProcessId, KafkaStreamsAssignment> defaultStandbyTaskAssignment(
         final ApplicationState applicationState,
-        final Map<ProcessID, KafkaStreamsAssignment> kafkaStreamsAssignments
+        final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments
     ) {
         throw new UnsupportedOperationException("Not Implemented.");
     }
@@ -53,9 +53,9 @@ public final class TaskAssignmentUtils {
      * @return a new map containing the mappings from KafkaStreamsAssignments updated with the default
      *         rack-aware assignment for active tasks
      */
-    public static Map<ProcessID, KafkaStreamsAssignment> optimizeRackAwareActiveTasks(
+    public static Map<ProcessId, KafkaStreamsAssignment> optimizeRackAwareActiveTasks(
         final ApplicationState applicationState,
-        final Map<ProcessID, KafkaStreamsAssignment> kafkaStreamsAssignments,
+        final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments,
         final SortedSet<TaskId> tasks
     ) {
         throw new UnsupportedOperationException("Not Implemented.");
@@ -70,9 +70,9 @@ public final class TaskAssignmentUtils {
      * @return a new map containing the mappings from KafkaStreamsAssignments updated with the default
      *         rack-aware assignment for standby tasks
      */
-    public static Map<ProcessID, KafkaStreamsAssignment> optimizeRackAwareStandbyTasks(
+    public static Map<ProcessId, KafkaStreamsAssignment> optimizeRackAwareStandbyTasks(
         final ApplicationState applicationState,
-        final Map<ProcessID, KafkaStreamsAssignment> kafkaStreamsAssignments
+        final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments
     ) {
         throw new UnsupportedOperationException("Not Implemented.");
     }
@@ -85,7 +85,7 @@ public final class TaskAssignmentUtils {
      * @return a new map containing an assignment that replicates exactly the previous assignment reported
      *         in the applicationState
      */
-    public static Map<ProcessID, KafkaStreamsAssignment> identityAssignment(
+    public static Map<ProcessId, KafkaStreamsAssignment> identityAssignment(
         final ApplicationState applicationState
     ) {
         throw new UnsupportedOperationException("Not Implemented.");

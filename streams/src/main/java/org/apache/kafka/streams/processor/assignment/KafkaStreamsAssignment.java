@@ -29,7 +29,7 @@ public interface KafkaStreamsAssignment {
      *
      * @return the {@code ProcessID} associated with this {@code KafkaStreamsAssignment}
      */
-    ProcessID processId();
+    ProcessId processId();
 
     /**
      *
@@ -38,14 +38,11 @@ public interface KafkaStreamsAssignment {
     Set<AssignedTask> assignment();
 
     /**
-     * @return the actual deadline in objective time, after which the followup rebalance will be attempted.
-     * Equivalent to {@code 'now + followupRebalanceDelay'}
+     * @return the followup rebalance deadline in epoch time, after which this KafkaStreams
+     * client will trigger a new rebalance
      */
     Instant followupRebalanceDeadline();
 
-    /**
-     * The container class for a task's id and type.
-     */
     class AssignedTask {
         private final TaskId id;
         private final Type taskType;
@@ -55,9 +52,6 @@ public interface KafkaStreamsAssignment {
             this.taskType = taskType;
         }
 
-        /**
-         * AssignedTasks can be either ACTIVE or STANDBY.
-         */
         public enum Type {
             ACTIVE,
             STANDBY
