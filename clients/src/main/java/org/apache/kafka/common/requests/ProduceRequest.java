@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
@@ -48,7 +49,7 @@ public class ProduceRequest extends AbstractRequest {
 
         final short minVersion;
         final short maxVersion;
-        if (magic < RecordBatch.MAGIC_VALUE_V2) {
+        if (magic < RecordBatch.MAGIC_VALUE_V2 || canNotSupportTopicId(data)) {
             minVersion = 2;
             maxVersion = 2;
         } else {
@@ -56,6 +57,10 @@ public class ProduceRequest extends AbstractRequest {
             maxVersion = ApiKeys.PRODUCE.latestVersion();
         }
         return new Builder(minVersion, maxVersion, data);
+    }
+
+    private static boolean canNotSupportTopicId(ProduceRequestData data) {
+        return data.topicData().stream().anyMatch(d -> d.topicId() == Uuid.ZERO_UUID);
     }
 
     public static Builder forCurrentMagic(ProduceRequestData data) {

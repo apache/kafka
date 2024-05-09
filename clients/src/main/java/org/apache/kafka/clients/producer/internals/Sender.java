@@ -880,10 +880,12 @@ public class Sender implements Runnable {
             if (batch.magic() < minUsedMagic)
                 minUsedMagic = batch.magic();
         }
+        Map<String, Uuid> topicIds = getTopicIdsFromBatches(batches);
+        boolean canUseTopicId = !topicIds.entrySet().stream().anyMatch(e -> e.getValue() == Uuid.ZERO_UUID);
+
         ProduceRequestData.TopicProduceDataCollection tpd = new ProduceRequestData.TopicProduceDataCollection();
         for (ProducerBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
-            Uuid topicId = metadata.topicIds().getOrDefault(tp.topic(), Uuid.ZERO_UUID);
             MemoryRecords records = batch.records();
 
             // down convert if necessary to the minimum magic used. In general, there can be a delay between the time
@@ -895,11 +897,15 @@ public class Sender implements Runnable {
             // which is supporting the new magic version to one which doesn't, then we will need to convert.
             if (!records.hasMatchingMagic(minUsedMagic))
                 records = batch.records().downConvert(minUsedMagic, 0, time).records();
-            ProduceRequestData.TopicProduceData tpData = tpd.find(tp.topic(), topicId);
-            if (tpData == null) {
-                tpData = new ProduceRequestData.TopicProduceData().setName(tp.topic()).setTopicId(topicId);
-                tpd.add(tpData);
+            Optional<ProduceRequestData.TopicProduceData> topicProduceData = canUseTopicId ?
+                    Optional.ofNullable(tpd.find(tp.topic(), topicIds.get(tp.topic()))):
+                    tpd.stream().filter(data -> data.name() == tp.topic()).findFirst();
+
+            ProduceRequestData.TopicProduceData tpData = topicProduceData.orElse(new ProduceRequestData.TopicProduceData().setName(tp.topic()));
+            if (canUseTopicId) {
+                tpData.setTopicId(topicIds.get(tp.topic()));
             }
+            tpd.add(tpData);
             tpData.partitionData().add(new ProduceRequestData.PartitionProduceData()
                     .setIndex(tp.partition())
                     .setRecords(records));
@@ -924,6 +930,14 @@ public class Sender implements Runnable {
                 requestTimeoutMs, callback);
         client.send(clientRequest, now);
         log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
+    }
+
+    private Map<String, Uuid> getTopicIdsFromBatches(List<ProducerBatch> batches) {
+        return batches.stream()
+                .collect(Collectors.toMap(
+                        b -> b.topicPartition.topic(),
+                        b -> metadata.topicIds().getOrDefault(b.topicPartition.topic(), Uuid.ZERO_UUID))
+                );
     }
 
     /**
