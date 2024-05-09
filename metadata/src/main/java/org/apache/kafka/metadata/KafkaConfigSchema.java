@@ -24,13 +24,14 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.server.config.ConfigSynonym;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import org.apache.kafka.server.config.ConfigSynonym;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
@@ -159,10 +160,10 @@ public class KafkaConfigSchema {
     }
 
     public Map<String, ConfigEntry> resolveEffectiveTopicConfigs(
-            Map<String, ?> staticNodeConfig,
-            Map<String, ?> dynamicClusterConfigs,
-            Map<String, ?> dynamicNodeConfigs,
-            Map<String, ?> dynamicTopicConfigs) {
+            OrderedConfigResolver staticNodeConfig,
+            OrderedConfigResolver dynamicClusterConfigs,
+            OrderedConfigResolver dynamicNodeConfigs,
+            OrderedConfigResolver dynamicTopicConfigs) {
         ConfigDef configDef = configDefs.getOrDefault(ConfigResource.Type.TOPIC, EMPTY_CONFIG_DEF);
         HashMap<String, ConfigEntry> effectiveConfigs = new HashMap<>();
         for (ConfigDef.ConfigKey configKey : configDef.configKeys().values()) {
@@ -174,10 +175,10 @@ public class KafkaConfigSchema {
     }
 
     private ConfigEntry resolveEffectiveTopicConfig(ConfigDef.ConfigKey configKey,
-            Map<String, ?> staticNodeConfig,
-            Map<String, ?> dynamicClusterConfigs,
-            Map<String, ?> dynamicNodeConfigs,
-            Map<String, ?> dynamicTopicConfigs) {
+            OrderedConfigResolver staticNodeConfig,
+            OrderedConfigResolver dynamicClusterConfigs,
+            OrderedConfigResolver dynamicNodeConfigs,
+            OrderedConfigResolver dynamicTopicConfigs) {
         if (dynamicTopicConfigs.containsKey(configKey.name)) {
             return toConfigEntry(configKey,
                 dynamicTopicConfigs.get(configKey.name),
@@ -243,5 +244,30 @@ public class KafkaConfigSchema {
             emptyList(), // we don't populate synonyms, for now.
             translateConfigType(configKey.type()),
             configKey.documentation);
+    }
+
+    public static class OrderedConfigResolver {
+        List<Map<String, ?>> configs;
+        public OrderedConfigResolver(List<Map<String, ?>> maps) {
+            configs = maps;
+        }
+
+        public OrderedConfigResolver(Map<String, ?> map) {
+            configs = new ArrayList<>();
+            configs.add(map);
+        }
+        public boolean containsKey(String key) {
+            for (Map<String, ?> config : configs) {
+                if (config.containsKey(key)) return true;
+            }
+            return false;
+        }
+
+        public Object get(String key) {
+            for (Map<String, ?> config : configs) {
+                if (config.containsKey(key)) return config.get(key);
+            }
+            return null;
+        }
     }
 }

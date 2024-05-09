@@ -30,6 +30,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.KafkaConfigSchema.OrderedConfigResolver;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
@@ -39,6 +40,7 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -358,15 +360,15 @@ public class ConfigurationControlManager {
 
         // Because it may require multiple layer look up for the min ISR config value. Build a config data copy and apply
         // the config updates to it. Use this config copy for the min ISR look up.
-        Map<ConfigResource, TimelineHashMap<String, String>> configDataCopy = new HashMap<>(configData);
+        Map<ConfigResource, TimelineHashMap<String, String>> pendingConfigData = new HashMap<>();
         SnapshotRegistry localSnapshotRegistry = new SnapshotRegistry(new LogContext("dummy-config-update"));
         for (ConfigRecord record : minIsrRecords) {
-            replayInternal(record, configDataCopy, localSnapshotRegistry);
+            replayInternal(record, pendingConfigData, localSnapshotRegistry);
         }
         records.addAll(minIsrConfigUpdatePartitionHandler.addRecordsForMinIsrUpdate(
             configRemovedTopicMap.size() == minIsrRecords.size() ?
                 new ArrayList<>(configRemovedTopicMap.keySet()) : Collections.emptyList(),
-            topicName -> getTopicConfigInternal(topicName, TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, configDataCopy))
+            topicName -> getTopicConfigWithPendingChange(topicName, TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, pendingConfigData))
         );
     }
 
@@ -523,24 +525,39 @@ public class ConfigurationControlManager {
      * @param configKey            The key for the config.
      */
     String getTopicConfig(String topicName, String configKey) throws NoSuchElementException {
-        return getTopicConfigInternal(topicName, configKey, configData);
+        return getTopicConfigWithPendingChange(topicName, configKey, configData);
     }
 
-    String getTopicConfigInternal(
+    /**
+     * Get the config value for the give topic and give config key. Also, it will search the configs in the pending
+     * config data first.
+     * If the config value is not found, return null.
+     *
+     * @param topicName            The topic name for the config.
+     * @param configKey            The key for the config.
+     * @param pendingConfigData    The configs which is going to be applied. It should have the higher priority than
+     *                             the current configs.
+     */
+    String getTopicConfigWithPendingChange(
         String topicName,
         String configKey,
-        Map<ConfigResource, TimelineHashMap<String, String>> localConfigData
+        Map<ConfigResource, TimelineHashMap<String, String>> pendingConfigData
     ) throws NoSuchElementException {
-        Map<String, String> topicConfigs = localConfigData.get(new ConfigResource(Type.TOPIC, topicName));
-        if (topicConfigs == null || !topicConfigs.containsKey(configKey)) {
-            Map<String, ConfigEntry> effectiveConfigMap =
-                computeEffectiveTopicConfigsInternal(Collections.emptyMap(), localConfigData);
+        // First check if there is any pending changes on the topic level.
+        Map<String, String> map = pendingConfigData.get(new ConfigResource(Type.TOPIC, topicName));
+        if (map != null && map.containsKey(configKey)) {
+            return map.get(configKey);
+        }
+
+        map = configData.get(new ConfigResource(Type.TOPIC, topicName));
+        if (map == null || !map.containsKey(configKey)) {
+            Map<String, ConfigEntry> effectiveConfigMap = computeEffectiveTopicConfigsWithPendingChange(pendingConfigData);
             if (!effectiveConfigMap.containsKey(configKey)) {
                 return null;
             }
             return effectiveConfigMap.get(configKey).value();
         }
-        return topicConfigs.get(configKey);
+        return map.get(configKey);
     }
 
     public Map<ConfigResource, ResultOrError<Map<String, String>>> describeConfigs(
@@ -588,24 +605,35 @@ public class ConfigurationControlManager {
         return false; // TODO: support configuring unclean leader election.
     }
 
+    Map<String, ConfigEntry> computeEffectiveTopicConfigsWithPendingChange(
+        Map<ConfigResource, TimelineHashMap<String, String>> pendingConfigData
+    ) {
+        Map<String, String> pendingClusterConfig =
+            pendingConfigData.containsKey(DEFAULT_NODE) ? pendingConfigData.get(DEFAULT_NODE) : Collections.emptyMap();
+        Map<String, String> pendingControllerConfig =
+            pendingConfigData.containsKey(currentController) ? pendingConfigData.get(currentController) : Collections.emptyMap();
+        return configSchema.resolveEffectiveTopicConfigs(
+            new OrderedConfigResolver(staticConfig),
+            new OrderedConfigResolver(Arrays.asList(pendingClusterConfig, clusterConfig())),
+            new OrderedConfigResolver(Arrays.asList(pendingControllerConfig, currentControllerConfig())),
+            new OrderedConfigResolver(Collections.emptyMap()));
+    }
+
     Map<String, ConfigEntry> computeEffectiveTopicConfigs(Map<String, String> creationConfigs) {
-        return computeEffectiveTopicConfigsInternal(creationConfigs, configData);
+        return configSchema.resolveEffectiveTopicConfigs(
+            new OrderedConfigResolver(staticConfig),
+            new OrderedConfigResolver(clusterConfig()),
+            new OrderedConfigResolver(currentControllerConfig()),
+            new OrderedConfigResolver(creationConfigs));
     }
 
-    Map<String, ConfigEntry> computeEffectiveTopicConfigsInternal(
-        Map<String, String> creationConfigs,
-        Map<ConfigResource, TimelineHashMap<String, String>> localConfigData) {
-        return configSchema.resolveEffectiveTopicConfigs(staticConfig, clusterConfig(localConfigData),
-            currentControllerConfig(localConfigData), creationConfigs);
-    }
-
-    Map<String, String> clusterConfig(Map<ConfigResource, TimelineHashMap<String, String>> localConfigData) {
-        Map<String, String> result = localConfigData.get(DEFAULT_NODE);
+    Map<String, String> clusterConfig() {
+        Map<String, String> result = configData.get(DEFAULT_NODE);
         return (result == null) ? Collections.emptyMap() : result;
     }
 
-    Map<String, String> currentControllerConfig(Map<ConfigResource, TimelineHashMap<String, String>> localConfigData) {
-        Map<String, String> result = localConfigData.get(currentController);
+    Map<String, String> currentControllerConfig() {
+        Map<String, String> result = configData.get(currentController);
         return (result == null) ? Collections.emptyMap() : result;
     }
 
