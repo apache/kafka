@@ -16,13 +16,15 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
+import org.apache.kafka.common.Uuid;
+
 import java.util.Map;
 import java.util.Objects;
 
 /**
  * The assignment specification for a consumer group.
  */
-public class AssignmentSpec {
+public class AssignmentSpec implements GroupAssignmentSpec{
     /**
      * The member metadata keyed by member Id.
      */
@@ -33,13 +35,20 @@ public class AssignmentSpec {
      */
     private final SubscriptionType subscriptionType;
 
+    /**
+     * Reverse lookup map representing partitions per topic that are currently assigned.
+     */
+    Map<Uuid, byte[]> partitionAssignmentsPerTopic;
+
     public AssignmentSpec(
         Map<String, AssignmentMemberSpec> members,
-        SubscriptionType subscriptionType
+        SubscriptionType subscriptionType,
+        Map<Uuid, byte[]> partitionAssignmentsPerTopic
     ) {
         Objects.requireNonNull(members);
         this.members = members;
         this.subscriptionType = subscriptionType;
+        this.partitionAssignmentsPerTopic = partitionAssignmentsPerTopic;
     }
 
     /**
@@ -54,6 +63,24 @@ public class AssignmentSpec {
      */
     public SubscriptionType subscriptionType() {
         return subscriptionType;
+    }
+
+    /**
+     * @param topicId           The topic Id.
+     * @param partitionId       The partition Id.
+     * @return True if the partition is currently assigned,
+     *         false otherwise.
+     */
+    @Override
+    public boolean isPartitionAssigned(Uuid topicId, int partitionId) {
+        byte[] partitionArray = partitionAssignmentsPerTopic.get(topicId);
+        if (partitionArray == null) {
+            return false;
+        }
+        if (partitionId < 0 || partitionId >= partitionArray.length) {
+            return false;
+        }
+        return partitionArray[partitionId] == 0;
     }
 
     @Override
