@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.image.TopicImage;
@@ -502,17 +503,6 @@ public class ConsumerGroupMember {
      */
     public Optional<ConsumerGroupMemberMetadataValue.ClassicMemberMetadata> classicMemberMetadata() {
         return Optional.ofNullable(classicMemberMetadata);
-    }
-
-    public Optional<Short> classicMemberProtocolVersion() {
-        if (classicMemberMetadata().isPresent()) {
-            return Optional.ofNullable(
-                ConsumerProtocol.deserializeVersion(
-                    ByteBuffer.wrap(classicMemberMetadata.supportedProtocols().iterator().next().metadata())
-                )
-            );
-        }
-        return Optional.empty();
     }
 
     /**

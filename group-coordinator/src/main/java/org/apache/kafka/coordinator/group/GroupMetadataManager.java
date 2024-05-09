@@ -1249,7 +1249,26 @@ public class GroupMetadataManager {
                 ByteBuffer.wrap(protocols.iterator().next().metadata())
             );
         } catch (SchemaException e) {
-            throw new IllegalStateException("Malformed embedded consumer protocol.");
+            throw new IllegalStateException("Malformed embedded consumer protocol in subscription deserialization.");
+        }
+    }
+
+    /**
+     * Deserialize the consumer protocol version in ClassicMemberMetadata.
+     * All the protocols have the same subscription, so the method picks a random one.
+     *
+     * @param classicMemberMetadata The ClassicMemberMetadata.
+     * @return The consumer protocol version.
+     */
+    private static short deserializeProtocolVersion(
+        ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata
+    ) {
+        try {
+            return ConsumerProtocol.deserializeVersion(
+                ByteBuffer.wrap(classicMemberMetadata.supportedProtocols().iterator().next().metadata())
+            );
+        } catch (SchemaException e) {
+            throw new IllegalStateException("Malformed embedded consumer protocol in version deserialization.");
         }
     }
 
@@ -4023,7 +4042,7 @@ public class GroupMetadataManager {
 
         byte[] assignment = ConsumerProtocol.serializeAssignment(
             new ConsumerPartitionAssignor.Assignment(toTopicPartitionList(member.assignedPartitions(), metadataImage.topics())),
-            member.classicMemberProtocolVersion().get()
+            deserializeProtocolVersion(member.classicMemberMetadata().get())
         ).array();
 
         responseFuture.complete(new SyncGroupResponseData()
