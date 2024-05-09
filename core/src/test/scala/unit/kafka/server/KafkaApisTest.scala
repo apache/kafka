@@ -3071,7 +3071,7 @@ class KafkaApisTest extends Logging {
 
     val requestLocal = RequestLocal.withThreadConfinedCaching
 
-    // Allowing WriteTxnMarkers API with the help of AlterCluster ACL.
+    // Allowing WriteTxnMarkers API with the help of allowedAclOperation parameter.
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
     val allowedAction = Collections.singletonList(new Action(AclOperation.fromString(allowedAclOperation), clusterResource, 1, true, true))
