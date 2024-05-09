@@ -193,11 +193,12 @@ public class HeartbeatRequestManager implements RequestManager {
         }
         pollTimer.update(currentTimeMs);
         if (pollTimer.isExpired() && !membershipManager.isLeavingGroup()) {
-            logger.warn("Consumer poll timeout has expired. This means the time between " +
+            logger.warn("Consumer poll timeout has expired, exceeded by {} ms. This means the time between " +
                 "subsequent calls to poll() was longer than the configured max.poll.interval.ms, " +
                 "which typically implies that the poll loop is spending too much time processing " +
                 "messages. You can address this either by increasing max.poll.interval.ms or by " +
-                "reducing the maximum size of batches returned in poll() with max.poll.records.");
+                "reducing the maximum size of batches returned in poll() with max.poll.records.",
+                pollTimerExceededTime());
 
             membershipManager.transitionToSendingLeaveGroup(true);
             NetworkClientDelegate.UnsentRequest leaveHeartbeat = makeHeartbeatRequest(currentTimeMs, true);
@@ -215,6 +216,11 @@ public class HeartbeatRequestManager implements RequestManager {
 
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, false);
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
+    }
+
+    // Visible for testing
+    long pollTimerExceededTime() {
+        return pollTimer.elapsedMs() - pollTimer.timeoutMs();
     }
 
     /**

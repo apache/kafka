@@ -655,6 +655,20 @@ public class HeartbeatRequestManagerTest {
     }
 
     @Test
+    public void testPollTimerExceededTimeUsedForLogging() {
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
+
+        int exceededTimeMs = 5;
+        time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS + exceededTimeMs);
+
+        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        verify(membershipManager).transitionToSendingLeaveGroup(true);
+
+        assertEquals(exceededTimeMs, heartbeatRequestManager.pollTimerExceededTime());
+    }
+
+    @Test
     public void testHeartbeatMetrics() {
         // setup
         coordinatorRequestManager = mock(CoordinatorRequestManager.class);
