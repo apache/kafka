@@ -26,12 +26,12 @@ import org.apache.kafka.streams.StreamsConfig;
 public class AssignmentConfigs {
     private final long acceptableRecoveryLag;
     private final int maxWarmupReplicas;
-    private final int nonOverlapCost;
     private final int numStandbyReplicas;
     private final long probingRebalanceIntervalMs;
     private final List<String> rackAwareAssignmentTags;
-    private final int trafficCost;
-    private final String assignmentStrategy;
+    private final int rackAwareTrafficCost;
+    private final int rackAwareNonOverlapCost;
+    private final String rackAwareAssignmentStrategy;
 
     public AssignmentConfigs(final StreamsConfig configs) {
         this(
@@ -51,17 +51,24 @@ public class AssignmentConfigs {
                              final int numStandbyReplicas,
                              final long probingRebalanceIntervalMs,
                              final List<String> rackAwareAssignmentTags,
-                             final int trafficCost,
-                             final int nonOverlapCost,
-                             final String assignmentStrategy) {
+                             final int rackAwareTrafficCost,
+                             final int rackAwareNonOverlapCost,
+                             final String rackAwareAssignmentStrategy
+    ) {
         this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
         this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
         this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
         this.probingRebalanceIntervalMs = validated(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, probingRebalanceIntervalMs);
         this.rackAwareAssignmentTags = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rackAwareAssignmentTags);
-        this.trafficCost = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG, trafficCost);
-        this.nonOverlapCost = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG, nonOverlapCost);
-        this.assignmentStrategy = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, assignmentStrategy);
+        this.rackAwareTrafficCost = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG,
+            rackAwareTrafficCost
+        );
+        this.rackAwareNonOverlapCost = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
+            rackAwareNonOverlapCost
+        );
+        this.rackAwareAssignmentStrategy = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
+            rackAwareAssignmentStrategy
+        );
     }
 
     /**
@@ -108,24 +115,24 @@ public class AssignmentConfigs {
      * The rack-aware assignment traffic cost as configured via
      * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG}
      */
-    public int trafficCost() {
-        return trafficCost;
+    public int rackAwareTrafficCost() {
+        return rackAwareTrafficCost;
     }
 
     /**
      * The rack-aware assignment non-overlap cost as configured via
      * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG}
      */
-    public int nonOverlapCost() {
-        return nonOverlapCost;
+    public int rackAwareNonOverlapCost() {
+        return rackAwareNonOverlapCost;
     }
 
     /**
      * The rack-aware assignment strategy as configured via
      * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG}
      */
-    public String assignmentStrategy() {
-        return assignmentStrategy;
+    public String rackAwareAssignmentStrategy() {
+        return rackAwareAssignmentStrategy;
     }
 
     private static <T> T validated(final String configKey, final T value) {
