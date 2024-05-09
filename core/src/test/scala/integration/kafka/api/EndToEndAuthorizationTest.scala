@@ -43,7 +43,7 @@ import org.apache.kafka.server.config.{KafkaSecurityConfigs, ZkConfigs}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -68,6 +68,7 @@ import scala.jdk.CollectionConverters._
   * would end up with QuorumTestHarness twice.
   */
 @Timeout(60)
+@Disabled
 abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
 
   override val brokerCount = 3

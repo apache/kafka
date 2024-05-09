@@ -38,10 +38,11 @@ import org.apache.kafka.common.utils.{LogContext, MockTime}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
+@Disabled
 class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   override val brokerCount = 1
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT

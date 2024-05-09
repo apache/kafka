@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSeriali
 import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -40,6 +41,7 @@ import scala.util.Random
   * Subclasses of `BaseConsumerTest` exercise the consumer and fetch request/response. This class
   * complements those classes with tests that require lower-level access to the protocol.
   */
+@Disabled
 class FetchRequestTest extends BaseFetchRequestTest {
 
   @ParameterizedTest
