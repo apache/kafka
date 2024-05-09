@@ -120,10 +120,10 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
     }
 
     /**
-     * Returns the next non-control Batch
+     * Returns the next batch
      */
     private Optional<Batch<T>> nextBatch() {
-        while (iterator.hasNext()) {
+        if (iterator.hasNext()) {
             Batch<T> batch = iterator.next();
 
             if (!lastContainedLogTimestamp.isPresent()) {
