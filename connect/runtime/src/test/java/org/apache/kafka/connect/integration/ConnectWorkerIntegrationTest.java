@@ -787,23 +787,25 @@ public class ConnectWorkerIntegrationTest {
         Map<String, String> props = defaultSinkConnectorProps(TOPIC_NAME);
         props.put("unaffected-key", "unaffected-value");
         props.put("to-be-deleted-key", "value");
-        props.put(TASKS_MAX_CONFIG, "1");
+        props.put(TASKS_MAX_CONFIG, "2");
 
         Map<String, String> patch = new HashMap<>();
-        patch.put(TASKS_MAX_CONFIG, "2");  // this plays as a value to be changed
+        patch.put(TASKS_MAX_CONFIG, "3");  // this plays as a value to be changed
         patch.put("to-be-added-key", "value");
         patch.put("to-be-deleted-key", null);
 
         connect.configureConnector(CONNECTOR_NAME, props);
-        connect.patchConnectorConfig(CONNECTOR_NAME, patch);
-
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 2,
                 "connector and tasks did not start in time");
+
+        connect.patchConnectorConfig(CONNECTOR_NAME, patch);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 3,
+                "connector and tasks did not reconfigure and restart in time");
 
         Map<String, String> expectedConfig = new HashMap<>(props);
         expectedConfig.put("name", CONNECTOR_NAME);
         expectedConfig.put("to-be-added-key", "value");
-        expectedConfig.put(TASKS_MAX_CONFIG, "2");
+        expectedConfig.put(TASKS_MAX_CONFIG, "3");
         expectedConfig.remove("to-be-deleted-key");
         assertEquals(expectedConfig, connect.connectorInfo(CONNECTOR_NAME).config());
     }
