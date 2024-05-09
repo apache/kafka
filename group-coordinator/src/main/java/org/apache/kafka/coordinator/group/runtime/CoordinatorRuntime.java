@@ -793,14 +793,14 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (exception == null) {
                 if (appendFuture != null) result.appendFuture().complete(null);
                 future.complete(result.response());
-
-                if (writeTimeoutTask != null) {
-                    writeTimeoutTask.cancel();
-                    writeTimeoutTask = null;
-                }
             } else {
                 if (appendFuture != null) result.appendFuture().completeExceptionally(exception);
                 future.completeExceptionally(exception);
+            }
+
+            if (writeTimeoutTask != null) {
+                writeTimeoutTask.cancel();
+                writeTimeoutTask = null;
             }
         }
 
@@ -1094,13 +1094,13 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         public void complete(Throwable exception) {
             if (exception == null) {
                 future.complete(null);
-
-                if (writeTimeoutTask != null) {
-                    writeTimeoutTask.cancel();
-                    writeTimeoutTask = null;
-                }
             } else {
                 future.completeExceptionally(exception);
+            }
+
+            if (writeTimeoutTask != null) {
+                writeTimeoutTask.cancel();
+                writeTimeoutTask = null;
             }
         }
 
