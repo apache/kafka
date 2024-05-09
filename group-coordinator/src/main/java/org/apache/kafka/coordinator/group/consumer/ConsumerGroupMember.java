@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -24,6 +25,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -500,6 +502,17 @@ public class ConsumerGroupMember {
      */
     public Optional<ConsumerGroupMemberMetadataValue.ClassicMemberMetadata> classicMemberMetadata() {
         return Optional.ofNullable(classicMemberMetadata);
+    }
+
+    public Optional<Short> classicMemberProtocolVersion() {
+        if (classicMemberMetadata().isPresent()) {
+            return Optional.ofNullable(
+                ConsumerProtocol.deserializeVersion(
+                    ByteBuffer.wrap(classicMemberMetadata.supportedProtocols().iterator().next().metadata())
+                )
+            );
+        }
+        return Optional.empty();
     }
 
     /**

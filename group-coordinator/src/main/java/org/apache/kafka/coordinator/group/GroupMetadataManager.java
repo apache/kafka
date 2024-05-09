@@ -1198,6 +1198,43 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Validates if the consumer group member uses the classic protocol.
+     *
+     * @param member The ConsumerGroupMember.
+     */
+    private void throwIfMemberDoesNotUseClassicProtocol(ConsumerGroupMember member) {
+        if (member.useClassicProtocol()) {
+            throw new UnknownMemberIdException(
+                String.format("Member %s does not use the classic protocol.", member.memberId())
+            );
+        }
+    }
+
+    /**
+     * Validates if the generation id and the protocol type from the request match those of the consumer group.
+     *
+     * @param group                 The ConsumerGroup.
+     * @param requestGenerationId   The generation id from the request.
+     * @param requestProtocolType   The protocol type from the request.
+     * @param requestProtocolName   The protocol name from the request.
+     */
+    private void throwIfGenerationIdOrProtocolUnmatched(
+        ConsumerGroup group,
+        int requestGenerationId,
+        String requestProtocolType,
+        String requestProtocolName
+    ) {
+        if (group.groupEpoch() != requestGenerationId) {
+            throw Errors.ILLEGAL_GENERATION.exception(
+                String.format("The request generation id %s is not equal to the group epoch %d from the consumer group %s.",
+                    requestGenerationId, group.groupEpoch(), group.groupId())
+            );
+        } else if (!group.supportsClassicProtocols(requestProtocolType, Collections.singleton(requestProtocolName))) {
+            throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception("The member protocol is not supported.");
+        }
+    }
+
+    /**
      * Deserialize the subscription in JoinGroupRequestProtocolCollection.
      * All the protocols have the same subscription, so the method picks a random one.
      *
@@ -1234,6 +1271,25 @@ public class GroupMetadataManager {
             }
         });
         return new ArrayList<>(topicPartitionMap.values());
+    }
+
+    /**
+     * @return The TopicPartition list converted from the assignment map.
+     */
+    private static List<TopicPartition> toTopicPartitionList(
+        Map<Uuid, Set<Integer>> partitions,
+        TopicsImage topicsImage
+    ) {
+        List<TopicPartition> topicPartitions = new ArrayList<>();
+        partitions.forEach((topicId, partitionSet) -> {
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            if (topicImage != null) {
+                partitionSet.forEach(partition ->
+                    topicPartitions.add(new TopicPartition(topicImage.name(), partition))
+                );
+            }
+        });
+        return topicPartitions;
     }
 
     private ConsumerGroupHeartbeatResponseData.Assignment createResponseAssignment(
@@ -3797,9 +3853,38 @@ public class GroupMetadataManager {
      * @param request        The actual SyncGroup request.
      * @param responseFuture The sync group response future.
      *
-     * @return The result that contains records to append if the group metadata manager received assignments.
+     * @return The result that contains records to append.
      */
     public CoordinatorResult<Void, Record> classicGroupSync(
+        RequestContext context,
+        SyncGroupRequestData request,
+        CompletableFuture<SyncGroupResponseData> responseFuture
+    ) throws UnknownMemberIdException, GroupIdNotFoundException {
+        Group group = groups.get(request.groupId(), Long.MAX_VALUE);
+
+        if (group.isEmpty()) {
+            responseFuture.complete(new SyncGroupResponseData()
+                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()));
+            return EMPTY_RESULT;
+        }
+
+        if (group != null && group.type() == CONSUMER) {
+            return classicGroupSyncToConsumerGroup((ConsumerGroup) group, context, request, responseFuture);
+        } else {
+            return classicGroupSyncToClassicGroup(context, request, responseFuture);
+        }
+    }
+
+    /**
+     * Handle a SyncGroupRequest to a ClassicGroup.
+     *
+     * @param context        The request context.
+     * @param request        The actual SyncGroup request.
+     * @param responseFuture The sync group response future.
+     *
+     * @return The result that contains records to append if the group metadata manager received assignments.
+     */
+    public CoordinatorResult<Void, Record> classicGroupSyncToClassicGroup(
         RequestContext context,
         SyncGroupRequestData request,
         CompletableFuture<SyncGroupResponseData> responseFuture
@@ -3820,9 +3905,6 @@ public class GroupMetadataManager {
         if (errorOpt.isPresent()) {
             responseFuture.complete(new SyncGroupResponseData()
                 .setErrorCode(errorOpt.get().code()));
-        } else if (group.isInState(EMPTY)) {
-            responseFuture.complete(new SyncGroupResponseData()
-                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()));
         } else if (group.isInState(PREPARING_REBALANCE)) {
             responseFuture.complete(new SyncGroupResponseData()
                 .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()));
@@ -3894,6 +3976,61 @@ public class GroupMetadataManager {
         } else if (group.isInState(DEAD)) {
             throw new IllegalStateException("Reached unexpected condition for Dead group " + groupId);
         }
+
+        return EMPTY_RESULT;
+    }
+
+    /**
+     * Handle a SyncGroupRequest to a ConsumerGroup.
+     *
+     * @param group          The ConsumerGroup.
+     * @param context        The request context.
+     * @param request        The actual SyncGroup request.
+     * @param responseFuture The sync group response future.
+     *
+     * @return The result that contains records to append.
+     */
+    public CoordinatorResult<Void, Record> classicGroupSyncToConsumerGroup(
+        ConsumerGroup group,
+        RequestContext context,
+        SyncGroupRequestData request,
+        CompletableFuture<SyncGroupResponseData> responseFuture
+    ) throws UnknownMemberIdException, GroupIdNotFoundException {
+        String groupId = group.groupId();
+        String memberId = request.memberId();
+        String instanceId = request.groupInstanceId();
+
+        ConsumerGroupMember member;
+        if (instanceId == null) {
+            member = group.getOrMaybeCreateMember(request.memberId(), false);
+        } else {
+            member = group.staticMember(instanceId);
+            if (member == null) {
+                throw new UnknownMemberIdException(
+                    String.format("Member with instance id %s is not a member of group %s.", instanceId, groupId)
+                );
+            }
+            throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
+        }
+
+        throwIfMemberDoesNotUseClassicProtocol(member);
+        throwIfGenerationIdOrProtocolUnmatched(
+            group,
+            request.generationId(),
+            request.protocolType(),
+            request.protocolName()
+        );
+
+        byte[] assignment = ConsumerProtocol.serializeAssignment(
+            new ConsumerPartitionAssignor.Assignment(toTopicPartitionList(member.assignedPartitions(), metadataImage.topics())),
+            member.classicMemberProtocolVersion().get()
+        ).array();
+
+        responseFuture.complete(new SyncGroupResponseData()
+            .setProtocolType(request.protocolType())
+            .setProtocolName(request.protocolName())
+            .setAssignment(assignment)
+            .setErrorCode(Errors.NONE.code()));
 
         return EMPTY_RESULT;
     }
