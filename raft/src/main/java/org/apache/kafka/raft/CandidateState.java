@@ -277,14 +277,17 @@ public class CandidateState implements EpochState {
 
     @Override
     public String toString() {
-        return "CandidateState(" +
-            "localId=" + localId +
-            ", epoch=" + epoch +
-            ", retries=" + retries +
-            ", voteStates=" + voteStates +
-            ", highWatermark=" + highWatermark +
-            ", electionTimeoutMs=" + electionTimeoutMs +
-            ')';
+        return String.format(
+            "CandidateState(localId=%d, localDirectoryId=%s,epoch=%d, retries=%d, voteStates=%s, " +
+            "highWatermark=%s, electionTimeoutMs=%d)",
+            localId,
+            localDirectoryId,
+            epoch,
+            retries,
+            voteStates,
+            highWatermark,
+            electionTimeoutMs
+        );
     }
 
     @Override

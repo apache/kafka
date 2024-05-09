@@ -82,7 +82,7 @@ final public class VoterSet {
             if (node.voterKey().directoryId().isPresent()) {
                 return node.voterKey().directoryId().equals(nodeKey.directoryId());
             } else {
-                // configured voter set doesn't an uuid so it is a voter as long as the node id
+                // configured voter set doesn't include a directory id so it is a voter as long as the node id
                 // matches
                 return true;
             }

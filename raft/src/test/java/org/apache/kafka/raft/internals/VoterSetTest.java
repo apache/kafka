@@ -110,7 +110,7 @@ final public class VoterSetTest {
     }
 
     @Test
-    void testStandaloneAndOnlyVoter() {
+    void testStandaloneAndIsOnlyVoter() {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
@@ -124,7 +124,7 @@ final public class VoterSetTest {
     }
 
     @Test
-    void testOnlyVoter() {
+    void testNotStandaloneAndIsOnlyVoter() {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
@@ -232,14 +232,23 @@ final public class VoterSetTest {
     }
 
     public static VoterSet.VoterNode voterNode(int id, boolean withDirectoryId) {
-        return new VoterSet.VoterNode(
+        return voterNode(
             ReplicaKey.of(
                 id,
                 withDirectoryId ? Optional.of(Uuid.randomUuid()) : Optional.empty()
-            ),
+            )
+        );
+    }
+
+    public static VoterSet.VoterNode voterNode(ReplicaKey replicaKey) {
+        return new VoterSet.VoterNode(
+            replicaKey,
             Collections.singletonMap(
                 "LISTENER",
-                InetSocketAddress.createUnresolved(String.format("replica-%d", id), 1234)
+                InetSocketAddress.createUnresolved(
+                    String.format("replica-%d", replicaKey.id()),
+                    1234
+                )
             ),
             new SupportedVersionRange((short) 0, (short) 0)
         );

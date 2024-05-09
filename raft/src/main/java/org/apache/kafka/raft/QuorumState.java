@@ -507,24 +507,24 @@ public class QuorumState {
         return state;
     }
 
-    private void durableTransitionTo(EpochState state) {
-        if (this.state != null) {
+    private void durableTransitionTo(EpochState newState) {
+        if (state != null) {
             try {
-                this.state.close();
+                state.close();
             } catch (IOException e) {
                 throw new UncheckedIOException(
-                    "Failed to transition from " + this.state.name() + " to " + state.name(), e);
+                    "Failed to transition from " + state.name() + " to " + newState.name(), e);
             }
         }
 
-        this.store.writeElectionState(state.election(), latestKraftVersion.get());
-        memoryTransitionTo(state);
+        store.writeElectionState(newState.election(), latestKraftVersion.get());
+        memoryTransitionTo(newState);
     }
 
-    private void memoryTransitionTo(EpochState state) {
-        EpochState from = this.state;
-        this.state = state;
-        log.info("Completed transition to {} from {}", state, from);
+    private void memoryTransitionTo(EpochState newState) {
+        EpochState from = state;
+        state = newState;
+        log.info("Completed transition to {} from {}", newState, from);
     }
 
     private int randomElectionTimeoutMs() {
@@ -549,7 +549,7 @@ public class QuorumState {
     }
 
     public Optional<VotedState> maybeVotedState() {
-        EpochState fixedState = this.state;
+        EpochState fixedState = state;
         if (fixedState instanceof VotedState) {
             return Optional.of((VotedState) fixedState);
         } else {
@@ -570,7 +570,7 @@ public class QuorumState {
 
     @SuppressWarnings("unchecked")
     public <T> Optional<LeaderState<T>> maybeLeaderState() {
-        EpochState fixedState = this.state;
+        EpochState fixedState = state;
         if (fixedState instanceof LeaderState) {
             return Optional.of((LeaderState<T>) fixedState);
         } else {

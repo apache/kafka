@@ -1712,7 +1712,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     /**
      * Validate common state for requests to establish leadership.
      *
-     * These include the Vote, BeginQuorumEpoch rnd EndQuorumEpoch RPCs. If an error is present in
+     * These include the Vote, BeginQuorumEpoch and EndQuorumEpoch RPCs. If an error is present in
      * the returned value, it should be returned in the response.
      */
     private Optional<Errors> validateVoterOnlyRequest(int remoteNodeId, int requestEpoch) {

@@ -41,17 +41,30 @@ import java.util.Optional;
 
 /**
  * Local file based quorum state store. It takes the JSON format of {@link QuorumStateData}
- * with an extra data version number as part of the data for easy deserialization.
+ * with an extra data version number field (data_version) as part of the data.
  *
- * Example format:
+ * Example version 0 format:
  * <pre>
- * {"clusterId":"",
- *   "leaderId":1,
- *   "leaderEpoch":2,
- *   "votedId":-1,
- *   "appliedOffset":0,
- *   "currentVoters":[],
- *   "data_version":0}
+ * {
+ *   "clusterId": "",
+ *   "leaderId": 1,
+ *   "leaderEpoch": 2,
+ *   "votedId": -1,
+ *   "appliedOffset": 0,
+ *   "currentVoters": [],
+ *   "data_version": 0
+ * }
+ * </pre>
+ *
+ * Example version 1 format:
+ * <pre>
+ * {
+ *   "leaderId": -1,
+ *   "leaderEpoch": 2,
+ *   "votedId": 1,
+ *   "votedDirectoryId": "J8aAPcfLQt2bqs1JT_rMgQ",
+ *   "data_version": 1
+ * }
  * </pre>
  * */
 public class FileQuorumStateStore implements QuorumStateStore {

@@ -848,7 +848,7 @@ public class RaftEventSimulationTest {
     private static class InflightRequest {
         final int sourceId;
 
-        private InflightRequest(int correlationId, int sourceId, int destinationId) {
+        private InflightRequest(int sourceId) {
             this.sourceId = sourceId;
         }
     }
@@ -1202,7 +1202,7 @@ public class RaftEventSimulationTest {
                 return;
 
             cluster.nodeIfRunning(destinationId).ifPresent(node -> {
-                inflight.put(correlationId, new InflightRequest(correlationId, senderId, destinationId));
+                inflight.put(correlationId, new InflightRequest(senderId));
 
                 inbound.completion.whenComplete((response, exception) -> {
                     if (response != null && filters.get(destinationId).acceptOutbound(response)) {

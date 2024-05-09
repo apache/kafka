@@ -80,8 +80,8 @@ final public class ElectionState {
         } else if (votedKey.get().id() != nodeKey.id()) {
             return false;
         } else if (!votedKey.get().directoryId().isPresent()) {
-            // when the persisted voted uuid is not present assume that we voted for this candidate;
-            // this happends when the kraft version is 0.
+            // when the persisted voted directory id is not present assume that we voted for this candidate;
+            // this happens when the kraft version is 0.
             return true;
         }
 
@@ -202,14 +202,14 @@ final public class ElectionState {
             Optional.empty() :
             Optional.of(data.votedDirectoryId());
 
-        Optional<ReplicaKey> voterKey = data.votedId() == notVoted ?
+        Optional<ReplicaKey> votedKey = data.votedId() == notVoted ?
             Optional.empty() :
             Optional.of(ReplicaKey.of(data.votedId(), votedDirectoryId));
 
         return new ElectionState(
             data.leaderEpoch(),
             data.leaderId() == unknownLeaderId ? OptionalInt.empty() : OptionalInt.of(data.leaderId()),
-            voterKey,
+            votedKey,
             data.currentVoters().stream().map(QuorumStateData.Voter::voterId).collect(Collectors.toSet())
         );
     }
