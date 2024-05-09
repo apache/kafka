@@ -1417,7 +1417,7 @@ class LogManager(logDirs: Seq[File],
       deletableLogs.foreach {
         case (topicPartition, log) =>
           if (topicPartition.topic().contains("topicB")) {
-            System.err.print(s"d:${topicPartition} ${log.dir}")
+            System.err.print(s"d:${log.dir}")
           }
           debug(s"Garbage collecting '${log.name}'")
           total += log.deleteOldSegments()
@@ -1432,7 +1432,9 @@ class LogManager(logDirs: Seq[File],
       }
     } finally {
       if (cleaner != null) {
+        System.err.print(s"cleaner ")
         cleaner.resumeCleaning(deletableLogs.map(_._1))
+        System.err.print(s"cleaner end")
       }
     }
 

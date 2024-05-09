@@ -308,7 +308,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     *  Each call of this function will undo one pause.
     */
   def resumeCleaning(topicPartitions: Iterable[TopicPartition]): Unit = {
+    System.err.print("lock")
     inLock(lock) {
+      System.err.print("lock get")
       topicPartitions.foreach {
         topicPartition =>
           inProgress.get(topicPartition) match {
