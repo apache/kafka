@@ -28,7 +28,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -36,8 +35,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * This class covers basic tests for {@link RemoteLogMetadataManager} implementations like {@link InmemoryRemoteLogMetadataManager},
- * and {@link org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager}.
+ * This class covers basic tests for {@link RemoteLogMetadataManager} implementations like
+ * {@link TopicBasedRemoteLogMetadataManagerWrapperWithHarness}
  */
 public class RemoteLogMetadataManagerTest {
 
@@ -153,6 +152,6 @@ public class RemoteLogMetadataManagerTest {
     }
 
     private static Collection<Arguments> remoteLogMetadataManagers() {
-        return Arrays.asList(Arguments.of(new InmemoryRemoteLogMetadataManager()), Arguments.of(new TopicBasedRemoteLogMetadataManagerWrapperWithHarness()));
+        return Collections.singletonList(Arguments.of(new TopicBasedRemoteLogMetadataManagerWrapperWithHarness()));
     }
 }
