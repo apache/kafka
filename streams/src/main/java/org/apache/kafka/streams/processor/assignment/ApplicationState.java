@@ -20,10 +20,13 @@ import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.apache.kafka.streams.errors.TaskAssignmentException;
 
 /**
- * A read-only metadata class representing the current state of each KafkaStreams client with at least
- * one StreamThread participating in this rebalance.
+ * A read-only metadata class representing the state of the application and the current rebalance.
+ * This class wraps all the input parameters to the task assignment, including the current state
+ * of each KafkaStreams client with at least one StreamThread participating in this rebalance, the
+ * assignment-related configs, and the tasks to be assigned.
  */
 public interface ApplicationState {
     /**

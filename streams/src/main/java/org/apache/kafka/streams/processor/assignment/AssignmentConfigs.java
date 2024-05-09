@@ -34,24 +34,26 @@ public class AssignmentConfigs {
     private final String assignmentStrategy;
 
     public AssignmentConfigs(final StreamsConfig configs) {
-        acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
-        maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
-        numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
-        probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
-        rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
-        trafficCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG);
-        nonOverlapCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG);
-        assignmentStrategy = configs.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG);
+        this(
+            configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG),
+            configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG),
+            configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG),
+            configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG),
+            configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG),
+            configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG),
+            configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG),
+            configs.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG)
+        );
     }
 
-    public AssignmentConfigs(final Long acceptableRecoveryLag,
-                      final Integer maxWarmupReplicas,
-                      final Integer numStandbyReplicas,
-                      final Long probingRebalanceIntervalMs,
-                      final List<String> rackAwareAssignmentTags,
-                      final Integer trafficCost,
-                      final Integer nonOverlapCost,
-                      final String assignmentStrategy) {
+    public AssignmentConfigs(final long acceptableRecoveryLag,
+                             final int maxWarmupReplicas,
+                             final int numStandbyReplicas,
+                             final long probingRebalanceIntervalMs,
+                             final List<String> rackAwareAssignmentTags,
+                             final int trafficCost,
+                             final int nonOverlapCost,
+                             final String assignmentStrategy) {
         this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
         this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
         this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
