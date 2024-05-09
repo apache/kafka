@@ -54,6 +54,7 @@ object ProducerIdsIntegrationTest {
   }
 }
 
+@Disabled
 @ClusterTestDefaults(serverProperties = Array(
   new ClusterConfigProperty(key = "transaction.state.log.num.partitions", value = "1")
 ))

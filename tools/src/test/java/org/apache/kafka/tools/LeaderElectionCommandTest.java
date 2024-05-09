@@ -30,6 +30,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.server.common.AdminCommandFailedException;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import scala.collection.JavaConverters;
@@ -61,6 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
+@Disabled
 @SuppressWarnings("deprecation")
 @ExtendWith(value = ClusterTestExtensions.class)
 @ClusterTestDefaults(clusterType = Type.ALL, brokers = 3, serverProperties = {

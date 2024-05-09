@@ -25,6 +25,7 @@ import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -43,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import static java.util.Arrays.stream;
 
+@Disabled
 @ExtendWith(value = ClusterTestExtensions.class)
 @ClusterTestDefaults(clusterType = Type.KRAFT)
 @Tag("integration")

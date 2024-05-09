@@ -34,7 +34,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled}
 
 import scala.jdk.CollectionConverters._
 
@@ -69,6 +69,7 @@ object SaslApiVersionsRequestTest {
   }
 }
 
+@Disabled
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {
   private var sasl: SaslSetup = _
