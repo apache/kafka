@@ -909,7 +909,7 @@ object LocalLog extends Logging {
                                       logPrefix: String): Unit = {
     System.err.print(s"del")
     segmentsToDelete.foreach { segment =>
-      System.err.print(s"ren:${segment.baseOffset()}")
+      System.err.print(s"ren:${segment.baseOffset()} $dir")
       if (!segment.hasSuffix(LogFileUtils.DELETED_FILE_SUFFIX))
         segment.changeFileSuffixes("", LogFileUtils.DELETED_FILE_SUFFIX)
 
