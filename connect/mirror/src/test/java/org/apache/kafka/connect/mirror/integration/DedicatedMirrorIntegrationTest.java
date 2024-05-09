@@ -28,6 +28,7 @@ import org.apache.kafka.connect.mirror.MirrorSourceConnector;
 import org.apache.kafka.connect.mirror.SourceAndTarget;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -260,9 +261,8 @@ public class DedicatedMirrorIntegrationTest {
             awaitConnectorTasksStart(mirrorMakers.get("node 0"), MirrorHeartbeatConnector.class, sourceAndTarget);
 
             // Create one topic per Kafka cluster per MirrorMaker node
-            final int topicsPerCluster = numNodes;
             final int messagesPerTopic = 10;
-            for (int i = 0; i < topicsPerCluster; i++) {
+            for (int i = 0; i < numNodes; i++) {
                 String topic = testTopicPrefix + i;
 
                 // Create the topic on cluster A
@@ -353,6 +353,9 @@ public class DedicatedMirrorIntegrationTest {
                         .map(TaskInfo::config)
                         .allMatch(predicate);
             } catch (Exception ex) {
+                if (ex instanceof RebalanceNeededException) {
+                    throw ex;
+                }
                 log.error("Something unexpected occurred. Unable to get configuration of connector {} for mirror maker with source->target={}", connName, sourceAndTarget, ex);
                 throw new NoRetryException(ex);
             }
