@@ -78,11 +78,14 @@ public class ConsumerGroupTest {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
         ConsumerGroupMember member;
 
-        // Create a group.
+        // Create a member.
         member = consumerGroup.getOrMaybeCreateMember("member-id", true);
         assertEquals("member-id", member.memberId());
 
-        // Get that group back.
+        // Add member to the group.
+        consumerGroup.updateMember(member);
+
+        // Get that member back.
         member = consumerGroup.getOrMaybeCreateMember("member-id", false);
         assertEquals("member-id", member.memberId());
 
@@ -138,7 +141,8 @@ public class ConsumerGroupTest {
     public void testRemoveMember() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
 
-        consumerGroup.getOrMaybeCreateMember("member", true);
+        ConsumerGroupMember member = consumerGroup.getOrMaybeCreateMember("member", true);
+        consumerGroup.updateMember(member);
         assertTrue(consumerGroup.hasMember("member"));
 
         consumerGroup.removeMember("member");
@@ -150,16 +154,13 @@ public class ConsumerGroupTest {
     public void testRemoveStaticMember() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
 
-        ConsumerGroupMember member;
-        member = consumerGroup.getOrMaybeCreateMember("member", true);
-        assertTrue(consumerGroup.hasMember("member"));
-
-        member = new ConsumerGroupMember.Builder(member)
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setInstanceId("instance")
             .build();
 
         consumerGroup.updateMember(member);
+        assertTrue(consumerGroup.hasMember("member"));
 
         consumerGroup.removeMember("member");
         assertFalse(consumerGroup.hasMember("member"));
@@ -801,7 +802,7 @@ public class ConsumerGroupTest {
             group.validateOffsetCommit("member-id", null, 0, isTransactional));
 
         // Create a member.
-        group.getOrMaybeCreateMember("member-id", true);
+        group.updateMember(new ConsumerGroupMember.Builder("member-id").build());
 
         // A call from the admin client should fail as the group is not empty.
         assertThrows(UnknownMemberIdException.class, () ->
@@ -852,7 +853,7 @@ public class ConsumerGroupTest {
 
         // Create a member.
         snapshotRegistry.getOrCreateSnapshot(0);
-        group.getOrMaybeCreateMember("member-id", true);
+        group.updateMember(new ConsumerGroupMember.Builder("member-id").build());
 
         // The member does not exist at last committed offset 0.
         assertThrows(UnknownMemberIdException.class, () ->
