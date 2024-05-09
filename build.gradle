@@ -883,6 +883,7 @@ project(':core') {
       implementation libs.dropwizardMetrics
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
+      exclude group: 'ch.qos.logback', module: 'logback-classic'
     }
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     implementation libs.commonsCli
