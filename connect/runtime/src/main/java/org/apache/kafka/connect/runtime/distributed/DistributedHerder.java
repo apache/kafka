@@ -1768,7 +1768,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         long now = time.milliseconds();
         if (scheduledRebalance <= now) {
             log.debug("Requesting rebalance because scheduled rebalance timeout has been reached "
-                    + "(now: {} scheduledRebalance: {}", scheduledRebalance, now);
+                    + "now: {} scheduledRebalance: {}", now, scheduledRebalance);
 
             needsRejoin = true;
             scheduledRebalance = Long.MAX_VALUE;

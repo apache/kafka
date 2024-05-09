@@ -721,7 +721,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(Map.empty)
     else {
       val internalTopicsAllowed = request.header.clientId == AdminUtils.ADMIN_CLIENT_ID
-      val supportedOperation = if (request.header.apiVersion > 10) genericError else defaultError
+      val transactionSupportedOperation = if (request.header.apiVersion > 10) genericError else defaultError
       // call the replica manager to append messages to the replicas
       replicaManager.handleProduceAppend(
         timeout = produceRequest.timeout.toLong,
@@ -732,7 +732,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         responseCallback = sendResponseCallback,
         recordValidationStatsCallback = processingStatsCallback,
         requestLocal = requestLocal,
-        supportedOperation = supportedOperation)
+        transactionSupportedOperation = transactionSupportedOperation)
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log

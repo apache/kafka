@@ -1351,21 +1351,26 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldAddActiveTaskWithRevokedInputPartitionsInStateUpdaterToPendingTasksToSuspend() {
+    public void shouldSuspendActiveTaskWithRevokedInputPartitionsInStateUpdater() {
         final StreamTask task = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId00Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setupForRevocationAndLost(mkSet(task), tasks);
         when(stateUpdater.getTasks()).thenReturn(mkSet(task));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
+        when(stateUpdater.removeWithFuture(task.id())).thenReturn(future);
+        future.complete(new StateUpdater.RemovedTaskResult(task));
 
         taskManager.handleRevocation(task.inputPartitions());
 
-        verify(tasks).addPendingActiveTaskToSuspend(task.id());
-        verify(stateUpdater, never()).remove(task.id());
+        verify(task).suspend();
+        verify(tasks).addTask(task);
+        verify(stateUpdater).removeWithFuture(task.id());
     }
 
-    public void shouldAddMultipleActiveTasksWithRevokedInputPartitionsInStateUpdaterToPendingTasksToSuspend() {
+    @Test
+    public void shouldSuspendMultipleActiveTasksWithRevokedInputPartitionsInStateUpdater() {
         final StreamTask task1 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId00Partitions).build();
@@ -1374,15 +1379,23 @@ public class TaskManagerTest {
             .withInputPartitions(taskId01Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setupForRevocationAndLost(mkSet(task1, task2), tasks);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = new CompletableFuture<>();
+        when(stateUpdater.removeWithFuture(task1.id())).thenReturn(future1);
+        future1.complete(new StateUpdater.RemovedTaskResult(task1));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = new CompletableFuture<>();
+        when(stateUpdater.removeWithFuture(task2.id())).thenReturn(future2);
+        future2.complete(new StateUpdater.RemovedTaskResult(task2));
 
         taskManager.handleRevocation(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
-        verify(tasks).addPendingActiveTaskToSuspend(task1.id());
-        verify(tasks).addPendingActiveTaskToSuspend(task2.id());
+        verify(task1).suspend();
+        verify(tasks).addTask(task1);
+        verify(task2).suspend();
+        verify(tasks).addTask(task2);
     }
 
     @Test
-    public void shouldNotAddActiveTaskWithoutRevokedInputPartitionsInStateUpdaterToPendingTasksToSuspend() {
+    public void shouldNotSuspendActiveTaskWithoutRevokedInputPartitionsInStateUpdater() {
         final StreamTask task = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId00Partitions).build();
@@ -1391,8 +1404,9 @@ public class TaskManagerTest {
 
         taskManager.handleRevocation(taskId01Partitions);
 
-        verify(stateUpdater, never()).remove(task.id());
-        verify(tasks, never()).addPendingActiveTaskToSuspend(task.id());
+        verify(task, never()).suspend();
+        verify(tasks, never()).addTask(task);
+        verify(stateUpdater, never()).removeWithFuture(task.id());
     }
 
     @Test
@@ -1405,8 +1419,39 @@ public class TaskManagerTest {
 
         taskManager.handleRevocation(taskId00Partitions);
 
-        verify(stateUpdater, never()).remove(task.id());
-        verify(tasks, never()).addPendingActiveTaskToSuspend(task.id());
+        verify(task, never()).suspend();
+        verify(tasks, never()).addTask(task);
+        verify(stateUpdater, never()).removeWithFuture(task.id());
+    }
+
+    @Test
+    public void shouldThrowIfRevokingTasksInStateUpdaterFindsFailedTasks() {
+        final StreamTask task1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask task2 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId01Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setupForRevocationAndLost(mkSet(task1, task2), tasks);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = new CompletableFuture<>();
+        when(stateUpdater.removeWithFuture(task1.id())).thenReturn(future1);
+        future1.complete(new StateUpdater.RemovedTaskResult(task1));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = new CompletableFuture<>();
+        when(stateUpdater.removeWithFuture(task2.id())).thenReturn(future2);
+        final StreamsException streamsException = new StreamsException("Something happened");
+        future2.complete(new StateUpdater.RemovedTaskResult(task2, streamsException));
+
+        final StreamsException thrownException = assertThrows(
+            StreamsException.class,
+            () -> taskManager.handleRevocation(union(HashSet::new, taskId00Partitions, taskId01Partitions))
+        );
+
+        assertEquals(thrownException, streamsException);
+        verify(task1).suspend();
+        verify(tasks).addTask(task1);
+        verify(task2, never()).suspend();
+        verify(tasks).addTask(task2);
     }
 
     @Test
