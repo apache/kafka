@@ -2219,6 +2219,48 @@ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminc
             <td>Group</td>
             <td></td>
         </tr>
+        <tr>
+            <td>CONSUMER_GROUP_DESCRIBE (69)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>CONTROLLER_REGISTRATION (70)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>GET_TELEMETRY_SUBSCRIPTIONS (71)</td>
+            <td></td>
+            <td></td>
+            <td>No authorization check is performed for this request.</td>
+        </tr>
+        <tr>
+            <td>PUSH_TELEMETRY (72)</td>
+            <td></td>
+            <td></td>
+            <td>No authorization check is performed for this request.</td>
+        </tr>
+        <tr>
+            <td>ASSIGN_REPLICAS_TO_DIRS (73)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>LIST_CLIENT_METRICS_RESOURCES (74)</td>
+            <td>DescribeConfigs</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_TOPIC_PARTITIONS (75)</td>
+            <td>Describe</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
         </tbody>
     </table>
 
