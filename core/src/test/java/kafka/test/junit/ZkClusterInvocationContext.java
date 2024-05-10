@@ -301,7 +301,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         public void modifyConfigs(Seq<Properties> props) {
             super.modifyConfigs(props);
             for (int i = 0; i < props.length(); i++) {
-                props.apply(i).putAll(clusterConfig.perBrokerOverrideProperties().getOrDefault(i, Collections.emptyMap()));
+                props.apply(i).putAll(clusterConfig.perServerOverrideProperties().getOrDefault(i, Collections.emptyMap()));
             }
         }
 

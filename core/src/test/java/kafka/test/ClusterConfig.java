@@ -53,14 +53,14 @@ public class ClusterConfig {
     private final Map<String, String> adminClientProperties;
     private final Map<String, String> saslServerProperties;
     private final Map<String, String> saslClientProperties;
-    private final Map<Integer, Map<String, String>> perBrokerOverrideProperties;
+    private final Map<Integer, Map<String, String>> perServerProperties;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     private ClusterConfig(Type type, int brokers, int controllers, int disksPerBroker, String name, boolean autoStart,
                   SecurityProtocol securityProtocol, String listenerName, File trustStoreFile,
                   MetadataVersion metadataVersion, Map<String, String> serverProperties, Map<String, String> producerProperties,
                   Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
-                  Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perBrokerOverrideProperties) {
+                  Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perServerProperties) {
         // do fail fast. the following values are invalid for both zk and kraft modes.
         if (brokers < 0) throw new IllegalArgumentException("Number of brokers must be greater or equal to zero.");
         if (controllers < 0) throw new IllegalArgumentException("Number of controller must be greater or equal to zero.");
@@ -82,7 +82,7 @@ public class ClusterConfig {
         this.adminClientProperties = Objects.requireNonNull(adminClientProperties);
         this.saslServerProperties = Objects.requireNonNull(saslServerProperties);
         this.saslClientProperties = Objects.requireNonNull(saslClientProperties);
-        this.perBrokerOverrideProperties = Objects.requireNonNull(perBrokerOverrideProperties);
+        this.perServerProperties = Objects.requireNonNull(perServerProperties);
     }
 
     public Type clusterType() {
@@ -149,8 +149,8 @@ public class ClusterConfig {
         return metadataVersion;
     }
 
-    public Map<Integer, Map<String, String>> perBrokerOverrideProperties() {
-        return perBrokerOverrideProperties;
+    public Map<Integer, Map<String, String>> perServerOverrideProperties() {
+        return perServerProperties;
     }
 
     public Map<String, String> nameTags() {
@@ -195,7 +195,7 @@ public class ClusterConfig {
                 .setAdminClientProperties(clusterConfig.adminClientProperties)
                 .setSaslServerProperties(clusterConfig.saslServerProperties)
                 .setSaslClientProperties(clusterConfig.saslClientProperties)
-                .setPerBrokerProperties(clusterConfig.perBrokerOverrideProperties);
+                .setPerServerProperties(clusterConfig.perServerProperties);
     }
 
     public static class Builder {
@@ -215,7 +215,7 @@ public class ClusterConfig {
         private Map<String, String> adminClientProperties = Collections.emptyMap();
         private Map<String, String> saslServerProperties = Collections.emptyMap();
         private Map<String, String> saslClientProperties = Collections.emptyMap();
-        private Map<Integer, Map<String, String>> perBrokerOverrideProperties = Collections.emptyMap();
+        private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
 
         private Builder() {}
 
@@ -299,9 +299,9 @@ public class ClusterConfig {
             return this;
         }
 
-        public Builder setPerBrokerProperties(Map<Integer, Map<String, String>> perBrokerOverrideProperties) {
-            this.perBrokerOverrideProperties = Collections.unmodifiableMap(
-                    perBrokerOverrideProperties.entrySet().stream()
+        public Builder setPerServerProperties(Map<Integer, Map<String, String>> perServerProperties) {
+            this.perServerProperties = Collections.unmodifiableMap(
+                    perServerProperties.entrySet().stream()
                             .collect(Collectors.toMap(Map.Entry::getKey, e -> Collections.unmodifiableMap(new HashMap<>(e.getValue())))));
             return this;
         }
@@ -309,8 +309,7 @@ public class ClusterConfig {
         public ClusterConfig build() {
             return new ClusterConfig(type, brokers, controllers, disksPerBroker, name, autoStart, securityProtocol, listenerName,
                     trustStoreFile, metadataVersion, serverProperties, producerProperties, consumerProperties,
-                    adminClientProperties, saslServerProperties, saslClientProperties,
-                    perBrokerOverrideProperties);
+                    adminClientProperties, saslServerProperties, saslClientProperties, perServerProperties);
         }
     }
 }
