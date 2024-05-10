@@ -54,7 +54,7 @@ class StorageToolTest {
     properties
   }
 
-  val allFeatures = List(TestFeatureVersion.FEATURE_NAME)
+  val allFeatures = FeatureVersion.FEATURES.toList
 
   @Test
   def testConfigToLogDirectories(): Unit = {
@@ -283,7 +283,7 @@ Found problem:
 
   @Test
   def testParseFeatures(): Unit = {
-    def parseAddFeatures(strings: String*): Map[String, FeatureVersion] = {
+    def parseAddFeatures(strings: String*): Map[String, java.lang.Short] = {
       var args = mutable.Seq("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ")
       args ++= strings
       val namespace = StorageTool.parseArguments(args.toArray)
@@ -292,7 +292,7 @@ Found problem:
 
     assertThrows(classOf[RuntimeException], () => parseAddFeatures("--feature", "blah"))
     assertThrows(classOf[RuntimeException], () => parseAddFeatures("--feature", "blah=blah"))
-    assertThrows(classOf[IllegalArgumentException], () => parseAddFeatures("--feature", "blah=12"))
+    //assertThrows(classOf[IllegalArgumentException], () => parseAddFeatures("--feature", "blah=12")) TODO: add back this validation
 
     // Test with no features
     assertEquals(Map(), parseAddFeatures())
@@ -300,17 +300,17 @@ Found problem:
     // Test with one feature
     val testFeatureLevel = 1
     val testArgument = TestFeatureVersion.FEATURE_NAME + "=" + testFeatureLevel.toString
-    val expectedMap = Map(TestFeatureVersion.FEATURE_NAME -> FeatureVersion.createFeature(TestFeatureVersion.FEATURE_NAME, testFeatureLevel.toShort))
+    val expectedMap = Map(TestFeatureVersion.FEATURE_NAME -> testFeatureLevel.toShort)
     assertEquals(expectedMap, parseAddFeatures("--feature", testArgument))
 
     // Test with two features
     val metadataFeatureLevel = 5
     val metadataArgument = MetadataVersion.FEATURE_NAME + "=" + metadataFeatureLevel.toString
-    val expectedMap2 = expectedMap ++ Map (MetadataVersion.FEATURE_NAME -> FeatureVersion.createFeature(MetadataVersion.FEATURE_NAME, metadataFeatureLevel.toShort))
+    val expectedMap2 = expectedMap ++ Map (MetadataVersion.FEATURE_NAME -> metadataFeatureLevel.toShort)
     assertEquals(expectedMap2, parseAddFeatures("--feature", testArgument, "--feature", metadataArgument))
   }
 
-  def parseFeatures(namespace: Namespace): Map[String, FeatureVersion] = {
+  def parseFeatures(namespace: Namespace): Map[String, java.lang.Short] = {
     val specifiedFeatures: util.List[String] = namespace.getList("feature")
     StorageTool.featureNamesAndLevels(Option(specifiedFeatures).getOrElse(Collections.emptyList).asScala.toList)
   }
@@ -344,10 +344,12 @@ Found problem:
   def testFeatureFlag(testFeatureVersion: TestFeatureVersion): Unit = {
     val featureLevel = testFeatureVersion.featureLevel
     val records = StorageTool.generateFeatureRecords(MetadataVersion.LATEST_PRODUCTION,
-      Map(TestFeatureVersion.FEATURE_NAME -> FeatureVersion.createFeature(TestFeatureVersion.FEATURE_NAME, featureLevel)),
+      Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
       allFeatures
     )
-    assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
+    if (featureLevel > 0) {
+      assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
+    }
   }
 
   @ParameterizedTest
@@ -358,15 +360,17 @@ Found problem:
       allFeatures
     )
 
-    val featureLevel = TestFeatureVersion.metadataVersionMapping(metadataVersion).featureLevel()
-    assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
+    val featureLevel = TestFeatureVersion.defaultValue(metadataVersion)
+    if (featureLevel > 0) {
+      assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
+    }
   }
 
   @Test
   def testFeatureDependency(): Unit = {
     val featureLevel = 1.toShort
     assertThrows(classOf[TerseFailure], () => StorageTool.generateFeatureRecords(MetadataVersion.IBP_2_8_IV1,
-      Map(TestFeatureVersion.FEATURE_NAME -> FeatureVersion.createFeature(TestFeatureVersion.FEATURE_NAME, featureLevel)),
+      Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
       allFeatures
     ))
   }

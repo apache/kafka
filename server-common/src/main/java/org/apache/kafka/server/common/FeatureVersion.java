@@ -18,7 +18,9 @@ package org.apache.kafka.server.common;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * This is an interface for the various features implemented for Kafka clusters.
@@ -29,82 +31,50 @@ import java.util.Optional;
  * Having a unified interface for the features that will use a shared type in the API used to set and update them
  * makes it easier to process these features.
  */
-public interface FeatureVersion {
+public enum FeatureVersion {
 
     /**
      * Features currently used in production. If a feature is included in this list, it will also be specified when
      * formatting a cluster via the StorageTool. MetadataVersion is handled separately, so it is not included here.
      *
-     * When a feature is added here, make sure it has a mapping in {@link #defaultValue} and {@link #createFeature}.
      * See {@link TestFeatureVersion} as an example.
      */
-    List<String> PRODUCTION_FEATURES = Arrays.asList();
+    TEST_VERSION("test.feature.version", TestFeatureVersion::defaultValue, TestFeatureVersion::validateVersion, false);
 
-    /**
-     * Name of the feature. It should be the same across all feature levels of a given feature.
-     */
-    String featureName();
+    public static final FeatureVersion[] FEATURES;
+    public static final List<FeatureVersion> PRODUCTION_FEATURES;
+    private final String name;
+    private final FeatureVersionUtils.DefaultValueMethod defaultValueMethod;
+    private final FeatureVersionUtils.ValidateMethod validateVersionMethod;
+    private final boolean usedInProduction;
 
-    /**
-     * Level of the feature. Used to indicate which components of the feature will be enabled.
-     */
-    short featureLevel();
-
-    /**
-     * A method to be implemented by each feature. If a given feature relies on another feature, the dependencies should be
-     * captured here.
-     *
-     * For example, say feature X level x relies on feature Y level y:
-     * if feature X >= x then throw an error if feature Y < y.
-     *
-     * All feature levels above 0 require metadata.version=4 (IBP_3_3_IV0) in order to write the feature records to the cluster.
-     *
-     * @param metadataVersion the metadata version we want to set
-     * @param features        the feature versions (besides MetadataVersion) we want to set
-     */
-    void validateVersion(MetadataVersion metadataVersion, List<FeatureVersion> features);
-
-    /**
-     * A method to return the default version of a feature. If metadataVersionOpt is not empty, the default is based on
-     * the metadataVersion. If not, use the latest production version for the given feature.
-     *
-     * Every time a new feature is added, it should create a mapping from metadata version to feature version and include
-     * a case here to specify the default.
-     *
-     * @param feature            the name of the feature requested
-     * @param metadataVersionOpt the metadata version we want to use to set the default, or None if the latest production version is desired
-     * @throws                   IllegalArgumentException if the feature name is not valid (not implemented for this method)
-     * @return                   the FeatureVersion of the feature that contains the feature name and the default level as determined by this method.
-     */
-    static FeatureVersion defaultValue(String feature, Optional<MetadataVersion> metadataVersionOpt) {
-        switch (feature) {
-            case MetadataVersion.FEATURE_NAME:
-                return createFeature(MetadataVersion.FEATURE_NAME,
-                        metadataVersionOpt.orElse(MetadataVersion.LATEST_PRODUCTION).featureLevel());
-            case TestFeatureVersion.FEATURE_NAME:
-                return createFeature(TestFeatureVersion.FEATURE_NAME,
-                        metadataVersionOpt.map(TestFeatureVersion::metadataVersionMapping).orElse(TestFeatureVersion.PRODUCTION_VERSION).featureLevel());
-            default:
-                throw new IllegalArgumentException(feature + " is not a valid feature version.");
-        }
+    FeatureVersion(String name,
+                   FeatureVersionUtils.DefaultValueMethod defaultValueMethod,
+                   FeatureVersionUtils.ValidateMethod validateMethod,
+                   boolean usedInProduction) {
+        this.name = name;
+        this.defaultValueMethod = defaultValueMethod;
+        this.validateVersionMethod = validateMethod;
+        this.usedInProduction = usedInProduction;
     }
 
-    /**
-     * Creates a FeatureVersion from a given name and level with the correct feature object underneath.
-     *
-     * @param feature the name of the feature requested
-     * @param level   the level of the feature
-     * @throws        IllegalArgumentException if the feature name is not valid (not implemented for this method)
-     */
-    static FeatureVersion createFeature(String feature, short level) {
-        switch (feature) {
-            case MetadataVersion.FEATURE_NAME:
-                return MetadataVersion.fromFeatureLevel(level);
-            case TestFeatureVersion.FEATURE_NAME:
-                return TestFeatureVersion.fromFeatureLevel(level);
-            default:
-                throw new IllegalArgumentException(feature + " is not a valid feature version.");
-        }
+    static {
+        FeatureVersion[] enumValues = FeatureVersion.values();
+        FEATURES = Arrays.copyOf(enumValues, enumValues.length);
+        PRODUCTION_FEATURES = Arrays.stream(FEATURES).filter(feature ->
+                feature.usedInProduction).collect(Collectors.toList());
+    }
+
+    public String featureName() {
+        return name;
+    }
+
+    public void validateVersion(short featureLevel, MetadataVersion metadataVersion, Map<String, Short> features) {
+        validateVersionMethod.validateVersion(featureLevel, metadataVersion, features);
+    }
+
+    public short defaultValue(Optional<MetadataVersion> metadataVersionOpt) {
+        return defaultValueMethod.defaultValue(metadataVersionOpt.orElse(MetadataVersion.LATEST_PRODUCTION));
     }
 
 }

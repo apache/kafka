@@ -62,10 +62,10 @@ public final class QuorumFeatures {
                 enableUnstable ?
                     MetadataVersion.latestTesting().featureLevel() :
                     MetadataVersion.latestProduction().featureLevel()));
-        for (String feature : FeatureVersion.PRODUCTION_FEATURES) {
-            features.put(feature, VersionRange.of(
+        for (FeatureVersion feature : FeatureVersion.PRODUCTION_FEATURES) {
+            features.put(feature.featureName(), VersionRange.of(
                     0,
-                    FeatureVersion.defaultValue(feature, Optional.empty()).featureLevel()
+                    feature.defaultValue(Optional.empty())
             ));
         }
         return features;

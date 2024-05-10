@@ -56,10 +56,10 @@ public class QuorumFeaturesTest {
         expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
             MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
             MetadataVersion.LATEST_PRODUCTION.featureLevel()));
-        for (String feature : FeatureVersion.PRODUCTION_FEATURES) {
-            expectedFeatures.put(feature, VersionRange.of(
+        for (FeatureVersion feature : FeatureVersion.PRODUCTION_FEATURES) {
+            expectedFeatures.put(feature.featureName(), VersionRange.of(
                     0,
-                    FeatureVersion.defaultValue(feature, Optional.empty()).featureLevel()
+                    feature.defaultValue(Optional.empty())
             ));
         }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(false));
@@ -71,10 +71,10 @@ public class QuorumFeaturesTest {
         expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
             MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
             MetadataVersion.latestTesting().featureLevel()));
-        for (String feature : FeatureVersion.PRODUCTION_FEATURES) {
-            expectedFeatures.put(feature, VersionRange.of(
+        for (FeatureVersion feature : FeatureVersion.PRODUCTION_FEATURES) {
+            expectedFeatures.put(feature.featureName(), VersionRange.of(
                     0,
-                    FeatureVersion.defaultValue(feature, Optional.empty()).featureLevel()
+                    feature.defaultValue(Optional.empty())
             ));
         }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(true));

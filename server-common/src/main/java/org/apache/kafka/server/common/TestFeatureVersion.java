@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.server.common;
 
-import java.util.List;
+import java.util.Map;
 
-public enum TestFeatureVersion implements FeatureVersion {
+public enum TestFeatureVersion {
 
     TEST_0(0),
     TEST_1(1),
@@ -41,18 +41,18 @@ public enum TestFeatureVersion implements FeatureVersion {
         return FEATURE_NAME;
     }
 
-    public void validateVersion(MetadataVersion metadataVersion, List<FeatureVersion> features) {
+    public static void validateVersion(short featureLevel, MetadataVersion metadataVersion, Map<String, Short> features) {
         // version 1 depends on metadata.version 3.3-IVO
         if (featureLevel >= 1 && metadataVersion.isLessThan(MetadataVersion.IBP_3_3_IV0))
             throw new IllegalArgumentException(FEATURE_NAME + " could not be set to " + featureLevel +
                     " because it depends on metadata.version=14 (" + MetadataVersion.IBP_3_3_IV0 + ")");
     }
 
-    public static TestFeatureVersion metadataVersionMapping(MetadataVersion metadataVersion) {
+    public static short defaultValue(MetadataVersion metadataVersion) {
         if (metadataVersion.isLessThan(MetadataVersion.IBP_3_8_IV0)) {
-            return TEST_0;
+            return TEST_0.featureLevel;
         } else {
-            return TEST_1;
+            return TEST_1.featureLevel;
         }
     }
 

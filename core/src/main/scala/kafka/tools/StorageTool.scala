@@ -118,25 +118,26 @@ object StorageTool extends Logging {
   }
 
   def generateFeatureRecords(metadataVersion: MetadataVersion,
-                             specifiedFeatures: Map[String, FeatureVersion],
-                             allFeatures: List[String]): List[ApiMessageAndVersion] = {
+                             specifiedFeatures: Map[String, java.lang.Short],
+                             allFeatures: List[FeatureVersion]): List[ApiMessageAndVersion] = {
     // If we are using --version-default, the default is based on the metadata version.
     val metadataVersionOpt: Optional[MetadataVersion] = if (specifiedFeatures.isEmpty) Optional.of(metadataVersion) else Optional.empty[MetadataVersion]
 
-    val allFeaturesAndVersions = allFeatures.map { featureName =>
-        specifiedFeatures.getOrElse(featureName, FeatureVersion.defaultValue(featureName, metadataVersionOpt))
+    val allFeaturesAndLevels: List[(FeatureVersion, java.lang.Short)] = allFeatures.map { feature =>
+      (feature, specifiedFeatures.getOrElse(feature.featureName, feature.defaultValue(metadataVersionOpt)))
     }
+    val nameToLevel = allFeaturesAndLevels.map { case (feature, level) => (feature.featureName, level) }.toMap.asJava
 
     val records = mutable.ListBuffer.empty[ApiMessageAndVersion]
     try {
-      for (feature <- allFeaturesAndVersions) {
+      for ((feature, level) <- allFeaturesAndLevels) {
         // In order to validate, we need all feature versions set.
-        feature.validateVersion(metadataVersion, allFeaturesAndVersions.asJava)
+        feature.validateVersion(level, metadataVersion, nameToLevel)
         // Only set feature records for levels greater than 0. 0 is assumed if there is no record.
-        if (feature.featureLevel() > 0) {
+        if (level > 0) {
           records += new ApiMessageAndVersion(new FeatureLevelRecord().
             setName(feature.featureName).
-            setFeatureLevel(feature.featureLevel), 0.toShort)
+            setFeatureLevel(level), 0.toShort)
         }
       }
       records.toList
@@ -195,7 +196,7 @@ object StorageTool extends Logging {
 
   def getMetadataVersion(
     namespace: Namespace,
-    featureNamesAndLevelsMap: Map[String, FeatureVersion],
+    featureNamesAndLevelsMap: Map[String, java.lang.Short],
     defaultVersionString: Option[String]
   ): MetadataVersion = {
     val defaultValue = defaultVersionString match {
@@ -211,8 +212,8 @@ object StorageTool extends Logging {
         throw new IllegalArgumentException("Both --release_version and --feature were set. Only one of the two flags can be set.")
       case (Some(version), None) =>
         MetadataVersion.fromVersionString(version)
-      case (None, Some(feature)) =>
-        MetadataVersion.fromFeatureLevel(feature.featureLevel())
+      case (None, Some(level)) =>
+        MetadataVersion.fromFeatureLevel(level)
       case (None, None) =>
         defaultValue
     }
@@ -535,10 +536,10 @@ object StorageTool extends Logging {
     Array[String](name, levelString)
   }
 
-  def featureNamesAndLevels(features: List[String]): Map[String, FeatureVersion] = {
+  def featureNamesAndLevels(features: List[String]): Map[String, java.lang.Short] = {
     features.map((feature: String) => {
       val nameAndLevel = parseNameAndLevel(feature)
-      (nameAndLevel(0), FeatureVersion.createFeature(nameAndLevel(0), java.lang.Short.valueOf(nameAndLevel(1))))
+      (nameAndLevel(0), java.lang.Short.valueOf(nameAndLevel(1)))
     }).toMap
   }
 }
