@@ -1053,7 +1053,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldThrowTaskMigratedExceptionOnSubsequentSendWhenProducerFencedInCallback() {
-        testThrowTaskMigratedExceptionOnSubsequentSend(new ProducerFencedException("KABOOM!") );
+        testThrowTaskMigratedExceptionOnSubsequentSend(new ProducerFencedException("KABOOM!"));
     }
 
     @Test
@@ -1092,6 +1092,11 @@ public class RecordCollectorTest {
     }
 
     @Test
+    public void shouldThrowTaskMigratedExceptionOnSubsequentFlushWhenInvalidPidMappingInCallback() {
+        testThrowTaskMigratedExceptionOnSubsequentFlush(new InvalidPidMappingException("KABOOM!"));
+    }
+
+    @Test
     public void shouldThrowTaskMigratedExceptionOnSubsequentFlushWhenInvalidEpochInCallback() {
         testThrowTaskMigratedExceptionOnSubsequentFlush(new InvalidProducerEpochException("KABOOM!"));
     }
@@ -1122,7 +1127,6 @@ public class RecordCollectorTest {
     public void shouldThrowTaskMigratedExceptionOnSubsequentCloseWhenInvalidPidMappingInCallback() {
         testThrowTaskMigratedExceptionOnSubsequentClose(new InvalidPidMappingException("KABOOM!"));
     }
-
 
     @Test
     public void shouldThrowTaskMigratedExceptionOnSubsequentCloseWhenInvalidEpochInCallback() {
