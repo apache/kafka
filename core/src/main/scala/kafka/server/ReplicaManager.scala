@@ -2128,7 +2128,7 @@ class ReplicaManager(val config: KafkaConfig,
 
           // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move
           // replica from source dir to destination dir
-          logManager.abortAndPauseCleaning(topicPartition)
+          //logManager.abortAndPauseCleaning(topicPartition)
 
           futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(topicIds(topicPartition.topic), leader,
             partition.getLeaderEpoch, futureLog.highWatermark))
