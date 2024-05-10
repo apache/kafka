@@ -10967,6 +10967,7 @@ public class GroupMetadataManagerTest {
                 .setRebalanceTimeoutMs(500)
                 .setAssignedPartitions(assignor.targetPartitions(newMemberId))
                 .setSupportedClassicProtocols(request.protocols())
+                .setSessionTimeoutMs(request.sessionTimeoutMs())
                 .build();
 
             List<Record> expectedRecords = Arrays.asList(
@@ -11133,6 +11134,7 @@ public class GroupMetadataManagerTest {
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(500)
             .setSupportedClassicProtocols(request.protocols())
+            .setSessionTimeoutMs(request.sessionTimeoutMs())
             .build();
 
         List<Record> expectedRecords = Arrays.asList(
@@ -11233,6 +11235,7 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(fooTopicId, 0, 1)))
             .setRebalanceTimeoutMs(500)
             .setSupportedClassicProtocols(request.protocols())
+            .setSessionTimeoutMs(request.sessionTimeoutMs())
             .build();
 
         List<Record> expectedRecords = Arrays.asList(
@@ -11369,6 +11372,7 @@ public class GroupMetadataManagerTest {
             .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                 Arrays.asList(fooTopicName, barTopicName, zarTopicName),
                 Collections.emptyList()))
+            .setSessionTimeoutMs(request.sessionTimeoutMs())
             .build();
 
         List<Record> expectedRecords = Arrays.asList(
@@ -11576,6 +11580,7 @@ public class GroupMetadataManagerTest {
             .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                 Arrays.asList(fooTopicName, barTopicName, zarTopicName),
                 Collections.emptyList()))
+            .setSessionTimeoutMs(request.sessionTimeoutMs())
             .build();
 
         List<Record> expectedRecords1 = Arrays.asList(
@@ -11761,6 +11766,7 @@ public class GroupMetadataManagerTest {
             .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                 Arrays.asList(fooTopicName, barTopicName, zarTopicName),
                 Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(barTopicName, 0))))
+            .setSessionTimeoutMs(request1.sessionTimeoutMs())
             .build();
 
         List<Record> expectedRecords1 = Arrays.asList(

@@ -88,7 +88,7 @@ public class ConsumerGroupMember {
             this.state = member.state;
             this.assignedPartitions = member.assignedPartitions;
             this.partitionsPendingRevocation = member.partitionsPendingRevocation;
-            this.classicMemberMetadata = member.classicMemberMetadata;
+            this.classicMemberMetadata = member.classicMemberMetadata == null ? null : member.classicMemberMetadata.duplicate();
         }
 
         public Builder updateMemberEpoch(int memberEpoch) {
@@ -209,8 +209,19 @@ public class ConsumerGroupMember {
                         .setMetadata(protocol.metadata())
                 )
             );
-            this.classicMemberMetadata = new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                .setSupportedProtocols(newSupportedProtocols);
+
+            if (this.classicMemberMetadata == null) {
+                this.classicMemberMetadata = new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata();
+            }
+            this.classicMemberMetadata.setSupportedProtocols(newSupportedProtocols);
+            return this;
+        }
+
+        public Builder setSessionTimeoutMs(int sessionTimeoutMs) {
+            if (this.classicMemberMetadata == null) {
+                this.classicMemberMetadata = new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata();
+            }
+            this.classicMemberMetadata.setSessionTimeoutMs(sessionTimeoutMs);
             return this;
         }
 
