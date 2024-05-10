@@ -1396,6 +1396,7 @@ class LogManager(logDirs: Seq[File],
   private def cleanupLogs(): Unit = {
     debug("Beginning log cleanup...")
     System.err.print(s"start clean ")
+    System.err.flush()
     var total = 0
     val startMs = time.milliseconds
 
@@ -1412,12 +1413,14 @@ class LogManager(logDirs: Seq[File],
     }
 
     System.err.print(s"c1:${currentLogs.get(new TopicPartition("topicB", 0))}")
+    System.err.flush()
 
     try {
       deletableLogs.foreach {
         case (topicPartition, log) =>
           if (topicPartition.topic().contains("topicB")) {
             System.err.print(s"d:${log.dir}")
+            System.err.flush()
           }
           debug(s"Garbage collecting '${log.name}'")
           total += log.deleteOldSegments()
@@ -1426,6 +1429,7 @@ class LogManager(logDirs: Seq[File],
           if (futureLog != null) {
             // clean future logs
             System.err.print(s"fut:${futureLog.name} ")
+            System.err.flush()
             debug(s"Garbage collecting future log '${futureLog.name}'")
             total += futureLog.deleteOldSegments()
           }
@@ -1433,14 +1437,17 @@ class LogManager(logDirs: Seq[File],
     } finally {
       if (cleaner != null) {
         System.err.print(s"cleaner ")
+        System.err.flush()
         cleaner.resumeCleaning(deletableLogs.map(_._1))
         System.err.print(s"cleaner end")
+        System.err.flush()
       }
     }
 
     debug(s"Log cleanup completed. $total files deleted in " +
                   (time.milliseconds - startMs) / 1000 + " seconds")
     System.err.print(s"end clean ")
+    System.err.flush()
   }
 
   /**

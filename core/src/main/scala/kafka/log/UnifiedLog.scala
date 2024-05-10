@@ -1447,6 +1447,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                                 reason: SegmentDeletionReason): Int = {
     lock synchronized {
       val deletable = deletableSegments(predicate)
+      System.err.print(s"toD:${deletable.size}")
+      System.err.flush()
       if (deletable.nonEmpty)
         deleteSegments(deletable, reason)
       else
@@ -1576,6 +1578,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val retentionSize: Long = localRetentionSize(config, remoteLogEnabled())
     if (name.contains("topicB")) {
       System.err.print(s"$name $parentDir $size ")
+      System.err.flush()
     }
     if (retentionSize < 0 || size < retentionSize) return 0
     var diff = size - retentionSize
@@ -2286,6 +2289,8 @@ object UnifiedLog extends Logging {
                                            logDirFailureChannel: LogDirFailureChannel,
                                            parentDir: String,
                                            topicPartition: TopicPartition): Unit = {
+    System.err.print(s"dels:${segments.size}")
+    System.err.flush()
     val snapshotsToDelete = segments.flatMap { segment =>
       producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset).asScala
     }
@@ -2304,6 +2309,9 @@ object UnifiedLog extends Logging {
       scheduler.scheduleOnce("delete-producer-snapshot", () => deleteProducerSnapshots(), config.fileDeleteDelayMs)
     else
       deleteProducerSnapshots()
+
+    System.err.print(s"dels done")
+    System.err.flush()
   }
 
   private[log] def createNewCleanedSegment(dir: File, logConfig: LogConfig, baseOffset: Long): LogSegment = {
@@ -2388,6 +2396,7 @@ case class RetentionSizeBreach(log: UnifiedLog, remoteLogEnabled: Boolean) exten
           s"Local log size after deletion will be $size.")
         System.err.println(s"Deleting segment $segment due to local log retention size ${UnifiedLog.localRetentionSize(log.config, remoteLogEnabled)} breach. " +
           s"Local log size after deletion will be $size.")
+        System.err.flush()
       }
       else log.info(s"Deleting segment $segment due to log retention size ${log.config.retentionSize} breach. Log size " +
         s"after deletion will be $size.")

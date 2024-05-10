@@ -309,8 +309,10 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     */
   def resumeCleaning(topicPartitions: Iterable[TopicPartition]): Unit = {
     System.err.print("lock")
+    System.err.flush()
     inLock(lock) {
       System.err.print("lock get")
+      System.err.flush()
       topicPartitions.foreach {
         topicPartition =>
           inProgress.get(topicPartition) match {
