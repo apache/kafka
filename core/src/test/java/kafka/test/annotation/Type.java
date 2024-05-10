@@ -22,7 +22,8 @@ import kafka.test.junit.RaftClusterInvocationContext;
 import kafka.test.junit.ZkClusterInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
-import java.util.function.Consumer;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * The type of cluster config being requested. Used by {@link kafka.test.ClusterConfig} and the test annotations.
@@ -30,36 +31,44 @@ import java.util.function.Consumer;
 public enum Type {
     KRAFT {
         @Override
-        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, false));
+        public List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config) {
+            List<TestTemplateInvocationContext> ret = new ArrayList<>();
+            ret.add(new RaftClusterInvocationContext(baseDisplayName, config, false));
+            return ret;
         }
     },
     CO_KRAFT {
         @Override
-        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, true));
+        public List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config) {
+            List<TestTemplateInvocationContext> ret = new ArrayList<>();
+            ret.add(new RaftClusterInvocationContext(baseDisplayName, config, true));
+            return ret;
         }
     },
     ZK {
         @Override
-        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config));
+        public List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config) {
+            List<TestTemplateInvocationContext> ret = new ArrayList<>();
+            ret.add(new ZkClusterInvocationContext(baseDisplayName, config));
+            return ret;
         }
     },
     ALL {
         @Override
-        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, false));
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, true));
-            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config));
+        public List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config) {
+            List<TestTemplateInvocationContext> ret = new ArrayList<>();
+            ret.add(new RaftClusterInvocationContext(baseDisplayName, config, false));
+            ret.add(new RaftClusterInvocationContext(baseDisplayName, config, true));
+            ret.add(new ZkClusterInvocationContext(baseDisplayName, config));
+            return ret;
         }
     },
     DEFAULT {
         @Override
-        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+        public List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config) {
             throw new UnsupportedOperationException("Cannot create invocation contexts for DEFAULT type");
         }
     };
 
-    public abstract void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer);
+    public abstract List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config);
 }

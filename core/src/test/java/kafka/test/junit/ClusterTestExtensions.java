@@ -37,7 +37,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -93,7 +92,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         // Process the @ClusterTemplate annotation
         ClusterTemplate clusterTemplateAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTemplate.class);
         if (clusterTemplateAnnot != null) {
-            processClusterTemplate(context, clusterTemplateAnnot, generatedContexts::add);
+            generatedContexts.addAll(processClusterTemplate(context, clusterTemplateAnnot));
             if (generatedContexts.isEmpty()) {
                 throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
             }
@@ -102,14 +101,14 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         // Process single @ClusterTest annotation
         ClusterTest clusterTestAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTest.class);
         if (clusterTestAnnot != null) {
-            processClusterTest(context, clusterTestAnnot, defaults, generatedContexts::add);
+            generatedContexts.addAll(processClusterTest(context, clusterTestAnnot, defaults));
         }
 
         // Process multiple @ClusterTest annotation within @ClusterTests
         ClusterTests clusterTestsAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTests.class);
         if (clusterTestsAnnot != null) {
             for (ClusterTest annot : clusterTestsAnnot.value()) {
-                processClusterTest(context, annot, defaults, generatedContexts::add);
+                generatedContexts.addAll(processClusterTest(context, annot, defaults));
             }
         }
 
@@ -121,17 +120,20 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return generatedContexts.stream();
     }
 
-    void processClusterTemplate(ExtensionContext context, ClusterTemplate annot,
-                                        Consumer<TestTemplateInvocationContext> testInvocations) {
+    List<TestTemplateInvocationContext> processClusterTemplate(ExtensionContext context, ClusterTemplate annot) {
         // If specified, call cluster config generated method (must be static)
         List<ClusterConfig> generatedClusterConfigs = new ArrayList<>();
+        List<TestTemplateInvocationContext> contexts = new ArrayList<>();
+
         if (annot.value().trim().isEmpty()) {
             throw new IllegalStateException("ClusterTemplate value can't be empty string.");
         }
         generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
 
         String baseDisplayName = context.getRequiredTestMethod().getName();
-        generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(baseDisplayName, config, testInvocations));
+        generatedClusterConfigs.forEach(config -> contexts.addAll(config.clusterType().invocationContexts(baseDisplayName, config)));
+
+        return contexts;
     }
 
     private void generateClusterConfigurations(ExtensionContext context, String generateClustersMethods, ClusterGenerator generator) {
@@ -140,8 +142,8 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         ReflectionUtils.invokeMethod(method, testInstance, generator);
     }
 
-    private void processClusterTest(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults,
-                                    Consumer<TestTemplateInvocationContext> testInvocations) {
+    private List<TestTemplateInvocationContext> processClusterTest(ExtensionContext context, ClusterTest annot,
+                                                                   ClusterTestDefaults defaults) {
         Type type = annot.clusterType() == Type.DEFAULT ? defaults.clusterType() : annot.clusterType();
         Map<String, String> serverProperties = Stream.concat(Arrays.stream(defaults.serverProperties()), Arrays.stream(annot.serverProperties()))
                 .filter(e -> e.id() == -1)
@@ -165,7 +167,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 .setSecurityProtocol(annot.securityProtocol())
                 .setMetadataVersion(annot.metadataVersion())
                 .build();
-        type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
+        return type.invocationContexts(context.getRequiredTestMethod().getName(), config);
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {
