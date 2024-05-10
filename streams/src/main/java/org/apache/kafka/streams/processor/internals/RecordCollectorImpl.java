@@ -299,7 +299,7 @@ public class RecordCollectorImpl implements RecordCollector {
         } else if (exception instanceof ProducerFencedException ||
                 exception instanceof InvalidPidMappingException ||
                 exception instanceof InvalidProducerEpochException ||
-                exception instanceof OutOfOrderSequenceException ) {
+                exception instanceof OutOfOrderSequenceException) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, " +
                 "indicating the task may be migrated out";
             sendException.set(new TaskMigratedException(errorMessage, exception));

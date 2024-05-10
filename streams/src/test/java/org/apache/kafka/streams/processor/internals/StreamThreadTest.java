@@ -1683,7 +1683,7 @@ public class StreamThreadTest {
             TestUtils.waitForCondition(() -> !producer.uncommittedRecords().isEmpty(), "Processing threads to process record");
         }
 
-        producer.commitTransactionException = new ProducerFencedException("Producer is fenced");
+        producer.commitTransactionException = new ProducerFencedException("Producer is fenced") ;
         assertThrows(TaskMigratedException.class, () -> thread.rebalanceListener().onPartitionsRevoked(assignedPartitions));
         assertFalse(producer.transactionCommitted());
         assertFalse(producer.closed());
