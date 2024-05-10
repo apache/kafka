@@ -80,6 +80,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -664,8 +665,12 @@ public class HeartbeatRequestManagerTest {
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         verify(membershipManager).transitionToSendingLeaveGroup(true);
-
+        verify(heartbeatRequestManager, never()).pollTimerExceededTime();
         assertEquals(exceededTimeMs, heartbeatRequestManager.pollTimerExceededTime());
+
+        clearInvocations(heartbeatRequestManager);
+        heartbeatRequestManager.resetPollTimer(time.milliseconds());
+        verify(heartbeatRequestManager).pollTimerExceededTime();
     }
 
     @Test
