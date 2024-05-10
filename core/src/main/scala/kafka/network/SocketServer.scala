@@ -734,6 +734,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
       info(s"Awaiting socket connections on ${socketAddress.getHostString}:${serverChannel.socket.getLocalPort}.")
     } catch {
       case e: SocketException =>
+        Utils.closeQuietly(serverChannel, "server socket")
         throw new KafkaException(s"Socket server failed to bind to ${socketAddress.getHostString}:$port: ${e.getMessage}.", e)
     }
     serverChannel
