@@ -260,7 +260,7 @@ public class HeartbeatRequestManager implements RequestManager {
         pollTimer.update(pollMs);
         if (pollTimer.isExpired()) {
             logger.warn("Time between subsequent calls to poll() was longer than the configured" +
-                "max.poll.interval.ms, exceeded by %s ms. This typically implies that the " +
+                "max.poll.interval.ms, exceeded by {} ms. This typically implies that the " +
                 "poll loop is spending too much time processing messages. You can address this " +
                 "either by increasing max.poll.interval.ms or by reducing the maximum size of " +
                 "batches returned in poll() with max.poll.records.", pollTimerExceededTime());
