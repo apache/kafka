@@ -415,7 +415,7 @@ class LogValidatorTest {
       s"Max timestamp should be ${now + 1}")
 
     // V2: Only one batch is in the records, so the shallow OffsetOfMaxTimestamp is the last offset of the single batch
-    // V1: 3 batches are in the records, so the shallow OffsetOfMaxTimestamp is the timestamp of branch-1
+    // V1: 3 batches are in the records, so the shallow OffsetOfMaxTimestamp is the timestamp of batch-1
     if (magic >= RecordBatch.MAGIC_VALUE_V2) {
       assertEquals(1, records.batches().asScala.size)
       assertEquals(2, validatingResults.shallowOffsetOfMaxTimestamp)
