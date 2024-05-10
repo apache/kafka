@@ -691,12 +691,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             // The leader epoch check in checkDriverState prevents us from getting stuck retrying this event after a
             // new leader has been seen.
             if (checkDriverState(MigrationDriverState.BECOME_CONTROLLER, this)) {
+                applyMigrationOperation("Claimed ZK controller leadership", zkMigrationClient::claimControllerLeadership, true);
                 if (migrationLeadershipState.zkControllerEpochZkVersion() == ZkMigrationLeadershipState.UNKNOWN_ZK_VERSION) {
-                    applyMigrationOperation("Claimed ZK controller leadership", zkMigrationClient::claimControllerLeadership, true);
-                    if (migrationLeadershipState.zkControllerEpochZkVersion() == ZkMigrationLeadershipState.UNKNOWN_ZK_VERSION) {
-                        log.info("Unable to claim leadership, will retry until we learn of a different KRaft leader");
-                        return; // Stay in BECOME_CONTROLLER state and retry
-                    }
+                    log.info("Unable to claim leadership, will retry until we learn of a different KRaft leader");
+                    return; // Stay in BECOME_CONTROLLER state and retry
                 }
 
                 // KAFKA-16171 and KAFKA-16667: Prior writing to /controller and /controller_epoch ZNodes above,
