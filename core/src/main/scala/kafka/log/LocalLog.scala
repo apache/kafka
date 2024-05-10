@@ -910,13 +910,8 @@ object LocalLog extends Logging {
     System.err.print(s"del")
     System.err.flush()
     segmentsToDelete.foreach { segment =>
-      System.err.print(s"ren:${segment.baseOffset()} $dir")
-      System.err.flush()
       if (!segment.hasSuffix(LogFileUtils.DELETED_FILE_SUFFIX))
         segment.changeFileSuffixes("", LogFileUtils.DELETED_FILE_SUFFIX)
-
-      System.err.print(s"ren done")
-      System.err.flush()
     }
 
     def deleteSegments(): Unit = {

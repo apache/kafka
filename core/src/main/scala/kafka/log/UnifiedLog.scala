@@ -1447,8 +1447,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                                 reason: SegmentDeletionReason): Int = {
     lock synchronized {
       val deletable = deletableSegments(predicate)
-      System.err.print(s"toD:${deletable.size}")
-      System.err.flush()
+      if (deletable.size > 0) {
+        System.err.print(s"toD:${deletable.size}")
+        System.err.flush()
+      }
       if (deletable.nonEmpty)
         deleteSegments(deletable, reason)
       else
