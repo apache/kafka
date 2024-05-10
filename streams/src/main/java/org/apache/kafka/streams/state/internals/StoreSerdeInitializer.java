@@ -27,8 +27,10 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 
 public class StoreSerdeInitializer {
-    static <K, V> StateSerdes<K, V> prepareStoreSerde(final StateStoreContext context, final String storeName,
-                                                      final String changelogTopic, final Serde<K> keySerde,
+    static <K, V> StateSerdes<K, V> prepareStoreSerde(final StateStoreContext context,
+                                                      final String storeName,
+                                                      final String changelogTopic,
+                                                      final Serde<K> keySerde,
                                                       final Serde<V> valueSerde,
                                                       final PrepareFunc<V> prepareValueSerdeFunc) {
         return new StateSerdes<>(
@@ -38,8 +40,10 @@ public class StoreSerdeInitializer {
         );
     }
 
-    static <K, V> StateSerdes<K, V> prepareStoreSerde(final ProcessorContext context, final String storeName,
-                                                      final String changelogTopic, final Serde<K> keySerde,
+    static <K, V> StateSerdes<K, V> prepareStoreSerde(final ProcessorContext context,
+                                                      final String storeName,
+                                                      final String changelogTopic,
+                                                      final Serde<K> keySerde,
                                                       final Serde<V> valueSerde,
                                                       final PrepareFunc<V> prepareValueSerdeFunc) {
         return new StateSerdes<>(
@@ -49,8 +53,11 @@ public class StoreSerdeInitializer {
         );
     }
 
-    private static <T> Serde<T> prepareSerde(final PrepareFunc<T> prepare, final String storeName, final Serde<T> serde,
-                                             final SerdeGetter getter, final Boolean isKey) {
+    private static <T> Serde<T> prepareSerde(final PrepareFunc<T> prepare,
+                                             final String storeName,
+                                             final Serde<T> serde,
+                                             final SerdeGetter getter,
+                                             final Boolean isKey) {
 
         final String serdeType = isKey ? "key" : "value";
         try {

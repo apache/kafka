@@ -156,7 +156,8 @@ public class ProcessorNodeTest {
 
         final ConfigException se = assertThrows(ConfigException.class, () -> new TopologyTestDriver(topology));
         final String msg = se.getMessage();
-        assertTrue("Error about class cast with serdes", msg.contains("Failed to initialize key serdes for source node"));
+        assertThat(msg, containsString("Failed to initialize key serdes for source node"));
+        assertThat(msg, containsString("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
     }
 
     private static class ClassCastProcessor extends ExceptionalProcessor {

@@ -137,11 +137,15 @@ public class SourceNodeTest {
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
 
-        utilsMock.when(() -> WrappingNullableUtils.prepareKeyDeserializer(any(), any(), any())).thenThrow(new ConfigException(""));
+        utilsMock.when(() -> WrappingNullableUtils.prepareKeyDeserializer(any(), any(), any()))
+            .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
 
         final Throwable exception = assertThrows(ConfigException.class, () -> node.init(context));
 
-        assertThat(exception.getMessage(), equalTo("Failed to initialize key serdes for source node TESTING_NODE"));
+        assertThat(
+            exception.getMessage(),
+            equalTo("Failed to initialize key serdes for source node TESTING_NODE. Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG")
+        );
     }
 
     @Test
@@ -151,11 +155,15 @@ public class SourceNodeTest {
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
 
-        utilsMock.when(() -> WrappingNullableUtils.prepareValueDeserializer(any(), any(), any())).thenThrow(new ConfigException(""));
+        utilsMock.when(() -> WrappingNullableUtils.prepareValueDeserializer(any(), any(), any()))
+            .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
 
         final Throwable exception = assertThrows(ConfigException.class, () -> node.init(context));
 
-        assertThat(exception.getMessage(), equalTo("Failed to initialize value serdes for source node TESTING_NODE"));
+        assertThat(
+            exception.getMessage(),
+            equalTo("Failed to initialize value serdes for source node TESTING_NODE. Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG")
+        );
     }
 
     @Test

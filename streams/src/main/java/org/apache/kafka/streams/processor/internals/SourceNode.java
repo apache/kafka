@@ -79,7 +79,7 @@ public class SourceNode<KIn, VIn> extends ProcessorNode<KIn, VIn, KIn, VIn> {
         try {
             keyDeserializer = prepareKeyDeserializer(keyDeserializer, context, name());
         } catch (final ConfigException e) {
-            throw new ConfigException(String.format("Failed to initialize key serdes for source node %s", name()));
+            throw new ConfigException(String.format("Failed to initialize key serdes for source node %s. %s", name(), e.getMessage()));
         } catch (final StreamsException e) {
             throw new StreamsException(String.format("Failed to initialize key serdes for source node %s", name()), e);
         }
@@ -87,7 +87,7 @@ public class SourceNode<KIn, VIn> extends ProcessorNode<KIn, VIn, KIn, VIn> {
         try {
             valDeserializer = prepareValueDeserializer(valDeserializer, context, name());
         } catch (final ConfigException e) {
-            throw new ConfigException(String.format("Failed to initialize value serdes for source node %s", name()));
+            throw new ConfigException(String.format("Failed to initialize value serdes for source node %s. %s", name(), e.getMessage()));
         } catch (final StreamsException e) {
             throw new StreamsException(String.format("Failed to initialize value serdes for source node %s", name()), e);
         }

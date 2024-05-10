@@ -33,9 +33,7 @@ public class WrappingNullableUtils {
         final Deserializer<T> deserializerToUse;
 
         if (specificDeserializer == null) {
-            final Deserializer<?> contextKeyDeserializer = context.keySerde().deserializer();
-            final Deserializer<?> contextValueDeserializer = context.valueSerde().deserializer();
-            deserializerToUse = (Deserializer<T>) (isKey ? contextKeyDeserializer : contextValueDeserializer);
+            deserializerToUse = (Deserializer<T>) (isKey ? context.keySerde().deserializer() : context.valueSerde().deserializer());
         } else {
             deserializerToUse = specificDeserializer;
             initNullableDeserializer(deserializerToUse, new SerdeGetter(context));
@@ -47,9 +45,7 @@ public class WrappingNullableUtils {
     private static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final ProcessorContext context, final boolean isKey, final String name) {
         final Serializer<T> serializerToUse;
         if (specificSerializer == null) {
-            final Serializer<?> contextKeySerializer = context.keySerde().serializer();
-            final Serializer<?> contextValueSerializer = context.valueSerde().serializer();
-            serializerToUse = (Serializer<T>) (isKey ? contextKeySerializer : contextValueSerializer);
+            serializerToUse = (Serializer<T>) (isKey ? context.keySerde().serializer() : context.valueSerde().serializer());
         } else {
             serializerToUse = specificSerializer;
             initNullableSerializer(serializerToUse, new SerdeGetter(context));
