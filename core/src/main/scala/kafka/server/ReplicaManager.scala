@@ -2759,6 +2759,8 @@ class ReplicaManager(val config: KafkaConfig,
   ): Unit = {
     stateChangeLogger.info(s"Transitioning ${localLeaders.size} partition(s) to " +
       "local leaders.")
+    System.err.print(s"toL:${localLeaders.keySet}")
+    System.err.flush()
     replicaFetcherManager.removeFetcherForPartitions(localLeaders.keySet)
     localLeaders.forKeyValue { (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
@@ -2792,6 +2794,8 @@ class ReplicaManager(val config: KafkaConfig,
   ): Unit = {
     stateChangeLogger.info(s"Transitioning ${localFollowers.size} partition(s) to " +
       "local followers.")
+    System.err.print(s"toF:${localFollowers.keySet}")
+    System.err.flush()
     val partitionsToStartFetching = new mutable.HashMap[TopicPartition, Partition]
     val partitionsToStopFetching = new mutable.HashMap[TopicPartition, Boolean]
     val followerTopicSet = new mutable.HashSet[String]
