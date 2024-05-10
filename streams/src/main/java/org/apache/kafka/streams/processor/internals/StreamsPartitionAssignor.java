@@ -37,6 +37,11 @@ import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.internals.assignment.ApplicationStateImpl;
+import org.apache.kafka.streams.processor.internals.assignment.KafkaStreamsStateImpl;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
@@ -432,6 +437,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // compute the assignment of tasks to threads within each client and build the final group assignment
 
+            getApplicationState(
+                clientMetadataMap, statefulTasks
+            );
+
             final Map<String, Assignment> assignment = computeNewAssignment(
                 statefulTasks,
                 clientMetadataMap,
@@ -457,6 +466,38 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 errorAssignment(clientMetadataMap, AssignorError.ASSIGNMENT_ERROR.code())
             );
         }
+    }
+
+    private ApplicationState getApplicationState(
+        final Map<UUID, ClientMetadata> clientMetadataMap,
+        final Set<TaskId> statefulTasks
+    ) {
+        final Set<TaskId> statelessTasks = new HashSet<>();
+        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = new HashMap<>();
+        for (final Map.Entry<UUID, ClientMetadata> clientEntry : clientMetadataMap.entrySet()) {
+            final ClientState clientState = clientEntry.getValue().state;
+            final ProcessId processId = new ProcessId(clientEntry.getKey());
+            final KafkaStreamsState kafkaStreamsState = new KafkaStreamsStateImpl(
+                processId,
+                clientState.capacity(),
+                clientState.clientTags(),
+                clientState.taskLagTotals(),
+                clientState.previousActiveTasks(),
+                clientState.previousStandbyTasks(),
+                clientState.taskIdsByConsumer(),
+                Optional.ofNullable(clientEntry.getValue().hostInfo)
+            );
+            kafkaStreamsStates.put(processId, kafkaStreamsState);
+
+            statelessTasks.addAll(clientState.statelessActiveTasks());
+        }
+
+        return new ApplicationStateImpl(
+            assignmentConfigs.toPublicAssignmentConfigs(),
+            kafkaStreamsStates,
+            statefulTasks,
+            statelessTasks
+        );
     }
 
     /**

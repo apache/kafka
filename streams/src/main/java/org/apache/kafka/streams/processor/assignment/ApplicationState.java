@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.assignment;
 import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 
 /**
