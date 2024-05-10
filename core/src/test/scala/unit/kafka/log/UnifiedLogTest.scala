@@ -342,7 +342,10 @@ class UnifiedLogTest {
     assertValidLogOffsetMetadata(log, readInfo.fetchOffsetMetadata)
   }
 
-  private def assertEmptyFetch(log: UnifiedLog, offset: Long, isolation: FetchIsolation): Unit = {
+  private def assertEmptyFetch(log: UnifiedLog,
+                               offset: Long,
+                               isolation: FetchIsolation,
+                               messageOffsetOnly: Boolean = false): Unit = {
     val readInfo = log.read(startOffset = offset,
       maxLength = Int.MaxValue,
       isolation = isolation,
@@ -350,7 +353,11 @@ class UnifiedLogTest {
     assertFalse(readInfo.firstEntryIncomplete)
     assertEquals(0, readInfo.records.sizeInBytes)
     assertEquals(offset, readInfo.fetchOffsetMetadata.messageOffset)
-    assertValidLogOffsetMetadata(log, readInfo.fetchOffsetMetadata)
+    if (messageOffsetOnly) {
+      assertTrue(readInfo.fetchOffsetMetadata.messageOffsetOnly())
+    } else {
+      assertValidLogOffsetMetadata(log, readInfo.fetchOffsetMetadata)
+    }
   }
 
   @Test
@@ -393,8 +400,10 @@ class UnifiedLogTest {
         assertNonEmptyFetch(log, offset, FetchIsolation.HIGH_WATERMARK)
       }
 
-      (log.highWatermark to log.logEndOffset).foreach { offset =>
-        assertEmptyFetch(log, offset, FetchIsolation.HIGH_WATERMARK)
+      assertEmptyFetch(log, log.highWatermark, FetchIsolation.HIGH_WATERMARK)
+
+      (log.highWatermark + 1 to log.logEndOffset).foreach { offset =>
+        assertEmptyFetch(log, offset, FetchIsolation.HIGH_WATERMARK, messageOffsetOnly = true)
       }
     }
 
@@ -489,8 +498,10 @@ class UnifiedLogTest {
         assertNonEmptyFetch(log, offset, FetchIsolation.TXN_COMMITTED)
       }
 
-      (log.lastStableOffset to log.logEndOffset).foreach { offset =>
-        assertEmptyFetch(log, offset, FetchIsolation.TXN_COMMITTED)
+      assertEmptyFetch(log, log.lastStableOffset, FetchIsolation.TXN_COMMITTED)
+
+      (log.lastStableOffset + 1 to log.logEndOffset).foreach { offset =>
+        assertEmptyFetch(log, offset, FetchIsolation.TXN_COMMITTED, messageOffsetOnly = true)
       }
     }
 
@@ -4239,19 +4250,16 @@ class UnifiedLogTest {
 
     // case-1: offset is higher than the local-log-start-offset.
     // log-start-offset < local-log-start-offset < offset-to-be-converted < log-end-offset
-    val offsetMetadata = log.convertToOffsetMetadataOrThrow(35)
-    assertEquals(new LogOffsetMetadata(35, 31, 288), offsetMetadata)
+    assertEquals(new LogOffsetMetadata(35, 31, 288), log.convertToOffsetMetadata(35))
     // case-2: offset is lesser than the local-log-start-offset
     // log-start-offset < offset-to-be-converted < local-log-start-offset < log-end-offset
-    val offsetMetadata1 = log.convertToOffsetMetadataOrThrow(29)
-    assertEquals(new LogOffsetMetadata(29, -1L, -1), offsetMetadata1)
+    assertEquals(new LogOffsetMetadata(29, -1L, -1), log.convertToOffsetMetadata(29))
     // case-3: offset is higher than the log-end-offset
     // log-start-offset < local-log-start-offset < log-end-offset < offset-to-be-converted
-    val offsetMetadata2 = log.convertToOffsetMetadataOrThrow(log.logEndOffset + 1)
-    assertEquals(new LogOffsetMetadata(log.logEndOffset + 1, -1L, -1), offsetMetadata2)
+    assertEquals(new LogOffsetMetadata(log.logEndOffset + 1, -1L, -1), log.convertToOffsetMetadata(log.logEndOffset + 1))
     // case-4: offset is lesser than the log-start-offset
     // offset-to-be-converted < log-start-offset < local-log-start-offset < log-end-offset
-    assertThrows(classOf[OffsetOutOfRangeException], () => log.convertToOffsetMetadataOrThrow(14))
+    assertEquals(new LogOffsetMetadata(14, -1L, -1), log.convertToOffsetMetadata(14))
   }
 
   private def appendTransactionalToBuffer(buffer: ByteBuffer,

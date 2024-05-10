@@ -361,7 +361,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val offsetMetadata = highWatermarkMetadata
     if (offsetMetadata.messageOffsetOnly) {
       lock.synchronized {
-        val fullOffset = convertToOffsetMetadataOrThrow(highWatermark)
+        val fullOffset = convertToOffsetMetadata(highWatermark)
         updateHighWatermarkMetadata(fullOffset)
         fullOffset
       }
@@ -405,7 +405,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       case Some(offsetMetadata) if offsetMetadata.messageOffset < highWatermarkMetadata.messageOffset =>
         if (offsetMetadata.messageOffsetOnly) {
           lock synchronized {
-            val fullOffset = convertToOffsetMetadataOrThrow(offsetMetadata.messageOffset)
+            val fullOffset = convertToOffsetMetadata(offsetMetadata.messageOffset)
             if (firstUnstableOffsetMetadata.contains(offsetMetadata))
               firstUnstableOffsetMetadata = Some(fullOffset)
             fullOffset
@@ -964,7 +964,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val updatedFirstUnstableOffset = producerStateManager.firstUnstableOffset.asScala match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly || logOffsetMetadata.messageOffset < logStartOffset =>
         val offset = math.max(logOffsetMetadata.messageOffset, logStartOffset)
-        Some(convertToOffsetMetadataOrThrow(offset))
+        Some(convertToOffsetMetadata(offset))
       case other => other
     }
 
@@ -1425,12 +1425,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   /**
     * Given a message offset, find its corresponding offset metadata in the log.
-    * 1. If the message offset is lesser than the log-start-offset, then throw an OffsetOutOfRangeException
-    * 2. If the message offset is lesser than the local-log-start-offset, then it returns the message-only metadata
-    * 3. If the message offset is greater than the log-end-offset, then it returns the message-only metadata
+    * 1. If the message offset is less than the log-start-offset (or) local-log-start-offset, then it returns the
+   *     message-only metadata.
+    * 2. If the message offset is beyond the log-end-offset, then it returns the message-only metadata.
+    * 3. For all other cases, it returns the offset metadata from the log.
     */
-  private[log] def convertToOffsetMetadataOrThrow(offset: Long): LogOffsetMetadata = {
-    checkLogStartOffset(offset)
+  private[log] def convertToOffsetMetadata(offset: Long): LogOffsetMetadata = {
     try {
       localLog.convertToOffsetMetadataOrThrow(offset)
     } catch {

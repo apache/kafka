@@ -93,7 +93,8 @@ class DelayedFetch(
             // which would incorrectly be seen as an instance of Case F.
             if (endOffset.messageOffset != fetchOffset.messageOffset) {
               if (endOffset.messageOffsetOnly() || fetchOffset.messageOffsetOnly()) {
-                // This case is to handle the stale high-watermark on the leader until it gets updated with the correct value
+                // If we don't know the position of the offset on log segments, just pessimistically assume that we
+                // only gained 1 byte. This can happen when the high watermark is stale, but should be rare.
                 accumulatedSize += 1
               } else if (endOffset.onOlderSegment(fetchOffset)) {
                 // Case F, this can happen when the new fetch operation is on a truncated leader
