@@ -96,6 +96,35 @@ public abstract class AbstractUniformAssignmentBuilder {
     }
 
     /**
+     * Constructs a set of {@code TopicIdPartition} including all the partitions that are
+     * currently not assigned to any member.
+     *
+     * @param topicIds                      Collection of topic Ids.
+     * @param subscribedTopicDescriber      Describer to fetch partition counts for topics.
+     * @param assignmentSpec                The group's assignment spec.
+     *
+     *
+     * @return Set of {@code TopicIdPartition} including new topic partitions.
+     */
+    protected static Set<TopicIdPartition> unassignedTopicIdPartitions(
+        Collection<Uuid> topicIds,
+        SubscribedTopicDescriber subscribedTopicDescriber,
+        AssignmentSpec assignmentSpec
+    ) {
+        Set<TopicIdPartition> unassignedPartitions = new HashSet<>();
+        topicIds.forEach(topicId -> {
+            int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
+            for (int i = 0; i < numPartitions; i++) {
+                if (!assignmentSpec.isPartitionAssigned(topicId, i)) {
+                    unassignedPartitions.add(new TopicIdPartition(topicId, i));
+                }
+            }
+        });
+
+        return unassignedPartitions;
+    }
+
+    /**
      * Processes partitions for the given topic Ids using the provided function.
      *
      * @param topicIds                   Collection of topic Ids.

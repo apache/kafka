@@ -165,7 +165,12 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
             targetAssignment.put(memberId, new MemberAssignment(new HashMap<>())
         ));
 
-        unassignedPartitions = topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber);
+        unassignedPartitions = unassignedTopicIdPartitions(
+            subscribedTopicIds,
+            subscribedTopicDescriber,
+            assignmentSpec
+        );
+
         potentiallyUnfilledMembers = assignStickyPartitions(minQuota);
 
         if (rackInfo.useRackStrategy) rackAwarePartitionAssignment();
@@ -223,20 +228,26 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
                         topicIdPartition.topicId(),
                         topicIdPartition.partitionId()
                     );
-                    unassignedPartitions.remove(topicIdPartition);
                 });
 
                 // The extra partition is located at the last index from the previous step.
-                if (remaining < 0 && remainingMembersToGetAnExtraPartition > 0) {
-                    TopicIdPartition topicIdPartition = validCurrentMemberAssignment.get(retainedPartitionsCount);
-                    addPartitionToAssignment(
-                        targetAssignment,
-                        memberId,
-                        topicIdPartition.topicId(),
-                        topicIdPartition.partitionId()
-                    );
-                    unassignedPartitions.remove(topicIdPartition);
-                    remainingMembersToGetAnExtraPartition--;
+                if (remaining < 0) {
+                    if (remainingMembersToGetAnExtraPartition > 0) {
+                        TopicIdPartition topicIdPartition = validCurrentMemberAssignment.get(retainedPartitionsCount++);
+                        addPartitionToAssignment(
+                            targetAssignment,
+                            memberId,
+                            topicIdPartition.topicId(),
+                            topicIdPartition.partitionId()
+                        );
+                        remainingMembersToGetAnExtraPartition--;
+                    }
+                    if (retainedPartitionsCount < currentAssignmentSize) {
+                        unassignedPartitions.addAll(validCurrentMemberAssignment.subList(
+                            retainedPartitionsCount,
+                            currentAssignmentSize
+                        ));
+                    }
                 }
             }
 

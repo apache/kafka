@@ -68,7 +68,7 @@ public class AssignmentSpec implements GroupAssignmentSpec{
     /**
      * @param topicId           The topic Id.
      * @param partitionId       The partition Id.
-     * @return True if the partition is currently assigned,
+     * @return True iff the partition is currently assigned,
      *         false otherwise.
      */
     @Override
@@ -80,7 +80,7 @@ public class AssignmentSpec implements GroupAssignmentSpec{
         if (partitionId < 0 || partitionId >= partitionArray.length) {
             return false;
         }
-        return partitionArray[partitionId] == 0;
+        return partitionArray[partitionId] == 1;
     }
 
     @Override
