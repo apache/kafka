@@ -1647,7 +1647,7 @@ public class StreamThreadTest {
         assertThat(producer.commitCount(), equalTo(1L));
     }
 
-    private void throwCommitTransactionException(final RuntimeException e) throws InterruptedException {
+    private void testThrowingDurringCommitTransactionException(final RuntimeException e) throws InterruptedException {
         final StreamsConfig config = new StreamsConfig(configProps(true));
         thread = createStreamThread(CLIENT_ID, config);
 
@@ -1692,11 +1692,11 @@ public class StreamThreadTest {
 
     @Test
     public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerGotFencedInCommitTransactionWhenSuspendingTasks() throws Exception {
-        throwCommitTransactionException(new ProducerFencedException("Producer is fenced"));
+        testThrowingDurringCommitTransactionException(new ProducerFencedException("Producer is fenced"));
     }
     @Test
     public void shouldNotCloseTaskAndRemoveFromTaskManagerIfInvalidPidMappingOccurredInCommitTransactionWhenSuspendingTasks() throws Exception {
-        throwCommitTransactionException(new InvalidPidMappingException("PidMapping is invalid"));
+        testThrowingDurringCommitTransactionException(new InvalidPidMappingException("PidMapping is invalid"));
     }
 
     @Test
