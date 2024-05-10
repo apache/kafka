@@ -165,7 +165,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
 
             @Override
             public Schema typeSchema(boolean isOptional) {
-                return TimestampConverter.typeSchema(SchemaBuilder.string(), isOptional);
+                return isOptional ? Schema.OPTIONAL_STRING_SCHEMA : Schema.STRING_SCHEMA;
             }
 
             @Override
@@ -197,7 +197,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
 
             @Override
             public Schema typeSchema(boolean isOptional) {
-                return TimestampConverter.typeSchema(SchemaBuilder.int64(), isOptional);
+                return isOptional ? Schema.OPTIONAL_INT64_SCHEMA : Schema.INT64_SCHEMA;
             }
 
             @Override
@@ -228,7 +228,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
 
             @Override
             public Schema typeSchema(boolean isOptional) {
-                return TimestampConverter.typeSchema(org.apache.kafka.connect.data.Date.builder(), isOptional);
+                return isOptional ? OPTIONAL_DATE_SCHEMA : org.apache.kafka.connect.data.Date.SCHEMA;
             }
 
             @Override
@@ -254,7 +254,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
 
             @Override
             public Schema typeSchema(boolean isOptional) {
-                return TimestampConverter.typeSchema(Time.builder(), isOptional);
+                return isOptional ? OPTIONAL_TIME_SCHEMA : Time.SCHEMA;
             }
 
             @Override
@@ -281,7 +281,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
 
             @Override
             public Schema typeSchema(boolean isOptional) {
-                return TimestampConverter.typeSchema(Timestamp.builder(), isOptional);
+                return isOptional ? OPTIONAL_TIMESTAMP_SCHEMA : Timestamp.SCHEMA;
             }
 
             @Override
@@ -289,11 +289,6 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                 return orig;
             }
         });
-    }
-
-    private static Schema typeSchema(SchemaBuilder builder, boolean isOptional) {
-        if (isOptional) builder.optional();
-        return builder.build();
     }
 
     // This is a bit unusual, but allows the transformation config to be passed to static anonymous classes to customize
