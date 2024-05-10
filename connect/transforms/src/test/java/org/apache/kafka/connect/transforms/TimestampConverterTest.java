@@ -803,6 +803,35 @@ public class TimestampConverterTest {
         assertEquals(DATE_PLUS_TIME_UNIX_SECONDS, transformed.value());
     }
 
+    @Test
+    public void testWithSchemaFieldWithDefaultValue() {
+        final String timestampField = "timestamp_field";
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
+        config.put(TimestampConverter.FIELD_CONFIG, timestampField);
+        xformValue.configure(config);
+
+        java.util.Date defaultFieldValue = new java.util.Date();
+        Schema schema = SchemaBuilder.struct()
+            .field(
+                timestampField,
+                Timestamp.builder()
+                    .defaultValue(defaultFieldValue)
+                    .build()
+            );
+        Struct value = new Struct(schema)
+            .put(timestampField, DATE_PLUS_TIME.getTime());
+
+        SourceRecord transformed = xformValue.apply(createRecordWithSchema(schema, value));
+
+        assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type());
+        Struct transformedValue = (Struct) transformed.value();
+        assertEquals(DATE_PLUS_TIME.getTime(), transformedValue.get(timestampField));
+        assertNull(
+            transformedValue.schema().field(timestampField).schema().defaultValue(),
+            "Default values for converted fields should not be kept"
+        );
+    }
 
     @Test
     public void testWithSchemaFieldConversionWithDefaultValueV2() {
@@ -828,7 +857,7 @@ public class TimestampConverterTest {
         SourceRecord transformed = xformValue.apply(createRecordWithSchema(fooSchema, foo));
 
         Schema expectedSchema = SchemaBuilder.struct()
-                .field("ts", Timestamp.builder().defaultValue(java.util.Date.from(now)).build())
+                .field("ts", Timestamp.builder().build())
                 .field("other", Schema.STRING_SCHEMA)
                 .build();
         Schema expectedFooSchema = SchemaBuilder.struct().field("foo", expectedSchema).build();

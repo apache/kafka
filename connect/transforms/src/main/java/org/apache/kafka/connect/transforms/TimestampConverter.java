@@ -135,7 +135,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         /**
          * Get the schema for this format.
          */
-        Schema typeSchema(boolean isOptional, Object defaultValue);
+        Schema typeSchema(boolean isOptional);
 
         /**
          * Convert from the universal java.util.Date format to the type-specific format
@@ -164,8 +164,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             }
 
             @Override
-            public Schema typeSchema(boolean isOptional, Object defaultValue) {
-                return TimestampConverter.typeSchema(SchemaBuilder.string(), isOptional, defaultValue);
+            public Schema typeSchema(boolean isOptional) {
+                return TimestampConverter.typeSchema(SchemaBuilder.string(), isOptional);
             }
 
             @Override
@@ -196,8 +196,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             }
 
             @Override
-            public Schema typeSchema(boolean isOptional, Object defaultValue) {
-                return TimestampConverter.typeSchema(SchemaBuilder.int64(), isOptional, defaultValue);
+            public Schema typeSchema(boolean isOptional) {
+                return TimestampConverter.typeSchema(SchemaBuilder.int64(), isOptional);
             }
 
             @Override
@@ -227,8 +227,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             }
 
             @Override
-            public Schema typeSchema(boolean isOptional, Object defaultValue) {
-                return TimestampConverter.typeSchema(org.apache.kafka.connect.data.Date.builder(), isOptional, defaultValue);
+            public Schema typeSchema(boolean isOptional) {
+                return TimestampConverter.typeSchema(org.apache.kafka.connect.data.Date.builder(), isOptional);
             }
 
             @Override
@@ -253,8 +253,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             }
 
             @Override
-            public Schema typeSchema(boolean isOptional, Object defaultValue) {
-                return TimestampConverter.typeSchema(Time.builder(), isOptional, defaultValue);
+            public Schema typeSchema(boolean isOptional) {
+                return TimestampConverter.typeSchema(Time.builder(), isOptional);
             }
 
             @Override
@@ -280,8 +280,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             }
 
             @Override
-            public Schema typeSchema(boolean isOptional, Object defaultValue) {
-                return TimestampConverter.typeSchema(Timestamp.builder(), isOptional, defaultValue);
+            public Schema typeSchema(boolean isOptional) {
+                return TimestampConverter.typeSchema(Timestamp.builder(), isOptional);
             }
 
             @Override
@@ -291,9 +291,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         });
     }
 
-    private static Schema typeSchema(SchemaBuilder builder, boolean isOptional, Object defaultValue) {
+    private static Schema typeSchema(SchemaBuilder builder, boolean isOptional) {
         if (isOptional) builder.optional();
-        if (defaultValue != null) builder.defaultValue(defaultValue);
         return builder.build();
     }
 
@@ -405,7 +404,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         if (config.field.isEmpty()) {
             Object value = operatingValue(record);
             // New schema is determined by the requested target timestamp type
-            Schema updatedSchema = TRANSLATORS.get(config.type).typeSchema(schema.isOptional(), schema.defaultValue());
+            Schema updatedSchema = TRANSLATORS.get(config.type).typeSchema(schema.isOptional());
             return newRecord(record, updatedSchema, convertTimestamp(value, timestampTypeFromSchema(schema)));
         } else {
             final Struct value = requireStructOrNull(operatingValue(record), PURPOSE);
@@ -421,18 +420,12 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                 updatedSchema = config.field.updateSchemaFrom(
                     schema,
                     builder,
-                    (updated, field, fieldPath) -> {
-                        // default value is conserved and transformed
-                        Object defaultValue = convertTimestamp(
-                            field.schema().defaultValue(),
-                            timestampTypeFromSchema(field.schema())
-                        );
+                    (updated, field, fieldPath) ->
                         updated.field(
                             field.name(),
                             TRANSLATORS.get(config.type)
-                                .typeSchema(field.schema().isOptional(), defaultValue)
-                        );
-                    },
+                                .typeSchema(field.schema().isOptional())
+                        ),
                     StructSchemaUpdater.FILTER_OUT_FIELD,
                     StructSchemaUpdater.PASS_THROUGH_FIELD
                 );
