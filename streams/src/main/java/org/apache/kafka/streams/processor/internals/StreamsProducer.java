@@ -239,7 +239,7 @@ public class StreamsProducer {
             try {
                 producer.beginTransaction();
                 transactionInFlight = true;
-            } catch (final ProducerFencedException | InvalidProducerEpochException error) {
+            } catch (final ProducerFencedException | InvalidProducerEpochException error ) {
                 throw new TaskMigratedException(
                     formatException("Producer got fenced trying to begin a new transaction"),
                     error
@@ -276,7 +276,7 @@ public class StreamsProducer {
         }
     }
 
-    private static boolean isRecoverable(final KafkaException uncaughtException) {
+    private static boolean isRecoverable(final KafkaException uncaughtException ) {
         return uncaughtException.getCause() instanceof ProducerFencedException ||
             uncaughtException.getCause() instanceof InvalidProducerEpochException ||
             uncaughtException.getCause() instanceof UnknownProducerIdException;
@@ -299,7 +299,7 @@ public class StreamsProducer {
             producer.sendOffsetsToTransaction(offsets, maybeDowngradedGroupMetadata);
             producer.commitTransaction();
             transactionInFlight = false;
-        } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException error) {
+        } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException error ) {
             throw new TaskMigratedException(
                 formatException("Producer got fenced trying to commit a transaction"),
                 error
@@ -333,7 +333,7 @@ public class StreamsProducer {
                         " Will rely on broker to eventually abort the transaction after the transaction timeout passed.",
                     logAndSwallow
                 );
-            } catch (final ProducerFencedException | InvalidProducerEpochException error) {
+            } catch (final ProducerFencedException | InvalidProducerEpochException error ) {
                 // The producer is aborting the txn when there's still an ongoing one,
                 // which means that we did not commit the task while closing it, which
                 // means that it is a dirty close. Therefore it is possible that the dirty
