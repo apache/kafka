@@ -8,3 +8,8 @@ lang: java
 lang_version: unknown
 github:
   enable: true
+code_artifact:
+  enable: true
+  package_paths:
+    - maven-snapshots/maven/org.apache.kafka/*
+    - maven-releases-preview/maven/org.apache.kafka/*
