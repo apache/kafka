@@ -214,11 +214,6 @@ public class HeartbeatRequestManager implements RequestManager {
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
     }
 
-    // Visible for testing
-    long pollTimerExceededTime() {
-        return pollTimer.elapsedMs() - pollTimer.timeoutMs();
-    }
-
     /**
      * Returns the {@link MembershipManager} that this request manager is using to track the state of the group.
      * This is provided so that the {@link ApplicationEventProcessor} can access the state for querying or updating.
@@ -263,7 +258,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 "max.poll.interval.ms, exceeded by {} ms. This typically implies that the " +
                 "poll loop is spending too much time processing messages. You can address this " +
                 "either by increasing max.poll.interval.ms or by reducing the maximum size of " +
-                "batches returned in poll() with max.poll.records.", pollTimerExceededTime());
+                "batches returned in poll() with max.poll.records.", pollTimer.isExpiredBy());
             membershipManager.maybeRejoinStaleMember();
         }
         pollTimer.reset(maxPollIntervalMs);
