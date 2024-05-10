@@ -86,7 +86,11 @@ import scala.jdk.CollectionConverters._
 object DynamicBrokerConfig {
 
   private[server] val DynamicSecurityConfigs = SslConfigs.RECONFIGURABLE_CONFIGS.asScala
-  private[server] val DynamicProducerStateManagerConfig = Set(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG, TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG)
+  private[server] val DynamicProducerStateManagerConfig = Set(
+    TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG,
+    TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG,
+    TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG,
+  )
 
   val AllDynamicConfigs = DynamicSecurityConfigs ++
     LogCleaner.ReconfigurableConfigs ++
@@ -1161,6 +1165,8 @@ class DynamicProducerStateManagerConfig(val logManager: LogManager) extends Brok
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     if (newConfig.producerIdExpirationMs < 0)
       throw new ConfigException(s"${TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG} cannot be less than 0, current value is ${producerStateManagerConfig.producerIdExpirationMs}, and new value is ${newConfig.producerIdExpirationMs}")
+    if (newConfig.producerIdExpirationCheckIntervalMs < 0)
+      throw new ConfigException(s"${TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG} cannot be less than 0, current value is ${producerStateManagerConfig.producerIdExpirationCheckIntervalMs}, and new value is ${newConfig.producerIdExpirationCheckIntervalMs}")
   }
 
   override def reconfigurableConfigs: Set[String] = DynamicProducerStateManagerConfig
