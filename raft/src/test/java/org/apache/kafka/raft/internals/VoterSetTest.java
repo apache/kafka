@@ -110,7 +110,7 @@ final public class VoterSetTest {
     }
 
     @Test
-    void testStandaloneAndIsOnlyVoter() {
+    void testIsOnlyVoterInStandalone() {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
@@ -124,7 +124,7 @@ final public class VoterSetTest {
     }
 
     @Test
-    void testNotStandaloneAndIsOnlyVoter() {
+    void testIsOnlyVoterInNotStandalone() {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1, 2), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 

@@ -93,7 +93,15 @@ public class KafkaRaftMetricsTest {
     public void shouldRecordVoterQuorumState(short kraftVersion) {
         boolean withDirectoryId = kraftVersion > 0;
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(Utils.mkSet(1, 2), withDirectoryId);
-        voterMap.put(localId, VoterSetTest.voterNode(ReplicaKey.of(localId, Optional.of(localDirectoryId))));
+        voterMap.put(
+            localId,
+            VoterSetTest.voterNode(
+                ReplicaKey.of(
+                    localId,
+                    withDirectoryId ? Optional.of(localDirectoryId) : Optional.empty()
+                )
+            )
+        );
         QuorumState state = buildQuorumState(VoterSetTest.voterSet(voterMap), kraftVersion);
 
         state.initialize(new OffsetAndEpoch(0L, 0));
