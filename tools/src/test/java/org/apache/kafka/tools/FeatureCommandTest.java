@@ -22,7 +22,6 @@ import java.util.HashMap;
 import java.util.Map;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import net.sourceforge.argparse4j.inf.Namespace;
