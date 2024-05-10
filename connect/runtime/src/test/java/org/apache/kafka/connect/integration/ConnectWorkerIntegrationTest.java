@@ -23,6 +23,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -32,6 +33,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -69,6 +71,7 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POL
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.connect.util.clusters.ConnectAssertions.CONNECTOR_SETUP_DURATION_MS;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -852,18 +855,55 @@ public class ConnectWorkerIntegrationTest {
 
     @Test
     public void testPollTimeoutExpiry() throws Exception {
-        final String configTopic = "test-poll-timeout-expiry-config";
-        workerProps.put(CONFIG_TOPIC_CONFIG, configTopic);
-
-        workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "0");
+        String configTopicName = "to-be-deleted";
+        workerProps.put(REBALANCE_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(3)));
+        workerProps.put(CONFIG_TOPIC_CONFIG, "to-be-deleted");
         connect = connectBuilder
             .numBrokers(1)
-            .numWorkers(2)
+            .numWorkers(1)
             .build();
+
         connect.start();
-        connect.assertions().assertAtLeastNumWorkersAreUp(2,
+
+        connect.assertions().assertExactlyNumWorkersAreUp(1, "Worker not brought up in time");
+
+        Map<String, String> connectorConfig1 = defaultSourceConnectorProps(TOPIC_NAME);
+        connect.configureConnector(CONNECTOR_NAME, connectorConfig1);
+
+/*
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME, NUM_TASKS, "connector and tasks did not start in time"
+        );
+*/
+
+        /*connect.assertions().assertExactlyNumWorkersAreUp(1,
             "Worker did not start in time");
 
+        // Add another worker
+        WorkerHandle anotherWorker = connect.addWorker();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(2,
+            "Workers did not start in time");
+        // Create 20 connectors. Each worker should be running 10 connectors/tasks each
+        for (int i = 0; i < 20; i++) {
+            String connectorName = CONNECTOR_NAME + "-" + i;
+            Map<String, String> connectorConfig1 = defaultSourceConnectorProps(TOPIC_NAME);
+            connect.configureConnector(connectorName, connectorConfig1);
+            connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                connectorName, NUM_TASKS, "connector and tasks did not start in time"
+            );
+        }
+
+        // Remove the other worker. This should trigger a rebalance immediately and all tasks should be assigned to
+        // the surviving worker
+        connect.removeWorker(anotherWorker);*/
+
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(WorkerCoordinator.class)) {
+            TestUtils.waitForCondition(() -> logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
+                    logCaptureAppender.getEvents().stream().anyMatch(e -> e.getMessage().startsWith("worker poll timeout has expired")),
+                TimeUnit.SECONDS.toMillis(30),
+                "Coordinator did not poll for rebalance.timeout.ms");
+        }
     }
 
     private void assertTimeoutException(Runnable operation, String expectedStageDescription) throws InterruptedException {
