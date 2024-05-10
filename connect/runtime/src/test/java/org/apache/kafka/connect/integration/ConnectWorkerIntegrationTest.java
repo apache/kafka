@@ -56,6 +56,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.connect.integration.BlockingConnectorTest.TASK_STOP;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
@@ -69,6 +70,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG;
@@ -855,9 +857,10 @@ public class ConnectWorkerIntegrationTest {
 
     @Test
     public void testPollTimeoutExpiry() throws Exception {
-        String configTopicName = "to-be-deleted";
-        workerProps.put(REBALANCE_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(3)));
-        workerProps.put(CONFIG_TOPIC_CONFIG, "to-be-deleted");
+        // This is a fabricated test to ensure that a poll timeout expiry happens. The tick thread awaits on
+        // task#stop method which is blocked. The timeouts have been set accordingly
+        workerProps.put(REBALANCE_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(20)));
+        workerProps.put(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(40)));
         connect = connectBuilder
             .numBrokers(1)
             .numWorkers(1)
@@ -867,42 +870,28 @@ public class ConnectWorkerIntegrationTest {
 
         connect.assertions().assertExactlyNumWorkersAreUp(1, "Worker not brought up in time");
 
-        Map<String, String> connectorConfig1 = defaultSourceConnectorProps(TOPIC_NAME);
-        connect.configureConnector(CONNECTOR_NAME, connectorConfig1);
+        Map<String, String> connectorWithBlockingTaskStopConfig = new HashMap<>();
+        connectorWithBlockingTaskStopConfig.put(CONNECTOR_CLASS_CONFIG, BlockingConnectorTest.BlockingSourceConnector.class.getName());
+        connectorWithBlockingTaskStopConfig.put(TASKS_MAX_CONFIG, "1");
+        connectorWithBlockingTaskStopConfig.put(BlockingConnectorTest.Block.BLOCK_CONFIG, Objects.requireNonNull(TASK_STOP));
 
-/*
+        connect.configureConnector(CONNECTOR_NAME, connectorWithBlockingTaskStopConfig);
+
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
-            CONNECTOR_NAME, NUM_TASKS, "connector and tasks did not start in time"
+            CONNECTOR_NAME, 1, "connector and tasks did not start in time"
         );
-*/
-
-        /*connect.assertions().assertExactlyNumWorkersAreUp(1,
-            "Worker did not start in time");
-
-        // Add another worker
-        WorkerHandle anotherWorker = connect.addWorker();
-
-        connect.assertions().assertExactlyNumWorkersAreUp(2,
-            "Workers did not start in time");
-        // Create 20 connectors. Each worker should be running 10 connectors/tasks each
-        for (int i = 0; i < 20; i++) {
-            String connectorName = CONNECTOR_NAME + "-" + i;
-            Map<String, String> connectorConfig1 = defaultSourceConnectorProps(TOPIC_NAME);
-            connect.configureConnector(connectorName, connectorConfig1);
-            connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
-                connectorName, NUM_TASKS, "connector and tasks did not start in time"
-            );
-        }
-
-        // Remove the other worker. This should trigger a rebalance immediately and all tasks should be assigned to
-        // the surviving worker
-        connect.removeWorker(anotherWorker);*/
 
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(WorkerCoordinator.class)) {
+            connect.restartTask(CONNECTOR_NAME, 0);
             TestUtils.waitForCondition(() -> logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
-                    logCaptureAppender.getEvents().stream().anyMatch(e -> e.getMessage().startsWith("worker poll timeout has expired")),
-                TimeUnit.SECONDS.toMillis(30),
+                    logCaptureAppender.getEvents().stream().anyMatch(e ->
+                        // Ensure that the tick thread is blocked on the stage which we expect it to be, i.e restarting the task.
+                        e.getMessage().contains("worker poll timeout has expired") &&
+                        e.getMessage().contains("The last known stage executing on the tick thread is : restarting task " + CONNECTOR_NAME + "-0")
+                    ),
                 "Coordinator did not poll for rebalance.timeout.ms");
+            // This clean up ensures that the test ends quickly as o/w we will wait for task#stop.
+            BlockingConnectorTest.Block.reset();
         }
     }
 
