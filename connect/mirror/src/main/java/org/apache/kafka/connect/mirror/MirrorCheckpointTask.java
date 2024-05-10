@@ -20,7 +20,9 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.source.SourceTask;
@@ -111,8 +113,8 @@ public class MirrorCheckpointTask extends SourceTask {
         idleConsumerGroupsOffset = new HashMap<>();
         checkpointsPerConsumerGroup = new HashMap<>();
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
+        this.initializeCheckpoints(config);
         scheduler.execute(() -> {
-            loadOldCheckpoints(config);
             offsetSyncStore.start();
             scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
                     "refreshing idle consumers group offsets at target cluster");
@@ -123,42 +125,66 @@ public class MirrorCheckpointTask extends SourceTask {
                 consumerGroups.size(), sourceClusterAlias, config.targetClusterAlias(), consumerGroups);
     }
 
-    private void loadOldCheckpoints(MirrorCheckpointTaskConfig config) {
+    // read the checkpoints topic to initialize the checkpointsPerConsumerGroup state of this task
+    private void initializeCheckpoints(MirrorCheckpointTaskConfig config) {
+
+        class CheckpointRecordHandler {
+            private volatile KafkaException lastLoggedErrorReadingCheckpoints = null;
+
+            void handle(Throwable error, ConsumerRecord<byte[], byte[]> cpRecord) {
+                // See KafkaBasedLog.poll : only KafkaException can be passed as error
+                if (error instanceof KafkaException) {
+                    // only log once
+                    if ((lastLoggedErrorReadingCheckpoints == null || !lastLoggedErrorReadingCheckpoints.getClass().equals(error.getClass()))) {
+                        log.error("Error loading Checkpoint topic", error);
+                        lastLoggedErrorReadingCheckpoints = (KafkaException)error;
+                    }
+
+                    if (error instanceof RetriableException) {
+                        return;
+                    } else {
+                        throw (KafkaException) error;
+                    }
+                } else {
+                    lastLoggedErrorReadingCheckpoints = null;
+                    Checkpoint cp = Checkpoint.deserializeRecord(cpRecord);
+                    if (consumerGroups.contains(cp.consumerGroupId())) {
+                        Map<TopicPartition, Checkpoint> cps = checkpointsPerConsumerGroup.computeIfAbsent(cp.consumerGroupId(), ignored -> new HashMap<>());
+                        cps.put(cp.topicPartition(), cp);
+                    }
+                }
+            }
+        }
+
+        CheckpointRecordHandler handler = new CheckpointRecordHandler();
         TopicAdmin cpAdmin = null;
-        KafkaBasedLog<byte[], byte[]> oldCheckpoints = null;
+        KafkaBasedLog<byte[], byte[]> previousCheckpoints = null;
 
         try {
             cpAdmin = new TopicAdmin(
                     config.targetAdminConfig("checkpoint-target-admin"),
                     config.forwardingAdmin(config.targetAdminConfig("checkpoint-target-admin")));
 
-            oldCheckpoints = KafkaBasedLog.withExistingClients(
+            previousCheckpoints = KafkaBasedLog.withExistingClients(
                     config.checkpointsTopic(),
                     MirrorUtils.newConsumer(config.targetConsumerConfig(CHECKPOINTS_TARGET_CONSUMER_ROLE)),
                     null,
                     cpAdmin,
-                    (error, cpRecord) -> this.handleCPRecord(cpRecord),
+                    (error, cpRecord) -> handler.handle(error, cpRecord),
                     Time.SYSTEM,
-                    ignored -> {
-                    },
+                    ignored -> {},
                     topicPartition -> topicPartition.partition() == 0);
 
-            oldCheckpoints.start();
-            oldCheckpoints.stop();
+            log.info("Starting loading Checkpoint topic : {}", config.checkpointsTopic());
+            previousCheckpoints.start(true);
+            previousCheckpoints.stop();
+            log.info("Finished loading Checkpoint topic : {}", config.checkpointsTopic());
+            log.debug("Initial checkpointsPerConsumerGroup : {}", checkpointsPerConsumerGroup);
         } finally {
-            Utils.closeQuietly(cpAdmin, "admin client for old CPs");
-            Utils.closeQuietly(oldCheckpoints != null ? oldCheckpoints::stop : null, "backing store for old CPs");
+            Utils.closeQuietly(cpAdmin, "admin client for previous Checkpoints");
+            Utils.closeQuietly(previousCheckpoints != null ? previousCheckpoints::stop : null, "backing store for previous Checkpoints");
         }
     }
-
-    private void handleCPRecord(ConsumerRecord<byte[], byte[]> cpRecord) {
-        Checkpoint cp = Checkpoint.deserializeRecord(cpRecord);
-        if (consumerGroups.contains(cp.consumerGroupId())) {
-            Map<TopicPartition, Checkpoint> cps = checkpointsPerConsumerGroup.computeIfAbsent(cp.consumerGroupId(), ignored -> new HashMap<>());
-            cps.put(cp.topicPartition(), cp);
-        }
-    }
-
 
     @Override
     public void commit() {
