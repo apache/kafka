@@ -460,14 +460,15 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 applyMigrationOperation("Became inactive migration driver", state ->
                     state.withNewKRaftController(
                         leaderAndEpoch.leaderId().orElse(ZkMigrationLeadershipState.EMPTY.kraftControllerId()),
-                        leaderAndEpoch.epoch())
+                        leaderAndEpoch.epoch()
+                    ).withUnknownZkController()
                 );
                 transitionTo(MigrationDriverState.INACTIVE);
             } else {
                 // Load the existing migration state and apply the new KRaft state
                 applyMigrationOperation("Became active migration driver", state -> {
                     ZkMigrationLeadershipState recoveredState = zkMigrationClient.getOrCreateMigrationRecoveryState(state);
-                    return recoveredState.withNewKRaftController(nodeId, leaderAndEpoch.epoch());
+                    return recoveredState.withNewKRaftController(nodeId, leaderAndEpoch.epoch()).withUnknownZkController();
                 });
 
                 // Before becoming the controller fo ZkBrokers, we need to make sure the

@@ -404,7 +404,6 @@ class ZkMigrationFailoverTest extends Logging {
 
       TestUtils.waitUntilTrue(() => {
         val topics = zkClient.getAllTopicsInCluster(false)
-        System.err.println(topics.size)
         topics.size == 1000
       }, "waiting for topics to be created in ZK.")
 
