@@ -656,7 +656,11 @@ public class HeartbeatRequestManagerTest {
     }
 
     @Test
-    public void testPollTimerExceededTimeUsedForLogging() {
+    public void testisExpiredByUsedForLogging() {
+        Timer pollTimer = spy(time.timer(DEFAULT_MAX_POLL_INTERVAL_MS));
+        heartbeatRequestManager = new HeartbeatRequestManager(new LogContext(), pollTimer, config(),
+            coordinatorRequestManager, membershipManager, heartbeatState, heartbeatRequestState,
+            backgroundEventHandler, metrics);
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
 
         int exceededTimeMs = 5;
@@ -665,12 +669,12 @@ public class HeartbeatRequestManagerTest {
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         verify(membershipManager).transitionToSendingLeaveGroup(true);
-        verify(heartbeatRequestManager, never()).pollTimerExceededTime();
-        assertEquals(exceededTimeMs, heartbeatRequestManager.pollTimerExceededTime());
+        verify(pollTimer, never()).isExpiredBy();
+        assertEquals(exceededTimeMs, pollTimer.isExpiredBy());
 
-        clearInvocations(heartbeatRequestManager);
+        clearInvocations(pollTimer);
         heartbeatRequestManager.resetPollTimer(time.milliseconds());
-        verify(heartbeatRequestManager).pollTimerExceededTime();
+        verify(pollTimer).isExpiredBy();
     }
 
     @Test
