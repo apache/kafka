@@ -156,7 +156,6 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 .filter(e -> e.id() != -1)
                 .collect(Collectors.groupingBy(ClusterConfigProperty::id, Collectors.mapping(Function.identity(),
                         Collectors.toMap(ClusterConfigProperty::key, ClusterConfigProperty::value, (a, b) -> b))));
-        List<String> tags = new ArrayList<>(Arrays.asList(annot.tags()));
         ClusterConfig config = ClusterConfig.builder()
                 .setTypes(new HashSet<>(Arrays.asList(types)))
                 .setBrokers(annot.brokers() == 0 ? defaults.brokers() : annot.brokers())
