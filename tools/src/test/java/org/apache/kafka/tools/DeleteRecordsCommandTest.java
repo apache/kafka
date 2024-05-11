@@ -53,13 +53,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("integration")
 public class DeleteRecordsCommandTest {
 
-    private final ClusterInstance cluster;
-    public DeleteRecordsCommandTest(ClusterInstance cluster) {
-        this.cluster = cluster;
-    }
-
     @ClusterTest
-    public void testCommand() throws Exception {
+    public void testCommand(ClusterInstance cluster) throws Exception {
         Properties adminProps = new Properties();
 
         adminProps.put(AdminClientConfig.RETRIES_CONFIG, 1);
@@ -112,12 +107,11 @@ public class DeleteRecordsCommandTest {
         });
         assertTrue(output.contains(expOut));
     }
-}
 
-/**
- * Unit test of {@link DeleteRecordsCommand} tool.
- */
-class DeleteRecordsCommandUnitTest {
+    /**
+     * Unit test of {@link DeleteRecordsCommand} tool.
+     */
+
     @Test
     public void testOffsetFileNotExists() {
         assertThrows(IOException.class, () -> DeleteRecordsCommand.execute(new String[]{
@@ -168,7 +162,7 @@ class DeleteRecordsCommandUnitTest {
                 "{\"topic\":\"t\", \"partition\":1, \"offset\":1, \"ignored\":\"field\"}," +
                 "{\"topic\":\"t\", \"partition\":0, \"offset\":2}," +
                 "{\"topic\":\"t\", \"partition\":0, \"offset\":0}" +
-            "]}"
+                "]}"
         );
 
         assertEquals(2, res.size());
