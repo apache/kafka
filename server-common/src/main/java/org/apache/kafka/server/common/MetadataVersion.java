@@ -18,7 +18,6 @@ package org.apache.kafka.server.common;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -261,9 +260,6 @@ public enum MetadataVersion {
 
     public String featureName() {
         return FEATURE_NAME;
-    }
-
-    public void validateVersion(MetadataVersion metadataVersion, List<FeatureVersion> features) {
     }
 
     public short featureLevel() {

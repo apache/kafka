@@ -17,11 +17,13 @@
 
 package org.apache.kafka.server.common;
 
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public interface FeatureVersionUtils {
 
-    public interface ValidateMethod {
+    interface FeatureVersionImpl {
         /**
          * A method to be implemented by each feature. If a given feature relies on another feature, the dependencies should be
          * captured here.
@@ -31,23 +33,39 @@ public interface FeatureVersionUtils {
          *
          * All feature levels above 0 require metadata.version=4 (IBP_3_3_IV0) in order to write the feature records to the cluster.
          *
-         * @param metadataVersion the metadata version we want to set
-         * @param features        the feature versions (besides MetadataVersion) we want to set
+         * @param metadataVersion the metadata version we have (or want to se)
+         * @param features        the feature versions (besides MetadataVersion) we have (or want to set)
          */
         void validateVersion(short featureLevel, MetadataVersion metadataVersion, Map<String, Short> features);
+
+        short featureLevel();
+
+        String featureName();
+
+        static Map<String, Short> featureImplsToMap(List<FeatureVersionImpl> features) {
+            return features.stream().collect(Collectors.toMap(FeatureVersionImpl::featureName, FeatureVersionImpl::featureLevel));
+        }
     }
 
-    public interface DefaultValueMethod {
+    interface CreateMethod {
+        /**
+         * Creates a FeatureVersion from a given feature and level with the correct feature object underneath.
+         *
+         * @param level   the level of the feature
+         * @throws        IllegalArgumentException if the feature name is not valid (not implemented for this method)
+         */
+        FeatureVersionImpl fromFeatureLevel(short level);
+    }
+
+    interface DefaultValueMethod {
         /**
          * A method to return the default version level of a feature. If metadataVersionOpt is not empty, the default is based on
          * the metadataVersion. If not, use the latest production version for the given feature.
          * <p>
-         * Every time a new feature is added, it should create a mapping from metadata version to feature version and include
-         * a case here to specify the default.
+         * Every time a new feature is added, it should create a mapping from metadata version to feature version.
          *
          * @param metadataVersionOpt the metadata version we want to use to set the default, or None if the latest production version is desired
          * @return the default version level for the feature and potential metadata version
-         * @throws IllegalArgumentException if the feature name is not valid (not implemented for this method)
          */
         short defaultValue(MetadataVersion metadataVersionOpt);
     }

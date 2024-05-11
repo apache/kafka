@@ -36,6 +36,7 @@ import org.apache.kafka.common.security.scram.internals.ScramFormatter
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.apache.kafka.server.common.FeatureVersionUtils.FeatureVersionImpl
 
 import java.util
 import java.util.{Base64, Collections, Optional}
@@ -123,21 +124,22 @@ object StorageTool extends Logging {
     // If we are using --version-default, the default is based on the metadata version.
     val metadataVersionOpt: Optional[MetadataVersion] = if (specifiedFeatures.isEmpty) Optional.of(metadataVersion) else Optional.empty[MetadataVersion]
 
-    val allFeaturesAndLevels: List[(FeatureVersion, java.lang.Short)] = allFeatures.map { feature =>
-      (feature, specifiedFeatures.getOrElse(feature.featureName, feature.defaultValue(metadataVersionOpt)))
+    val allFeaturesAndLevels: List[FeatureVersionImpl] = allFeatures.map { feature =>
+      val level: java.lang.Short = specifiedFeatures.getOrElse(feature.featureName, feature.defaultValue(metadataVersionOpt))
+      feature.fromFeatureLevel(level)
     }
-    val nameToLevel = allFeaturesAndLevels.map { case (feature, level) => (feature.featureName, level) }.toMap.asJava
+    val featuresMap = FeatureVersionImpl.featureImplsToMap(allFeaturesAndLevels.asJava)
 
     val records = mutable.ListBuffer.empty[ApiMessageAndVersion]
     try {
-      for ((feature, level) <- allFeaturesAndLevels) {
+      for (feature <- allFeaturesAndLevels) {
         // In order to validate, we need all feature versions set.
-        feature.validateVersion(level, metadataVersion, nameToLevel)
+        feature.validateVersion(feature.featureLevel, metadataVersion, featuresMap)
         // Only set feature records for levels greater than 0. 0 is assumed if there is no record.
-        if (level > 0) {
+        if (feature.featureLevel > 0) {
           records += new ApiMessageAndVersion(new FeatureLevelRecord().
             setName(feature.featureName).
-            setFeatureLevel(level), 0.toShort)
+            setFeatureLevel(feature.featureLevel), 0.toShort)
         }
       }
       records.toList
@@ -538,6 +540,8 @@ object StorageTool extends Logging {
 
   def featureNamesAndLevels(features: List[String]): Map[String, java.lang.Short] = {
     features.map((feature: String) => {
+      // Ensure the feature exists
+
       val nameAndLevel = parseNameAndLevel(feature)
       (nameAndLevel(0), java.lang.Short.valueOf(nameAndLevel(1)))
     }).toMap

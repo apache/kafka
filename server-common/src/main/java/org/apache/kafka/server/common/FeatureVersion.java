@@ -18,17 +18,16 @@ package org.apache.kafka.server.common;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * This is an interface for the various features implemented for Kafka clusters.
+ * This is enum for the various features implemented for Kafka clusters.
  * KIP-584: Versioning Scheme for Features introduced the idea of various features, but only added one feature -- MetadataVersion.
  * KIP-1022: Formatting and Updating Features allowed for more features to be added. In order to set and update features,
  * they need to be specified via the StorageTool or FeatureCommand tools.
  * <br>
- * Having a unified interface for the features that will use a shared type in the API used to set and update them
+ * Having a unified enum for the features that will use a shared type in the API used to set and update them
  * makes it easier to process these features.
  */
 public enum FeatureVersion {
@@ -39,28 +38,29 @@ public enum FeatureVersion {
      *
      * See {@link TestFeatureVersion} as an example.
      */
-    TEST_VERSION("test.feature.version", TestFeatureVersion::defaultValue, TestFeatureVersion::validateVersion, false);
+    TEST_VERSION("test.feature.version", TestFeatureVersion::defaultValue, TestFeatureVersion::fromFeatureLevel, false);
 
     public static final FeatureVersion[] FEATURES;
     public static final List<FeatureVersion> PRODUCTION_FEATURES;
     private final String name;
     private final FeatureVersionUtils.DefaultValueMethod defaultValueMethod;
-    private final FeatureVersionUtils.ValidateMethod validateVersionMethod;
+    private final FeatureVersionUtils.CreateMethod createFeatureVersionMethod;
     private final boolean usedInProduction;
 
     FeatureVersion(String name,
                    FeatureVersionUtils.DefaultValueMethod defaultValueMethod,
-                   FeatureVersionUtils.ValidateMethod validateMethod,
+                   FeatureVersionUtils.CreateMethod createMethod,
                    boolean usedInProduction) {
         this.name = name;
         this.defaultValueMethod = defaultValueMethod;
-        this.validateVersionMethod = validateMethod;
+        this.createFeatureVersionMethod = createMethod;
         this.usedInProduction = usedInProduction;
     }
 
     static {
         FeatureVersion[] enumValues = FeatureVersion.values();
         FEATURES = Arrays.copyOf(enumValues, enumValues.length);
+
         PRODUCTION_FEATURES = Arrays.stream(FEATURES).filter(feature ->
                 feature.usedInProduction).collect(Collectors.toList());
     }
@@ -69,12 +69,11 @@ public enum FeatureVersion {
         return name;
     }
 
-    public void validateVersion(short featureLevel, MetadataVersion metadataVersion, Map<String, Short> features) {
-        validateVersionMethod.validateVersion(featureLevel, metadataVersion, features);
+    public FeatureVersionUtils.FeatureVersionImpl fromFeatureLevel(short level) {
+        return createFeatureVersionMethod.fromFeatureLevel(level);
     }
 
     public short defaultValue(Optional<MetadataVersion> metadataVersionOpt) {
         return defaultValueMethod.defaultValue(metadataVersionOpt.orElse(MetadataVersion.LATEST_PRODUCTION));
     }
-
 }

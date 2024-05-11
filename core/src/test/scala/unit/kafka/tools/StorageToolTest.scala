@@ -292,7 +292,6 @@ Found problem:
 
     assertThrows(classOf[RuntimeException], () => parseAddFeatures("--feature", "blah"))
     assertThrows(classOf[RuntimeException], () => parseAddFeatures("--feature", "blah=blah"))
-    //assertThrows(classOf[IllegalArgumentException], () => parseAddFeatures("--feature", "blah=12")) TODO: add back this validation
 
     // Test with no features
     assertEquals(Map(), parseAddFeatures())
@@ -370,6 +369,15 @@ Found problem:
   def testFeatureDependency(): Unit = {
     val featureLevel = 1.toShort
     assertThrows(classOf[TerseFailure], () => StorageTool.generateFeatureRecords(MetadataVersion.IBP_2_8_IV1,
+      Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
+      allFeatures
+    ))
+  }
+
+  @Test
+  def testFeatureInvalidFlag(): Unit = {
+    val featureLevel = 99.toShort
+    assertThrows(classOf[IllegalArgumentException], () => StorageTool.generateFeatureRecords(MetadataVersion.LATEST_PRODUCTION,
       Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
       allFeatures
     ))
