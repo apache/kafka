@@ -160,7 +160,7 @@ public class ClusterConfig {
     }
 
     public Set<String> displayTags() {
-        Set<String> displayTags = new LinkedHashSet<>(4);
+        Set<String> displayTags = new LinkedHashSet<>(tags);
         tags().ifPresent(tags -> displayTags.add("tags=" + tags));
         displayTags.add("MetadataVersion=" + metadataVersion);
         displayTags.add("Security=" + securityProtocol.name());
