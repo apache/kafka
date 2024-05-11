@@ -69,7 +69,7 @@ class ConsumerGroupCommandTestUtils {
         ClusterConfig consumerGroupCoordinator = ClusterConfig.defaultBuilder()
                 .setTypes(Stream.of(KRAFT, CO_KRAFT).collect(Collectors.toSet()))
                 .setServerProperties(serverProperties)
-                .setTags(Collections.singletonList("newGroupCoordinator"))
+                .setTags(Collections.singletonList("combinedNewGroupCoordinator"))
                 .build();
         clusterGenerator.accept(consumerGroupCoordinator);
     }

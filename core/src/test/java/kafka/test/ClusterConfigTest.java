@@ -45,8 +45,6 @@ public class ClusterConfigTest {
     @Test
     public void testCopy() throws IOException {
         File trustStoreFile = TestUtils.tempFile();
-        String[] array = {"name", "Generated Test"};
-        ArrayList<String> tags = new ArrayList<>(Arrays.asList(array));
 
         ClusterConfig clusterConfig = ClusterConfig.builder()
                 .setTypes(Collections.singleton(Type.KRAFT))
