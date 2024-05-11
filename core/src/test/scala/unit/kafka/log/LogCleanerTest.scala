@@ -127,11 +127,15 @@ class LogCleanerTest extends Logging {
       time = time)
 
     try {
+      logCleaner.startup()
+      var nonexistent = LogCleaner.MetricNames.diff(KafkaYammerMetrics.defaultRegistry.allMetrics().keySet().asScala.map(_.getName))
+      assertEquals(0, nonexistent.size, s"$nonexistent should be existent")
+
       logCleaner.reconfigure(new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181")),
         new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181")))
 
-      LogCleaner.MetricNames.foreach(name => assertNotNull(KafkaYammerMetrics.defaultRegistry.allMetrics().get(logCleaner.metricsGroup
-              .metricName(name, java.util.Collections.emptyMap())), s"$name is gone?"))
+      nonexistent = LogCleaner.MetricNames.diff(KafkaYammerMetrics.defaultRegistry.allMetrics().keySet().asScala.map(_.getName))
+      assertEquals(0, nonexistent.size, s"$nonexistent should be existent")
     } finally logCleaner.shutdown()
   }
 
