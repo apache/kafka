@@ -26,7 +26,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Set;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -42,7 +46,6 @@ public class ClusterConfig {
     private final int brokers;
     private final int controllers;
     private final int disksPerBroker;
-    private final String name;
     private final boolean autoStart;
 
     private final SecurityProtocol securityProtocol;
@@ -56,6 +59,7 @@ public class ClusterConfig {
     private final Map<String, String> adminClientProperties;
     private final Map<String, String> saslServerProperties;
     private final Map<String, String> saslClientProperties;
+    private final List<String> tags;
     private final Map<Integer, Map<String, String>> perServerProperties;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
@@ -63,7 +67,7 @@ public class ClusterConfig {
                   SecurityProtocol securityProtocol, String listenerName, File trustStoreFile,
                   MetadataVersion metadataVersion, Map<String, String> serverProperties, Map<String, String> producerProperties,
                   Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
-                  Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perServerProperties) {
+                  Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perServerProperties, List<String> tags) {
         // do fail fast. the following values are invalid for both zk and kraft modes.
         if (brokers < 0) throw new IllegalArgumentException("Number of brokers must be greater or equal to zero.");
         if (controllers < 0) throw new IllegalArgumentException("Number of controller must be greater or equal to zero.");
@@ -73,7 +77,6 @@ public class ClusterConfig {
         this.brokers = brokers;
         this.controllers = controllers;
         this.disksPerBroker = disksPerBroker;
-        this.name = name;
         this.autoStart = autoStart;
         this.securityProtocol = Objects.requireNonNull(securityProtocol);
         this.listenerName = listenerName;
@@ -86,6 +89,7 @@ public class ClusterConfig {
         this.saslServerProperties = Objects.requireNonNull(saslServerProperties);
         this.saslClientProperties = Objects.requireNonNull(saslClientProperties);
         this.perServerProperties = Objects.requireNonNull(perServerProperties);
+        this.tags = Objects.requireNonNull(tags);
     }
 
     public Set<Type> clusterTypes() {
@@ -102,10 +106,6 @@ public class ClusterConfig {
 
     public int numDisksPerBroker() {
         return disksPerBroker;
-    }
-
-    public Optional<String> name() {
-        return Optional.ofNullable(name);
     }
 
     public boolean isAutoStart() {
@@ -156,13 +156,17 @@ public class ClusterConfig {
         return perServerProperties;
     }
 
-    public Map<String, String> nameTags() {
-        Map<String, String> tags = new LinkedHashMap<>(4);
-        name().ifPresent(name -> tags.put("Name", name));
-        tags.put("MetadataVersion", metadataVersion.toString());
-        tags.put("Security", securityProtocol.name());
-        listenerName().ifPresent(listener -> tags.put("Listener", listener));
+    public List<String> tags() {
         return tags;
+    }
+
+    public Set<String> displayTags() {
+        Set<String> displayTags = new LinkedHashSet<>(tags);
+        displayTags.add("tags=" + tags);
+        displayTags.add("MetadataVersion=" + metadataVersion);
+        displayTags.add("Security=" + securityProtocol.name());
+        listenerName().ifPresent(listener -> displayTags.add("Listener=" + listener));
+        return displayTags;
     }
 
     public static Builder defaultBuilder() {
@@ -186,7 +190,6 @@ public class ClusterConfig {
                 .setBrokers(clusterConfig.brokers)
                 .setControllers(clusterConfig.controllers)
                 .setDisksPerBroker(clusterConfig.disksPerBroker)
-                .setName(clusterConfig.name)
                 .setAutoStart(clusterConfig.autoStart)
                 .setSecurityProtocol(clusterConfig.securityProtocol)
                 .setListenerName(clusterConfig.listenerName)
@@ -198,7 +201,8 @@ public class ClusterConfig {
                 .setAdminClientProperties(clusterConfig.adminClientProperties)
                 .setSaslServerProperties(clusterConfig.saslServerProperties)
                 .setSaslClientProperties(clusterConfig.saslClientProperties)
-                .setPerServerProperties(clusterConfig.perServerProperties);
+                .setPerServerProperties(clusterConfig.perServerProperties)
+                .setTags(clusterConfig.tags);
     }
 
     public static class Builder {
@@ -219,7 +223,7 @@ public class ClusterConfig {
         private Map<String, String> saslServerProperties = Collections.emptyMap();
         private Map<String, String> saslClientProperties = Collections.emptyMap();
         private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
-
+        private List<String> tags;
         private Builder() {}
 
         public Builder setTypes(Set<Type> types) {
@@ -309,10 +313,16 @@ public class ClusterConfig {
             return this;
         }
 
+        public Builder setTags(List<String> tags) {
+            this.tags = Collections.unmodifiableList(new ArrayList<>(tags));
+            return this;
+        }
+
         public ClusterConfig build() {
             return new ClusterConfig(types, brokers, controllers, disksPerBroker, name, autoStart, securityProtocol, listenerName,
                     trustStoreFile, metadataVersion, serverProperties, producerProperties, consumerProperties,
-                    adminClientProperties, saslServerProperties, saslClientProperties, perServerProperties);
+                    adminClientProperties, saslServerProperties, saslClientProperties,
+                    perServerProperties, tags);
         }
     }
 }

@@ -82,7 +82,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
     @Override
     public String getDisplayName(int invocationIndex) {
-        String clusterDesc = clusterConfig.nameTags().entrySet().stream()
+        String clusterDesc = clusterConfig.displayTags().stream()
             .map(Object::toString)
             .collect(Collectors.joining(", "));
         return String.format("%s [%d] Type=ZK, %s", baseDisplayName, invocationIndex, clusterDesc);

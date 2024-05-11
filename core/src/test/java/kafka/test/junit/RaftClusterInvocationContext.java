@@ -80,7 +80,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
     @Override
     public String getDisplayName(int invocationIndex) {
-        String clusterDesc = clusterConfig.nameTags().entrySet().stream()
+        String clusterDesc = clusterConfig.displayTags().stream()
             .map(Object::toString)
             .collect(Collectors.joining(", "));
         return String.format("%s [%d] Type=Raft-%s, %s", baseDisplayName, invocationIndex, isCombined ? "Combined" : "Isolated", clusterDesc);

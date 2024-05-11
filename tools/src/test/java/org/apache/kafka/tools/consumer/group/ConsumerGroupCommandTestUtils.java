@@ -24,10 +24,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -66,8 +63,8 @@ class ConsumerGroupCommandTestUtils {
 
         ClusterConfig consumerGroupCoordinator = ClusterConfig.defaultBuilder()
                 .setTypes(Stream.of(KRAFT, CO_KRAFT).collect(Collectors.toSet()))
-                .setName("consumerGroupCoordinator")
                 .setServerProperties(serverProperties)
+                .setTags(Collections.singletonList("newGroupCoordinator"))
                 .build();
         clusterGenerator.accept(consumerGroupCoordinator);
     }

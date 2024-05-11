@@ -17,33 +17,16 @@
 
 package kafka.test.annotation;
 
-import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.server.common.MetadataVersion;
-import org.junit.jupiter.api.TestTemplate;
-
 import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-import static java.lang.annotation.ElementType.METHOD;
-import static java.lang.annotation.RetentionPolicy.RUNTIME;
-
 @Documented
-@Target({METHOD})
-@Retention(RUNTIME)
-@TestTemplate
-public @interface ClusterTest {
-    Type[] types() default {};
-    int brokers() default 0;
-    int controllers() default 0;
-    int disksPerBroker() default 0;
-    AutoStart autoStart() default AutoStart.DEFAULT;
-
-    String name() default "";
-    SecurityProtocol securityProtocol() default SecurityProtocol.PLAINTEXT;
-    String listener() default "";
-    MetadataVersion metadataVersion() default MetadataVersion.IBP_3_8_IV0;
-    ClusterConfigProperty[] serverProperties() default {};
-    // users can add tags that they want to display in test
-    String[] tags() default {};
+@Target({ElementType.ANNOTATION_TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface ClusterConfigDisplayTag {
+    String key();
+    String value();
 }

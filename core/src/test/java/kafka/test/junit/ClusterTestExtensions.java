@@ -19,13 +19,13 @@ package kafka.test.junit;
 
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterGenerator;
-import kafka.test.annotation.AutoStart;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.annotation.ClusterConfigProperty;
-import kafka.test.annotation.ClusterTemplate;
 import kafka.test.annotation.ClusterTest;
+import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
+import kafka.test.annotation.ClusterTemplate;
+import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.Type;
+import kafka.test.annotation.AutoStart;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
@@ -156,7 +156,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 .filter(e -> e.id() != -1)
                 .collect(Collectors.groupingBy(ClusterConfigProperty::id, Collectors.mapping(Function.identity(),
                         Collectors.toMap(ClusterConfigProperty::key, ClusterConfigProperty::value, (a, b) -> b))));
-
+        List<String> tags = new ArrayList<>(Arrays.asList(annot.tags()));
         ClusterConfig config = ClusterConfig.builder()
                 .setTypes(new HashSet<>(Arrays.asList(types)))
                 .setBrokers(annot.brokers() == 0 ? defaults.brokers() : annot.brokers())
@@ -169,6 +169,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 .setPerServerProperties(perServerProperties)
                 .setSecurityProtocol(annot.securityProtocol())
                 .setMetadataVersion(annot.metadataVersion())
+                .setTags(tags)
                 .build();
         for (Type type : types) {
             type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
