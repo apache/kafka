@@ -45,7 +45,7 @@ object ProducerIdsIntegrationTest {
         java.util.Collections.singletonMap(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0-IV0"))
 
     clusterGenerator.accept(ClusterConfig.defaultBuilder()
-      .setType(Type.ZK)
+      .setTypes(Set(Type.ZK).asJava)
       .setBrokers(3)
       .setAutoStart(false)
       .setServerProperties(serverProperties)
@@ -61,9 +61,9 @@ object ProducerIdsIntegrationTest {
 class ProducerIdsIntegrationTest {
 
   @ClusterTests(Array(
-    new ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_2_8_IV1),
-    new ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_0_IV0),
-    new ClusterTest(clusterType = Type.KRAFT, brokers = 3, metadataVersion = MetadataVersion.IBP_3_3_IV0)
+    new ClusterTest(types = Array(Type.ZK), brokers = 3, metadataVersion = MetadataVersion.IBP_2_8_IV1),
+    new ClusterTest(types = Array(Type.ZK), brokers = 3, metadataVersion = MetadataVersion.IBP_3_0_IV0),
+    new ClusterTest(types = Array(Type.KRAFT), brokers = 3, metadataVersion = MetadataVersion.IBP_3_3_IV0)
   ))
   def testUniqueProducerIds(clusterInstance: ClusterInstance): Unit = {
     verifyUniqueIds(clusterInstance)
@@ -76,7 +76,7 @@ class ProducerIdsIntegrationTest {
     clusterInstance.stop()
   }
 
-  @ClusterTest(clusterType = Type.ZK, brokers = 1, autoStart = AutoStart.NO, serverProperties = Array(
+  @ClusterTest(types = Array(Type.ZK), brokers = 1, autoStart = AutoStart.NO, serverProperties = Array(
     new ClusterConfigProperty(key = "num.io.threads", value = "1")
   ))
   @Timeout(20)
@@ -87,7 +87,7 @@ class ProducerIdsIntegrationTest {
   }
 
   @Disabled // TODO: Enable once producer id block size is configurable (KAFKA-15029)
-  @ClusterTest(clusterType = Type.ZK, brokers = 1, autoStart = AutoStart.NO, serverProperties = Array(
+  @ClusterTest(types = Array(Type.ZK), brokers = 1, autoStart = AutoStart.NO, serverProperties = Array(
     new ClusterConfigProperty(key = "num.io.threads", value = "2")
   ))
   def testMultipleAllocateProducerIdsRequest(clusterInstance: ClusterInstance): Unit = {

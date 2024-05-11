@@ -34,6 +34,7 @@ import org.junit.platform.commons.util.ReflectionUtils;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -131,7 +132,11 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
 
         String baseDisplayName = context.getRequiredTestMethod().getName();
-        generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(baseDisplayName, config, testInvocations));
+        generatedClusterConfigs.forEach(config -> {
+            for (Type type: config.clusterTypes()) {
+                type.invocationContexts(baseDisplayName, config, testInvocations);
+            }
+        });
     }
 
     private void generateClusterConfigurations(ExtensionContext context, String generateClustersMethods, ClusterGenerator generator) {
@@ -142,7 +147,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
     private void processClusterTest(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults,
                                     Consumer<TestTemplateInvocationContext> testInvocations) {
-        Type type = annot.clusterType() == Type.DEFAULT ? defaults.clusterType() : annot.clusterType();
+        Type[] types = annot.types().length == 0 ? defaults.types() : annot.types();
         Map<String, String> serverProperties = Stream.concat(Arrays.stream(defaults.serverProperties()), Arrays.stream(annot.serverProperties()))
                 .filter(e -> e.id() == -1)
                 .collect(Collectors.toMap(ClusterConfigProperty::key, ClusterConfigProperty::value, (a, b) -> b));
@@ -153,7 +158,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                         Collectors.toMap(ClusterConfigProperty::key, ClusterConfigProperty::value, (a, b) -> b))));
 
         ClusterConfig config = ClusterConfig.builder()
-                .setType(type)
+                .setTypes(new HashSet<>(Arrays.asList(types)))
                 .setBrokers(annot.brokers() == 0 ? defaults.brokers() : annot.brokers())
                 .setControllers(annot.controllers() == 0 ? defaults.controllers() : annot.controllers())
                 .setDisksPerBroker(annot.disksPerBroker() == 0 ? defaults.disksPerBroker() : annot.disksPerBroker())
@@ -165,7 +170,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 .setSecurityProtocol(annot.securityProtocol())
                 .setMetadataVersion(annot.metadataVersion())
                 .build();
-        type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
+        for (Type type : types) {
+            type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
+        }
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {

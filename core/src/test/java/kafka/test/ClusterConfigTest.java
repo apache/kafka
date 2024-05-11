@@ -46,7 +46,7 @@ public class ClusterConfigTest {
         File trustStoreFile = TestUtils.tempFile();
 
         ClusterConfig clusterConfig = ClusterConfig.builder()
-                .setType(Type.KRAFT)
+                .setTypes(Collections.singleton(Type.KRAFT))
                 .setBrokers(3)
                 .setControllers(2)
                 .setDisksPerBroker(1)
