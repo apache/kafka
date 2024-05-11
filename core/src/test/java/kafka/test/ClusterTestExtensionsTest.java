@@ -39,7 +39,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Arrays;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Collections;
@@ -129,7 +128,7 @@ public class ClusterTestExtensionsTest {
             Assertions.assertEquals("bar", clusterInstance.config().serverProperties().get("foo"));
             Assertions.assertEquals("eggs", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("default.value", clusterInstance.config().serverProperties().get("default.key"));
-            Assertions.assertArrayEquals(new String[]{"default.display.key1", "default.display.key2"}, clusterInstance.config().tags().toArray());
+            Assertions.assertArrayEquals(new String[]{"default.display.key1", "default.display.key2"}, clusterInstance.config().tags().orElseGet(ArrayList::new).toArray());
 
             // assert broker server 0 contains property queued.max.requests 100 from ClusterTestDefaults
             try (Admin admin = clusterInstance.createAdminClient()) {
@@ -142,7 +141,7 @@ public class ClusterTestExtensionsTest {
             Assertions.assertEquals("baz", clusterInstance.config().serverProperties().get("foo"));
             Assertions.assertEquals("eggs", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("overwrite.value", clusterInstance.config().serverProperties().get("default.key"));
-            Assertions.assertArrayEquals(new String[]{"default.display.key1", "default.display.key2"}, clusterInstance.config().tags().toArray());
+            Assertions.assertArrayEquals(new String[]{"default.display.key1", "default.display.key2"}, clusterInstance.config().tags().orElseGet(ArrayList::new).toArray());
 
             // assert broker server 0 contains property queued.max.requests 200 from ClusterTest which overrides
             // the value 100 in server property in ClusterTestDefaults

@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -59,6 +59,7 @@ class ConsumerGroupCommandTestUtils {
         ClusterConfig classicGroupCoordinator = ClusterConfig.defaultBuilder()
                 .setTypes(Stream.of(ZK, KRAFT, CO_KRAFT).collect(Collectors.toSet()))
                 .setServerProperties(serverProperties)
+                .setTags(Collections.singletonList("newGroupCoordinator"))
                 .build();
         clusterGenerator.accept(classicGroupCoordinator);
 
