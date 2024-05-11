@@ -4177,7 +4177,7 @@ class KafkaApisTest extends Logging {
     val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
       fetchMetadata, fetchData, false, false)
     when(fetchManager.newContext(
       any[Short],
@@ -4229,7 +4229,7 @@ class KafkaApisTest extends Logging {
     val fetchDataBuilder = Map(foo.topicPartition -> new FetchRequest.PartitionData(foo.topicId, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
       fetchMetadata, fetchData, true, replicaId >= 0)
     // We expect to have the resolved partition, but we will simulate an unknown one with the fetchContext we return.
     when(fetchManager.newContext(
@@ -4300,8 +4300,8 @@ class KafkaApisTest extends Logging {
     val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, false, false)
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
+      fetchMetadata, fetchData, true, false)
     when(fetchManager.newContext(
       any[Short],
       any[JFetchMetadata],
@@ -5543,7 +5543,7 @@ class KafkaApisTest extends Logging {
     })
 
     val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
       fetchMetadata, fetchData, true, true)
     when(fetchManager.newContext(
       any[Short],
