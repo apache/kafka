@@ -218,7 +218,7 @@ def run_tests(image, mode, fixtures_dir):
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
 
     test_classes_to_run = []
-    if mode == "jvm":
+    if mode == "jvm" or mode == "native":
         test_classes_to_run = [DockerSanityTestJVMCombinedMode, DockerSanityTestJVMIsolatedMode]
     
     loader = unittest.TestLoader()
