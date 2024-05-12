@@ -489,7 +489,7 @@ public class StandardAuthorizerData {
                                           String host,
                                           StandardAcl acl) {
         // Check if the principal matches. If it doesn't, return no result (null).
-        if (!matchingPrincipals.contains(acl.kafkaPrincipal())) {
+        if (!acl.matchAtLeastOnePrincipal(matchingPrincipals)) {
             return null;
         }
         // Check if the host matches. If it doesn't, return no result (null).
