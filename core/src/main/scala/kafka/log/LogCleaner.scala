@@ -101,7 +101,6 @@ class LogCleaner(initialConfig: CleanerConfig,
                  time: Time = Time.SYSTEM) extends Logging with BrokerReconfigurable {
   // Visible for test.
   private[log] val metricsGroup = new KafkaMetricsGroup(this.getClass)
-  activateMetrics()
 
   /* Log cleaner configuration which may be dynamically updated */
   @volatile private var config = initialConfig
