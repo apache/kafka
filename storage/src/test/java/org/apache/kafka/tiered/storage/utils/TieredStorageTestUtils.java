@@ -52,6 +52,7 @@ import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.storage.internals.log.CleanerConfig.LOG_CLEANER_ENABLE_PROP;
 
 public class TieredStorageTestUtils {
 
@@ -153,6 +154,8 @@ public class TieredStorageTestUtils {
         overridingProps.setProperty(metadataConfigPrefix(testClassName, REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP), RLMM_INIT_RETRY_INTERVAL_MS.toString());
         // Set 2 log dirs to make sure JBOD feature is working correctly
         overridingProps.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDir().getAbsolutePath() + "," + TestUtils.tempDir().getAbsolutePath());
+
+        overridingProps.setProperty(LOG_CLEANER_ENABLE_PROP, "false");
 
         return overridingProps;
     }
