@@ -26,13 +26,13 @@ public class BrokerNodeTest {
     @Test
     public void testInvalidBuilder() {
         Assertions.assertEquals("You must set the node id.",
-                Assertions.assertThrows(RuntimeException.class, () -> BrokerNode.builder()
+                Assertions.assertThrows(IllegalArgumentException.class, () -> BrokerNode.builder()
                         .setBaseDirectory("foo")
                         .setClusterId(Uuid.randomUuid())
                         .build()).getMessage());
 
         Assertions.assertEquals("The value of numLogDirectories should be at least 1.",
-                Assertions.assertThrows(RuntimeException.class, () -> BrokerNode.builder()
+                Assertions.assertThrows(IllegalArgumentException.class, () -> BrokerNode.builder()
                         .setBaseDirectory("foo")
                         .setClusterId(Uuid.randomUuid())
                         .setId(0)

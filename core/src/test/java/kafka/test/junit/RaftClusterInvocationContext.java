@@ -94,8 +94,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         setBootstrapMetadataVersion(clusterConfig.metadataVersion()).
                         setCombined(isCombined).
                         setNumBrokerNodes(clusterConfig.numBrokers()).
+                        setPerServerProperties(clusterConfig.perServerOverrideProperties()).
                         setNumDisksPerBroker(clusterConfig.numDisksPerBroker()).
-                        setPerBrokerProperties(clusterConfig.perBrokerOverrideProperties()).
                         setNumControllerNodes(clusterConfig.numControllers()).build();
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
 
@@ -104,7 +104,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     builder.setConfigProp("zookeeper.connect", String.format("localhost:%d", zkReference.get().port()));
                 }
                 // Copy properties into the TestKit builder
-                clusterConfig.serverProperties().forEach((key, value) -> builder.setConfigProp(key.toString(), value.toString()));
+                clusterConfig.serverProperties().forEach(builder::setConfigProp);
                 // KAFKA-12512 need to pass security protocol and listener name here
                 KafkaClusterTestKit cluster = builder.build();
                 clusterReference.set(cluster);

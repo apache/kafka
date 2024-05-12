@@ -49,8 +49,8 @@ object ProducerIdsIntegrationTest {
       .setBrokers(3)
       .setAutoStart(false)
       .setServerProperties(serverProperties)
-      .setPerBrokerProperties(perBrokerProperties)
-      .build());
+      .setPerServerProperties(perBrokerProperties)
+      .build())
   }
 }
 

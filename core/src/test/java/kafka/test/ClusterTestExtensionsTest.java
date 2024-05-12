@@ -26,27 +26,30 @@ import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
-
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 
-
 @ClusterTestDefaults(clusterType = Type.ZK, serverProperties = {
     @ClusterConfigProperty(key = "default.key", value = "default.value"),
+    @ClusterConfigProperty(id = 0, key = "queued.max.requests", value = "100"),
 })   // Set defaults for a few params in @ClusterTest(s)
 @ExtendWith(ClusterTestExtensions.class)
 public class ClusterTestExtensionsTest {
@@ -89,30 +92,59 @@ public class ClusterTestExtensionsTest {
     @ClusterTests({
         @ClusterTest(name = "cluster-tests-1", clusterType = Type.ZK, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "bar"),
-            @ClusterConfigProperty(key = "spam", value = "eggs")
+            @ClusterConfigProperty(key = "spam", value = "eggs"),
+            @ClusterConfigProperty(id = 86400, key = "baz", value = "qux"), // this one will be ignored as there is no broker id is 86400
         }),
         @ClusterTest(name = "cluster-tests-2", clusterType = Type.KRAFT, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
             @ClusterConfigProperty(key = "spam", value = "eggz"),
-            @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
+            @ClusterConfigProperty(key = "default.key", value = "overwrite.value"),
+            @ClusterConfigProperty(id = 0, key = "queued.max.requests", value = "200"),
+            @ClusterConfigProperty(id = 3000, key = "queued.max.requests", value = "300")
         }),
         @ClusterTest(name = "cluster-tests-3", clusterType = Type.CO_KRAFT, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
             @ClusterConfigProperty(key = "spam", value = "eggz"),
-            @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
+            @ClusterConfigProperty(key = "default.key", value = "overwrite.value"),
+            @ClusterConfigProperty(id = 0, key = "queued.max.requests", value = "200")
         })
     })
-    public void testClusterTests() {
-        if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.ZK)) {
+    public void testClusterTests() throws ExecutionException, InterruptedException {
+        if (!clusterInstance.isKRaftTest()) {
             Assertions.assertEquals("bar", clusterInstance.config().serverProperties().get("foo"));
             Assertions.assertEquals("eggs", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("default.value", clusterInstance.config().serverProperties().get("default.key"));
-        } else if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.RAFT)) {
+
+            // assert broker server 0 contains property queued.max.requests 100 from ClusterTestDefaults
+            try (Admin admin = clusterInstance.createAdminClient()) {
+                ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+                Map<ConfigResource, Config> configs = admin.describeConfigs(Collections.singletonList(configResource)).all().get();
+                Assertions.assertEquals(1, configs.size());
+                Assertions.assertEquals("100", configs.get(configResource).get("queued.max.requests").value());
+            }
+        } else {
             Assertions.assertEquals("baz", clusterInstance.config().serverProperties().get("foo"));
             Assertions.assertEquals("eggz", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("overwrite.value", clusterInstance.config().serverProperties().get("default.key"));
-        } else {
-            Assertions.fail("Unknown cluster type " + clusterInstance.clusterType());
+
+            // assert broker server 0 contains property queued.max.requests 200 from ClusterTest which overrides
+            // the value 100 in server property in ClusterTestDefaults
+            try (Admin admin = clusterInstance.createAdminClient()) {
+                ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+                Map<ConfigResource, Config> configs = admin.describeConfigs(Collections.singletonList(configResource)).all().get();
+                Assertions.assertEquals(1, configs.size());
+                Assertions.assertEquals("200", configs.get(configResource).get("queued.max.requests").value());
+            }
+            // In KRaft cluster non-combined mode, assert the controller server 3000 contains the property queued.max.requests 300
+            if (clusterInstance.config().clusterType() == Type.KRAFT) {
+                try (Admin admin = Admin.create(Collections.singletonMap(
+                        AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()))) {
+                    ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
+                    Map<ConfigResource, Config> configs = admin.describeConfigs(Collections.singletonList(configResource)).all().get();
+                    Assertions.assertEquals(1, configs.size());
+                    Assertions.assertEquals("300", configs.get(configResource).get("queued.max.requests").value());
+                }
+            }
         }
     }
 

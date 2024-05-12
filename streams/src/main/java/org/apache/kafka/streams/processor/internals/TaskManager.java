@@ -623,6 +623,21 @@ public class TaskManager {
         });
     }
 
+    private void iterateAndActOnRemovedTask(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
+                                            final Map<TaskId, RuntimeException> failedTasks,
+                                            final java.util.function.Consumer<Task> action) {
+        iterateAndActOnFuture(futures, removedTaskResult -> {
+            final Task task = removedTaskResult.task();
+            final Optional<RuntimeException> exception = removedTaskResult.exception();
+            if (exception.isPresent()) {
+                failedTasks.put(task.id(), exception.get());
+                tasks.addTask(task);
+            } else {
+                action.accept(task);
+            }
+        });
+    }
+
     private void iterateAndActOnFuture(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
                                        final java.util.function.Consumer<StateUpdater.RemovedTaskResult> action) {
         for (final Map.Entry<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> entry : futures.entrySet()) {
@@ -632,7 +647,8 @@ public class TaskManager {
                 final StateUpdater.RemovedTaskResult removedTaskResult = waitForFuture(taskId, future);
                 action.accept(removedTaskResult);
             } catch (final ExecutionException executionException) {
-                log.warn("An exception happened when removing task {} from the state updater. The exception will be handled later: ",
+                log.warn("An exception happened when removing task {} from the state updater. The task was added to the " +
+                        "failed task in the state updater: ",
                     taskId, executionException);
             } catch (final InterruptedException shouldNotHappen) {
                 Thread.currentThread().interrupt();
@@ -1085,7 +1101,7 @@ public class TaskManager {
             }
         }
 
-        addRevokedTasksInStateUpdaterToPendingTasksToSuspend(remainingRevokedPartitions);
+        revokeTasksInStateUpdater(remainingRevokedPartitions);
 
         if (!remainingRevokedPartitions.isEmpty()) {
             log.debug("The following revoked partitions {} are missing from the current task partitions. It could "
@@ -1174,16 +1190,27 @@ public class TaskManager {
         }
     }
 
-    private void addRevokedTasksInStateUpdaterToPendingTasksToSuspend(final Set<TopicPartition> remainingRevokedPartitions) {
+    private void revokeTasksInStateUpdater(final Set<TopicPartition> remainingRevokedPartitions) {
         if (stateUpdater != null) {
+            final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
+            final Map<TaskId, RuntimeException> failedTasksFromStateUpdater = new HashMap<>();
             for (final Task restoringTask : stateUpdater.getTasks()) {
                 if (restoringTask.isActive()) {
                     if (remainingRevokedPartitions.containsAll(restoringTask.inputPartitions())) {
-                        tasks.addPendingActiveTaskToSuspend(restoringTask.id());
+                        futures.put(restoringTask.id(), stateUpdater.removeWithFuture(restoringTask.id()));
                         remainingRevokedPartitions.removeAll(restoringTask.inputPartitions());
                     }
                 }
             }
+            iterateAndActOnRemovedTask(
+                futures,
+                failedTasksFromStateUpdater,
+                task -> {
+                    task.suspend();
+                    tasks.addTask(task);
+                }
+            );
+            maybeThrowTaskExceptions(failedTasksFromStateUpdater);
         }
     }
 
