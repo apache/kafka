@@ -146,7 +146,7 @@ public class DescribeAclsResponse extends AbstractResponse {
         List<DescribeAclsResource> resources = new ArrayList<>(patternToEntries.size());
         for (Entry<ResourcePattern, Set<AccessControlEntry>> entry : patternToEntries.entrySet()) {
             ResourcePattern key = entry.getKey();
-            List<AclDescription> aclDescriptions = new ArrayList<>(128);
+            List<AclDescription> aclDescriptions = new ArrayList<>(entry.getValue().size());
             for (AccessControlEntry ace : entry.getValue()) {
                 AclDescription ad = new AclDescription()
                     .setHost(ace.host())
