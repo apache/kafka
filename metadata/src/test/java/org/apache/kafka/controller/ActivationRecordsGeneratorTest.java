@@ -191,7 +191,7 @@ public class ActivationRecordsGeneratorTest {
         assertEquals(0, result.records().size());
 
         result = ActivationRecordsGenerator.recordsForNonEmptyLog(
-            logMsg -> assertEquals("Performing controller activation. Loaded ZK migration state of NONE.", logMsg),
+            logMsg -> assertEquals("Performing controller activation. Loaded ZK migration state of NONE. since this is a de-novo KRaft cluster.", logMsg),
             -1L,
             false,
             buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.empty()),
@@ -202,7 +202,7 @@ public class ActivationRecordsGeneratorTest {
 
         result = ActivationRecordsGenerator.recordsForNonEmptyLog(
             logMsg -> assertEquals("Performing controller activation. Aborting in-progress metadata " +
-                "transaction at offset 42. Loaded ZK migration state of NONE.", logMsg),
+                "transaction at offset 42. Loaded ZK migration state of NONE. since this is a de-novo KRaft cluster.", logMsg),
             42L,
             false,
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.empty()),
