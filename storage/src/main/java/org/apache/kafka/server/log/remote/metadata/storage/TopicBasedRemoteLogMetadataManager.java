@@ -55,6 +55,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -89,14 +90,16 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private volatile RemoteLogMetadataTopicPartitioner rlmTopicPartitioner;
     private final Set<TopicIdPartition> pendingAssignPartitions = Collections.synchronizedSet(new HashSet<>());
     private volatile boolean initializationFailed;
+    private final Supplier<RemotePartitionMetadataStore> remoteLogMetadataManagerSupplier;
 
     public TopicBasedRemoteLogMetadataManager() {
-        this(true);
+        this(true, RemotePartitionMetadataStore::new);
     }
 
     // Visible for testing.
-    public TopicBasedRemoteLogMetadataManager(boolean startConsumerThread) {
+    public TopicBasedRemoteLogMetadataManager(boolean startConsumerThread, Supplier<RemotePartitionMetadataStore> remoteLogMetadataManagerSupplier) {
         this.startConsumerThread = startConsumerThread;
+        this.remoteLogMetadataManagerSupplier = remoteLogMetadataManagerSupplier;
     }
 
     @Override
@@ -358,7 +361,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
 
             rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(configs);
             rlmTopicPartitioner = new RemoteLogMetadataTopicPartitioner(rlmmConfig.metadataTopicPartitionsCount());
-            remotePartitionMetadataStore = new RemotePartitionMetadataStore();
+            remotePartitionMetadataStore = remoteLogMetadataManagerSupplier.get();
             configured = true;
             log.info("Successfully configured topic-based RLMM with config: {}", rlmmConfig);
 
