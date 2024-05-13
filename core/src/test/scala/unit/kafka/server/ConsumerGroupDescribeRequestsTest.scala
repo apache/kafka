@@ -34,11 +34,11 @@ import scala.jdk.CollectionConverters._
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(clusterType = Type.KRAFT, brokers = 1)
+@ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1)
 @Tag("integration")
 class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
-  @ClusterTest(clusterType = Type.ZK)
+  @ClusterTest(types = Array(Type.ZK))
   def testConsumerGroupDescribeWithZookeeperCluster(): Unit = {
     val consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
       new ConsumerGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava)
@@ -60,7 +60,7 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
     assertEquals(expectedResponse, consumerGroupDescribeResponse.data)
   }
 
-  @ClusterTest(clusterType = Type.KRAFT, serverProperties = Array(
+  @ClusterTest(types = Array(Type.KRAFT), serverProperties = Array(
     new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
