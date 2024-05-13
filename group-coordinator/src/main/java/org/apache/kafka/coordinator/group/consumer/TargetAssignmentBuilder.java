@@ -300,7 +300,7 @@ public class TargetAssignmentBuilder {
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
-            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs), subscriptionType),
+            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs), subscriptionType, Collections.emptyMap()),
             new SubscribedTopicMetadata(topicMetadataMap)
         );
 

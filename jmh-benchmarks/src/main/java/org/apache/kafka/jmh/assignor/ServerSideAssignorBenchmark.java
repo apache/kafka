@@ -198,7 +198,7 @@ public class ServerSideAssignorBenchmark {
             }
         }
 
-        this.assignmentSpec = new AssignmentSpec(members, subscriptionType);
+        this.assignmentSpec = new AssignmentSpec(members, subscriptionType, Collections.emptyMap());
     }
 
     private Optional<String> rackId(int memberIndex) {
@@ -237,6 +237,8 @@ public class ServerSideAssignorBenchmark {
         GroupAssignment initialAssignment = partitionAssignor.assign(assignmentSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
+        Map<Uuid, byte[]> partitionAssignments = updatePartitionAssignments(initialAssignment);
+
         Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
         members.forEach((memberId, memberAssignment) -> {
             AssignmentMemberSpec memberSpec = assignmentSpec.members().get(memberId);
@@ -263,7 +265,29 @@ public class ServerSideAssignorBenchmark {
             Collections.emptyMap()
         ));
 
-        assignmentSpec = new AssignmentSpec(updatedMembers, subscriptionType);
+        assignmentSpec = new AssignmentSpec(updatedMembers, subscriptionType, partitionAssignments);
+    }
+
+    private Map<Uuid, byte[]> updatePartitionAssignments(
+        GroupAssignment targetAssignment
+    ) {
+        Map<Uuid, byte[]> partitionAssignments = new HashMap<>(topicCount);
+        for (Uuid topicId : allTopicIds) {
+            partitionAssignments.put(topicId, new byte[subscribedTopicDescriber.numPartitions(topicId)]);
+        }
+
+        for (Map.Entry<String, MemberAssignment> e : targetAssignment.members().entrySet()) {
+            MemberAssignment memberAssignment = e.getValue();
+            for (Map.Entry<Uuid, Set<Integer>> entry : memberAssignment.targetPartitions().entrySet()) {
+                Uuid topicId = entry.getKey();
+                Set<Integer> partitions = entry.getValue();
+                byte[] topicPartitionAssignment = partitionAssignments.get(topicId);
+                for (int partition : partitions) {
+                    topicPartitionAssignment[partition] = 1;
+                }
+            }
+        }
+        return partitionAssignments;
     }
 
     @Benchmark

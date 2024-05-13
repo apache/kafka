@@ -202,7 +202,7 @@ public class TargetAssignmentBuilderTest {
             SubscriptionType subscriptionType = HOMOGENEOUS;
 
             // Prepare the expected assignment spec.
-            AssignmentSpec assignmentSpec = new AssignmentSpec(memberSpecs, subscriptionType);
+            AssignmentSpec assignmentSpec = new AssignmentSpec(memberSpecs, subscriptionType, Collections.emptyMap());
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.
