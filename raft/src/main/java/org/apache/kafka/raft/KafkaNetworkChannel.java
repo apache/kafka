@@ -39,6 +39,7 @@ import org.apache.kafka.server.util.RequestAndCompletionHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -148,8 +149,8 @@ public class KafkaNetworkChannel implements NetworkChannel {
     }
 
     @Override
-    public void updateEndpoint(int id, QuorumConfig.InetAddressSpec spec) {
-        Node node = new Node(id, spec.address.getHostString(), spec.address.getPort());
+    public void updateEndpoint(int id, InetSocketAddress address) {
+        Node node = new Node(id, address.getHostString(), address.getPort());
         endpoints.put(id, node);
     }
 

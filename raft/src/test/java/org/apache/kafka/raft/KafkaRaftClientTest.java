@@ -303,12 +303,11 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
-        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
+        ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
         // Return null when allocation error
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
-            .thenReturn(null);
-        Mockito.when(memoryPool.tryAllocate(256))
-            .thenReturn(leaderBuffer);
+            .thenReturn(buffer) // Buffer for the leader message control record
+            .thenReturn(null); // Buffer for the scheduleAppend call
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withMemoryPool(memoryPool)
@@ -319,6 +318,7 @@ public class KafkaRaftClientTest {
         int epoch = context.currentEpoch();
 
         assertThrows(BufferAllocationException.class, () -> context.client.scheduleAppend(epoch, singletonList("a")));
+        Mockito.verify(memoryPool).release(buffer);
     }
 
     @Test
@@ -881,11 +881,8 @@ public class KafkaRaftClientTest {
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
         ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
-        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
-        Mockito.when(memoryPool.tryAllocate(256))
-            .thenReturn(leaderBuffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
@@ -901,7 +898,8 @@ public class KafkaRaftClientTest {
         context.pollUntilResponse();
 
         context.assertElectedLeader(epoch + 1, otherNodeId);
-        Mockito.verify(memoryPool).release(buffer);
+        // Expect two calls one for the leader change control batch and one for the data batch
+        Mockito.verify(memoryPool, Mockito.times(2)).release(buffer);
     }
 
     @Test
@@ -913,11 +911,8 @@ public class KafkaRaftClientTest {
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
         ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
-        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
-        Mockito.when(memoryPool.tryAllocate(256))
-            .thenReturn(leaderBuffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
@@ -934,7 +929,7 @@ public class KafkaRaftClientTest {
         context.pollUntilResponse();
 
         context.assertVotedCandidate(epoch + 1, otherNodeId);
-        Mockito.verify(memoryPool).release(buffer);
+        Mockito.verify(memoryPool, Mockito.times(2)).release(buffer);
     }
 
     @Test
@@ -946,11 +941,8 @@ public class KafkaRaftClientTest {
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
         ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
-        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
-        Mockito.when(memoryPool.tryAllocate(256))
-            .thenReturn(leaderBuffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
@@ -966,7 +958,8 @@ public class KafkaRaftClientTest {
         context.pollUntilResponse();
 
         context.assertUnknownLeader(epoch + 1);
-        Mockito.verify(memoryPool).release(buffer);
+        // Expect two calls one for the leader change control batch and one for the data batch
+        Mockito.verify(memoryPool, Mockito.times(2)).release(buffer);
     }
 
     @Test
