@@ -46,7 +46,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -65,15 +64,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
     private final String baseDisplayName;
     private final ClusterConfig clusterConfig;
-    private final AtomicReference<KafkaClusterTestKit> clusterReference;
-    private final AtomicReference<EmbeddedZookeeper> zkReference;
     private final boolean isCombined;
 
     public RaftClusterInvocationContext(String baseDisplayName, ClusterConfig clusterConfig, boolean isCombined) {
         this.baseDisplayName = baseDisplayName;
         this.clusterConfig = clusterConfig;
-        this.clusterReference = new AtomicReference<>();
-        this.zkReference = new AtomicReference<>();
         this.isCombined = isCombined;
     }
 
@@ -87,65 +82,41 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
     @Override
     public List<Extension> getAdditionalExtensions() {
-        RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterReference, zkReference, clusterConfig);
+        RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterConfig,isCombined);
         return Arrays.asList(
-            (BeforeTestExecutionCallback) context -> {
-                TestKitNodes nodes = new TestKitNodes.Builder().
-                        setBootstrapMetadataVersion(clusterConfig.metadataVersion()).
-                        setCombined(isCombined).
-                        setNumBrokerNodes(clusterConfig.numBrokers()).
-                        setNumDisksPerBroker(clusterConfig.numDisksPerBroker()).
-                        setPerBrokerProperties(clusterConfig.perBrokerOverrideProperties()).
-                        setNumControllerNodes(clusterConfig.numControllers()).build();
-                KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
-
-                if (Boolean.parseBoolean(clusterConfig.serverProperties().getOrDefault("zookeeper.metadata.migration.enable", "false"))) {
-                    zkReference.set(new EmbeddedZookeeper());
-                    builder.setConfigProp("zookeeper.connect", String.format("localhost:%d", zkReference.get().port()));
-                }
-                // Copy properties into the TestKit builder
-                clusterConfig.serverProperties().forEach((key, value) -> builder.setConfigProp(key.toString(), value.toString()));
-                // KAFKA-12512 need to pass security protocol and listener name here
-                KafkaClusterTestKit cluster = builder.build();
-                clusterReference.set(cluster);
-                cluster.format();
-                if (clusterConfig.isAutoStart()) {
-                    cluster.startup();
-                    kafka.utils.TestUtils.waitUntilTrue(
-                        () -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
-                        () -> "Broker never made it to RUNNING state.",
-                        org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
-                        100L);
-                }
-            },
-            (AfterTestExecutionCallback) context -> clusterInstance.stop(),
-            new ClusterInstanceParameterResolver(clusterInstance)
+                (BeforeTestExecutionCallback) context -> {
+                    if(clusterConfig.isAutoStart()){
+                        clusterInstance.start();
+                    }
+                },
+                (AfterTestExecutionCallback) context -> clusterInstance.stop(),
+                new ClusterInstanceParameterResolver(clusterInstance)
         );
     }
 
     public static class RaftClusterInstance implements ClusterInstance {
 
-        private final AtomicReference<KafkaClusterTestKit> clusterReference;
-        private final AtomicReference<EmbeddedZookeeper> zkReference;
         private final ClusterConfig clusterConfig;
         final AtomicBoolean started = new AtomicBoolean(false);
         final AtomicBoolean stopped = new AtomicBoolean(false);
         private final ConcurrentLinkedQueue<Admin> admins = new ConcurrentLinkedQueue<>();
+        private EmbeddedZookeeper embeddedZookeeper;
+        private KafkaClusterTestKit clusterTestKit;
+        private final boolean isCombined;
 
-        RaftClusterInstance(AtomicReference<KafkaClusterTestKit> clusterReference, AtomicReference<EmbeddedZookeeper> zkReference, ClusterConfig clusterConfig) {
-            this.clusterReference = clusterReference;
-            this.zkReference = zkReference;
+        RaftClusterInstance(ClusterConfig clusterConfig,boolean isCombined) {
             this.clusterConfig = clusterConfig;
+            this.isCombined = isCombined;
         }
 
         @Override
         public String bootstrapServers() {
-            return clusterReference.get().bootstrapServers();
+            return clusterTestKit.bootstrapServers();
         }
 
         @Override
         public String bootstrapControllers() {
-            return clusterReference.get().bootstrapControllers();
+            return clusterTestKit.bootstrapControllers();
         }
 
         @Override
@@ -234,13 +205,12 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public KafkaClusterTestKit getUnderlying() {
-            return clusterReference.get();
+            return clusterTestKit;
         }
 
         @Override
         public Admin createAdminClient(Properties configOverrides) {
-            Admin admin = Admin.create(clusterReference.get().
-                newClientPropertiesBuilder(configOverrides).build());
+            Admin admin = Admin.create(clusterTestKit.newClientPropertiesBuilder(configOverrides).build());
             admins.add(admin);
             return admin;
         }
@@ -249,7 +219,13 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         public void start() {
             if (started.compareAndSet(false, true)) {
                 try {
-                    clusterReference.get().startup();
+                    buildAndFormatCluster();
+                    clusterTestKit.startup();
+                    kafka.utils.TestUtils.waitUntilTrue(
+                            () -> this.clusterTestKit.brokers().get(0).brokerState() == BrokerState.RUNNING,
+                            () -> "Broker never made it to RUNNING state.",
+                            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
+                            100L);
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to start Raft server", e);
                 }
@@ -261,9 +237,9 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             if (stopped.compareAndSet(false, true)) {
                 admins.forEach(admin -> Utils.closeQuietly(admin, "admin"));
                 admins.clear();
-                Utils.closeQuietly(clusterReference.get(), "cluster");
-                if (zkReference.get() != null) {
-                    Utils.closeQuietly(zkReference.get(), "zk");
+                Utils.closeQuietly(clusterTestKit, "cluster");
+                if (embeddedZookeeper != null) {
+                    Utils.closeQuietly(embeddedZookeeper, "zk");
                 }
             }
         }
@@ -281,23 +257,44 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void waitForReadyBrokers() throws InterruptedException {
             try {
-                clusterReference.get().waitForReadyBrokers();
+                clusterTestKit.waitForReadyBrokers();
             } catch (ExecutionException e) {
                 throw new AssertionError("Failed while waiting for brokers to become ready", e);
             }
         }
 
-        private BrokerServer findBrokerOrThrow(int brokerId) {
-            return Optional.ofNullable(clusterReference.get().brokers().get(brokerId))
-                .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
-        }
-
         public Stream<BrokerServer> brokers() {
-            return clusterReference.get().brokers().values().stream();
+            return clusterTestKit.brokers().values().stream();
         }
 
         public Stream<ControllerServer> controllers() {
-            return clusterReference.get().controllers().values().stream();
+            return clusterTestKit.controllers().values().stream();
+        }
+
+        private BrokerServer findBrokerOrThrow(int brokerId) {
+            return Optional.ofNullable(clusterTestKit.brokers().get(brokerId))
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
+        }
+
+        private void buildAndFormatCluster() throws Exception {
+            TestKitNodes nodes = new TestKitNodes.Builder()
+                    .setBootstrapMetadataVersion(clusterConfig.metadataVersion())
+                    .setCombined(isCombined)
+                    .setNumBrokerNodes(clusterConfig.numBrokers())
+                    .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())
+                    .setPerBrokerProperties(clusterConfig.perBrokerOverrideProperties())
+                    .setNumControllerNodes(clusterConfig.numControllers()).build();
+            KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
+            if (Boolean.parseBoolean(clusterConfig.serverProperties()
+                    .getOrDefault("zookeeper.metadata.migration.enable", "false"))) {
+                this.embeddedZookeeper = new EmbeddedZookeeper();
+                builder.setConfigProp("zookeeper.connect", String.format("localhost:%d", embeddedZookeeper.port()));
+            }
+            // Copy properties into the TestKit builder
+            clusterConfig.serverProperties().forEach(builder::setConfigProp);
+            // KAFKA-12512 need to pass security protocol and listener name here
+            this.clusterTestKit = builder.build();
+            this.clusterTestKit.format();
         }
 
     }
