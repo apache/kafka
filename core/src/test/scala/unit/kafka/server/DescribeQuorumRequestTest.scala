@@ -33,11 +33,11 @@ import scala.reflect.ClassTag
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(clusterType = Type.KRAFT)
+@ClusterTestDefaults(types = Array(Type.KRAFT))
 @Tag("integration")
 class DescribeQuorumRequestTest(cluster: ClusterInstance) {
 
-  @ClusterTest(clusterType = Type.ZK)
+  @ClusterTest(types = Array(Type.ZK))
   def testDescribeQuorumNotSupportedByZkBrokers(): Unit = {
     val apiRequest = new ApiVersionsRequest.Builder().build()
     val apiResponse =  connectAndReceive[ApiVersionsResponse](apiRequest)

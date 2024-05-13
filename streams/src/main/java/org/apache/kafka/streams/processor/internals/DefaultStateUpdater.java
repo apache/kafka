@@ -44,6 +44,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -51,6 +52,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -147,11 +149,20 @@ public class DefaultStateUpdater implements StateUpdater {
             } catch (final RuntimeException anyOtherException) {
                 handleRuntimeException(anyOtherException);
             } finally {
-                removeAddedTasksFromInputQueue();
-                removeUpdatingAndPausedTasks();
+                clearInputQueue();
+                clearUpdatingAndPausedTasks();
                 updaterMetrics.clear();
                 shutdownGate.countDown();
                 log.info("State updater thread stopped");
+            }
+        }
+
+        private void clearInputQueue() {
+            tasksAndActionsLock.lock();
+            try {
+                tasksAndActions.clear();
+            } finally {
+                tasksAndActionsLock.unlock();
             }
         }
 
@@ -191,14 +202,20 @@ public class DefaultStateUpdater implements StateUpdater {
             tasksAndActionsLock.lock();
             try {
                 for (final TaskAndAction taskAndAction : getTasksAndActions()) {
-                    final Action action = taskAndAction.getAction();
+                    final Action action = taskAndAction.action();
                     switch (action) {
                         case ADD:
-                            addTask(taskAndAction.getTask());
+                            addTask(taskAndAction.task());
                             break;
                         case REMOVE:
-                            removeTask(taskAndAction.getTaskId());
+                            if (taskAndAction.futureForRemove() == null) {
+                                removeTask(taskAndAction.taskId());
+                            } else {
+                                removeTask(taskAndAction.taskId(), taskAndAction.futureForRemove());
+                            }
                             break;
+                        default:
+                            throw new IllegalStateException("Unknown action type " + action);
                     }
                 }
             } finally {
@@ -436,17 +453,10 @@ public class DefaultStateUpdater implements StateUpdater {
                 !isTopologyResumed.get();
         }
 
-        private void removeUpdatingAndPausedTasks() {
-            changelogReader.clear();
-            measureCheckpointLatency(() -> updatingTasks.forEach((id, task) -> {
-                task.maybeCheckpoint(true);
-                removedTasks.add(task);
-            }));
+        private void clearUpdatingAndPausedTasks() {
             updatingTasks.clear();
-            pausedTasks.forEach((id, task) -> {
-                removedTasks.add(task);
-            });
             pausedTasks.clear();
+            changelogReader.clear();
         }
 
         private List<TaskAndAction> getTasksAndActions() {
@@ -493,6 +503,107 @@ public class DefaultStateUpdater implements StateUpdater {
                         changelogReader.transitToUpdateStandby();
                     }
                 }
+            }
+        }
+
+        private void removeTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
+            try {
+                if (!removeUpdatingTask(taskId, future)
+                    && !removePausedTask(taskId, future)
+                    && !removeRestoredTask(taskId, future)
+                    && !removeFailedTask(taskId, future)) {
+
+                    future.complete(null);
+                    log.warn("Task {} could not be removed from the state updater because the state updater does not"
+                        + " own this task.", taskId);
+                }
+            } catch (final StreamsException streamsException) {
+                handleStreamsException(streamsException);
+                future.completeExceptionally(streamsException);
+            } catch (final RuntimeException runtimeException) {
+                handleRuntimeException(runtimeException);
+                future.completeExceptionally(runtimeException);
+            }
+        }
+
+        private boolean removeUpdatingTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
+            if (!updatingTasks.containsKey(taskId)) {
+                return false;
+            }
+            final Task task = updatingTasks.get(taskId);
+            prepareUpdatingTaskForRemoval(task);
+            updatingTasks.remove(taskId);
+            if (task.isActive()) {
+                transitToUpdateStandbysIfOnlyStandbysLeft();
+            }
+            log.info((task.isActive() ? "Active" : "Standby")
+                + " task " + task.id() + " was removed from the updating tasks.");
+            future.complete(new RemovedTaskResult(task));
+            return true;
+        }
+
+        private void prepareUpdatingTaskForRemoval(final Task task) {
+            measureCheckpointLatency(() -> task.maybeCheckpoint(true));
+            final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
+            changelogReader.unregister(changelogPartitions);
+        }
+
+        private boolean removePausedTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
+            if (!pausedTasks.containsKey(taskId)) {
+                return false;
+            }
+            final Task task = pausedTasks.get(taskId);
+            preparePausedTaskForRemoval(task);
+            pausedTasks.remove(taskId);
+            log.info((task.isActive() ? "Active" : "Standby")
+                + " task " + task.id() + " was removed from the paused tasks.");
+            future.complete(new RemovedTaskResult(task));
+            return true;
+        }
+
+        private void preparePausedTaskForRemoval(final Task task) {
+            final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
+            changelogReader.unregister(changelogPartitions);
+        }
+
+        private boolean removeRestoredTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
+            restoredActiveTasksLock.lock();
+            try {
+                final Iterator<StreamTask> iterator = restoredActiveTasks.iterator();
+                while (iterator.hasNext()) {
+                    final StreamTask restoredTask = iterator.next();
+                    if (restoredTask.id().equals(taskId)) {
+                        iterator.remove();
+                        log.info((restoredTask.isActive() ? "Active" : "Standby")
+                            + " task " + restoredTask.id() + " was removed from the restored tasks.");
+                        future.complete(new RemovedTaskResult(restoredTask));
+                        return true;
+                    }
+                }
+                return false;
+            } finally {
+                restoredActiveTasksLock.unlock();
+            }
+        }
+
+        private boolean removeFailedTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
+            exceptionsAndFailedTasksLock.lock();
+            try {
+                final Iterator<ExceptionAndTask> iterator = exceptionsAndFailedTasks.iterator();
+                while (iterator.hasNext()) {
+                    final ExceptionAndTask exceptionAndTask = iterator.next();
+                    final Task failedTask = exceptionAndTask.task();
+                    if (failedTask.id().equals(taskId)) {
+                        iterator.remove();
+                        log.info((failedTask.isActive() ? "Active" : "Standby")
+                            + " task " + failedTask.id() + " was removed from the failed tasks.");
+                        future.complete(new RemovedTaskResult(failedTask, exceptionAndTask.exception()));
+                        return true;
+                    }
+                }
+                return false;
+            } finally {
+                exceptionsAndFailedTasksLock.unlock();
             }
         }
 
@@ -676,9 +787,12 @@ public class DefaultStateUpdater implements StateUpdater {
         this.log = logContext.logger(DefaultStateUpdater.class);
     }
 
-    @Override
     public void start() {
         if (stateUpdaterThread == null) {
+            if (!restoredActiveTasks.isEmpty() || !exceptionsAndFailedTasks.isEmpty()) {
+                throw new IllegalStateException("State updater started with non-empty output queues. "
+                    + BUG_ERROR_MESSAGE);
+            }
             stateUpdaterThread = new StateUpdaterThread(name, metrics, changelogReader);
             stateUpdaterThread.start();
             shutdownGate = new CountDownLatch(1);
@@ -712,23 +826,6 @@ public class DefaultStateUpdater implements StateUpdater {
                 stateUpdaterThread = null;
             } catch (final InterruptedException ignored) {
             }
-        } else {
-            removeAddedTasksFromInputQueue();
-        }
-    }
-
-    private void removeAddedTasksFromInputQueue() {
-        tasksAndActionsLock.lock();
-        try {
-            TaskAndAction taskAndAction;
-            while ((taskAndAction = tasksAndActions.peek()) != null) {
-                if (taskAndAction.getAction() == Action.ADD) {
-                    removedTasks.add(taskAndAction.getTask());
-                }
-                tasksAndActions.poll();
-            }
-        } finally {
-            tasksAndActionsLock.unlock();
         }
     }
 
@@ -752,6 +849,19 @@ public class DefaultStateUpdater implements StateUpdater {
         if (!task.isActive() && task.state() != State.RUNNING) {
             throw new IllegalStateException("Standby task " + task.id() + " is not in state RUNNING. " + BUG_ERROR_MESSAGE);
         }
+    }
+
+    @Override
+    public CompletableFuture<RemovedTaskResult> removeWithFuture(final TaskId taskId) {
+        final CompletableFuture<RemovedTaskResult> future = new CompletableFuture<>();
+        tasksAndActionsLock.lock();
+        try {
+            tasksAndActions.add(TaskAndAction.createRemoveTask(taskId, future));
+            tasksAndActionsCondition.signalAll();
+        } finally {
+            tasksAndActionsLock.unlock();
+        }
+        return future;
     }
 
     @Override
@@ -909,6 +1019,10 @@ public class DefaultStateUpdater implements StateUpdater {
         return stateUpdaterThread.restoreConsumerInstanceId(timeout);
     }
 
+    public boolean isRunning() {
+        return stateUpdaterThread != null && stateUpdaterThread.isRunning.get();
+    }
+
     // used for testing
     boolean isIdle() {
         if (stateUpdaterThread != null) {
@@ -942,8 +1056,8 @@ public class DefaultStateUpdater implements StateUpdater {
         return
             Stream.concat(
                 tasksAndActions.stream()
-                    .filter(taskAndAction -> taskAndAction.getAction() == Action.ADD)
-                    .map(TaskAndAction::getTask),
+                    .filter(taskAndAction -> taskAndAction.action() == Action.ADD)
+                    .map(TaskAndAction::task),
                 Stream.concat(
                     getUpdatingTasks().stream(),
                     Stream.concat(

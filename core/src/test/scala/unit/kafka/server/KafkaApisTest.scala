@@ -29,10 +29,11 @@ import kafka.utils.{CoreUtils, Log4jController, Logging, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
+import org.apache.kafka.common._
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
-import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
@@ -71,15 +72,14 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
-import org.apache.kafka.common._
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.ClientMetricsManager
-import org.apache.kafka.server.config.{ConfigType, Defaults, KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.config._
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
@@ -2823,6 +2823,31 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def requiredAclsNotPresentWriteTxnMarkersThrowsAuthorizationException(): Unit = {
+    // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
+    val topicPartition = new TopicPartition("t", 0)
+    val (_, request) = createWriteTxnMarkersRequest(asList(topicPartition))
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+    val alterActions = Collections.singletonList(new Action(AclOperation.ALTER, clusterResource, 1, true, true))
+    val clusterActions = Collections.singletonList(new Action(AclOperation.CLUSTER_ACTION, clusterResource, 1, true, true))
+    val deniedList = Collections.singletonList(AuthorizationResult.DENIED)
+    when(authorizer.authorize(
+      request.context,
+      alterActions
+    )).thenReturn(deniedList)
+    when(authorizer.authorize(
+      request.context,
+      clusterActions
+    )).thenReturn(deniedList)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+
+    assertThrows(classOf[ClusterAuthorizationException],
+      () => kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching))
+  }
+
+  @Test
   def shouldRespondWithUnsupportedForMessageFormatOnHandleWriteTxnMarkersWhenMagicLowerThanRequired(): Unit = {
     val topicPartition = new TopicPartition("t", 0)
     val (_, request) = createWriteTxnMarkersRequest(asList(topicPartition))
@@ -3036,15 +3061,32 @@ class KafkaApisTest extends Logging {
     assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
   }
 
-  @Test
-  def shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("ALTER", "CLUSTER_ACTION"))
+  def shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion(allowedAclOperation: String): Unit = {
     val topicPartition = new TopicPartition("t", 0)
     val request = createWriteTxnMarkersRequest(asList(topicPartition))._2
     when(replicaManager.getMagic(topicPartition))
       .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
     val requestLocal = RequestLocal.withThreadConfinedCaching
-    kafkaApis = createKafkaApis()
+
+    // Allowing WriteTxnMarkers API with the help of allowedAclOperation parameter.
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+    val allowedAction = Collections.singletonList(new Action(AclOperation.fromString(allowedAclOperation), clusterResource, 1, true, true))
+    val deniedList = Collections.singletonList(AuthorizationResult.DENIED)
+    val allowedList = Collections.singletonList(AuthorizationResult.ALLOWED)
+    when(authorizer.authorize(
+      ArgumentMatchers.eq(request.context),
+      any()
+    )).thenReturn(deniedList)
+    when(authorizer.authorize(
+      request.context,
+      allowedAction
+    )).thenReturn(allowedList)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+
     kafkaApis.handleWriteTxnMarkersRequest(request, requestLocal)
     verify(replicaManager).appendRecords(anyLong,
       anyShort,
@@ -4166,7 +4208,7 @@ class KafkaApisTest extends Logging {
     val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
       fetchMetadata, fetchData, false, false)
     when(fetchManager.newContext(
       any[Short],
@@ -4218,7 +4260,7 @@ class KafkaApisTest extends Logging {
     val fetchDataBuilder = Map(foo.topicPartition -> new FetchRequest.PartitionData(foo.topicId, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
       fetchMetadata, fetchData, true, replicaId >= 0)
     // We expect to have the resolved partition, but we will simulate an unknown one with the fetchContext we return.
     when(fetchManager.newContext(
@@ -4289,7 +4331,7 @@ class KafkaApisTest extends Logging {
     val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(topicId, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
       fetchMetadata, fetchData, true, false)
     when(fetchManager.newContext(
       any[Short],
@@ -5532,7 +5574,7 @@ class KafkaApisTest extends Logging {
     })
 
     val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
       fetchMetadata, fetchData, true, true)
     when(fetchManager.newContext(
       any[Short],
