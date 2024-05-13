@@ -19,7 +19,6 @@ package kafka.zk.migration
 import kafka.api.LeaderAndIsr
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.coordinator.transaction.{ProducerIdManager, ZkProducerIdManager}
-import kafka.server.KafkaConfig
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType, PartitionRecord, ProducerIdsRecord, TopicRecord}
@@ -27,6 +26,7 @@ import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.migration.{KRaftMigrationZkWriter, ZkMigrationLeadershipState}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
@@ -206,7 +206,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     // can claim it. This is because KRaft leadership comes from Raft and we are just synchronizing it to ZK.
     var otherNodeState = ZkMigrationLeadershipState.EMPTY
       .withNewKRaftController(3001, 43)
-      .withKRaftMetadataOffsetAndEpoch(100, 42);
+      .withKRaftMetadataOffsetAndEpoch(100, 42)
     otherNodeState = migrationClient.claimControllerLeadership(otherNodeState)
     assertEquals(2, otherNodeState.zkControllerEpochZkVersion())
     assertEquals(3001, otherNodeState.kraftControllerId())
@@ -330,7 +330,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     val replicas = List(1, 2, 3).map(int2Integer).asJava
     val topicId = Uuid.randomUuid()
     val props = new Properties()
-    props.put(KafkaConfig.DefaultReplicationFactorProp, "1") // normal config
+    props.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "1") // normal config
     props.put(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, SECRET) // sensitive config
 
     //    // Leave Zk in an incomplete state.
@@ -474,7 +474,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     // Read the changed partition with zkClient.
     val topicReplicaAssignmentFromZk = zkClient.getReplicaAssignmentAndTopicIdForTopics(Set("test"))
     assertEquals(1, topicReplicaAssignmentFromZk.size)
-    assertEquals(Some(topicId), topicReplicaAssignmentFromZk.head.topicId);
+    assertEquals(Some(topicId), topicReplicaAssignmentFromZk.head.topicId)
     topicReplicaAssignmentFromZk.head.assignment.foreach { case (tp, assignment) =>
       tp.partition() match {
         case p if p <=1 =>

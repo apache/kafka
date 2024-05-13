@@ -30,7 +30,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -170,7 +169,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
     @Override
     public void configure(final WorkerConfig config) {
         this.statusTopic = config.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG);
-        if (this.statusTopic == null || this.statusTopic.trim().length() == 0)
+        if (this.statusTopic == null || this.statusTopic.trim().isEmpty())
             throw new ConfigException("Must specify topic for connector status.");
 
         sendRetryExecutor = Executors.newSingleThreadExecutor(
@@ -298,7 +297,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
                 if (exception == null) return;
                 // TODO: retry more gracefully and not forever
                 if (exception instanceof RetriableException) {
-                    sendRetryExecutor.submit((Runnable) () -> kafkaLog.send(key, value, this));
+                    sendRetryExecutor.submit(() -> kafkaLog.send(key, value, this));
                 } else {
                     log.error("Failed to write status update", exception);
                 }
@@ -332,7 +331,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
                             return;
                     }
 
-                    sendRetryExecutor.submit((Runnable) () -> kafkaLog.send(key, value, this));
+                    sendRetryExecutor.submit(() -> kafkaLog.send(key, value, this));
                 } else {
                     log.error("Failed to write status update", exception);
                 }
@@ -534,7 +533,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
 
         try {
             int taskNum = Integer.parseInt(parts[parts.length - 1]);
-            String connectorName = Utils.join(Arrays.copyOfRange(parts, 2, parts.length - 1), "-");
+            String connectorName = String.join("-", Arrays.copyOfRange(parts, 2, parts.length - 1));
             return new ConnectorTaskId(connectorName, taskNum);
         } catch (NumberFormatException e) {
             log.warn("Invalid task status key {}", key);

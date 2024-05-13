@@ -29,10 +29,11 @@ import kafka.utils.{CoreUtils, Log4jController, Logging, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
+import org.apache.kafka.common._
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
-import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
@@ -71,13 +72,14 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
-import org.apache.kafka.common._
-import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
-import org.apache.kafka.server.config.{ConfigType, Defaults}
+import org.apache.kafka.server.config._
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
@@ -151,11 +153,11 @@ class KafkaApisTest extends Logging {
                       overrideProperties: Map[String, String] = Map.empty): KafkaApis = {
     val properties = if (raftSupport) {
       val properties = TestUtils.createBrokerConfig(brokerId, "")
-      properties.put(KafkaConfig.NodeIdProp, brokerId.toString)
-      properties.put(KafkaConfig.ProcessRolesProp, "broker")
+      properties.put(KRaftConfigs.NODE_ID_CONFIG, brokerId.toString)
+      properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
       val voterId = brokerId + 1
-      properties.put(KafkaConfig.QuorumVotersProp, s"$voterId@localhost:9093")
-      properties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
+      properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$voterId@localhost:9093")
+      properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
       properties
     } else {
       TestUtils.createBrokerConfig(brokerId, "zk")
@@ -1183,15 +1185,15 @@ class KafkaApisTest extends Logging {
     val topicName =
       coordinatorType match {
         case CoordinatorType.GROUP =>
-          topicConfigOverride.put(KafkaConfig.OffsetsTopicPartitionsProp, numBrokersNeeded.toString)
-          topicConfigOverride.put(KafkaConfig.OffsetsTopicReplicationFactorProp, numBrokersNeeded.toString)
+          topicConfigOverride.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
+          topicConfigOverride.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
           when(groupCoordinator.groupMetadataTopicConfigs).thenReturn(new Properties)
           authorizeResource(authorizer, AclOperation.DESCRIBE, ResourceType.GROUP,
             groupId, AuthorizationResult.ALLOWED)
           Topic.GROUP_METADATA_TOPIC_NAME
         case CoordinatorType.TRANSACTION =>
-          topicConfigOverride.put(KafkaConfig.TransactionsTopicPartitionsProp, numBrokersNeeded.toString)
-          topicConfigOverride.put(KafkaConfig.TransactionsTopicReplicationFactorProp, numBrokersNeeded.toString)
+          topicConfigOverride.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
+          topicConfigOverride.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
           when(txnCoordinator.transactionTopicConfigs).thenReturn(new Properties)
           authorizeResource(authorizer, AclOperation.DESCRIBE, ResourceType.TRANSACTIONAL_ID,
             groupId, AuthorizationResult.ALLOWED)
@@ -1294,19 +1296,19 @@ class KafkaApisTest extends Logging {
     val isInternal =
       topicName match {
         case Topic.GROUP_METADATA_TOPIC_NAME =>
-          topicConfigOverride.put(KafkaConfig.OffsetsTopicPartitionsProp, numBrokersNeeded.toString)
-          topicConfigOverride.put(KafkaConfig.OffsetsTopicReplicationFactorProp, numBrokersNeeded.toString)
+          topicConfigOverride.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
+          topicConfigOverride.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
           when(groupCoordinator.groupMetadataTopicConfigs).thenReturn(new Properties)
           true
 
         case Topic.TRANSACTION_STATE_TOPIC_NAME =>
-          topicConfigOverride.put(KafkaConfig.TransactionsTopicPartitionsProp, numBrokersNeeded.toString)
-          topicConfigOverride.put(KafkaConfig.TransactionsTopicReplicationFactorProp, numBrokersNeeded.toString)
+          topicConfigOverride.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
+          topicConfigOverride.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
           when(txnCoordinator.transactionTopicConfigs).thenReturn(new Properties)
           true
         case _ =>
-          topicConfigOverride.put(KafkaConfig.NumPartitionsProp, numBrokersNeeded.toString)
-          topicConfigOverride.put(KafkaConfig.DefaultReplicationFactorProp, numBrokersNeeded.toString)
+          topicConfigOverride.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, numBrokersNeeded.toString)
+          topicConfigOverride.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
           false
       }
 
@@ -2821,6 +2823,31 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def requiredAclsNotPresentWriteTxnMarkersThrowsAuthorizationException(): Unit = {
+    // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
+    val topicPartition = new TopicPartition("t", 0)
+    val (_, request) = createWriteTxnMarkersRequest(asList(topicPartition))
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+    val alterActions = Collections.singletonList(new Action(AclOperation.ALTER, clusterResource, 1, true, true))
+    val clusterActions = Collections.singletonList(new Action(AclOperation.CLUSTER_ACTION, clusterResource, 1, true, true))
+    val deniedList = Collections.singletonList(AuthorizationResult.DENIED)
+    when(authorizer.authorize(
+      request.context,
+      alterActions
+    )).thenReturn(deniedList)
+    when(authorizer.authorize(
+      request.context,
+      clusterActions
+    )).thenReturn(deniedList)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+
+    assertThrows(classOf[ClusterAuthorizationException],
+      () => kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching))
+  }
+
+  @Test
   def shouldRespondWithUnsupportedForMessageFormatOnHandleWriteTxnMarkersWhenMagicLowerThanRequired(): Unit = {
     val topicPartition = new TopicPartition("t", 0)
     val (_, request) = createWriteTxnMarkersRequest(asList(topicPartition))
@@ -3034,15 +3061,32 @@ class KafkaApisTest extends Logging {
     assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
   }
 
-  @Test
-  def shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("ALTER", "CLUSTER_ACTION"))
+  def shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion(allowedAclOperation: String): Unit = {
     val topicPartition = new TopicPartition("t", 0)
     val request = createWriteTxnMarkersRequest(asList(topicPartition))._2
     when(replicaManager.getMagic(topicPartition))
       .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
     val requestLocal = RequestLocal.withThreadConfinedCaching
-    kafkaApis = createKafkaApis()
+
+    // Allowing WriteTxnMarkers API with the help of allowedAclOperation parameter.
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+    val allowedAction = Collections.singletonList(new Action(AclOperation.fromString(allowedAclOperation), clusterResource, 1, true, true))
+    val deniedList = Collections.singletonList(AuthorizationResult.DENIED)
+    val allowedList = Collections.singletonList(AuthorizationResult.ALLOWED)
+    when(authorizer.authorize(
+      ArgumentMatchers.eq(request.context),
+      any()
+    )).thenReturn(deniedList)
+    when(authorizer.authorize(
+      request.context,
+      allowedAction
+    )).thenReturn(allowedList)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+
     kafkaApis.handleWriteTxnMarkersRequest(request, requestLocal)
     verify(replicaManager).appendRecords(anyLong,
       anyShort,
@@ -3141,7 +3185,7 @@ class KafkaApisTest extends Logging {
       )
     }
     kafkaApis = createKafkaApis(overrideProperties = Map(
-      KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
+      GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true"
     ))
     kafkaApis.handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.NoCaching)
 
@@ -3226,7 +3270,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(Duration.ofMillis(Defaults.REQUEST_TIMEOUT_MS))
     )).thenReturn(FutureUtils.failedFuture[Void](error.exception()))
     kafkaApis = createKafkaApis(overrideProperties = Map(
-      KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
+      GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true"
     ))
     kafkaApis.handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.NoCaching)
 
@@ -4164,7 +4208,7 @@ class KafkaApisTest extends Logging {
     val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
       fetchMetadata, fetchData, false, false)
     when(fetchManager.newContext(
       any[Short],
@@ -4216,7 +4260,7 @@ class KafkaApisTest extends Logging {
     val fetchDataBuilder = Map(foo.topicPartition -> new FetchRequest.PartitionData(foo.topicId, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
       fetchMetadata, fetchData, true, replicaId >= 0)
     // We expect to have the resolved partition, but we will simulate an unknown one with the fetchContext we return.
     when(fetchManager.newContext(
@@ -4287,7 +4331,7 @@ class KafkaApisTest extends Logging {
     val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(topicId, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
       fetchMetadata, fetchData, true, false)
     when(fetchManager.newContext(
       any[Short],
@@ -5530,7 +5574,7 @@ class KafkaApisTest extends Logging {
     })
 
     val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
       fetchMetadata, fetchData, true, true)
     when(fetchManager.newContext(
       any[Short],
@@ -6979,7 +7023,7 @@ class KafkaApisTest extends Logging {
       consumerGroupHeartbeatRequest
     )).thenReturn(future)
     kafkaApis = createKafkaApis(overrideProperties = Map(
-      KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
+      GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true"
     ))
     kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
@@ -7003,7 +7047,7 @@ class KafkaApisTest extends Logging {
       consumerGroupHeartbeatRequest
     )).thenReturn(future)
     kafkaApis = createKafkaApis(overrideProperties = Map(
-      KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
+      GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true"
     ))
     kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
@@ -7023,7 +7067,7 @@ class KafkaApisTest extends Logging {
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
-      overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
+      overrideProperties = Map(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true")
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
@@ -7044,7 +7088,7 @@ class KafkaApisTest extends Logging {
       any[util.List[String]]
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
+      overrideProperties = Map(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true")
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
@@ -7099,7 +7143,7 @@ class KafkaApisTest extends Logging {
     future.complete(List().asJava)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
-      overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
+      overrideProperties = Map(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true")
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
@@ -7119,7 +7163,7 @@ class KafkaApisTest extends Logging {
       any[util.List[String]]
     )).thenReturn(future)
     kafkaApis = createKafkaApis(overrideProperties = Map(
-      KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
+      GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true"
     ))
     kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 

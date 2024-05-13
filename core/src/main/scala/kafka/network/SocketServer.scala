@@ -34,7 +34,6 @@ import kafka.server.{ApiVersionManager, BrokerReconfigurable, KafkaConfig}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import kafka.utils._
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
@@ -46,7 +45,9 @@ import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestContext, Req
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.CredentialProvider
+import org.apache.kafka.server.config.QuotaConfigs
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.FutureUtils
 import org.slf4j.event.Level
@@ -405,12 +406,12 @@ object SocketServer {
   val MetricsGroup = "socket-server-metrics"
 
   val ReconfigurableConfigs: Set[String] = Set(
-    KafkaConfig.MaxConnectionsPerIpProp,
-    KafkaConfig.MaxConnectionsPerIpOverridesProp,
-    KafkaConfig.MaxConnectionsProp,
-    KafkaConfig.MaxConnectionCreationRateProp)
+    SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG,
+    SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG,
+    SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
+    SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG)
 
-  val ListenerReconfigurableConfigs: Set[String] = Set(KafkaConfig.MaxConnectionsProp, KafkaConfig.MaxConnectionCreationRateProp)
+  val ListenerReconfigurableConfigs: Set[String] = Set(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG)
 
   def closeSocket(
     channel: SocketChannel,
@@ -616,7 +617,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private val blockedPercentMeter = metricsGroup.newMeter(blockedPercentMeterMetricName,"blocked time", TimeUnit.NANOSECONDS)
   private var currentProcessorIndex = 0
   private[network] val throttledSockets = new mutable.PriorityQueue[DelayedCloseSocket]()
-  private var started = false
+  private val started = new AtomicBoolean()
   private[network] val startedFuture = new CompletableFuture[Void]()
 
   val thread: KafkaThread = KafkaThread.nonDaemon(
@@ -637,7 +638,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
       debug(s"Starting acceptor thread for listener ${endPoint.listenerName}")
       thread.start()
       startedFuture.complete(null)
-      started = true
+      started.set(true)
     } catch {
       case e: ClosedChannelException =>
         debug(s"Refusing to start acceptor for ${endPoint.listenerName} since the acceptor has already been shut down.")
@@ -674,6 +675,9 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   def close(): Unit = {
     beginShutdown()
     thread.join()
+    if (!started.get) {
+      closeAll()
+    }
     synchronized {
       processors.foreach(_.close())
     }
@@ -699,12 +703,16 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
         }
       }
     } finally {
-      debug("Closing server socket, selector, and any throttled sockets.")
-      CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
-      CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
-      throttledSockets.foreach(throttledSocket => closeSocket(throttledSocket.socket, this))
-      throttledSockets.clear()
+      closeAll()
     }
+  }
+
+  private def closeAll(): Unit = {
+    debug("Closing server socket, selector, and any throttled sockets.")
+    CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
+    CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
+    throttledSockets.foreach(throttledSocket => closeSocket(throttledSocket.socket, this))
+    throttledSockets.clear()
   }
 
   /**
@@ -845,7 +853,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
       listenerProcessors += processor
       requestChannel.addProcessor(processor)
 
-      if (started) {
+      if (started.get) {
         processor.start()
       }
     }
@@ -915,6 +923,7 @@ private[kafka] class Processor(
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val shouldRun: AtomicBoolean = new AtomicBoolean(true)
+  private val started: AtomicBoolean = new AtomicBoolean()
 
   val thread: KafkaThread = KafkaThread.nonDaemon(threadName, this)
 
@@ -1351,7 +1360,11 @@ private[kafka] class Processor(
   private[network] def channel(connectionId: String): Option[KafkaChannel] =
     Option(selector.channel(connectionId))
 
-  def start(): Unit = thread.start()
+  def start(): Unit = {
+    if (!started.getAndSet(true)) {
+      thread.start()
+    }
+  }
 
   /**
    * Wakeup the thread for selection.
@@ -1368,6 +1381,9 @@ private[kafka] class Processor(
     try {
       beginShutdown()
       thread.join()
+      if (!started.get) {
+        CoreUtils.swallow(closeAll(), this, Level.ERROR)
+      }
     } finally {
       metricsGroup.removeMetric("IdlePercent", Map("networkProcessor" -> id.toString).asJava)
       metrics.removeMetric(expiredConnectionsKilledCountMetricName)
@@ -1791,11 +1807,11 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
       val value = maxConnections(configs)
       if (value <= 0)
-        throw new ConfigException(s"Invalid ${KafkaConfig.MaxConnectionsProp} $value")
+        throw new ConfigException(s"Invalid ${SocketServerConfigs.MAX_CONNECTIONS_CONFIG} $value")
 
       val rate = maxConnectionCreationRate(configs)
       if (rate <= 0)
-        throw new ConfigException(s"Invalid ${KafkaConfig.MaxConnectionCreationRateProp} $rate")
+        throw new ConfigException(s"Invalid ${SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG} $rate")
     }
 
     override def reconfigure(configs: util.Map[String, _]): Unit = {
@@ -1813,11 +1829,11 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     }
 
     private def maxConnections(configs: util.Map[String, _]): Int = {
-      Option(configs.get(KafkaConfig.MaxConnectionsProp)).map(_.toString.toInt).getOrElse(Int.MaxValue)
+      Option(configs.get(SocketServerConfigs.MAX_CONNECTIONS_CONFIG)).map(_.toString.toInt).getOrElse(Int.MaxValue)
     }
 
     private def maxConnectionCreationRate(configs: util.Map[String, _]): Int = {
-      Option(configs.get(KafkaConfig.MaxConnectionCreationRateProp)).map(_.toString.toInt).getOrElse(Int.MaxValue)
+      Option(configs.get(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG)).map(_.toString.toInt).getOrElse(Int.MaxValue)
     }
 
     /**

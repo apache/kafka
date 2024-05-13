@@ -74,12 +74,12 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def isUnstableApiEnabled: Boolean = {
-    cluster.config.serverProperties.getProperty("unstable.api.versions.enable") == "true"
+    cluster.config.serverProperties.get("unstable.api.versions.enable") == "true"
   }
 
   protected def isNewGroupCoordinatorEnabled: Boolean = {
-    cluster.config.serverProperties.getProperty("group.coordinator.new.enable") == "true" ||
-      cluster.config.serverProperties.getProperty("group.coordinator.rebalance.protocols").contains("consumer")
+    cluster.config.serverProperties.get("group.coordinator.new.enable") == "true" ||
+      cluster.config.serverProperties.get("group.coordinator.rebalance.protocols").contains("consumer")
   }
 
   protected def commitOffset(

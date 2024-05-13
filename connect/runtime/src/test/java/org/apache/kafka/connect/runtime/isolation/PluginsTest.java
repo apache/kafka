@@ -450,7 +450,7 @@ public class PluginsTest {
     }
 
     @Test
-    public void pluginClassLoaderReadVersionFromResourceExistingOnlyInChild() throws Exception {
+    public void pluginClassLoaderReadVersionFromResourceExistingOnlyInChild() {
         assertClassLoaderReadsVersionFromResource(
                 TestPlugin.ALIASED_STATIC_FIELD,
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V1,
@@ -459,7 +459,7 @@ public class PluginsTest {
     }
 
     @Test
-    public void pluginClassLoaderReadVersionFromResourceExistingOnlyInParent() throws Exception {
+    public void pluginClassLoaderReadVersionFromResourceExistingOnlyInParent() {
         assertClassLoaderReadsVersionFromResource(
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V1,
                 TestPlugin.ALIASED_STATIC_FIELD,
@@ -468,7 +468,7 @@ public class PluginsTest {
     }
 
     @Test
-    public void pluginClassLoaderReadVersionFromResourceExistingInParentAndChild() throws Exception {
+    public void pluginClassLoaderReadVersionFromResourceExistingInParentAndChild() {
         assertClassLoaderReadsVersionFromResource(
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V1,
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V2,
@@ -661,11 +661,6 @@ public class PluginsTest {
     protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {
         converter = (TestConverter) plugins.newConverter(config, configPropName, classLoaderUsage);
         assertNotNull(converter);
-    }
-
-    protected void instantiateAndConfigureHeaderConverter(String configPropName) {
-        headerConverter = (TestHeaderConverter) plugins.newHeaderConverter(config, configPropName, ClassLoaderUsage.CURRENT_CLASSLOADER);
-        assertNotNull(headerConverter);
     }
 
     protected void instantiateAndConfigureInternalConverter(boolean isKey, Map<String, String> config) {

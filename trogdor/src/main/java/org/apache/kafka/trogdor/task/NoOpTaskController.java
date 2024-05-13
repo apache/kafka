@@ -18,13 +18,10 @@
 package org.apache.kafka.trogdor.task;
 
 import org.apache.kafka.trogdor.common.Topology;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 
 public class NoOpTaskController implements TaskController {
-    private static final Logger log = LoggerFactory.getLogger(NoOpTaskController.class);
 
     public NoOpTaskController() {
     }

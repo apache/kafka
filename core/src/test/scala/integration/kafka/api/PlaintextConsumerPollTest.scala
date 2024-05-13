@@ -24,8 +24,8 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import java.time.Duration
 import java.util
 import java.util.stream.Stream
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.Buffer
 
 /**
  * Integration tests for the consumer that covers the poll logic
@@ -248,7 +248,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     val subscriptions = Set(tp, tp2) ++ createTopicAndSendRecords(producer, topic1, 6, 100)
 
     // first subscribe consumers that are defined in this class
-    val consumerPollers = Buffer[ConsumerAssignmentPoller]()
+    val consumerPollers = mutable.Buffer[ConsumerAssignmentPoller]()
     consumerPollers += subscribeConsumerAndStartPolling(createConsumer(), List(topic, topic1))
     consumerPollers += subscribeConsumerAndStartPolling(createConsumer(), List(topic, topic1))
 

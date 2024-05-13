@@ -14,17 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.transaction;
+package org.apache.kafka.streams.processor.assignment;
 
-import java.util.concurrent.TimeUnit;
+import org.apache.kafka.common.protocol.types.Field.UUID;
 
-public class TransactionStateManagerConfig {
-    // Default transaction management config values
-    public static final int DEFAULT_TRANSACTIONS_MAX_TIMEOUT_MS = (int) TimeUnit.MINUTES.toMillis(15);
-    public static final int DEFAULT_TRANSACTIONAL_ID_EXPIRATION_MS = (int) TimeUnit.DAYS.toMillis(7);
-    public static final int DEFAULT_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS = (int) TimeUnit.SECONDS.toMillis(10);
-    public static final int DEFAULT_REMOVE_EXPIRED_TRANSACTIONAL_IDS_INTERVAL_MS = (int) TimeUnit.HOURS.toMillis(1);
+/** A simple wrapper around UUID that abstracts a Process ID */
+public class ProcessId {
 
-    public static final String METRICS_GROUP = "transaction-coordinator-metrics";
-    public static final String LOAD_TIME_SENSOR = "TransactionsPartitionLoadTime";
+    private final UUID id;
+
+    public ProcessId(final UUID id) {
+        this.id = id;
+    }
+
+    /**
+     *
+     * @return the underlying {@code UUID} that this ProcessID is wrapping.
+     */
+    public UUID id() {
+        return id;
+    }
 }

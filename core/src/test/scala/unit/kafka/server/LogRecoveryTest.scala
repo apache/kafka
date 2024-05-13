@@ -16,25 +16,24 @@
 */
 package kafka.server
 
-import java.util.Properties
-
-import scala.collection.Seq
-
-import kafka.utils.TestUtils
-import TestUtils._
-import java.io.File
-
 import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.utils.TestUtils
+import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+
+import java.io.File
+import java.util.Properties
+import scala.collection.Seq
 
 class LogRecoveryTest extends QuorumTestHarness {
 
@@ -44,9 +43,9 @@ class LogRecoveryTest extends QuorumTestHarness {
   val replicaFetchMinBytes = 20
 
   val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
-  overridingProps.put(KafkaConfig.ReplicaFetchWaitMaxMsProp, replicaFetchWaitMaxMs.toString)
-  overridingProps.put(KafkaConfig.ReplicaFetchMinBytesProp, replicaFetchMinBytes.toString)
+  overridingProps.put(ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG, replicaLagTimeMaxMs.toString)
+  overridingProps.put(ReplicationConfigs.REPLICA_FETCH_WAIT_MAX_MS_CONFIG, replicaFetchWaitMaxMs.toString)
+  overridingProps.put(ReplicationConfigs.REPLICA_FETCH_MIN_BYTES_CONFIG, replicaFetchMinBytes.toString)
 
   var configs: Seq[KafkaConfig] = _
   val topic = "new-topic"
@@ -69,7 +68,7 @@ class LogRecoveryTest extends QuorumTestHarness {
 
   // Some tests restart the brokers then produce more data. But since test brokers use random ports, we need
   // to use a new producer that knows the new ports
-  def updateProducer() = {
+  def updateProducer(): Unit = {
     if (producer != null)
       producer.close()
     producer = createProducer(
@@ -252,5 +251,21 @@ class LogRecoveryTest extends QuorumTestHarness {
 
   private def sendMessages(n: Int): Unit = {
     (0 until n).map(_ => producer.send(new ProducerRecord(topic, 0, message))).foreach(_.get)
+  }
+
+  private def getLeaderIdForPartition[B <: KafkaBroker](
+                                                 brokers: Seq[B],
+                                                 tp: TopicPartition,
+                                                 timeout: Long = org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    def leaderExists: Option[Int] = {
+      brokers.find { broker =>
+        broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+      }.map(_.config.brokerId)
+    }
+
+    waitUntilTrue(() => leaderExists.isDefined,
+      s"Did not find a leader for partition $tp after $timeout ms", waitTimeMs = timeout)
+
+    leaderExists.get
   }
 }

@@ -318,7 +318,7 @@ public class SubscriptionStateTest {
         state.assignFromSubscribedAwaitingCallback(Utils.mkSet(tp0, tp1), singleton(tp1));
         assertTrue(state.isFetchable(tp0));
         assertFalse(state.isFetchable(tp1));
-        assertEquals(0, state.initializingPartitions().size());
+        assertEquals(1, state.initializingPartitions().size());
 
         // Callback completed. Added partition be initializing positions and become fetchable when it gets one.
         state.enablePartitionsAwaitingCallback(singleton(tp1));
@@ -334,7 +334,7 @@ public class SubscriptionStateTest {
         assertEquals(singleton(topicPartition.topic()), state.subscription());
 
         assertFalse(state.isFetchable(topicPartition));
-        assertEquals(0, state.initializingPartitions().size());
+        assertEquals(1, state.initializingPartitions().size());
         assertFalse(state.isPaused(topicPartition));
     }
 

@@ -17,10 +17,7 @@
 
 package org.apache.kafka.trogdor.basic;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.common.Platform;
 
@@ -32,7 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import org.junit.jupiter.api.Timeout;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 120)
 public class BasicPlatformTest {
 
     @Test
@@ -58,7 +55,7 @@ public class BasicPlatformTest {
             Platform platform = Platform.Config.parse("bob01", configFile.getPath());
             assertEquals("BasicPlatform", platform.name());
             assertEquals(2, platform.topology().nodes().size());
-            assertEquals("bob01, bob02", Utils.join(platform.topology().nodes().keySet(), ", "));
+            assertEquals("bob01, bob02", String.join(", ", platform.topology().nodes().keySet()));
         } finally {
             Files.delete(configFile.toPath());
         }

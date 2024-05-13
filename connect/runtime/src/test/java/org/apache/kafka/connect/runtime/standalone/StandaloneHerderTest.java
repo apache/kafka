@@ -77,7 +77,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
@@ -749,6 +751,77 @@ public class StandaloneHerderTest {
         assertEquals("bar", capturedConfig.getValue().get("foo"));
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
         verifyNoMoreInteractions(connectorConfigCb);
+    }
+
+    @Test
+    public void testPatchConnectorConfigNotFound() {
+        Map<String, String> connConfigPatch = new HashMap<>();
+        connConfigPatch.put("foo1", "baz1");
+
+        Callback<Herder.Created<ConnectorInfo>> patchCallback = mock(Callback.class);
+        herder.patchConnectorConfig(CONNECTOR_NAME, connConfigPatch, patchCallback);
+
+        ArgumentCaptor<NotFoundException> exceptionCaptor = ArgumentCaptor.forClass(NotFoundException.class);
+        verify(patchCallback).onCompletion(exceptionCaptor.capture(), isNull());
+        assertEquals(exceptionCaptor.getValue().getMessage(), "Connector " + CONNECTOR_NAME + " not found");
+    }
+
+    @Test
+    public void testPatchConnectorConfig() throws ExecutionException, InterruptedException, TimeoutException {
+        // Create the connector.
+        Map<String, String> originalConnConfig = connectorConfig(SourceSink.SOURCE);
+        originalConnConfig.put("foo0", "unaffected");
+        originalConnConfig.put("foo1", "will-be-changed");
+        originalConnConfig.put("foo2", "will-be-removed");
+
+        Map<String, String> connConfigPatch = new HashMap<>();
+        connConfigPatch.put("foo1", "changed");
+        connConfigPatch.put("foo2", null);
+        connConfigPatch.put("foo3", "added");
+
+        Map<String, String> patchedConnConfig = new HashMap<>(originalConnConfig);
+        patchedConnConfig.put("foo0", "unaffected");
+        patchedConnConfig.put("foo1", "changed");
+        patchedConnConfig.remove("foo2");
+        patchedConnConfig.put("foo3", "added");
+
+        expectAdd(SourceSink.SOURCE);
+        expectConfigValidation(SourceSink.SOURCE, originalConnConfig, patchedConnConfig);
+
+        expectConnectorStartingWithoutTasks(originalConnConfig, SourceSink.SOURCE);
+
+        herder.putConnectorConfig(CONNECTOR_NAME, originalConnConfig, false, createCallback);
+        createCallback.get(1000L, TimeUnit.SECONDS);
+
+        expectConnectorStartingWithoutTasks(patchedConnConfig, SourceSink.SOURCE);
+
+        FutureCallback<Herder.Created<ConnectorInfo>> patchCallback = new FutureCallback<>();
+        herder.patchConnectorConfig(CONNECTOR_NAME, connConfigPatch, patchCallback);
+
+        Map<String, String> returnedConfig = patchCallback.get(1000L, TimeUnit.SECONDS).result().config();
+        assertEquals(patchedConnConfig, returnedConfig);
+
+        // Also check the returned config when requested.
+        FutureCallback<Map<String, String>> configCallback = new FutureCallback<>();
+        herder.connectorConfig(CONNECTOR_NAME, configCallback);
+
+        Map<String, String> returnedConfig2 = configCallback.get(1000L, TimeUnit.SECONDS);
+        assertEquals(patchedConnConfig, returnedConfig2);
+    }
+
+    private void expectConnectorStartingWithoutTasks(Map<String, String> config, SourceSink sourceSink) {
+        doNothing().when(worker).stopAndAwaitConnector(CONNECTOR_NAME);
+        final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            onStart.getValue().onCompletion(null, TargetState.STARTED);
+            return true;
+        }).when(worker).startConnector(eq(CONNECTOR_NAME), any(Map.class), any(),
+                eq(herder), eq(TargetState.STARTED), onStart.capture());
+        ConnectorConfig connConfig = sourceSink == SourceSink.SOURCE ?
+                new SourceConnectorConfig(plugins, config, true) :
+                new SinkConnectorConfig(plugins, config);
+        when(worker.connectorTaskConfigs(CONNECTOR_NAME, connConfig))
+                .thenReturn(emptyList());
     }
 
     @Test

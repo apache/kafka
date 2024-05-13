@@ -42,6 +42,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.config.QuotaConfigs;
 import org.apache.kafka.tools.TerseException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Timeout;
@@ -53,6 +54,7 @@ import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
 import java.io.Closeable;
+import java.util.AbstractMap;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -73,11 +75,20 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1;
+import static org.apache.kafka.server.config.QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
+import static org.apache.kafka.server.config.QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_BACKOFF_MS_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_FOLLOWER_THROTTLE;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_LEADER_THROTTLE;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_LOG_DIR_THROTTLE;
+import static org.apache.kafka.tools.ToolsTestUtils.assignThrottledPartitionReplicas;
+import static org.apache.kafka.tools.ToolsTestUtils.throttleAllBrokersReplication;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_THROTTLES;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.cancelAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.executeAssignment;
@@ -123,7 +134,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         // the `AlterPartition` API. In this case, the controller will register individual
         // watches for each reassigning partition so that the reassignment can be
         // completed as soon as the ISR is expanded.
-        Map<String, String> configOverrides = Collections.singletonMap(KafkaConfig.InterBrokerProtocolVersionProp(), IBP_2_7_IV1.version());
+        Map<String, String> configOverrides = singletonMap(INTER_BROKER_PROTOCOL_VERSION_CONFIG, IBP_2_7_IV1.version());
         cluster = new ReassignPartitionsTestCluster(configOverrides, Collections.emptyMap());
         cluster.setup();
         executeAndVerifyReassignment();
@@ -143,7 +154,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         // change notification delay
         ZkAlterPartitionManager.DefaultIsrPropagationConfig_$eq(new IsrChangePropagationConfig(500, 100, 500));
 
-        Map<String, String> oldIbpConfig = Collections.singletonMap(KafkaConfig.InterBrokerProtocolVersionProp(), IBP_2_7_IV1.version());
+        Map<String, String> oldIbpConfig = singletonMap(INTER_BROKER_PROTOCOL_VERSION_CONFIG, IBP_2_7_IV1.version());
         Map<Integer, Map<String, String>> brokerConfigOverrides = new HashMap<>();
         brokerConfigOverrides.put(1, oldIbpConfig);
         brokerConfigOverrides.put(2, oldIbpConfig);
@@ -210,7 +221,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
         // Execute the assignment
         runExecuteAssignment(cluster.adminClient, false, assignment, -1L, -1L);
-        Map<TopicPartition, PartitionReassignmentState> finalAssignment = Collections.singletonMap(part,
+        Map<TopicPartition, PartitionReassignmentState> finalAssignment = singletonMap(part,
             new PartitionReassignmentState(asList(3, 1, 2), asList(3, 1, 2), true));
 
         // Wait for the assignment to complete
@@ -350,13 +361,13 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
         TopicPartition part = new TopicPartition("baz", 2);
         try {
-            consumer.assign(Collections.singleton(part));
+            consumer.assign(singleton(part));
             TestUtils.pollUntilAtLeastNumRecords(consumer, 100, DEFAULT_MAX_WAIT_MS);
         } finally {
             consumer.close();
         }
-        TestUtils.removeReplicationThrottleForPartitions(cluster.adminClient, seq(asList(0, 1, 2, 3)), mutableSet(part).toSet());
-        Map<TopicPartition, PartitionReassignmentState> finalAssignment = Collections.singletonMap(part,
+        removeReplicationThrottleForPartitions(cluster.adminClient, part);
+        Map<TopicPartition, PartitionReassignmentState> finalAssignment = singletonMap(part,
             new PartitionReassignmentState(asList(3, 2, 1), asList(3, 2, 1), true));
         waitForVerifyAssignment(cluster.adminClient, assignment, false,
             new VerifyAssignmentResult(finalAssignment));
@@ -424,12 +435,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             "]}";
 
         // We will throttle replica 4 so that only replica 3 joins the ISR
-        TestUtils.setReplicationThrottleForPartitions(
-            cluster.adminClient,
-            seq(asList(4)),
-            mutableSet(foo0).toSet(),
-            1
-        );
+        setReplicationThrottleForPartitions(cluster.adminClient, foo0);
 
         // Execute the assignment and wait for replica 3 (only) to join the ISR
         runExecuteAssignment(
@@ -446,7 +452,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         );
 
         // Now cancel the assignment and verify that the partition is removed from cancelled replicas
-        assertEquals(new SimpleImmutableEntry<>(Collections.singleton(foo0), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, true));
+        assertEquals(new SimpleImmutableEntry<>(singleton(foo0), Collections.emptySet()), runCancelAssignment(cluster.adminClient, assignment, true));
         verifyReplicaDeleted(foo0, 3);
         verifyReplicaDeleted(foo0, 4);
     }
@@ -470,17 +476,17 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
     private void waitForLogDirThrottle(Set<Integer> throttledBrokers, Long logDirThrottle) {
         Map<String, Long> throttledConfigMap = new HashMap<>();
-        throttledConfigMap.put(BROKER_LEVEL_LEADER_THROTTLE, -1L);
-        throttledConfigMap.put(BROKER_LEVEL_FOLLOWER_THROTTLE, -1L);
-        throttledConfigMap.put(BROKER_LEVEL_LOG_DIR_THROTTLE, logDirThrottle);
+        throttledConfigMap.put(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, -1L);
+        throttledConfigMap.put(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, -1L);
+        throttledConfigMap.put(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, logDirThrottle);
         waitForBrokerThrottles(throttledBrokers, throttledConfigMap);
     }
 
     private void waitForInterBrokerThrottle(List<Integer> throttledBrokers, Long interBrokerThrottle) {
         Map<String, Long> throttledConfigMap = new HashMap<>();
-        throttledConfigMap.put(BROKER_LEVEL_LEADER_THROTTLE, interBrokerThrottle);
-        throttledConfigMap.put(BROKER_LEVEL_FOLLOWER_THROTTLE, interBrokerThrottle);
-        throttledConfigMap.put(BROKER_LEVEL_LOG_DIR_THROTTLE, -1L);
+        throttledConfigMap.put(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, interBrokerThrottle);
+        throttledConfigMap.put(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, interBrokerThrottle);
+        throttledConfigMap.put(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, -1L);
         waitForBrokerThrottles(throttledBrokers, throttledConfigMap);
     }
 
@@ -518,7 +524,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         Map<Integer, Map<String, Long>> results = new HashMap<>();
         for (Integer brokerId : brokerIds) {
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString());
-            Config brokerConfigs = cluster.adminClient.describeConfigs(Collections.singleton(brokerResource)).values()
+            Config brokerConfigs = cluster.adminClient.describeConfigs(singleton(brokerResource)).values()
                 .get(brokerResource)
                 .get();
 
@@ -556,27 +562,27 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
         // Check the output of --verify
         waitForVerifyAssignment(cluster.adminClient, reassignment.json, true,
-            new VerifyAssignmentResult(Collections.singletonMap(
+            new VerifyAssignmentResult(singletonMap(
                 topicPartition, new PartitionReassignmentState(asList(0, 1, 2), asList(0, 1, 2), true)
-            ), false, Collections.singletonMap(
+            ), false, singletonMap(
                 new TopicPartitionReplica(topicPartition.topic(), topicPartition.partition(), 0),
                 new ActiveMoveState(reassignment.currentDir, reassignment.targetDir, reassignment.targetDir)
             ), true));
-        waitForLogDirThrottle(Collections.singleton(0), logDirThrottle);
+        waitForLogDirThrottle(singleton(0), logDirThrottle);
 
         // Remove the throttle
-        cluster.adminClient.incrementalAlterConfigs(Collections.singletonMap(
+        cluster.adminClient.incrementalAlterConfigs(singletonMap(
                 new ConfigResource(ConfigResource.Type.BROKER, "0"),
-                Collections.singletonList(new AlterConfigOp(
-                    new ConfigEntry(BROKER_LEVEL_LOG_DIR_THROTTLE, ""), AlterConfigOp.OpType.DELETE))))
+                singletonList(new AlterConfigOp(
+                    new ConfigEntry(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, ""), AlterConfigOp.OpType.DELETE))))
             .all().get();
         waitForBrokerLevelThrottles(unthrottledBrokerConfigs);
 
         // Wait for the directory movement to complete.
         waitForVerifyAssignment(cluster.adminClient, reassignment.json, true,
-            new VerifyAssignmentResult(Collections.singletonMap(
+            new VerifyAssignmentResult(singletonMap(
                 topicPartition, new PartitionReassignmentState(asList(0, 1, 2), asList(0, 1, 2), true)
-            ), false, Collections.singletonMap(
+            ), false, singletonMap(
                 new TopicPartitionReplica(topicPartition.topic(), topicPartition.partition(), 0),
                 new CompletedMoveState(reassignment.targetDir)
             ), false));
@@ -602,18 +608,18 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         long initialLogDirThrottle = 1L;
         runExecuteAssignment(cluster.adminClient, false, reassignment.json,
             -1L, initialLogDirThrottle);
-        waitForLogDirThrottle(new HashSet<>(Collections.singletonList(0)), initialLogDirThrottle);
+        waitForLogDirThrottle(new HashSet<>(singletonList(0)), initialLogDirThrottle);
 
         // Now increase the throttle and verify that the log dir movement completes
         long updatedLogDirThrottle = 3000000L;
         runExecuteAssignment(cluster.adminClient, true, reassignment.json,
             -1L, updatedLogDirThrottle);
-        waitForLogDirThrottle(Collections.singleton(0), updatedLogDirThrottle);
+        waitForLogDirThrottle(singleton(0), updatedLogDirThrottle);
 
         waitForVerifyAssignment(cluster.adminClient, reassignment.json, true,
-            new VerifyAssignmentResult(Collections.singletonMap(
+            new VerifyAssignmentResult(singletonMap(
                 topicPartition, new PartitionReassignmentState(asList(0, 1, 2), asList(0, 1, 2), true)
-            ), false, Collections.singletonMap(
+            ), false, singletonMap(
                 new TopicPartitionReplica(topicPartition.topic(), topicPartition.partition(), targetBrokerId),
                 new CompletedMoveState(reassignment.targetDir)
             ), false));
@@ -794,10 +800,10 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
                     (short) 1,
                     false);
                 // shorter backoff to reduce test durations when no active partitions are eligible for fetching due to throttling
-                config.setProperty(KafkaConfig.ReplicaFetchBackoffMsProp(), "100");
+                config.setProperty(REPLICA_FETCH_BACKOFF_MS_CONFIG, "100");
                 // Don't move partition leaders automatically.
-                config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp(), "false");
-                config.setProperty(KafkaConfig.ReplicaLagTimeMaxMsProp(), "1000");
+                config.setProperty(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, "false");
+                config.setProperty(REPLICA_LAG_TIME_MAX_MS_CONFIG, "1000");
                 configOverrides.forEach(config::setProperty);
                 brokerConfigOverrides.getOrDefault(brokerId, Collections.emptyMap()).forEach(config::setProperty);
 
@@ -820,7 +826,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
             TestUtils.waitUntilBrokerMetadataIsPropagated(seq(servers), DEFAULT_MAX_WAIT_MS);
             brokerList = TestUtils.plaintextBootstrapServers(seq(servers));
 
-            adminClient = Admin.create(Collections.singletonMap(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList));
+            adminClient = Admin.create(singletonMap(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList));
 
             adminClient.createTopics(topics.entrySet().stream().map(e -> {
                 Map<Integer, List<Integer>> partMap = new HashMap<>();
@@ -872,5 +878,53 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     @SuppressWarnings({"deprecation"})
     private static <T> Seq<T> seq(Collection<T> seq) {
         return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
+    }
+
+    /**
+     * Remove a set of throttled partitions and reset the overall replication quota.
+     */
+    private void removeReplicationThrottleForPartitions(Admin admin, TopicPartition part) {
+        try {
+            removePartitionReplicaThrottles(admin, new HashSet<>(singleton(part)));
+            throttleAllBrokersReplication(admin, asList(0, 1, 2, 3), Integer.MAX_VALUE);
+        } catch (ExecutionException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void removePartitionReplicaThrottles(Admin adminClient, Set<TopicPartition> partitions) {
+        Map<ConfigResource, Collection<AlterConfigOp>> throttles = partitions.stream()
+            .map(tp -> {
+                ConfigResource resource = new ConfigResource(TOPIC, tp.topic());
+                return new AbstractMap.SimpleEntry<>(
+                    resource,
+                    asList(
+                        new AlterConfigOp(new ConfigEntry(LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
+                                AlterConfigOp.OpType.DELETE),
+                        new AlterConfigOp(new ConfigEntry(FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
+                                AlterConfigOp.OpType.DELETE)
+                    )
+                );
+            })
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        try {
+            adminClient.incrementalAlterConfigs(throttles).all().get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Set broker replication quotas and enable throttling for a set of partitions. This
+     * will override any previous replication quotas, but will leave the throttling status
+     * of other partitions unaffected.
+     */
+    private void setReplicationThrottleForPartitions(Admin admin, TopicPartition topicPartition) {
+        try {
+            throttleAllBrokersReplication(admin, singletonList(4), 1);
+            assignThrottledPartitionReplicas(admin, singletonMap(topicPartition, singletonList(4)));
+        } catch (ExecutionException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

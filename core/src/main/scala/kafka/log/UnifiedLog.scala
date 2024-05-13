@@ -1177,6 +1177,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       validBytesCount += batchSize
 
       val batchCompression = CompressionType.forId(batch.compressionType.id)
+      // sourceCompression is only used on the leader path, which only contains one batch if version is v2 or messages are compressed
       if (batchCompression != CompressionType.NONE)
         sourceCompression = batchCompression
     }
@@ -1531,10 +1532,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           }
         }
         localLog.checkIfMemoryMappedBufferClosed()
-        // remove the segments for lookups
-        localLog.removeAndDeleteSegments(segmentsToDelete, asyncDelete = true, reason)
+        if (segmentsToDelete.nonEmpty) {
+          // increment the local-log-start-offset or log-start-offset before removing the segment for lookups
+          val newLocalLogStartOffset = localLog.segments.higherSegment(segmentsToDelete.last.baseOffset()).get.baseOffset()
+          incrementStartOffset(newLocalLogStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
+          // remove the segments for lookups
+          localLog.removeAndDeleteSegments(segmentsToDelete, asyncDelete = true, reason)
+        }
         deleteProducerSnapshots(deletable, asyncDelete = true)
-        incrementStartOffset(localLog.segments.firstSegmentBaseOffset.getAsLong, LogStartOffsetIncrementReason.SegmentDeletion)
       }
       numToDelete
     }

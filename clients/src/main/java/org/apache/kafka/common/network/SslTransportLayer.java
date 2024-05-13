@@ -682,7 +682,7 @@ public class SslTransportLayer implements TransportLayer {
 
         int totalRead = 0;
         int i = offset;
-        while (i < length) {
+        while (i < offset + length) {
             if (dsts[i].hasRemaining()) {
                 int read = read(dsts[i]);
                 if (read > 0)
@@ -755,7 +755,7 @@ public class SslTransportLayer implements TransportLayer {
             throw new IndexOutOfBoundsException();
         int totalWritten = 0;
         int i = offset;
-        while (i < length) {
+        while (i < offset + length) {
             if (srcs[i].hasRemaining() || hasPendingWrites()) {
                 int written = write(srcs[i]);
                 if (written > 0) {
@@ -886,7 +886,7 @@ public class SslTransportLayer implements TransportLayer {
      * retries and report the failure. If `flush` is true, exceptions are propagated after
      * any pending outgoing bytes are flushed to ensure that the peer is notified of the failure.
      */
-    private void handshakeFailure(SSLException sslException, boolean flush) throws IOException {
+    private void handshakeFailure(SSLException sslException, boolean flush) {
         //Release all resources such as internal buffers that SSLEngine is managing
         log.debug("SSL Handshake failed", sslException);
         sslEngine.closeOutbound();

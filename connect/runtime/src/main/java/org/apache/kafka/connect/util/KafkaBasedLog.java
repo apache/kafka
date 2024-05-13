@@ -251,7 +251,7 @@ public class KafkaBasedLog<K, V> {
             throw new ConnectException(
                     "Must provide a TopicAdmin to KafkaBasedLog when consumer is configured with "
                             + ConsumerConfig.ISOLATION_LEVEL_CONFIG + " set to "
-                            + IsolationLevel.READ_COMMITTED.toString()
+                            + IsolationLevel.READ_COMMITTED
             );
         }
         initializer.accept(admin);
