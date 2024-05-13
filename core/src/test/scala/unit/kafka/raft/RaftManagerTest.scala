@@ -31,7 +31,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs,ReplicationConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.ProcessRole
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -39,6 +39,8 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.apache.kafka.server.fault.FaultHandler
 import org.mockito.Mockito._
+
+import scala.util.Using
 
 
 class RaftManagerTest {
@@ -304,7 +306,7 @@ class RaftManagerTest {
   }
 
   private def fileLocked(path: Path): Boolean = {
-    TestUtils.resource(FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) { channel =>
+    Using.resource(FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) { channel =>
       try {
         Option(channel.tryLock()).foreach(_.close())
         false

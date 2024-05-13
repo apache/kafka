@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -117,6 +118,11 @@ public class TargetAssignmentBuilder {
     private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
 
     /**
+     * The subscription type of the consumer group.
+     */
+    private SubscriptionType subscriptionType;
+
+    /**
      * The existing target assignment.
      */
     private Map<String, Assignment> targetAssignment = Collections.emptyMap();
@@ -185,6 +191,19 @@ public class TargetAssignmentBuilder {
         Map<String, TopicMetadata> subscriptionMetadata
     ) {
         this.subscriptionMetadata = subscriptionMetadata;
+        return this;
+    }
+
+    /**
+     * Adds the subscription type in use.
+     *
+     * @param subscriptionType  Subscription type of the group.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withSubscriptionType(
+        SubscriptionType subscriptionType
+    ) {
+        this.subscriptionType = subscriptionType;
         return this;
     }
 
@@ -281,7 +300,7 @@ public class TargetAssignmentBuilder {
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
-            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs)),
+            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs), subscriptionType),
             new SubscribedTopicMetadata(topicMetadataMap)
         );
 
