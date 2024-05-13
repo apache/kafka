@@ -134,7 +134,7 @@ object StorageTool extends Logging {
     try {
       for (feature <- allFeaturesAndLevels) {
         // In order to validate, we need all feature versions set.
-        feature.validateVersion(feature.featureLevel, metadataVersion, featuresMap)
+        FeatureVersion.validateVersion(feature, metadataVersion, featuresMap)
         // Only set feature records for levels greater than 0. 0 is assumed if there is no record.
         if (feature.featureLevel > 0) {
           records += new ApiMessageAndVersion(new FeatureLevelRecord().

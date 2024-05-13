@@ -24,23 +24,13 @@ import java.util.stream.Collectors;
 public interface FeatureVersionUtils {
 
     interface FeatureVersionImpl {
-        /**
-         * A method to be implemented by each feature. If a given feature relies on another feature, the dependencies should be
-         * captured here.
-         *
-         * For example, say feature X level x relies on feature Y level y:
-         * if feature X >= x then throw an error if feature Y < y.
-         *
-         * All feature levels above 0 require metadata.version=4 (IBP_3_3_IV0) in order to write the feature records to the cluster.
-         *
-         * @param metadataVersion the metadata version we have (or want to se)
-         * @param features        the feature versions (besides MetadataVersion) we have (or want to set)
-         */
-        void validateVersion(short featureLevel, MetadataVersion metadataVersion, Map<String, Short> features);
-
         short featureLevel();
 
         String featureName();
+
+        MetadataVersion metadataVersionMapping();
+
+        Map<String, Short> dependencies();
 
         static Map<String, Short> featureImplsToMap(List<FeatureVersionImpl> features) {
             return features.stream().collect(Collectors.toMap(FeatureVersionImpl::featureName, FeatureVersionImpl::featureLevel));

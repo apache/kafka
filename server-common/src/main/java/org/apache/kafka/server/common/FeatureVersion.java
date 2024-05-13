@@ -17,7 +17,9 @@
 package org.apache.kafka.server.common;
 
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -38,21 +40,22 @@ public enum FeatureVersion {
      *
      * See {@link TestFeatureVersion} as an example.
      */
-    TEST_VERSION("test.feature.version", TestFeatureVersion::defaultValue, TestFeatureVersion::fromFeatureLevel, false);
+    TEST_VERSION("test.feature.version", TestFeatureVersion.values(), TestFeatureVersion::fromFeatureLevel, false);
 
     public static final FeatureVersion[] FEATURES;
     public static final List<FeatureVersion> PRODUCTION_FEATURES;
     private final String name;
-    private final FeatureVersionUtils.DefaultValueMethod defaultValueMethod;
+
+    private FeatureVersionUtils.FeatureVersionImpl[] features;
     private final FeatureVersionUtils.CreateMethod createFeatureVersionMethod;
     private final boolean usedInProduction;
 
     FeatureVersion(String name,
-                   FeatureVersionUtils.DefaultValueMethod defaultValueMethod,
+                   FeatureVersionUtils.FeatureVersionImpl[] features,
                    FeatureVersionUtils.CreateMethod createMethod,
                    boolean usedInProduction) {
         this.name = name;
-        this.defaultValueMethod = defaultValueMethod;
+        this.features = features;
         this.createFeatureVersionMethod = createMethod;
         this.usedInProduction = usedInProduction;
     }
@@ -73,7 +76,44 @@ public enum FeatureVersion {
         return createFeatureVersionMethod.fromFeatureLevel(level);
     }
 
+    /**
+     * A method to be implemented by each feature. If a given feature relies on another feature, the dependencies should be
+     * captured here.
+     *
+     * For example, say feature X level x relies on feature Y level y:
+     * if feature X >= x then throw an error if feature Y < y.
+     *
+     * All feature levels above 0 require metadata.version=4 (IBP_3_3_IV0) in order to write the feature records to the cluster.
+     *
+     * @param metadataVersion the metadata version we have (or want to se)
+     * @param features        the feature versions (besides MetadataVersion) we have (or want to set)
+     */
+    public static void validateVersion(FeatureVersionUtils.FeatureVersionImpl feature, MetadataVersion metadataVersion, Map<String, Short> features) {
+        if (feature.featureLevel() >= 1 && metadataVersion.isLessThan(MetadataVersion.IBP_3_3_IV0))
+            throw new IllegalArgumentException(feature.featureName() + " could not be set to " + feature.featureLevel() +
+                    " because it depends on metadata.version=14 (" + MetadataVersion.IBP_3_3_IV0 + ")");
+
+        for (Map.Entry<String, Short> dependency: feature.dependencies().entrySet()) {
+            Short featureLevel = features.get(dependency.getKey());
+
+            if (featureLevel == null || featureLevel < dependency.getValue()) {
+                throw new IllegalArgumentException(feature.featureName() + " could not be set to " + feature.featureLevel() +
+                        " because it depends on " + dependency.getKey() + " level " + dependency.getValue());
+            }
+        }
+    }
+
     public short defaultValue(Optional<MetadataVersion> metadataVersionOpt) {
-        return defaultValueMethod.defaultValue(metadataVersionOpt.orElse(MetadataVersion.LATEST_PRODUCTION));
+        MetadataVersion mv = metadataVersionOpt.orElse(MetadataVersion.LATEST_PRODUCTION);
+        short level = 0;
+
+        for (Iterator<FeatureVersionUtils.FeatureVersionImpl> it = Arrays.stream(features).iterator(); it.hasNext(); ) {
+            FeatureVersionUtils.FeatureVersionImpl feature = it.next();
+            if (feature.metadataVersionMapping().isLessThan(mv))
+                level = feature.featureLevel();
+            else
+                return level;
+        }
+        return level;
     }
 }

@@ -16,21 +16,26 @@
  */
 package org.apache.kafka.server.common;
 
+import java.util.Collections;
 import java.util.Map;
 
 public enum TestFeatureVersion implements FeatureVersionUtils.FeatureVersionImpl {
 
-    TEST_0(0),
-    TEST_1(1),
-    TEST_2(2);
+    TEST_0(0, MetadataVersion.IBP_3_3_IV0, Collections.emptyMap()),
+    TEST_1(1, MetadataVersion.IBP_3_7_IV0, Collections.emptyMap()),
+    TEST_2(2, MetadataVersion.IBP_3_8_IV0, Collections.emptyMap());
 
     private short featureLevel;
+    private MetadataVersion metadataVersionMapping;
+    private Map<String, Short> dependencies;
 
     public static final String FEATURE_NAME = "test.feature.version";
     public static final TestFeatureVersion PRODUCTION_VERSION = TEST_1;
 
-    TestFeatureVersion(int featureLevel) {
+    TestFeatureVersion(int featureLevel, MetadataVersion metadataVersionMapping, Map<String, Short> dependencies) {
         this.featureLevel = (short) featureLevel;
+        this.metadataVersionMapping = metadataVersionMapping;
+        this.dependencies = dependencies;
     }
 
     public short featureLevel() {
@@ -41,22 +46,12 @@ public enum TestFeatureVersion implements FeatureVersionUtils.FeatureVersionImpl
         return FEATURE_NAME;
     }
 
-    public void validateVersion(short featureLevel, MetadataVersion metadataVersion, Map<String, Short> features) {
-        // Ensure version of feature exists
-        TestFeatureVersion.fromFeatureLevel(featureLevel);
-
-        // version 1 depends on metadata.version 3.3-IVO
-        if (featureLevel >= 1 && metadataVersion.isLessThan(MetadataVersion.IBP_3_3_IV0))
-            throw new IllegalArgumentException(FEATURE_NAME + " could not be set to " + featureLevel +
-                    " because it depends on metadata.version=14 (" + MetadataVersion.IBP_3_3_IV0 + ")");
+    public MetadataVersion metadataVersionMapping() {
+        return metadataVersionMapping;
     }
 
-    public static short defaultValue(MetadataVersion metadataVersion) {
-        if (metadataVersion.isLessThan(MetadataVersion.IBP_3_8_IV0)) {
-            return TEST_0.featureLevel;
-        } else {
-            return TEST_1.featureLevel;
-        }
+    public Map<String, Short> dependencies() {
+        return dependencies;
     }
 
     public static TestFeatureVersion fromFeatureLevel(short level) {
