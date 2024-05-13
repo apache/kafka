@@ -23,7 +23,7 @@ import kafka.test.junit.ZkClusterInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
 import java.util.List;
-import java.util.ArrayList;
+import java.util.Collections;
 
 /**
  * The type of cluster config being requested. Used by {@link kafka.test.ClusterConfig} and the test annotations.
@@ -32,25 +32,19 @@ public enum Type {
     KRAFT {
         @Override
         public List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config) {
-            List<TestTemplateInvocationContext> ret = new ArrayList<>();
-            ret.add(new RaftClusterInvocationContext(baseDisplayName, config, false));
-            return ret;
+            return Collections.singletonList(new RaftClusterInvocationContext(baseDisplayName, config, false));
         }
     },
     CO_KRAFT {
         @Override
         public List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config) {
-            List<TestTemplateInvocationContext> ret = new ArrayList<>();
-            ret.add(new RaftClusterInvocationContext(baseDisplayName, config, true));
-            return ret;
+            return Collections.singletonList(new RaftClusterInvocationContext(baseDisplayName, config, true));
         }
     },
     ZK {
         @Override
         public List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config) {
-            List<TestTemplateInvocationContext> ret = new ArrayList<>();
-            ret.add(new ZkClusterInvocationContext(baseDisplayName, config));
-            return ret;
+            return Collections.singletonList(new ZkClusterInvocationContext(baseDisplayName, config));
         }
     };
 
