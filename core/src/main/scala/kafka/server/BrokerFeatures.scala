@@ -86,7 +86,7 @@ object BrokerFeatures extends Logging {
             MetadataVersion.latestProduction.featureLevel
           }))
       FeatureVersion.PRODUCTION_FEATURES.forEach { feature =>
-        features.put(feature.featureName, new SupportedVersionRange(0, feature.defaultValue(Optional.empty)))
+        features.put(feature.featureName, new SupportedVersionRange(0, feature.defaultValue(Optional.empty())))
       }
     Features.supportedFeatures(features)
   }
