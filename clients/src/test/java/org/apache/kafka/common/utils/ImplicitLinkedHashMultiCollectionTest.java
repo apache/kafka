@@ -116,8 +116,6 @@ public class ImplicitLinkedHashMultiCollectionTest {
         };
         for (TestElement testElement : testElements) {
             assertTrue(multiSet.add(testElement));
-        }
-        for (TestElement testElement : testElements) {
             assertFalse(multiSet.add(testElement));
         }
         assertEquals(23, multiSet.numSlots());

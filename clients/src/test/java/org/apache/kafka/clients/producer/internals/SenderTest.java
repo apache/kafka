@@ -516,7 +516,7 @@ public class SenderTest {
         sender.runOnce();  // We should try to flush the batch, but we expire it instead without sending anything.
         assertEquals(messagesPerBatch, expiryCallbackCount.get(), "Callbacks not invoked for expiry");
         assertNull(unexpectedException.get(), "Unexpected exception");
-        // Make sure that the reconds were appended back to the batch.
+        // Make sure that the records were appended back to the batch.
         assertNotNull(accumulator.getDeque(tp1));
         assertEquals(1, accumulator.getDeque(tp1).size());
         assertEquals(messagesPerBatch, accumulator.getDeque(tp1).peekFirst().recordCount);
@@ -2308,7 +2308,7 @@ public class SenderTest {
         sender.runOnce();  // receive response
         assertTrue(responseFuture.isDone());
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
-        assertEquals(1L, (long) transactionManager.sequenceNumber(tp0));
+        assertEquals(1L, transactionManager.sequenceNumber(tp0));
     }
 
     @Test
@@ -2471,7 +2471,7 @@ public class SenderTest {
             assertEquals(OptionalInt.of(0), txnManager.lastAckedSequence(tp), "The last ack'd sequence number should be 0");
             assertFalse(f2.isDone(), "The future shouldn't have been done.");
             assertEquals(0L, f1.get().offset(), "Offset of the first message should be 0");
-            sender.runOnce(); // send the seconcd produce request
+            sender.runOnce(); // send the second produce request
             id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
             node = new Node(Integer.parseInt(id), "localhost", 0);
@@ -3150,7 +3150,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testTransactionAbortablenExceptionIsAnAbortableError() throws Exception {
+    public void testTransactionAbortableExceptionIsAnAbortableError() throws Exception {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
         TransactionManager txnManager = new TransactionManager(logContext, "textTransactionAbortableException", 60000, 100, apiVersions);
@@ -3231,7 +3231,7 @@ public class SenderTest {
             assertTrue(client.hasInFlightRequests());
             client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, 0));
             sender.runOnce(); // receive produce response, batch scheduled for retry
-            assertFalse(futureIsProduced.isDone(), "Produce request is yet not done.");
+            assertFalse(futureIsProduced.isDone(), "Produce request should not be done.");
 
             // TEST that as new-leader(with epochA) is discovered, the batch is retried immediately i.e. skips any backoff period.
             // Update leader epoch for tp0
@@ -3252,7 +3252,7 @@ public class SenderTest {
             assertTrue(client.hasInFlightRequests());
             client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, 0));
             sender.runOnce(); // receive produce response, schedule batch for retry.
-            assertFalse(futureIsProduced.isDone(), "Produce request is yet not done.");
+            assertFalse(futureIsProduced.isDone(), "Produce request should not be done.");
 
             // TEST that a subsequent retry to the same leader(epochA) waits the backoff period.
             sender.runOnce(); //send produce request
@@ -3491,7 +3491,7 @@ public class SenderTest {
         assertEquals(expectedMessage, e1.getCause().getMessage());
     }
 
-    static class AssertEndTxnRequestMatcher implements MockClient.RequestMatcher {
+    private static class AssertEndTxnRequestMatcher implements MockClient.RequestMatcher {
 
         private final TransactionResult requiredResult;
         private boolean matched = false;

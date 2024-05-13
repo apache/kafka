@@ -67,13 +67,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.assertOptional;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -1321,22 +1321,14 @@ public class MetadataTest {
                     metadata.updateWithCurrentRequestVersion(newMetadataResponse, true, time.milliseconds());
                     atleastMetadataUpdatedOnceLatch.countDown();
                 } else { // Thread to read metadata snapshot, once its updated
-                    try {
-                        if (!atleastMetadataUpdatedOnceLatch.await(5, TimeUnit.MINUTES)) {
-                            fail("Test had to wait more than 5 minutes, something went wrong.");
-                        }
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
+                    assertTrue(assertDoesNotThrow(() -> atleastMetadataUpdatedOnceLatch.await(5, TimeUnit.MINUTES)));
                     newSnapshot.set(metadata.fetchMetadataSnapshot());
                     newCluster.set(metadata.fetch());
                 }
                 allThreadsDoneLatch.countDown();
             });
         }
-        if (!allThreadsDoneLatch.await(5, TimeUnit.MINUTES)) {
-            fail("Test had to wait more than 5 minutes, something went wrong.");
-        }
+        assertTrue(allThreadsDoneLatch.await(5, TimeUnit.MINUTES));
 
         // Validate new snapshot is upto-date. And has higher partition counts, nodes & leader epoch than earlier.
         {

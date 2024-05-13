@@ -76,7 +76,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("ClassDataAbstractionCoupling")
 public class ConsumerNetworkThreadTest {
 
     private ConsumerTestBuilder.ConsumerNetworkThreadTestBuilder testBuilder;
@@ -103,8 +102,6 @@ public class ConsumerNetworkThreadTest {
         commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
         offsetsRequestManager = testBuilder.offsetsRequestManager;
         coordinatorRequestManager = testBuilder.coordinatorRequestManager.orElseThrow(IllegalStateException::new);
-        HeartbeatRequestManager heartbeatRequestManager = testBuilder.heartbeatRequestManager.orElseThrow(IllegalStateException::new);
-        MembershipManager membershipManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
         consumerNetworkThread = testBuilder.consumerNetworkThread;
         consumerNetworkThread.initializeResources();
     }

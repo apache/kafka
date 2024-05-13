@@ -219,11 +219,7 @@ public class RecordHeadersTest {
     }
 
     private int getCount(Headers headers) {
-        int count = 0;
-        for (Header ignore : headers) {
-            count++;
-        }
-        return count;
+        return headers.toArray().length;
     }
     
     static void assertHeader(String key, String value, Header actual) {
