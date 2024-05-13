@@ -43,28 +43,28 @@ public class KafkaStreamsStateImpl implements KafkaStreamsState {
     private final ProcessId processId;
     private final int numProcessingThreads;
     private final Map<String, String> clientTags;
-    private final Map<TaskId, Long> taskLagTotals; // contains lag for all stateful tasks in the app topology
     private final SortedSet<TaskId> previousActiveTasks;
     private final SortedSet<TaskId> previousStandbyTasks;
     private final SortedMap<String, Set<TaskId>> taskIdsByConsumer;
     private final Optional<HostInfo> hostInfo;
+    private final Optional<Map<TaskId, Long>> taskLagTotals; // contains lag for all stateful tasks in the app topology
 
     public KafkaStreamsStateImpl(final ProcessId processId,
                                  final int numProcessingThreads,
                                  final Map<String, String> clientTags,
-                                 final Map<TaskId, Long> taskLagTotals,
                                  final SortedSet<TaskId> previousActiveTasks,
                                  final SortedSet<TaskId> previousStandbyTasks,
                                  final SortedMap<String, Set<TaskId>> taskIdsByConsumer,
-                                 final Optional<HostInfo> hostInfo) {
+                                 final Optional<HostInfo> hostInfo,
+                                 final Optional<Map<TaskId, Long>> taskLagTotals) {
         this.processId = processId;
         this.numProcessingThreads = numProcessingThreads;
         this.clientTags = unmodifiableMap(clientTags);
-        this.taskLagTotals = unmodifiableMap(taskLagTotals);
         this.previousActiveTasks = unmodifiableSortedSet(previousActiveTasks);
         this.previousStandbyTasks = unmodifiableSortedSet(previousStandbyTasks);
         this.taskIdsByConsumer = unmodifiableSortedMap(taskIdsByConsumer);
         this.hostInfo = hostInfo;
+        this.taskLagTotals = taskLagTotals;
     }
 
     @Override
@@ -94,10 +94,15 @@ public class KafkaStreamsStateImpl implements KafkaStreamsState {
 
     @Override
     public long lagFor(final TaskId task) {
-        final Long totalLag = taskLagTotals.get(task);
+        if (!taskLagTotals.isPresent()) {
+            LOG.error("lagFor was called on a KafkaStreamsState {} that does not support lag computations.", processId);
+            throw new UnsupportedOperationException("Lag computation was not requested for KafkaStreamsState with process " + processId);
+        }
+
+        final Long totalLag = taskLagTotals.get().get(task);
         if (totalLag == null) {
             LOG.error("Task lag lookup failed: {} not in {}", task,
-                Arrays.toString(taskLagTotals.keySet().toArray()));
+                Arrays.toString(taskLagTotals.get().keySet().toArray()));
             throw new IllegalStateException("Tried to lookup lag for unknown task " + task);
         }
         return totalLag;
@@ -105,12 +110,17 @@ public class KafkaStreamsStateImpl implements KafkaStreamsState {
 
     @Override
     public SortedSet<TaskId> prevTasksByLag(final String consumerClientId) {
+        if (!taskLagTotals.isPresent()) {
+            LOG.error("prevTasksByLag was called on a KafkaStreamsState {} that does not support lag computations.", processId);
+            throw new UnsupportedOperationException("Lag computation was not requested for KafkaStreamsState with process " + processId);
+        }
+
         final SortedSet<TaskId> prevTasksByLag =
             new TreeSet<>(comparingLong(this::lagFor).thenComparing(TaskId::compareTo));
         final Set<TaskId> prevOwnedStatefulTasks = taskIdsByConsumer.containsKey(consumerClientId)
             ? taskIdsByConsumer.get(consumerClientId) : new HashSet<>();
         for (final TaskId task : prevOwnedStatefulTasks) {
-            if (taskLagTotals.containsKey(task)) {
+            if (taskLagTotals.get().containsKey(task)) {
                 prevTasksByLag.add(task);
             } else {
                 LOG.debug(
@@ -124,7 +134,12 @@ public class KafkaStreamsStateImpl implements KafkaStreamsState {
 
     @Override
     public Map<TaskId, Long> statefulTasksToLagSums() {
-        return taskLagTotals.keySet()
+        if (!taskLagTotals.isPresent()) {
+            LOG.error("statefulTasksToLagSums was called on a KafkaStreamsState {} that does not support lag computations.", processId);
+            throw new UnsupportedOperationException("Lag computation was not requested for KafkaStreamsState with process " + processId);
+        }
+
+        return taskLagTotals.get().keySet()
             .stream()
             .collect(Collectors.toMap(taskId -> taskId, this::lagFor));
     }

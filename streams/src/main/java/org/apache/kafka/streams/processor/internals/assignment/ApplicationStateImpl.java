@@ -16,17 +16,21 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static java.util.Collections.unmodifiableMap;
 import static java.util.Collections.unmodifiableSet;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.ClientMetadata;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 
 public class ApplicationStateImpl implements ApplicationState {
 
@@ -34,21 +38,40 @@ public class ApplicationStateImpl implements ApplicationState {
     private final Set<TaskId> statelessTasks;
     private final Set<TaskId> statefulTasks;
     private final Set<TaskId> allTasks;
-    private final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates;
+    private final Map<UUID, ClientMetadata> clientStates;
 
     public ApplicationStateImpl(final AssignmentConfigs assignmentConfigs,
-                                final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates,
                                 final Set<TaskId> statefulTasks,
-                                final Set<TaskId> statelessTasks) {
+                                final Set<TaskId> statelessTasks,
+                                final Map<UUID, ClientMetadata> clientStates) {
         this.assignmentConfigs = assignmentConfigs;
-        this.kafkaStreamsStates = unmodifiableMap(kafkaStreamsStates);
         this.statefulTasks = unmodifiableSet(statefulTasks);
         this.statelessTasks = unmodifiableSet(statelessTasks);
         this.allTasks = unmodifiableSet(computeAllTasks(statelessTasks, statefulTasks));
+        this.clientStates = clientStates;
     }
 
     @Override
     public Map<ProcessId, KafkaStreamsState> kafkaStreamsStates(final boolean computeTaskLags) {
+        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = new HashMap<>();
+        for (final Map.Entry<UUID, StreamsPartitionAssignor.ClientMetadata> clientEntry : clientStates.entrySet()) {
+            final ClientMetadata metadata = clientEntry.getValue();
+            final ClientState clientState = metadata.state();
+            final ProcessId processId = new ProcessId(clientEntry.getKey());
+            final Map<TaskId, Long> taskLagTotals = computeTaskLags ? clientState.taskLagTotals() : null;
+            final KafkaStreamsState kafkaStreamsState = new KafkaStreamsStateImpl(
+                processId,
+                clientState.capacity(),
+                clientState.clientTags(),
+                clientState.previousActiveTasks(),
+                clientState.previousStandbyTasks(),
+                clientState.taskIdsByPreviousConsumer(),
+                Optional.ofNullable(metadata.hostInfo()),
+                Optional.ofNullable(taskLagTotals)
+            );
+            kafkaStreamsStates.put(processId, kafkaStreamsState);
+        }
+
         return kafkaStreamsStates;
     }
 
@@ -72,7 +95,7 @@ public class ApplicationStateImpl implements ApplicationState {
         return statelessTasks;
     }
 
-    private static Set<TaskId> computeAllTasks(Set<TaskId> statelessTasks, Set<TaskId> statefulTasks) {
+    private static Set<TaskId> computeAllTasks(final Set<TaskId> statelessTasks, final Set<TaskId> statefulTasks) {
         final Set<TaskId> union = new HashSet<>(statefulTasks);
         union.addAll(statelessTasks);
         return union;

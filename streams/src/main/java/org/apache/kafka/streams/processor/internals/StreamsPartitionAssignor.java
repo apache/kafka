@@ -39,9 +39,6 @@ import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
 import org.apache.kafka.streams.processor.internals.assignment.ApplicationStateImpl;
-import org.apache.kafka.streams.processor.internals.assignment.KafkaStreamsStateImpl;
-import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
@@ -129,7 +126,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
-    private static class ClientMetadata {
+    public static class ClientMetadata {
 
         private final HostInfo hostInfo;
         private final ClientState state;
@@ -155,6 +152,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         void addPreviousTasksAndOffsetSums(final String consumerId, final Map<TaskId, Long> taskOffsetSums) {
             state.addPreviousTasksAndOffsetSums(consumerId, taskOffsetSums);
+        }
+
+        public ClientState state() {
+            return state;
+        }
+
+        public HostInfo hostInfo() {
+            return hostInfo;
         }
 
         @Override
@@ -475,30 +480,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private ApplicationState buildApplicationState(final Map<UUID, ClientMetadata> clientMetadataMap,
                                                    final Set<TaskId> statefulTasks) {
         final Set<TaskId> statelessTasks = new HashSet<>();
-        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = new HashMap<>();
         for (final Map.Entry<UUID, ClientMetadata> clientEntry : clientMetadataMap.entrySet()) {
             final ClientState clientState = clientEntry.getValue().state;
-            final ProcessId processId = new ProcessId(clientEntry.getKey());
-            final KafkaStreamsState kafkaStreamsState = new KafkaStreamsStateImpl(
-                processId,
-                clientState.capacity(),
-                clientState.clientTags(),
-                clientState.taskLagTotals(),
-                clientState.previousActiveTasks(),
-                clientState.previousStandbyTasks(),
-                clientState.taskIdsByPreviousConsumer(),
-                Optional.ofNullable(clientEntry.getValue().hostInfo)
-            );
-            kafkaStreamsStates.put(processId, kafkaStreamsState);
-
             statelessTasks.addAll(clientState.statelessActiveTasks());
         }
 
         return new ApplicationStateImpl(
             assignmentConfigs.toPublicAssignmentConfigs(),
-            kafkaStreamsStates,
             statefulTasks,
-            statelessTasks
+            statelessTasks,
+            clientMetadataMap
         );
     }
 
