@@ -92,12 +92,18 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private volatile boolean initializationFailed;
     private final Supplier<RemotePartitionMetadataStore> remoteLogMetadataManagerSupplier;
 
+    /**
+     * The default constructor delegates to the internal one, starting the consumer thread and
+     * supplying an instance of RemotePartitionMetadataStore by default.
+     */
     public TopicBasedRemoteLogMetadataManager() {
         this(true, RemotePartitionMetadataStore::new);
     }
 
-    // Visible for testing.
-    public TopicBasedRemoteLogMetadataManager(boolean startConsumerThread, Supplier<RemotePartitionMetadataStore> remoteLogMetadataManagerSupplier) {
+    /**
+     * Used in tests to dynamically configure the instance.
+     */
+    TopicBasedRemoteLogMetadataManager(boolean startConsumerThread, Supplier<RemotePartitionMetadataStore> remoteLogMetadataManagerSupplier) {
         this.startConsumerThread = startConsumerThread;
         this.remoteLogMetadataManagerSupplier = remoteLogMetadataManagerSupplier;
     }
