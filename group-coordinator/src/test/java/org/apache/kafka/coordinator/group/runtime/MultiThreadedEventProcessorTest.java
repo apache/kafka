@@ -516,7 +516,8 @@ public class MultiThreadedEventProcessorTest {
 
             long sum = recordedIdleTimesMs.stream().mapToLong(Long::longValue).sum();
             double idleRatio = (double) sum / diff;
-            assertTrue(idleRatio >= 0.5 && idleRatio <= 1.0);
+            assertTrue(idleRatio >= 0.5 && idleRatio <= 1.0, "idle ratio should be " +
+                "greater than or equal to 0.5 and smaller than or equal to 1.0 but was " + idleRatio);
         }
     }
 }
