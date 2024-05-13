@@ -24,18 +24,21 @@ import org.apache.kafka.server.common.MetadataVersion;
 import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Represents an immutable requested configuration of a Kafka cluster for integration testing.
  */
 public class ClusterConfig {
 
-    private final Type type;
+    private final Set<Type> types;
     private final int brokers;
     private final int controllers;
     private final int disksPerBroker;
@@ -56,7 +59,7 @@ public class ClusterConfig {
     private final Map<Integer, Map<String, String>> perServerProperties;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
-    private ClusterConfig(Type type, int brokers, int controllers, int disksPerBroker, String name, boolean autoStart,
+    private ClusterConfig(Set<Type> types, int brokers, int controllers, int disksPerBroker, String name, boolean autoStart,
                   SecurityProtocol securityProtocol, String listenerName, File trustStoreFile,
                   MetadataVersion metadataVersion, Map<String, String> serverProperties, Map<String, String> producerProperties,
                   Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
@@ -66,7 +69,7 @@ public class ClusterConfig {
         if (controllers < 0) throw new IllegalArgumentException("Number of controller must be greater or equal to zero.");
         if (disksPerBroker <= 0) throw new IllegalArgumentException("Number of disks must be greater than zero.");
 
-        this.type = Objects.requireNonNull(type);
+        this.types = Objects.requireNonNull(types);
         this.brokers = brokers;
         this.controllers = controllers;
         this.disksPerBroker = disksPerBroker;
@@ -85,8 +88,8 @@ public class ClusterConfig {
         this.perServerProperties = Objects.requireNonNull(perServerProperties);
     }
 
-    public Type clusterType() {
-        return type;
+    public Set<Type> clusterTypes() {
+        return types;
     }
 
     public int numBrokers() {
@@ -164,7 +167,7 @@ public class ClusterConfig {
 
     public static Builder defaultBuilder() {
         return new Builder()
-                .setType(Type.ZK)
+                .setTypes(Stream.of(Type.ZK, Type.KRAFT, Type.CO_KRAFT).collect(Collectors.toSet()))
                 .setBrokers(1)
                 .setControllers(1)
                 .setDisksPerBroker(1)
@@ -179,7 +182,7 @@ public class ClusterConfig {
 
     public static Builder builder(ClusterConfig clusterConfig) {
         return new Builder()
-                .setType(clusterConfig.type)
+                .setTypes(clusterConfig.types)
                 .setBrokers(clusterConfig.brokers)
                 .setControllers(clusterConfig.controllers)
                 .setDisksPerBroker(clusterConfig.disksPerBroker)
@@ -199,7 +202,7 @@ public class ClusterConfig {
     }
 
     public static class Builder {
-        private Type type;
+        private Set<Type> types;
         private int brokers;
         private int controllers;
         private int disksPerBroker;
@@ -219,8 +222,8 @@ public class ClusterConfig {
 
         private Builder() {}
 
-        public Builder setType(Type type) {
-            this.type = type;
+        public Builder setTypes(Set<Type> types) {
+            this.types = Collections.unmodifiableSet(new HashSet<>(types));
             return this;
         }
 
@@ -307,7 +310,7 @@ public class ClusterConfig {
         }
 
         public ClusterConfig build() {
-            return new ClusterConfig(type, brokers, controllers, disksPerBroker, name, autoStart, securityProtocol, listenerName,
+            return new ClusterConfig(types, brokers, controllers, disksPerBroker, name, autoStart, securityProtocol, listenerName,
                     trustStoreFile, metadataVersion, serverProperties, producerProperties, consumerProperties,
                     adminClientProperties, saslServerProperties, saslClientProperties, perServerProperties);
         }

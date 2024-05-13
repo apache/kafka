@@ -33,7 +33,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Retention(RUNTIME)
 @TestTemplate
 public @interface ClusterTest {
-    Type clusterType() default Type.DEFAULT;
+    Type[] types() default {};
     int brokers() default 0;
     int controllers() default 0;
     int disksPerBroker() default 0;

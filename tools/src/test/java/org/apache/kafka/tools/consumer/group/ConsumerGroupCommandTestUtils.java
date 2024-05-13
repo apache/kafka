@@ -33,6 +33,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Collections.singleton;
 import static kafka.test.annotation.Type.CO_KRAFT;
@@ -53,40 +55,21 @@ class ConsumerGroupCommandTestUtils {
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
         serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false");
 
-        ClusterConfig zk = ClusterConfig.defaultBuilder()
-                .setType(ZK)
+        ClusterConfig classicGroupCoordinator = ClusterConfig.defaultBuilder()
+                .setTypes(Stream.of(ZK, KRAFT, CO_KRAFT).collect(Collectors.toSet()))
                 .setServerProperties(serverProperties)
                 .build();
-        clusterGenerator.accept(zk);
-
-        ClusterConfig raftWithLegacyCoordinator = ClusterConfig.defaultBuilder()
-                .setType(KRAFT)
-                .setServerProperties(serverProperties)
-                .build();
-        clusterGenerator.accept(raftWithLegacyCoordinator);
-
-        ClusterConfig combinedKRaftWithLegacyCoordinator = ClusterConfig.defaultBuilder()
-                .setType(CO_KRAFT)
-                .setServerProperties(serverProperties)
-                .build();
-        clusterGenerator.accept(combinedKRaftWithLegacyCoordinator);
+        clusterGenerator.accept(classicGroupCoordinator);
 
         // Following are test case config with new group coordinator
         serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true");
 
-        ClusterConfig raftWithNewGroupCoordinator = ClusterConfig.defaultBuilder()
-                .setType(KRAFT)
-                .setName("newGroupCoordinator")
+        ClusterConfig consumerGroupCoordinator = ClusterConfig.defaultBuilder()
+                .setTypes(Stream.of(KRAFT, CO_KRAFT).collect(Collectors.toSet()))
+                .setName("consumerGroupCoordinator")
                 .setServerProperties(serverProperties)
                 .build();
-        clusterGenerator.accept(raftWithNewGroupCoordinator);
-
-        ClusterConfig combinedKRaftWithNewGroupCoordinator = ClusterConfig.defaultBuilder()
-                .setType(CO_KRAFT)
-                .setName("newGroupCoordinator")
-                .setServerProperties(serverProperties)
-                .build();
-        clusterGenerator.accept(combinedKRaftWithNewGroupCoordinator);
+        clusterGenerator.accept(consumerGroupCoordinator);
     }
 
     static <T> AutoCloseable buildConsumers(int numberOfConsumers,

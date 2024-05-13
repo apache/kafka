@@ -58,6 +58,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
@@ -1342,9 +1343,6 @@ public class GroupMetadataManager {
             }
         }
 
-        int groupEpoch = group.groupEpoch();
-        Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
-
         // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue
         // record is written to the __consumer_offsets partition to persist the change. If the subscriptions have
         // changed, the subscription metadata is updated and persisted by writing a ConsumerGroupPartitionMetadataValue
@@ -1368,15 +1366,30 @@ public class GroupMetadataManager {
             records
         );
 
+        int groupEpoch = group.groupEpoch();
+        Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
+        Map<String, Integer> subscribedTopicNamesMap = group.subscribedTopicNames();
+        SubscriptionType subscriptionType = group.subscriptionType();
+
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
             // 2) The refresh deadline has been reached.
+            subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
             subscriptionMetadata = group.computeSubscriptionMetadata(
-                member,
-                updatedMember,
+                subscribedTopicNamesMap,
                 metadataImage.topics(),
                 metadataImage.cluster()
+            );
+
+            int numMembers = group.numMembers();
+            if (!group.hasMember(updatedMember.memberId()) && !staticMemberReplaced) {
+                numMembers++;
+            }
+
+            subscriptionType = ConsumerGroup.subscriptionType(
+                subscribedTopicNamesMap,
+                numMembers
             );
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
@@ -1407,6 +1420,7 @@ public class GroupMetadataManager {
                 member,
                 updatedMember,
                 subscriptionMetadata,
+                subscriptionType,
                 staticMemberReplaced,
                 records
             );
@@ -1527,6 +1541,8 @@ public class GroupMetadataManager {
 
         int groupEpoch = group.groupEpoch();
         Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
+        Map<String, Integer> subscribedTopicNamesMap = group.subscribedTopicNames();
+        SubscriptionType subscriptionType = group.subscriptionType();
         final ConsumerPartitionAssignor.Subscription subscription = deserializeSubscription(protocols);
         final List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions =
             toTopicPartitions(subscription.ownedPartitions(), metadataImage.topics());
@@ -1558,11 +1574,21 @@ public class GroupMetadataManager {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
             // 2) The refresh deadline has been reached.
+            subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
             subscriptionMetadata = group.computeSubscriptionMetadata(
-                member,
-                updatedMember,
+                subscribedTopicNamesMap,
                 metadataImage.topics(),
                 metadataImage.cluster()
+            );
+
+            int numMembers = group.numMembers();
+            if (!group.hasMember(updatedMember.memberId()) && !staticMemberReplaced) {
+                numMembers++;
+            }
+
+            subscriptionType = ConsumerGroup.subscriptionType(
+                subscribedTopicNamesMap,
+                numMembers
             );
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
@@ -1593,6 +1619,7 @@ public class GroupMetadataManager {
                 member,
                 updatedMember,
                 subscriptionMetadata,
+                subscriptionType,
                 staticMemberReplaced,
                 records
             );
@@ -1738,6 +1765,7 @@ public class GroupMetadataManager {
      * @param member                The existing member.
      * @param updatedMember         The updated member.
      * @param subscriptionMetadata  The subscription metadata.
+     * @param subscriptionType      The group subscription type.
      * @param staticMemberReplaced  The boolean indicating whether the updated member
      *                              is a static member that replaces the existing member.
      * @param records               The list to accumulate any new records.
@@ -1749,6 +1777,7 @@ public class GroupMetadataManager {
         ConsumerGroupMember member,
         ConsumerGroupMember updatedMember,
         Map<String, TopicMetadata> subscriptionMetadata,
+        SubscriptionType subscriptionType,
         boolean staticMemberReplaced,
         List<Record> records
     ) {
@@ -1762,6 +1791,7 @@ public class GroupMetadataManager {
                     .withMembers(group.members())
                     .withStaticMembers(group.staticMembers())
                     .withSubscriptionMetadata(subscriptionMetadata)
+                    .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult;
@@ -1882,8 +1912,7 @@ public class GroupMetadataManager {
 
             // We update the subscription metadata without the leaving member.
             Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
-                member,
-                null,
+                group.computeSubscribedTopicNames(member, null),
                 metadataImage.topics(),
                 metadataImage.cluster()
             );
@@ -2148,7 +2177,7 @@ public class GroupMetadataManager {
         String memberId = key.memberId();
 
         ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, value != null);
-        Set<String> oldSubscribedTopicNames = new HashSet<>(consumerGroup.subscribedTopicNames());
+        Set<String> oldSubscribedTopicNames = new HashSet<>(consumerGroup.subscribedTopicNames().keySet());
 
         if (value != null) {
             ConsumerGroupMember oldMember = consumerGroup.getOrMaybeCreateMember(memberId, true);
@@ -2168,7 +2197,7 @@ public class GroupMetadataManager {
             consumerGroup.removeMember(memberId);
         }
 
-        updateGroupsByTopics(groupId, oldSubscribedTopicNames, consumerGroup.subscribedTopicNames());
+        updateGroupsByTopics(groupId, oldSubscribedTopicNames, consumerGroup.subscribedTopicNames().keySet());
     }
 
     /**

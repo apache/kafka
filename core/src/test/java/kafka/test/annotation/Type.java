@@ -52,22 +52,6 @@ public enum Type {
             ret.add(new ZkClusterInvocationContext(baseDisplayName, config));
             return ret;
         }
-    },
-    ALL {
-        @Override
-        public List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config) {
-            List<TestTemplateInvocationContext> ret = new ArrayList<>();
-            ret.add(new RaftClusterInvocationContext(baseDisplayName, config, false));
-            ret.add(new RaftClusterInvocationContext(baseDisplayName, config, true));
-            ret.add(new ZkClusterInvocationContext(baseDisplayName, config));
-            return ret;
-        }
-    },
-    DEFAULT {
-        @Override
-        public List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config) {
-            throw new UnsupportedOperationException("Cannot create invocation contexts for DEFAULT type");
-        }
     };
 
     public abstract List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config);
