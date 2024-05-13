@@ -207,6 +207,11 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
+    public Set<Task> pendingTasksToInit() {
+        return Collections.unmodifiableSet(pendingTasksToInit);
+    }
+
+    @Override
     public void addPendingTasksToInit(final Collection<Task> tasks) {
         pendingTasksToInit.addAll(tasks);
     }

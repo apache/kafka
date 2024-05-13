@@ -2680,6 +2680,147 @@ public class CoordinatorRuntimeTest {
         assertTrue(write2.isDone());
     }
 
+    @Test
+    public void testWriteEventWriteTimeoutTaskIsCancelledWhenHighWatermarkIsUpdated() {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        ManualEventProcessor processor = new ManualEventProcessor();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(processor)
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .build();
+
+        // Loads the coordinator. Poll once to execute the load operation and once
+        // to complete the load.
+        runtime.scheduleLoadOperation(TP, 10);
+        processor.poll();
+        processor.poll();
+
+        // Write#1.
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("Write#1", TP, DEFAULT_WRITE_TIMEOUT,
+            state -> new CoordinatorResult<>(Collections.singletonList("record1"), "response1")
+        );
+        processor.poll();
+
+        // Write#2.
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("Write#2", TP, DEFAULT_WRITE_TIMEOUT,
+            state -> new CoordinatorResult<>(Collections.singletonList("record2"), "response2")
+        );
+        processor.poll();
+
+        // Records have been written to the log.
+        assertEquals(Arrays.asList(
+            InMemoryPartitionWriter.LogEntry.value("record1"),
+            InMemoryPartitionWriter.LogEntry.value("record2")
+        ), writer.entries(TP));
+
+        // The write timeout tasks exist.
+        assertEquals(2, timer.size());
+
+        // Commit the first record.
+        writer.commit(TP, 1);
+
+        // Commit the second record.
+        writer.commit(TP, 2);
+
+        // We should still have one pending event and the pending high watermark should be updated.
+        assertEquals(1, processor.size());
+        assertEquals(2, runtime.contextOrThrow(TP).highWatermarklistener.lastHighWatermark());
+
+        // The write timeout tasks should have not yet been cancelled.
+        assertEquals(2, timer.size());
+        timer.taskQueue().forEach(taskEntry -> assertFalse(taskEntry.cancelled()));
+
+        // Poll once to process the high watermark update and complete the writes.
+        processor.poll();
+
+        assertEquals(-1, runtime.contextOrThrow(TP).highWatermarklistener.lastHighWatermark());
+        assertEquals(2, runtime.contextOrThrow(TP).coordinator.lastCommittedOffset());
+        assertTrue(write1.isDone());
+        assertTrue(write2.isDone());
+
+        // All timer tasks have been cancelled. TimerTask entries are not removed in MockTimer.
+        assertEquals(2, timer.size());
+        timer.taskQueue().forEach(taskEntry -> assertTrue(taskEntry.cancelled()));
+    }
+
+    @Test
+    public void testCoordinatorCompleteTransactionEventWriteTimeoutTaskIsCancelledWhenHighWatermarkIsUpdated() {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        ManualEventProcessor processor = new ManualEventProcessor();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(processor)
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .build();
+
+        // Loads the coordinator. Poll once to execute the load operation and once
+        // to complete the load.
+        runtime.scheduleLoadOperation(TP, 10);
+        processor.poll();
+        processor.poll();
+
+        // transaction completion.
+        CompletableFuture<Void> write1 = runtime.scheduleTransactionCompletion(
+            "transactional-write",
+            TP,
+            100L,
+            (short) 50,
+            1,
+            TransactionResult.COMMIT,
+            DEFAULT_WRITE_TIMEOUT
+        );
+        processor.poll();
+
+        // Records have been written to the log.
+        assertEquals(Collections.singletonList(
+            InMemoryPartitionWriter.LogEntry.control(100, (short) 50, 1, TransactionResult.COMMIT)
+        ), writer.entries(TP));
+
+        // The write timeout tasks exist.
+        assertEquals(1, timer.size());
+
+        // Commit the first record.
+        writer.commit(TP, 1);
+
+        // We should still have one pending event and the pending high watermark should be updated.
+        assertEquals(1, processor.size());
+        assertEquals(1, runtime.contextOrThrow(TP).highWatermarklistener.lastHighWatermark());
+
+        // The write timeout tasks should have not yet been cancelled.
+        assertEquals(1, timer.size());
+        timer.taskQueue().forEach(taskEntry -> assertFalse(taskEntry.cancelled()));
+
+        // Poll once to process the high watermark update and complete the writes.
+        processor.poll();
+
+        assertEquals(-1, runtime.contextOrThrow(TP).highWatermarklistener.lastHighWatermark());
+        assertEquals(1, runtime.contextOrThrow(TP).coordinator.lastCommittedOffset());
+        assertTrue(write1.isDone());
+
+        // All timer tasks have been cancelled. TimerTask entries are not removed in MockTimer.
+        assertEquals(1, timer.size());
+        timer.taskQueue().forEach(taskEntry -> assertTrue(taskEntry.cancelled()));
+    }
+
     private static <S extends CoordinatorShard<U>, U> ArgumentMatcher<CoordinatorPlayback<U>> coordinatorMatcher(
         CoordinatorRuntime<S, U> runtime,
         TopicPartition tp

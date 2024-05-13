@@ -1786,14 +1786,6 @@ object TestUtils extends Logging {
       KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
   }
 
-  def resource[R <: AutoCloseable, A](resource: R)(func: R => A): A = {
-    try {
-      func(resource)
-    } finally {
-      resource.close()
-    }
-  }
-
   def waitForAllReassignmentsToComplete(adminClient: Admin, pause: Long = 100L): Unit = {
     waitUntilTrue(() => adminClient.listPartitionReassignments().reassignments().get().isEmpty,
       s"There still are ongoing reassignments", pause = pause)

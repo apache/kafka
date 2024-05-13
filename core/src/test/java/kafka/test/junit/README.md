@@ -10,11 +10,11 @@ A new `@ClusterTest` annotation is introduced which allows for a test to declara
 def testSomething(): Unit = { ... }
 ```
 
-This annotation has fields for cluster type and number of brokers, as well as commonly parameterized configurations. 
+This annotation has fields for a set of cluster types and number of brokers, as well as commonly parameterized configurations. 
 Arbitrary server properties can also be provided in the annotation:
 
 ```java
-@ClusterTest(clusterType = Type.Zk, securityProtocol = "PLAINTEXT", properties = {
+@ClusterTest(types = {Type.Zk}, securityProtocol = "PLAINTEXT", properties = {
   @ClusterProperty(key = "inter.broker.protocol.version", value = "2.7-IV2"),
   @ClusterProperty(key = "socket.send.buffer.bytes", value = "10240"),
 })

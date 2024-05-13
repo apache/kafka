@@ -17,28 +17,38 @@
 
 package kafka.tools
 
+import com.fasterxml.jackson.databind.JsonNode
+
 import java.io._
 import com.fasterxml.jackson.databind.node.{IntNode, JsonNodeFactory, ObjectNode, TextNode}
-import kafka.coordinator.group.GroupMetadataManager
 import kafka.coordinator.transaction.TransactionLog
 import kafka.log._
 import kafka.serializer.Decoder
 import kafka.utils._
 import kafka.utils.Implicits._
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
+import org.apache.kafka.common.message.ConsumerProtocolAssignment
+import org.apache.kafka.common.message.ConsumerProtocolAssignmentJsonConverter
+import org.apache.kafka.common.message.ConsumerProtocolSubscription
+import org.apache.kafka.common.message.ConsumerProtocolSubscriptionJsonConverter
 import org.apache.kafka.common.message.KRaftVersionRecordJsonConverter
 import org.apache.kafka.common.message.SnapshotFooterRecordJsonConverter
 import org.apache.kafka.common.message.SnapshotHeaderRecordJsonConverter
 import org.apache.kafka.common.message.VotersRecordJsonConverter
 import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordType}
-import org.apache.kafka.common.protocol.ByteBufferAccessor
+import org.apache.kafka.common.protocol.{ByteBufferAccessor, Message}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.group.RecordSerde
+import org.apache.kafka.coordinator.group.generated.{ConsumerGroupCurrentMemberAssignmentKey, ConsumerGroupCurrentMemberAssignmentKeyJsonConverter, ConsumerGroupCurrentMemberAssignmentValue, ConsumerGroupCurrentMemberAssignmentValueJsonConverter, ConsumerGroupMemberMetadataKey, ConsumerGroupMemberMetadataKeyJsonConverter, ConsumerGroupMemberMetadataValue, ConsumerGroupMemberMetadataValueJsonConverter, ConsumerGroupMetadataKey, ConsumerGroupMetadataKeyJsonConverter, ConsumerGroupMetadataValue, ConsumerGroupMetadataValueJsonConverter, ConsumerGroupPartitionMetadataKey, ConsumerGroupPartitionMetadataKeyJsonConverter, ConsumerGroupPartitionMetadataValue, ConsumerGroupPartitionMetadataValueJsonConverter, ConsumerGroupTargetAssignmentMemberKey, ConsumerGroupTargetAssignmentMemberKeyJsonConverter, ConsumerGroupTargetAssignmentMemberValue, ConsumerGroupTargetAssignmentMemberValueJsonConverter, ConsumerGroupTargetAssignmentMetadataKey, ConsumerGroupTargetAssignmentMetadataKeyJsonConverter, ConsumerGroupTargetAssignmentMetadataValue, ConsumerGroupTargetAssignmentMetadataValueJsonConverter, GroupMetadataKey, GroupMetadataKeyJsonConverter, GroupMetadataValue, GroupMetadataValueJsonConverter, OffsetCommitKey, OffsetCommitKeyJsonConverter, OffsetCommitValue, OffsetCommitValueJsonConverter}
+import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.UnknownRecordTypeException
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.snapshot.Snapshots
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.{CorruptSnapshotException, LogFileUtils, OffsetIndex, ProducerStateManager, TimeIndex, TransactionIndex}
 
+import java.nio.ByteBuffer
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -407,9 +417,141 @@ object DumpLogSegments {
     }
   }
 
-  private class OffsetsMessageParser extends MessageParser[String, String] {
+  // Package private for testing.
+  class OffsetsMessageParser extends MessageParser[String, String] {
+    private val serde = new RecordSerde()
+
+    private def prepareKey(message: Message, version: Short): String = {
+      val messageAsJson = message match {
+        case m: OffsetCommitKey =>
+          OffsetCommitKeyJsonConverter.write(m, version)
+        case m: GroupMetadataKey =>
+          GroupMetadataKeyJsonConverter.write(m, version)
+        case m: ConsumerGroupMetadataKey =>
+          ConsumerGroupMetadataKeyJsonConverter.write(m, version)
+        case m: ConsumerGroupPartitionMetadataKey =>
+          ConsumerGroupPartitionMetadataKeyJsonConverter.write(m, version)
+        case m: ConsumerGroupMemberMetadataKey =>
+          ConsumerGroupMemberMetadataKeyJsonConverter.write(m, version)
+        case m: ConsumerGroupTargetAssignmentMetadataKey =>
+          ConsumerGroupTargetAssignmentMetadataKeyJsonConverter.write(m, version)
+        case m: ConsumerGroupTargetAssignmentMemberKey =>
+          ConsumerGroupTargetAssignmentMemberKeyJsonConverter.write(m, version)
+        case m: ConsumerGroupCurrentMemberAssignmentKey =>
+          ConsumerGroupCurrentMemberAssignmentKeyJsonConverter.write(m, version)
+        case _ => throw new UnknownRecordTypeException(version)
+      }
+
+      val json = new ObjectNode(JsonNodeFactory.instance)
+      json.set("type", new TextNode(version.toString))
+      json.set("data", messageAsJson)
+      json.toString
+    }
+
+    private def prepareGroupMetadataValue(message: GroupMetadataValue, version: Short): JsonNode = {
+      val json = GroupMetadataValueJsonConverter.write(message, version)
+
+      def replace[T](
+        node: JsonNode,
+        field: String,
+        reader: (org.apache.kafka.common.protocol.Readable, Short) => T,
+        writer: (T, Short) => JsonNode
+      ): Unit = {
+        Option(node.get(field)).foreach { filedNode =>
+          try {
+            val buffer = ByteBuffer.wrap(filedNode.binaryValue())
+            val accessor = new ByteBufferAccessor(buffer)
+            val version = accessor.readShort
+            val data = reader(accessor, version)
+            node.asInstanceOf[ObjectNode].replace(field, writer(data, version))
+          } catch {
+            case _: RuntimeException => // Swallow and keep the original bytes.
+          }
+        }
+      }
+
+      Option(json.get("protocolType")).foreach { protocolTypeNode =>
+        // If the group uses the consumer embedded protocol, we deserialize
+        // the subscription and the assignment of each member.
+        if (protocolTypeNode.asText() == ConsumerProtocol.PROTOCOL_TYPE) {
+          Option(json.get("members")).foreach { membersNode =>
+            if (membersNode.isArray) {
+              membersNode.forEach { memberNode =>
+                // Replace the subscription field by its deserialized version.
+                replace(
+                  memberNode,
+                  "subscription",
+                  (readable, version) => new ConsumerProtocolSubscription(readable, version),
+                  ConsumerProtocolSubscriptionJsonConverter.write
+                )
+
+                // Replace the assignment field by its deserialized version.
+                replace(
+                  memberNode,
+                  "assignment",
+                  (readable, version) => new ConsumerProtocolAssignment(readable, version),
+                  ConsumerProtocolAssignmentJsonConverter.write
+                )
+              }
+            }
+          }
+        }
+      }
+
+      json
+    }
+
+    private def prepareValue(message: Message, version: Short): String = {
+      val messageAsJson = message match {
+        case m: OffsetCommitValue =>
+          OffsetCommitValueJsonConverter.write(m, version)
+        case m: GroupMetadataValue =>
+          prepareGroupMetadataValue(m, version)
+        case m: ConsumerGroupMetadataValue =>
+          ConsumerGroupMetadataValueJsonConverter.write(m, version)
+        case m: ConsumerGroupPartitionMetadataValue =>
+          ConsumerGroupPartitionMetadataValueJsonConverter.write(m, version)
+        case m: ConsumerGroupMemberMetadataValue =>
+          ConsumerGroupMemberMetadataValueJsonConverter.write(m, version)
+        case m: ConsumerGroupTargetAssignmentMetadataValue =>
+          ConsumerGroupTargetAssignmentMetadataValueJsonConverter.write(m, version)
+        case m: ConsumerGroupTargetAssignmentMemberValue =>
+          ConsumerGroupTargetAssignmentMemberValueJsonConverter.write(m, version)
+        case m: ConsumerGroupCurrentMemberAssignmentValue =>
+          ConsumerGroupCurrentMemberAssignmentValueJsonConverter.write(m, version)
+        case _ => throw new IllegalStateException(s"Message value ${message.getClass.getSimpleName} is not supported.")
+      }
+
+      val json = new ObjectNode(JsonNodeFactory.instance)
+      json.set("version", new TextNode(version.toString))
+      json.set("data", messageAsJson)
+      json.toString
+    }
+
     override def parse(record: Record): (Option[String], Option[String]) = {
-      GroupMetadataManager.formatRecordKeyAndValue(record)
+      if (!record.hasKey)
+        throw new RuntimeException(s"Failed to decode message at offset ${record.offset} using offset " +
+          "topic decoder (message had a missing key)")
+
+      try {
+        val r = serde.deserialize(record.key, record.value)
+        (
+          Some(prepareKey(r.key.message, r.key.version)),
+          Option(r.value).map(v => prepareValue(v.message, v.version)).orElse(Some("<DELETE>"))
+        )
+      } catch {
+        case e: UnknownRecordTypeException =>
+          (
+            Some(s"Unknown record type ${e.unknownType} at offset ${record.offset}, skipping."),
+            None
+          )
+
+        case e: Throwable =>
+          (
+            Some(s"Error at offset ${record.offset}, skipping. ${e.getMessage}"),
+            None
+          )
+      }
     }
   }
 
