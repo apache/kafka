@@ -2253,15 +2253,15 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
         // assign throws
-        Throwable t = assertThrows(Throwable.class, () -> consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE)));
-        assertEquals(partitionAssigned + singleTopicPartition, t.getCause().getMessage());
+        KafkaException exc = assertThrows(KafkaException.class, () -> consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE)));
+        assertEquals(partitionAssigned + singleTopicPartition, exc.getCause().getMessage());
 
         // the assignment is still updated regardless of the exception
         assertEquals(singleton(tp0), subscription.assignedPartitions());
 
         // close's revoke throws
-        t = assertThrows(Throwable.class, () -> consumer.close(Duration.ofMillis(0)));
-        assertEquals(partitionRevoked + singleTopicPartition, t.getCause().getCause().getMessage());
+        exc = assertThrows(KafkaException.class, () -> consumer.close(Duration.ofMillis(0)));
+        assertEquals(partitionRevoked + singleTopicPartition, exc.getCause().getCause().getMessage());
 
         consumer.close(Duration.ofMillis(0));
 
