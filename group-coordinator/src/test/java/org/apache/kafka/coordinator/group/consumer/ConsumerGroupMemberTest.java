@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
-import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
@@ -40,7 +39,6 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConsumerGroupMemberTest {
 
@@ -351,40 +349,6 @@ public class ConsumerGroupMemberTest {
                 .build().topics()
         );
         assertEquals(expected, actual);
-    }
-
-    @Test
-    public void testSetSupportedClassicProtocolsWithJoinGroupRequestProtocolCollections() {
-        Uuid topicId1 = Uuid.randomUuid();
-        Uuid topicId2 = Uuid.randomUuid();
-
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
-        protocols.addAll(Arrays.asList(
-            new JoinGroupRequestData.JoinGroupRequestProtocol()
-                .setName("range")
-                .setMetadata(new byte[]{1, 2, 3})
-        ));
-
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
-            .setMemberEpoch(10)
-            .setPreviousMemberEpoch(9)
-            .setInstanceId("instance-id")
-            .setRackId("rack-id")
-            .setRebalanceTimeoutMs(5000)
-            .setClientId("client-id")
-            .setClientHost("hostname")
-            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-            .setSubscribedTopicRegex("regex")
-            .setServerAssignorName("range")
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(topicId2, 4, 5, 6)))
-            .setSupportedClassicProtocols(protocols)
-            .build();
-
-        assertEquals(toClassicProtocolCollection("range"), member.supportedClassicProtocols().get());
-        assertTrue(member.useClassicProtocol());
     }
 
     private List<ConsumerGroupMemberMetadataValue.ClassicProtocol> toClassicProtocolCollection(String name) {

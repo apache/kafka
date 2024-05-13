@@ -1545,8 +1545,11 @@ public class GroupMetadataManager {
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscription.topics()))
             .setClientId(context.clientId())
             .setClientHost(context.clientAddress.toString())
-            .setSupportedClassicProtocols(protocols)
-            .setSessionTimeoutMs(sessionTimeoutMs)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(sessionTimeoutMs)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+            )
             .build();
 
         boolean bumpGroupEpoch = hasMemberSubscriptionChanged(

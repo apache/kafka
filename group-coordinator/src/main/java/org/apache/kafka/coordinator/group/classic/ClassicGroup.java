@@ -1400,7 +1400,7 @@ public class ClassicGroup implements Group {
                         Optional.ofNullable(member.instanceId()),
                         member.clientId(),
                         member.clientHost(),
-                        member.rebalanceTimeoutMs(),
+                        member.classicProtocolSessionTimeout().get(),
                         consumerGroupSessionTimeoutMs,
                         ConsumerProtocol.PROTOCOL_TYPE,
                         member.supportedJoinGroupRequestProtocols(),
