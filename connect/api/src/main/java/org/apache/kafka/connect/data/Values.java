@@ -411,7 +411,7 @@ public class Values {
         if (value.isEmpty()) {
             return new SchemaAndValue(Schema.STRING_SCHEMA, value);
         }
-        Parser parser = new Parser(new Tokenizer(value));
+        ValueParser parser = new ValueParser(new Parser(value));
         return parser.parse(false);
     }
 
@@ -797,9 +797,9 @@ public class Values {
         return new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN);
     }
 
-    private static class Parser {
+    private static class ValueParser {
 
-        private static final Logger log = LoggerFactory.getLogger(Parser.class);
+        private static final Logger log = LoggerFactory.getLogger(ValueParser.class);
         private static final SchemaAndValue TRUE_SCHEMA_AND_VALUE = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, Boolean.TRUE);
         private static final SchemaAndValue FALSE_SCHEMA_AND_VALUE = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, Boolean.FALSE);
         private static final String TRUE_LITERAL = Boolean.TRUE.toString();
@@ -817,16 +817,16 @@ public class Values {
         private static final int ISO_8601_TIME_LENGTH = ISO_8601_TIME_FORMAT_PATTERN.length() - 2; // subtract single quotes
         private static final int ISO_8601_TIMESTAMP_LENGTH = ISO_8601_TIMESTAMP_FORMAT_PATTERN.length() - 4; // subtract single quotes
 
-        private final Tokenizer tokenizer;
+        private final Parser parser;
 
-        private Parser(Tokenizer tokenizer) {
-            this.tokenizer = tokenizer;
+        private ValueParser(Parser parser) {
+            this.parser = parser;
         }
 
         private boolean canParseSingleTokenLiteral(boolean embedded, String tokenLiteral) {
-            int startPosition = tokenizer.mark();
+            int startPosition = parser.mark();
             // If the next token is what we expect, then either...
-            if (tokenizer.canConsume(tokenLiteral)) {
+            if (parser.canConsume(tokenLiteral)) {
                 //   ...we're reading an embedded value, in which case the next token will be handled appropriately
                 //      by the caller if it's something like an end delimiter for a map or array, or a comma to
                 //      separate multiple embedded values...
@@ -834,18 +834,18 @@ public class Values {
                 //      cause use to stop parsing this single-token literal as such and instead just treat it like
                 //      a string. For example, the top-level string "true}" will be tokenized as the tokens "true" and
                 //      "}", but should ultimately be parsed as just the string "true}" instead of the boolean true.
-                if (embedded || !tokenizer.hasNext()) {
+                if (embedded || !parser.hasNext()) {
                     return true;
                 }
             }
-            tokenizer.rewindTo(startPosition);
+            parser.rewindTo(startPosition);
             return false;
         }
 
         public SchemaAndValue parse(boolean embedded) throws NoSuchElementException {
-            if (!tokenizer.hasNext()) {
+            if (!parser.hasNext()) {
                 return null;
-            } else if (embedded && tokenizer.canConsume(QUOTE_DELIMITER)) {
+            } else if (embedded && parser.canConsume(QUOTE_DELIMITER)) {
                 return parseQuotedString();
             } else if (canParseSingleTokenLiteral(embedded, NULL_VALUE)) {
                 return null;
@@ -855,20 +855,20 @@ public class Values {
                 return FALSE_SCHEMA_AND_VALUE;
             }
 
-            int startPosition = tokenizer.mark();
+            int startPosition = parser.mark();
 
             try {
-                if (tokenizer.canConsume(ARRAY_BEGIN_DELIMITER)) {
+                if (parser.canConsume(ARRAY_BEGIN_DELIMITER)) {
                     return parseArray();
-                } else if (tokenizer.canConsume(MAP_BEGIN_DELIMITER)) {
+                } else if (parser.canConsume(MAP_BEGIN_DELIMITER)) {
                     return parseMap();
                 }
             } catch (DataException e) {
                 log.trace("Unable to parse the value as a map or an array; reverting to string", e);
-                tokenizer.rewindTo(startPosition);
+                parser.rewindTo(startPosition);
             }
 
-            String token = tokenizer.next();
+            String token = parser.next();
             if (Utils.isBlank(token)) {
                 return new SchemaAndValue(Schema.STRING_SCHEMA, token);
             } else {
@@ -898,16 +898,16 @@ public class Values {
                 throw new DataException("Failed to parse embedded value");
             }
             // At this point, the only thing this non-embedded value can be is a string.
-            return new SchemaAndValue(Schema.STRING_SCHEMA, tokenizer.original());
+            return new SchemaAndValue(Schema.STRING_SCHEMA, parser.original());
         }
 
         private SchemaAndValue parseQuotedString() {
             StringBuilder sb = new StringBuilder();
-            while (tokenizer.hasNext()) {
-                if (tokenizer.canConsume(QUOTE_DELIMITER)) {
+            while (parser.hasNext()) {
+                if (parser.canConsume(QUOTE_DELIMITER)) {
                     break;
                 }
-                sb.append(tokenizer.next());
+                sb.append(parser.next());
             }
             String content = sb.toString();
             // We can parse string literals as temporal logical types, but all others
@@ -922,8 +922,8 @@ public class Values {
         private SchemaAndValue parseArray() {
             List<Object> result = new ArrayList<>();
             SchemaMerger elementSchema = new SchemaMerger();
-            while (tokenizer.hasNext()) {
-                if (tokenizer.canConsume(ARRAY_END_DELIMITER)) {
+            while (parser.hasNext()) {
+                if (parser.canConsume(ARRAY_END_DELIMITER)) {
                     Schema listSchema;
                     if (elementSchema.hasCommonSchema()) {
                         listSchema = SchemaBuilder.array(elementSchema.schema()).schema();
@@ -935,34 +935,34 @@ public class Values {
                     return new SchemaAndValue(listSchema, result);
                 }
 
-                if (tokenizer.canConsume(COMMA_DELIMITER)) {
-                    throw new DataException("Unable to parse an empty array element: " + tokenizer.original());
+                if (parser.canConsume(COMMA_DELIMITER)) {
+                    throw new DataException("Unable to parse an empty array element: " + parser.original());
                 }
                 SchemaAndValue element = parse(true);
                 elementSchema.merge(element);
                 result.add(element != null ? element.value() : null);
 
-                int currentPosition = tokenizer.mark();
-                if (tokenizer.canConsume(ARRAY_END_DELIMITER)) {
-                    tokenizer.rewindTo(currentPosition);
-                } else if (!tokenizer.canConsume(COMMA_DELIMITER)) {
+                int currentPosition = parser.mark();
+                if (parser.canConsume(ARRAY_END_DELIMITER)) {
+                    parser.rewindTo(currentPosition);
+                } else if (!parser.canConsume(COMMA_DELIMITER)) {
                     throw new DataException("Array elements missing '" + COMMA_DELIMITER + "' delimiter");
                 }
             }
 
             // Missing either a comma or an end delimiter
-            if (COMMA_DELIMITER.equals(tokenizer.previous())) {
-                throw new DataException("Array is missing element after ',': " + tokenizer.original());
+            if (COMMA_DELIMITER.equals(parser.previous())) {
+                throw new DataException("Array is missing element after ',': " + parser.original());
             }
-            throw new DataException("Array is missing terminating ']': " + tokenizer.original());
+            throw new DataException("Array is missing terminating ']': " + parser.original());
         }
 
         private SchemaAndValue parseMap() {
             Map<Object, Object> result = new LinkedHashMap<>();
             SchemaMerger keySchema = new SchemaMerger();
             SchemaMerger valueSchema = new SchemaMerger();
-            while (tokenizer.hasNext()) {
-                if (tokenizer.canConsume(MAP_END_DELIMITER)) {
+            while (parser.hasNext()) {
+                if (parser.canConsume(MAP_END_DELIMITER)) {
                     Schema mapSchema;
                     if (keySchema.hasCommonSchema() && valueSchema.hasCommonSchema()) {
                         mapSchema = SchemaBuilder.map(keySchema.schema(), valueSchema.schema()).build();
@@ -976,37 +976,37 @@ public class Values {
                     return new SchemaAndValue(mapSchema, result);
                 }
 
-                if (tokenizer.canConsume(COMMA_DELIMITER)) {
-                    throw new DataException("Unable to parse a map entry with no key or value: " + tokenizer.original());
+                if (parser.canConsume(COMMA_DELIMITER)) {
+                    throw new DataException("Unable to parse a map entry with no key or value: " + parser.original());
                 }
                 SchemaAndValue key = parse(true);
                 if (key == null || key.value() == null) {
-                    throw new DataException("Map entry may not have a null key: " + tokenizer.original());
-                } else if (!tokenizer.canConsume(ENTRY_DELIMITER)) {
+                    throw new DataException("Map entry may not have a null key: " + parser.original());
+                } else if (!parser.canConsume(ENTRY_DELIMITER)) {
                     throw new DataException("Map entry is missing '" + ENTRY_DELIMITER
-                            + "' at " + tokenizer.position()
-                            + " in " + tokenizer.original());
+                            + "' at " + parser.position()
+                            + " in " + parser.original());
                 }
                 SchemaAndValue value = parse(true);
                 Object entryValue = value != null ? value.value() : null;
                 result.put(key.value(), entryValue);
 
-                tokenizer.canConsume(COMMA_DELIMITER);
+                parser.canConsume(COMMA_DELIMITER);
                 keySchema.merge(key);
                 valueSchema.merge(value);
             }
             // Missing either a comma or an end delimiter
-            if (COMMA_DELIMITER.equals(tokenizer.previous())) {
-                throw new DataException("Map is missing element after ',': " + tokenizer.original());
+            if (COMMA_DELIMITER.equals(parser.previous())) {
+                throw new DataException("Map is missing element after ',': " + parser.original());
             }
-            throw new DataException("Map is missing terminating '}': " + tokenizer.original());
+            throw new DataException("Map is missing terminating '}': " + parser.original());
         }
 
         private SchemaAndValue parseMultipleTokensAsTemporal(String token) {
             // The time and timestamp literals may be split into 5 tokens since an unescaped colon
             // is a delimiter. Check these first since the first of these tokens is a simple numeric
-            int position = tokenizer.mark();
-            String remainder = tokenizer.next(4);
+            int position = parser.mark();
+            String remainder = parser.next(4);
             if (remainder != null) {
                 String timeOrTimestampStr = token + remainder;
                 SchemaAndValue temporal = parseAsTemporal(timeOrTimestampStr);
@@ -1015,7 +1015,7 @@ public class Values {
                 }
             }
             // No match was found using the 5 tokens, so rewind and see if the current token has a date, time, or timestamp
-            tokenizer.rewindTo(position);
+            parser.rewindTo(position);
             return parseAsTemporal(token);
         }
 
@@ -1287,13 +1287,13 @@ public class Values {
         }
     }
 
-    protected static class Tokenizer {
+    protected static class Parser {
         private final String original;
         private final CharacterIterator iter;
         private String nextToken = null;
         private String previousToken = null;
 
-        public Tokenizer(String original) {
+        public Parser(String original) {
             this.original = original;
             this.iter = new StringCharacterIterator(this.original);
         }

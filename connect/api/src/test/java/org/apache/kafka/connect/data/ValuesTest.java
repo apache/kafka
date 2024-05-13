@@ -18,7 +18,7 @@ package org.apache.kafka.connect.data;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema.Type;
-import org.apache.kafka.connect.data.Values.Tokenizer;
+import org.apache.kafka.connect.data.Values.Parser;
 import org.apache.kafka.connect.errors.DataException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -779,7 +779,7 @@ public class ValuesTest {
     @Test
     public void shouldConsumeMultipleTokens() {
         String value = "a:b:c:d:e:f:g:h";
-        Tokenizer parser = new Tokenizer(value);
+        Parser parser = new Parser(value);
         String firstFive = parser.next(5);
         assertEquals("a:b:c", firstFive);
         assertEquals(":", parser.next());
@@ -1159,7 +1159,7 @@ public class ValuesTest {
     }
 
     protected void assertParsed(String input, String... expectedTokens) {
-        Tokenizer parser = new Tokenizer(input);
+        Parser parser = new Parser(input);
         if (!parser.hasNext()) {
             assertEquals(1, expectedTokens.length);
             assertTrue(expectedTokens[0].isEmpty());
@@ -1186,11 +1186,11 @@ public class ValuesTest {
         assertConsumable(parser, expectedTokens);
 
         // Parse again and try consuming expected tokens ...
-        parser = new Tokenizer(input);
+        parser = new Parser(input);
         assertConsumable(parser, expectedTokens);
     }
 
-    protected void assertConsumable(Tokenizer parser, String... expectedTokens) {
+    protected void assertConsumable(Parser parser, String... expectedTokens) {
         for (String expectedToken : expectedTokens) {
             if (!Utils.isBlank(expectedToken)) {
                 int position = parser.mark();
