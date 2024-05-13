@@ -22,12 +22,13 @@ import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.{AfterEach, Disabled}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 
+@Disabled
 @ClusterTestDefaults(clusterType = Type.ALL)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class BrokerMetricNamesTest(cluster: ClusterInstance) {

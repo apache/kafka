@@ -907,6 +907,8 @@ object LocalLog extends Logging {
                                       scheduler: Scheduler,
                                       logDirFailureChannel: LogDirFailureChannel,
                                       logPrefix: String): Unit = {
+    System.err.print(s"del")
+    System.err.flush()
     segmentsToDelete.foreach { segment =>
       if (!segment.hasSuffix(LogFileUtils.DELETED_FILE_SUFFIX))
         segment.changeFileSuffixes("", LogFileUtils.DELETED_FILE_SUFFIX)
@@ -926,6 +928,9 @@ object LocalLog extends Logging {
       scheduler.scheduleOnce("delete-file", () => deleteSegments(), config.fileDeleteDelayMs)
     else
       deleteSegments()
+
+    System.err.print(s"del end")
+    System.err.flush()
   }
 
   private[log] def emptyFetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,

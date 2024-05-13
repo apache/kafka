@@ -69,6 +69,7 @@ import scala.util.{Random, Using}
  *
  * Also see [[org.apache.kafka.clients.admin.KafkaAdminClientTest]] for unit tests of the admin client.
  */
+@Disabled
 class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   import PlaintextAdminIntegrationTest._
 

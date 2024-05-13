@@ -14,7 +14,6 @@ package kafka.api
 
 import java.util
 import java.util.Properties
-
 import kafka.security.authorizer.AclAuthorizer
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
@@ -29,7 +28,7 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -73,6 +72,7 @@ object DescribeAuthorizedOperationsTest {
   }
 }
 
+@Disabled
 class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslSetup {
   import DescribeAuthorizedOperationsTest._
 

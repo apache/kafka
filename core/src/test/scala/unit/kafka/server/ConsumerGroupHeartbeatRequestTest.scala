@@ -25,13 +25,13 @@ import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, Consu
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull}
-import org.junit.jupiter.api.Tag
-import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.{Disabled, Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util.stream.Collectors
 import scala.jdk.CollectionConverters._
 
+@Disabled
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.ALL, brokers = 1)

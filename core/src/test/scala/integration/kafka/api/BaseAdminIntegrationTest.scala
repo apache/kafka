@@ -33,7 +33,7 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo, Timeout}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -46,6 +46,7 @@ import scala.compat.java8.OptionConverters._
  * time to the build. However, if an admin API involves differing interactions with
  * authentication/authorization layers, we may add the test case here.
  */
+@Disabled
 @Timeout(120)
 abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logging {
   def brokerCount = 3

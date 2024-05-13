@@ -890,9 +890,9 @@ class LogManager(logDirs: Seq[File],
   /**
    * Abort and pause cleaning of the provided partition and log a message about it.
    */
-  def abortAndPauseCleaning(topicPartition: TopicPartition): Unit = {
+  def abortAndPauseCleaning(topicPartition: TopicPartition, shouldInc: Boolean = true): Unit = {
     if (cleaner != null) {
-      cleaner.abortAndPauseCleaning(topicPartition)
+      cleaner.abortAndPauseCleaning(topicPartition, shouldInc)
       info(s"The cleaning for partition $topicPartition is aborted and paused")
     }
   }
@@ -1247,6 +1247,7 @@ class LogManager(logDirs: Seq[File],
     // Update the cached map and log cleaner as appropriate.
     futureLogs.remove(topicPartition)
     currentLogs.put(topicPartition, destLog)
+    System.err.print(s"c:${currentLogs.get(topicPartition)}")
     if (cleaner != null) {
       sourceLog.foreach { srcLog =>
         cleaner.alterCheckpointDir(topicPartition, srcLog.parentDirFile, destLog.parentDirFile)
@@ -1394,6 +1395,8 @@ class LogManager(logDirs: Seq[File],
    */
   private def cleanupLogs(): Unit = {
     debug("Beginning log cleanup...")
+    System.err.print(s"start clean ")
+    System.err.flush()
     var total = 0
     val startMs = time.milliseconds
 
@@ -1409,27 +1412,42 @@ class LogManager(logDirs: Seq[File],
       }
     }
 
+    System.err.print(s"c1:${currentLogs.get(new TopicPartition("topicB", 0))}")
+    System.err.flush()
+
     try {
       deletableLogs.foreach {
         case (topicPartition, log) =>
+          if (topicPartition.topic().contains("topicB")) {
+            System.err.print(s"d:${log.dir}")
+            System.err.flush()
+          }
           debug(s"Garbage collecting '${log.name}'")
           total += log.deleteOldSegments()
 
           val futureLog = futureLogs.get(topicPartition)
           if (futureLog != null) {
             // clean future logs
+            System.err.print(s"fut:${futureLog.name} ")
+            System.err.flush()
             debug(s"Garbage collecting future log '${futureLog.name}'")
             total += futureLog.deleteOldSegments()
           }
       }
     } finally {
       if (cleaner != null) {
+        System.err.print(s"cleaner ")
+        System.err.flush()
         cleaner.resumeCleaning(deletableLogs.map(_._1))
+        System.err.print(s"cleaner end")
+        System.err.flush()
       }
     }
 
     debug(s"Log cleanup completed. $total files deleted in " +
                   (time.milliseconds - startMs) / 1000 + " seconds")
+    System.err.print(s"end clean ")
+    System.err.flush()
   }
 
   /**

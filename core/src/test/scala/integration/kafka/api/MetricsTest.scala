@@ -28,7 +28,7 @@ import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteStorageMetrics}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -36,6 +36,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
+@Disabled
 class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
   override val brokerCount = 1

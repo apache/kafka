@@ -573,6 +573,7 @@ class ReplicaManager(val config: KafkaConfig,
    *                         If no errors occurred, the map will be empty.
    */
   private def stopPartitions(partitionsToStop: Set[StopPartition]): Map[TopicPartition, Throwable] = {
+    System.err.print(s"stop:$partitionsToStop")
     // First stop fetchers for all partitions.
     val partitions = partitionsToStop.map(_.topicPartition)
     replicaFetcherManager.removeFetcherForPartitions(partitions)
@@ -701,6 +702,10 @@ class ReplicaManager(val config: KafkaConfig,
 
   def futureLogExists(topicPartition: TopicPartition): Boolean = {
     getPartitionOrException(topicPartition).futureLog.isDefined
+  }
+
+  def futureLogOrException(topicPartition: TopicPartition): UnifiedLog = {
+    getPartitionOrException(topicPartition).futureLocalLogOrException
   }
 
   def localLog(topicPartition: TopicPartition): Option[UnifiedLog] = {
@@ -1197,7 +1202,7 @@ class ReplicaManager(val config: KafkaConfig,
           val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
           if (partition.maybeCreateFutureReplica(destinationDir, highWatermarkCheckpoints)) {
             val futureLog = futureLocalLogOrException(topicPartition)
-            logManager.abortAndPauseCleaning(topicPartition)
+            logManager.abortAndPauseCleaning(topicPartition, shouldInc = false)
 
             val initialFetchState = InitialFetchState(topicId, BrokerEndPoint(config.brokerId, "localhost", -1),
               partition.getLeaderEpoch, futureLog.highWatermark)
@@ -1744,8 +1749,8 @@ class ReplicaManager(val config: KafkaConfig,
       val leaderLogStartOffset = log.logStartOffset
       val leaderLogEndOffset = log.logEndOffset
 
-      if (params.isFromFollower) {
-        // If it is from a follower then send the offset metadata only as the data is already available in remote
+      if (params.isFromFollower || params.isFromFuture) {
+        // If it is from a follower or from a future replica, then send the offset metadata only as the data is already available in remote
         // storage and throw an error saying that this offset is moved to tiered storage.
         createLogReadResult(highWatermark, leaderLogStartOffset, leaderLogEndOffset,
           new OffsetMovedToTieredStorageException("Given offset" + offset + " is moved to tiered storage"))
@@ -2123,7 +2128,7 @@ class ReplicaManager(val config: KafkaConfig,
 
           // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move
           // replica from source dir to destination dir
-          logManager.abortAndPauseCleaning(topicPartition)
+          logManager.abortAndPauseCleaning(topicPartition, shouldInc = false)
 
           futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(topicIds(topicPartition.topic), leader,
             partition.getLeaderEpoch, futureLog.highWatermark))

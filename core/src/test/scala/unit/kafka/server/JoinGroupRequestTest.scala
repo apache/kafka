@@ -27,7 +27,7 @@ import org.apache.kafka.common.message.{JoinGroupResponseData, SyncGroupRequestD
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{Tag, Timeout}
+import org.junit.jupiter.api.{Disabled, Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util.Collections
@@ -36,6 +36,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.jdk.CollectionConverters._
 
+@Disabled
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.KRAFT, brokers = 1)

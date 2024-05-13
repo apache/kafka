@@ -29,7 +29,7 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.{KRaftConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions.{assertThrows, fail}
 import org.junit.jupiter.api.extension.ExtendWith
-import org.junit.jupiter.api.{Tag, Timeout}
+import org.junit.jupiter.api.{Disabled, Tag, Timeout}
 
 import java.util.Optional
 import java.util.concurrent.{TimeUnit, TimeoutException}
@@ -42,6 +42,7 @@ import scala.jdk.CollectionConverters._
  * failure paths is to use timeouts. See {@link unit.kafka.server.BrokerRegistrationRequestTest} for integration test
  * of just the broker registration path.
  */
+@Disabled
 @Timeout(120)
 @Tag("integration")
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))

@@ -31,6 +31,7 @@ import java.util.{Optional, Properties}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
+
 class BaseFetchRequestTest extends BaseRequestTest {
 
   protected var producer: KafkaProducer[String, String] = _
