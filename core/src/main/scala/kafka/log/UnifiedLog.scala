@@ -361,7 +361,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val offsetMetadata = highWatermarkMetadata
     if (offsetMetadata.messageOffsetOnly) {
       lock.synchronized {
-        val fullOffset = convertToOffsetMetadata(highWatermark)
+        val fullOffset = maybeConvertToOffsetMetadata(highWatermark)
         updateHighWatermarkMetadata(fullOffset)
         fullOffset
       }
@@ -405,7 +405,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       case Some(offsetMetadata) if offsetMetadata.messageOffset < highWatermarkMetadata.messageOffset =>
         if (offsetMetadata.messageOffsetOnly) {
           lock synchronized {
-            val fullOffset = convertToOffsetMetadata(offsetMetadata.messageOffset)
+            val fullOffset = maybeConvertToOffsetMetadata(offsetMetadata.messageOffset)
             if (firstUnstableOffsetMetadata.contains(offsetMetadata))
               firstUnstableOffsetMetadata = Some(fullOffset)
             fullOffset
@@ -964,7 +964,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val updatedFirstUnstableOffset = producerStateManager.firstUnstableOffset.asScala match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly || logOffsetMetadata.messageOffset < logStartOffset =>
         val offset = math.max(logOffsetMetadata.messageOffset, logStartOffset)
-        Some(convertToOffsetMetadata(offset))
+        Some(maybeConvertToOffsetMetadata(offset))
       case other => other
     }
 
@@ -1430,7 +1430,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     * 2. If the message offset is beyond the log-end-offset, then it returns the message-only metadata.
     * 3. For all other cases, it returns the offset metadata from the log.
     */
-  private[log] def convertToOffsetMetadata(offset: Long): LogOffsetMetadata = {
+  private[log] def maybeConvertToOffsetMetadata(offset: Long): LogOffsetMetadata = {
     try {
       localLog.convertToOffsetMetadataOrThrow(offset)
     } catch {
