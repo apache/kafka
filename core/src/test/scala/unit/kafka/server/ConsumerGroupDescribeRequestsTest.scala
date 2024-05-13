@@ -23,7 +23,7 @@ import kafka.test.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.{Assignment, DescribedGroup, TopicPartitions}
-import org.apache.kafka.common.message.{ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData}
+import org.apache.kafka.common.message.{ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -81,33 +81,44 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
     val clientId = "client-id"
     val clientHost = "/127.0.0.1"
 
-    // Add first group with one member
-    val consumerGroupHeartbeatResponseData1 = consumerGroupHeartbeat(
-      groupId = "grp-1",
-      rebalanceTimeoutMs = timeoutMs,
-      subscribedTopicNames = List("bar"),
-      topicPartitions = List.empty
-    )
+    // Add first group with one member.
+    var grp1Member1Response: ConsumerGroupHeartbeatResponseData = null
+    TestUtils.waitUntilTrue(() => {
+      grp1Member1Response = consumerGroupHeartbeat(
+        groupId = "grp-1",
+        rebalanceTimeoutMs = timeoutMs,
+        subscribedTopicNames = List("bar"),
+        topicPartitions = List.empty
+      )
+      grp1Member1Response.errorCode == Errors.NONE.code
+    }, msg = s"Could not join the group successfully. Last response $grp1Member1Response.")
 
-    // Add second group with two members
-    consumerGroupHeartbeat(
-      memberId = "member-1",
-      groupId = "grp-2",
-      rebalanceTimeoutMs = timeoutMs,
-      subscribedTopicNames = List("foo"),
-      topicPartitions = List.empty
-    )
+    // Add second group with two members. For the first member, we
+    // wait until it receives an assignment. We use 'range` in this
+    // case to validate the assignor selection logic.
+    var grp2Member1Response: ConsumerGroupHeartbeatResponseData = null
+    TestUtils.waitUntilTrue(() => {
+      grp2Member1Response = consumerGroupHeartbeat(
+        memberId = "member-1",
+        groupId = "grp-2",
+        serverAssignor = "range",
+        rebalanceTimeoutMs = timeoutMs,
+        subscribedTopicNames = List("foo"),
+        topicPartitions = List.empty
+      )
+      grp2Member1Response.assignment != null && !grp2Member1Response.assignment.topicPartitions.isEmpty
+    }, msg = s"Could not join the group successfully. Last response $grp2Member1Response.")
 
-    consumerGroupHeartbeat(
+    val grp2Member2Response = consumerGroupHeartbeat(
       memberId = "member-2",
       groupId = "grp-2",
+      serverAssignor = "range",
       rebalanceTimeoutMs = timeoutMs,
       subscribedTopicNames = List("foo"),
       topicPartitions = List.empty
     )
 
     for (version <- ApiKeys.CONSUMER_GROUP_DESCRIBE.oldestVersion() to ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)) {
-
       val expected = List(
         new DescribedGroup()
           .setGroupId("grp-1")
@@ -117,29 +128,28 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
           .setAssignorName("uniform")
           .setMembers(List(
             new ConsumerGroupDescribeResponseData.Member()
-              .setMemberId(consumerGroupHeartbeatResponseData1.memberId)
-              .setMemberEpoch(1)
+              .setMemberId(grp1Member1Response.memberId)
+              .setMemberEpoch(grp1Member1Response.memberEpoch)
               .setClientId(clientId)
               .setClientHost(clientHost)
               .setSubscribedTopicRegex("")
               .setSubscribedTopicNames(List("bar").asJava)
           ).asJava),
-
         new DescribedGroup()
           .setGroupId("grp-2")
           .setGroupState(ConsumerGroupState.RECONCILING.toString)
-          .setGroupEpoch(2)
-          .setAssignmentEpoch(2)
-          .setAssignorName("uniform")
+          .setGroupEpoch(grp2Member2Response.memberEpoch)
+          .setAssignmentEpoch(grp2Member2Response.memberEpoch)
+          .setAssignorName("range")
           .setMembers(List(
             new ConsumerGroupDescribeResponseData.Member()
-              .setMemberId("member-2")
-              .setMemberEpoch(2)
+              .setMemberId(grp2Member2Response.memberId)
+              .setMemberEpoch(grp2Member2Response.memberEpoch)
               .setClientId(clientId)
               .setClientHost(clientHost)
               .setSubscribedTopicRegex("")
               .setSubscribedTopicNames(List("foo").asJava)
-              .setAssignment(new Assignment().setTopicPartitions(List().asJava))
+              .setAssignment(new Assignment())
               .setTargetAssignment(new Assignment()
                 .setTopicPartitions(List(
                   new TopicPartitions()
@@ -148,8 +158,8 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
                     .setPartitions(List[Integer](2).asJava)
                 ).asJava)),
             new ConsumerGroupDescribeResponseData.Member()
-              .setMemberId("member-1")
-              .setMemberEpoch(1)
+              .setMemberId(grp2Member1Response.memberId)
+              .setMemberEpoch(grp2Member1Response.memberEpoch)
               .setClientId(clientId)
               .setClientHost(clientHost)
               .setSubscribedTopicRegex("")
