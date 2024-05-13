@@ -947,17 +947,15 @@ public class TaskManager {
         }
     }
 
-    /** Returns true if the task closed clean */
-    private boolean closeTaskClean(final Task task,
-                                   final Set<Task> tasksToCloseDirty,
-                                   final Map<TaskId, RuntimeException> taskExceptions) {
+    private void closeTaskClean(final Task task,
+                                final Set<Task> tasksToCloseDirty,
+                                final Map<TaskId, RuntimeException> taskExceptions) {
         try {
             task.suspend();
             task.closeClean();
             if (task.isActive()) {
                 activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
             }
-            return true;
         } catch (final RuntimeException e) {
             final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
                 "Attempting to close remaining tasks before re-throwing:", task.id());
@@ -968,7 +966,6 @@ public class TaskManager {
             }
 
             taskExceptions.putIfAbsent(task.id(), e);
-            return false;
         }
     }
 
@@ -1035,44 +1032,6 @@ public class TaskManager {
         }
 
         return taskExceptions;
-    }
-
-    private void handleRemovedTasksFromStateUpdater() {
-        final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
-        final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
-
-        for (final Task task : stateUpdater.drainRemovedTasks()) {
-            Set<TopicPartition> inputPartitions;
-            if ((inputPartitions = tasks.removePendingTaskToRecycle(task.id())) != null) {
-                recycleTaskFromStateUpdater(task, inputPartitions, tasksToCloseDirty, taskExceptions);
-            } else if (tasks.removePendingTaskToAddBack(task.id())) {
-                stateUpdater.add(task);
-            } else if (tasks.removePendingTaskToCloseClean(task.id())) {
-                closeTaskClean(task, tasksToCloseDirty, taskExceptions);
-            } else if ((inputPartitions = tasks.removePendingTaskToCloseReviveAndUpdateInputPartitions(task.id())) != null) {
-                if (closeTaskClean(task, tasksToCloseDirty, taskExceptions)) {
-                    task.revive();
-                    task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
-                    addTaskToStateUpdater(task);
-                }
-            } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
-                task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
-                stateUpdater.add(task);
-            } else if (tasks.removePendingActiveTaskToSuspend(task.id())) {
-                task.suspend();
-                tasks.addTask(task);
-            } else {
-                throw new IllegalStateException("Got a removed task " + task.id() + " from the state updater " +
-                    "that is not for recycle, closing, or updating input partitions; this should not happen");
-            }
-        }
-
-        // for tasks that cannot be cleanly closed or recycled, close them dirty
-        for (final Task task : tasksToCloseDirty) {
-            closeTaskDirty(task, false);
-        }
-
-        maybeThrowTaskExceptions(taskExceptions);
     }
 
     private void handleRestoredTasksFromStateUpdater(final long now,
@@ -1523,10 +1482,26 @@ public class TaskManager {
 
     private void shutdownStateUpdater() {
         if (stateUpdater != null) {
+            final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
+            for (final Task task : stateUpdater.getTasks()) {
+                final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(task.id());
+                futures.put(task.id(), future);
+            }
+            final Set<Task> tasksToCloseClean = new HashSet<>();
+            final Set<Task> tasksToCloseDirty = new HashSet<>();
+            addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
             stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
-            closeFailedTasksFromStateUpdater();
-            addRestoredTasksToTaskRegistry();
-            addRemovedTasksToTaskRegistry();
+
+            for (final Task task : tasksToCloseClean) {
+                tasks.addTask(task);
+            }
+            for (final Task task : tasksToCloseDirty) {
+                closeTaskDirty(task, false);
+            }
+            for (final StateUpdater.ExceptionAndTask exceptionAndTask : stateUpdater.drainExceptionsAndFailedTasks()) {
+                final Task failedTask = exceptionAndTask.task();
+                closeTaskDirty(failedTask, false);
+            }
         }
     }
 
@@ -1534,59 +1509,6 @@ public class TaskManager {
         if (schedulingTaskManager != null) {
             schedulingTaskManager.shutdown(Duration.ofMillis(Long.MAX_VALUE));
         }
-    }
-
-    private void closeFailedTasksFromStateUpdater() {
-        final Set<Task> tasksToCloseDirty = stateUpdater.drainExceptionsAndFailedTasks().stream()
-            .map(StateUpdater.ExceptionAndTask::task).collect(Collectors.toSet());
-
-        for (final Task task : tasksToCloseDirty) {
-            try {
-                // we call this function only to flush the case if necessary
-                // before suspending and closing the topology
-                task.prepareCommit();
-            } catch (final RuntimeException swallow) {
-                log.error("Error flushing caches of dirty task {} ", task.id(), swallow);
-            }
-
-            try {
-                task.suspend();
-            } catch (final RuntimeException swallow) {
-                log.error("Error suspending dirty task {}: {}", task.id(), swallow.getMessage());
-            }
-
-            task.closeDirty();
-
-            try {
-                if (task.isActive()) {
-                    activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-                }
-            } catch (final RuntimeException swallow) {
-                log.error("Error closing dirty task {}: {}", task.id(), swallow.getMessage());
-            }
-        }
-    }
-
-    private void addRestoredTasksToTaskRegistry() {
-        tasks.addActiveTasks(stateUpdater.drainRestoredActiveTasks(Duration.ZERO).stream()
-            .map(t -> (Task) t)
-            .collect(Collectors.toSet())
-        );
-    }
-
-    private void addRemovedTasksToTaskRegistry() {
-        final Set<Task> removedTasks = stateUpdater.drainRemovedTasks();
-        final Set<Task> removedActiveTasks = new HashSet<>();
-        final Iterator<Task> iterator = removedTasks.iterator();
-        while (iterator.hasNext()) {
-            final Task task = iterator.next();
-            if (task.isActive()) {
-                iterator.remove();
-                removedActiveTasks.add(task);
-            }
-        }
-        tasks.addActiveTasks(removedActiveTasks);
-        tasks.addStandbyTasks(removedTasks);
     }
 
     /**

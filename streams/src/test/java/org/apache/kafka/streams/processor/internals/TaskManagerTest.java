@@ -176,7 +176,9 @@ public class TaskManagerTest {
 
     private final TaskId taskId05 = new TaskId(0, 5);
     private final TopicPartition t1p5 = new TopicPartition(topic1, 5);
+    private final TopicPartition t1p5changelog = new TopicPartition("changelog", 5);
     private final Set<TopicPartition> taskId05Partitions = mkSet(t1p5);
+    private final Set<TopicPartition> taskId05ChangelogPartitions = mkSet(t1p5changelog);
 
     private final TaskId taskId10 = new TaskId(1, 0);
     private final TopicPartition t2p0 = new TopicPartition(topic2, 0);
@@ -691,7 +693,7 @@ public class TaskManagerTest {
             Collections.emptyMap()
         );
 
-        verify(stateUpdater, never()).remove(reassignedActiveTask.id());
+        verify(stateUpdater, never()).removeWithFuture(reassignedActiveTask.id());
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
@@ -730,7 +732,7 @@ public class TaskManagerTest {
             mkMap(mkEntry(standbyTaskToUpdateInputPartitions.id(), taskId03Partitions))
         );
 
-        verify(stateUpdater, never()).remove(standbyTaskToUpdateInputPartitions.id());
+        verify(stateUpdater, never()).removeWithFuture(standbyTaskToUpdateInputPartitions.id());
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
@@ -1339,7 +1341,7 @@ public class TaskManagerTest {
         verify(task1).closeClean();
         verify(task3).suspend();
         verify(task3).closeClean();
-        verify(stateUpdater, never()).remove(task2.id());
+        verify(stateUpdater, never()).removeWithFuture(task2.id());
     }
 
     @Test
@@ -3381,50 +3383,80 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldShutDownStateUpdaterAndAddRestoredTasksToTaskRegistry() {
-        final TasksRegistry tasks = mock(TasksRegistry.class);
-        final StreamTask statefulTask1 = statefulTask(taskId01, taskId01ChangelogPartitions)
-            .inState(State.RESTORING).build();
-        final StreamTask statefulTask2 = statefulTask(taskId02, taskId02ChangelogPartitions)
-            .inState(State.RESTORING).build();
-        final Set<StreamTask> restoredActiveTasks = mkSet(statefulTask1, statefulTask2);
-        final Set<Task> restoredTasks = restoredActiveTasks.stream().map(t -> (Task) t).collect(Collectors.toSet());
-        when(stateUpdater.drainRestoredActiveTasks(Duration.ZERO)).thenReturn(restoredActiveTasks);
-        when(tasks.activeTasks()).thenReturn(restoredTasks);
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-
-        taskManager.shutdown(true);
-
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(statefulTask1.id());
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(statefulTask2.id());
-        verify(activeTaskCreator).closeThreadProducerIfNeeded();
-        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
-        verify(tasks).addActiveTasks(restoredTasks);
-        verify(statefulTask1).closeClean();
-        verify(statefulTask2).closeClean();
-    }
-
-    @Test
-    public void shouldShutDownStateUpdaterAndAddRemovedTasksToTaskRegistry() {
+    public void shouldShutDownStateUpdaterAndCloseDirtyTasksFailedDuringRemoval() {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final StreamTask removedStatefulTask = statefulTask(taskId01, taskId01ChangelogPartitions)
             .inState(State.RESTORING).build();
         final StandbyTask removedStandbyTask = standbyTask(taskId02, taskId02ChangelogPartitions)
             .inState(State.RUNNING).build();
-        when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(removedStandbyTask, removedStatefulTask));
-        when(tasks.activeTasks()).thenReturn(mkSet(removedStatefulTask));
-        when(tasks.allTasks()).thenReturn(mkSet(removedStatefulTask, removedStandbyTask));
+        final StreamTask removedFailedStatefulTask = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RESTORING).build();
+        final StandbyTask removedFailedStandbyTask = standbyTask(taskId04, taskId04ChangelogPartitions)
+            .inState(State.RUNNING).build();
+        final StreamTask removedFailedStatefulTaskDuringRemoval = statefulTask(taskId05, taskId05ChangelogPartitions)
+            .inState(State.RESTORING).build();
+        final StandbyTask removedFailedStandbyTaskDuringRemoval = standbyTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING).build();
+        when(stateUpdater.getTasks())
+            .thenReturn(mkSet(
+                removedStatefulTask,
+                removedStandbyTask,
+                removedFailedStatefulTask,
+                removedFailedStandbyTask,
+                removedFailedStatefulTaskDuringRemoval,
+                removedFailedStandbyTaskDuringRemoval
+            ));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedStatefulTask = new CompletableFuture<>();
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedStandbyTask = new CompletableFuture<>();
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedFailedStatefulTask = new CompletableFuture<>();
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedFailedStandbyTask = new CompletableFuture<>();
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedFailedStatefulTaskDuringRemoval = new CompletableFuture<>();
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedFailedStandbyTaskDuringRemoval = new CompletableFuture<>();
+        when(stateUpdater.removeWithFuture(removedStatefulTask.id())).thenReturn(futureForRemovedStatefulTask);
+        when(stateUpdater.removeWithFuture(removedStandbyTask.id())).thenReturn(futureForRemovedStandbyTask);
+        when(stateUpdater.removeWithFuture(removedFailedStatefulTask.id())).thenReturn(futureForRemovedFailedStatefulTask);
+        when(stateUpdater.removeWithFuture(removedFailedStandbyTask.id())).thenReturn(futureForRemovedFailedStandbyTask);
+        when(stateUpdater.removeWithFuture(removedFailedStatefulTaskDuringRemoval.id()))
+            .thenReturn(futureForRemovedFailedStatefulTaskDuringRemoval);
+        when(stateUpdater.removeWithFuture(removedFailedStandbyTaskDuringRemoval.id()))
+            .thenReturn(futureForRemovedFailedStandbyTaskDuringRemoval);
+        when(stateUpdater.drainExceptionsAndFailedTasks()).thenReturn(Arrays.asList(
+            new ExceptionAndTask(new StreamsException("KABOOM!"), removedFailedStatefulTaskDuringRemoval),
+            new ExceptionAndTask(new StreamsException("KABOOM!"), removedFailedStandbyTaskDuringRemoval)
+        ));
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        futureForRemovedStatefulTask.complete(new StateUpdater.RemovedTaskResult(removedStatefulTask));
+        futureForRemovedStandbyTask.complete(new StateUpdater.RemovedTaskResult(removedStandbyTask));
+        futureForRemovedFailedStatefulTask
+            .complete(new StateUpdater.RemovedTaskResult(removedFailedStatefulTask, new StreamsException("KABOOM!")));
+        futureForRemovedFailedStandbyTask
+            .complete(new StateUpdater.RemovedTaskResult(removedFailedStandbyTask, new StreamsException("KABOOM!")));
+        futureForRemovedFailedStatefulTaskDuringRemoval
+            .completeExceptionally(new StreamsException("KABOOM!"));
+        futureForRemovedFailedStandbyTaskDuringRemoval
+            .completeExceptionally(new StreamsException("KABOOM!"));
 
         taskManager.shutdown(true);
 
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(removedStatefulTask.id());
-        verify(activeTaskCreator).closeThreadProducerIfNeeded();
         verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
-        verify(tasks).addActiveTasks(mkSet(removedStatefulTask));
-        verify(tasks).addStandbyTasks(mkSet(removedStandbyTask));
-        verify(removedStatefulTask).closeClean();
-        verify(removedStandbyTask).closeClean();
+        verify(tasks).addTask(removedStatefulTask);
+        verify(tasks).addTask(removedStandbyTask);
+        verify(removedFailedStatefulTask).prepareCommit();
+        verify(removedFailedStatefulTask).suspend();
+        verify(removedFailedStatefulTask).closeDirty();
+        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId03);
+        verify(removedFailedStandbyTask).prepareCommit();
+        verify(removedFailedStandbyTask).suspend();
+        verify(removedFailedStandbyTask).closeDirty();
+        verify(activeTaskCreator, never()).closeAndRemoveTaskProducerIfNeeded(taskId04);
+        verify(removedFailedStatefulTaskDuringRemoval).prepareCommit();
+        verify(removedFailedStatefulTaskDuringRemoval).suspend();
+        verify(removedFailedStatefulTaskDuringRemoval).closeDirty();
+        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId05);
+        verify(removedFailedStandbyTaskDuringRemoval).prepareCommit();
+        verify(removedFailedStandbyTaskDuringRemoval).suspend();
+        verify(removedFailedStandbyTaskDuringRemoval).closeDirty();
+        verify(activeTaskCreator, never()).closeAndRemoveTaskProducerIfNeeded(taskId00);
     }
 
     @Test
