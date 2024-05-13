@@ -94,7 +94,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
             if (state.isLeader() || state.isCandidate()) {
                 return state.localIdOrThrow();
             } else {
-                return state.maybeVotedState()
+                return (double) state.maybeVotedState()
                     .map(votedState -> votedState.votedKey().id())
                     .orElse(-1);
             }
