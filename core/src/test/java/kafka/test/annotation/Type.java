@@ -45,20 +45,6 @@ public enum Type {
         public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
             invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config));
         }
-    },
-    ALL {
-        @Override
-        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, false));
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, true));
-            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config));
-        }
-    },
-    DEFAULT {
-        @Override
-        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            throw new UnsupportedOperationException("Cannot create invocation contexts for DEFAULT type");
-        }
     };
 
     public abstract void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer);

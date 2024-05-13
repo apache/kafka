@@ -47,7 +47,7 @@ import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 
-@ClusterTestDefaults(clusterType = Type.ZK, serverProperties = {
+@ClusterTestDefaults(types = {Type.ZK}, serverProperties = {
     @ClusterConfigProperty(key = "default.key", value = "default.value"),
     @ClusterConfigProperty(id = 0, key = "queued.max.requests", value = "100"),
 })   // Set defaults for a few params in @ClusterTest(s)
@@ -65,6 +65,7 @@ public class ClusterTestExtensionsTest {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put("foo", "bar");
         clusterGenerator.accept(ClusterConfig.defaultBuilder()
+                .setTypes(Collections.singleton(Type.ZK))
                 .setName("Generated Test")
                 .setServerProperties(serverProperties)
                 .build());
@@ -74,14 +75,14 @@ public class ClusterTestExtensionsTest {
     @ClusterTest
     public void testClusterTest(ClusterInstance clusterInstance) {
         Assertions.assertSame(this.clusterInstance, clusterInstance, "Injected objects should be the same");
-        Assertions.assertEquals(ClusterInstance.ClusterType.ZK, clusterInstance.clusterType()); // From the class level default
+        Assertions.assertEquals(Type.ZK, clusterInstance.type()); // From the class level default
         Assertions.assertEquals("default.value", clusterInstance.config().serverProperties().get("default.key"));
     }
 
     // generate1 is a template method which generates any number of cluster configs
     @ClusterTemplate("generate1")
     public void testClusterTemplate() {
-        Assertions.assertEquals(ClusterInstance.ClusterType.ZK, clusterInstance.clusterType(),
+        Assertions.assertEquals(Type.ZK, clusterInstance.type(),
             "generate1 provided a Zk cluster, so we should see that here");
         Assertions.assertEquals("Generated Test", clusterInstance.config().name().orElse(""),
             "generate1 named this cluster config, so we should see that here");
@@ -90,19 +91,19 @@ public class ClusterTestExtensionsTest {
 
     // Multiple @ClusterTest can be used with @ClusterTests
     @ClusterTests({
-        @ClusterTest(name = "cluster-tests-1", clusterType = Type.ZK, serverProperties = {
+        @ClusterTest(name = "cluster-tests-1", types = {Type.ZK}, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "bar"),
             @ClusterConfigProperty(key = "spam", value = "eggs"),
             @ClusterConfigProperty(id = 86400, key = "baz", value = "qux"), // this one will be ignored as there is no broker id is 86400
         }),
-        @ClusterTest(name = "cluster-tests-2", clusterType = Type.KRAFT, serverProperties = {
+        @ClusterTest(name = "cluster-tests-2", types = {Type.KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
             @ClusterConfigProperty(key = "spam", value = "eggz"),
             @ClusterConfigProperty(key = "default.key", value = "overwrite.value"),
             @ClusterConfigProperty(id = 0, key = "queued.max.requests", value = "200"),
             @ClusterConfigProperty(id = 3000, key = "queued.max.requests", value = "300")
         }),
-        @ClusterTest(name = "cluster-tests-3", clusterType = Type.CO_KRAFT, serverProperties = {
+        @ClusterTest(name = "cluster-tests-3", types = {Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
             @ClusterConfigProperty(key = "spam", value = "eggz"),
             @ClusterConfigProperty(key = "default.key", value = "overwrite.value"),
@@ -136,7 +137,7 @@ public class ClusterTestExtensionsTest {
                 Assertions.assertEquals("200", configs.get(configResource).get("queued.max.requests").value());
             }
             // In KRaft cluster non-combined mode, assert the controller server 3000 contains the property queued.max.requests 300
-            if (clusterInstance.config().clusterType() == Type.KRAFT) {
+            if (clusterInstance.type() == Type.KRAFT) {
                 try (Admin admin = Admin.create(Collections.singletonMap(
                         AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()))) {
                     ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
@@ -149,12 +150,8 @@ public class ClusterTestExtensionsTest {
     }
 
     @ClusterTests({
-        @ClusterTest(clusterType = Type.ZK),
-        @ClusterTest(clusterType = Type.ZK, disksPerBroker = 2),
-        @ClusterTest(clusterType = Type.KRAFT),
-        @ClusterTest(clusterType = Type.KRAFT, disksPerBroker = 2),
-        @ClusterTest(clusterType = Type.CO_KRAFT),
-        @ClusterTest(clusterType = Type.CO_KRAFT, disksPerBroker = 2)
+        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}),
+        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, disksPerBroker = 2),
     })
     public void testClusterTestWithDisksPerBroker() throws ExecutionException, InterruptedException {
         Admin admin = clusterInstance.createAdminClient();
@@ -178,21 +175,21 @@ public class ClusterTestExtensionsTest {
     }
 
     @ClusterTests({
-        @ClusterTest(name = "enable-new-coordinator", clusterType = Type.ALL, serverProperties = {
+        @ClusterTest(name = "enable-new-coordinator", types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
         }),
-        @ClusterTest(name = "enable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+        @ClusterTest(name = "enable-new-consumer-rebalance-coordinator", types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
         }),
-        @ClusterTest(name = "enable-new-coordinator-and-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+        @ClusterTest(name = "enable-new-coordinator-and-new-consumer-rebalance-coordinator", types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
             @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
         }),
-        @ClusterTest(name = "enable-new-coordinator-and-disable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+        @ClusterTest(name = "enable-new-coordinator-and-disable-new-consumer-rebalance-coordinator", types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
             @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
         }),
-        @ClusterTest(name = "disable-new-coordinator-and-enable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+        @ClusterTest(name = "disable-new-coordinator-and-enable-new-consumer-rebalance-coordinator", types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
             @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
         }),
@@ -206,13 +203,13 @@ public class ClusterTestExtensionsTest {
     }
 
     @ClusterTests({
-        @ClusterTest(name = "disable-new-coordinator", clusterType = Type.ALL, serverProperties = {
+        @ClusterTest(name = "disable-new-coordinator", types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
         }),
-        @ClusterTest(name = "disable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+        @ClusterTest(name = "disable-new-consumer-rebalance-coordinator", types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
         }),
-        @ClusterTest(name = "disable-new-coordinator-and-disable-new-consumer-rebalance-coordinator", clusterType = Type.ALL, serverProperties = {
+        @ClusterTest(name = "disable-new-coordinator-and-disable-new-consumer-rebalance-coordinator", types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
             @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
         }),

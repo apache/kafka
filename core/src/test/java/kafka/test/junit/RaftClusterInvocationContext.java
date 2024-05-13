@@ -21,6 +21,7 @@ import kafka.network.SocketServer;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
+import kafka.test.annotation.Type;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.testkit.KafkaClusterTestKit;
@@ -87,7 +88,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
     @Override
     public List<Extension> getAdditionalExtensions() {
-        RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterReference, zkReference, clusterConfig);
+        RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterReference, zkReference, clusterConfig, isCombined);
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
                 TestKitNodes nodes = new TestKitNodes.Builder().
@@ -131,11 +132,13 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         final AtomicBoolean started = new AtomicBoolean(false);
         final AtomicBoolean stopped = new AtomicBoolean(false);
         private final ConcurrentLinkedQueue<Admin> admins = new ConcurrentLinkedQueue<>();
+        private final boolean isCombined;
 
-        RaftClusterInstance(AtomicReference<KafkaClusterTestKit> clusterReference, AtomicReference<EmbeddedZookeeper> zkReference, ClusterConfig clusterConfig) {
+        RaftClusterInstance(AtomicReference<KafkaClusterTestKit> clusterReference, AtomicReference<EmbeddedZookeeper> zkReference, ClusterConfig clusterConfig, boolean isCombined) {
             this.clusterReference = clusterReference;
             this.zkReference = zkReference;
             this.clusterConfig = clusterConfig;
+            this.isCombined = isCombined;
         }
 
         @Override
@@ -209,8 +212,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
-        public ClusterType clusterType() {
-            return ClusterType.RAFT;
+        public Type type() {
+            return isCombined ? Type.CO_KRAFT : Type.KRAFT;
         }
 
         @Override
