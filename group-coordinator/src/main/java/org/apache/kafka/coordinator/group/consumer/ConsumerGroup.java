@@ -31,6 +31,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.ClusterImage;
@@ -52,6 +53,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.RECONCILING;
@@ -149,6 +152,12 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
 
     /**
+     * The consumer group's subscription type.
+     * This value is set to Homogeneous by default.
+     */
+    private final TimelineObject<SubscriptionType> subscriptionType;
+
+    /**
      * The target assignment epoch. An assignment epoch smaller than the group epoch
      * means that a new assignment is required. The assignment epoch is updated when
      * a new assignment is installed.
@@ -208,6 +217,7 @@ public class ConsumerGroup implements Group {
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -375,7 +385,7 @@ public class ConsumerGroup implements Group {
             throw new IllegalArgumentException("newMember cannot be null.");
         }
         ConsumerGroupMember oldMember = members.put(newMember.memberId(), newMember);
-        maybeUpdateSubscribedTopicNames(oldMember, newMember);
+        maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, newMember);
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
         updateStaticMember(newMember);
@@ -402,7 +412,7 @@ public class ConsumerGroup implements Group {
      */
     public void removeMember(String memberId) {
         ConsumerGroupMember oldMember = members.remove(memberId);
-        maybeUpdateSubscribedTopicNames(oldMember, null);
+        maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, null);
         maybeUpdateServerAssignors(oldMember, null);
         maybeRemovePartitionEpoch(oldMember);
         removeStaticMember(oldMember);
@@ -469,10 +479,11 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return An immutable Set containing all the subscribed topic names.
+     * @return An immutable map containing all the subscribed topic names
+     *         with the subscribers counts per topic.
      */
-    public Set<String> subscribedTopicNames() {
-        return Collections.unmodifiableSet(subscribedTopicNames.keySet());
+    public Map<String, Integer> subscribedTopicNames() {
+        return Collections.unmodifiableMap(subscribedTopicNames);
     }
 
     /**
@@ -485,6 +496,13 @@ public class ConsumerGroup implements Group {
     @Override
     public boolean isSubscribedToTopic(String topic) {
         return subscribedTopicNames.containsKey(topic);
+    }
+
+    /**
+     * @return The group's subscription type.
+     */
+    public SubscriptionType subscriptionType() {
+        return subscriptionType.get();
     }
 
     /**
@@ -604,26 +622,19 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Computes the subscription metadata based on the current subscription and
-     * an updated member.
+     * Computes the subscription metadata based on the current subscription info.
      *
-     * @param oldMember     The old member of the consumer group.
-     * @param newMember     The updated member of the consumer group.
-     * @param topicsImage   The current metadata for all available topics.
-     * @param clusterImage  The current metadata for the Kafka cluster.
+     * @param subscribedTopicNames      Map of topic names to the number of subscribers.
+     * @param topicsImage               The current metadata for all available topics.
+     * @param clusterImage              The current metadata for the Kafka cluster.
      *
      * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
      */
     public Map<String, TopicMetadata> computeSubscriptionMetadata(
-        ConsumerGroupMember oldMember,
-        ConsumerGroupMember newMember,
+        Map<String, Integer> subscribedTopicNames,
         TopicsImage topicsImage,
         ClusterImage clusterImage
     ) {
-        // Copy and update the current subscriptions.
-        Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
-        maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
-
         // Create the topic metadata for each subscribed topic.
         Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
 
@@ -930,15 +941,17 @@ public class ConsumerGroup implements Group {
 
     /**
      * Updates the subscribed topic names count.
+     * The subscription type is updated as a consequence.
      *
      * @param oldMember The old member.
      * @param newMember The new member.
      */
-    private void maybeUpdateSubscribedTopicNames(
+    private void maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
         maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
+        subscriptionType.set(subscriptionType(subscribedTopicNames, members.size()));
     }
 
     /**
@@ -964,6 +977,51 @@ public class ConsumerGroup implements Group {
                 subscribedTopicCount.compute(topicName, ConsumerGroup::incValue)
             );
         }
+    }
+
+    /**
+     * Updates the subscription count.
+     *
+     * @param oldMember             The old member.
+     * @param newMember             The new member.
+     *
+     * @return Copy of the map of topics to the count of number of subscribers.
+     */
+    public Map<String, Integer> computeSubscribedTopicNames(
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
+    ) {
+        Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
+        maybeUpdateSubscribedTopicNames(
+            subscribedTopicNames,
+            oldMember,
+            newMember
+        );
+        return subscribedTopicNames;
+    }
+
+    /**
+     * Compute the subscription type of the consumer group.
+     *
+     * @param subscribedTopicNames      A map of topic names to the count of members subscribed to each topic.
+     *
+     * @return {@link SubscriptionType#HOMOGENEOUS} if all members are subscribed to exactly the same topics;
+     *         otherwise, {@link SubscriptionType#HETEROGENEOUS}.
+     */
+    public static SubscriptionType subscriptionType(
+        Map<String, Integer> subscribedTopicNames,
+        int numberOfMembers
+    ) {
+        if (subscribedTopicNames.isEmpty()) {
+            return HOMOGENEOUS;
+        }
+
+        for (int subscriberCount : subscribedTopicNames.values()) {
+            if (subscriberCount != numberOfMembers) {
+                return HETEROGENEOUS;
+            }
+        }
+        return HOMOGENEOUS;
     }
 
     /**
