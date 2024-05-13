@@ -40,6 +40,7 @@ import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, Grou
 import org.apache.kafka.coordinator.group.util.SystemTimerReaper
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, RecordSerde}
 import org.apache.kafka.image.publisher.MetadataPublisher
+import org.apache.kafka.image.publisher.BrokerRegistrationTracker
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
@@ -139,6 +140,8 @@ class BrokerServer(
   val clusterId: String = sharedServer.metaPropsEnsemble.clusterId().get()
 
   var brokerMetadataPublisher: BrokerMetadataPublisher = _
+
+  var brokerRegistrationTracker: BrokerRegistrationTracker = _
 
   val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault(config.unstableMetadataVersionsEnabled)
 
@@ -473,6 +476,10 @@ class BrokerServer(
         lifecycleManager
       )
       metadataPublishers.add(brokerMetadataPublisher)
+      brokerRegistrationTracker = new BrokerRegistrationTracker(config.brokerId,
+        logManager.directoryIdsSet.toList.asJava,
+        () => lifecycleManager.resendBrokerRegistrationUnlessZkMode())
+      metadataPublishers.add(brokerRegistrationTracker)
 
       // Register parts of the broker that can be reconfigured via dynamic configs.  This needs to
       // be done before we publish the dynamic configs, so that we don't miss anything.

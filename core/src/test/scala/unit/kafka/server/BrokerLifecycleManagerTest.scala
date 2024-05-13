@@ -272,7 +272,7 @@ class BrokerLifecycleManagerTest {
       assertEquals(1000L, manager.brokerEpoch)
     }
 
-    manager.handleKraftJBODMetadataVersionUpdate()
+    manager.resendBrokerRegistrationUnlessZkMode()
     context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
       new BrokerRegistrationResponseData().setBrokerEpoch(1200)), controllerNode)
     TestUtils.retry(60000) {

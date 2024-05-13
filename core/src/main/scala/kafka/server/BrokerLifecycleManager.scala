@@ -244,11 +244,11 @@ class BrokerLifecycleManager(
     eventQueue.append(new OfflineDirEvent(directory))
   }
 
-  def handleKraftJBODMetadataVersionUpdate(): Unit = {
-    eventQueue.append(new KraftJBODMetadataVersionUpdateEvent())
+  def resendBrokerRegistrationUnlessZkMode(): Unit = {
+    eventQueue.append(new ResendBrokerRegistrationUnlessZkModeEvent())
   }
 
-  private class KraftJBODMetadataVersionUpdateEvent extends EventQueue.Event {
+  private class ResendBrokerRegistrationUnlessZkModeEvent extends EventQueue.Event {
     override def run(): Unit = {
       if (!isZkBroker) {
         registered = false
