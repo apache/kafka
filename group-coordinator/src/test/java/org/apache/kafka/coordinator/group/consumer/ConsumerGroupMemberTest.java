@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
@@ -38,6 +39,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ConsumerGroupMemberTest {
@@ -349,6 +351,21 @@ public class ConsumerGroupMemberTest {
                 .build().topics()
         );
         assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testClassicProtocolListFromJoinRequestProtocolCollection() {
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
+        protocols.addAll(Arrays.asList(
+            new JoinGroupRequestData.JoinGroupRequestProtocol()
+                .setName("range")
+                .setMetadata(new byte[]{1, 2, 3})
+        ));
+
+        assertEquals(
+            toClassicProtocolCollection("range"),
+            classicProtocolListFromJoinRequestProtocolCollection(protocols)
+        );
     }
 
     private List<ConsumerGroupMemberMetadataValue.ClassicProtocol> toClassicProtocolCollection(String name) {

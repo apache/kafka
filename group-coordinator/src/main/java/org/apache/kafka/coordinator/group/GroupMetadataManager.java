@@ -833,7 +833,6 @@ public class GroupMetadataManager {
                 logContext,
                 time,
                 metrics,
-                consumerGroupSessionTimeoutMs,
                 metadataImage
             );
         } catch (SchemaException e) {

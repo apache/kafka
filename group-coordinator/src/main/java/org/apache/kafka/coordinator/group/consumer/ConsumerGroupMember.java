@@ -88,7 +88,7 @@ public class ConsumerGroupMember {
             this.state = member.state;
             this.assignedPartitions = member.assignedPartitions;
             this.partitionsPendingRevocation = member.partitionsPendingRevocation;
-            this.classicMemberMetadata = member.classicMemberMetadata == null ? null : member.classicMemberMetadata.duplicate();
+            this.classicMemberMetadata = member.classicMemberMetadata;
         }
 
         public Builder updateMemberEpoch(int memberEpoch) {
@@ -485,7 +485,7 @@ public class ConsumerGroupMember {
      * @return The session timeout if the member uses the classic protocol.
      */
     public Optional<Integer> classicProtocolSessionTimeout() {
-        if (classicMemberMetadata != null) {
+        if (useClassicProtocol()) {
             return Optional.ofNullable(classicMemberMetadata.sessionTimeoutMs());
         } else {
             return Optional.empty();

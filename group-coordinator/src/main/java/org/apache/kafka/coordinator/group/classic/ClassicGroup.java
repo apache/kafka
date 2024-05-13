@@ -1366,7 +1366,6 @@ public class ClassicGroup implements Group {
      * @param leavingMemberId               The member that will not be converted in the ClassicGroup.
      * @param logContext                    The logContext to create the ClassicGroup.
      * @param time                          The time to create the ClassicGroup.
-     * @param consumerGroupSessionTimeoutMs The consumerGroupSessionTimeoutMs.
      * @param metadataImage                 The MetadataImage.
      * @return  The created ClassicGroup.
      */
@@ -1376,7 +1375,6 @@ public class ClassicGroup implements Group {
         LogContext logContext,
         Time time,
         GroupCoordinatorMetricsShard metrics,
-        int consumerGroupSessionTimeoutMs,
         MetadataImage metadataImage
     ) {
         ClassicGroup classicGroup = new ClassicGroup(
@@ -1400,8 +1398,8 @@ public class ClassicGroup implements Group {
                         Optional.ofNullable(member.instanceId()),
                         member.clientId(),
                         member.clientHost(),
+                        member.rebalanceTimeoutMs(),
                         member.classicProtocolSessionTimeout().get(),
-                        consumerGroupSessionTimeoutMs,
                         ConsumerProtocol.PROTOCOL_TYPE,
                         member.supportedJoinGroupRequestProtocols(),
                         null

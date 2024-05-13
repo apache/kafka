@@ -10382,8 +10382,8 @@ public class GroupMetadataManagerTest {
                 Optional.ofNullable(member1.instanceId()),
                 member1.clientId(),
                 member1.clientHost(),
+                member1.rebalanceTimeoutMs(),
                 member1.classicProtocolSessionTimeout().get(),
-                45000,
                 ConsumerProtocol.PROTOCOL_TYPE,
                 member1.supportedJoinGroupRequestProtocols(),
                 assignment
@@ -10410,7 +10410,7 @@ public class GroupMetadataManagerTest {
         assertUnorderedListEquals(expectedRecords.subList(2, 4), result.records().subList(2, 4));
         assertRecordEquals(expectedRecords.get(4), result.records().get(4));
         assertUnorderedListEquals(expectedRecords.subList(5, 7), result.records().subList(5, 7));
-        assertRecordsEquals(expectedRecords.subList(7, 9), result.records().subList(7, 9));
+        assertRecordsEquals(expectedRecords.subList(7, 10), result.records().subList(7, 10));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
@@ -10580,7 +10580,7 @@ public class GroupMetadataManagerTest {
                 member1.clientId(),
                 member1.clientHost(),
                 member1.rebalanceTimeoutMs(),
-                45000,
+                member1.classicProtocolSessionTimeout().get(),
                 ConsumerProtocol.PROTOCOL_TYPE,
                 member1.supportedJoinGroupRequestProtocols(),
                 assignment
@@ -10606,7 +10606,7 @@ public class GroupMetadataManagerTest {
         assertUnorderedListEquals(expectedRecords.subList(2, 4), timeout.result.records().subList(2, 4));
         assertRecordEquals(expectedRecords.get(4), timeout.result.records().get(4));
         assertUnorderedListEquals(expectedRecords.subList(5, 7), timeout.result.records().subList(5, 7));
-        assertRecordsEquals(expectedRecords.subList(7, 9), timeout.result.records().subList(7, 9));
+        assertRecordsEquals(expectedRecords.subList(7, 10), timeout.result.records().subList(7, 10));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
@@ -10796,7 +10796,7 @@ public class GroupMetadataManagerTest {
                 member1.clientId(),
                 member1.clientHost(),
                 member1.rebalanceTimeoutMs(),
-                45000,
+                member1.classicProtocolSessionTimeout().get(),
                 ConsumerProtocol.PROTOCOL_TYPE,
                 member1.supportedJoinGroupRequestProtocols(),
                 assignment
@@ -10823,7 +10823,7 @@ public class GroupMetadataManagerTest {
         assertUnorderedListEquals(expectedRecords.subList(2, 4), timeout.result.records().subList(2, 4));
         assertRecordEquals(expectedRecords.get(4), timeout.result.records().get(4));
         assertUnorderedListEquals(expectedRecords.subList(5, 7), timeout.result.records().subList(5, 7));
-        assertRecordsEquals(expectedRecords.subList(7, 9), timeout.result.records().subList(7, 9));
+        assertRecordsEquals(expectedRecords.subList(7, 10), timeout.result.records().subList(7, 10));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.RECONCILING, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
