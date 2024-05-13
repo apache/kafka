@@ -82,10 +82,10 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
     @Override
     public List<Extension> getAdditionalExtensions() {
-        RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterConfig,isCombined);
+        RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterConfig, isCombined);
         return Arrays.asList(
                 (BeforeTestExecutionCallback) context -> {
-                    if(clusterConfig.isAutoStart()){
+                    if (clusterConfig.isAutoStart()) {
                         clusterInstance.start();
                     }
                 },
@@ -104,7 +104,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         private KafkaClusterTestKit clusterTestKit;
         private final boolean isCombined;
 
-        RaftClusterInstance(ClusterConfig clusterConfig,boolean isCombined) {
+        RaftClusterInstance(ClusterConfig clusterConfig, boolean isCombined) {
             this.clusterConfig = clusterConfig;
             this.isCombined = isCombined;
         }
@@ -122,8 +122,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public Collection<SocketServer> brokerSocketServers() {
             return brokers()
-                .map(BrokerServer::socketServer)
-                .collect(Collectors.toList());
+                    .map(BrokerServer::socketServer)
+                    .collect(Collectors.toList());
         }
 
         @Override
@@ -139,39 +139,39 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public Collection<SocketServer> controllerSocketServers() {
             return controllers()
-                .map(ControllerServer::socketServer)
-                .collect(Collectors.toList());
+                    .map(ControllerServer::socketServer)
+                    .collect(Collectors.toList());
         }
 
         @Override
         public SocketServer anyBrokerSocketServer() {
             return brokers()
-                .map(BrokerServer::socketServer)
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
+                    .map(BrokerServer::socketServer)
+                    .findFirst()
+                    .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
         }
 
         @Override
         public SocketServer anyControllerSocketServer() {
             return controllers()
-                .map(ControllerServer::socketServer)
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
+                    .map(ControllerServer::socketServer)
+                    .findFirst()
+                    .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
         }
 
         @Override
         public Map<Integer, BrokerFeatures> brokerFeatures() {
             return brokers().collect(Collectors.toMap(
-                brokerServer -> brokerServer.config().nodeId(),
-                BrokerServer::brokerFeatures
+                    brokerServer -> brokerServer.config().nodeId(),
+                    BrokerServer::brokerFeatures
             ));
         }
 
         @Override
         public String clusterId() {
             return controllers().findFirst().map(ControllerServer::clusterId).orElse(
-                brokers().findFirst().map(BrokerServer::clusterId).orElseThrow(
-                    () -> new RuntimeException("No controllers or brokers!"))
+                    brokers().findFirst().map(BrokerServer::clusterId).orElseThrow(
+                            () -> new RuntimeException("No controllers or brokers!"))
             );
         }
 
@@ -192,15 +192,15 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public Set<Integer> controllerIds() {
             return controllers()
-                .map(controllerServer -> controllerServer.config().nodeId())
-                .collect(Collectors.toSet());
+                    .map(controllerServer -> controllerServer.config().nodeId())
+                    .collect(Collectors.toSet());
         }
 
         @Override
         public Set<Integer> brokerIds() {
             return brokers()
-                .map(brokerServer -> brokerServer.config().nodeId())
-                .collect(Collectors.toSet());
+                    .map(brokerServer -> brokerServer.config().nodeId())
+                    .collect(Collectors.toSet());
         }
 
         @Override
@@ -296,6 +296,5 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             this.clusterTestKit = builder.build();
             this.clusterTestKit.format();
         }
-
     }
 }
