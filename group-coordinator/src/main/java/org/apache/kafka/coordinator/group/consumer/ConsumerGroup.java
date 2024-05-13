@@ -497,7 +497,7 @@ public class ConsumerGroup implements Group {
      *         with their current assignment status.
      *         Newly added partitions are not tracked until they are assigned once.
      */
-    public Map<String, byte[]> partitionAssignments() {
+    public Map<Uuid, byte[]> partitionAssignments() {
         return Collections.unmodifiableMap(partitionAssignments);
     }
 
