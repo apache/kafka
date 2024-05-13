@@ -33,18 +33,18 @@ public class ApplicationStateImpl implements ApplicationState {
     private final AssignmentConfigs assignmentConfigs;
     private final Set<TaskId> statelessTasks;
     private final Set<TaskId> statefulTasks;
+    private final Set<TaskId> allTasks;
     private final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates;
 
-    public ApplicationStateImpl(
-        final AssignmentConfigs assignmentConfigs,
-        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates,
-        final Set<TaskId> statefulTasks,
-        final Set<TaskId> statelessTasks
-    ) {
+    public ApplicationStateImpl(final AssignmentConfigs assignmentConfigs,
+                                final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates,
+                                final Set<TaskId> statefulTasks,
+                                final Set<TaskId> statelessTasks) {
         this.assignmentConfigs = assignmentConfigs;
         this.kafkaStreamsStates = unmodifiableMap(kafkaStreamsStates);
         this.statefulTasks = unmodifiableSet(statefulTasks);
         this.statelessTasks = unmodifiableSet(statelessTasks);
+        this.allTasks = unmodifiableSet(computeAllTasks(statelessTasks, statefulTasks));
     }
 
     @Override
@@ -59,9 +59,7 @@ public class ApplicationStateImpl implements ApplicationState {
 
     @Override
     public Set<TaskId> allTasks() {
-        final Set<TaskId> union = new HashSet<>(statefulTasks);
-        union.addAll(statelessTasks);
-        return union;
+        return allTasks;
     }
 
     @Override
@@ -72,5 +70,11 @@ public class ApplicationStateImpl implements ApplicationState {
     @Override
     public Set<TaskId> statelessTasks() {
         return statelessTasks;
+    }
+
+    private static Set<TaskId> computeAllTasks(Set<TaskId> statelessTasks, Set<TaskId> statefulTasks) {
+        final Set<TaskId> union = new HashSet<>(statefulTasks);
+        union.addAll(statelessTasks);
+        return union;
     }
 }

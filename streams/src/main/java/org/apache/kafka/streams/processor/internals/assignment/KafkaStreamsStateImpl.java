@@ -21,6 +21,7 @@ import static java.util.Collections.unmodifiableSortedMap;
 import static java.util.Collections.unmodifiableSortedSet;
 import static java.util.Comparator.comparingLong;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -48,16 +49,14 @@ public class KafkaStreamsStateImpl implements KafkaStreamsState {
     private final SortedMap<String, Set<TaskId>> taskIdsByConsumer;
     private final Optional<HostInfo> hostInfo;
 
-    public KafkaStreamsStateImpl(
-        final ProcessId processId,
-        final int numProcessingThreads,
-        final Map<String, String> clientTags,
-        final Map<TaskId, Long> taskLagTotals,
-        final SortedSet<TaskId> previousActiveTasks,
-        final SortedSet<TaskId> previousStandbyTasks,
-        final SortedMap<String, Set<TaskId>> taskIdsByConsumer,
-        final Optional<HostInfo> hostInfo
-    ) {
+    public KafkaStreamsStateImpl(final ProcessId processId,
+                                 final int numProcessingThreads,
+                                 final Map<String, String> clientTags,
+                                 final Map<TaskId, Long> taskLagTotals,
+                                 final SortedSet<TaskId> previousActiveTasks,
+                                 final SortedSet<TaskId> previousStandbyTasks,
+                                 final SortedMap<String, Set<TaskId>> taskIdsByConsumer,
+                                 final Optional<HostInfo> hostInfo) {
         this.processId = processId;
         this.numProcessingThreads = numProcessingThreads;
         this.clientTags = unmodifiableMap(clientTags);
@@ -97,6 +96,8 @@ public class KafkaStreamsStateImpl implements KafkaStreamsState {
     public long lagFor(final TaskId task) {
         final Long totalLag = taskLagTotals.get(task);
         if (totalLag == null) {
+            LOG.error("Task lag lookup failed: {} not in {}", task,
+                Arrays.toString(taskLagTotals.keySet().toArray()));
             throw new IllegalStateException("Tried to lookup lag for unknown task " + task);
         }
         return totalLag;

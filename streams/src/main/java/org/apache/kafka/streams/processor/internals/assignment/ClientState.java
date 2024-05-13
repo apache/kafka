@@ -469,7 +469,7 @@ public class ClientState {
         return new TreeSet<>(previousStandbyTasks.taskIds());
     }
 
-    public SortedMap<String, Set<TaskId>> taskIdsByConsumer() {
+    public SortedMap<String, Set<TaskId>> taskIdsByPreviousConsumer() {
         return new TreeMap<>(consumerToPreviousStatefulTaskIds);
     }
 

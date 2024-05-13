@@ -436,11 +436,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // ---------------- Step Four ---------------- //
 
             // compute the assignment of tasks to threads within each client and build the final group assignment
-
-            getApplicationState(
-                clientMetadataMap, statefulTasks
-            );
-
             final Map<String, Assignment> assignment = computeNewAssignment(
                 statefulTasks,
                 clientMetadataMap,
@@ -468,10 +463,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
-    private ApplicationState getApplicationState(
-        final Map<UUID, ClientMetadata> clientMetadataMap,
-        final Set<TaskId> statefulTasks
-    ) {
+    /**
+     *
+     * @param clientMetadataMap the map of process id to client metadata used to build an immutable
+     *                          {@code ApplicationState}
+     * @param statefulTasks     the set of {@code TaskId} that correspond to all the stateful
+     *                          tasks that need to be reassigned.
+     * @return The {@code ApplicationState} needed by the TaskAssigner to compute new task
+     *         assignments.
+     */
+    private ApplicationState buildApplicationState(final Map<UUID, ClientMetadata> clientMetadataMap,
+                                                   final Set<TaskId> statefulTasks) {
         final Set<TaskId> statelessTasks = new HashSet<>();
         final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = new HashMap<>();
         for (final Map.Entry<UUID, ClientMetadata> clientEntry : clientMetadataMap.entrySet()) {
@@ -484,7 +486,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 clientState.taskLagTotals(),
                 clientState.previousActiveTasks(),
                 clientState.previousStandbyTasks(),
-                clientState.taskIdsByConsumer(),
+                clientState.taskIdsByPreviousConsumer(),
                 Optional.ofNullable(clientEntry.getValue().hostInfo)
             );
             kafkaStreamsStates.put(processId, kafkaStreamsState);
