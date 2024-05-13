@@ -288,9 +288,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    *  6. If the partition is already paused, a new call to this function
    *     will increase the paused count by one.
    */
-  def abortAndPauseCleaning(topicPartition: TopicPartition): Unit = {
+  def abortAndPauseCleaning(topicPartition: TopicPartition, shouldInc: Boolean = true): Unit = {
     if (topicPartition.equals(new TopicPartition("topicB", 0))) {
-      System.err.print(s"abort $inProgress")
+      System.err.print(s"abort $inProgress $shouldInc")
       val elements = Thread.currentThread.getStackTrace
       for (i <- 1 until elements.length) {
         if (i <= 5) {
@@ -307,7 +307,8 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         case Some(LogCleaningInProgress) =>
           inProgress.put(topicPartition, LogCleaningAborted)
         case Some(LogCleaningPaused(count)) =>
-          inProgress.put(topicPartition, LogCleaningPaused(count + 1))
+          if (shouldInc)
+            inProgress.put(topicPartition, LogCleaningPaused(count + 1))
         case Some(s) =>
           throw new IllegalStateException(s"Compaction for partition $topicPartition cannot be aborted and paused since it is in $s state.")
       }

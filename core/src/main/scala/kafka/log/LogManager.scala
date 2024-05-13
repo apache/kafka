@@ -890,9 +890,9 @@ class LogManager(logDirs: Seq[File],
   /**
    * Abort and pause cleaning of the provided partition and log a message about it.
    */
-  def abortAndPauseCleaning(topicPartition: TopicPartition): Unit = {
+  def abortAndPauseCleaning(topicPartition: TopicPartition, shouldInc: Boolean = true): Unit = {
     if (cleaner != null) {
-      cleaner.abortAndPauseCleaning(topicPartition)
+      cleaner.abortAndPauseCleaning(topicPartition, shouldInc)
       info(s"The cleaning for partition $topicPartition is aborted and paused")
     }
   }

@@ -286,8 +286,8 @@ class LogCleaner(initialConfig: CleanerConfig,
    *
    *  @param topicPartition The topic and partition to abort and pause cleaning
    */
-  def abortAndPauseCleaning(topicPartition: TopicPartition): Unit = {
-    cleanerManager.abortAndPauseCleaning(topicPartition)
+  def abortAndPauseCleaning(topicPartition: TopicPartition, shouldInc: Boolean = true): Unit = {
+    cleanerManager.abortAndPauseCleaning(topicPartition, shouldInc)
   }
 
   /**

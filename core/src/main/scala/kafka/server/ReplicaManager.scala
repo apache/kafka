@@ -1202,7 +1202,7 @@ class ReplicaManager(val config: KafkaConfig,
           val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
           if (partition.maybeCreateFutureReplica(destinationDir, highWatermarkCheckpoints)) {
             val futureLog = futureLocalLogOrException(topicPartition)
-            logManager.abortAndPauseCleaning(topicPartition)
+            logManager.abortAndPauseCleaning(topicPartition, shouldInc = false)
 
             val initialFetchState = InitialFetchState(topicId, BrokerEndPoint(config.brokerId, "localhost", -1),
               partition.getLeaderEpoch, futureLog.highWatermark)
@@ -2128,7 +2128,7 @@ class ReplicaManager(val config: KafkaConfig,
 
           // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move
           // replica from source dir to destination dir
-          //logManager.abortAndPauseCleaning(topicPartition)
+          logManager.abortAndPauseCleaning(topicPartition, shouldInc = false)
 
           futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(topicIds(topicPartition.topic), leader,
             partition.getLeaderEpoch, futureLog.highWatermark))
