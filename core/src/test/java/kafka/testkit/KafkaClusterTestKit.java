@@ -40,6 +40,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -89,7 +90,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
      */
     private static class ControllerQuorumVotersFutureManager implements AutoCloseable {
         private final int expectedControllers;
-        private final CompletableFuture<Map<Integer, QuorumConfig.AddressSpec>> future = new CompletableFuture<>();
+        private final CompletableFuture<Map<Integer, InetSocketAddress>> future = new CompletableFuture<>();
         private final Map<Integer, Integer> controllerPorts = new TreeMap<>();
 
         ControllerQuorumVotersFutureManager(int expectedControllers) {
@@ -99,11 +100,17 @@ public class KafkaClusterTestKit implements AutoCloseable {
         synchronized void registerPort(int nodeId, int port) {
             controllerPorts.put(nodeId, port);
             if (controllerPorts.size() >= expectedControllers) {
-                future.complete(controllerPorts.entrySet().stream().
-                    collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        entry -> new QuorumConfig.InetAddressSpec(new InetSocketAddress("localhost", entry.getValue()))
-                    )));
+                future.complete(
+                    controllerPorts
+                        .entrySet()
+                        .stream()
+                        .collect(
+                            Collectors.toMap(
+                                Map.Entry::getKey,
+                                entry -> new InetSocketAddress("localhost", entry.getValue())
+                            )
+                        )
+                );
             }
         }
 
@@ -158,17 +165,17 @@ public class KafkaClusterTestKit implements AutoCloseable {
             ControllerNode controllerNode = nodes.controllerNodes().get(node.id());
 
             Map<String, String> props = new HashMap<>(configProps);
-            props.put(KafkaConfig$.MODULE$.ServerMaxStartupTimeMsProp(),
+            props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
                     Long.toString(TimeUnit.MINUTES.toMillis(10)));
-            props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), roles(node.id()));
-            props.put(KafkaConfig$.MODULE$.NodeIdProp(),
+            props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, roles(node.id()));
+            props.put(KRaftConfigs.NODE_ID_CONFIG,
                     Integer.toString(node.id()));
             // In combined mode, always prefer the metadata log directory of the controller node.
             if (controllerNode != null) {
-                props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
+                props.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG,
                         controllerNode.metadataDirectory());
             } else {
-                props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
+                props.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG,
                         node.metadataDirectory());
             }
             if (brokerNode != null) {
@@ -185,7 +192,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners(node.id()));
             props.put(INTER_BROKER_LISTENER_NAME_CONFIG,
                     nodes.interBrokerListenerName().value());
-            props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
+            props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG,
                     "CONTROLLER");
             // Note: we can't accurately set controller.quorum.voters yet, since we don't
             // yet know what ports each controller will pick.  Set it to a dummy string
@@ -201,6 +208,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
             // Add associated broker node property overrides
             if (brokerNode != null) {
                 props.putAll(brokerNode.propertyOverrides());
+            }
+            // Add associated controller node property overrides
+            if (controllerNode != null) {
+                props.putAll(controllerNode.propertyOverrides());
             }
             props.putIfAbsent(KafkaConfig$.MODULE$.UnstableMetadataVersionsEnableProp(), "true");
             props.putIfAbsent(KafkaConfig$.MODULE$.UnstableApiVersionsEnableProp(), "true");
@@ -243,7 +254,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
                         Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", () -> sharedServer.stopForController());
-                        if (controller != null) controller.shutdown();
                         throw e;
                     }
                     controllers.put(node.id(), controller);
@@ -270,7 +280,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
                         Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", () -> sharedServer.stopForBroker());
-                        if (broker != null) broker.shutdown();
                         throw e;
                     }
                     brokers.put(node.id(), broker);
@@ -451,7 +460,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public String quorumVotersConfig() throws ExecutionException, InterruptedException {
         Collection<Node> controllerNodes = QuorumConfig.voterConnectionsToNodes(
-            controllerQuorumVotersFutureManager.future.get());
+            controllerQuorumVotersFutureManager.future.get()
+        );
         StringBuilder bld = new StringBuilder();
         String prefix = "";
         for (Node node : controllerNodes) {

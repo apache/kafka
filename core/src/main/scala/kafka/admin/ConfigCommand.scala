@@ -115,7 +115,7 @@ object ConfigCommand extends Logging {
     val zkClientConfig = ZkSecurityMigrator.createZkClientConfigFromOption(opts.options, opts.zkTlsConfigFile)
       .getOrElse(new ZKClientConfig())
     val zkClient = KafkaZkClient(zkConnectString, JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig), 30000, 30000,
-      Int.MaxValue, Time.SYSTEM, zkClientConfig = zkClientConfig, name = "ConfigCommand")
+      Int.MaxValue, Time.SYSTEM, zkClientConfig = zkClientConfig, name = "ConfigCommand", enableEntityConfigControllerCheck = false)
     val adminZkClient = new AdminZkClient(zkClient)
     try {
       if (opts.options.has(opts.alterOpt))
@@ -127,7 +127,7 @@ object ConfigCommand extends Logging {
     }
   }
 
-  private[admin] def alterConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
+  def alterConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configsToBeAdded = parseConfigsToBeAdded(opts)
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
     val entity = parseEntity(opts)
@@ -210,7 +210,7 @@ object ConfigCommand extends Logging {
     }
   }
 
-  private[admin] def createPasswordEncoder(encoderConfigs: Map[String, String]): PasswordEncoder = {
+  def createPasswordEncoder(encoderConfigs: Map[String, String]): PasswordEncoder = {
     encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG)
     val encoderSecret = encoderConfigs.getOrElse(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG,
       throw new IllegalArgumentException("Password encoder secret not specified"))
@@ -276,7 +276,7 @@ object ConfigCommand extends Logging {
   }
 
   @nowarn("cat=deprecation")
-  private[admin] def parseConfigsToBeAdded(opts: ConfigCommandOptions): Properties = {
+  def parseConfigsToBeAdded(opts: ConfigCommandOptions): Properties = {
     val props = new Properties
     if (opts.options.has(opts.addConfigFile)) {
       val file = opts.options.valueOf(opts.addConfigFile)
@@ -303,7 +303,7 @@ object ConfigCommand extends Logging {
     props
   }
 
-  private[admin] def parseConfigsToBeDeleted(opts: ConfigCommandOptions): Seq[String] = {
+  def parseConfigsToBeDeleted(opts: ConfigCommandOptions): Seq[String] = {
     if (opts.options.has(opts.deleteConfig)) {
       val configsToBeDeleted = opts.options.valuesOf(opts.deleteConfig).asScala.map(_.trim())
       configsToBeDeleted
@@ -348,7 +348,7 @@ object ConfigCommand extends Logging {
   }
 
   @nowarn("cat=deprecation")
-  private[admin] def alterConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
+  def alterConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
     val entityTypeHead = entityTypes.head
@@ -529,7 +529,7 @@ object ConfigCommand extends Logging {
       .all().get(60, TimeUnit.SECONDS)
   }
 
-  private[admin] def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
+  def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
     val describeAll = opts.options.has(opts.allOpt)

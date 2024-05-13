@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
+import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
 import kafka.utils.TestUtils
@@ -34,7 +34,6 @@ import scala.jdk.CollectionConverters._
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(clusterType = Type.ALL, brokers = 1)
 @Tag("integration")
 class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
@@ -49,7 +48,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     assertEquals(expectedResponse, consumerGroupHeartbeatResponse.data)
   }
 
-  @ClusterTest(clusterType = Type.KRAFT, serverProperties = Array(
+  @ClusterTest(types = Array(Type.KRAFT), serverProperties = Array(
     new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -137,7 +136,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     assertEquals(-1, consumerGroupHeartbeatResponse.data.memberEpoch)
   }
 
-  @ClusterTest(clusterType = Type.KRAFT, serverProperties = Array(
+  @ClusterTest(types = Array(Type.KRAFT), serverProperties = Array(
     new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -251,7 +250,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     assertNotEquals(oldMemberId, consumerGroupHeartbeatResponse.data.memberId)
   }
 
-  @ClusterTest(clusterType = Type.KRAFT, serverProperties = Array(
+  @ClusterTest(types = Array(Type.KRAFT), serverProperties = Array(
     new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),

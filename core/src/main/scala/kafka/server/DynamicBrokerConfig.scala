@@ -39,10 +39,9 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ServerTopicConfigSynonyms, ZooKeeperInternals}
+import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ReplicationConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ZooKeeperInternals}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
-import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin
+import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, MetricConfigs}
 import org.apache.kafka.server.telemetry.ClientTelemetry
 import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerConfig}
 
@@ -93,7 +92,7 @@ object DynamicBrokerConfig {
     LogCleaner.ReconfigurableConfigs ++
     DynamicLogConfig.ReconfigurableConfigs ++
     DynamicThreadPool.ReconfigurableConfigs ++
-    Set(KafkaConfig.MetricReporterClassesProp) ++
+    Set(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG) ++
     DynamicListenerConfig.ReconfigurableConfigs ++
     SocketServer.ReconfigurableConfigs ++
     DynamicProducerStateManagerConfig ++
@@ -859,7 +858,7 @@ class DynamicMetricsReporters(brokerId: Int, config: KafkaConfig, metrics: Metri
 
   override def reconfigurableConfigs(): util.Set[String] = {
     val configs = new util.HashSet[String]()
-    configs.add(KafkaConfig.MetricReporterClassesProp)
+    configs.add(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG)
     currentReporters.values.foreach {
       case reporter: Reconfigurable => configs.addAll(reporter.reconfigurableConfigs)
       case _ =>
@@ -950,8 +949,8 @@ class DynamicMetricReporterState(brokerId: Int, config: KafkaConfig, metrics: Me
   @nowarn("cat=deprecation")
   private[server] def metricsReporterClasses(configs: util.Map[String, _]): mutable.Buffer[String] = {
     val reporters = mutable.Buffer[String]()
-    reporters ++= configs.get(KafkaConfig.MetricReporterClassesProp).asInstanceOf[util.List[String]].asScala
-    if (configs.get(KafkaConfig.AutoIncludeJmxReporterProp).asInstanceOf[Boolean] &&
+    reporters ++= configs.get(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG).asInstanceOf[util.List[String]].asScala
+    if (configs.get(MetricConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG).asInstanceOf[Boolean] &&
         !reporters.contains(classOf[JmxReporter].getName)) {
       reporters += classOf[JmxReporter].getName
     }

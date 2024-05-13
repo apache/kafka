@@ -31,7 +31,7 @@ import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
@@ -68,14 +68,14 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     configureListeners(cfgs)
     modifyConfigs(cfgs)
     if (isZkMigrationTest()) {
-      cfgs.foreach(_.setProperty(KafkaConfig.MigrationEnabledProp, "true"))
+      cfgs.foreach(_.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true"))
     }
     if (isNewGroupCoordinatorEnabled()) {
       cfgs.foreach(_.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true"))
     }
 
     if(isKRaftTest()) {
-      cfgs.foreach(_.setProperty(KafkaConfig.MetadataLogDirProp, TestUtils.tempDir().getAbsolutePath))
+      cfgs.foreach(_.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, TestUtils.tempDir().getAbsolutePath))
     }
 
     insertControllerListenersIfNeeded(cfgs)
@@ -106,7 +106,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       props.foreach { config =>
         // Add a security protocol for the controller endpoints, if one is not already set.
         val securityPairs = config.getProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "").split(",")
-        val toAdd = config.getProperty(KafkaConfig.ControllerListenerNamesProp, "").split(",").filter(
+        val toAdd = config.getProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "").split(",").filter(
           e => !securityPairs.exists(_.startsWith(s"$e:")))
         if (toAdd.nonEmpty) {
           config.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, (securityPairs ++

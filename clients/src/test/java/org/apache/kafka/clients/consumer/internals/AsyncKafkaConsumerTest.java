@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -57,6 +58,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -1433,7 +1435,9 @@ public class AsyncKafkaConsumerTest {
                                             Optional<RuntimeException> lostError,
                                             int expectedRevokedCount,
                                             int expectedAssignedCount,
-                                            int expectedLostCount) {
+                                            int expectedLostCount,
+                                            Optional<RuntimeException> expectedException
+                                            ) {
         consumer = newConsumer();
         CounterConsumerRebalanceListener consumerRebalanceListener = new CounterConsumerRebalanceListener(
                 revokedError,
@@ -1447,9 +1451,16 @@ public class AsyncKafkaConsumerTest {
         for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
             CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, partitions);
             backgroundEventQueue.add(e);
+        }
 
-            // This will trigger the background event queue to process our background event message.
-            consumer.poll(Duration.ZERO);
+        // This will trigger the background event queue to process our background event message.
+        // If any error is happening inside the rebalance callbacks, we expect the first exception to be thrown from poll.
+        if (expectedException.isPresent()) {
+            Exception exception = assertThrows(expectedException.get().getClass(), () -> consumer.poll(Duration.ZERO));
+            assertEquals(expectedException.get().getMessage(), exception.getMessage());
+            assertEquals(expectedException.get().getCause(), exception.getCause());
+        } else {
+            assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
         }
 
         assertEquals(expectedRevokedCount, consumerRebalanceListener.revokedCount());
@@ -1460,32 +1471,43 @@ public class AsyncKafkaConsumerTest {
     private static Stream<Arguments> listenerCallbacksInvokeSource() {
         Optional<RuntimeException> empty = Optional.empty();
         Optional<RuntimeException> error = Optional.of(new RuntimeException("Intentional error"));
+        Optional<RuntimeException> kafkaException = Optional.of(new KafkaException("Intentional error"));
+        Optional<RuntimeException> wrappedException = Optional.of(new KafkaException("User rebalance callback throws an error", error.get()));
 
         return Stream.of(
             // Tests if we don't have an event, the listener doesn't get called.
-            Arguments.of(Collections.emptyList(), empty, empty, empty, 0, 0, 0),
+            Arguments.of(Collections.emptyList(), empty, empty, empty, 0, 0, 0, empty),
 
             // Tests if we get an event for a revocation, that we invoke our listener.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), empty, empty, empty, 1, 0, 0),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), empty, empty, empty, 1, 0, 0, empty),
 
             // Tests if we get an event for an assignment, that we invoke our listener.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, empty, empty, 0, 1, 0),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, empty, empty, 0, 1, 0, empty),
 
             // Tests that we invoke our listener even if it encounters an exception.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, empty, 0, 0, 1),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, empty, 0, 0, 1, empty),
 
             // Tests that we invoke our listener even if it encounters an exception.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), error, empty, empty, 1, 0, 0),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), error, empty, empty, 1, 0, 0, wrappedException),
 
             // Tests that we invoke our listener even if it encounters an exception.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, error, empty, 0, 1, 0),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, error, empty, 0, 1, 0, wrappedException),
 
             // Tests that we invoke our listener even if it encounters an exception.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, error, 0, 0, 1),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, error, 0, 0, 1, wrappedException),
+
+            // Tests that we invoke our listener even if it encounters an exception. Special case to test that a kafka exception is not wrapped.
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), kafkaException, empty, empty, 1, 0, 0, kafkaException),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, kafkaException, empty, 0, 1, 0, kafkaException),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, kafkaException, 0, 0, 1, kafkaException),
 
             // Tests if we get separate events for revocation and then assignment--AND our revocation throws an error--
-            // we still invoke the listeners correctly without throwing the error at the user.
-            Arguments.of(Arrays.asList(ON_PARTITIONS_REVOKED, ON_PARTITIONS_ASSIGNED), error, empty, empty, 1, 1, 0)
+            // we still invoke the listeners correctly and throw the error.
+            Arguments.of(Arrays.asList(ON_PARTITIONS_REVOKED, ON_PARTITIONS_ASSIGNED), error, empty, empty, 1, 1, 0, wrappedException),
+
+            // Tests if we get separate events for revocation and then assignment--AND both throws an error--
+            // we still invoke the listeners correctly and throw the first error.
+            Arguments.of(Arrays.asList(ON_PARTITIONS_REVOKED, ON_PARTITIONS_ASSIGNED), kafkaException, error, empty, 1, 1, 0, kafkaException)
         );
     }
 
@@ -1789,6 +1811,33 @@ public class AsyncKafkaConsumerTest {
         }
     }
 
+    /**
+     * Tests that calling {@link Thread#interrupt()} before {@link KafkaConsumer#poll(Duration)}
+     * causes {@link InterruptException} to be thrown.
+     */
+    @Test
+    public void testPollThrowsInterruptExceptionIfInterrupted() {
+        consumer = newConsumer();
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        consumer.assign(singleton(tp));
+
+        // interrupt the thread and call poll
+        try {
+            Thread.currentThread().interrupt();
+            assertThrows(InterruptException.class, () -> consumer.poll(Duration.ZERO));
+        } finally {
+            // clear interrupted state again since this thread may be reused by JUnit
+            Thread.interrupted();
+        }
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+    
     private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
         final TopicPartition t0 = new TopicPartition("t0", 2);
         final TopicPartition t1 = new TopicPartition("t0", 3);

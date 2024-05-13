@@ -88,11 +88,6 @@ public interface RaftClient<T> extends AutoCloseable {
     }
 
     /**
-     * Initialize the client. This should only be called once on startup.
-     */
-    void initialize();
-
-    /**
      * Register a listener to get commit, snapshot and leader notifications.
      *
      * The implementation of this interface assumes that each call to {@code register} uses
