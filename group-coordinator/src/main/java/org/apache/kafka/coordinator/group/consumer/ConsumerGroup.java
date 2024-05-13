@@ -147,6 +147,11 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, Integer> subscribedTopicNames;
 
     /**
+     * The number of subscribers per topic.
+     */
+    private final TimelineHashMap<Uuid, byte[]> partitionAssignments;
+
+    /**
      * The metadata associated with each subscribed topic name.
      */
     private final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
@@ -216,6 +221,7 @@ public class ConsumerGroup implements Group {
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.partitionAssignments = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
@@ -487,6 +493,15 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * @return An immutable map containing all the topic partitions
+     *         with their current assignment status.
+     *         Newly added partitions are not tracked until they are assigned once.
+     */
+    public Map<String, byte[]> partitionAssignments() {
+        return Collections.unmodifiableMap(partitionAssignments);
+    }
+
+    /**
      * Returns true if the consumer group is actively subscribed to the topic.
      *
      * @param topic  The topic name.
@@ -522,7 +537,26 @@ public class ConsumerGroup implements Group {
      * @param newTargetAssignment   The new target assignment.
      */
     public void updateTargetAssignment(String memberId, Assignment newTargetAssignment) {
+        updatePartitionAssignments(targetAssignment.get(memberId), newTargetAssignment);
         targetAssignment.put(memberId, newTargetAssignment);
+    }
+
+    /**
+     * Updates partition assignments of the topics.
+     *
+     * @param newTargetAssignment   The new target assignment.
+     */
+    public void updatePartitionAssignments(Assignment oldTargetAssignment, Assignment newTargetAssignment) {
+        // O - (OxN) = 0
+        // N - (OxN) = 1
+        oldTargetAssignment.partitions().forEach((topicId, partitions) -> {
+            byte[] topicPartitions = partitionAssignments.get(topicId);
+            partitions.forEach(partition -> topicPartitions[partition] = 0);
+        });
+        newTargetAssignment.partitions().forEach((topicId, partitions) -> {
+            byte[] topicPartitions = partitionAssignments.get(topicId);
+            partitions.forEach(partition -> topicPartitions[partition] = 1);
+        });
     }
 
     /**
