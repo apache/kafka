@@ -29,7 +29,6 @@ smoke_test_versions = [str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4),
                        str(LATEST_2_8), str(LATEST_3_0), str(LATEST_3_1),
                        str(LATEST_3_2), str(LATEST_3_3), str(LATEST_3_4),
                        str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7)]
-dev_version = [str(DEV_VERSION)]
 
 class StreamsUpgradeTest(Test):
     """
@@ -57,11 +56,13 @@ class StreamsUpgradeTest(Test):
             self.kafka.start_node(node)
 
     @cluster(num_nodes=6)
-    @matrix(from_version=smoke_test_versions, to_version=dev_version, bounce_type=["full"])
-    def test_app_upgrade(self, from_version, to_version, bounce_type):
+    @matrix(from_version=smoke_test_versions, bounce_type=["full"])
+    def test_app_upgrade(self, from_version, bounce_type):
         """
         Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
         """
+
+        to_version = str(DEV_VERSION)
 
         if from_version == to_version:
             return

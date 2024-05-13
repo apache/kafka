@@ -117,8 +117,6 @@ public class KStreamWindowAggregateTest {
     public void before() {
         emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
         emitStrategy = StrategyType.forType(type);
-        // Set interval to 0 so that it always tries to emit
-        props.setProperty(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
     }
 
     @Test

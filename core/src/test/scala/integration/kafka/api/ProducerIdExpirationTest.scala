@@ -18,7 +18,7 @@
 package kafka.api
 
 import java.util
-import java.util.{Collections, List, Map, Properties}
+import java.util.{Collections, Properties}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -31,7 +31,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidPidMappingException, TransactionalIdNotFoundException}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
-import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -197,13 +197,13 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     TestUtils.waitUntilTrue(() => producerState.isEmpty, "Producer ID did not expire.")
   }
 
-  private def producerState: List[ProducerState] = {
+  private def producerState: util.List[ProducerState] = {
     val describeResult = admin.describeProducers(Collections.singletonList(tp0))
     val activeProducers = describeResult.partitionResult(tp0).get().activeProducers
     activeProducers
   }
 
-  private def producerIdExpirationConfig(configValue: String): Map[ConfigResource, util.Collection[AlterConfigOp]] = {
+  private def producerIdExpirationConfig(configValue: String): util.Map[ConfigResource, util.Collection[AlterConfigOp]] = {
     val producerIdCfg = new ConfigEntry(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_CONFIG, configValue)
     val configs = Collections.singletonList(new AlterConfigOp(producerIdCfg, AlterConfigOp.OpType.SET))
     Collections.singletonMap(configResource, configs)
@@ -226,7 +226,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
 
   private def serverProps(): Properties = {
     val serverProps = new Properties()
-    serverProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+    serverProps.put(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
     // Set a smaller value for the number of partitions for the __consumer_offsets topic
     // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long.
     serverProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 1.toString)

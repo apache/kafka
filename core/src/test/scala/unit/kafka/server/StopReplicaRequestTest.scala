@@ -41,7 +41,7 @@ class StopReplicaRequestTest extends BaseRequestTest {
 
   @Test
   def testStopReplicaRequest(): Unit = {
-    createTopic(topic, partitionNum, 1)
+    createTopic(topic, partitionNum)
     TestUtils.generateAndProduceMessages(servers, topic, 10)
 
     val server = servers.head

@@ -721,7 +721,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(Map.empty)
     else {
       val internalTopicsAllowed = request.header.clientId == AdminUtils.ADMIN_CLIENT_ID
-      val supportedOperation = if (request.header.apiVersion > 10) genericError else defaultError
+      val transactionSupportedOperation = if (request.header.apiVersion > 10) genericError else defaultError
       // call the replica manager to append messages to the replicas
       replicaManager.handleProduceAppend(
         timeout = produceRequest.timeout.toLong,
@@ -732,7 +732,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         responseCallback = sendResponseCallback,
         recordValidationStatsCallback = processingStatsCallback,
         requestLocal = requestLocal,
-        supportedOperation = supportedOperation)
+        transactionSupportedOperation = transactionSupportedOperation)
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log
@@ -1426,7 +1426,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           new DescribeTopicPartitionsResponse(response)
         })
       }
-      case None => throw new InvalidRequestException("ZK cluster does not handle DescribeTopicPartitions request")
+      case None => {
+        requestHelper.sendMaybeThrottle(request, request.body[DescribeTopicPartitionsRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      }
     }
   }
 
@@ -2360,7 +2362,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleWriteTxnMarkersRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     ensureInterBrokerVersion(IBP_0_11_0_IV0)
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    // We are checking for AlterCluster permissions first. If it is not present, we are authorizing cluster operation
+    // The latter will throw an exception if it is denied.
+    if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
+      authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    }
     val writeTxnMarkersRequest = request.body[WriteTxnMarkersRequest]
     val errors = new ConcurrentHashMap[java.lang.Long, util.Map[TopicPartition, Errors]]()
     val markers = writeTxnMarkersRequest.markers
@@ -2991,6 +2997,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       (rType, rName) => authHelper.authorize(request.context, ALTER_CONFIGS, rType, rName))
     val remaining = ConfigAdminManager.copyWithoutPreprocessed(original.data(), preprocessingResponses)
 
+    // Before deciding whether to forward or handle locally, a ZK broker needs to check if
+    // the active controller is ZK or KRaft. If the controller is KRaft, we need to forward.
+    // If the controller is ZK, we need to process the request locally.
+    val isKRaftController = metadataSupport match {
+      case ZkSupport(_, _, _, _, metadataCache, _) =>
+        metadataCache.getControllerId.exists(_.isInstanceOf[KRaftCachedControllerId])
+      case RaftSupport(_, _) => true
+    }
+
     def sendResponse(secondPart: Option[ApiMessage]): Unit = {
       secondPart match {
         case Some(result: IncrementalAlterConfigsResponseData) =>
@@ -3003,9 +3018,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
+    // Forwarding has not happened yet, so handle both ZK and KRaft cases here
     if (remaining.resources().isEmpty) {
       sendResponse(Some(new IncrementalAlterConfigsResponseData()))
-    } else if ((!request.isForwarded) && metadataSupport.canForward()) {
+    } else if ((!request.isForwarded) && metadataSupport.canForward() && isKRaftController) {
       metadataSupport.forwardingManager.get.forwardRequest(request,
         new IncrementalAlterConfigsRequest(remaining, request.header.apiVersion()),
         response => sendResponse(response.map(_.data())))

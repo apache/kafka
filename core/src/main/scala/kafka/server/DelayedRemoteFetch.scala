@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
@@ -124,5 +125,5 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
 
 object DelayedRemoteFetchMetrics {
   private val metricsGroup = new KafkaMetricsGroup(DelayedRemoteFetchMetrics.getClass)
-  val expiredRequestMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
+  val expiredRequestMeter: Meter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 }

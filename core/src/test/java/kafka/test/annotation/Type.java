@@ -31,33 +31,19 @@ public enum Type {
     KRAFT {
         @Override
         public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config.copyOf(), false));
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, false));
         }
     },
     CO_KRAFT {
         @Override
         public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config.copyOf(), true));
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, true));
         }
     },
     ZK {
         @Override
         public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config.copyOf()));
-        }
-    },
-    ALL {
-        @Override
-        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config.copyOf(), false));
-            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config.copyOf(), true));
-            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config.copyOf()));
-        }
-    },
-    DEFAULT {
-        @Override
-        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            throw new UnsupportedOperationException("Cannot create invocation contexts for DEFAULT type");
+            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config));
         }
     };
 

@@ -20,7 +20,6 @@ import kafka.utils.CoreUtils
 import kafka.server.ZkAdminManager
 import kafka.zk.{AdminZkClient, ZkMigrationClient}
 import org.apache.kafka.clients.admin.ScramMechanism
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.metadata.ClientQuotaRecord
@@ -38,8 +37,7 @@ import org.apache.kafka.metadata.RecordTestUtils
 import org.apache.kafka.metadata.migration.KRaftMigrationZkWriter
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs}
-import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ReplicationConfigs, QuotaConfigs}
 import org.apache.kafka.server.util.MockRandom
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.Test
@@ -263,6 +261,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     props.put(TopicConfig.RETENTION_MS_CONFIG, "300000")
     zkClient.setOrCreateEntityConfigs(ConfigType.TOPIC, "test", props)
 
+    migrationState = migrationClient.claimControllerLeadership(migrationState)
     migrationState = migrationClient.configClient().writeConfigs(new ConfigResource(ConfigResource.Type.TOPIC, "test"),
       java.util.Collections.singletonMap(TopicConfig.SEGMENT_MS_CONFIG, "100000"), migrationState)
     assertEquals(1, migrationState.migrationZkVersion())

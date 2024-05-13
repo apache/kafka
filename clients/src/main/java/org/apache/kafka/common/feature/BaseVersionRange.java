@@ -56,7 +56,7 @@ class BaseVersionRange {
      * @param maxValue      The maximum version value.
      *
      * @throws IllegalArgumentException   If any of the following conditions are true:
-     *                                     - (minValue < 1) OR (maxValue < 1) OR (maxValue < minValue).
+     *                                     - (minValue < 0) OR (maxValue < 0) OR (maxValue < minValue).
      *                                     - minKeyLabel is empty, OR, minKeyLabel is empty.
      */
     protected BaseVersionRange(String minKeyLabel, short minValue, String maxKeyLabel, short maxValue) {
@@ -86,6 +86,7 @@ class BaseVersionRange {
         return maxValue;
     }
 
+    @Override
     public String toString() {
         return String.format(
             "%s[%s]",
