@@ -57,6 +57,7 @@
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.fault" />
     <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
+    <allow class="org.apache.kafka.network.SocketServerConfigs" />
   </subpackage>
 
   <subpackage name="tools">
@@ -106,6 +107,8 @@
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.zk" />
     <allow pkg="org.apache.kafka.clients.admin"/>
+    <allow pkg="org.apache.kafka.clients.consumer"/>
+    <allow pkg="org.apache.kafka.coordinator.group"/>
     <subpackage name="annotation">
       <allow pkg="kafka.test"/>
     </subpackage>
@@ -114,5 +117,17 @@
       <allow pkg="org.apache.kafka.clients"/>
       <allow pkg="org.apache.kafka.metadata" />
     </subpackage>
+  </subpackage>
+
+  <subpackage name="admin">
+    <allow pkg="kafka.cluster"/>
+    <allow pkg="kafka.server"/>
+    <allow pkg="kafka.zk"/>
+    <allow pkg="org.apache.kafka.security"/>
+    <allow pkg="org.apache.kafka.server"/>
+    <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="kafka.test"/>
+    <allow pkg="kafka.test.annotation"/>
+    <allow pkg="kafka.test.junit"/>
   </subpackage>
 </import-control>

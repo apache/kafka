@@ -365,7 +365,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
         this.usesFencableWriter = config.transactionalLeaderEnabled();
         this.topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
-        if (this.topic == null || this.topic.trim().length() == 0)
+        if (this.topic == null || this.topic.trim().isEmpty())
             throw new ConfigException("Must specify topic for connector configuration.");
 
         configLog = setupAndCreateKafkaBasedLog(this.topic, config);
@@ -1265,7 +1265,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
         try {
             int taskNum = Integer.parseInt(parts[parts.length - 1]);
-            String connectorName = Utils.join(Arrays.copyOfRange(parts, 1, parts.length - 1), "-");
+            String connectorName = String.join("-", Arrays.copyOfRange(parts, 1, parts.length - 1));
             return new ConnectorTaskId(connectorName, taskNum);
         } catch (NumberFormatException e) {
             return null;

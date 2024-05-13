@@ -34,12 +34,11 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{atLeastOnce, mock, verify, when}
 
-import scala.collection.Seq
-import scala.collection.mutable.{HashMap, Map}
+import scala.collection.{Seq, mutable}
 
 class IsrExpirationTest {
 
-  var topicPartitionIsr: Map[(String, Int), Seq[Int]] = new HashMap[(String, Int), Seq[Int]]()
+  var topicPartitionIsr: mutable.Map[(String, Int), Seq[Int]] = new mutable.HashMap[(String, Int), Seq[Int]]()
   val replicaLagTimeMaxMs = 100L
   val replicaFetchWaitMaxMs = 100
   val leaderLogEndOffset = 20

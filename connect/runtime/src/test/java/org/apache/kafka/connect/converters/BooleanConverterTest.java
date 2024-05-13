@@ -41,7 +41,7 @@ public class BooleanConverterTest {
 
     @Before
     public void setUp() {
-        converter.configure(Collections.<String, String>emptyMap(), false);
+        converter.configure(Collections.emptyMap(), false);
     }
 
     @Test

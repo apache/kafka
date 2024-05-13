@@ -17,7 +17,7 @@
 package kafka.log
 
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils.checkEquals
+import kafka.utils.TestUtils.random
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
@@ -25,13 +25,13 @@ import org.apache.kafka.common.utils.{MockTime, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{BatchMetadata, EpochEntry, LogConfig, LogFileUtils, LogSegment, LogSegmentOffsetOverflowException, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, RollParams}
+import org.apache.kafka.storage.internals.log._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
-import java.io.File
+import java.io.{File, RandomAccessFile}
 import java.util
 import java.util.{Optional, OptionalLong}
 import scala.collection._
@@ -327,7 +327,7 @@ class LogSegmentTest {
     for (i <- 0 until 100)
       seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, records(i, i.toString))
     val indexFile = seg.offsetIndexFile
-    TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
+    writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(newProducerStateManager(), Optional.empty())
     for (i <- 0 until 100) {
       val records = seg.read(i, 1, seg.size(), true).records.records
@@ -453,7 +453,7 @@ class LogSegmentTest {
     for (i <- 0 until 100)
       seg.append(i, i * 10, i, records(i, i.toString))
     val timeIndexFile = seg.timeIndexFile
-    TestUtils.writeNonsenseToFile(timeIndexFile, 5, timeIndexFile.length.toInt)
+    writeNonsenseToFile(timeIndexFile, 5, timeIndexFile.length.toInt)
     seg.recover(newProducerStateManager(), Optional.empty())
     for (i <- 0 until 100) {
       assertEquals(i, seg.findOffsetByTimestamp(i * 10, 0L).get.offset)
@@ -477,7 +477,7 @@ class LogSegmentTest {
 
       val recordPosition = seg.log.searchForOffsetWithSize(offsetToBeginCorruption, 0)
       val position = recordPosition.position + TestUtils.random.nextInt(15)
-      TestUtils.writeNonsenseToFile(seg.log.file, position, (seg.log.file.length - position).toInt)
+      writeNonsenseToFile(seg.log.file, position, (seg.log.file.length - position).toInt)
       seg.recover(newProducerStateManager(), Optional.empty())
       assertEquals((0 until offsetToBeginCorruption).toList, seg.log.batches.asScala.map(_.lastOffset).toList,
         "Should have truncated off bad messages.")
@@ -500,7 +500,7 @@ class LogSegmentTest {
   /* create a segment with   pre allocate, put message to it and verify */
   @Test
   def testCreateWithInitFileSizeAppendMessage(): Unit = {
-    val seg = createSegment(40, false, 512*1024*1024, true)
+    val seg = createSegment(40, fileAlreadyExists = false, 512*1024*1024, preallocate = true)
     val ms = records(50, "hello", "there")
     seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
     val ms2 = records(60, "alpha", "beta")
@@ -611,6 +611,24 @@ class LogSegmentTest {
       new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
       new MockTime()
     )
+  }
+
+  private def checkEquals[T](s1: java.util.Iterator[T], s2: java.util.Iterator[T]): Unit = {
+    while (s1.hasNext && s2.hasNext)
+      assertEquals(s1.next, s2.next)
+    assertFalse(s1.hasNext, "Iterators have uneven length--first has more")
+    assertFalse(s2.hasNext, "Iterators have uneven length--second has more")
+  }
+
+  private def writeNonsenseToFile(fileName: File, position: Long, size: Int): Unit = {
+    val file = new RandomAccessFile(fileName, "rw")
+    try {
+      file.seek(position)
+      for (_ <- 0 until size)
+        file.writeByte(random.nextInt(255))
+    } finally {
+      file.close()
+    }
   }
 
 }

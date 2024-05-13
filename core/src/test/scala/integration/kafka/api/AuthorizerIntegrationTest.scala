@@ -225,7 +225,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     ApiKeys.DESCRIBE_CONFIGS -> topicDescribeConfigsAcl,
     ApiKeys.ALTER_CONFIGS -> topicAlterConfigsAcl,
     ApiKeys.INIT_PRODUCER_ID -> (transactionIdWriteAcl ++ clusterIdempotentWriteAcl),
-    ApiKeys.WRITE_TXN_MARKERS -> clusterAcl,
+    ApiKeys.WRITE_TXN_MARKERS -> (clusterAcl ++ clusterAlterAcl),
     ApiKeys.ADD_PARTITIONS_TO_TXN -> (topicWriteAcl ++ transactionIdWriteAcl),
     ApiKeys.ADD_OFFSETS_TO_TXN -> (groupReadAcl ++ transactionIdWriteAcl),
     ApiKeys.END_TXN -> transactionIdWriteAcl,
@@ -560,7 +560,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     dir.topics.add(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic()
       .setName(tp.topic)
       .setPartitions(Collections.singletonList(tp.partition)))
-    val data = new AlterReplicaLogDirsRequestData();
+    val data = new AlterReplicaLogDirsRequestData()
     data.dirs.add(dir)
     new AlterReplicaLogDirsRequest.Builder(data).build()
   }

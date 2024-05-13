@@ -22,7 +22,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.server.config.{ClientQuotaManagerConfig, ReplicationQuotaManagerConfig}
+import org.apache.kafka.server.config.{ClientQuotaManagerConfig, ReplicationQuotaManagerConfig, QuotaConfigs}
 import org.apache.kafka.server.quota.ClientQuotaType
 
 object QuotaType  {
@@ -74,7 +74,7 @@ object QuotaFactory extends Logging {
 
   def instantiate(cfg: KafkaConfig, metrics: Metrics, time: Time, threadNamePrefix: String): QuotaManagers = {
 
-    val clientQuotaCallback = Option(cfg.getConfiguredInstance(KafkaConfig.ClientQuotaCallbackClassProp,
+    val clientQuotaCallback = Option(cfg.getConfiguredInstance(QuotaConfigs.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,
       classOf[ClientQuotaCallback]))
     QuotaManagers(
       new ClientQuotaManager(clientConfig(cfg), metrics, Fetch, time, threadNamePrefix, clientQuotaCallback),
@@ -96,21 +96,21 @@ object QuotaFactory extends Logging {
     )
   }
 
-  def clientControllerMutationConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
+  private def clientControllerMutationConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
     new ClientQuotaManagerConfig(
       cfg.numControllerQuotaSamples,
       cfg.controllerQuotaWindowSizeSeconds
     )
   }
 
-  def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
+  private def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
     new ReplicationQuotaManagerConfig(
       cfg.numReplicationQuotaSamples,
       cfg.replicationQuotaWindowSizeSeconds
     )
   }
 
-  def alterLogDirsReplicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
+  private def alterLogDirsReplicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
     new ReplicationQuotaManagerConfig(
       cfg.numAlterLogDirsReplicationQuotaSamples,
       cfg.alterLogDirsReplicationQuotaWindowSizeSeconds

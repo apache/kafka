@@ -82,7 +82,7 @@ class RequestHandlerHelper(
       sendErrorResponseExemptThrottle(request, e)
   }
 
-  def sendErrorOrCloseConnection(
+  private def sendErrorOrCloseConnection(
     request: RequestChannel.Request,
     error: Throwable,
     throttleMs: Int
@@ -178,7 +178,7 @@ class RequestHandlerHelper(
     requestChannel.sendResponse(request, response, onComplete)
   }
 
-  def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
+  private def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
     quotas.request.maybeRecordExempt(request)
     sendErrorOrCloseConnection(request, error, 0)
   }

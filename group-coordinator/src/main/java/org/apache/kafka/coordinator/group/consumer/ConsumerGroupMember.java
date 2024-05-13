@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.image.TopicImage;
@@ -64,6 +65,7 @@ public class ConsumerGroupMember {
         private String serverAssignorName = null;
         private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
         private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Collections.emptyMap();
+        private ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata = null;
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);
@@ -86,6 +88,7 @@ public class ConsumerGroupMember {
             this.state = member.state;
             this.assignedPartitions = member.assignedPartitions;
             this.partitionsPendingRevocation = member.partitionsPendingRevocation;
+            this.classicMemberMetadata = member.classicMemberMetadata;
         }
 
         public Builder updateMemberEpoch(int memberEpoch) {
@@ -192,6 +195,25 @@ public class ConsumerGroupMember {
             return this;
         }
 
+        public Builder setClassicMemberMetadata(ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata) {
+            this.classicMemberMetadata = classicMemberMetadata;
+            return this;
+        }
+
+        public Builder setSupportedClassicProtocols(JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols) {
+            List<ConsumerGroupMemberMetadataValue.ClassicProtocol> newSupportedProtocols = new ArrayList<>();
+            protocols.forEach(protocol ->
+                newSupportedProtocols.add(
+                    new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                        .setName(protocol.name())
+                        .setMetadata(protocol.metadata())
+                )
+            );
+            this.classicMemberMetadata = new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(newSupportedProtocols);
+            return this;
+        }
+
         public Builder updateWith(ConsumerGroupMemberMetadataValue record) {
             setInstanceId(record.instanceId());
             setRackId(record.rackId());
@@ -201,6 +223,7 @@ public class ConsumerGroupMember {
             setSubscribedTopicRegex(record.subscribedTopicRegex());
             setRebalanceTimeoutMs(record.rebalanceTimeoutMs());
             setServerAssignorName(record.serverAssignor());
+            setClassicMemberMetadata(record.classicMemberMetadata());
             return this;
         }
 
@@ -236,7 +259,8 @@ public class ConsumerGroupMember {
                 serverAssignorName,
                 state,
                 assignedPartitions,
-                partitionsPendingRevocation
+                partitionsPendingRevocation,
+                classicMemberMetadata
             );
         }
     }
@@ -311,6 +335,11 @@ public class ConsumerGroupMember {
      */
     private final Map<Uuid, Set<Integer>> partitionsPendingRevocation;
 
+    /**
+     * The classic member metadata if the consumer uses the classic protocol.
+     */
+    private final ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata;
+
     private ConsumerGroupMember(
         String memberId,
         int memberEpoch,
@@ -325,7 +354,8 @@ public class ConsumerGroupMember {
         String serverAssignorName,
         MemberState state,
         Map<Uuid, Set<Integer>> assignedPartitions,
-        Map<Uuid, Set<Integer>> partitionsPendingRevocation
+        Map<Uuid, Set<Integer>> partitionsPendingRevocation,
+        ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata
     ) {
         this.memberId = memberId;
         this.memberEpoch = memberEpoch;
@@ -341,6 +371,7 @@ public class ConsumerGroupMember {
         this.serverAssignorName = serverAssignorName;
         this.assignedPartitions = assignedPartitions;
         this.partitionsPendingRevocation = partitionsPendingRevocation;
+        this.classicMemberMetadata = classicMemberMetadata;
     }
 
     /**
@@ -449,6 +480,40 @@ public class ConsumerGroupMember {
     }
 
     /**
+     * @return The supported classic protocols converted to JoinGroupRequestProtocolCollection.
+     */
+    public JoinGroupRequestData.JoinGroupRequestProtocolCollection supportedJoinGroupRequestProtocols() {
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
+        supportedClassicProtocols().ifPresent(classicProtocols -> classicProtocols.forEach(protocol ->
+            protocols.add(
+                new JoinGroupRequestData.JoinGroupRequestProtocol()
+                    .setName(protocol.name())
+                    .setMetadata(protocol.metadata())
+            )
+        ));
+        return protocols;
+    }
+
+    /**
+     * @return The classicMemberMetadata if the consumer uses the classic protocol.
+     */
+    public Optional<ConsumerGroupMemberMetadataValue.ClassicMemberMetadata> classicMemberMetadata() {
+        return Optional.ofNullable(classicMemberMetadata);
+    }
+
+    /**
+     * @return The list of protocols if the consumer uses the classic protocol.
+     */
+    public Optional<List<ConsumerGroupMemberMetadataValue.ClassicProtocol>> supportedClassicProtocols() {
+        if (useClassicProtocol()) {
+            return Optional.ofNullable(classicMemberMetadata.supportedProtocols());
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    /**
      * @param targetAssignment The target assignment of this member in the corresponding group.
      *
      * @return The ConsumerGroupMember mapped as ConsumerGroupDescribeResponseData.Member.
@@ -504,6 +569,13 @@ public class ConsumerGroupMember {
         }
     }
 
+    /**
+     * @return A boolean indicating whether the member uses the classic protocol.
+     */
+    public boolean useClassicProtocol() {
+        return classicMemberMetadata != null;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -522,7 +594,8 @@ public class ConsumerGroupMember {
             && Objects.equals(subscribedTopicRegex, that.subscribedTopicRegex)
             && Objects.equals(serverAssignorName, that.serverAssignorName)
             && Objects.equals(assignedPartitions, that.assignedPartitions)
-            && Objects.equals(partitionsPendingRevocation, that.partitionsPendingRevocation);
+            && Objects.equals(partitionsPendingRevocation, that.partitionsPendingRevocation)
+            && Objects.equals(classicMemberMetadata, that.classicMemberMetadata);
     }
 
     @Override
@@ -541,6 +614,7 @@ public class ConsumerGroupMember {
         result = 31 * result + Objects.hashCode(serverAssignorName);
         result = 31 * result + Objects.hashCode(assignedPartitions);
         result = 31 * result + Objects.hashCode(partitionsPendingRevocation);
+        result = 31 * result + Objects.hashCode(classicMemberMetadata);
         return result;
     }
 
@@ -561,6 +635,7 @@ public class ConsumerGroupMember {
             ", serverAssignorName='" + serverAssignorName + '\'' +
             ", assignedPartitions=" + assignedPartitions +
             ", partitionsPendingRevocation=" + partitionsPendingRevocation +
+            ", classicMemberMetadata='" + classicMemberMetadata + '\'' +
             ')';
     }
 

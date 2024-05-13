@@ -29,7 +29,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.FlattenedIterator;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -120,7 +119,7 @@ public final class LeaderAndIsrRequest extends AbstractControlRequest {
                 .append(", brokerEpoch=").append(brokerEpoch)
                 .append(", partitionStates=").append(partitionStates)
                 .append(", topicIds=").append(topicIds)
-                .append(", liveLeaders=(").append(Utils.join(liveLeaders, ", ")).append(")")
+                .append(", liveLeaders=(").append(liveLeaders.stream().map(Node::toString).collect(Collectors.joining(", "))).append(")")
                 .append(")");
             return bld.toString();
 

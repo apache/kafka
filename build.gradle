@@ -135,6 +135,13 @@ ext {
   repo = file("$rootDir/.git").isDirectory() ? Grgit.open(currentDir: project.getRootDir()) : null
 
   commitId = determineCommitId()
+
+  addParametersForTests = { name, options ->
+    // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
+    // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
+    if (name == "compileTestJava" || name == "compileTestScala")
+      options.compilerArgs << "-parameters"
+  }
 }
 
 allprojects {
@@ -300,7 +307,7 @@ subprojects {
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
     // temporary exclusions until all the warnings are fixed
-    if (!project.path.startsWith(":connect"))
+    if (!project.path.startsWith(":connect") && !project.path.startsWith(":storage"))
       options.compilerArgs << "-Xlint:-rawtypes"
     options.compilerArgs << "-Xlint:-serial"
     options.compilerArgs << "-Xlint:-try"
@@ -313,11 +320,9 @@ subprojects {
     if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_20))
       options.compilerArgs << "-Xlint:-options"
     dependsOn installGitHooks
-  }
 
-  // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
-  // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
-  compileTestJava.options.compilerArgs.add "-parameters"
+    addParametersForTests(name, options)
+  }
 
   // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
   // `-target` incorrectly if this is unset
@@ -741,6 +746,8 @@ subprojects {
     if (versions.baseScala == "2.13" || JavaVersion.current().isJava9Compatible())
       scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)]
 
+    addParametersForTests(name, options)
+
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = defaultMaxHeapSize
       jvmArgs = defaultJvmArgs
@@ -815,6 +822,7 @@ subprojects {
   dependencyCheck {
     suppressionFile = "$rootDir/gradle/resources/dependencycheck-suppressions.xml"
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
+    skipConfigurations = [ "zinc" ]
   }
 }
 
@@ -1382,6 +1390,8 @@ project(':group-coordinator') {
     implementation project(':clients')
     implementation project(':metadata')
     implementation project(':storage')
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
     implementation libs.metrics
 
@@ -1418,7 +1428,7 @@ project(':group-coordinator') {
     args = [ "-p", "org.apache.kafka.coordinator.group.generated",
              "-o", "src/generated/java/org/apache/kafka/coordinator/group/generated",
              "-i", "src/main/resources/common/message",
-             "-m", "MessageDataGenerator"
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"
     ]
     inputs.dir("src/main/resources/common/message")
         .withPropertyName("messages")
@@ -1555,7 +1565,7 @@ project(':clients') {
     // dependencies excluded from the final jar, since they are declared as runtime dependencies
     dependencies {
       project.configurations.shadowed.allDependencies.each {
-        exclude(dependency(it.group + ':' + it.name + ':' + it.version))
+        exclude(dependency(it.group + ':' + it.name))
       }
       // exclude proto files from the jar
       exclude "**/opentelemetry/proto/**/*.proto"
@@ -2088,6 +2098,7 @@ project(':tools') {
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.main.output
+    testImplementation project(':group-coordinator')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
@@ -2245,6 +2256,7 @@ project(':streams') {
     testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':storage')
+    testImplementation project(':group-coordinator')
     testImplementation project(':transaction-coordinator')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
@@ -2257,6 +2269,7 @@ project(':streams') {
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
+    testImplementation project(':group-coordinator')
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly libs.slf4jlog4j
@@ -2393,6 +2406,7 @@ project(':streams:streams-scala') {
       // So we make sure to not include it in the dependencies.
       api libs.scalaCollectionCompat
     }
+    testImplementation project(':group-coordinator')
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -2832,6 +2846,7 @@ project(':jmh-benchmarks') {
     }
     implementation project(':server-common')
     implementation project(':server')
+    implementation project(':raft')
     implementation project(':clients')
     implementation project(':group-coordinator')
     implementation project(':metadata')
@@ -3061,8 +3076,10 @@ project(':connect:runtime') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server')
+    testImplementation project(':group-coordinator')
     testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
+    testImplementation project(':group-coordinator')
 
     testImplementation libs.easymock
     testImplementation libs.junitJupiterApi

@@ -18,9 +18,9 @@
 package kafka.coordinator.transaction
 
 import kafka.network.SocketServer
-import kafka.server.{IntegrationTestUtils, KafkaConfig}
-import kafka.test.ClusterInstance
-import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTest, ClusterTestDefaults, ClusterTests, Type}
+import kafka.server.IntegrationTestUtils
+import kafka.test.{ClusterConfig, ClusterGenerator, ClusterInstance}
+import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTemplate, ClusterTest, ClusterTestDefaults, ClusterTests, Type}
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.message.InitProducerIdRequestData
 import org.apache.kafka.common.network.ListenerName
@@ -37,6 +37,22 @@ import java.util.stream.{Collectors, IntStream}
 import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters._
 
+object ProducerIdsIntegrationTest {
+  def uniqueProducerIdsBumpIBP(clusterGenerator: ClusterGenerator): Unit = {
+    val serverProperties = java.util.Collections.singletonMap(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
+    val perBrokerProperties: java.util.Map[Integer, java.util.Map[String, String]] =
+      java.util.Collections.singletonMap(0,
+        java.util.Collections.singletonMap(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0-IV0"))
+
+    clusterGenerator.accept(ClusterConfig.defaultBuilder()
+      .setTypes(Set(Type.ZK).asJava)
+      .setBrokers(3)
+      .setAutoStart(false)
+      .setServerProperties(serverProperties)
+      .setPerServerProperties(perBrokerProperties)
+      .build())
+  }
+}
 
 @ClusterTestDefaults(serverProperties = Array(
   new ClusterConfigProperty(key = "transaction.state.log.num.partitions", value = "1")
@@ -45,36 +61,36 @@ import scala.jdk.CollectionConverters._
 class ProducerIdsIntegrationTest {
 
   @ClusterTests(Array(
-    new ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_2_8_IV1),
-    new ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_0_IV0),
-    new ClusterTest(clusterType = Type.KRAFT, brokers = 3, metadataVersion = MetadataVersion.IBP_3_3_IV0)
+    new ClusterTest(types = Array(Type.ZK), brokers = 3, metadataVersion = MetadataVersion.IBP_2_8_IV1),
+    new ClusterTest(types = Array(Type.ZK), brokers = 3, metadataVersion = MetadataVersion.IBP_3_0_IV0),
+    new ClusterTest(types = Array(Type.KRAFT), brokers = 3, metadataVersion = MetadataVersion.IBP_3_3_IV0)
   ))
   def testUniqueProducerIds(clusterInstance: ClusterInstance): Unit = {
     verifyUniqueIds(clusterInstance)
   }
 
-  @ClusterTest(clusterType = Type.ZK, brokers = 3, autoStart = AutoStart.NO)
+  @ClusterTemplate("uniqueProducerIdsBumpIBP")
   def testUniqueProducerIdsBumpIBP(clusterInstance: ClusterInstance): Unit = {
-    clusterInstance.config().serverProperties().put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
-    clusterInstance.config().brokerServerProperties(0).put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0-IV0")
     clusterInstance.start()
     verifyUniqueIds(clusterInstance)
     clusterInstance.stop()
   }
 
-  @ClusterTest(clusterType = Type.ZK, brokers = 1, autoStart = AutoStart.NO)
+  @ClusterTest(types = Array(Type.ZK), brokers = 1, autoStart = AutoStart.NO, serverProperties = Array(
+    new ClusterConfigProperty(key = "num.io.threads", value = "1")
+  ))
   @Timeout(20)
   def testHandleAllocateProducerIdsSingleRequestHandlerThread(clusterInstance: ClusterInstance): Unit = {
-    clusterInstance.config().serverProperties().put(KafkaConfig.NumIoThreadsProp, "1")
     clusterInstance.start()
     verifyUniqueIds(clusterInstance)
     clusterInstance.stop()
   }
 
   @Disabled // TODO: Enable once producer id block size is configurable (KAFKA-15029)
-  @ClusterTest(clusterType = Type.ZK, brokers = 1, autoStart = AutoStart.NO)
+  @ClusterTest(types = Array(Type.ZK), brokers = 1, autoStart = AutoStart.NO, serverProperties = Array(
+    new ClusterConfigProperty(key = "num.io.threads", value = "2")
+  ))
   def testMultipleAllocateProducerIdsRequest(clusterInstance: ClusterInstance): Unit = {
-    clusterInstance.config().serverProperties().put(KafkaConfig.NumIoThreadsProp, "2")
     clusterInstance.start()
     verifyUniqueIds(clusterInstance)
     clusterInstance.stop()

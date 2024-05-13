@@ -29,7 +29,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
@@ -257,7 +256,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSupportMultipleBootstrapServers() {
         final List<String> expectedBootstrapServers = Arrays.asList("broker1:9092", "broker2:9092");
-        final String bootstrapServersString = Utils.join(expectedBootstrapServers, ",");
+        final String bootstrapServersString = String.join(",", expectedBootstrapServers);
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "irrelevant");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServersString);
