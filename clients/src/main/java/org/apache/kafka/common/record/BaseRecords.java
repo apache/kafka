@@ -31,4 +31,13 @@ public interface BaseRecords {
      * @return Initialized {@link RecordsSend} object
      */
     RecordsSend<? extends BaseRecords> toSend();
+
+    /**
+     * Make a copy of this {@link BaseRecords}.
+     *
+     * @return A copy of this {@link BaseRecords} which does not share any mutable fields.
+     */
+    default BaseRecords duplicate() {
+        throw new UnsupportedOperationException("Duplication is not supported");
+    }
 }

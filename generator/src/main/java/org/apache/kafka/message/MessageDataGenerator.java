@@ -1537,12 +1537,9 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                     });
                 }
             } else if (field.type().isRecords()) {
-                cond.ifShouldNotBeNull(() -> {
-                    headerGenerator.addImport(MessageGenerator.MEMORY_RECORDS_CLASS);
+                cond.ifShouldNotBeNull(() ->
                     buffer.printf("%s;%n", target.assignmentStatement(
-                        String.format("MemoryRecords.readableRecords(((MemoryRecords) %s).buffer().duplicate())",
-                            target.sourceVariable())));
-                });
+                        String.format("%s.duplicate()", target.sourceVariable()))));
             } else if (field.type().isStruct()) {
                 cond.ifShouldNotBeNull(() ->
                     buffer.printf("%s;%n", target.assignmentStatement(
