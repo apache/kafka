@@ -1816,7 +1816,7 @@ public class StreamThreadTest {
         }
     }
 
-    private void testNotCloseTaskAndRemoveFromTaskManagerInCommitTransactionWhenCommitting(RuntimeException e) {
+    private void testNotCloseTaskAndRemoveFromTaskManagerInCommitTransactionWhenCommitting(final RuntimeException e) {
         // only have source but no sink so that we would not get fenced in producer.send
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
 

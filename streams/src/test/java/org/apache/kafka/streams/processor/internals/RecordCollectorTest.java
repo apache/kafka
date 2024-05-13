@@ -1058,7 +1058,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldThrowTaskMigratedExceptionOnSubsequentSendWhenInvalidPidMappingInCallback() {
-        testThrowTaskMigratedExceptionOnSubsequentSend(new InvalidPidMappingException("KABOOM!") );
+        testThrowTaskMigratedExceptionOnSubsequentSend(new InvalidPidMappingException("KABOOM!"));
     }
 
     @Test
