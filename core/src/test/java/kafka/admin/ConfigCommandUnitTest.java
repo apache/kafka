@@ -410,7 +410,6 @@ public class ConfigCommandUnitTest {
         assertEquals("[[1, 2], [3, 4]]", addedProps.getProperty("nested"));
     }
 
-    @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
     public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String...args) {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--describe"), Arrays.asList(args)));
         createOpts.checkArgs();
@@ -1086,7 +1085,7 @@ public class ConfigCommandUnitTest {
     }
 
     @Test
-    public void shouldAddBrokerLoggerConfig() throws Exception {
+    public void shouldAddBrokerLoggerConfig() {
         Node node = new Node(1, "localhost", 9092);
         verifyAlterBrokerLoggerConfig(node, "1", "1", Arrays.asList(
             new ConfigEntry("kafka.log.LogCleaner", "INFO"),
