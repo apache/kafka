@@ -29,7 +29,6 @@ spec:
     url: git@github.com:confluentinc/kafka.git
     run_on:
     - branches
-    - tags
     - pull_requests
     pipeline_file: .semaphore/semaphore.yml
     integration_type: github_app
@@ -39,10 +38,22 @@ spec:
         level: pipeline
     whitelist:
       branches:
+      - 2.3
+      - 2.4
+      - 2.5
+      - 2.6
+      - 2.7
+      - 2.8
+      - 3.0
+      - 3.1
+      - 3.2
+      - 3.3
+      - 3.4
+      - 3.5
+      - 3.6
+      - 3.7
+      - trunk
       - master
-      - main
-      - /^v\d+\.\d+\.x$/
-      - /^gh-readonly-queue.*/
   custom_permissions: true
   debug_permissions:
   - empty
