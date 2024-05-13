@@ -370,7 +370,9 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     public void close() {
         if (!this.closed) {
             this.closed = true;
-            producer.close();
+            if (producer != null) {
+                producer.close();
+            }
         }
     }
 
