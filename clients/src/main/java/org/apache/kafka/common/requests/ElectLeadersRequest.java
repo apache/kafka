@@ -75,10 +75,14 @@ public class ElectLeadersRequest extends AbstractRequest {
                         tps = new ElectLeadersRequestData.TopicPartitions().setTopic(tp.topic());
                         data.topicPartitions().add(tps);
                     }
-                    if(tps.desiredLeaders().size() != tps.partitions().size()) {
-                        throw new IllegalStateException("Both desiredLeaders and partitions must be the same size");
-                    }
                     tps.partitions().add(tp.partition());
+                    if (version >= 3) {
+                        tps.desiredLeaders().add(tp.getDesignatedLeader());
+                        if (tps.desiredLeaders().size() != tps.partitions().size()) {
+                            throw new IllegalStateException("Both desiredLeaders and partitions must be the same size " + tps.desiredLeaders().size() + " " + tps.partitions().size());
+                        }
+                    }
+
                 });
             } else {
                 data.setTopicPartitions(null);

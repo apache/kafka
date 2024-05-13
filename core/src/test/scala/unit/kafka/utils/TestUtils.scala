@@ -1814,6 +1814,16 @@ object TestUtils extends Logging {
       KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
   }
 
+  def stringifyTopicPartitions(partitions: Set[TopicPartition]): String = {
+    Json.encodeAsString(Map("partitions" ->
+      partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition).asJava).asJava).asJava)
+  }
+
+  def stringifyTopicPartitionsWithDesignatedLeader(partitions: Set[TopicPartition]): String = {
+    Json.encodeAsString(Map("partitions" ->
+      partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition, "designatedLeader" -> tp.getDesignatedLeader).asJava).asJava).asJava)
+  }
+
   def waitForAllReassignmentsToComplete(adminClient: Admin, pause: Long = 100L): Unit = {
     waitUntilTrue(() => adminClient.listPartitionReassignments().reassignments().get().isEmpty,
       s"There still are ongoing reassignments", pause = pause)

@@ -28,11 +28,18 @@ public final class TopicPartition implements Serializable {
     private int hash = 0;
     private final int partition;
     private final String topic;
+    private int designatedLeader = -1;
 
     public TopicPartition(String topic, int partition) {
         this.partition = partition;
         this.topic = topic;
     }
+
+    public void setDesignatedLeader(int designatedLeader) {
+        this.designatedLeader = designatedLeader;
+    }
+
+    public int getDesignatedLeader(){ return designatedLeader; }
 
     public int partition() {
         return partition;

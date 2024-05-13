@@ -86,7 +86,7 @@ public class LeaderElectionCommand {
         ElectionType electionType = commandOptions.getElectionType();
         Optional<Set<TopicPartition>> jsonFileTopicPartitions =
             Optional.ofNullable(commandOptions.getPathToJsonFile())
-                .map(LeaderElectionCommand::parseReplicaElectionData);
+                .map(path -> parseReplicaElectionData(electionType, path));
 
         Optional<String> topicOption = Optional.ofNullable(commandOptions.getTopic());
         Optional<Integer> partitionOption = Optional.ofNullable(commandOptions.getPartition());
@@ -189,13 +189,13 @@ public class LeaderElectionCommand {
         }
     }
 
-    private static Set<TopicPartition> parseReplicaElectionData(String path) {
+    private static Set<TopicPartition> parseReplicaElectionData(ElectionType electionType, String path) {
         Optional<JsonValue> jsonFile;
         try {
             jsonFile = Json.parseFull(Utils.readFileAsString(path));
             return jsonFile.map(js -> {
                 try {
-                    return topicPartitions(js);
+                    return topicPartitions(electionType, js);
                 } catch (JsonMappingException e) {
                     throw new RuntimeException(e);
                 }
@@ -205,11 +205,11 @@ public class LeaderElectionCommand {
         }
     }
 
-    private static Set<TopicPartition> topicPartitions(JsonValue js) throws JsonMappingException {
+    private static Set<TopicPartition> topicPartitions(ElectionType electionType, JsonValue js) throws JsonMappingException {
         return js.asJsonObject().get("partitions")
             .map(partitionsList -> {
                 try {
-                    return toTopicPartition(partitionsList);
+                    return toTopicPartition(electionType, partitionsList);
                 } catch (JsonMappingException e) {
                     throw new RuntimeException(e);
                 }
@@ -217,7 +217,7 @@ public class LeaderElectionCommand {
             .orElseThrow(() -> new AdminOperationException("Replica election data is missing \"partitions\" field"));
     }
 
-    private static Set<TopicPartition> toTopicPartition(JsonValue partitionsList) throws JsonMappingException {
+    private static Set<TopicPartition> toTopicPartition(ElectionType electionType, JsonValue partitionsList) throws JsonMappingException {
         List<TopicPartition> partitions = new ArrayList<>();
         Iterator<JsonValue> iterator = partitionsList.asJsonArray().iterator();
 
@@ -225,7 +225,17 @@ public class LeaderElectionCommand {
             JsonObject partitionJs = iterator.next().asJsonObject();
             String topic = partitionJs.apply("topic").to(STRING);
             int partition = partitionJs.apply("partition").to(INT);
-            partitions.add(new TopicPartition(topic, partition));
+            int designatedLeader = -1;
+            if(electionType == ElectionType.DESIGNATED ) {
+                if (!partitionJs.node().has("designatedLeader")) {
+                    throw new RuntimeException("Election type is designated but no designated leader declared");
+                } else {
+                    designatedLeader = partitionJs.apply("designatedLeader").to(INT);
+                }
+            }
+            TopicPartition topicPartition = new TopicPartition(topic, partition);
+            topicPartition.setDesignatedLeader(designatedLeader);
+            partitions.add(topicPartition);
         }
 
         Set<TopicPartition> duplicatePartitions  = partitions.stream()
