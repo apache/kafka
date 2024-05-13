@@ -34,4 +34,9 @@ public class ProcessId {
     public UUID id() {
         return id;
     }
+
+    @Override
+    public String toString() {
+        return "ProcessId{id=" + id + "}";
+    }
 }
