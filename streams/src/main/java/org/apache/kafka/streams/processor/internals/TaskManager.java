@@ -652,13 +652,6 @@ public class TaskManager {
                                             final Map<TaskId, Set<TopicPartition>> activeInputPartitions,
                                             final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                             final Map<TaskId, RuntimeException> failedTasks) {
-        iterateAndActOnRemovedTask(futures, failedTasks, task -> tasksToRecycle.put(task, activeInputPartitions.get(task.id())));
-    }
-
-    private void addToStandbyTasksToRecycle(final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures,
-                                            final Map<TaskId, Set<TopicPartition>> activeInputPartitions,
-                                            final Map<Task, Set<TopicPartition>> tasksToRecycle,
-                                            final Map<TaskId, RuntimeException> failedTasks) {
         getNonFailedTasks(futures, failedTasks).forEach(task -> tasksToRecycle.put(task, activeInputPartitions.get(task.id())));
     }
 
@@ -1509,6 +1502,8 @@ public class TaskManager {
                 final Task failedTask = exceptionAndTask.task();
                 closeTaskDirty(failedTask, false);
             }
+        }
+    }
 
     private void shutdownSchedulingTaskManager() {
         if (schedulingTaskManager != null) {
