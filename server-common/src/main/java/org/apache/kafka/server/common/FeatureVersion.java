@@ -35,18 +35,17 @@ import java.util.stream.Collectors;
 public enum FeatureVersion {
 
     /**
-     * Features currently used in production. If a feature is included in this list, it will also be specified when
+     * Features defined. If a feature is included in this list, and marked to be used in production they will also be specified when
      * formatting a cluster via the StorageTool. MetadataVersion is handled separately, so it is not included here.
      *
-     * See {@link TestFeatureVersion} as an example.
+     * See {@link TestFeatureVersion} as an example. See {@link FeatureVersionUtils.FeatureVersionImpl} when implementing a new feature.
      */
     TEST_VERSION("test.feature.version", TestFeatureVersion.values(), TestFeatureVersion::fromFeatureLevel, false);
 
     public static final FeatureVersion[] FEATURES;
     public static final List<FeatureVersion> PRODUCTION_FEATURES;
     private final String name;
-
-    private FeatureVersionUtils.FeatureVersionImpl[] features;
+    private final FeatureVersionUtils.FeatureVersionImpl[] features;
     private final FeatureVersionUtils.CreateMethod createFeatureVersionMethod;
     private final boolean usedInProduction;
 
@@ -72,21 +71,30 @@ public enum FeatureVersion {
         return name;
     }
 
+    /**
+     * Creates a FeatureVersion from a given name and level with the correct feature object underneath.
+     *
+     * @param level   the level of the feature
+     * @returns       the FeatureVersionUtils.FeatureVersionImpl for the feature the enum is based on.
+     * @throws        IllegalArgumentException if the feature name is not valid (not implemented for this method)
+     */
     public FeatureVersionUtils.FeatureVersionImpl fromFeatureLevel(short level) {
         return createFeatureVersionMethod.fromFeatureLevel(level);
     }
 
     /**
-     * A method to be implemented by each feature. If a given feature relies on another feature, the dependencies should be
-     * captured here.
-     *
+     * A method to validate the feature can be set. If a given feature relies on another feature, the dependencies should be
+     * captured in {@link FeatureVersionUtils.FeatureVersionImpl#dependencies()}
+     * <p>
      * For example, say feature X level x relies on feature Y level y:
      * if feature X >= x then throw an error if feature Y < y.
      *
      * All feature levels above 0 require metadata.version=4 (IBP_3_3_IV0) in order to write the feature records to the cluster.
      *
-     * @param metadataVersion the metadata version we have (or want to se)
-     * @param features        the feature versions (besides MetadataVersion) we have (or want to set)
+     * @param feature                   the feature we are validating
+     * @param metadataVersion           the metadata version we have (or want to set)
+     * @param features                  the feature versions (besides MetadataVersion) we have (or want to set)
+     * @throws IllegalArgumentException if the feature is not valid
      */
     public static void validateVersion(FeatureVersionUtils.FeatureVersionImpl feature, MetadataVersion metadataVersion, Map<String, Short> features) {
         if (feature.featureLevel() >= 1 && metadataVersion.isLessThan(MetadataVersion.IBP_3_3_IV0))
@@ -103,6 +111,16 @@ public enum FeatureVersion {
         }
     }
 
+    /**
+     * A method to return the default version level of a feature. If metadataVersionOpt is not empty, the default is based on
+     * the metadataVersion. If not, use the latest production version for the given feature.
+     *
+     * Every time a new feature is added, it should create a mapping from metadata version to feature version
+     * with {@link FeatureVersionUtils.FeatureVersionImpl#metadataVersionMapping()}
+     *
+     * @param metadataVersionOpt the metadata version we want to use to set the default, or None if the latest production version is desired
+     * @return the default version level for the feature and potential metadata version
+     */
     public short defaultValue(Optional<MetadataVersion> metadataVersionOpt) {
         MetadataVersion mv = metadataVersionOpt.orElse(MetadataVersion.LATEST_PRODUCTION);
         short level = 0;

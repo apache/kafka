@@ -28,10 +28,23 @@ public interface FeatureVersionUtils {
 
         String featureName();
 
+        /**
+         * The next metadata version to be released when the feature became production ready.
+         * (Ie, if the current production MV is 17 when a feature is released, its mapping should be to MV 18)
+         */
         MetadataVersion metadataVersionMapping();
 
+        /**
+         * A mapping from feature to level for all features that this feature depends on. If this feature doesn't
+         * depend on any others, return an empty map.
+         * For example, say feature X level x relies on feature Y level y:
+         * feature (X level x).dependencies() will return (Y -> y)
+         */
         Map<String, Short> dependencies();
 
+        /**
+         * Utility method to map a list of FeatureVersionImpl to a map of feature name to feature level
+         */
         static Map<String, Short> featureImplsToMap(List<FeatureVersionImpl> features) {
             return features.stream().collect(Collectors.toMap(FeatureVersionImpl::featureName, FeatureVersionImpl::featureLevel));
         }
@@ -45,18 +58,5 @@ public interface FeatureVersionUtils {
          * @throws        IllegalArgumentException if the feature name is not valid (not implemented for this method)
          */
         FeatureVersionImpl fromFeatureLevel(short level);
-    }
-
-    interface DefaultValueMethod {
-        /**
-         * A method to return the default version level of a feature. If metadataVersionOpt is not empty, the default is based on
-         * the metadataVersion. If not, use the latest production version for the given feature.
-         * <p>
-         * Every time a new feature is added, it should create a mapping from metadata version to feature version.
-         *
-         * @param metadataVersionOpt the metadata version we want to use to set the default, or None if the latest production version is desired
-         * @return the default version level for the feature and potential metadata version
-         */
-        short defaultValue(MetadataVersion metadataVersionOpt);
     }
 }
