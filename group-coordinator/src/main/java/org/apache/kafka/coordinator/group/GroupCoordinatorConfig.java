@@ -149,9 +149,10 @@ public class GroupCoordinatorConfig {
     public static final String OFFSET_COMMIT_TIMEOUT_MS_DOC = "Offset commit will be delayed until all replicas for the offsets topic receive the commit " +
             "or this timeout is reached. This is similar to the producer request timeout.";
 
+    @Deprecated
     public static final String OFFSET_COMMIT_REQUIRED_ACKS_CONFIG = "offsets.commit.required.acks";
     public static final short OFFSET_COMMIT_REQUIRED_ACKS_DEFAULT = -1;
-    public static final String OFFSET_COMMIT_REQUIRED_ACKS_DOC = "The required acks before the commit can be accepted. In general, the default (-1) should not be overridden.";
+    public static final String OFFSET_COMMIT_REQUIRED_ACKS_DOC = "DEPRECATED: The required acks before the commit can be accepted. In general, the default (-1) should not be overridden.";
 
     /**
      * The timeout used to wait for a new member in milliseconds.
