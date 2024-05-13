@@ -749,7 +749,7 @@ object ConfigCommand extends Logging {
     }
   }
 
-  def parseEntity(opts: ConfigCommandOptions): ConfigEntity = {
+  private[admin] def parseEntity(opts: ConfigCommandOptions): ConfigEntity = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
     if (entityTypes.head == ConfigType.USER || entityTypes.head == ConfigType.CLIENT)
