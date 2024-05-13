@@ -233,7 +233,7 @@ private object Constants {
   val KafkaToolsLog4jLoglevelEnv = "KAFKA_TOOLS_LOG4J_LOGLEVEL"
   val ExcludeServerPropsEnv: Set[String] = Set(
     "KAFKA_VERSION",
-    "KAFKA_HEAP_OPT",
+    "KAFKA_HEAP_OPTS",
     "KAFKA_LOG4J_OPTS",
     "KAFKA_OPTS",
     "KAFKA_JMX_OPTS",

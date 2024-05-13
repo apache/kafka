@@ -59,6 +59,8 @@ public interface TasksRegistry {
 
     Set<Task> drainPendingTasksToInit();
 
+    Set<Task> pendingTasksToInit();
+
     void addPendingTasksToInit(final Collection<Task> tasks);
 
     boolean hasPendingTasksToInit();
