@@ -63,6 +63,7 @@ class OffsetSyncStore implements AutoCloseable {
     private final KafkaBasedLog<byte[], byte[]> backingStore;
     private final Map<TopicPartition, OffsetSync[]> offsetSyncs = new ConcurrentHashMap<>();
     private final TopicAdmin admin;
+    protected volatile boolean pessimisticLoading = true;
     protected volatile boolean readToEnd = false;
 
     OffsetSyncStore(MirrorCheckpointConfig config) {
@@ -104,8 +105,13 @@ class OffsetSyncStore implements AutoCloseable {
 
     /**
      * Start the OffsetSyncStore, blocking until all previous Offset Syncs have been read from backing storage.
+     * @param optimisticLoading
      */
-    public void start() {
+    public void start(boolean optimisticLoading) {
+        this.pessimisticLoading = !optimisticLoading;
+        if (pessimisticLoading) {
+            log.warn("OffsetSyncStore initialization will discard OffsetSyncs before end of topic");
+        }
         backingStore.start();
         readToEnd = true;
     }
@@ -211,10 +217,13 @@ class OffsetSyncStore implements AutoCloseable {
 
     private void updateSyncArray(OffsetSync[] syncs, OffsetSync[] original, OffsetSync offsetSync) {
         long upstreamOffset = offsetSync.upstreamOffset();
+
         // While reading to the end of the topic, ensure that our earliest sync is later than
         // any earlier sync that could have been used for translation, to preserve monotonicity
         // If the upstream offset rewinds, all previous offsets are invalid, so overwrite them all.
-        if (syncs[0].upstreamOffset() > upstreamOffset) {
+        boolean onlyLoadLastOffset = !readToEnd && pessimisticLoading;
+        boolean upstreamRewind = upstreamOffset < syncs[0].upstreamOffset();
+        if (onlyLoadLastOffset || upstreamRewind) {
             clearSyncArray(syncs, offsetSync);
             return;
         }
