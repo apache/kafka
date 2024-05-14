@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -25,10 +24,8 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -103,7 +100,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import org.mockito.Mockito;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -3541,7 +3537,7 @@ public class TransactionManagerTest {
 
         prepareAddPartitionsToTxn(tp, Errors.TRANSACTION_ABORTABLE);
         runUntil(transactionManager::hasError);
-        assertTrue(transactionManager.lastError() instanceof TransactionAbortableException);
+        assertInstanceOf(TransactionAbortableException.class, transactionManager.lastError());
 
         assertAbortableError(TransactionAbortableException.class);
     }
@@ -3559,11 +3555,11 @@ public class TransactionManagerTest {
 
         prepareFindCoordinatorResponse(Errors.TRANSACTION_ABORTABLE, false, CoordinatorType.GROUP, consumerGroupId);
         runUntil(transactionManager::hasError);
-        assertTrue(transactionManager.lastError() instanceof TransactionAbortableException);
+        assertInstanceOf(TransactionAbortableException.class, transactionManager.lastError());
 
         runUntil(sendOffsetsResult::isCompleted);
         assertFalse(sendOffsetsResult.isSuccessful());
-        assertTrue(sendOffsetsResult.error() instanceof TransactionAbortableException);
+        assertInstanceOf(TransactionAbortableException.class, sendOffsetsResult.error());
 
         assertAbortableError(TransactionAbortableException.class);
     }
@@ -3605,10 +3601,10 @@ public class TransactionManagerTest {
 
         prepareAddOffsetsToTxnResponse(Errors.TRANSACTION_ABORTABLE, consumerGroupId, producerId, epoch);
         runUntil(transactionManager::hasError);
-        assertTrue(transactionManager.lastError() instanceof TransactionAbortableException);
+        assertInstanceOf(TransactionAbortableException.class, transactionManager.lastError());
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
-        assertTrue(sendOffsetsResult.error() instanceof TransactionAbortableException);
+        assertInstanceOf(TransactionAbortableException.class, sendOffsetsResult.error());
 
         assertAbortableError(TransactionAbortableException.class);
     }
@@ -3628,10 +3624,10 @@ public class TransactionManagerTest {
         prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, singletonMap(tp, Errors.TRANSACTION_ABORTABLE));
         runUntil(transactionManager::hasError);
 
-        assertTrue(transactionManager.lastError() instanceof TransactionAbortableException);
+        assertInstanceOf(TransactionAbortableException.class, transactionManager.lastError());
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
-        assertTrue(sendOffsetsResult.error() instanceof TransactionAbortableException);
+        assertInstanceOf(TransactionAbortableException.class, sendOffsetsResult.error());
         assertAbortableError(TransactionAbortableException.class);
     }
 
@@ -3967,18 +3963,6 @@ public class TransactionManagerTest {
 
     private void runUntil(Supplier<Boolean> condition) {
         ProducerTestUtils.runUntil(sender, condition);
-    }
-
-    private Metadata setupMetadata(Cluster cluster) {
-        Metadata metadataMock = Mockito.mock(Metadata.class);
-        Mockito.when(metadataMock.fetch()).thenReturn(cluster);
-        for (String topic: cluster.topics()) {
-            for (PartitionInfo partInfo: cluster.partitionsForTopic(topic)) {
-                TopicPartition tp = new TopicPartition(partInfo.topic(), partInfo.partition());
-                Mockito.when(metadataMock.currentLeader(tp)).thenReturn(new Metadata.LeaderAndEpoch(Optional.of(partInfo.leader()), Optional.of(999 /* dummy value */)));
-            }
-        }
-        return metadataMock;
     }
 
 }
