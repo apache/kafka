@@ -236,6 +236,9 @@ class KafkaServer(
         val initialMetaPropsEnsemble = {
           val loader = new MetaPropertiesEnsemble.Loader()
           config.logDirs.foreach(loader.addLogDir)
+          if (config.migrationEnabled) {
+            loader.addMetadataLogDir(config.metadataLogDir)
+          }
           loader.load()
         }
 
