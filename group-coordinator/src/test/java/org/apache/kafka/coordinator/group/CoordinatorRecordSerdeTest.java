@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class CoordinatorCoordinatorRecordSerdeTest {
+public class CoordinatorRecordSerdeTest {
     @Test
     public void testSerializeKey() {
         CoordinatorRecordSerde serializer = new CoordinatorRecordSerde();
