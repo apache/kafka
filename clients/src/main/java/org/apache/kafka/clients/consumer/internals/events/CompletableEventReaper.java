@@ -26,9 +26,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
 /**
@@ -42,7 +40,7 @@ public class CompletableEventReaper {
     private final Logger log;
 
     /**
-     * List of tracked events that are candidates for expiration or cancellation.
+     * List of tracked events that are candidates for expiration.
      */
     private final List<CompletableEvent<?>> tracked;
 
@@ -83,22 +81,25 @@ public class CompletableEventReaper {
      * @param currentTimeMs <em>Current</em> time with which to compare against the
      *                      <em>{@link CompletableEvent#deadlineMs() expiration time}</em>
      */
-    public void reapExpiredAndCompleted(long currentTimeMs) {
+    public void reap(long currentTimeMs) {
         log.trace("Reaping expired events");
 
-        Consumer<CompletableEvent<?>> timeoutEvent = e -> {
-            TimeoutException error = new TimeoutException(String.format("%s could not be completed within its timeout", e.getClass().getSimpleName()));
-            long pastDueMs = currentTimeMs - e.deadlineMs();
-            log.debug("Completing event {} exceptionally since it expired {} ms ago", e, pastDueMs);
-            CompletableFuture<?> f = e.future();
-            f.completeExceptionally(error);
+        Consumer<CompletableEvent<?>> expireEvent = event -> {
+            long pastDueMs = currentTimeMs - event.deadlineMs();
+            TimeoutException error = new TimeoutException(String.format("%s was %s ms past its expiration of %s", event.getClass().getSimpleName(), pastDueMs, event.deadlineMs()));
+
+            if (event.future().completeExceptionally(error)) {
+                log.debug("Event {} completed exceptionally since its expiration of {} passed {} ms ago", event, event.deadlineMs(), pastDueMs);
+            } else {
+                log.trace("Event {} not completed exceptionally since it was previously completed", event);
+            }
         };
 
         // First, complete (exceptionally) any events that have passed their deadline AND aren't already complete.
         tracked.stream()
             .filter(e -> !e.future().isDone())
             .filter(e -> currentTimeMs > e.deadlineMs())
-            .forEach(timeoutEvent);
+            .forEach(expireEvent);
         // Second, remove any events that are already complete, just to make sure we don't hold references. This will
         // include any events that finished successfully as well as any events we just completed exceptionally above.
         tracked.removeIf(e -> e.future().isDone());
@@ -108,13 +109,14 @@ public class CompletableEventReaper {
 
     /**
      * It is possible for the {@link AsyncKafkaConsumer#close() consumer to close} before completing the processing of
-     * all the events in the queue. In this case, we need to {@link Future#cancel(boolean) cancel} any remaining events.
+     * all the events in the queue. In this case, we need to
+     * {@link CompletableFuture#completeExceptionally(Throwable) expire} any remaining events.
      *
      * <p/>
      *
      * Check each of the {@link #add(CompletableEvent) previously-added} {@link CompletableEvent completable events},
-     * and for any that are incomplete, {@link Future#cancel(boolean) cancel} them. Also check the core event queue
-     * for any incomplete events and likewise cancel them.
+     * and for any that are incomplete, expire them. Also check the core event queue for any incomplete events and
+     * likewise expire them.
      *
      * <p/>
      *
@@ -123,33 +125,41 @@ public class CompletableEventReaper {
      *
      * @param events Events from a queue that have not yet been tracked that also need to be reviewed
      */
-    public void reapIncomplete(Collection<?> events) {
+    public void reap(Collection<?> events) {
         log.trace("Reaping incomplete events");
 
         Objects.requireNonNull(events, "Event queue to reap must be non-null");
 
-        Consumer<CompletableEvent<?>> cancelEvent = e -> {
-            log.debug("Canceling event {} since the consumer is closing", e);
-            CompletableFuture<?> f = e.future();
-            f.completeExceptionally(new CancellationException("Canceling event since the consumer is closing"));
+        Consumer<CompletableEvent<?>> expireEvent = event -> {
+            TimeoutException error = new TimeoutException(String.format("%s could not be completed before the consumer closed", event.getClass().getSimpleName()));
+
+            if (event.future().completeExceptionally(error)) {
+                log.debug("Event {} completed exceptionally since the consumer is closing", event);
+            } else {
+                log.trace("Event {} not completed exceptionally since it was completed prior to the consumer closing", event);
+            }
         };
 
         tracked.stream()
             .filter(e -> !e.future().isDone())
-            .forEach(cancelEvent);
+            .forEach(expireEvent);
         tracked.clear();
 
         events.stream()
             .filter(e -> e instanceof CompletableEvent<?>)
             .map(e -> (CompletableEvent<?>) e)
             .filter(e -> !e.future().isDone())
-            .forEach(cancelEvent);
+            .forEach(expireEvent);
         events.clear();
 
         log.trace("Finished reaping incomplete events");
     }
 
-    int size() {
+    public int size() {
         return tracked.size();
+    }
+
+    public boolean contains(CompletableEvent<?> event) {
+        return event != null && tracked.contains(event);
     }
 }

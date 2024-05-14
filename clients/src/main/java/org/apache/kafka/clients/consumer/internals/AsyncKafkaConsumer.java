@@ -1233,7 +1233,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // close() can be called from inside one of the constructors. In that case, it's possible that neither
         // the reaper nor the background event queue were constructed, so check them first to avoid NPE.
         if (backgroundEventReaper != null && backgroundEventQueue != null)
-            backgroundEventReaper.reapIncomplete(backgroundEventQueue);
+            backgroundEventReaper.reap(backgroundEventQueue);
 
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
@@ -1840,7 +1840,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
         }
 
-        backgroundEventReaper.reapExpiredAndCompleted(time.milliseconds());
+        backgroundEventReaper.reap(time.milliseconds());
 
         if (firstError.get() != null)
             throw firstError.get();

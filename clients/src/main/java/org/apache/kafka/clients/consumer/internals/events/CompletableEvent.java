@@ -20,7 +20,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
 import java.time.Duration;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
@@ -52,12 +51,8 @@ public interface CompletableEvent<T> {
      *     <li>
      *         Timeout: when the time spent executing the event logic exceeds the {@link #deadlineMs() deadline}, an
      *         instance of {@link TimeoutException} should be created and passed to
-     *         {@link CompletableFuture#completeExceptionally(Throwable)}.
-     *     </li>
-     *     <li>
-     *         Cancelled: when an event remains incomplete when the consumer closes, an
-     *         instance of {@link CancellationException} should be created and passed to
-     *         {@link CompletableFuture#completeExceptionally(Throwable)}.
+     *         {@link CompletableFuture#completeExceptionally(Throwable)}. This also occurs when an event remains
+     *         incomplete when the consumer closes.
      *     </li>
      * </ul>
      *

@@ -179,7 +179,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * is given least one attempt to satisfy any network requests <em>before</em> checking if a timeout has expired.
      */
     private void reapExpiredApplicationEvents(long currentTimeMs) {
-        applicationEventReaper.reapExpiredAndCompleted(currentTimeMs);
+        applicationEventReaper.reap(currentTimeMs);
     }
 
     /**
@@ -309,11 +309,15 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             log.error("Unexpected error during shutdown.  Proceed with closing.", e);
         } finally {
             sendUnsentRequests(timer);
-            applicationEventReaper.reapIncomplete(applicationEventQueue);
+            applicationEventReaper.reap(applicationEventQueue);
 
             closeQuietly(requestManagers, "request managers");
             closeQuietly(networkClientDelegate, "network client delegate");
             log.debug("Closed the consumer network thread");
         }
+    }
+
+    CompletableEventReaper completableEventReaper() {
+        return applicationEventReaper;
     }
 }

@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
@@ -32,6 +33,7 @@ import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -66,6 +68,7 @@ import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -299,6 +302,47 @@ public class ConsumerNetworkThreadTest {
         consumerNetworkThread.cleanup();
         assertTrue(future.isCompletedExceptionally());
         assertTrue(applicationEventsQueue.isEmpty());
+    }
+
+    @Test
+    void testReaperExpiresExpiredEvents() {
+        CompletableEventReaper completableEventReaper = consumerNetworkThread.completableEventReaper();
+        long event1TimeoutMs = 100;
+        long event2TimeoutMs = 200;
+        SyncCommitEvent event1 = new SyncCommitEvent(new HashMap<>(), calculateDeadlineMs(time, event1TimeoutMs));
+        SyncCommitEvent event2 = new SyncCommitEvent(new HashMap<>(), calculateDeadlineMs(time, event2TimeoutMs));
+        applicationEventsQueue.add(event1);
+        applicationEventsQueue.add(event2);
+        consumerNetworkThread.runOnce();
+
+        // Make sure both events have been moved from the event queue to the reaper's "tracked" list.
+        assertFalse(applicationEventsQueue.contains(event1));
+        assertFalse(applicationEventsQueue.contains(event2));
+        assertTrue(completableEventReaper.contains(event1));
+        assertTrue(completableEventReaper.contains(event2));
+        assertEquals(2, completableEventReaper.size());
+
+        // Sleep long enough for the first event to have expired.
+        time.sleep(event1TimeoutMs + 1);
+
+        consumerNetworkThread.runOnce();
+
+        // Validate that the first event was expired, but the second continues to be tracked
+        assertTrue(event1.future().isCompletedExceptionally());
+        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event1.future()));
+        assertFalse(completableEventReaper.contains(event1));
+
+        assertTrue(completableEventReaper.contains(event2));
+        assertFalse(event2.future().isDone());
+        assertEquals(1, completableEventReaper.size());
+
+        // The cleanup will trigger the reaper's
+        consumerNetworkThread.cleanup();
+
+        assertTrue(event2.future().isCompletedExceptionally());
+        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event2.future()));
+        assertFalse(consumerNetworkThread.completableEventReaper().contains(event2));
+        assertEquals(0, consumerNetworkThread.completableEventReaper().size());
     }
 
     private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,
