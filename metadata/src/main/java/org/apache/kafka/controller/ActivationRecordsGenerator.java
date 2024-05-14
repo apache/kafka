@@ -166,7 +166,7 @@ public class ActivationRecordsGenerator {
                             "created in KRaft mode.");
                     }
                     logMessageBuilder
-                            .append("since this is a de-novo KRaft cluster.");
+                            .append("This is expected because this is a de-novo KRaft cluster.");
                     break;
                 case PRE_MIGRATION:
                     if (!metadataVersion.isMetadataTransactionSupported()) {
