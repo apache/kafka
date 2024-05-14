@@ -153,13 +153,13 @@ public class ClusterConfig {
         return perServerProperties;
     }
 
-    public Optional<List<String>> tags() {
-        return Optional.ofNullable(tags);
+    public List<String> tags() {
+        return tags;
     }
 
     public Set<String> displayTags() {
         Set<String> displayTags = new LinkedHashSet<>(tags);
-        tags().ifPresent(tags -> displayTags.add("tags=" + tags));
+        displayTags.add("tags=" + String.join(",", tags));
         displayTags.add("MetadataVersion=" + metadataVersion);
         displayTags.add("Security=" + securityProtocol.name());
         listenerName().ifPresent(listener -> displayTags.add("Listener=" + listener));
