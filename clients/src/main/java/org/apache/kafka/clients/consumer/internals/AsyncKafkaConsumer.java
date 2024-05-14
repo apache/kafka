@@ -375,6 +375,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.backgroundEventProcessor = new BackgroundEventProcessor(
                     rebalanceListenerInvoker
             );
+            this.backgroundEventReaper = backgroundEventReaperFactory.build(logContext);
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
