@@ -94,9 +94,6 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         ClusterTemplate clusterTemplateAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTemplate.class);
         if (clusterTemplateAnnot != null) {
             generatedContexts.addAll(processClusterTemplate(context, clusterTemplateAnnot));
-            if (generatedContexts.isEmpty()) {
-                throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
-            }
         }
 
         // Process single @ClusterTest annotation
@@ -108,18 +105,13 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         // Process multiple @ClusterTest annotation within @ClusterTests
         ClusterTests clusterTestsAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTests.class);
         if (clusterTestsAnnot != null) {
-            for (ClusterTest annot : clusterTestsAnnot.value()) {
-                generatedContexts.addAll(processClusterTest(context, annot, defaults));
-            }
-        }
-
-        if (generatedContexts.isEmpty()) {
-            throw new IllegalStateException("Please annotate test methods with @ClusterTemplate, @ClusterTest, or " +
-                    "@ClusterTests when using the ClusterTestExtensions provider");
+            generatedContexts.addAll(processClusterTests(context, clusterTestsAnnot, defaults));
         }
 
         return generatedContexts.stream();
     }
+
+
 
     List<TestTemplateInvocationContext> processClusterTemplate(ExtensionContext context, ClusterTemplate annot) {
         // If specified, call cluster config generated method (must be static)
@@ -137,6 +129,11 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 contexts.addAll(type.invocationContexts(baseDisplayName, config));
             }
         });
+
+        if (contexts.isEmpty()) {
+            throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
+        }
+
         return contexts;
     }
 
@@ -146,7 +143,30 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         ReflectionUtils.invokeMethod(method, testInstance, generator);
     }
 
+    private List<TestTemplateInvocationContext> processClusterTests(ExtensionContext context, ClusterTests annots, ClusterTestDefaults defaults) {
+        List<TestTemplateInvocationContext> ret = new ArrayList<>();
+
+        for (ClusterTest annot : annots.value()) {
+            ret.addAll(processClusterTestInternal(context, annot, defaults));
+        }
+
+        if (ret.isEmpty()) {
+            throw new IllegalStateException("processClusterTests method should provide at least one config");
+        }
+
+        return ret;
+    }
+
     private List<TestTemplateInvocationContext> processClusterTest(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults) {
+        List<TestTemplateInvocationContext> ret = processClusterTestInternal(context, annot, defaults);
+
+        if (ret.isEmpty()) {
+            throw new IllegalStateException("processClusterTest method should provide at least one config");
+        }
+
+        return ret;
+    }
+    private List<TestTemplateInvocationContext> processClusterTestInternal(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults) {
         Type[] types = annot.types().length == 0 ? defaults.types() : annot.types();
         Map<String, String> serverProperties = Stream.concat(Arrays.stream(defaults.serverProperties()), Arrays.stream(annot.serverProperties()))
                 .filter(e -> e.id() == -1)
