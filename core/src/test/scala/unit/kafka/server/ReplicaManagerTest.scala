@@ -314,6 +314,77 @@ class ReplicaManagerTest {
     }
   }
 
+  @ParameterizedTest(name = "testMaybeAddLogDirFetchersPausingCleaning with futureLogCreated: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testMaybeAddLogDirFetchersPausingCleaning(futureLogCreated: Boolean): Unit = {
+    val dir1 = TestUtils.tempDir()
+    val dir2 = TestUtils.tempDir()
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put("log.dirs", dir1.getAbsolutePath + "," + dir2.getAbsolutePath)
+    val config = KafkaConfig.fromProps(props)
+    val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), new LogConfig(new Properties()))
+    val spyLogManager = spy(logManager)
+    val metadataCache: MetadataCache = mock(classOf[MetadataCache])
+    mockGetAliveBrokerFunctions(metadataCache, Seq(new Node(0, "host0", 0)))
+    when(metadataCache.metadataVersion()).thenReturn(config.interBrokerProtocolVersion)
+    val tp0 = new TopicPartition(topic, 0)
+    val uuid = Uuid.randomUuid()
+    val rm = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = spyLogManager,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager)
+
+    try {
+      val partition = rm.createPartition(tp0)
+      partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
+
+      rm.becomeLeaderOrFollower(0, new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(topic)
+          .setPartitionIndex(0)
+          .setControllerEpoch(0)
+          .setLeader(0)
+          .setLeaderEpoch(0)
+          .setIsr(Seq[Integer](0).asJava)
+          .setPartitionEpoch(0)
+          .setReplicas(Seq[Integer](0).asJava)
+          .setIsNew(false)).asJava,
+        Collections.singletonMap(topic, Uuid.randomUuid()),
+        Set(new Node(0, "host1", 0)).asJava).build(), (_, _) => ())
+      spyLogManager.maybeUpdatePreferredLogDir(tp0, dir2.getAbsolutePath)
+
+      if (futureLogCreated) {
+        // create future log before maybeAddLogDirFetchers invoked
+        partition.createLogIfNotExists(isNew = false, isFutureReplica = true,
+          new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
+      } else {
+        val mockLog = mock(classOf[UnifiedLog])
+        when(spyLogManager.getLog(tp0, isFuture = true)).thenReturn(Option.apply(mockLog))
+        when(mockLog.topicId).thenReturn(Option.apply(uuid))
+        when(mockLog.parentDir).thenReturn(dir2.getAbsolutePath)
+      }
+
+      val topicIdMap: Map[String, Option[Uuid]] = Map(topic -> Option.apply(uuid))
+      rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), topicIdMap)
+      if (futureLogCreated) {
+        // since the futureLog is already created, we don't have to abort and pause the cleaning
+        verify(spyLogManager, never).abortAndPauseCleaning(any[TopicPartition])
+      } else {
+        verify(spyLogManager, times(1)).abortAndPauseCleaning(any[TopicPartition])
+      }
+      rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.fetchState(new TopicPartition(topic, 0)).foreach(s => assertEquals(0L, s.fetchOffset)))
+    } finally {
+      rm.shutdown(checkpointHW = false)
+    }
+  }
+
   @Test
   def testClearPurgatoryOnBecomingFollower(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
@@ -434,10 +505,11 @@ class ReplicaManagerTest {
   }
 
   private[this] def testFencedErrorCausedByBecomeLeader(loopEpochChange: Int): Unit = {
+    val topicPartition = new TopicPartition(topic, 0)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
+    replicaManager.replicaFetcherManager.failedPartitions.removeAll(Set.apply(topicPartition))
     try {
       val brokerList = Seq[Integer](0, 1).asJava
-      val topicPartition = new TopicPartition(topic, 0)
       replicaManager.createPartition(topicPartition)
         .createLogIfNotExists(isNew = false, isFutureReplica = false,
           new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
