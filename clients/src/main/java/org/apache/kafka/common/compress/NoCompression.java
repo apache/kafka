@@ -27,6 +27,8 @@ import java.nio.ByteBuffer;
 
 public class NoCompression implements Compression {
 
+    private NoCompression() {}
+
     @Override
     public CompressionType type() {
         return CompressionType.NONE;
@@ -42,17 +44,8 @@ public class NoCompression implements Compression {
         return new ByteBufferInputStream(buffer);
     }
 
-    @Override
-    public boolean equals(Object o) {
-        return o instanceof NoCompression;
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
-
     public static class Builder implements Compression.Builder<NoCompression> {
+
         @Override
         public NoCompression build() {
             return new NoCompression();

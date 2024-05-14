@@ -42,9 +42,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.compress.GzipCompression;
-import org.apache.kafka.common.compress.Lz4Compression;
-import org.apache.kafka.common.compress.ZstdCompression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -556,23 +553,22 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         CompressionType type = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
         switch (type) {
             case GZIP: {
-                return new GzipCompression.Builder()
+                return Compression.gzip()
                         .level(config.getInt(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
                         .build();
             }
             case LZ4: {
-                return new Lz4Compression.Builder()
+                return Compression.lz4()
                         .level(config.getInt(ProducerConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
                         .build();
             }
             case ZSTD: {
-                return new ZstdCompression.Builder()
+                return Compression.zstd()
                         .level(config.getInt(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
                         .build();
             }
             default:
-                return Compression.of(type)
-                        .build();
+                return Compression.of(type).build();
         }
     }
 

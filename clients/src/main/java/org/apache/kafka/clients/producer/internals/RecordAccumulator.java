@@ -189,7 +189,7 @@ public class RecordAccumulator {
                              BufferPool bufferPool) {
         this(logContext,
             batchSize,
-                compression,
+            compression,
             lingerMs,
             retryBackoffMs,
             retryBackoffMaxMs,

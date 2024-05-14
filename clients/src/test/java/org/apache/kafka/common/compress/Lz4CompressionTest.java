@@ -99,7 +99,8 @@ public class Lz4CompressionTest {
 
                 try (InputStream inputStream = compression.wrapForInput(bufferStream.buffer(), magic, BufferSupplier.create())) {
                     byte[] result = new byte[data.length];
-                    inputStream.read(result);
+                    int read = inputStream.read(result);
+                    assertEquals(data.length, read);
                     assertArrayEquals(data, result);
                 }
             }
@@ -108,7 +109,7 @@ public class Lz4CompressionTest {
 
     @Test
     public void testCompressionLevels() {
-        Lz4Compression.Builder builder = new Lz4Compression.Builder();
+        Lz4Compression.Builder builder = Compression.lz4();
 
         assertThrows(IllegalArgumentException.class, () -> builder.level(Lz4Compression.MIN_LEVEL - 1));
         assertThrows(IllegalArgumentException.class, () -> builder.level(Lz4Compression.MAX_LEVEL + 1));

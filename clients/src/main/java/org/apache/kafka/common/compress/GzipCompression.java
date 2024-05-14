@@ -56,7 +56,7 @@ public class GzipCompression implements Compression {
             // Set input buffer (uncompressed) to 16 KB (none by default) and output buffer (compressed) to
             // 8 KB (0.5 KB by default) to ensure reasonable performance in cases where the caller passes a small
             // number of bytes to write (potentially a single byte)
-            return new BufferedOutputStream(new GzipOutputStream(buffer, 8 * 1024, this.level), 16 * 1024);
+            return new BufferedOutputStream(new GzipOutputStream(buffer, 8 * 1024, level), 16 * 1024);
         } catch (Exception e) {
             throw new KafkaException(e);
         }
@@ -114,7 +114,7 @@ public class GzipCompression implements Compression {
 
         @Override
         public GzipCompression build() {
-            return new GzipCompression(this.level);
+            return new GzipCompression(level);
         }
     }
 

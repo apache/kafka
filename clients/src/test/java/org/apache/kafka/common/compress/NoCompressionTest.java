@@ -28,6 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class NoCompressionTest {
 
@@ -47,7 +48,8 @@ public class NoCompressionTest {
 
             try (InputStream inputStream = compression.wrapForInput(bufferStream.buffer(), magic, BufferSupplier.create())) {
                 byte[] result = new byte[data.length];
-                inputStream.read(result);
+                int read = inputStream.read(result);
+                assertEquals(data.length, read);
                 assertArrayEquals(data, result);
             }
         }

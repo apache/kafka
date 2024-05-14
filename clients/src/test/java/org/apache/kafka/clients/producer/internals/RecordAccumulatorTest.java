@@ -460,7 +460,7 @@ public class RecordAccumulatorTest {
         String metricGrpName = "producer-metrics";
 
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
-                Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
+            Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
             deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
@@ -1601,8 +1601,7 @@ public class RecordAccumulatorTest {
         int batchSize = 10;
         int lingerMs = 10;
         long totalSize = 10 * 1024;
-        RecordAccumulator accum = createTestRecordAccumulator(batchSize, totalSize,
-                Compression.NONE, lingerMs);
+        RecordAccumulator accum = createTestRecordAccumulator(batchSize, totalSize, Compression.NONE, lingerMs);
 
         // Create cluster metadata, node2 doesn't host any partitions.
         PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node1.id()), Optional.empty(), null, null, null);
@@ -1752,7 +1751,7 @@ public class RecordAccumulatorTest {
         return new RecordAccumulator(
             logContext,
             batchSize,
-                compression,
+            compression,
             lingerMs,
             retryBackoffMs,
             retryBackoffMaxMs,

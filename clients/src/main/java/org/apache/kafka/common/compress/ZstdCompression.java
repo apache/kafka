@@ -77,7 +77,7 @@ public class ZstdCompression implements Compression {
     }
 
     // visible for testing
-    public ZstdInputStreamNoFinalizer wrapForZstdInput(ByteBuffer buffer, BufferSupplier decompressionBufferSupplier) throws IOException {
+    public static ZstdInputStreamNoFinalizer wrapForZstdInput(ByteBuffer buffer, BufferSupplier decompressionBufferSupplier) throws IOException {
         // We use our own BufferSupplier instead of com.github.luben.zstd.RecyclingBufferPool since our
         // implementation doesn't require locking or soft references. The buffer allocated by this buffer pool is
         // used by zstd-jni for 1\ reading compressed data from input stream into a buffer before passing it over JNI
@@ -137,7 +137,7 @@ public class ZstdCompression implements Compression {
 
         @Override
         public ZstdCompression build() {
-            return new ZstdCompression(this.level);
+            return new ZstdCompression(level);
         }
     }
 }

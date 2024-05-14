@@ -509,13 +509,12 @@ public class DefaultRecordBatchTest {
         final ByteBuffer compressedBuf = records.buffer();
         // Create a RecordBatch object
         final DefaultRecordBatch batch = spy(new DefaultRecordBatch(compressedBuf.duplicate()));
-        final ZstdCompression compression = Compression.zstd().build();
         // Buffer containing compressed records to be used for creating zstd-jni stream
-        ByteBuffer recordsBuffer = spy(compressedBuf.duplicate());
+        ByteBuffer recordsBuffer = compressedBuf.duplicate();
         recordsBuffer.position(RECORDS_OFFSET);
 
         try (final BufferSupplier bufferSupplier = BufferSupplier.create();
-             final InputStream zstdStream = spy(compression.wrapForZstdInput(recordsBuffer, bufferSupplier));
+             final InputStream zstdStream = spy(ZstdCompression.wrapForZstdInput(recordsBuffer, bufferSupplier));
              final InputStream chunkedStream = new ChunkedBytesStream(zstdStream, bufferSupplier, 16 * 1024, false)
         ) {
             doReturn(chunkedStream).when(batch).recordInputStream(any());

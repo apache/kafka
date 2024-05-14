@@ -29,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class GzipCompressionTest {
@@ -50,7 +51,8 @@ public class GzipCompressionTest {
 
                 try (InputStream inputStream = compression.wrapForInput(bufferStream.buffer(), magic, BufferSupplier.create())) {
                     byte[] result = new byte[data.length];
-                    inputStream.read(result);
+                    int read = inputStream.read(result);
+                    assertEquals(data.length, read);
                     assertArrayEquals(data, result);
                 }
             }
@@ -59,7 +61,7 @@ public class GzipCompressionTest {
 
     @Test
     public void testCompressionLevels() {
-        GzipCompression.Builder builder = new GzipCompression.Builder();
+        GzipCompression.Builder builder = Compression.gzip();
 
         assertThrows(IllegalArgumentException.class, () -> builder.level(GzipCompression.MIN_LEVEL - 1));
         assertThrows(IllegalArgumentException.class, () -> builder.level(GzipCompression.MAX_LEVEL + 1));

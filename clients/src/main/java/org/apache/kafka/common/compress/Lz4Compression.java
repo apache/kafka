@@ -30,6 +30,8 @@ import java.util.Objects;
 
 public class Lz4Compression implements Compression {
 
+    // These values come from net.jpountz.lz4.LZ4Constants
+    // We may need to update them if the lz4 library changes these values.
     public static final int MIN_LEVEL = 1;
     public static final int MAX_LEVEL = 17;
     public static final int DEFAULT_LEVEL = 9;
@@ -48,7 +50,7 @@ public class Lz4Compression implements Compression {
     @Override
     public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
         try {
-            return new Lz4BlockOutputStream(buffer, this.level, messageVersion == RecordBatch.MAGIC_VALUE_V0);
+            return new Lz4BlockOutputStream(buffer, level, messageVersion == RecordBatch.MAGIC_VALUE_V0);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
@@ -67,7 +69,7 @@ public class Lz4Compression implements Compression {
 
     @Override
     public int decompressionOutputSize() {
-        // KafkaLZ4BlockInputStream uses an internal intermediate buffer to store decompressed data. The size
+        // Lz4BlockInputStream uses an internal intermediate buffer to store decompressed data. The size
         // of this buffer is based on legacy implementation based on skipArray introduced in
         // https://github.com/apache/kafka/pull/6785
         return 2 * 1024; // 2KB
@@ -100,7 +102,7 @@ public class Lz4Compression implements Compression {
 
         @Override
         public Lz4Compression build() {
-            return new Lz4Compression(this.level);
+            return new Lz4Compression(level);
         }
     }
 }

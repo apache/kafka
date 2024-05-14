@@ -32,7 +32,10 @@ public interface Compression {
     CompressionType type();
 
     /**
-     * Wrap bufferStream with an OutputStream that will compress data with this CompressionType.
+     * Wrap bufferStream with an OutputStream that will compress data with this Compression.
+     *
+     * @param bufferStream The buffer to write the compressed data to
+     * @param messageVersion The record format version to use.
      * Note: Unlike {@link #wrapForInput}, this cannot take {@link ByteBuffer}s directly.
      * Currently, MemoryRecordsBuilder writes to the underlying buffer in the given {@link ByteBufferOutputStream} after the compressed data has been written.
      * In the event that the buffer needs to be expanded while writing the data, access to the underlying buffer needs to be preserved.
@@ -40,15 +43,15 @@ public interface Compression {
     OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion);
 
     /**
-     * Wrap buffer with an InputStream that will decompress data with this CompressionType.
+     * Wrap buffer with an InputStream that will decompress data with this Compression.
      *
      * @param buffer The {@link ByteBuffer} instance holding the data to decompress.
      * @param messageVersion The record format version to use.
      * @param decompressionBufferSupplier The supplier of ByteBuffer(s) used for decompression if supported.
      * For small record batches, allocating a potentially large buffer (64 KB for LZ4)
-     *                                    will dominate the cost of decompressing and iterating over the records in the
-     *                                    batch. As such, a supplier that reuses buffers will have a significant
-     *                                    performance impact.
+     * will dominate the cost of decompressing and iterating over the records in the
+     * batch. As such, a supplier that reuses buffers will have a significant
+     * performance impact.
      */
     InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier);
 

@@ -206,7 +206,6 @@ public class ClientTelemetryUtils {
         Compression compression = Compression.of(compressionType).build();
         try (InputStream in = compression.wrapForInput(data, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create());
             ByteBufferOutputStream out = new ByteBufferOutputStream(512)) {
-
             byte[] bytes = new byte[data.capacity() * 2];
             int nRead;
             while ((nRead = in.read(bytes, 0, bytes.length)) != -1) {

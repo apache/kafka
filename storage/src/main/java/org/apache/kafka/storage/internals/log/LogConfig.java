@@ -44,7 +44,6 @@ import java.util.stream.Collectors;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.compress.Lz4Compression;
-import org.apache.kafka.common.compress.SnappyCompression;
 import org.apache.kafka.common.compress.ZstdCompression;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -182,7 +181,7 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
 
     /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details
-    * Keep DEFAULT_MESSAGE_FORMAT_VERSION as a way to handlee the deprecated value */
+    * Keep DEFAULT_MESSAGE_FORMAT_VERSION as a way to handle the deprecated value */
     @Deprecated
     public static final String DEFAULT_MESSAGE_FORMAT_VERSION = ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_DEFAULT;
 
@@ -376,22 +375,21 @@ public class LogConfig extends AbstractConfig {
     }
 
     private Optional<Compression> getCompression() {
-        BrokerCompressionType brokerCompressionType = BrokerCompressionType.forName(getString(TopicConfig.COMPRESSION_TYPE_CONFIG));
-        switch (brokerCompressionType) {
+        switch (compressionType) {
             case GZIP:
-                return Optional.of(new GzipCompression.Builder()
-                         .level(getInt(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
-                         .build());
+                return Optional.of(Compression.gzip()
+                        .level(getInt(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
+                        .build());
             case LZ4:
-                return Optional.of(new Lz4Compression.Builder()
+                return Optional.of(Compression.lz4()
                         .level(getInt(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
                         .build());
             case ZSTD:
-                return Optional.of(new ZstdCompression.Builder()
+                return Optional.of(Compression.zstd()
                         .level(getInt(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
                         .build());
             case SNAPPY:
-                return Optional.of(new SnappyCompression.Builder().build());
+                return Optional.of(Compression.snappy().build());
             case UNCOMPRESSED:
                 return Optional.of(Compression.NONE);
             case PRODUCER:

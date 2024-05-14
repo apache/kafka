@@ -29,43 +29,28 @@ import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class ZstdCompressionTest {
+public class SnappyCompressionTest {
 
     @Test
     public void testCompressionDecompression() throws IOException {
-        ZstdCompression.Builder builder = Compression.zstd();
+        SnappyCompression compression = Compression.snappy().build();
         byte[] data = "data".getBytes(StandardCharsets.UTF_8);
 
         for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
-            for (int level : Arrays.asList(ZstdCompression.MIN_LEVEL, ZstdCompression.DEFAULT_LEVEL, ZstdCompression.MAX_LEVEL)) {
-                ZstdCompression compression = builder.level(level).build();
-                ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(4);
-                try (OutputStream out = compression.wrapForOutput(bufferStream, RecordBatch.CURRENT_MAGIC_VALUE)) {
-                    out.write(data);
-                    out.flush();
-                }
-                bufferStream.buffer().flip();
+            ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(4);
+            try (OutputStream out = compression.wrapForOutput(bufferStream, RecordBatch.CURRENT_MAGIC_VALUE)) {
+                out.write(data);
+                out.flush();
+            }
+            bufferStream.buffer().flip();
 
-                try (InputStream inputStream = compression.wrapForInput(bufferStream.buffer(), magic, BufferSupplier.create())) {
-                    byte[] result = new byte[data.length];
-                    int read = inputStream.read(result);
-                    assertEquals(data.length, read);
-                    assertArrayEquals(data, result);
-                }
+            try (InputStream inputStream = compression.wrapForInput(bufferStream.buffer(), magic, BufferSupplier.create())) {
+                byte[] result = new byte[data.length];
+                int read = inputStream.read(result);
+                assertEquals(data.length, read);
+                assertArrayEquals(data, result);
             }
         }
-    }
-
-    @Test
-    public void testCompressionLevels() {
-        ZstdCompression.Builder builder = Compression.zstd();
-
-        assertThrows(IllegalArgumentException.class, () -> builder.level(ZstdCompression.MIN_LEVEL - 1));
-        assertThrows(IllegalArgumentException.class, () -> builder.level(ZstdCompression.MAX_LEVEL + 1));
-
-        builder.level(ZstdCompression.MIN_LEVEL);
-        builder.level(ZstdCompression.MAX_LEVEL);
     }
 }

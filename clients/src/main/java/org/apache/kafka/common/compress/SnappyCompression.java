@@ -81,6 +81,7 @@ public class SnappyCompression implements Compression {
     }
 
     public static class Builder implements Compression.Builder<SnappyCompression> {
+
         @Override
         public SnappyCompression build() {
             return new SnappyCompression();
