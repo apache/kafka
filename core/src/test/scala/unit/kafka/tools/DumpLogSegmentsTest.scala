@@ -37,7 +37,6 @@ import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRe
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.group
 import org.apache.kafka.coordinator.group.{CoordinatorRecord, CoordinatorRecordSerde}
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
