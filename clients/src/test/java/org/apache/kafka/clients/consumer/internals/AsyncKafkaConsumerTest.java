@@ -39,6 +39,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
@@ -155,6 +156,7 @@ public class AsyncKafkaConsumerTest {
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+    private final CompletableEventReaper backgroundEventReaper = new CompletableEventReaper(new LogContext());
 
     @AfterEach
     public void resetAll() {
@@ -195,7 +197,8 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (a, b, c, d, e, f) -> applicationEventHandler,
+            (a, b, c, d, e, f, g) -> applicationEventHandler,
+            (a) -> backgroundEventReaper,
             (a, b, c, d, e, f, g) -> fetchCollector,
             (a, b, c, d) -> metadata,
             backgroundEventQueue
@@ -220,6 +223,7 @@ public class AsyncKafkaConsumerTest {
             time,
             applicationEventHandler,
             backgroundEventQueue,
+            backgroundEventReaper,
             rebalanceListenerInvoker,
             new Metrics(),
             subscriptions,
@@ -1848,7 +1852,34 @@ public class AsyncKafkaConsumerTest {
         }
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
-    
+
+    @Test
+    void testReaperExpiresExpiredEvents() {
+        consumer = newConsumer();
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        final SortedSet<TopicPartition> partitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        partitions.add(tp);
+
+        consumer.subscribe(Collections.singletonList(topicName), new CounterConsumerRebalanceListener());
+
+        final ConsumerRebalanceListenerCallbackNeededEvent event1 = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, partitions);
+        final ConsumerRebalanceListenerCallbackNeededEvent event2 = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_ASSIGNED, partitions);
+        backgroundEventReaper.add(event1);
+        backgroundEventQueue.add(event2);
+
+        assertEquals(1, backgroundEventReaper.size());
+        assertEquals(1, backgroundEventQueue.size());
+
+        consumer.close();
+
+        assertEquals(0, backgroundEventReaper.size());
+        assertEquals(0, backgroundEventQueue.size());
+        assertTrue(event1.future().isCompletedExceptionally());
+        assertTrue(event2.future().isCompletedExceptionally());
+    }
+
     private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
         final TopicPartition t0 = new TopicPartition("t0", 2);
         final TopicPartition t1 = new TopicPartition("t0", 3);

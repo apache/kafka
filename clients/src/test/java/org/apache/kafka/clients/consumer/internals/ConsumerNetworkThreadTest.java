@@ -94,6 +94,7 @@ public class ConsumerNetworkThreadTest {
     private HeartbeatRequestManager heartbeatRequestManager;
     private MembershipManager memberhipsManager;
     private ConsumerNetworkThread consumerNetworkThread;
+    private CompletableEventReaper applicationEventReaper;
     private MockClient client;
     private SubscriptionState subscriptions;
 
@@ -112,6 +113,7 @@ public class ConsumerNetworkThreadTest {
         heartbeatRequestManager = testBuilder.heartbeatRequestManager.orElseThrow(IllegalStateException::new);
         memberhipsManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
         consumerNetworkThread = testBuilder.consumerNetworkThread;
+        applicationEventReaper = testBuilder.applicationEventReaper;
         subscriptions = testBuilder.subscriptions;
         consumerNetworkThread.initializeResources();
     }
@@ -306,7 +308,6 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testReaperExpiresExpiredEvents() {
-        CompletableEventReaper completableEventReaper = consumerNetworkThread.completableEventReaper();
         long event1TimeoutMs = 100;
         long event2TimeoutMs = 200;
         SyncCommitEvent event1 = new SyncCommitEvent(new HashMap<>(), calculateDeadlineMs(time, event1TimeoutMs));
@@ -318,9 +319,9 @@ public class ConsumerNetworkThreadTest {
         // Make sure both events have been moved from the event queue to the reaper's "tracked" list.
         assertFalse(applicationEventsQueue.contains(event1));
         assertFalse(applicationEventsQueue.contains(event2));
-        assertTrue(completableEventReaper.contains(event1));
-        assertTrue(completableEventReaper.contains(event2));
-        assertEquals(2, completableEventReaper.size());
+        assertTrue(applicationEventReaper.contains(event1));
+        assertTrue(applicationEventReaper.contains(event2));
+        assertEquals(2, applicationEventReaper.size());
 
         // Sleep long enough for the first event to have expired.
         time.sleep(event1TimeoutMs + 1);
@@ -330,19 +331,19 @@ public class ConsumerNetworkThreadTest {
         // Validate that the first event was expired, but the second continues to be tracked
         assertTrue(event1.future().isCompletedExceptionally());
         assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event1.future()));
-        assertFalse(completableEventReaper.contains(event1));
+        assertFalse(applicationEventReaper.contains(event1));
 
-        assertTrue(completableEventReaper.contains(event2));
+        assertTrue(applicationEventReaper.contains(event2));
         assertFalse(event2.future().isDone());
-        assertEquals(1, completableEventReaper.size());
+        assertEquals(1, applicationEventReaper.size());
 
         // The cleanup will trigger the reaper's
         consumerNetworkThread.cleanup();
 
         assertTrue(event2.future().isCompletedExceptionally());
         assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event2.future()));
-        assertFalse(consumerNetworkThread.completableEventReaper().contains(event2));
-        assertEquals(0, consumerNetworkThread.completableEventReaper().size());
+        assertFalse(applicationEventReaper.contains(event2));
+        assertEquals(0, applicationEventReaper.size());
     }
 
     private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,

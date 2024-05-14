@@ -266,6 +266,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             valueDeserializer,
             Time.SYSTEM,
             ApplicationEventHandler::new,
+            CompletableEventReaper::new,
             FetchCollector::new,
             ConsumerMetadata::new,
             new LinkedBlockingQueue<>()
@@ -278,6 +279,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        final Deserializer<V> valueDeserializer,
                        final Time time,
                        final ApplicationEventHandlerFactory applicationEventHandlerFactory,
+                       final CompletableEventReaperFactory backgroundEventReaperFactory,
                        final FetchCollectorFactory<K, V> fetchCollectorFactory,
                        final ConsumerMetadataFactory metadataFactory,
                        final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue) {
@@ -359,6 +361,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     logContext,
                     time,
                     applicationEventQueue,
+                    new CompletableEventReaper(logContext),
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier);
@@ -372,7 +375,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.backgroundEventProcessor = new BackgroundEventProcessor(
                     rebalanceListenerInvoker
             );
-            this.backgroundEventReaper = new CompletableEventReaper(logContext);
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
@@ -417,6 +419,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        Time time,
                        ApplicationEventHandler applicationEventHandler,
                        BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                       CompletableEventReaper backgroundEventReaper,
                        ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
                        Metrics metrics,
                        SubscriptionState subscriptions,
@@ -436,7 +439,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.time = time;
         this.backgroundEventQueue = backgroundEventQueue;
         this.backgroundEventProcessor = new BackgroundEventProcessor(rebalanceListenerInvoker);
-        this.backgroundEventReaper = new CompletableEventReaper(logContext);
+        this.backgroundEventReaper = backgroundEventReaper;
         this.metrics = metrics;
         this.groupMetadata.set(initializeGroupMetadata(groupId, Optional.empty()));
         this.metadata = metadata;
@@ -541,6 +544,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
                 time,
                 applicationEventQueue,
+                new CompletableEventReaper(logContext),
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier);
@@ -555,10 +559,18 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final LogContext logContext,
             final Time time,
             final BlockingQueue<ApplicationEvent> applicationEventQueue,
+            final CompletableEventReaper applicationEventReaper,
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
             final Supplier<RequestManagers> requestManagersSupplier
         );
+
+    }
+
+    // auxiliary interface for testing
+    interface CompletableEventReaperFactory {
+
+        CompletableEventReaper build(final LogContext logContext);
 
     }
 

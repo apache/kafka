@@ -47,6 +47,7 @@ public class ApplicationEventHandler implements Closeable {
     public ApplicationEventHandler(final LogContext logContext,
                                    final Time time,
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
+                                   final CompletableEventReaper applicationEventReaper,
                                    final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                    final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                    final Supplier<RequestManagers> requestManagersSupplier) {
@@ -55,6 +56,7 @@ public class ApplicationEventHandler implements Closeable {
         this.networkThread = new ConsumerNetworkThread(logContext,
                 time,
                 applicationEventQueue,
+                applicationEventReaper,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier);

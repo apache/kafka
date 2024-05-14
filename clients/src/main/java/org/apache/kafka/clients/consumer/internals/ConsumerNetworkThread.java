@@ -70,6 +70,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     public ConsumerNetworkThread(LogContext logContext,
                                  Time time,
                                  BlockingQueue<ApplicationEvent> applicationEventQueue,
+                                 CompletableEventReaper applicationEventReaper,
                                  Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                  Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                  Supplier<RequestManagers> requestManagersSupplier) {
@@ -77,7 +78,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.time = time;
         this.log = logContext.logger(getClass());
         this.applicationEventQueue = applicationEventQueue;
-        this.applicationEventReaper = new CompletableEventReaper(logContext);
+        this.applicationEventReaper = applicationEventReaper;
         this.applicationEventProcessorSupplier = applicationEventProcessorSupplier;
         this.networkClientDelegateSupplier = networkClientDelegateSupplier;
         this.requestManagersSupplier = requestManagersSupplier;
@@ -315,9 +316,5 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             closeQuietly(networkClientDelegate, "network client delegate");
             log.debug("Closed the consumer network thread");
         }
-    }
-
-    CompletableEventReaper completableEventReaper() {
-        return applicationEventReaper;
     }
 }

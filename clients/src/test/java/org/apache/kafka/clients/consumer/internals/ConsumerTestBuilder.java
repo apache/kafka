@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -72,6 +73,7 @@ public class ConsumerTestBuilder implements Closeable {
     final LogContext logContext = new LogContext();
     final Time time;
     public final BlockingQueue<ApplicationEvent> applicationEventQueue;
+    final CompletableEventReaper applicationEventReaper;
     public final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     final ConsumerConfig config;
     final long retryBackoffMs;
@@ -108,6 +110,7 @@ public class ConsumerTestBuilder implements Closeable {
         this.groupInfo = groupInfo;
         this.time = enableAutoTick ? new MockTime(1) : new MockTime();
         this.applicationEventQueue = new LinkedBlockingQueue<>();
+        this.applicationEventReaper = new CompletableEventReaper(logContext);
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
         this.offsetCommitCallbackInvoker = mock(OffsetCommitCallbackInvoker.class);
@@ -302,6 +305,7 @@ public class ConsumerTestBuilder implements Closeable {
                     logContext,
                     time,
                     applicationEventQueue,
+                    applicationEventReaper,
                     () -> applicationEventProcessor,
                     () -> networkClientDelegate,
                     () -> requestManagers
