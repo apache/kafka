@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
+import kafka.test.annotation.ClusterTest
 import kafka.test.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -29,7 +29,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 import scala.jdk.CollectionConverters._
 
 @Disabled
-@ClusterTestDefaults(clusterType = Type.ALL)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class BrokerMetricNamesTest(cluster: ClusterInstance) {
   @AfterEach

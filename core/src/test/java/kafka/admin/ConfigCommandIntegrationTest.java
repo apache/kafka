@@ -20,8 +20,6 @@ import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import kafka.test.junit.ZkClusterInvocationContext;
@@ -67,7 +65,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Disabled
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults
 @Tag("integration")
 public class ConfigCommandIntegrationTest {
     AdminZkClient adminZkClient;
@@ -79,10 +76,7 @@ public class ConfigCommandIntegrationTest {
         this.cluster = cluster;
     }
 
-    @ClusterTests({
-        @ClusterTest(clusterType = Type.ZK),
-        @ClusterTest(clusterType = Type.KRAFT)
-    })
+    @ClusterTest(types = {Type.ZK, Type.KRAFT})
     public void testExitWithNonZeroStatusOnUpdatingUnallowedConfig() {
         assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
             "--entity-name", cluster.isKRaftTest() ? "0" : "1",
@@ -93,9 +87,8 @@ public class ConfigCommandIntegrationTest {
                 assertTrue(errOut.contains("Cannot update these configs dynamically: Set(security.inter.broker.protocol)"), errOut));
     }
 
-    @ClusterTests({
-        @ClusterTest(clusterType = Type.ZK)
-    })
+
+    @ClusterTest(types = {Type.ZK})
     public void testExitWithNonZeroStatusOnZkCommandAlterUserQuota() {
         assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
             "--entity-type", "users",
@@ -166,7 +159,7 @@ public class ConfigCommandIntegrationTest {
         verifyConfig(zkClient, Collections.emptyMap(), brokerId);
     }
 
-    @ClusterTest(clusterType = Type.ZK)
+    @ClusterTest(types = {Type.ZK})
     public void testDynamicBrokerConfigUpdateUsingZooKeeper() throws Exception {
         cluster.shutdownBroker(0);
         String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();

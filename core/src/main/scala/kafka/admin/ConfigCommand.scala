@@ -348,7 +348,7 @@ object ConfigCommand extends Logging {
   }
 
   @nowarn("cat=deprecation")
-  private[admin] def alterConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
+  def alterConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
     val entityTypeHead = entityTypes.head
@@ -529,7 +529,7 @@ object ConfigCommand extends Logging {
       .all().get(60, TimeUnit.SECONDS)
   }
 
-  private[admin] def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
+  def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
     val describeAll = opts.options.has(opts.allOpt)

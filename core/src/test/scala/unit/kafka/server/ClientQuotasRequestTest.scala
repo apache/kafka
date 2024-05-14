@@ -21,7 +21,7 @@ import java.net.InetAddress
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
+import kafka.test.annotation.{ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
@@ -37,7 +37,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 import scala.jdk.CollectionConverters._
 
 @Disabled
-@ClusterTestDefaults(clusterType = Type.ALL)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @Tag("integration")
 class ClientQuotasRequestTest(cluster: ClusterInstance) {
@@ -169,7 +168,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     ))
   }
 
-  @ClusterTest(clusterType = Type.ZK) // No SCRAM for Raft yet
+  @ClusterTest(types = Array(Type.ZK)) // No SCRAM for Raft yet
   def testClientQuotasForScramUsers(): Unit = {
     val userName = "user"
 

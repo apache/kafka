@@ -1177,6 +1177,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       validBytesCount += batchSize
 
       val batchCompression = CompressionType.forId(batch.compressionType.id)
+      // sourceCompression is only used on the leader path, which only contains one batch if version is v2 or messages are compressed
       if (batchCompression != CompressionType.NONE)
         sourceCompression = batchCompression
     }

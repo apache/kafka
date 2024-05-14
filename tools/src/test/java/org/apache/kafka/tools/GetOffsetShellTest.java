@@ -21,7 +21,6 @@ import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
@@ -55,7 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 @Disabled
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.ALL, serverProperties = {
+@ClusterTestDefaults(serverProperties = {
     @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
     @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
     @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "4")
