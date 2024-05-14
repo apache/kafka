@@ -579,7 +579,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     private class ConstrainedAssignmentBuilder extends AbstractAssignmentBuilder {
 
         private final Set<TopicPartition> partitionsWithMultiplePreviousOwners;
-        private final Map<TopicPartition, String> mayRevokedPartitions;
+        private final Map<TopicPartition, String> maybeRevokedPartitions;
 
         // the consumers which may still be assigned one or more partitions to reach expected capacity
         private final List<String> unfilledMembersWithUnderMinQuotaPartitions;
@@ -610,7 +610,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             super(partitionsPerTopic, rackInfo, consumerToOwnedPartitions);
 
             this.partitionsWithMultiplePreviousOwners = partitionsWithMultiplePreviousOwners;
-            mayRevokedPartitions = new HashMap<>();
+            maybeRevokedPartitions = new HashMap<>();
             unfilledMembersWithUnderMinQuotaPartitions = new LinkedList<>();
             unfilledMembersWithExactlyMinQuotaPartitions = new LinkedList<>();
 
@@ -665,7 +665,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                         .filter(tp -> {
                             boolean mismatch = rackInfo.racksMismatch(consumer, tp);
                             if (mismatch) {
-                                mayRevokedPartitions.put(tp, consumer);
+                                maybeRevokedPartitions.put(tp, consumer);
                             }
                             return !mismatch;
                         })
@@ -702,7 +702,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     consumerAssignment.addAll(maxQuotaPartitions);
                     assignedPartitions.addAll(maxQuotaPartitions);
                     for (TopicPartition topicPartition : ownedPartitions.subList(maxQuota, ownedPartitions.size())) {
-                        mayRevokedPartitions.put(topicPartition, consumer);
+                        maybeRevokedPartitions.put(topicPartition, consumer);
                     }
                 } else {
                     // consumer owned at least "minQuota" of partitions
@@ -711,7 +711,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     consumerAssignment.addAll(minQuotaPartitions);
                     assignedPartitions.addAll(minQuotaPartitions);
                     for (TopicPartition topicPartition : ownedPartitions.subList(minQuota, ownedPartitions.size())) {
-                        mayRevokedPartitions.put(topicPartition, consumer);
+                        maybeRevokedPartitions.put(topicPartition, consumer);
                     }
                     // this consumer is potential maxQuota candidate since we're still under the number of expected members
                     // with more than the minQuota partitions. Note, if the number of expected members with more than
@@ -739,6 +739,9 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     int assignmentCount = assignment.get(consumer).size() + 1;
                     if (assignmentCount >= minQuota) {
                         unfilledMembersWithUnderMinQuotaPartitions.remove(consumer);
+                        // Only add this consumer if the current num members at maxQuota is less than the expected number
+                        // since a consumer at minQuota can only be considered unfilled if it's possible to add another partition,
+                        // which would bump it to maxQuota and exceed the expectedNumMembersWithOverMinQuotaPartitions
                         if (assignmentCount < maxQuota && (currentNumMembersWithOverMinQuotaPartitions < expectedNumMembersWithOverMinQuotaPartitions)) {
                             unfilledMembersWithExactlyMinQuotaPartitions.add(consumer);
                         }
@@ -753,6 +756,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                         if (assignment.get(consumer).size() + 1 == maxQuota) {
                             unfilledMembersWithExactlyMinQuotaPartitions.remove(firstIndex);
                             currentNumMembersWithOverMinQuotaPartitions++;
+                            // Clear this once the current num consumers over minQuota reaches the expected number since this
+                            // means all consumers at minQuota are now considered filled
                             if (currentNumMembersWithOverMinQuotaPartitions == expectedNumMembersWithOverMinQuotaPartitions) {
                                 unfilledMembersWithExactlyMinQuotaPartitions.clear();
                             }
@@ -819,7 +824,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             // We already assigned all possible ownedPartitions, so we know this must be newly assigned to this consumer
             // or else the partition was actually claimed by multiple previous owners and had to be invalidated from all
             // members claimed ownedPartitions
-            if ((mayRevokedPartitions.containsKey(unassignedPartition) && !mayRevokedPartitions.get(unassignedPartition).equals(consumer))
+            if ((maybeRevokedPartitions.containsKey(unassignedPartition) && !maybeRevokedPartitions.get(unassignedPartition).equals(consumer))
                     || partitionsWithMultiplePreviousOwners.contains(unassignedPartition)) {
                 partitionsTransferringOwnership.put(unassignedPartition, consumer);
             }
