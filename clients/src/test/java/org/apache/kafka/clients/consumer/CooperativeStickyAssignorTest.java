@@ -221,7 +221,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
                 generationId, 1));
 
         assignor.assignPartitions(partitionsPerTopic, subscriptions);
-        assertEquals(2, assignor.partitionsTransferringOwnership.size());
+        assertEquals(2, assignor.getPartitionsTransferringOwnership().size());
     }
 
     /**

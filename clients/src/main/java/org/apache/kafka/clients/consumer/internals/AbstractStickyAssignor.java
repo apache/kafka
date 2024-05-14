@@ -58,7 +58,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
     // Keep track of the partitions being migrated from one consumer to another during assignment
     // so the cooperative assignor can adjust the assignment
-    public Map<TopicPartition, String> partitionsTransferringOwnership = new HashMap<>();
+    protected Map<TopicPartition, String> partitionsTransferringOwnership = new HashMap<>();
 
     static final class ConsumerGenerationPair {
         final String consumer;
@@ -209,6 +209,10 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
     public boolean isSticky() {
         return partitionMovements.isSticky();
+    }
+
+    public Map<TopicPartition, String> getPartitionsTransferringOwnership() {
+        return partitionsTransferringOwnership;
     }
 
     private static class TopicComparator implements Comparator<String>, Serializable {
