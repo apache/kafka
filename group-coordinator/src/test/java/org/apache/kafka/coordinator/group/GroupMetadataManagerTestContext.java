@@ -18,10 +18,12 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -87,6 +89,7 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESU
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSyncKey;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
@@ -118,6 +121,34 @@ public class GroupMetadataManagerTestContext {
                     Collections.singletonList(topicNames.get(i % topicNames.size())))).array())
             );
         }
+        return protocols;
+    }
+
+    public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toConsumerProtocol(
+        List<String> topicNames,
+        List<TopicPartition> ownedPartitions
+    ) {
+        return toConsumerProtocol(topicNames, ownedPartitions, ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION);
+    }
+
+    public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toConsumerProtocol(
+        List<String> topicNames,
+        List<TopicPartition> ownedPartitions,
+        short version
+    ) {
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(0);
+        protocols.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(ConsumerProtocol.serializeSubscription(
+                new ConsumerPartitionAssignor.Subscription(
+                    topicNames,
+                    null,
+                    ownedPartitions
+                ),
+                version
+            ).array())
+        );
         return protocols;
     }
 
@@ -586,6 +617,27 @@ public class GroupMetadataManagerTestContext {
         assertNull(timeout);
     }
 
+    public MockCoordinatorTimer.ScheduledTimeout<Void, Record> assertSyncTimeout(
+        String groupId,
+        String memberId,
+        long delayMs
+    ) {
+        MockCoordinatorTimer.ScheduledTimeout<Void, Record> timeout =
+            timer.timeout(consumerGroupSyncKey(groupId, memberId));
+        assertNotNull(timeout);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        return timeout;
+    }
+
+    public void assertNoSyncTimeout(
+        String groupId,
+        String memberId
+    ) {
+        MockCoordinatorTimer.ScheduledTimeout<Void, Record> timeout =
+            timer.timeout(consumerGroupSyncKey(groupId, memberId));
+        assertNull(timeout);
+    }
+
     ClassicGroup createClassicGroup(String groupId) {
         return groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, true);
     }
@@ -641,6 +693,10 @@ public class GroupMetadataManagerTestContext {
             request,
             responseFuture
         );
+
+        if (coordinatorResult.replayRecords()) {
+            coordinatorResult.records().forEach(this::replay);
+        }
 
         return new JoinResult(responseFuture, coordinatorResult);
     }
@@ -788,6 +844,10 @@ public class GroupMetadataManagerTestContext {
             request,
             responseFuture
         );
+
+        if (coordinatorResult.replayRecords()) {
+            coordinatorResult.records().forEach(this::replay);
+        }
 
         return new SyncResult(responseFuture, coordinatorResult);
     }

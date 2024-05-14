@@ -75,8 +75,8 @@ settings.put(... , ...);</code></pre>
               <li><a class="reference internal" href="#default-production-exception-handler" id="id24">default.production.exception.handler</a></li>
               <li><a class="reference internal" href="#timestamp-extractor" id="id15">default.timestamp.extractor</a></li>
               <li><a class="reference internal" href="#default-value-serde" id="id9">default.value.serde</a></li>
-              <li><a class="reference internal" href="#default-windowed-key-serde-inner" id="id32">default.windowed.key.serde.inner</a></li>
-              <li><a class="reference internal" href="#default-windowed-value-serde-inner" id="id33">default.windowed.value.serde.inner</a></li>
+              <li><a class="reference internal" href="#default-windowed-key-serde-inner" id="id32">default.windowed.key.serde.inner (deprecated) </a></li>
+              <li><a class="reference internal" href="#default-windowed-value-serde-inner" id="id33">default.windowed.value.serde.inner (deprecated) </a></li>
               <li><a class="reference internal" href="#max-task-idle-ms" id="id28">max.task.idle.ms</a></li>
               <li><a class="reference internal" href="#max-warmup-replicas" id="id29">max.warmup.replicas</a></li>
               <li><a class="reference internal" href="#num-standby-replicas" id="id10">num.standby.replicas</a></li>
@@ -91,6 +91,7 @@ settings.put(... , ...);</code></pre>
               <li><a class="reference internal" href="#rocksdb-config-setter" id="id20">rocksdb.config.setter</a></li>
               <li><a class="reference internal" href="#state-dir" id="id14">state.dir</a></li>
               <li><a class="reference internal" href="#topology-optimization" id="id31">topology.optimization</a></li>
+              <li><a class="reference internal" href="#windowed-inner-class-serde" id="id38">windowed.inner.class.serde</a></li>
             </ul>
           </li>
           <li><a class="reference internal" href="#kafka-consumers-and-producer-configuration-parameters" id="id16">Kafka consumers and producer configuration parameters</a>
@@ -159,29 +160,29 @@ settings.put(... , ...);</code></pre>
         <p>There are several Kafka and Kafka Streams configuration options that need to be configured explicitly for resiliency in face of broker failures:</p>
         <table border="1" class="non-scrolling-table docutils">
           <thead valign="bottom">
-          <tr class="row-odd"><th class="head">Parameter Name</th>
+          <tr class="row-even"><th class="head">Parameter Name</th>
             <th class="head">Corresponding Client</th>
             <th class="head">Default value</th>
             <th class="head">Consider setting to</th>
           </tr>
           </thead>
           <tbody valign="top">
-          <tr class="row-even"><td>acks</td>
+          <tr class="row-odd"><td>acks</td>
             <td>Producer</td>
             <td><code class="docutils literal"><span class="pre">acks=1</span></code></td>
             <td><code class="docutils literal"><span class="pre">acks=all</span></code></td>
           </tr>
-          <tr class="row-odd"><td>replication.factor (for broker version 2.3 or older)/td>
+          <tr class="row-even"><td>replication.factor (for broker version 2.3 or older)/td>
             <td>Streams</td>
             <td><code class="docutils literal"><span class="pre">-1</span></code></td>
             <td><code class="docutils literal"><span class="pre">3</span></code></td>
           </tr>
-          <tr class="row-even"><td>min.insync.replicas</td>
+          <tr class="row-odd"><td>min.insync.replicas</td>
             <td>Broker</td>
             <td><code class="docutils literal"><span class="pre">1</span></code></td>
             <td><code class="docutils literal"><span class="pre">2</span></code></td>
           </tr>
-          <tr class="row-odd"><td>num.standby.replicas</td>
+          <tr class="row-even"><td>num.standby.replicas</td>
             <td>Streams</td>
             <td><code class="docutils literal"><span class="pre">0</span></code></td>
             <td><code class="docutils literal"><span class="pre">1</span></code></td>
@@ -241,24 +242,29 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           </tr>
           </thead>
           <tbody valign="top">
-          <tr class="row-odd"><td>acceptable.recovery.lag</td>
+          <tr class="row-even"><td>acceptable.recovery.lag</td>
             <td>Medium</td>
             <td colspan="2">The maximum acceptable lag (number of offsets to catch up) for an instance to be considered caught-up and ready for the active task.</td>
             <td><code class="docutils literal"><span class="pre">10000</span></code></td>
           </tr>
-          <tr class="row-even"><td>application.server</td>
+          <tr class="row-odd"><td>application.server</td>
             <td>Low</td>
             <td colspan="2">A host:port pair pointing to an embedded user defined endpoint that can be used for discovering the locations of
               state stores within a single Kafka Streams application. The value of this must be different for each instance
               of the application.</td>
             <td>the empty string</td>
           </tr>
-          <tr class="row-odd"><td>buffered.records.per.partition</td>
+          <tr class="row-even"><td>buffered.records.per.partition</td>
             <td>Low</td>
             <td colspan="2">The maximum number of records to buffer per partition.</td>
             <td><code class="docutils literal"><span class="pre">1000</span></code></td>
           </tr>
-          <tr class="row-even"><td>cache.max.bytes.buffering</td>
+          <tr class="row-odd"><td>statestore.cache.max.bytes</td>
+            <td>Medium</td>
+            <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads.</td>
+            <td>10485760</td>
+          </tr>
+          <tr class="row-even"><td>cache.max.bytes.buffering (Deprecated. Use statestore.cache.max.bytes instead.)</td>
             <td>Medium</td>
             <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads.</td>
             <td>10485760 bytes</td>
@@ -301,12 +307,12 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
               set by the user or all serdes must be passed in explicitly (see also default.key.serde).</td>
             <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
-          <tr class="row-even"><td>default.windowed.key.serde.inner</td>
+          <tr class="row-even"><td>default.windowed.key.serde.inner (Deprecated. Use windowed.inner.class.serde instead.)</td>
             <td>Medium</td>
             <td colspan="2">Default serializer/deserializer for the inner class of windowed keys, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
-          <tr class="row-odd"><td>default.windowed.value.serde.inner</td>
+          <tr class="row-odd"><td>default.windowed.value.serde.inner (Deprecated. Use windowed.inner.class.serde instead.)</td>
             <td>Medium</td>
             <td colspan="2">Default serializer/deserializer for the inner class of windowed values, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">null</span></code></td>
@@ -327,8 +333,9 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
               the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.
             </td>
             <td><code>BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers</code></td>
+            <td>null</td>
           </tr>
-          <tr class="row-even"><td>max.task.idle.ms</td>
+          <tr class="row-odd"><td>max.task.idle.ms</td>
             <td>Medium</td>
             <td colspan="2">
               <p>
@@ -347,37 +354,37 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             </td>
             <td>0 milliseconds</td>
           </tr>
-          <tr class="row-odd"><td>max.warmup.replicas</td>
+          <tr class="row-even"><td>max.warmup.replicas</td>
             <td>Medium</td>
             <td colspan="2">The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once.</td>
             <td><code class="docutils literal"><span class="pre">2</span></code></td>
           </tr>
-          <tr class="row-even"><td>metric.reporters</td>
+          <tr class="row-odd"><td>metric.reporters</td>
             <td>Low</td>
             <td colspan="2">A list of classes to use as metrics reporters.</td>
             <td>the empty list</td>
           </tr>
-          <tr class="row-odd"><td>metrics.num.samples</td>
+          <tr class="row-even"><td>metrics.num.samples</td>
             <td>Low</td>
             <td colspan="2">The number of samples maintained to compute metrics.</td>
             <td><code class="docutils literal"><span class="pre">2</span></code></td>
           </tr>
-          <tr class="row-even"><td>metrics.recording.level</td>
+          <tr class="row-odd"><td>metrics.recording.level</td>
             <td>Low</td>
             <td colspan="2">The highest recording level for metrics.</td>
             <td><code class="docutils literal"><span class="pre">INFO</span></code></td>
           </tr>
-          <tr class="row-odd"><td>metrics.sample.window.ms</td>
+          <tr class="row-even"><td>metrics.sample.window.ms</td>
             <td>Low</td>
             <td colspan="2">The window of time in milliseconds a metrics sample is computed over.</td>
             <td>30000 milliseconds (30 seconds)</td>
           </tr>
-          <tr class="row-even"><td>num.standby.replicas</td>
+          <tr class="row-odd"><td>num.standby.replicas</td>
             <td>High</td>
             <td colspan="2">The number of standby replicas for each task.</td>
             <td><code class="docutils literal"><span class="pre">0</span></code></td>
           </tr>
-          <tr class="row-odd"><td>num.stream.threads</td>
+          <tr class="row-even"><td>num.stream.threads</td>
             <td>Medium</td>
             <td colspan="2">The number of threads to execute stream processing.</td>
             <td><code class="docutils literal"><span class="pre">1</span></code></td>
@@ -406,7 +413,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
               clients with different tag values.</td>
             <td>the empty list</td>
           </tr>
-          <tr class="row-even"><td>replication.factor</td>
+          <tr class="row-odd"><td>replication.factor</td>
             <td>Medium</td>
             <td colspan="2">The replication factor for changelog topics and repartition topics created by the application.
               The default of <code>-1</code> (meaning: use broker default replication factor) requires broker version 2.4 or newer.</td>
@@ -432,22 +439,22 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td colspan="2">Directory location for state stores.</td>
             <td><code class="docutils literal"><span class="pre">/${java.io.tmpdir}/kafka-streams</span></code></td>
           </tr>
-          <tr class="row-odd"><td>task.timeout.ms</td>
+          <tr class="row-even"><td>task.timeout.ms</td>
             <td>Medium</td>
             <td colspan="2">The maximum amount of time in milliseconds a task might stall due to internal errors and retries until an error is raised. For a timeout of <code>0 ms</code>, a task would raise an error for the first internal error. For any timeout larger than <code>0 ms</code>, a task will retry at least once before an error is raised.</td>
             <td>300000 milliseconds (5 minutes)</td>
           </tr>
-          <tr class="row-even"><td>topology.optimization</td>
+          <tr class="row-odd"><td>topology.optimization</td>
             <td>Medium</td>
-            <td colspan="2">A configuration telling Kafka Streams if it should optimize the topology and what optimizations to apply. Acceptable values are: <code>StreamsConfig.NO_OPTIMIZATION</code> (<code>none</code>), <code>StreamsConfig.OPTIMIZE</code> (<code>all</code>) or a comma separated list of specific optimizations: (<code>StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS</code> (<code>reuse.ktable.source.topics</code>), <code>StreamsConfig.MERGE_REPARTITION_TOPICS</code> (<code>merge.repartition.topics</code>)). </td>
-            <td><code>NO_OPTIMIZATION</code></td>
+            <td colspan="2">A configuration telling Kafka Streams if it should optimize the topology and what optimizations to apply. Acceptable values are: <code>StreamsConfig.NO_OPTIMIZATION</code> (<code>none</code>), <code>StreamsConfig.OPTIMIZE</code> (<code>all</code>) or a comma separated list of specific optimizations: (<code>StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS</code> (<code>reuse.ktable.source.topics</code>), <code>StreamsConfig.MERGE_REPARTITION_TOPICS</code> (<code>merge.repartition.topics</code>)).</td>
+            <td><code> NO_OPTIMIZATION</code></td>
           </tr>
-          <tr class="row-odd"><td>upgrade.from</td>
+          <tr class="row-even"><td>upgrade.from</td>
             <td>Medium</td>
             <td colspan="2">The version you are upgrading from during a rolling upgrade.</td>
             <td>See <a class="reference internal" href="#streams-developer-guide-upgrade-from"><span class="std std-ref">Upgrade From</span></a></td>
           </tr>
-          <tr class="row-even"><td>windowstore.changelog.additional.retention.ms</td>
+          <tr class="row-odd"><td>windowstore.changelog.additional.retention.ms</td>
             <td>Low</td>
             <td colspan="2">Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift.</td>
             <td>86400000 milliseconds (1 day)</td>
@@ -676,7 +683,7 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
             </div></blockquote>
         </div>
         <div class="section" id="default-windowed-key-serde-inner">
-          <h4><a class="toc-backref" href="#id32">default.windowed.key.serde.inner</a><a class="headerlink" href="#default-windowed-key-serde-inner" title="Permalink to this headline"></a></h4>
+          <h4><a class="toc-backref" href="#id32">default.windowed.key.serde.inner</a><a class="headerlink" href="#default-windowed-key-serde-inner" title="Permalink to this headline"></a> (Deprecated.)</h4>
           <blockquote>
             <div><p>The default Serializer/Deserializer class for the inner class of windowed keys. Serialization and deserialization in Kafka Streams happens
               whenever data needs to be materialized, for example:</p>
@@ -689,7 +696,7 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
             </div></blockquote>
         </div>
         <div class="section" id="default-windowed-value-serde-inner">
-          <h4><a class="toc-backref" href="#id33">default.windowed.value.serde.inner</a><a class="headerlink" href="#default-windowed-value-serde-inner" title="Permalink to this headline"></a></h4>
+          <h4><a class="toc-backref" href="#id33">default.windowed.value.serde.inner</a><a class="headerlink" href="#default-windowed-value-serde-inner" title="Permalink to this headline"></a>(Deprecated.)</h4>
           <blockquote>
             <div><p>The default Serializer/Deserializer class for the inner class of windowed values. Serialization and deserialization in Kafka Streams happens
               happens whenever data needs to be materialized, for example:</p>
@@ -1029,6 +1036,18 @@ streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksD
           </p>
         </div></blockquote>
     </div>
+    <div class="section" id="windowed.inner.class.serde">
+      <h4><a class="toc-backref" href="#id31">windowed.inner.class.serde</a><a class="headerlink" href="#windowed.inner.class.serde" title="Permalink to this headline"></a></h4>
+      <blockquote>
+        <div>
+          <p>
+            Serde for the inner class of a windowed record. Must implement the org.apache.kafka.common.serialization.Serde interface.
+          </p>
+          <p>
+            Note that this config is only used by plain consumer/producer clients that set a windowed de/serializer type via configs. For Kafka Streams applications that deal with windowed types, you must pass in the inner serde type when you instantiate the windowed serde object for your topology.
+          </p>
+        </div></blockquote>
+    </div>
     <div class="section" id="upgrade-from">
       <span id="streams-developer-guide-upgrade-from"></span><h4><a class="toc-backref" href="#id14">upgrade.from</a><a class="headerlink" href="#upgrade-from" title="Permalink to this headline"></a></h4>
       <blockquote>
@@ -1120,7 +1139,7 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
           <td>Consumer</td>
           <td><code class="docutils literal"><span class="pre">1000</span></code></td>
         </tr>
-        <tr class="row-even">
+        <tr class="row-odd">
           <td>client.id</td>
           <td>-</td>
           <td><code class="docutils literal"><span class="pre">&lt;application.id&gt;-&lt;random-UUID&gt;</span></code></td>

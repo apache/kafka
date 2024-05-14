@@ -164,9 +164,9 @@ public class Assertions {
             // The order of the racks stored in the PartitionMetadata of the ConsumerGroupPartitionMetadataValue
             // is not always guaranteed. Therefore, we need a special comparator.
             ConsumerGroupPartitionMetadataValue expectedValue =
-                (ConsumerGroupPartitionMetadataValue) expected.message();
+                (ConsumerGroupPartitionMetadataValue) expected.message().duplicate();
             ConsumerGroupPartitionMetadataValue actualValue =
-                (ConsumerGroupPartitionMetadataValue) actual.message();
+                (ConsumerGroupPartitionMetadataValue) actual.message().duplicate();
 
             List<ConsumerGroupPartitionMetadataValue.TopicMetadata> expectedTopicMetadataList =
                 expectedValue.topics();
@@ -176,6 +176,9 @@ public class Assertions {
             if (expectedTopicMetadataList.size() != actualTopicMetadataList.size()) {
                 fail("Topic metadata lists have different sizes");
             }
+
+            expectedTopicMetadataList.sort(Comparator.comparing(ConsumerGroupPartitionMetadataValue.TopicMetadata::topicId));
+            actualTopicMetadataList.sort(Comparator.comparing(ConsumerGroupPartitionMetadataValue.TopicMetadata::topicId));
 
             for (int i = 0; i < expectedTopicMetadataList.size(); i++) {
                 ConsumerGroupPartitionMetadataValue.TopicMetadata expectedTopicMetadata =

@@ -20,7 +20,6 @@ package org.apache.kafka.trogdor.basic;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Shell;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.Topology;
@@ -49,10 +48,10 @@ public class BasicPlatform implements Platform {
         public String run(Node curNode, String[] command) throws IOException {
             try {
                 String result = Shell.execCommand(command);
-                log.info("RUN: {}. RESULT: [{}]", Utils.join(command, " "), result);
+                log.info("RUN: {}. RESULT: [{}]", String.join(" ", command), result);
                 return result;
             } catch (RuntimeException | IOException e) {
-                log.info("RUN: {}. ERROR: [{}]", Utils.join(command, " "), e.getMessage());
+                log.info("RUN: {}. ERROR: [{}]", String.join(" ", command), e.getMessage());
                 throw e;
             }
         }
@@ -64,7 +63,7 @@ public class BasicPlatform implements Platform {
         if (this.curNode == null) {
             throw new RuntimeException(String.format("No node named %s found " +
                     "in the cluster!  Cluster nodes are: %s", curNodeName,
-                Utils.join(topology.nodes().keySet(), ",")));
+                String.join(",", topology.nodes().keySet())));
         }
         this.topology = topology;
         this.scheduler = scheduler;
@@ -83,7 +82,7 @@ public class BasicPlatform implements Platform {
         if (this.curNode == null) {
             throw new RuntimeException(String.format("No node named %s found " +
                 "in the cluster!  Cluster nodes are: %s", curNodeName,
-                Utils.join(topology.nodes().keySet(), ",")));
+                String.join(",", topology.nodes().keySet())));
         }
         this.commandRunner = new ShellCommandRunner();
     }

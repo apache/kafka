@@ -21,6 +21,7 @@ import kafka.api.IntegrationTestHarness;
 import kafka.network.SocketServer;
 import kafka.server.BrokerFeatures;
 import kafka.server.KafkaServer;
+import kafka.test.annotation.Type;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.utils.EmptyTestInfo;
@@ -189,8 +190,8 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
-        public ClusterType clusterType() {
-            return ClusterType.ZK;
+        public Type type() {
+            return Type.ZK;
         }
 
         @Override
@@ -301,7 +302,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         public void modifyConfigs(Seq<Properties> props) {
             super.modifyConfigs(props);
             for (int i = 0; i < props.length(); i++) {
-                props.apply(i).putAll(clusterConfig.perBrokerOverrideProperties().getOrDefault(i, Collections.emptyMap()));
+                props.apply(i).putAll(clusterConfig.perServerOverrideProperties().getOrDefault(i, Collections.emptyMap()));
             }
         }
 

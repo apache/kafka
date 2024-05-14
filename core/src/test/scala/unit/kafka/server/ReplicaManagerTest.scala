@@ -99,7 +99,7 @@ object ReplicaManagerTest {
 class ReplicaManagerTest {
 
   private val topic = "test-topic"
-  private val topicId = Uuid.randomUuid()
+  private val topicId = Uuid.fromString("YK2ed2GaTH2JpgzUaJ8tgg");
   private val topicIds = scala.Predef.Map("test-topic" -> topicId)
   private val topicNames = scala.Predef.Map(topicId -> "test-topic")
   private val transactionalId = "txn"
@@ -114,7 +114,7 @@ class ReplicaManagerTest {
   private var mockRemoteLogManager: RemoteLogManager = _
   private var addPartitionsToTxnManager: AddPartitionsToTxnManager = _
   private var brokerTopicStats: BrokerTopicStats = _
-  private val supportedOperation = genericError
+  private val transactionSupportedOperation = genericError
   private val metadataCache: MetadataCache = mock(classOf[MetadataCache])
 
   // Constants defined for readability
@@ -2128,7 +2128,7 @@ class ReplicaManagerTest {
 
     try {
       val tp0 = new TopicPartition(topic, 0)
-      val topicIdPartition0 = new TopicIdPartition(Uuid.randomUuid(), tp0)
+      val topicIdPartition0 = new TopicIdPartition(topicId, tp0)
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
@@ -2288,6 +2288,7 @@ class ReplicaManagerTest {
       replicaManager.becomeLeaderOrFollower(1,
         makeLeaderAndIsrRequest(topicIds(tp0.topic), tp0, Seq(0, 1), LeaderAndIsr(1, List(0, 1))),
         (_, _) => ())
+
       // Start with sequence 6
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
@@ -3070,7 +3071,7 @@ class ReplicaManagerTest {
       transactionalId = transactionalId,
       entriesPerPartition = entriesToAppend.map(e => replicaManager.getTopicIdPartition(e._1) -> e._2),
       responseCallback = appendCallback,
-      supportedOperation = supportedOperation
+      transactionSupportedOperation = transactionSupportedOperation
     )
 
     result
@@ -3103,7 +3104,7 @@ class ReplicaManagerTest {
       transactionalId = transactionalId,
       entriesPerPartition = entriesPerPartition.map(e => replicaManager.getTopicIdPartition(e._1) -> e._2),
       responseCallback = appendCallback,
-      supportedOperation = supportedOperation
+      transactionSupportedOperation = transactionSupportedOperation
     )
 
     result
@@ -3129,7 +3130,7 @@ class ReplicaManagerTest {
       producerEpoch,
       baseSequence,
       postVerificationCallback,
-      supportedOperation
+      transactionSupportedOperation
     )
     result
   }
@@ -5134,7 +5135,7 @@ class ReplicaManagerTest {
     val localId = 1
     val otherId = localId + 1
     val numOfRecords = 3
-    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
+    val topicIdPartition = new TopicIdPartition(Uuid.fromString("zUaJeJpgd2GaTH28tggYK2"), 0, "foo")
     val topicPartition = topicIdPartition.topicPartition()
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 

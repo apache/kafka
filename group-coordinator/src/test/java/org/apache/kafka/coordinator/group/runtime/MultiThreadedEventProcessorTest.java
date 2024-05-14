@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -73,7 +73,7 @@ public class MultiThreadedEventProcessorTest {
         private final boolean block;
         private final CountDownLatch latch;
         private final CountDownLatch executed;
-        private long createdTimeMs;
+        private final long createdTimeMs;
 
         FutureEvent(
             TopicPartition key,
@@ -442,8 +442,6 @@ public class MultiThreadedEventProcessorTest {
             // e2 poll time = 500
             // e2 processing time = 5000
 
-            // e1 poll time / e1 poll time
-            verify(mockRuntimeMetrics, times(1)).recordThreadIdleRatio(1.0);
             // e1 poll time
             verify(mockRuntimeMetrics, times(1)).recordEventQueueTime(500L);
             // e1 processing time + e2 enqueue time
@@ -451,8 +449,8 @@ public class MultiThreadedEventProcessorTest {
 
             // Second event (e2)
 
-            // idle ratio = e2 poll time / (e1 poll time + e1 processing time + e2 enqueue time + e2 poll time)
-            verify(mockRuntimeMetrics, times(1)).recordThreadIdleRatio(500.0 / (500.0 + 7000.0 + 500.0));
+            // e1, e2 poll time
+            verify(mockRuntimeMetrics, times(2)).recordThreadIdleTime(500L);
             // event queue time = e2 enqueue time + e2 poll time
             verify(mockRuntimeMetrics, times(1)).recordEventQueueTime(3500L);
         }
@@ -461,26 +459,30 @@ public class MultiThreadedEventProcessorTest {
     @Test
     public void testRecordThreadIdleRatioTwoThreads() throws Exception {
         GroupCoordinatorRuntimeMetrics mockRuntimeMetrics = mock(GroupCoordinatorRuntimeMetrics.class);
+        Time time = Time.SYSTEM;
 
         try (CoordinatorEventProcessor eventProcessor = new MultiThreadedEventProcessor(
             new LogContext(),
             "event-processor-",
             2,
-            Time.SYSTEM,
+            time,
             mockRuntimeMetrics,
-            new DelayEventAccumulator(Time.SYSTEM, 100L)
+            new DelayEventAccumulator(time, 100L)
         )) {
-            List<Double> recordedRatios = new ArrayList<>();
+            List<Long> recordedIdleTimesMs = new ArrayList<>();
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
-            ArgumentCaptor<Double> ratioCaptured = ArgumentCaptor.forClass(Double.class);
+            ArgumentCaptor<Long> idleTimeCaptured = ArgumentCaptor.forClass(Long.class);
             doAnswer(invocation -> {
-                double threadIdleRatio = ratioCaptured.getValue();
-                assertTrue(threadIdleRatio > 0.0);
-                synchronized (recordedRatios) {
-                    recordedRatios.add(threadIdleRatio);
+                long threadIdleTime = idleTimeCaptured.getValue();
+
+                // As each thread sleeps for 100ms before returning from take(),
+                // we know that each recorded idle time must be at least 50 (100/2)ms.
+                assertTrue(threadIdleTime >= 50);
+                synchronized (recordedIdleTimesMs) {
+                    recordedIdleTimesMs.add(threadIdleTime);
                 }
                 return null;
-            }).when(mockRuntimeMetrics).recordThreadIdleRatio(ratioCaptured.capture());
+            }).when(mockRuntimeMetrics).recordThreadIdleTime(idleTimeCaptured.capture());
 
             List<FutureEvent<Integer>> events = Arrays.asList(
                 new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
@@ -489,9 +491,11 @@ public class MultiThreadedEventProcessorTest {
                 new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
                 new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet),
                 new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet),
+                new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet),
                 new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet)
             );
 
+            long startMs = time.milliseconds();
             events.forEach(eventProcessor::enqueueLast);
 
             CompletableFuture.allOf(events
@@ -499,18 +503,20 @@ public class MultiThreadedEventProcessorTest {
                 .map(FutureEvent::future)
                 .toArray(CompletableFuture[]::new)
             ).get(10, TimeUnit.SECONDS);
-
             events.forEach(event -> {
                 assertTrue(event.future.isDone());
                 assertFalse(event.future.isCompletedExceptionally());
             });
 
-            assertEquals(events.size(), numEventsExecuted.get());
-            verify(mockRuntimeMetrics, times(7)).recordThreadIdleRatio(anyDouble());
+            long diff = time.milliseconds() - startMs;
 
-            assertEquals(7, recordedRatios.size());
-            double average = recordedRatios.stream().mapToDouble(Double::doubleValue).sum() / 7;
-            assertTrue(average > 0.0 && average < 1.0);
+            assertEquals(events.size(), numEventsExecuted.get());
+            verify(mockRuntimeMetrics, times(8)).recordThreadIdleTime(anyLong());
+            assertEquals(8, recordedIdleTimesMs.size());
+
+            long sum = recordedIdleTimesMs.stream().mapToLong(Long::longValue).sum();
+            double idleRatio = (double) sum / diff;
+            assertTrue(idleRatio >= 0.5 && idleRatio <= 1.0);
         }
     }
 }

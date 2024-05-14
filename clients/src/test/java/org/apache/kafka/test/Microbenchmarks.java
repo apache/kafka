@@ -78,34 +78,30 @@ public class Microbenchmarks {
         final Time time = Time.SYSTEM;
         final AtomicBoolean done = new AtomicBoolean(false);
         final Object lock = new Object();
-        Thread t1 = new Thread() {
-            public void run() {
-                time.sleep(1);
-                int counter = 0;
-                long start = time.nanoseconds();
-                for (int i = 0; i < iters; i++) {
-                    synchronized (lock) {
-                        counter++;
-                    }
+        Thread t1 = new Thread(() -> {
+            time.sleep(1);
+            int counter = 0;
+            long start1 = time.nanoseconds();
+            for (int i = 0; i < iters; i++) {
+                synchronized (lock) {
+                    counter++;
                 }
-                System.out.println("synchronized: " + ((time.nanoseconds() - start) / iters));
-                System.out.println(counter);
-                done.set(true);
             }
-        };
+            System.out.println("synchronized: " + ((time.nanoseconds() - start1) / iters));
+            System.out.println(counter);
+            done.set(true);
+        });
 
-        Thread t2 = new Thread() {
-            public void run() {
-                int counter = 0;
-                while (!done.get()) {
-                    time.sleep(1);
-                    synchronized (lock) {
-                        counter += 1;
-                    }
+        Thread t2 = new Thread(() -> {
+            int counter = 0;
+            while (!done.get()) {
+                time.sleep(1);
+                synchronized (lock) {
+                    counter += 1;
                 }
-                System.out.println("Counter: " + counter);
             }
-        };
+            System.out.println("Counter: " + counter);
+        });
 
         t1.start();
         t2.start();
@@ -115,34 +111,30 @@ public class Microbenchmarks {
         System.out.println("Testing locks");
         done.set(false);
         final ReentrantLock lock2 = new ReentrantLock();
-        Thread t3 = new Thread() {
-            public void run() {
-                time.sleep(1);
-                int counter = 0;
-                long start = time.nanoseconds();
-                for (int i = 0; i < iters; i++) {
-                    lock2.lock();
-                    counter++;
-                    lock2.unlock();
-                }
-                System.out.println("lock: " + ((time.nanoseconds() - start) / iters));
-                System.out.println(counter);
-                done.set(true);
+        Thread t3 = new Thread(() -> {
+            time.sleep(1);
+            int counter = 0;
+            long start12 = time.nanoseconds();
+            for (int i = 0; i < iters; i++) {
+                lock2.lock();
+                counter++;
+                lock2.unlock();
             }
-        };
+            System.out.println("lock: " + ((time.nanoseconds() - start12) / iters));
+            System.out.println(counter);
+            done.set(true);
+        });
 
-        Thread t4 = new Thread() {
-            public void run() {
-                int counter = 0;
-                while (!done.get()) {
-                    time.sleep(1);
-                    lock2.lock();
-                    counter++;
-                    lock2.unlock();
-                }
-                System.out.println("Counter: " + counter);
+        Thread t4 = new Thread(() -> {
+            int counter = 0;
+            while (!done.get()) {
+                time.sleep(1);
+                lock2.lock();
+                counter++;
+                lock2.unlock();
             }
-        };
+            System.out.println("Counter: " + counter);
+        });
 
         t3.start();
         t4.start();
@@ -164,14 +156,12 @@ public class Microbenchmarks {
         final List<String> keys = new ArrayList<>(map.keySet());
         final List<Thread> threads = new ArrayList<>();
         for (int i = 0; i < numThreads; i++) {
-            threads.add(new Thread() {
-                public void run() {
-                    long start = System.nanoTime();
-                    for (int j = 0; j < iters; j++)
-                        map.get(keys.get(j % threads.size()));
-                    System.out.println("Map access time: " + ((System.nanoTime() - start) / (double) iters));
-                }
-            });
+            threads.add(new Thread(() -> {
+                long start = System.nanoTime();
+                for (int j = 0; j < iters; j++)
+                    map.get(keys.get(j % threads.size()));
+                System.out.println("Map access time: " + ((System.nanoTime() - start) / (double) iters));
+            }));
         }
         for (Thread thread : threads)
             thread.start();

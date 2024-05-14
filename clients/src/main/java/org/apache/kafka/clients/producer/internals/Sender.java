@@ -898,8 +898,8 @@ public class Sender implements Runnable {
             if (!records.hasMatchingMagic(minUsedMagic))
                 records = batch.records().downConvert(minUsedMagic, 0, time).records();
             Optional<ProduceRequestData.TopicProduceData> topicProduceData = canUseTopicId ?
-                    Optional.ofNullable(tpd.find(tp.topic(), topicIds.get(tp.topic()))):
-                    tpd.stream().filter(data -> data.name() == tp.topic()).findFirst();
+                    Optional.ofNullable(tpd.find(tp.topic(), topicIds.get(tp.topic()))) :
+                    tpd.stream().filter(data -> data.name().equals(tp.topic())).findFirst();
 
             ProduceRequestData.TopicProduceData tpData = topicProduceData.orElse(new ProduceRequestData.TopicProduceData().setName(tp.topic()));
             if (canUseTopicId) {

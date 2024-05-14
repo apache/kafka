@@ -191,7 +191,7 @@ class CoordinatorPartitionWriter[T](
     producerEpoch: Short,
     apiVersion: Short
   ): CompletableFuture[VerificationGuard] = {
-    val supportedOperation = if (apiVersion >= 4) genericError else defaultError
+    val transactionSupportedOperation = if (apiVersion >= 4) genericError else defaultError
     val future = new CompletableFuture[VerificationGuard]()
     replicaManager.maybeStartTransactionVerificationForPartition(
       topicPartition = tp,
@@ -207,7 +207,7 @@ class CoordinatorPartitionWriter[T](
           future.complete(verificationGuard)
         }
       },
-      supportedOperation
+      transactionSupportedOperation
     )
     future
   }

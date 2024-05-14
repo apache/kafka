@@ -1189,7 +1189,7 @@ public final class MessageTest {
     }
 
     @Test
-    public void testLongTaggedString() throws Exception {
+    public void testLongTaggedString() {
         char[] chars = new char[1024];
         Arrays.fill(chars, 'a');
         String longString = new String(chars);

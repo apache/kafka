@@ -107,6 +107,8 @@
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.zk" />
     <allow pkg="org.apache.kafka.clients.admin"/>
+    <allow pkg="org.apache.kafka.clients.consumer"/>
+    <allow pkg="org.apache.kafka.coordinator.group"/>
     <subpackage name="annotation">
       <allow pkg="kafka.test"/>
     </subpackage>
@@ -121,6 +123,7 @@
     <allow pkg="kafka.cluster"/>
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.zk"/>
+    <allow pkg="org.apache.kafka.clients.admin"/>
     <allow pkg="org.apache.kafka.security"/>
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.test"/>

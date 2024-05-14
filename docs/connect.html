@@ -291,6 +291,7 @@ predicates.IsBar.pattern=bar</code></pre>
         <li><code>GET /connectors/{name}</code> - get information about a specific connector</li>
         <li><code>GET /connectors/{name}/config</code> - get the configuration parameters for a specific connector</li>
         <li><code>PUT /connectors/{name}/config</code> - update the configuration parameters for a specific connector</li>
+        <li><code>PATCH /connectors/{name}/config</code> - patch the configuration parameters for a specific connector, where <code>null</code> values in the JSON body indicates removing of the key from the final configuration</li>
         <li><code>GET /connectors/{name}/status</code> - get current status of the connector, including if it is running, failed, paused, etc., which worker it is assigned to, error information if it has failed, and the state of all its tasks</li>
         <li><code>GET /connectors/{name}/tasks</code> - get a list of tasks currently running for a connector along with their configurations</li>
         <li><code>GET /connectors/{name}/tasks-config</code> - get the configuration of all tasks for a specific connector. This endpoint is deprecated and will be removed in the next major release. Please use the <code>GET /connectors/{name}/tasks</code> endpoint instead. Note that the response structures of the two endpoints differ slightly, please refer to the <a href="/{{version}}/generated/connect_rest.yaml">OpenAPI documentation</a> for more details</li>
