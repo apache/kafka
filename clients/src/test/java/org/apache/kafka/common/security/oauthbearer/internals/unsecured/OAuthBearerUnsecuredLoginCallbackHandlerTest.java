@@ -105,8 +105,8 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
             options.put("unsecuredLoginListClaim_" + "emptyList1", "");
             options.put("unsecuredLoginListClaim_" + "emptyList2", ",");
             options.put("unsecuredLoginNumberClaim_" + "number", "1");
-            long lifetmeSeconds = 10000;
-            options.put("unsecuredLoginLifetimeSeconds", String.valueOf(lifetmeSeconds));
+            long lifetimeSeconds = 10000;
+            options.put("unsecuredLoginLifetimeSeconds", String.valueOf(lifetimeSeconds));
             options.put("unsecuredLoginPrincipalClaimName", principalClaimName);
             if (scopeClaimNameOptionValue != null)
                 options.put("unsecuredLoginScopeClaimName", scopeClaimNameOptionValue);
@@ -120,7 +120,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
             OAuthBearerUnsecuredJws jws = (OAuthBearerUnsecuredJws) callback.token();
             assertNotNull(jws, "create token failed");
             long startMs = mockTime.milliseconds();
-            confirmCorrectValues(jws, user, startMs, lifetmeSeconds * 1000);
+            confirmCorrectValues(jws, user, startMs, lifetimeSeconds * 1000);
             Map<String, Object> claims = jws.claims();
             assertEquals(new HashSet<>(Arrays.asList(actualScopeClaimName, principalClaimName, "iat", "exp", "number",
                     "list", "emptyList1", "emptyList2")), claims.keySet());

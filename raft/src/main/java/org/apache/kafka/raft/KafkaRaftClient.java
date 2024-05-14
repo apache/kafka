@@ -386,8 +386,9 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         logger.info("Reading KRaft snapshot and log as part of the initialization");
         partitionState.updateState();
 
+        VoterSet lastVoterSet = partitionState.lastVoterSet();
         requestManager = new RequestManager(
-            partitionState.lastVoterSet().voterIds(),
+            lastVoterSet.voterIds(),
             quorumConfig.retryBackoffMs(),
             quorumConfig.requestTimeoutMs(),
             random
@@ -395,7 +396,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
         quorum = new QuorumState(
             nodeId,
-            partitionState.lastVoterSet().voterIds(),
+            lastVoterSet.voterIds(),
             quorumConfig.electionTimeoutMs(),
             quorumConfig.fetchTimeoutMs(),
             quorumStateStore,
@@ -409,7 +410,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         // so there are no unknown voter connections. Report this metric as 0.
         kafkaRaftMetrics.updateNumUnknownVoterConnections(0);
 
-        VoterSet lastVoterSet = partitionState.lastVoterSet();
         for (Integer voterId : lastVoterSet.voterIds()) {
             channel.updateEndpoint(voterId, lastVoterSet.voterAddress(voterId, listenerName).get());
         }
@@ -1524,7 +1524,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                     quorum.leaderIdOrSentinel()
                 );
 
-                // This will aways reload the snapshot because the internal next offset
+                // This will always reload the snapshot because the internal next offset
                 // is always less than the snapshot id just downloaded.
                 partitionState.updateState();
 

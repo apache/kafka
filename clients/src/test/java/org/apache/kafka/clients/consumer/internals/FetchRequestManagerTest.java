@@ -150,34 +150,35 @@ public class FetchRequestManagerTest {
 
     private static final double EPSILON = 0.0001;
 
-    private String topicName = "test";
-    private String groupId = "test-group";
-    private Uuid topicId = Uuid.randomUuid();
-    private Map<String, Uuid> topicIds = new HashMap<String, Uuid>() {
+    private final String topicName = "test";
+    private final String groupId = "test-group";
+    private final Uuid topicId = Uuid.randomUuid();
+    private final Map<String, Uuid> topicIds = new HashMap<String, Uuid>() {
         {
             put(topicName, topicId);
         }
     };
-    private Map<Uuid, String> topicNames = singletonMap(topicId, topicName);
+    private final Map<Uuid, String> topicNames = singletonMap(topicId, topicName);
     private final String metricGroup = "consumer" + groupId + "-fetch-manager-metrics";
-    private TopicPartition tp0 = new TopicPartition(topicName, 0);
-    private TopicPartition tp1 = new TopicPartition(topicName, 1);
-    private TopicPartition tp2 = new TopicPartition(topicName, 2);
-    private TopicPartition tp3 = new TopicPartition(topicName, 3);
-    private TopicIdPartition tidp0 = new TopicIdPartition(topicId, tp0);
-    private TopicIdPartition tidp1 = new TopicIdPartition(topicId, tp1);
-    private TopicIdPartition tidp2 = new TopicIdPartition(topicId, tp2);
-    private TopicIdPartition tidp3 = new TopicIdPartition(topicId, tp3);
-    private int validLeaderEpoch = 0;
-    private MetadataResponse initialUpdateResponse =
+    private final TopicPartition tp0 = new TopicPartition(topicName, 0);
+    private final TopicPartition tp1 = new TopicPartition(topicName, 1);
+    private final TopicPartition tp2 = new TopicPartition(topicName, 2);
+    private final TopicPartition tp3 = new TopicPartition(topicName, 3);
+    private final TopicIdPartition tidp0 = new TopicIdPartition(topicId, tp0);
+    private final TopicIdPartition tidp1 = new TopicIdPartition(topicId, tp1);
+    private final TopicIdPartition tidp2 = new TopicIdPartition(topicId, tp2);
+    private final TopicIdPartition tidp3 = new TopicIdPartition(topicId, tp3);
+    private final int validLeaderEpoch = 0;
+    private final MetadataResponse initialUpdateResponse =
             RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 4), topicIds);
 
-    private int minBytes = 1;
-    private int maxBytes = Integer.MAX_VALUE;
-    private int maxWaitMs = 0;
-    private int fetchSize = 1000;
-    private long retryBackoffMs = 100;
-    private long requestTimeoutMs = 30000;
+    private final int minBytes = 1;
+    private final int maxBytes = Integer.MAX_VALUE;
+    private final int maxWaitMs = 0;
+    private final int fetchSize = 1000;
+    private final long retryBackoffMs = 100;
+    private final long requestTimeoutMs = 30000;
+    private final ApiVersions apiVersions = new ApiVersions();
     private MockTime time = new MockTime(1);
     private SubscriptionState subscriptions;
     private ConsumerMetadata metadata;
@@ -185,11 +186,9 @@ public class FetchRequestManagerTest {
     private FetchMetricsManager metricsManager;
     private MockClient client;
     private Metrics metrics;
-    private ApiVersions apiVersions = new ApiVersions();
     private TestableFetchRequestManager<?, ?> fetcher;
     private TestableNetworkClientDelegate networkClientDelegate;
     private OffsetFetcher offsetFetcher;
-
     private MemoryRecords records;
     private MemoryRecords nextRecords;
     private MemoryRecords emptyRecords;
@@ -761,29 +760,29 @@ public class FetchRequestManagerTest {
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
-        Integer partitionLeaderEpoch = 1;
+        int partitionLeaderEpoch = 1;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
                 CompressionType.NONE, TimestampType.CREATE_TIME, 0L, System.currentTimeMillis(),
                 partitionLeaderEpoch);
-        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
-        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
+        builder.append(0L, "key".getBytes(), Integer.toString(partitionLeaderEpoch).getBytes());
+        builder.append(0L, "key".getBytes(), Integer.toString(partitionLeaderEpoch).getBytes());
         builder.close();
 
         partitionLeaderEpoch += 7;
 
         builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
                 TimestampType.CREATE_TIME, 2L, System.currentTimeMillis(), partitionLeaderEpoch);
-        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
+        builder.append(0L, "key".getBytes(), Integer.toString(partitionLeaderEpoch).getBytes());
         builder.close();
 
         partitionLeaderEpoch += 5;
         builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
                 TimestampType.CREATE_TIME, 3L, System.currentTimeMillis(), partitionLeaderEpoch);
-        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
-        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
-        builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
+        builder.append(0L, "key".getBytes(), Integer.toString(partitionLeaderEpoch).getBytes());
+        builder.append(0L, "key".getBytes(), Integer.toString(partitionLeaderEpoch).getBytes());
+        builder.append(0L, "key".getBytes(), Integer.toString(partitionLeaderEpoch).getBytes());
         builder.close();
 
         buffer.flip();

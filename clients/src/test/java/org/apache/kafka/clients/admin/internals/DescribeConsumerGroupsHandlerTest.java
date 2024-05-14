@@ -296,7 +296,7 @@ public class DescribeConsumerGroupsHandlerTest {
     }
 
     private DescribeGroupsResponse buildResponse(Errors error, String protocolType) {
-        DescribeGroupsResponse response = new DescribeGroupsResponse(
+        return new DescribeGroupsResponse(
                 new DescribeGroupsResponseData()
                     .setGroups(singletonList(
                             new DescribedGroup()
@@ -314,7 +314,6 @@ public class DescribeConsumerGroupsHandlerTest {
                                             .setMemberAssignment(ConsumerProtocol.serializeAssignment(
                                                     new Assignment(new ArrayList<>(tps))).array())
                                             )))));
-        return response;
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, ConsumerGroupDescription> handleClassicGroupWithError(
