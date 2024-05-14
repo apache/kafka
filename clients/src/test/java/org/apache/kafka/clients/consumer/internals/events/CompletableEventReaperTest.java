@@ -38,7 +38,7 @@ public class CompletableEventReaperTest {
 
     private final LogContext logContext = new LogContext();
     private final Time time = new MockTime();
-    private final CompletableEventReaper<CompletableApplicationEvent<?>> reaper = new CompletableEventReaper<>(logContext);
+    private final CompletableEventReaper reaper = new CompletableEventReaper(logContext);
 
     @Test
     public void testExpired() {

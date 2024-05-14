@@ -37,14 +37,14 @@ import java.util.function.Consumer;
  * mechanism is used by the {@link AsyncKafkaConsumer} to enforce the timeout provided by the user in its API
  * calls (e.g. {@link AsyncKafkaConsumer#commitSync(Duration)}).
  */
-public class CompletableEventReaper<T extends CompletableEvent<?>> {
+public class CompletableEventReaper {
 
     private final Logger log;
 
     /**
      * List of tracked events that are candidates for expiration or cancellation.
      */
-    private final List<T> tracked;
+    private final List<CompletableEvent<?>> tracked;
 
     public CompletableEventReaper(LogContext logContext) {
         this.log = logContext.logger(CompletableEventReaper.class);
@@ -56,7 +56,7 @@ public class CompletableEventReaper<T extends CompletableEvent<?>> {
      *
      * @param event Event to track
      */
-    public void add(T event) {
+    public void add(CompletableEvent<?> event) {
         tracked.add(Objects.requireNonNull(event, "Event to track must be non-null"));
     }
 

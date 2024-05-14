@@ -20,7 +20,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -55,7 +55,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private final Time time;
     private final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
-    private final CompletableEventReaper<CompletableApplicationEvent<?>> applicationEventReaper;
+    private final CompletableEventReaper applicationEventReaper;
     private final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier;
     private final Supplier<NetworkClientDelegate> networkClientDelegateSupplier;
     private final Supplier<RequestManagers> requestManagersSupplier;
@@ -77,7 +77,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.time = time;
         this.log = logContext.logger(getClass());
         this.applicationEventQueue = applicationEventQueue;
-        this.applicationEventReaper = new CompletableEventReaper<>(logContext);
+        this.applicationEventReaper = new CompletableEventReaper(logContext);
         this.applicationEventProcessorSupplier = applicationEventProcessorSupplier;
         this.networkClientDelegateSupplier = networkClientDelegateSupplier;
         this.requestManagersSupplier = requestManagersSupplier;
@@ -163,8 +163,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         for (ApplicationEvent event : events) {
             try {
-                if (event instanceof CompletableApplicationEvent)
-                    applicationEventReaper.add((CompletableApplicationEvent<?>) event);
+                if (event instanceof CompletableEvent)
+                    applicationEventReaper.add((CompletableEvent<?>) event);
 
                 applicationEventProcessor.process(event);
             } catch (Throwable t) {
