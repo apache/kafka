@@ -33,6 +33,7 @@ import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
@@ -1203,7 +1204,13 @@ public class ConsumerGroup implements Group {
                 .setClientHost(classicGroupMember.clientHost())
                 .setSubscribedTopicNames(subscription.topics())
                 .setAssignedPartitions(partitions)
-                .setSupportedClassicProtocols(classicGroupMember.supportedProtocols())
+                .setClassicMemberMetadata(
+                    new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                        .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())
+                        .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                            classicGroupMember.supportedProtocols()
+                        ))
+                )
                 .build();
             consumerGroup.updateTargetAssignment(newMember.memberId(), new Assignment(partitions));
             consumerGroup.updateMember(newMember);

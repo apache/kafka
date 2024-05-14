@@ -834,7 +834,6 @@ public class GroupMetadataManager {
                 logContext,
                 time,
                 metrics,
-                consumerGroupSessionTimeoutMs,
                 metadataImage
             );
         } catch (SchemaException e) {
@@ -1481,6 +1480,7 @@ public class GroupMetadataManager {
         final List<Record> records = new ArrayList<>();
         final String groupId = request.groupId();
         final String instanceId = request.groupInstanceId();
+        final int sessionTimeoutMs = request.sessionTimeoutMs();
         final JoinGroupRequestProtocolCollection protocols = request.protocols();
 
         String memberId = request.memberId();
@@ -1560,7 +1560,11 @@ public class GroupMetadataManager {
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscription.topics()))
             .setClientId(context.clientId())
             .setClientHost(context.clientAddress.toString())
-            .setSupportedClassicProtocols(protocols)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(sessionTimeoutMs)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+            )
             .build();
 
         boolean bumpGroupEpoch = hasMemberSubscriptionChanged(
@@ -1647,7 +1651,7 @@ public class GroupMetadataManager {
         CompletableFuture<Void> appendFuture = new CompletableFuture<>();
         appendFuture.whenComplete((__, t) -> {
             if (t == null) {
-                scheduleConsumerGroupSessionTimeout(groupId, response.memberId(), request.sessionTimeoutMs());
+                scheduleConsumerGroupSessionTimeout(groupId, response.memberId(), sessionTimeoutMs);
                 // The sync timeout ensures that the member send sync request within the rebalance timeout.
                 scheduleConsumerGroupSyncTimeout(groupId, response.memberId(), request.rebalanceTimeoutMs());
 
