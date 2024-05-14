@@ -211,7 +211,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         return partitionMovements.isSticky();
     }
 
-    public Map<TopicPartition, String> getPartitionsTransferringOwnership() {
+    public Map<TopicPartition, String> partitionsTransferringOwnership() {
         return partitionsTransferringOwnership;
     }
 
