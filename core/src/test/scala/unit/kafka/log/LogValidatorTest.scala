@@ -458,6 +458,9 @@ class LogValidatorTest {
       new SimpleRecord(timestampSeq(1), "there".getBytes),
       new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
 
+    // V2 has single batch, and other versions has many single-record batches
+    assertEquals(if (magic >= RecordBatch.MAGIC_VALUE_V2) 1 else 3, records.batches().asScala.size)
+
     val validatingResults = new LogValidator(records,
       topicPartition,
       time,
@@ -497,10 +500,8 @@ class LogValidatorTest {
     assertEquals(now + 1, validatingResults.maxTimestampMs,
       s"Max timestamp should be ${now + 1}")
 
-    // V2 has single batch, and other versions has many single-record batches
-    assertEquals(if (magic >= RecordBatch.MAGIC_VALUE_V2) 1 else 3, records.batches().asScala.size)
-    // Both V2 and V1 has single batch in the record when compression is enable, and hence their shallow OffsetOfMaxTimestamp
-    // is the last offset of the single batch
+    // Both V2 and V1 has single batch in the validated records when compression is enable, and hence their shallow
+    // OffsetOfMaxTimestamp is the last offset of the single batch
     assertEquals(1, validatedRecords.batches().asScala.size)
     assertEquals(2, validatingResults.shallowOffsetOfMaxTimestamp)
     assertTrue(validatingResults.messageSizeMaybeChanged,
