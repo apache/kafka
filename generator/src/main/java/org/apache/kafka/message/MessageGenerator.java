@@ -23,6 +23,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -165,7 +167,7 @@ public final class MessageGenerator {
     /**
      * The Jackson serializer we use for JSON objects.
      */
-    static final ObjectMapper JSON_SERDE;
+    public static final ObjectMapper JSON_SERDE;
 
     static {
         JSON_SERDE = new ObjectMapper();
@@ -174,6 +176,7 @@ public final class MessageGenerator {
         JSON_SERDE.configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true);
         JSON_SERDE.configure(JsonParser.Feature.ALLOW_COMMENTS, true);
         JSON_SERDE.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
+        JSON_SERDE.registerModule(new Jdk8Module());
     }
 
     private static List<TypeClassGenerator> createTypeClassGenerators(String packageName,
@@ -272,7 +275,7 @@ public final class MessageGenerator {
         System.out.printf("MessageGenerator: processed %d Kafka message JSON files(s).%n", numProcessed);
     }
 
-    static String capitalizeFirst(String string) {
+    public static String capitalizeFirst(String string) {
         if (string.isEmpty()) {
             return string;
         }
