@@ -12269,6 +12269,7 @@ public class GroupMetadataManagerTest {
             syncResult.syncFuture.get()
         );
         context.assertNoSyncTimeout(groupId, memberId);
+//        context.assertSessionTimeout(groupId, memberId, 5000);
     }
 
     private void testClassicGroupSyncToConsumerGroup(

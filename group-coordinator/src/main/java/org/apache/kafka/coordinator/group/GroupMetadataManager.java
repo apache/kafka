@@ -4037,6 +4037,7 @@ public class GroupMetadataManager {
         );
 
         cancelConsumerGroupSyncTimeout(groupId, memberId);
+//        scheduleConsumerGroupSessionTimeout(groupId, memberId, member.classicMemberSessionTimeout());
 
         byte[] assignment = ConsumerProtocol.serializeAssignment(
             new ConsumerPartitionAssignor.Assignment(toTopicPartitionList(member.assignedPartitions(), metadataImage.topics())),
