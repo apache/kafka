@@ -30,7 +30,7 @@
         // allow introducing stable naming for subtopologies in the future.
         { "name": "Subtopology", "type": "string", "versions": "0+",
           "about": "String to uniquely identify the sub-topology. Deterministically generated from the topology" },
-        { "name": "Partitions", "type": "int32", "versions": "0+",
+        { "name": "PartitionCount", "type": "int32", "versions": "0+",
           "about": "The number of partitions expected for all source topics and changelog topics." },
         { "name": "SourceTopics", "type": "[]string", "versions": "0+",
           "about": "The topics the topology reads from." },
