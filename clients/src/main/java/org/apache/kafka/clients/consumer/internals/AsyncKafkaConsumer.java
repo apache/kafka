@@ -78,6 +78,7 @@ import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -137,7 +138,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshC
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
-import static org.apache.kafka.common.utils.Utils.join;
 import static org.apache.kafka.common.utils.Utils.swallow;
 
 /**
@@ -868,6 +868,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     return position.offset;
 
                 updateFetchPositions(timer);
+                timer.update();
+                wakeupTrigger.maybeTriggerWakeup();
             } while (timer.notExpired());
 
             throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the position " +
@@ -1451,7 +1453,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // See the ApplicationEventProcessor.process() method that handles this event for more detail.
             applicationEventHandler.add(new AssignmentChangeEvent(subscriptions.allConsumed(), time.milliseconds()));
 
-            log.info("Assigned to partition(s): {}", join(partitions, ", "));
+            log.info("Assigned to partition(s): {}", partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+
             if (subscriptions.assignFromUser(new HashSet<>(partitions)))
                 applicationEventHandler.add(new NewTopicsMetadataUpdateRequestEvent());
         } finally {
@@ -1557,7 +1560,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             fetchBuffer.awaitNotEmpty(pollTimer);
         } catch (InterruptException e) {
-            log.trace("Timeout during fetch", e);
+            log.trace("Interrupt during fetch", e);
+            throw e;
         } finally {
             timer.update(pollTimer.currentTimeMs());
             wakeupTrigger.clearTask();
@@ -1589,7 +1593,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * Set the fetch position to the committed position (if there is one)
      * or reset it using the offset reset policy the user has configured.
      *
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws AuthenticationException If authentication fails. See the exception for more details
      * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
      *             defined
      * @return true iff the operation completed without timing out
@@ -1616,12 +1620,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // If there are partitions still needing a position and a reset policy is defined,
             // request reset using the default policy. If no reset strategy is defined and there
             // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
-            //
-            // Note: this will *not* initialize the position for any partitions that are in the process
-            // of being assigned and awaiting ConsumerRebalanceListener callbacks. We don't want to reset
-            // positions until the partition has been fully assigned *and* we want to wait until
-            // initWithCommittedOffsetsIfNeeded has had a chance to look up the partition's committed
-            // offset, if applicable.
             subscriptions.resetInitializingPositions();
 
             // Reset positions using partition offsets retrieved from the leader, for any partitions
@@ -1662,12 +1660,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 new FetchCommittedOffsetsEvent(
                     initializingPartitions,
                     calculateDeadlineMs(timer));
+            wakeupTrigger.setActiveTask(event.future());
             final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event);
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
         } catch (TimeoutException e) {
             log.error("Couldn't refresh committed offsets before timeout expired");
             return false;
+        } finally {
+            wakeupTrigger.clearTask();
         }
     }
 
@@ -1800,7 +1801,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
 
                 fetchBuffer.retainAll(currentTopicPartitions);
-                log.info("Subscribed to topic(s): {}", join(topics, ", "));
+                log.info("Subscribed to topic(s): {}", String.join(", ", topics));
                 if (subscriptions.subscribe(new HashSet<>(topics), listener))
                     metadata.requestUpdateForNewTopics();
 

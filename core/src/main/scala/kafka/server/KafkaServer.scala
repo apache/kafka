@@ -323,7 +323,8 @@ class KafkaServer(
 
         if (config.migrationEnabled) {
           kraftControllerNodes = QuorumConfig.voterConnectionsToNodes(
-            QuorumConfig.parseVoterConnections(config.quorumVoters)).asScala
+            QuorumConfig.parseVoterConnections(config.quorumVoters)
+          ).asScala
         } else {
           kraftControllerNodes = Seq.empty
         }
@@ -427,8 +428,7 @@ class KafkaServer(
           logger.info("Successfully deleted local metadata log. It will be re-created.")
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
-          val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
-            QuorumConfig.parseVoterConnections(config.quorumVoters))
+          val quorumVoters = QuorumConfig.parseVoterConnections(config.quorumVoters)
           raftManager = new KafkaRaftManager[ApiMessageAndVersion](
             metaPropsEnsemble.clusterId().get(),
             config,
@@ -438,10 +438,10 @@ class KafkaServer(
             time,
             metrics,
             threadNamePrefix,
-            controllerQuorumVotersFuture,
+            CompletableFuture.completedFuture(quorumVoters),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
-          val controllerNodes = QuorumConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
+          val controllerNodes = QuorumConfig.voterConnectionsToNodes(quorumVoters).asScala
           val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
           val brokerToQuorumChannelManager = new NodeToControllerChannelManagerImpl(
             controllerNodeProvider = quorumControllerNodeProvider,
@@ -541,9 +541,17 @@ class KafkaServer(
             }.toMap
         }
 
-        val fetchManager = new FetchManager(Time.SYSTEM,
-          new FetchSessionCache(config.maxIncrementalFetchSessionCacheSlots,
-            KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS))
+        // The FetchSessionCache is divided into config.numIoThreads shards, each responsible
+        // for Math.max(1, shardNum * sessionIdRange) <= sessionId < (shardNum + 1) * sessionIdRange
+        val sessionIdRange = Int.MaxValue / NumFetchSessionCacheShards
+        val fetchSessionCacheShards = (0 until NumFetchSessionCacheShards)
+          .map(shardNum => new FetchSessionCacheShard(
+            config.maxIncrementalFetchSessionCacheSlots / NumFetchSessionCacheShards,
+            KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS,
+            sessionIdRange,
+            shardNum
+          ))
+        val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
 
         // Start RemoteLogManager before broker start serving the requests.
         remoteLogManagerOpt.foreach { rlm =>

@@ -169,4 +169,24 @@ public class ConnectUtilsTest {
         assertEquals(expectedClientIdBase, actualClientIdBase);
     }
 
+    @Test
+    public void testPatchConfig() {
+        HashMap<String, String> config = new HashMap<>();
+        config.put("unaffected-key", "unaffected-value");
+        config.put("to-be-changed-key", "to-be-changed-value-old");
+        config.put("to-be-deleted-key", "to-be-deleted-value");
+
+        HashMap<String, String> patch = new HashMap<>();
+        patch.put("to-be-changed-key", "to-be-changed-value-new");
+        patch.put("to-be-deleted-key", null);
+        patch.put("to-be-added-key", "to-be-added-value");
+
+        HashMap<String, String> expectedResult = new HashMap<>();
+        expectedResult.put("unaffected-key", "unaffected-value");
+        expectedResult.put("to-be-changed-key", "to-be-changed-value-new");
+        expectedResult.put("to-be-added-key", "to-be-added-value");
+
+        Map<String, String> result = ConnectUtils.patchConfig(config, patch);
+        assertEquals(expectedResult, result);
+    }
 }

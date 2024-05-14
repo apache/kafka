@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.raft;
 
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
+
 public class MockQuorumStateStore implements QuorumStateStore {
     private ElectionState current;
 
@@ -27,6 +30,11 @@ public class MockQuorumStateStore implements QuorumStateStore {
     @Override
     public void writeElectionState(ElectionState update) {
         this.current = update;
+    }
+
+    @Override
+    public Path path() {
+        return FileSystems.getDefault().getPath("mock-file");
     }
 
     @Override

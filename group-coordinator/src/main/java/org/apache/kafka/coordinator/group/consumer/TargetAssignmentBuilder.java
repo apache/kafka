@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -117,6 +118,11 @@ public class TargetAssignmentBuilder {
     private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
 
     /**
+     * The subscription type of the consumer group.
+     */
+    private SubscriptionType subscriptionType;
+
+    /**
      * The existing target assignment.
      */
     private Map<String, Assignment> targetAssignment = Collections.emptyMap();
@@ -189,6 +195,19 @@ public class TargetAssignmentBuilder {
     }
 
     /**
+     * Adds the subscription type in use.
+     *
+     * @param subscriptionType  Subscription type of the group.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withSubscriptionType(
+        SubscriptionType subscriptionType
+    ) {
+        this.subscriptionType = subscriptionType;
+        return this;
+    }
+
+    /**
      * Adds the existing target assignment.
      *
      * @param targetAssignment   The existing target assignment.
@@ -252,14 +271,16 @@ public class TargetAssignmentBuilder {
             if (updatedMemberOrNull == null) {
                 memberSpecs.remove(memberId);
             } else {
-                ConsumerGroupMember member = members.get(memberId);
-                Assignment assignment;
+                Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+
                 // A new static member joins and needs to replace an existing departed one.
-                if (member == null && staticMembers.containsKey(updatedMemberOrNull.instanceId())) {
-                    assignment = targetAssignment.getOrDefault(staticMembers.get(updatedMemberOrNull.instanceId()), Assignment.EMPTY);
-                } else {
-                    assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+                if (updatedMemberOrNull.instanceId() != null) {
+                    String previousMemberId = staticMembers.get(updatedMemberOrNull.instanceId());
+                    if (previousMemberId != null && !previousMemberId.equals(memberId)) {
+                        assignment = targetAssignment.getOrDefault(previousMemberId, Assignment.EMPTY);
+                    }
                 }
+
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                     updatedMemberOrNull,
                     assignment,
@@ -279,7 +300,7 @@ public class TargetAssignmentBuilder {
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
-            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs)),
+            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs), subscriptionType),
             new SubscribedTopicMetadata(topicMetadataMap)
         );
 

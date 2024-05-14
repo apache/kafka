@@ -21,24 +21,25 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 public interface StateUpdater {
 
-    class ExceptionAndTasks {
-        private final Set<Task> tasks;
+    class ExceptionAndTask {
+        private final Task task;
         private final RuntimeException exception;
 
-        public ExceptionAndTasks(final Set<Task> tasks, final RuntimeException exception) {
-            this.tasks = Objects.requireNonNull(tasks);
+        public ExceptionAndTask(final RuntimeException exception, final Task task) {
             this.exception = Objects.requireNonNull(exception);
+            this.task = Objects.requireNonNull(task);
         }
 
-        public Set<Task> getTasks() {
-            return Collections.unmodifiableSet(tasks);
+        public Task task() {
+            return task;
         }
 
         public RuntimeException exception() {
@@ -48,14 +49,66 @@ public interface StateUpdater {
         @Override
         public boolean equals(final Object o) {
             if (this == o) return true;
-            if (!(o instanceof ExceptionAndTasks)) return false;
-            final ExceptionAndTasks that = (ExceptionAndTasks) o;
-            return tasks.equals(that.tasks) && exception.equals(that.exception);
+            if (!(o instanceof ExceptionAndTask)) return false;
+            final ExceptionAndTask that = (ExceptionAndTask) o;
+            return task.id().equals(that.task.id()) && exception.equals(that.exception);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(tasks, exception);
+            return Objects.hash(task, exception);
+        }
+
+        @Override
+        public String toString() {
+            return "ExceptionAndTask{" +
+                "task=" + task.id() +
+                ", exception=" + exception +
+                '}';
+        }
+    }
+
+    class RemovedTaskResult {
+
+        private final Task task;
+        private final Optional<RuntimeException> exception;
+
+        public RemovedTaskResult(final Task task) {
+            this(task, null);
+        }
+
+        public RemovedTaskResult(final Task task, final RuntimeException exception) {
+            this.task = Objects.requireNonNull(task);
+            this.exception = Optional.ofNullable(exception);
+        }
+
+        public Task task() {
+            return task;
+        }
+
+        public Optional<RuntimeException> exception() {
+            return exception;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) return true;
+            if (!(o instanceof RemovedTaskResult)) return false;
+            final RemovedTaskResult that = (RemovedTaskResult) o;
+            return Objects.equals(task.id(), that.task.id()) && Objects.equals(exception, that.exception);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(task, exception);
+        }
+
+        @Override
+        public String toString() {
+            return "RemovedTaskResult{" +
+                "task=" + task.id() +
+                ", exception=" + exception +
+                '}';
         }
     }
 
@@ -95,6 +148,17 @@ public interface StateUpdater {
      * @param taskId ID of the task to remove
      */
     void remove(final TaskId taskId);
+
+    /**
+     * Removes a task (active or standby) from the state updater.
+     *
+     * This method does not block until the removed task is removed from the state updater. But it returns a future on
+     * which processing can be blocked. The task to remove is removed from the updating tasks, paused tasks,
+     * restored tasks, or failed tasks.
+     *
+     * @param taskId ID of the task to remove
+     */
+    CompletableFuture<RemovedTaskResult> removeWithFuture(final TaskId taskId);
 
     /**
      * Wakes up the state updater if it is currently dormant, to check if a paused task should be resumed.
@@ -142,7 +206,7 @@ public interface StateUpdater {
      *
      * @return list of failed tasks and the corresponding exceptions
      */
-    List<ExceptionAndTasks> drainExceptionsAndFailedTasks();
+    List<ExceptionAndTask> drainExceptionsAndFailedTasks();
 
     /**
      * Checks if the state updater has any failed tasks that should be returned to the StreamThread
@@ -161,6 +225,7 @@ public interface StateUpdater {
      *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
      *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
      *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     *   <li>{@link StateUpdater#removeWithFuture(org.apache.kafka.streams.processor.TaskId)}</li>
      * </ul>
      *
      * @return set of all tasks managed by the state updater
@@ -187,6 +252,7 @@ public interface StateUpdater {
      *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
      *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
      *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     *   <li>{@link StateUpdater#removeWithFuture(org.apache.kafka.streams.processor.TaskId)}</li>
      * </ul>
      *
      * @return {@code true} if the state updater restores active tasks, {@code false} otherwise

@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
@@ -25,6 +24,7 @@ import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * The group coordinator configurations.
@@ -53,7 +53,8 @@ public class GroupCoordinatorConfig {
     public static final boolean NEW_GROUP_COORDINATOR_ENABLE_DEFAULT = false;
 
     public final static String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG = "group.coordinator.rebalance.protocols";
-    public final static String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols. Supported protocols: " + Utils.join(Group.GroupType.values(), ",") + ". " +
+    public final static String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols. Supported protocols: " +
+            Arrays.stream(Group.GroupType.values()).map(Group.GroupType::toString).collect(Collectors.joining(",")) + ". " +
             "The " + Group.GroupType.CONSUMER + " rebalance protocol is in early access and therefore must not be used in production.";
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = Collections.singletonList(Group.GroupType.CLASSIC.toString());
 
@@ -148,9 +149,10 @@ public class GroupCoordinatorConfig {
     public static final String OFFSET_COMMIT_TIMEOUT_MS_DOC = "Offset commit will be delayed until all replicas for the offsets topic receive the commit " +
             "or this timeout is reached. This is similar to the producer request timeout.";
 
+    @Deprecated
     public static final String OFFSET_COMMIT_REQUIRED_ACKS_CONFIG = "offsets.commit.required.acks";
     public static final short OFFSET_COMMIT_REQUIRED_ACKS_DEFAULT = -1;
-    public static final String OFFSET_COMMIT_REQUIRED_ACKS_DOC = "The required acks before the commit can be accepted. In general, the default (-1) should not be overridden.";
+    public static final String OFFSET_COMMIT_REQUIRED_ACKS_DOC = "DEPRECATED: The required acks before the commit can be accepted. In general, the default (-1) should not be overridden.";
 
     /**
      * The timeout used to wait for a new member in milliseconds.

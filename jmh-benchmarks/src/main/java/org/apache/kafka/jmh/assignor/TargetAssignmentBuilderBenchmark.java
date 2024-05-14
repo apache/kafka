@@ -52,6 +52,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
+
 @State(Scope.Benchmark)
 @Fork(value = 1)
 @Warmup(iterations = 5)
@@ -183,7 +185,7 @@ public class TargetAssignmentBuilderBenchmark {
                 Collections.emptyMap()
             ));
         }
-        assignmentSpec = new AssignmentSpec(members);
+        assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
     }
 
     @Benchmark
