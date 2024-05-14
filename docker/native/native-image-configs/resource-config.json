@@ -29,6 +29,10 @@
   }, {
     "pattern":"\\Qlinux/aarch64/libzstd-jni-1.5.5-6.so\\E"
   }, {
+    "pattern":"\\Qlinux/amd64/libzstd-jni-1.5.5-11.so\\E"
+  }, {
+    "pattern":"\\Qlinux/aarch64/libzstd-jni-1.5.5-11.so\\E"
+  }, {
     "pattern":"\\Qnet/jpountz/util/linux/amd64/liblz4-java.so\\E"
   }, {
     "pattern":"\\Qnet/jpountz/util/linux/aarch64/liblz4-java.so\\E"
