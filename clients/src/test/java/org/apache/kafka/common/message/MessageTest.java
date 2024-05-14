@@ -915,6 +915,8 @@ public final class MessageTest {
     @Test
     public void testProduceResponseVersions() throws Exception {
         String topicName = "topic";
+        Uuid topicId = Uuid.fromString("klZ9sa2rSvig6QpgGXzALT");
+
         int partitionIndex = 0;
         short errorCode = Errors.INVALID_TOPIC_EXCEPTION.code();
         long baseOffset = 12L;
@@ -971,12 +973,11 @@ public final class MessageTest {
                 responseData.setThrottleTimeMs(0);
             }
 
-            if (version <= 11) {
-                responseData.responses().iterator().next().setName(topicName);
-            }
 
             if (version >= 12) {
-                responseData.responses().iterator().next().setTopicId(Uuid.randomUuid());
+                responseData.responses().iterator().next().setTopicId(topicId);
+            } else {
+                responseData.responses().iterator().next().setName(topicName);
             }
 
             if (version >= 3 && version <= 4) {

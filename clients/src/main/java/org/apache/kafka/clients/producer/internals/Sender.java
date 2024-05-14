@@ -936,7 +936,8 @@ public class Sender implements Runnable {
         return batches.stream()
                 .collect(Collectors.toMap(
                         b -> b.topicPartition.topic(),
-                        b -> metadata.topicIds().getOrDefault(b.topicPartition.topic(), Uuid.ZERO_UUID))
+                        b -> metadata.topicIds().getOrDefault(b.topicPartition.topic(), Uuid.ZERO_UUID),
+                        (existing, replacement) -> replacement)
                 );
     }
 

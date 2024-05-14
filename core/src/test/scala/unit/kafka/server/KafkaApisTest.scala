@@ -2458,7 +2458,7 @@ class KafkaApisTest extends Logging {
   @Test
   def shouldReplaceProducerFencedWithInvalidProducerEpochInProduceResponse(): Unit = {
     val topic = "topic"
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.fromString("d2Gg8tgzJa2JYK2eTHUapg")
     val tp = new TopicIdPartition(topicId, 0, "topic")
     addTopicToMetadataCache(topic, numPartitions = 2, topicId = topicId)
 
@@ -2519,7 +2519,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testProduceResponseContainsNewLeaderOnNotLeaderOrFollower(): Unit = {
     val topic = "topic"
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.fromString("d2Gg8tgzJa2JYK2eTHUapg")
     addTopicToMetadataCache(topic, numPartitions = 2, numBrokers = 3, topicId = topicId)
 
     for (version <- 10 to ApiKeys.PRODUCE.latestVersion) {
@@ -2590,7 +2590,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testProduceResponseReplicaManagerLookupErrorOnNotLeaderOrFollower(): Unit = {
     val topic = "topic"
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.fromString("d2Gg8tgzJa2JYK2eTHUapg")
     addTopicToMetadataCache(topic, numPartitions = 2, numBrokers = 3, topicId = topicId)
 
     for (version <- 10 to ApiKeys.PRODUCE.latestVersion) {
@@ -2657,7 +2657,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testProduceResponseMetadataLookupErrorOnNotLeaderOrFollower(): Unit = {
     val topic = "topic"
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.fromString("d2Gg8tgzJa2JYK2eTHUapg")
     metadataCache = mock(classOf[ZkMetadataCache])
 
     for (version <- 10 to ApiKeys.PRODUCE.latestVersion) {
@@ -2669,10 +2669,11 @@ class KafkaApisTest extends Logging {
       val tp = new TopicIdPartition(topicId, 0, topic)
 
       val topicProduceData = new ProduceRequestData.TopicProduceData()
-        .setName(tp.topic)
 
       if (version >= 12 ) {
         topicProduceData.setTopicId(topicId)
+      } else {
+        topicProduceData.setName(tp.topic)
       }
 
       val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
@@ -2707,8 +2708,8 @@ class KafkaApisTest extends Logging {
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
         any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
       when(metadataCache.contains(tp.topicPartition())).thenAnswer(_ => true)
-      when(metadataCache.getTopicName(any())).thenReturn(Some(topicProduceData.name()))
-      when(metadataCache.getTopicId(any())).thenReturn(topicProduceData.topicId())
+      when(metadataCache.getTopicName(tp.topicId())).thenReturn(Some(tp.topic()))
+      when(metadataCache.getTopicId(tp.topic())).thenReturn(tp.topicId())
       when(metadataCache.getPartitionInfo(tp.topic(), tp.partition())).thenAnswer(_ => Option.empty)
       when(metadataCache.getAliveBrokerNode(any(), any())).thenReturn(Option.empty)
       kafkaApis = createKafkaApis()
@@ -2732,7 +2733,8 @@ class KafkaApisTest extends Logging {
     val topic = "topic"
     val transactionalId = "txn1"
 
-    val tp = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
+    val topicId = Uuid.fromString("d2Gg8tgzJa2JYK2eTHUapg")
+    val tp = new TopicIdPartition(topicId, 0, "topic")
     addTopicToMetadataCache(topic, numPartitions = 2, topicId = tp.topicId())
 
     for (version <- 3 to ApiKeys.PRODUCE.latestVersion) {
@@ -2913,7 +2915,7 @@ class KafkaApisTest extends Logging {
   def shouldRespondWithUnsupportedMessageFormatForBadPartitionAndNoErrorsForGoodPartition(): Unit = {
     val tp1 = new TopicPartition("t", 0)
     val tp2 = new TopicPartition("t1", 0)
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.fromString("d2Gg8tgzJa2JYK2eTHUapg")
     val (_, request) = createWriteTxnMarkersRequest(asList(tp1, tp2))
     val expectedErrors = Map(tp1 -> Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, tp2 -> Errors.NONE).asJava
 
@@ -3046,7 +3048,7 @@ class KafkaApisTest extends Logging {
   def shouldRespondWithUnknownTopicOrPartitionForBadPartitionAndNoErrorsForGoodPartition(): Unit = {
     val tp1 = new TopicPartition("t", 0)
     val tp2 = new TopicPartition("t1", 0)
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.fromString("d2Gg8tgzJa2JYK2eTHUapg")
     val (_, request) = createWriteTxnMarkersRequest(asList(tp1, tp2))
     val expectedErrors = Map(tp1 -> Errors.UNKNOWN_TOPIC_OR_PARTITION, tp2 -> Errors.NONE).asJava
 
@@ -3131,8 +3133,8 @@ class KafkaApisTest extends Logging {
     val foo1 = new TopicPartition("foo", 1)
 
     val topicIds = Map(
-      Topic.GROUP_METADATA_TOPIC_NAME -> Uuid.randomUuid(),
-      "foo" -> Uuid.randomUuid())
+      Topic.GROUP_METADATA_TOPIC_NAME -> Uuid.fromString("JaTH2JYK2ed2GzUapg8tgg"),
+      "foo" -> Uuid.fromString("d2Gg8tgzJa2JYK2eTHUapg"))
     val allPartitions = List(
       offset0,
       offset1,

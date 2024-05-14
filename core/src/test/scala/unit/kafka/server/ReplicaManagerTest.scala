@@ -99,9 +99,9 @@ object ReplicaManagerTest {
 class ReplicaManagerTest {
 
   private val topic = "test-topic"
-  private val topicId = Uuid.fromString("YK2ed2GaTH2JpgzUaJ8tgg");
+  private val topicId = Uuid.fromString("YK2ed2GaTH2JpgzUaJ8tgg")
   private val topicIds = scala.Predef.Map("test-topic" -> topicId)
-  private val topicNames = scala.Predef.Map(topicId -> "test-topic")
+  private val topicNames = topicIds.map(_.swap)
   private val transactionalId = "txn"
   private val time = new MockTime
   private val metrics = new Metrics
@@ -141,7 +141,16 @@ class ReplicaManagerTest {
       callback(Map.empty[TopicPartition, Errors].toMap)
     }
     // make sure metadataCache can map between topic name and id
-    topicNames.foreach { case (topicId, topicName) =>
+    setupMetadataCacheWithTopicIds(topicIds, metadataCache)
+  }
+
+  private def setupMetadataCacheWithTopicIds(topicIds: Map[String, Uuid], metadataCache: MetadataCache): Unit = {
+    val topicNames = topicIds.map(_.swap)
+    when(metadataCache.topicNamesToIds()).thenReturn(topicIds.asJava)
+    when(metadataCache.topicIdsToNames()).thenReturn(topicNames.asJava)
+    when(metadataCache.topicIdInfo()).thenReturn((topicIds.asJava, topicNames.asJava))
+
+    topicIds.foreach { case (topicName, topicId) =>
       when(metadataCache.getTopicId(topicName)).thenReturn(topicId)
     }
   }
@@ -3034,10 +3043,6 @@ class ReplicaManagerTest {
       result.fire(response.get)
     }
 
-    topicNames.foreach { case (topicId, topicName) =>
-      when(replicaManager.metadataCache.getTopicId(topicName)).thenReturn(topicId)
-    }
-
     replicaManager.appendRecords(
       timeout = 1000,
       requiredAcks = requiredAcks,
@@ -3053,7 +3058,6 @@ class ReplicaManagerTest {
   private def handleProduceAppendToMultipleTopics(replicaManager: ReplicaManager,
                                                   entriesToAppend: Map[TopicPartition, MemoryRecords],
                                                   transactionalId: String,
-                                                  origin: AppendOrigin = AppendOrigin.CLIENT,
                                                   requiredAcks: Short = -1): CallbackResult[Map[TopicIdPartition, PartitionResponse]] = {
     val result = new CallbackResult[Map[TopicIdPartition, PartitionResponse]]()
     def appendCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
@@ -3061,9 +3065,6 @@ class ReplicaManagerTest {
       result.fire(responses)
     }
 
-    topicNames.foreach { case (topicId, topicName) =>
-      when(replicaManager.metadataCache.getTopicId(topicName)).thenReturn(topicId)
-    }
     replicaManager.handleProduceAppend(
       timeout = 1000,
       requiredAcks = requiredAcks,
@@ -3090,10 +3091,6 @@ class ReplicaManagerTest {
       val response = responses.get(topicIdPartition)
       assertTrue(response.isDefined)
       result.fire(response.get)
-    }
-
-    topicNames.foreach { case (topicId, topicName) =>
-      when(replicaManager.metadataCache.getTopicId(topicName)).thenReturn(topicId)
     }
 
     val entriesPerPartition = Map(partition -> records)
@@ -3333,9 +3330,6 @@ class ReplicaManagerTest {
     val aliveBrokers = aliveBrokerIds.map(brokerId => new Node(brokerId, s"host$brokerId", brokerId))
     brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
 
-    when(metadataCache.topicIdInfo()).thenReturn((topicIds.asJava, topicNames.asJava))
-    when(metadataCache.topicNamesToIds()).thenReturn(topicIds.asJava)
-    when(metadataCache.topicIdsToNames()).thenReturn(topicNames.asJava)
     when(metadataCache.metadataVersion()).thenReturn(config.interBrokerProtocolVersion)
     mockGetAliveBrokerFunctions(metadataCache, aliveBrokers)
     val mockProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](

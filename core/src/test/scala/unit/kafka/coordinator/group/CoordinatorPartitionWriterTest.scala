@@ -99,7 +99,7 @@ class CoordinatorPartitionWriterTest {
       Collections.emptyMap(),
       new Properties()
     )))
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.fromString("JkYAB4AQe905orYDTvBGXw")
     when(replicaManager.getTopicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
 
     val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =

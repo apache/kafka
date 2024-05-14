@@ -92,7 +92,7 @@ class GroupCoordinatorTest {
   private val protocolSuperset = List((protocolName, metadata), ("roundrobin", metadata))
   private val requireStable = true
   private var groupPartitionId: Int = -1
-  val groupMetadataTopicId = Uuid.randomUuid()
+  val groupMetadataTopicId = Uuid.fromString("JaTH2JYK2ed2GzUapg8tgg")
 
   // we use this string value since its hashcode % #.partitions is different
   private val otherGroupId = "otherGroup"

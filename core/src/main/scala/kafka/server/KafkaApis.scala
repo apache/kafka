@@ -608,13 +608,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     val nonExistingTopicResponses = mutable.Map[TopicIdPartition, PartitionResponse]()
     val invalidRequestResponses = mutable.Map[TopicIdPartition, PartitionResponse]()
     val authorizedRequestInfo = mutable.Map[TopicIdPartition, MemoryRecords]()
-    val partitionDatas = new mutable.ArrayBuffer[(TopicIdPartition, ProduceRequestData.PartitionProduceData)]
+    val topicIdToPartitionData = new mutable.ArrayBuffer[(TopicIdPartition, ProduceRequestData.PartitionProduceData)]
 
     produceRequest.data.topicData.forEach { topic =>
       topic.partitionData.forEach { partition =>
         val topicIdIsMissing = topic.topicId == null || topic.topicId == Uuid.ZERO_UUID
-
-        val topicName: String = metadataCache.getTopicName(topic.topicId).getOrElse(topic.name)
+        val topicName: String = if (topicIdIsMissing) topic.name else metadataCache.getTopicName(topic.topicId).getOrElse(topic.name)
         val topicId: Uuid = if (topicIdIsMissing) metadataCache.getTopicId(topicName)  else topic.topicId
 
         val topicPartition = new TopicPartition(topicName, partition.index())
@@ -623,13 +622,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         else if (!metadataCache.contains(topicPartition))
           nonExistingTopicResponses += new TopicIdPartition(topicId, topicPartition) -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
         else
-          partitionDatas += new TopicIdPartition(topicId, topicPartition) -> partition
+          topicIdToPartitionData += new TopicIdPartition(topicId, topicPartition) -> partition
       }
     }
     // cache the result to avoid redundant authorization calls
-    val authorizedTopics = authHelper.filterByAuthorized(request.context, WRITE, TOPIC, partitionDatas)(_._1.topic)
+    val authorizedTopics = authHelper.filterByAuthorized(request.context, WRITE, TOPIC, topicIdToPartitionData)(_._1.topic)
 
-    partitionDatas.foreach { case (topicIdPartition, partition) =>
+    topicIdToPartitionData.foreach { case (topicIdPartition, partition) =>
       // This caller assumes the type is MemoryRecords and that is true on current serialization
       // We cast the type to avoid causing big change to code base.
       // https://issues.apache.org/jira/browse/KAFKA-10698

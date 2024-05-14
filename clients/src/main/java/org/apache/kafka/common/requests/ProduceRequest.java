@@ -49,9 +49,12 @@ public class ProduceRequest extends AbstractRequest {
 
         final short minVersion;
         final short maxVersion;
-        if (magic < RecordBatch.MAGIC_VALUE_V2 || canNotSupportTopicId(data)) {
+        if (magic < RecordBatch.MAGIC_VALUE_V2) {
             minVersion = 2;
             maxVersion = 2;
+        } else if (canNotSupportTopicId(data)) {
+            minVersion = 3;
+            maxVersion = 11;
         } else {
             minVersion = 3;
             maxVersion = ApiKeys.PRODUCE.latestVersion();
@@ -60,7 +63,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     private static boolean canNotSupportTopicId(ProduceRequestData data) {
-        return data.topicData().stream().anyMatch(d -> d.topicId() == Uuid.ZERO_UUID);
+        return data.topicData().stream().anyMatch(d -> d.topicId() == null || d.topicId() == Uuid.ZERO_UUID);
     }
 
     public static Builder forCurrentMagic(ProduceRequestData data) {

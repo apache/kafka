@@ -445,7 +445,7 @@ public class RequestResponseTest {
 
     @Test
     public void testProduceRequestPartitionSize() {
-        Uuid topicId = Uuid.randomUuid();
+        Uuid topicId = Uuid.fromString("e9TvBGX5JkYAB0AQorYD4w");
         TopicIdPartition tp0 = new TopicIdPartition(topicId, 0, "test");
         TopicIdPartition tp1 = new TopicIdPartition(topicId, 1, "test");
         MemoryRecords records0 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
@@ -2368,7 +2368,8 @@ public class RequestResponseTest {
     @SuppressWarnings("deprecation")
     private ProduceResponse createProduceResponse() {
         Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        responseData.put(new TopicIdPartition(Uuid.randomUuid(), 0, "test"), new ProduceResponse.PartitionResponse(Errors.NONE,
+        Uuid topicId = Uuid.fromString("0AQorYD4we9TvBGX5JkYAB");
+        responseData.put(new TopicIdPartition(topicId, 0, "test"), new ProduceResponse.PartitionResponse(Errors.NONE,
                 10000, RecordBatch.NO_TIMESTAMP, 100));
         return new ProduceResponse(responseData, 0);
     }
@@ -2376,7 +2377,8 @@ public class RequestResponseTest {
     @SuppressWarnings("deprecation")
     private ProduceResponse createProduceResponseWithErrorMessage() {
         Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        responseData.put(new TopicIdPartition(Uuid.randomUuid(), 0, "test"), new ProduceResponse.PartitionResponse(Errors.NONE,
+        Uuid topicId = Uuid.fromString("0AQorYD4we9TvBGX5JkYAB");
+        responseData.put(new TopicIdPartition(topicId, 0, "test"), new ProduceResponse.PartitionResponse(Errors.NONE,
                 10000, RecordBatch.NO_TIMESTAMP, 100, singletonList(new ProduceResponse.RecordError(0, "error message")),
                 "global error message"));
         return new ProduceResponse(responseData, 0);

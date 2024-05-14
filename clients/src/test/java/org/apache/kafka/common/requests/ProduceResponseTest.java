@@ -74,7 +74,8 @@ public class ProduceResponseTest {
     @Test
     public void produceResponseVersionTest() {
         Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "test");
+        Uuid topicId = Uuid.fromString("5JkYABorYD4w0AQXe9TvBG");
+        TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, 0, "test");
         responseData.put(topicIdPartition, new ProduceResponse.PartitionResponse(Errors.NONE, 10000, RecordBatch.NO_TIMESTAMP, 100));
         ProduceResponse v0Response = new ProduceResponse(responseData);
         ProduceResponse v1Response = new ProduceResponse(responseData, 10);
@@ -103,7 +104,8 @@ public class ProduceResponseTest {
     @Test
     public void produceResponseRecordErrorsTest() {
         Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), 0, "test");
+        Uuid topicId = Uuid.fromString("4w0AQXe9TvBG5JkYABorYD");
+        TopicIdPartition tp = new TopicIdPartition(topicId, 0, "test");
         ProduceResponse.PartitionResponse partResponse = new ProduceResponse.PartitionResponse(Errors.NONE,
                 10000, RecordBatch.NO_TIMESTAMP, 100,
                 Collections.singletonList(new ProduceResponse.RecordError(3, "Record error")),
