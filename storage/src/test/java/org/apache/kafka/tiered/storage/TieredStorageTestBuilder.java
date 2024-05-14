@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tiered.storage;
 
+import org.apache.kafka.tiered.storage.actions.AlterLogDirAction;
 import org.apache.kafka.tiered.storage.actions.BounceBrokerAction;
 import org.apache.kafka.tiered.storage.actions.ConsumeAction;
 import org.apache.kafka.tiered.storage.actions.CreatePartitionsAction;
@@ -310,6 +311,14 @@ public final class TieredStorageTestBuilder {
                                                     List<Integer> replicaIds) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         actions.add(new ReassignReplicaAction(topicPartition, replicaIds));
+        return this;
+    }
+
+    public TieredStorageTestBuilder alterLogDir(String topic,
+                                                Integer partition,
+                                                int replicaIds) {
+        TopicPartition topicPartition = new TopicPartition(topic, partition);
+        actions.add(new AlterLogDirAction(topicPartition, replicaIds));
         return this;
     }
 

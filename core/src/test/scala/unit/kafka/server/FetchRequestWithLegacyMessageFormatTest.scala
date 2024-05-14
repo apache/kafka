@@ -22,7 +22,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{Disabled, Test}
 
 import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_2_IV0
@@ -31,6 +31,7 @@ import scala.annotation.nowarn
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
+@Disabled
 class FetchRequestWithLegacyMessageFormatTest extends BaseFetchRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {

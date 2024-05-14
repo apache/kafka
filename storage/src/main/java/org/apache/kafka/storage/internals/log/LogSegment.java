@@ -804,6 +804,13 @@ public class LogSegment implements Closeable {
     // Helper method for `deleteIfExists()`
     private Void deleteTypeIfExists(StorageAction<Boolean, IOException> delete, String fileType, File file, boolean logIfMissing) throws IOException {
         try {
+//            try {
+//                Random r = new Random();
+//                int s = r.nextInt( 2000);
+//                Thread.sleep(s);
+//            } catch (InterruptedException e) {
+//                throw new RuntimeException(e);
+//            }
             if (delete.execute())
                 LOGGER.info("Deleted {} {}.", fileType, file.getAbsolutePath());
             else {

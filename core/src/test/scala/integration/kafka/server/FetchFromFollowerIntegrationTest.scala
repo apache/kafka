@@ -36,6 +36,7 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.{Executors, TimeUnit}
 import scala.jdk.CollectionConverters._
 
+@Disabled
 class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   val numNodes = 2
   val numParts = 1

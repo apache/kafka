@@ -232,6 +232,8 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     */
   def pauseCleaningForNonCompactedPartitions(): Iterable[(TopicPartition, UnifiedLog)] = {
     inLock(lock) {
+      System.err.print(s"inp:$inProgress")
+      System.err.flush()
       val deletableLogs = logs.filter {
         case (_, log) => !log.config.compact // pick non-compacted logs
       }.filterNot {
@@ -287,6 +289,17 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    *     will increase the paused count by one.
    */
   def abortAndPauseCleaning(topicPartition: TopicPartition): Unit = {
+    if (topicPartition.equals(new TopicPartition("topicB", 0))) {
+      System.err.print(s"abort $inProgress")
+      val elements = Thread.currentThread.getStackTrace
+      for (i <- 1 until elements.length) {
+        if (i <= 5) {
+          val s = elements(i)
+          System.err.print(s"${s.getFileName}:${s.getLineNumber}")
+          System.err.flush()
+        }
+      }
+    }
     inLock(lock) {
       inProgress.get(topicPartition) match {
         case None =>
@@ -308,6 +321,10 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     *  Each call of this function will undo one pause.
     */
   def resumeCleaning(topicPartitions: Iterable[TopicPartition]): Unit = {
+    topicPartitions.filter(tp => tp.equals(new TopicPartition("topicB", 0))).foreach(t => {
+      System.err.print(s"resumeCleaning:$t")
+      System.err.flush()
+    })
     inLock(lock) {
       topicPartitions.foreach {
         topicPartition =>
