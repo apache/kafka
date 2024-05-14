@@ -82,8 +82,6 @@ public class CompletableEventReaper {
      *                      <em>{@link CompletableEvent#deadlineMs() expiration time}</em>
      */
     public void reap(long currentTimeMs) {
-        log.trace("Reaping expired events");
-
         Consumer<CompletableEvent<?>> expireEvent = event -> {
             long pastDueMs = currentTimeMs - event.deadlineMs();
             TimeoutException error = new TimeoutException(String.format("%s was %s ms past its expiration of %s", event.getClass().getSimpleName(), pastDueMs, event.deadlineMs()));
@@ -103,8 +101,6 @@ public class CompletableEventReaper {
         // Second, remove any events that are already complete, just to make sure we don't hold references. This will
         // include any events that finished successfully as well as any events we just completed exceptionally above.
         tracked.removeIf(e -> e.future().isDone());
-
-        log.trace("Finished reaping expired events");
     }
 
     /**
@@ -126,8 +122,6 @@ public class CompletableEventReaper {
      * @param events Events from a queue that have not yet been tracked that also need to be reviewed
      */
     public void reap(Collection<?> events) {
-        log.trace("Reaping incomplete events");
-
         Objects.requireNonNull(events, "Event queue to reap must be non-null");
 
         Consumer<CompletableEvent<?>> expireEvent = event -> {
@@ -151,8 +145,6 @@ public class CompletableEventReaper {
             .filter(e -> !e.future().isDone())
             .forEach(expireEvent);
         events.clear();
-
-        log.trace("Finished reaping incomplete events");
     }
 
     public int size() {
