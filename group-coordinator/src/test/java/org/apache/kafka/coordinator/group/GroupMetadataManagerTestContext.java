@@ -839,7 +839,7 @@ public class GroupMetadataManagerTestContext {
 
         CompletableFuture<SyncGroupResponseData> responseFuture = new CompletableFuture<>();
 
-        CoordinatorResult<Void, Record> coordinatorResult = groupMetadataManager.classicGroupSyncToClassicGroup(
+        CoordinatorResult<Void, Record> coordinatorResult = groupMetadataManager.classicGroupSync(
             context,
             request,
             responseFuture

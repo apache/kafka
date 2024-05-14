@@ -1203,7 +1203,7 @@ public class GroupMetadataManager {
      * @param member The ConsumerGroupMember.
      */
     private void throwIfMemberDoesNotUseClassicProtocol(ConsumerGroupMember member) {
-        if (member.useClassicProtocol()) {
+        if (!member.useClassicProtocol()) {
             throw new UnknownMemberIdException(
                 String.format("Member %s does not use the classic protocol.", member.memberId())
             );
@@ -1214,17 +1214,19 @@ public class GroupMetadataManager {
      * Validates if the generation id and the protocol type from the request match those of the consumer group.
      *
      * @param group                 The ConsumerGroup.
+     * @param member                The ConsumerGroupMember.
      * @param requestGenerationId   The generation id from the request.
      * @param requestProtocolType   The protocol type from the request.
      * @param requestProtocolName   The protocol name from the request.
      */
     private void throwIfGenerationIdOrProtocolUnmatched(
         ConsumerGroup group,
+        ConsumerGroupMember member,
         int requestGenerationId,
         String requestProtocolType,
         String requestProtocolName
     ) {
-        if (group.groupEpoch() != requestGenerationId) {
+        if (member.memberEpoch() != requestGenerationId) {
             throw Errors.ILLEGAL_GENERATION.exception(
                 String.format("The request generation id %s is not equal to the group epoch %d from the consumer group %s.",
                     requestGenerationId, group.groupEpoch(), group.groupId())
@@ -3881,22 +3883,23 @@ public class GroupMetadataManager {
     ) throws UnknownMemberIdException, GroupIdNotFoundException {
         Group group = groups.get(request.groupId(), Long.MAX_VALUE);
 
-        if (group.isEmpty()) {
+        if (group == null || group.isEmpty()) {
             responseFuture.complete(new SyncGroupResponseData()
                 .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()));
             return EMPTY_RESULT;
         }
 
-        if (group != null && group.type() == CONSUMER) {
-            return classicGroupSyncToConsumerGroup((ConsumerGroup) group, context, request, responseFuture);
+        if (group.type() == CLASSIC) {
+            return classicGroupSyncToClassicGroup((ClassicGroup) group, context, request, responseFuture);
         } else {
-            return classicGroupSyncToClassicGroup(context, request, responseFuture);
+            return classicGroupSyncToConsumerGroup((ConsumerGroup) group, context, request, responseFuture);
         }
     }
 
     /**
      * Handle a SyncGroupRequest to a ClassicGroup.
      *
+     * @param group          The ClassicGroup.
      * @param context        The request context.
      * @param request        The actual SyncGroup request.
      * @param responseFuture The sync group response future.
@@ -3904,21 +3907,13 @@ public class GroupMetadataManager {
      * @return The result that contains records to append if the group metadata manager received assignments.
      */
     public CoordinatorResult<Void, Record> classicGroupSyncToClassicGroup(
+        ClassicGroup group,
         RequestContext context,
         SyncGroupRequestData request,
         CompletableFuture<SyncGroupResponseData> responseFuture
     ) throws UnknownMemberIdException, GroupIdNotFoundException {
         String groupId = request.groupId();
         String memberId = request.memberId();
-        ClassicGroup group;
-        try {
-            group = getOrMaybeCreateClassicGroup(groupId, false);
-        } catch (Throwable t) {
-            responseFuture.complete(new SyncGroupResponseData()
-                .setErrorCode(Errors.forException(t).code())
-            );
-            return EMPTY_RESULT;
-        }
 
         Optional<Errors> errorOpt = validateSyncGroup(group, request);
         if (errorOpt.isPresent()) {
@@ -4009,13 +4004,13 @@ public class GroupMetadataManager {
      *
      * @return The result that contains records to append.
      */
-    public CoordinatorResult<Void, Record> classicGroupSyncToConsumerGroup(
+    private CoordinatorResult<Void, Record> classicGroupSyncToConsumerGroup(
         ConsumerGroup group,
         RequestContext context,
         SyncGroupRequestData request,
         CompletableFuture<SyncGroupResponseData> responseFuture
     ) throws UnknownMemberIdException, GroupIdNotFoundException {
-        String groupId = group.groupId();
+        String groupId = request.groupId();
         String memberId = request.memberId();
         String instanceId = request.groupInstanceId();
 
@@ -4035,10 +4030,13 @@ public class GroupMetadataManager {
         throwIfMemberDoesNotUseClassicProtocol(member);
         throwIfGenerationIdOrProtocolUnmatched(
             group,
+            member,
             request.generationId(),
             request.protocolType(),
             request.protocolName()
         );
+
+        cancelConsumerGroupSyncTimeout(groupId, memberId);
 
         byte[] assignment = ConsumerProtocol.serializeAssignment(
             new ConsumerPartitionAssignor.Assignment(toTopicPartitionList(member.assignedPartitions(), metadataImage.topics())),

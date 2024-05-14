@@ -342,7 +342,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         SyncGroupRequestData request,
         CompletableFuture<SyncGroupResponseData> responseFuture
     ) {
-        return groupMetadataManager.classicGroupSyncToClassicGroup(
+        return groupMetadataManager.classicGroupSync(
             context,
             request,
             responseFuture
