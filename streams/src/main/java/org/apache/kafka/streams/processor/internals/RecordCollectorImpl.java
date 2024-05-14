@@ -23,6 +23,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
@@ -296,6 +297,7 @@ public class RecordCollectorImpl implements RecordCollector {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.";
             sendException.set(new StreamsException(errorMessage, exception));
         } else if (exception instanceof ProducerFencedException ||
+                exception instanceof InvalidPidMappingException ||
                 exception instanceof InvalidProducerEpochException ||
                 exception instanceof OutOfOrderSequenceException) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, " +
