@@ -21,7 +21,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -44,8 +43,8 @@ public class CompletableEventReaperTest {
     @Test
     public void testExpired() {
         // Add a new event to the reaper.
-        Timer timer = time.timer(100);
-        UnsubscribeEvent event = new UnsubscribeEvent(calculateDeadlineMs(timer));
+        long timeoutMs = 100;
+        UnsubscribeEvent event = new UnsubscribeEvent(calculateDeadlineMs(time.milliseconds(), timeoutMs));
         reaper.add(event);
 
         // Without any time passing, we check the reaper and verify that the event is not done amd is still
@@ -55,9 +54,7 @@ public class CompletableEventReaperTest {
         assertEquals(1, reaper.size());
 
         // Sleep for at least 1 ms. *more* than the timeout so that the event is considered expired.
-        time.sleep(timer.timeoutMs() + 1);
-        timer.update(time.milliseconds());
-        assertEquals(0, timer.remainingMs());
+        time.sleep(timeoutMs + 1);
 
         // However, until we actually invoke the reaper, the event isn't complete and is still being tracked.
         assertFalse(event.future().isDone());
@@ -74,8 +71,8 @@ public class CompletableEventReaperTest {
     @Test
     public void testCompleted() {
         // Add a new event to the reaper.
-        Timer timer = time.timer(100);
-        UnsubscribeEvent event = new UnsubscribeEvent(calculateDeadlineMs(timer));
+        long timeoutMs = 100;
+        UnsubscribeEvent event = new UnsubscribeEvent(calculateDeadlineMs(time.milliseconds(), timeoutMs));
         reaper.add(event);
 
         // Without any time passing, we check the reaper and verify that the event is not done amd is still
@@ -91,9 +88,7 @@ public class CompletableEventReaperTest {
         assertEquals(1, reaper.size());
 
         // To ensure we don't accidentally expire an event that completed normally, sleep past the timeout.
-        time.sleep(timer.timeoutMs() + 1);
-        timer.update(time.milliseconds());
-        assertEquals(0, timer.remainingMs());
+        time.sleep(timeoutMs + 1);
 
         // Call the reaper and validate that the event is not considered expired, but is still no longer tracked.
         reaper.reapExpiredAndCompleted(time.milliseconds());
@@ -105,9 +100,9 @@ public class CompletableEventReaperTest {
     @Test
     public void testCompletedAndExpired() {
         // Add two events to the reaper. One event will be completed, the other we will let expire.
-        Timer timer = time.timer(100);
-        UnsubscribeEvent event1 = new UnsubscribeEvent(calculateDeadlineMs(timer));
-        UnsubscribeEvent event2 = new UnsubscribeEvent(calculateDeadlineMs(timer));
+        long timeoutMs = 100;
+        UnsubscribeEvent event1 = new UnsubscribeEvent(calculateDeadlineMs(time.milliseconds(), timeoutMs));
+        UnsubscribeEvent event2 = new UnsubscribeEvent(calculateDeadlineMs(time.milliseconds(), timeoutMs));
         reaper.add(event1);
         reaper.add(event2);
 
@@ -122,9 +117,7 @@ public class CompletableEventReaperTest {
         event1.future().complete(null);
         assertTrue(event1.future().isDone());
 
-        time.sleep(timer.timeoutMs() + 1);
-        timer.update(time.milliseconds());
-        assertEquals(0, timer.remainingMs());
+        time.sleep(timeoutMs + 1);
 
         // Though the first event is completed, it's still being tracked, along with the second expired event.
         assertEquals(2, reaper.size());
@@ -141,11 +134,11 @@ public class CompletableEventReaperTest {
 
     @Test
     public void testIncompleteQueue() {
-        // Add two events to the queue.
+        long timeoutMs = 100;
+        UnsubscribeEvent event1 = new UnsubscribeEvent(calculateDeadlineMs(time.milliseconds(), timeoutMs));
+        UnsubscribeEvent event2 = new UnsubscribeEvent(calculateDeadlineMs(time.milliseconds(), timeoutMs));
+
         Collection<CompletableApplicationEvent<?>> queue = new ArrayList<>();
-        Timer timer = time.timer(100);
-        UnsubscribeEvent event1 = new UnsubscribeEvent(calculateDeadlineMs(timer));
-        UnsubscribeEvent event2 = new UnsubscribeEvent(calculateDeadlineMs(timer));
         queue.add(event1);
         queue.add(event2);
 
@@ -181,9 +174,9 @@ public class CompletableEventReaperTest {
         Collection<CompletableApplicationEvent<?>> queue = new ArrayList<>();
 
         // Add two events for the reaper to track.
-        Timer timer = time.timer(100);
-        UnsubscribeEvent event1 = new UnsubscribeEvent(calculateDeadlineMs(timer));
-        UnsubscribeEvent event2 = new UnsubscribeEvent(calculateDeadlineMs(timer));
+        long timeoutMs = 100;
+        UnsubscribeEvent event1 = new UnsubscribeEvent(calculateDeadlineMs(time.milliseconds(), timeoutMs));
+        UnsubscribeEvent event2 = new UnsubscribeEvent(calculateDeadlineMs(time.milliseconds(), timeoutMs));
         reaper.add(event1);
         reaper.add(event2);
 
