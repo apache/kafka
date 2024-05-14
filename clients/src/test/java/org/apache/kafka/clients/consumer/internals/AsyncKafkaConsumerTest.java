@@ -193,7 +193,7 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             time,
             (a, b, c, d, e, f, g) -> applicationEventHandler,
-            (a) -> backgroundEventReaper,
+            a -> backgroundEventReaper,
             (a, b, c, d, e, f, g) -> fetchCollector,
             (a, b, c, d) -> metadata,
             backgroundEventQueue
