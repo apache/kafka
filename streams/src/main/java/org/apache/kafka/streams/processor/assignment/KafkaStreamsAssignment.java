@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.assignment;
 import static java.util.Collections.unmodifiableSet;
 
 import java.time.Instant;
-import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 import org.apache.kafka.streams.processor.TaskId;
@@ -66,7 +65,7 @@ public class KafkaStreamsAssignment {
         return followupRebalanceDeadline;
     }
 
-    public static KafkaStreamsAssignment of(ProcessId processId, Set<AssignedTask> assignment) {
+    public static KafkaStreamsAssignment of(final ProcessId processId, final Set<AssignedTask> assignment) {
         return new KafkaStreamsAssignment(processId, assignment, Optional.empty());
     }
 
