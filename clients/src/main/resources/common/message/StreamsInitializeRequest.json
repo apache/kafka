@@ -29,14 +29,14 @@
         // We are using strings here, to avoid fixing a structure on task IDs which will
         // allow introducing stable naming for subtopologies in the future.
         { "name": "Subtopology", "type": "string", "versions": "0+",
-          "about": "String to uniquely identify the sub-topology. Deterministically generated from the topology" },
-        { "name": "PartitionCount", "type": "int32", "versions": "0+",
+          "about": "String to uniquely the sub-topology. Deterministically generated from the topology" },
+        { "name": "Partitions", "type": "int32", "versions": "0+",
           "about": "The number of partitions expected for all source topics and changelog topics." },
         { "name": "SourceTopics", "type": "[]string", "versions": "0+",
           "about": "The topics the topology reads from." },
         { "name": "SinkTopics", "type": "[]string", "versions": "0+",
           "about": "The topics the topology writes to." },
-        { "name": "ChangelogTopics", "type": "[]TopicInfo", "versions": "0+",
+        { "name": "StateChangelogTopics", "type": "[]TopicInfo", "versions": "0+",
           "about": "The set of state changelog topics associated with this subtopology. Created automatically." },
         { "name": "RepartitionSourceTopics", "type": "[]TopicInfo", "versions": "0+",
           "about": "The set of source topics that are internally created repartition topics. Created automatically." }
