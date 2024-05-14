@@ -24,9 +24,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.Test;
 
-import java.util.concurrent.BlockingQueue;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -142,7 +142,7 @@ public class CompletableEventReaperTest {
     @Test
     public void testIncompleteQueue() {
         // Add two events to the queue.
-        BlockingQueue<CompletableApplicationEvent<?>> queue = new LinkedBlockingQueue<>();
+        Collection<CompletableApplicationEvent<?>> queue = new ArrayList<>();
         Timer timer = time.timer(100);
         UnsubscribeEvent event1 = new UnsubscribeEvent(calculateDeadlineMs(timer));
         UnsubscribeEvent event2 = new UnsubscribeEvent(calculateDeadlineMs(timer));
@@ -178,7 +178,7 @@ public class CompletableEventReaperTest {
     @Test
     public void testIncompleteTracked() {
         // This queue is just here to test the case where the queue is empty.
-        BlockingQueue<CompletableApplicationEvent<?>> queue = new LinkedBlockingQueue<>();
+        Collection<CompletableApplicationEvent<?>> queue = new ArrayList<>();
 
         // Add two events for the reaper to track.
         Timer timer = time.timer(100);
