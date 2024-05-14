@@ -24,49 +24,47 @@ import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 
 import java.util.Optional;
 
-class KStreamKStreamLeftJoin<K, VL, VR, VOut> extends KStreamKStreamJoin<K, VL, VR, VOut, VL, VR> {
+class KStreamKStreamRightJoinSide<K, VLeft, VRight, VOut> extends KStreamKStreamJoin<K, VLeft, VRight, VOut, VRight, VLeft> {
 
-    KStreamKStreamLeftJoin(final String otherWindowName,
-                           final JoinWindowsInternal windows,
-                           final ValueJoinerWithKey<? super K, ? super VL, ? super VR, ? extends VOut> joiner,
-                           final boolean outer,
-                           final Optional<String> outerJoinWindowName,
-                           final TimeTrackerSupplier sharedTimeTrackerSupplier) {
-        super(otherWindowName, windows, joiner, outer, outerJoinWindowName, windows.beforeMs, windows.afterMs,
+    KStreamKStreamRightJoinSide(final String otherWindowName,
+                                final JoinWindowsInternal windows,
+                                final ValueJoinerWithKey<? super K, ? super VRight, ? super VLeft, ? extends VOut> joiner,
+                                final boolean outer,
+                                final Optional<String> outerJoinWindowName,
+                                final TimeTrackerSupplier sharedTimeTrackerSupplier) {
+        super(otherWindowName, windows, joiner, outer, outerJoinWindowName, windows.afterMs, windows.beforeMs,
                 sharedTimeTrackerSupplier);
     }
 
     @Override
-    public Processor<K, VL, K, VOut> get() {
-        return new KStreamKStreamJoinLeftProcessor();
+    public Processor<K, VRight, K, VOut> get() {
+        return new KStreamKStreamRightJoinProcessor();
     }
 
-    private class KStreamKStreamJoinLeftProcessor extends KStreamKStreamJoinProcessor {
-
-
+    private class KStreamKStreamRightJoinProcessor extends KStreamKStreamJoinProcessor {
         @Override
         public TimestampedKeyAndJoinSide<K> makeThisKey(final K key, final long timestamp) {
-            return TimestampedKeyAndJoinSide.makeLeft(key, timestamp);
-        }
-
-        @Override
-        public LeftOrRightValue<VL, VR> makeThisValue(final VL thisValue) {
-            return LeftOrRightValue.makeLeftValue(thisValue);
-        }
-
-        @Override
-        public TimestampedKeyAndJoinSide<K> makeOtherKey(final K key, final long timestamp) {
             return TimestampedKeyAndJoinSide.makeRight(key, timestamp);
         }
 
         @Override
-        public VL getThisValue(final LeftOrRightValue<? extends VL, ? extends VR> leftOrRightValue) {
-            return leftOrRightValue.getLeftValue();
+        public LeftOrRightValue<VLeft, VRight> makeThisValue(final VRight thisValue) {
+            return LeftOrRightValue.makeRightValue(thisValue);
         }
 
         @Override
-        public VR getOtherValue(final LeftOrRightValue<? extends VL, ? extends VR> leftOrRightValue) {
+        public TimestampedKeyAndJoinSide<K> makeOtherKey(final K key, final long timestamp) {
+            return TimestampedKeyAndJoinSide.makeLeft(key, timestamp);
+        }
+
+        @Override
+        public VRight getThisValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue) {
             return leftOrRightValue.getRightValue();
+        }
+
+        @Override
+        public VLeft getOtherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue) {
+            return leftOrRightValue.getLeftValue();
         }
     }
 }

@@ -42,7 +42,7 @@ import java.util.Optional;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
-abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements ProcessorSupplier<K, VThis, K, VOut> {
+abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> implements ProcessorSupplier<K, VThis, K, VOut> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
 
     private final String otherWindowName;
@@ -83,7 +83,7 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
     protected abstract class KStreamKStreamJoinProcessor extends ContextualProcessor<K, VThis, K, VOut> {
         private WindowStore<K, VOther> otherWindowStore;
         private Sensor droppedRecordsSensor;
-        private Optional<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>>> outerJoinStore = Optional.empty();
+        private Optional<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>>> outerJoinStore = Optional.empty();
         private InternalProcessorContext<K, VOut> internalProcessorContext;
         private TimeTracker sharedTimeTracker;
 
@@ -165,16 +165,16 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
 
         protected abstract TimestampedKeyAndJoinSide<K> makeThisKey(final K key, final long inputRecordTimestamp);
 
-        protected abstract LeftOrRightValue<VL, VR> makeThisValue(final VThis thisValue);
+        protected abstract LeftOrRightValue<VLeft, VRight> makeThisValue(final VThis thisValue);
 
         protected abstract TimestampedKeyAndJoinSide<K> makeOtherKey(final K key, final long timestamp);
 
-        protected abstract VThis getThisValue(final LeftOrRightValue<? extends VL, ? extends VR> leftOrRightValue);
+        protected abstract VThis getThisValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
 
-        protected abstract VOther getOtherValue(final LeftOrRightValue<? extends VL, ? extends VR> leftOrRightValue);
+        protected abstract VOther getOtherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
 
         private void emitNonJoinedOuterRecords(
-            final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>> store,
+            final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> store,
             final Record<K, ?> record) {
 
             // calling `store.all()` creates an iterator what is an expensive operation on RocksDB;
@@ -199,13 +199,13 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
             // reset to MAX_VALUE in case the store is empty
             sharedTimeTracker.minTime = Long.MAX_VALUE;
 
-            try (final KeyValueIterator<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>> it = store.all()) {
+            try (final KeyValueIterator<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> it = store.all()) {
                 TimestampedKeyAndJoinSide<K> prevKey = null;
 
                 boolean outerJoinLeftWindowOpen = false;
                 boolean outerJoinRightWindowOpen = false;
                 while (it.hasNext()) {
-                    final KeyValue<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VL, VR>> nextKeyValue = it.next();
+                    final KeyValue<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> nextKeyValue = it.next();
                     final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = nextKeyValue.key;
                     sharedTimeTracker.minTime = timestampedKeyAndJoinSide.getTimestamp();
                     if (outerJoinLeftWindowOpen && outerJoinRightWindowOpen) {
@@ -246,11 +246,11 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
             }
         }
 
-        private void forwardNonJoinedOuterRecords(final Record<K, ?> record, final KeyValue<? extends TimestampedKeyAndJoinSide<K>, ? extends LeftOrRightValue<VL, VR>> nextKeyValue) {
+        private void forwardNonJoinedOuterRecords(final Record<K, ?> record, final KeyValue<? extends TimestampedKeyAndJoinSide<K>, ? extends LeftOrRightValue<VLeft, VRight>> nextKeyValue) {
             final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = nextKeyValue.key;
             final K key = timestampedKeyAndJoinSide.getKey();
             final long timestamp = timestampedKeyAndJoinSide.getTimestamp();
-            final LeftOrRightValue<VL, VR> leftOrRightValue = nextKeyValue.value;
+            final LeftOrRightValue<VLeft, VRight> leftOrRightValue = nextKeyValue.value;
             final VThis thisValue = getThisValue(leftOrRightValue);
             final VOther otherValue = getOtherValue(leftOrRightValue);
             final VOut nullJoinedValue = joiner.apply(key, thisValue, otherValue);
@@ -294,7 +294,7 @@ abstract class KStreamKStreamJoin<K, VL, VR, VOut, VThis, VOther> implements Pro
         private void putInOuterJoinStore(final Record<K, VThis> thisRecord) {
             outerJoinStore.ifPresent(store -> {
                 final TimestampedKeyAndJoinSide<K> thisKey = makeThisKey(thisRecord.key(), thisRecord.timestamp());
-                final LeftOrRightValue<VL, VR> thisValue = makeThisValue(thisRecord.value());
+                final LeftOrRightValue<VLeft, VRight> thisValue = makeThisValue(thisRecord.value());
                 store.put(thisKey, thisValue);
             });
         }
