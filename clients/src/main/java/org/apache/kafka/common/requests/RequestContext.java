@@ -37,6 +37,7 @@ public class RequestContext implements AuthorizableRequestContext {
     public final RequestHeader header;
     public final String connectionId;
     public final InetAddress clientAddress;
+    public final Optional<Integer> clientPort;
     public final KafkaPrincipal principal;
     public final ListenerName listenerName;
     public final SecurityProtocol securityProtocol;
@@ -55,6 +56,28 @@ public class RequestContext implements AuthorizableRequestContext {
         this(header,
             connectionId,
             clientAddress,
+            Optional.empty(),
+            principal,
+            listenerName,
+            securityProtocol,
+            clientInformation,
+            fromPrivilegedListener,
+            Optional.empty());
+    }
+
+    public RequestContext(RequestHeader header,
+        String connectionId,
+        InetAddress clientAddress,
+        Optional<Integer> clientPort,
+        KafkaPrincipal principal,
+        ListenerName listenerName,
+        SecurityProtocol securityProtocol,
+        ClientInformation clientInformation,
+        boolean fromPrivilegedListener) {
+        this(header,
+            connectionId,
+            clientAddress,
+            clientPort,
             principal,
             listenerName,
             securityProtocol,
@@ -66,6 +89,7 @@ public class RequestContext implements AuthorizableRequestContext {
     public RequestContext(RequestHeader header,
                           String connectionId,
                           InetAddress clientAddress,
+                          Optional<Integer> clientPort,
                           KafkaPrincipal principal,
                           ListenerName listenerName,
                           SecurityProtocol securityProtocol,
@@ -75,6 +99,7 @@ public class RequestContext implements AuthorizableRequestContext {
         this.header = header;
         this.connectionId = connectionId;
         this.clientAddress = clientAddress;
+        this.clientPort = clientPort;
         this.principal = principal;
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;

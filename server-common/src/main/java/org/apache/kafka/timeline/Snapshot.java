@@ -22,7 +22,7 @@ import java.util.Map;
 
 /**
  * A snapshot of some timeline data structures.
- *
+ * <br>
  * The snapshot contains historical data for several timeline data structures.
  * We use an IdentityHashMap to store this data.  This way, we can easily drop all of
  * the snapshot data.

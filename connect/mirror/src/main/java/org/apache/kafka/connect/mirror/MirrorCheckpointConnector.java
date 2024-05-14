@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.util.ConnectorUtils;
 import org.slf4j.Logger;
@@ -39,6 +40,10 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static org.apache.kafka.connect.mirror.Checkpoint.CONSUMER_GROUP_ID_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.adminCall;
 
 /** Replicate consumer group state between clusters. Emits checkpoint records.
  *
@@ -132,6 +137,33 @@ public class MirrorCheckpointConnector extends SourceConnector {
         return AppInfoParser.getVersion();
     }
 
+    @Override
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<Map<String, ?>, Map<String, ?>> offsets) {
+        for (Map.Entry<Map<String, ?>, Map<String, ?>> offsetEntry : offsets.entrySet()) {
+            Map<String, ?> sourceOffset = offsetEntry.getValue();
+            if (sourceOffset == null) {
+                // We allow tombstones for anything; if there's garbage in the offsets for the connector, we don't
+                // want to prevent users from being able to clean it up using the REST API
+                continue;
+            }
+
+            Map<String, ?> sourcePartition = offsetEntry.getKey();
+            if (sourcePartition == null) {
+                throw new ConnectException("Source partitions may not be null");
+            }
+
+            MirrorUtils.validateSourcePartitionString(sourcePartition, CONSUMER_GROUP_ID_KEY);
+            MirrorUtils.validateSourcePartitionString(sourcePartition, TOPIC_KEY);
+            MirrorUtils.validateSourcePartitionPartition(sourcePartition);
+
+            MirrorUtils.validateSourceOffset(sourcePartition, sourceOffset, true);
+        }
+
+        // We don't actually use these offsets in the task class, so no additional effort is required beyond just validating
+        // the format of the user-supplied offsets
+        return true;
+    }
+
     private void refreshConsumerGroups()
             throws InterruptedException, ExecutionException {
         Set<String> consumerGroups = findConsumerGroups();
@@ -171,10 +203,10 @@ public class MirrorCheckpointConnector extends SourceConnector {
                     .collect(Collectors.toSet());
             // Only perform checkpoints for groups that have offsets for at least one topic that's accepted
             // by the topic filter.
-            if (consumedTopics.size() > 0) {
-                checkpointGroups.add(group);
-            } else {
+            if (consumedTopics.isEmpty()) {
                 irrelevantGroups.add(group);
+            } else {
+                checkpointGroups.add(group);
             }
         }
 
@@ -185,7 +217,10 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     Collection<ConsumerGroupListing> listConsumerGroups()
             throws InterruptedException, ExecutionException {
-        return sourceAdminClient.listConsumerGroups().valid().get();
+        return adminCall(
+                () -> sourceAdminClient.listConsumerGroups().valid().get(),
+                () -> "list consumer groups on " + config.sourceClusterAlias() + " cluster"
+        );
     }
 
     private void createInternalTopics() {
@@ -198,7 +233,11 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     Map<TopicPartition, OffsetAndMetadata> listConsumerGroupOffsets(String group)
             throws InterruptedException, ExecutionException {
-        return sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get();
+        return adminCall(
+                () -> sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get(),
+                () -> String.format("list offsets for consumer group %s on %s cluster", group,
+                        config.sourceClusterAlias())
+        );
     }
 
     boolean shouldReplicateByGroupFilter(String group) {

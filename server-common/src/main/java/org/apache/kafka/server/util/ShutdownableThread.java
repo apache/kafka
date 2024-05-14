@@ -46,6 +46,7 @@ public abstract class ShutdownableThread extends Thread {
         this(name, isInterruptible, "[" + name + "]: ");
     }
 
+    @SuppressWarnings("this-escape")
     public ShutdownableThread(String name, boolean isInterruptible, String logPrefix) {
         super(name);
         this.isInterruptible = isInterruptible;
@@ -65,6 +66,10 @@ public abstract class ShutdownableThread extends Thread {
 
     public boolean isShutdownComplete() {
         return shutdownComplete.getCount() == 0;
+    }
+
+    public boolean isStarted() {
+        return isStarted;
     }
 
     /**

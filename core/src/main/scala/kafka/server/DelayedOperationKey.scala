@@ -26,10 +26,6 @@ trait DelayedOperationKey {
   def keyLabel: String
 }
 
-object DelayedOperationKey {
-  val globalLabel = "All"
-}
-
 /* used by delayed-produce and delayed-fetch operations */
 case class TopicPartitionOperationKey(topic: String, partition: Int) extends DelayedOperationKey {
   override def keyLabel: String = "%s-%d".format(topic, partition)

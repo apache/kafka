@@ -25,6 +25,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.spy;
 
 import java.io.IOException;
@@ -62,6 +63,16 @@ public class ChunkedBytesStreamTest {
             is.read(got, toRead, got.length - toRead);
         }
         assertArrayEquals(input.array(), got);
+    }
+
+    @ParameterizedTest
+    @MethodSource("provideCasesWithInvalidInputsForMethodRead")
+    public void testInvalidInputsForMethodRead(byte[] b, int off, int len) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(16);
+
+        try (InputStream is = new ChunkedBytesStream(new ByteBufferInputStream(buffer.duplicate()), supplier, 10, false)) {
+            assertThrows(IndexOutOfBoundsException.class, () -> is.read(b, off, len));
+        }
     }
 
     @ParameterizedTest
@@ -147,6 +158,45 @@ public class ChunkedBytesStreamTest {
                 assertNotEquals(-1, readRes, "Unexpected end of data.");
             }
         }
+    }
+
+    @ParameterizedTest
+    @MethodSource("provideEdgeCaseInputForMethodSkip")
+    public void testEdgeCaseInputForMethodSkip(int bufferLength, long toSkip, boolean delegateSkipToSourceStream, long expected) throws IOException {
+        ByteBuffer inputBuf = ByteBuffer.allocate(bufferLength);
+        RANDOM.nextBytes(inputBuf.array());
+        inputBuf.rewind();
+
+        try (InputStream is = new ChunkedBytesStream(new ByteBufferInputStream(inputBuf.duplicate()), supplier, 10, delegateSkipToSourceStream)) {
+            assertEquals(expected, is.skip(toSkip));
+        }
+    }
+
+    private static Stream<Arguments> provideEdgeCaseInputForMethodSkip() {
+        int bufferLength = 16;
+        // Test toSkip larger than int and negative for both delegateToSourceStream true and false
+        return Stream.of(
+            Arguments.of(bufferLength, Integer.MAX_VALUE + 1L, true, bufferLength),
+            Arguments.of(bufferLength, -1, true, 0),
+            Arguments.of(bufferLength, Integer.MAX_VALUE + 1L, false, bufferLength),
+            Arguments.of(bufferLength, -1, false, 0)
+        );
+    }
+
+    private static Stream<Arguments> provideCasesWithInvalidInputsForMethodRead() {
+        byte[] b = new byte[16];
+        return Stream.of(
+            // negative off
+            Arguments.of(b, -1, b.length),
+            // negative len
+            Arguments.of(b, 0, -1),
+            // overflow off + len
+            Arguments.of(b, Integer.MAX_VALUE, 10),
+            // len greater than size of target array
+            Arguments.of(b, 0, b.length + 1),
+            // off + len greater than size of target array
+            Arguments.of(b, b.length - 1, 2)
+        );
     }
 
     private static List<Arguments> provideSourceSkipValuesForTest() {

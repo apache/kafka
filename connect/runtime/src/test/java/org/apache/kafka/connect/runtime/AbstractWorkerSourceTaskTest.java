@@ -37,6 +37,9 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.integration.MonitorableSourceConnector;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -72,6 +75,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
@@ -128,7 +132,7 @@ public class AbstractWorkerSourceTaskTest {
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
     @Mock private HeaderConverter headerConverter;
-    @Mock private TransformationChain<SourceRecord> transformationChain;
+    @Mock private TransformationChain<SourceRecord, SourceRecord> transformationChain;
     @Mock private CloseableOffsetStorageReader offsetReader;
     @Mock private OffsetStorageWriter offsetWriter;
     @Mock private ConnectorOffsetBackingStore offsetStore;
@@ -142,7 +146,7 @@ public class AbstractWorkerSourceTaskTest {
     private Plugins plugins;
     private WorkerConfig config;
     private SourceConnectorConfig sourceConfig;
-    private MockConnectMetrics metrics = new MockConnectMetrics();
+    private MockConnectMetrics metrics;
     @Mock private ErrorHandlingMetrics errorHandlingMetrics;
 
     private AbstractWorkerSourceTask workerTask;
@@ -348,7 +352,8 @@ public class AbstractWorkerSourceTaskTest {
         StringConverter stringConverter = new StringConverter();
         SampleConverterWithHeaders testConverter = new SampleConverterWithHeaders();
 
-        createWorkerTask(stringConverter, testConverter, stringConverter);
+        createWorkerTask(stringConverter, testConverter, stringConverter, RetryWithToleranceOperatorTest.noopOperator(),
+                Collections::emptyList);
 
         expectSendRecord(null);
         expectTopicCreation(TOPIC);
@@ -663,9 +668,9 @@ public class AbstractWorkerSourceTaskTest {
         expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
         expectTaskGetTopic();
 
-        when(transformationChain.apply(eq(record1))).thenReturn(null);
-        when(transformationChain.apply(eq(record2))).thenReturn(null);
-        when(transformationChain.apply(eq(record3))).thenReturn(record3);
+        when(transformationChain.apply(any(), eq(record1))).thenReturn(null);
+        when(transformationChain.apply(any(), eq(record2))).thenReturn(null);
+        when(transformationChain.apply(any(), eq(record3))).thenReturn(record3);
 
         TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
         TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
@@ -684,9 +689,9 @@ public class AbstractWorkerSourceTaskTest {
 
         // Ensure that the first two records that were filtered out by the transformation chain
         // aren't re-processed when we retry the call to sendRecords()
-        verify(transformationChain, times(1)).apply(eq(record1));
-        verify(transformationChain, times(1)).apply(eq(record2));
-        verify(transformationChain, times(2)).apply(eq(record3));
+        verify(transformationChain, times(1)).apply(any(), eq(record1));
+        verify(transformationChain, times(1)).apply(any(), eq(record2));
+        verify(transformationChain, times(2)).apply(any(), eq(record3));
     }
 
     private void expectSendRecord(Headers headers) {
@@ -790,8 +795,8 @@ public class AbstractWorkerSourceTaskTest {
     }
 
     private void expectApplyTransformationChain() {
-        when(transformationChain.apply(any(SourceRecord.class)))
-                .thenAnswer(AdditionalAnswers.returnsFirstArg());
+        when(transformationChain.apply(any(), any(SourceRecord.class)))
+                .thenAnswer(AdditionalAnswers.returnsSecondArg());
     }
 
     private RecordHeaders emptyHeaders() {
@@ -799,15 +804,16 @@ public class AbstractWorkerSourceTaskTest {
     }
 
     private void createWorkerTask() {
-        createWorkerTask(keyConverter, valueConverter, headerConverter);
+        createWorkerTask(keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noopOperator(), Collections::emptyList);
     }
 
-    private void createWorkerTask(Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
+    private void createWorkerTask(Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
+                                  RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator, Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
         workerTask = new AbstractWorkerSourceTask(
                 taskId, sourceTask, statusListener, TargetState.STARTED, keyConverter, valueConverter, headerConverter, transformationChain,
                 sourceTaskContext, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
-                config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), Time.SYSTEM, RetryWithToleranceOperatorTest.NOOP_OPERATOR,
-                statusBackingStore, Runnable::run) {
+                config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), Time.SYSTEM, retryWithToleranceOperator,
+                statusBackingStore, Runnable::run, errorReportersSupplier) {
             @Override
             protected void prepareToInitializeTask() {
             }
@@ -846,7 +852,7 @@ public class AbstractWorkerSourceTaskTest {
             }
 
             @Override
-            protected void producerSendFailed(boolean synchronous, ProducerRecord<byte[], byte[]> producerRecord, SourceRecord preTransformRecord, Exception e) {
+            protected void producerSendFailed(ProcessingContext<SourceRecord> context, boolean synchronous, ProducerRecord<byte[], byte[]> producerRecord, SourceRecord preTransformRecord, Exception e) {
             }
 
             @Override

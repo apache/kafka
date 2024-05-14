@@ -17,13 +17,14 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.consumer.ClientAssignor;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.consumer.MemberState;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
-import org.apache.kafka.coordinator.group.consumer.VersionedMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -38,29 +39,36 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.generic.GenericGroup;
-import org.apache.kafka.coordinator.group.generic.GenericGroupMember;
-import org.apache.kafka.coordinator.group.generic.GenericGroupState;
-import org.apache.kafka.coordinator.group.generic.Protocol;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkSortedAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkSortedTopicAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -78,11 +86,17 @@ import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignme
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentTombstoneRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 public class RecordHelpersTest {
 
     @Test
     public void testNewMemberSubscriptionRecord() {
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = new ArrayList<>();
+        protocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
             .setInstanceId("instance-id")
             .setRackId("rack-id")
@@ -92,14 +106,8 @@ public class RecordHelpersTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "zar", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setClientAssignors(Collections.singletonList(new ClientAssignor(
-                "assignor",
-                (byte) 0,
-                (byte) 1,
-                (byte) 10,
-                new VersionedMetadata(
-                    (byte) 5,
-                    ByteBuffer.wrap("hello".getBytes(StandardCharsets.UTF_8))))))
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                .setSupportedProtocols(protocols))
             .build();
 
         Record expectedRecord = new Record(
@@ -118,12 +126,8 @@ public class RecordHelpersTest {
                     .setSubscribedTopicNames(Arrays.asList("bar", "foo", "zar"))
                     .setSubscribedTopicRegex("regex")
                     .setServerAssignor("range")
-                    .setAssignors(Collections.singletonList(new ConsumerGroupMemberMetadataValue.Assignor()
-                        .setName("assignor")
-                        .setMinimumVersion((short) 1)
-                        .setMaximumVersion((short) 10)
-                        .setVersion((short) 5)
-                        .setMetadata("hello".getBytes(StandardCharsets.UTF_8)))),
+                    .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                        .setSupportedProtocols(protocols)),
                 (short) 0));
 
         assertEquals(expectedRecord, newMemberSubscriptionRecord(
@@ -154,15 +158,18 @@ public class RecordHelpersTest {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
         Map<String, TopicMetadata> subscriptionMetadata = new LinkedHashMap<>();
+
         subscriptionMetadata.put("foo", new TopicMetadata(
             fooTopicId,
             "foo",
-            10
+            10,
+            mkMapOfPartitionRacks(10)
         ));
         subscriptionMetadata.put("bar", new TopicMetadata(
             barTopicId,
             "bar",
-            20
+            20,
+            mkMapOfPartitionRacks(20)
         ));
 
         Record expectedRecord = new Record(
@@ -177,14 +184,16 @@ public class RecordHelpersTest {
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(fooTopicId)
                             .setTopicName("foo")
-                            .setNumPartitions(10),
+                            .setNumPartitions(10)
+                            .setPartitionMetadata(mkListOfPartitionRacks(10)),
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(barTopicId)
                             .setTopicName("bar")
-                            .setNumPartitions(20))),
+                            .setNumPartitions(20)
+                            .setPartitionMetadata(mkListOfPartitionRacks(20)))),
                 (short) 0));
 
-        assertEquals(expectedRecord, newGroupSubscriptionMetadataRecord(
+        assertRecordEquals(expectedRecord, newGroupSubscriptionMetadataRecord(
             "group-id",
             subscriptionMetadata
         ));
@@ -202,6 +211,52 @@ public class RecordHelpersTest {
 
         assertEquals(expectedRecord, newGroupSubscriptionMetadataTombstoneRecord(
             "group-id"
+        ));
+    }
+
+    @Test
+    public void testEmptyPartitionMetadataWhenRacksUnavailableGroupSubscriptionMetadataRecord() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+        Map<String, TopicMetadata> subscriptionMetadata = new LinkedHashMap<>();
+
+        subscriptionMetadata.put("foo", new TopicMetadata(
+            fooTopicId,
+            "foo",
+            10,
+            Collections.emptyMap()
+        ));
+        subscriptionMetadata.put("bar", new TopicMetadata(
+            barTopicId,
+            "bar",
+            20,
+            Collections.emptyMap()
+        ));
+
+        Record expectedRecord = new Record(
+            new ApiMessageAndVersion(
+                new ConsumerGroupPartitionMetadataKey()
+                    .setGroupId("group-id"),
+                (short) 4
+            ),
+            new ApiMessageAndVersion(
+                new ConsumerGroupPartitionMetadataValue()
+                    .setTopics(Arrays.asList(
+                        new ConsumerGroupPartitionMetadataValue.TopicMetadata()
+                            .setTopicId(fooTopicId)
+                            .setTopicName("foo")
+                            .setNumPartitions(10)
+                            .setPartitionMetadata(Collections.emptyList()),
+                        new ConsumerGroupPartitionMetadataValue.TopicMetadata()
+                            .setTopicId(barTopicId)
+                            .setTopicName("bar")
+                            .setNumPartitions(20)
+                            .setPartitionMetadata(Collections.emptyList()))),
+                (short) 0));
+
+        assertRecordEquals(expectedRecord, newGroupSubscriptionMetadataRecord(
+            "group-id",
+            subscriptionMetadata
         ));
     }
 
@@ -334,11 +389,6 @@ public class RecordHelpersTest {
             mkSortedTopicAssignment(topicId2, 24, 25, 26)
         );
 
-        Map<Uuid, Set<Integer>> assigning = mkSortedAssignment(
-            mkSortedTopicAssignment(topicId1, 17, 18, 19),
-            mkSortedTopicAssignment(topicId2, 27, 28, 29)
-        );
-
         Record expectedRecord = new Record(
             new ApiMessageAndVersion(
                 new ConsumerGroupCurrentMemberAssignmentKey()
@@ -347,9 +397,9 @@ public class RecordHelpersTest {
                 (short) 8),
             new ApiMessageAndVersion(
                 new ConsumerGroupCurrentMemberAssignmentValue()
+                    .setState(MemberState.UNREVOKED_PARTITIONS.value())
                     .setMemberEpoch(22)
                     .setPreviousMemberEpoch(21)
-                    .setTargetMemberEpoch(23)
                     .setAssignedPartitions(Arrays.asList(
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId1)
@@ -363,25 +413,17 @@ public class RecordHelpersTest {
                             .setPartitions(Arrays.asList(14, 15, 16)),
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId2)
-                            .setPartitions(Arrays.asList(24, 25, 26))))
-                    .setPartitionsPendingAssignment(Arrays.asList(
-                        new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
-                            .setTopicId(topicId1)
-                            .setPartitions(Arrays.asList(17, 18, 19)),
-                        new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
-                            .setTopicId(topicId2)
-                            .setPartitions(Arrays.asList(27, 28, 29)))),
+                            .setPartitions(Arrays.asList(24, 25, 26)))),
                 (short) 0));
 
         assertEquals(expectedRecord, newCurrentAssignmentRecord(
             "group-id",
             new ConsumerGroupMember.Builder("member-id")
+                .setState(MemberState.UNREVOKED_PARTITIONS)
                 .setMemberEpoch(22)
                 .setPreviousMemberEpoch(21)
-                .setTargetMemberEpoch(23)
                 .setAssignedPartitions(assigned)
                 .setPartitionsPendingRevocation(revoking)
-                .setPartitionsPendingAssignment(assigning)
                 .build()
         ));
     }
@@ -459,15 +501,23 @@ public class RecordHelpersTest {
                     .setMembers(expectedMembers),
                 expectedGroupMetadataValueVersion));
 
-        GenericGroup group = new GenericGroup(
+        ClassicGroup group = new ClassicGroup(
             new LogContext(),
             "group-id",
-            GenericGroupState.PREPARING_REBALANCE,
-            time
+            ClassicGroupState.PREPARING_REBALANCE,
+            time,
+            mock(GroupCoordinatorMetricsShard.class)
         );
 
+        Map<String, byte[]> assignment = new HashMap<>();
+
         expectedMembers.forEach(member -> {
-            group.add(new GenericGroupMember(
+            JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+            protocols.add(new JoinGroupRequestProtocol()
+                .setName("range")
+                .setMetadata(member.subscription()));
+
+            group.add(new ClassicGroupMember(
                 member.memberId(),
                 Optional.of(member.groupInstanceId()),
                 member.clientId(),
@@ -475,17 +525,17 @@ public class RecordHelpersTest {
                 member.rebalanceTimeout(),
                 member.sessionTimeout(),
                 "consumer",
-                Collections.singletonList(new Protocol(
-                    "range",
-                    member.subscription()
-                )),
-                member.assignment()
+                protocols,
+                ClassicGroupMember.EMPTY_ASSIGNMENT
             ));
+
+            assignment.put(member.memberId(), member.assignment());
         });
 
         group.initNextGeneration();
         Record groupMetadataRecord = RecordHelpers.newGroupMetadataRecord(
             group,
+            assignment,
             metadataVersion
         );
 
@@ -522,15 +572,21 @@ public class RecordHelpersTest {
                 .setAssignment(new byte[]{1, 2})
         );
 
-        GenericGroup group = new GenericGroup(
+        ClassicGroup group = new ClassicGroup(
             new LogContext(),
             "group-id",
-            GenericGroupState.PREPARING_REBALANCE,
-            time
+            ClassicGroupState.PREPARING_REBALANCE,
+            time,
+            mock(GroupCoordinatorMetricsShard.class)
         );
 
         expectedMembers.forEach(member -> {
-            group.add(new GenericGroupMember(
+            JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+            protocols.add(new JoinGroupRequestProtocol()
+                .setName("range")
+                .setMetadata(null));
+
+            group.add(new ClassicGroupMember(
                 member.memberId(),
                 Optional.of(member.groupInstanceId()),
                 member.clientId(),
@@ -538,10 +594,7 @@ public class RecordHelpersTest {
                 member.rebalanceTimeout(),
                 member.sessionTimeout(),
                 "consumer",
-                Collections.singletonList(new Protocol(
-                    "range",
-                    null
-                )),
+                protocols,
                 member.assignment()
             ));
         });
@@ -549,6 +602,7 @@ public class RecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             RecordHelpers.newGroupMetadataRecord(
                 group,
+                Collections.emptyMap(),
                 MetadataVersion.IBP_3_5_IV2
             ));
     }
@@ -570,15 +624,21 @@ public class RecordHelpersTest {
                 .setAssignment(null)
         );
 
-        GenericGroup group = new GenericGroup(
+        ClassicGroup group = new ClassicGroup(
             new LogContext(),
             "group-id",
-            GenericGroupState.PREPARING_REBALANCE,
-            time
+            ClassicGroupState.PREPARING_REBALANCE,
+            time,
+            mock(GroupCoordinatorMetricsShard.class)
         );
 
-        expectedMembers.forEach(member ->
-            group.add(new GenericGroupMember(
+        expectedMembers.forEach(member -> {
+            JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+            protocols.add(new JoinGroupRequestProtocol()
+                .setName("range")
+                .setMetadata(member.subscription()));
+
+            group.add(new ClassicGroupMember(
                 member.memberId(),
                 Optional.of(member.groupInstanceId()),
                 member.clientId(),
@@ -586,18 +646,200 @@ public class RecordHelpersTest {
                 member.rebalanceTimeout(),
                 member.sessionTimeout(),
                 "consumer",
-                Collections.singletonList(new Protocol(
-                    "range",
-                    member.subscription()
-                )),
+                protocols,
                 member.assignment()
-            ))
-        );
+            ));
+        });
 
         assertThrows(IllegalStateException.class, () ->
             RecordHelpers.newGroupMetadataRecord(
                 group,
+                Collections.emptyMap(),
                 MetadataVersion.IBP_3_5_IV2
             ));
+    }
+      
+    @ParameterizedTest
+    @MethodSource("metadataToExpectedGroupMetadataValue")
+    public void testEmptyGroupMetadataRecord(
+        MetadataVersion metadataVersion,
+        short expectedGroupMetadataValueVersion
+    ) {
+        Time time = new MockTime();
+
+        List<GroupMetadataValue.MemberMetadata> expectedMembers = Collections.emptyList();
+
+        Record expectedRecord = new Record(
+            new ApiMessageAndVersion(
+                new GroupMetadataKey()
+                    .setGroup("group-id"),
+                (short) 2),
+            new ApiMessageAndVersion(
+                new GroupMetadataValue()
+                    .setProtocol(null)
+                    .setProtocolType("")
+                    .setLeader(null)
+                    .setGeneration(0)
+                    .setCurrentStateTimestamp(time.milliseconds())
+                    .setMembers(expectedMembers),
+                expectedGroupMetadataValueVersion));
+
+        ClassicGroup group = new ClassicGroup(
+            new LogContext(),
+            "group-id",
+            ClassicGroupState.PREPARING_REBALANCE,
+            time,
+            mock(GroupCoordinatorMetricsShard.class)
+        );
+
+        group.initNextGeneration();
+        Record groupMetadataRecord = RecordHelpers.newEmptyGroupMetadataRecord(
+            group,
+            metadataVersion
+        );
+
+        assertEquals(expectedRecord, groupMetadataRecord);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testNewOffsetCommitRecord(MetadataVersion metadataVersion) {
+        OffsetCommitKey key = new OffsetCommitKey()
+            .setGroup("group-id")
+            .setTopic("foo")
+            .setPartition(1);
+        OffsetCommitValue value = new OffsetCommitValue()
+            .setOffset(100L)
+            .setLeaderEpoch(10)
+            .setMetadata("metadata")
+            .setCommitTimestamp(1234L)
+            .setExpireTimestamp(-1L);
+
+        Record expectedRecord = new Record(
+            new ApiMessageAndVersion(
+                key,
+                (short) 1),
+            new ApiMessageAndVersion(
+                value,
+                metadataVersion.offsetCommitValueVersion(false)
+            )
+        );
+
+        assertEquals(expectedRecord, RecordHelpers.newOffsetCommitRecord(
+            "group-id",
+            "foo",
+            1,
+            new OffsetAndMetadata(
+                100L,
+                OptionalInt.of(10),
+                "metadata",
+                1234L,
+                OptionalLong.empty()),
+            metadataVersion
+        ));
+
+        value.setLeaderEpoch(-1);
+
+        assertEquals(expectedRecord, RecordHelpers.newOffsetCommitRecord(
+            "group-id",
+            "foo",
+            1,
+            new OffsetAndMetadata(
+                100L,
+                OptionalInt.empty(),
+                "metadata",
+                1234L,
+                OptionalLong.empty()),
+            metadataVersion
+        ));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testNewOffsetCommitRecordWithExpireTimestamp(MetadataVersion metadataVersion) {
+        Record expectedRecord = new Record(
+            new ApiMessageAndVersion(
+                new OffsetCommitKey()
+                    .setGroup("group-id")
+                    .setTopic("foo")
+                    .setPartition(1),
+                (short) 1),
+            new ApiMessageAndVersion(
+                new OffsetCommitValue()
+                    .setOffset(100L)
+                    .setLeaderEpoch(10)
+                    .setMetadata("metadata")
+                    .setCommitTimestamp(1234L)
+                    .setExpireTimestamp(5678L),
+                (short) 1 // When expire timestamp is set, it is always version 1.
+            )
+        );
+
+        assertEquals(expectedRecord, RecordHelpers.newOffsetCommitRecord(
+            "group-id",
+            "foo",
+            1,
+            new OffsetAndMetadata(
+                100L,
+                OptionalInt.of(10),
+                "metadata",
+                1234L,
+                OptionalLong.of(5678L)),
+            metadataVersion
+        ));
+    }
+
+    @Test
+    public void testNewOffsetCommitTombstoneRecord() {
+        Record expectedRecord = new Record(
+            new ApiMessageAndVersion(
+                new OffsetCommitKey()
+                    .setGroup("group-id")
+                    .setTopic("foo")
+                    .setPartition(1),
+                (short) 1),
+            null);
+
+        Record record = RecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 1);
+        assertEquals(expectedRecord, record);
+    }
+
+    /**
+     * Creates a list of values to be added to the record and assigns partitions to racks for testing.
+     *
+     * @param numPartitions The number of partitions for the topic.
+     *
+     * For testing purposes, the following criteria are used:
+     *      - Number of replicas for each partition: 2
+     *      - Number of racks available to the cluster: 4
+     */
+    public static List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> mkListOfPartitionRacks(int numPartitions) {
+        List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionRacks = new ArrayList<>(numPartitions);
+        for (int i = 0; i < numPartitions; i++) {
+            List<String> racks = new ArrayList<>(Arrays.asList("rack" + i % 4, "rack" + (i + 1) % 4));
+            partitionRacks.add(
+                new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
+                    .setPartition(i)
+                    .setRacks(racks)
+            );
+        }
+        return partitionRacks;
+    }
+
+    /**
+     * Creates a map of partitions to racks for testing.
+     *
+     * @param numPartitions The number of partitions for the topic.
+     *
+     * For testing purposes, the following criteria are used:
+     *      - Number of replicas for each partition: 2
+     *      - Number of racks available to the cluster: 4
+     */
+    public static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
+        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
+        for (int i = 0; i < numPartitions; i++) {
+            partitionRacks.put(i, new HashSet<>(Arrays.asList("rack" + i % 4, "rack" + (i + 1) % 4)));
+        }
+        return partitionRacks;
     }
 }

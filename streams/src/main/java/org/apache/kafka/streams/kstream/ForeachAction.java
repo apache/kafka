@@ -27,6 +27,7 @@ package org.apache.kafka.streams.kstream;
  *
  * @param <K> key type
  * @param <V> value type
+ *
  * @see KStream#foreach(ForeachAction)
  */
 public interface ForeachAction<K, V> {
@@ -34,8 +35,10 @@ public interface ForeachAction<K, V> {
     /**
      * Perform an action for each record of a stream.
      *
-     * @param key   the key of the record
-     * @param value the value of the record
+     * @param key
+     *        the key of the record
+     * @param value
+     *        the value of the record
      */
     void apply(final K key, final V value);
 }

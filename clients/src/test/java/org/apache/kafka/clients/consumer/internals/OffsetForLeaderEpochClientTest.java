@@ -55,7 +55,7 @@ public class OffsetForLeaderEpochClientTest {
     @Test
     public void testEmptyResponse() {
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
-        RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future =
+        RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
                 offsetClient.sendAsyncRequest(Node.noNode(), Collections.emptyMap());
 
         OffsetsForLeaderEpochResponse resp = new OffsetsForLeaderEpochResponse(
@@ -63,7 +63,7 @@ public class OffsetForLeaderEpochClientTest {
         client.prepareResponse(resp);
         consumerClient.pollNoWakeup();
 
-        OffsetsForLeaderEpochClient.OffsetForEpochResult result = future.value();
+        OffsetsForLeaderEpochUtils.OffsetForEpochResult result = future.value();
         assertTrue(result.partitionsToRetry().isEmpty());
         assertTrue(result.endOffsets().isEmpty());
     }
@@ -75,7 +75,7 @@ public class OffsetForLeaderEpochClientTest {
                 new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
-        RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future =
+        RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
                 offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
 
         OffsetsForLeaderEpochResponse resp = new OffsetsForLeaderEpochResponse(
@@ -83,7 +83,7 @@ public class OffsetForLeaderEpochClientTest {
         client.prepareResponse(resp);
         consumerClient.pollNoWakeup();
 
-        OffsetsForLeaderEpochClient.OffsetForEpochResult result = future.value();
+        OffsetsForLeaderEpochUtils.OffsetForEpochResult result = future.value();
         assertFalse(result.partitionsToRetry().isEmpty());
         assertTrue(result.endOffsets().isEmpty());
     }
@@ -95,14 +95,14 @@ public class OffsetForLeaderEpochClientTest {
                 new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
-        RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future =
+        RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
                 offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
 
         client.prepareResponse(prepareOffsetForLeaderEpochResponse(
             tp0, Errors.NONE, 1, 10L));
         consumerClient.pollNoWakeup();
 
-        OffsetsForLeaderEpochClient.OffsetForEpochResult result = future.value();
+        OffsetsForLeaderEpochUtils.OffsetForEpochResult result = future.value();
         assertTrue(result.partitionsToRetry().isEmpty());
         assertTrue(result.endOffsets().containsKey(tp0));
         assertEquals(result.endOffsets().get(tp0).errorCode(), Errors.NONE.code());
@@ -117,7 +117,7 @@ public class OffsetForLeaderEpochClientTest {
                 new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
-        RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future =
+        RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
                 offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
 
         client.prepareResponse(prepareOffsetForLeaderEpochResponse(
@@ -136,7 +136,7 @@ public class OffsetForLeaderEpochClientTest {
                 new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
-        RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future =
+        RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
                 offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
 
         client.prepareResponse(prepareOffsetForLeaderEpochResponse(
@@ -144,7 +144,7 @@ public class OffsetForLeaderEpochClientTest {
         consumerClient.pollNoWakeup();
 
         assertFalse(future.failed());
-        OffsetsForLeaderEpochClient.OffsetForEpochResult result = future.value();
+        OffsetsForLeaderEpochUtils.OffsetForEpochResult result = future.value();
         assertTrue(result.partitionsToRetry().contains(tp0));
         assertFalse(result.endOffsets().containsKey(tp0));
     }
@@ -158,7 +158,7 @@ public class OffsetForLeaderEpochClientTest {
         LogContext logContext = new LogContext();
         time = new MockTime(1);
         subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
-        metadata = new ConsumerMetadata(0, Long.MAX_VALUE, false, false,
+        metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,

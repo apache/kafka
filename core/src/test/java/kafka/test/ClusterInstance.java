@@ -20,34 +20,34 @@ package kafka.test;
 import kafka.network.SocketServer;
 import kafka.server.BrokerFeatures;
 import kafka.test.annotation.ClusterTest;
+import kafka.test.annotation.Type;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.network.ListenerName;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
+import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
+
 public interface ClusterInstance {
 
-    enum ClusterType {
-        ZK,
-        RAFT
-    }
-
-    /**
-     * Cluster type. For now, only ZK is supported.
-     */
-    ClusterType clusterType();
+    Type type();
 
     default boolean isKRaftTest() {
-        return clusterType() == ClusterType.RAFT;
+        return type() == Type.KRAFT || type() == Type.CO_KRAFT;
     }
 
     /**
-     * The cluster configuration used to create this cluster. Changing data in this instance through this accessor will
-     * have no effect on the cluster since it is already provisioned.
+     * The immutable cluster configuration used to create this cluster.
      */
     ClusterConfig config();
 
@@ -87,6 +87,11 @@ public interface ClusterInstance {
      * The broker connect string which can be used by clients for bootstrapping
      */
     String bootstrapServers();
+
+    /**
+     * The broker connect string which can be used by clients for bootstrapping to the controller quorum.
+     */
+    String bootstrapControllers();
 
     /**
      * A collection of all brokers in the cluster. In ZK-based clusters this will also include the broker which is
@@ -140,7 +145,19 @@ public interface ClusterInstance {
 
     void startBroker(int brokerId);
 
-    void rollingBrokerRestart();
-
     void waitForReadyBrokers() throws InterruptedException;
+
+    default Set<GroupProtocol> supportedGroupProtocols() {
+        Map<String, String> serverProperties = config().serverProperties();
+        Set<GroupProtocol> supportedGroupProtocols = new HashSet<>();
+        supportedGroupProtocols.add(CLASSIC);
+
+        // KafkaConfig#isNewGroupCoordinatorEnabled check both NEW_GROUP_COORDINATOR_ENABLE_CONFIG and GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG
+        if (serverProperties.getOrDefault(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "").equals("true") ||
+                serverProperties.getOrDefault(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "").contains("consumer")) {
+            supportedGroupProtocols.add(CONSUMER);
+        }
+
+        return Collections.unmodifiableSet(supportedGroupProtocols);
+    }
 }

@@ -27,6 +27,9 @@ import java.util.Map;
  * The Converter interface provides support for translating between Kafka Connect's runtime data format
  * and byte[]. Internally, this likely includes an intermediate step to the format used by the serialization
  * layer (e.g. JsonNode, GenericRecord, Message).
+ * <p>Kafka Connect may discover implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
+ * To support this, implementations of this interface should also contain a service provider configuration file in
+ * {@code META-INF/services/org.apache.kafka.connect.storage.Converter}.
  */
 public interface Converter {
 

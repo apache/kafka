@@ -73,6 +73,14 @@
       "about": "Epoch time in milli seconds at which this event is generated."
     },
     {
+      "name": "CustomMetadata",
+      "type": "bytes",
+      "default": "null",
+      "versions": "0+",
+      "nullableVersions": "0+",
+      "about": "Custom metadata."
+    },
+    {
       "name": "RemoteLogSegmentState",
       "type": "int8",
       "versions": "0+",

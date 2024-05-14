@@ -20,6 +20,12 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
+
+import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkListOfPartitionRacks;
+import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -28,24 +34,29 @@ public class TopicMetadataTest {
     @Test
     public void testAttributes() {
         Uuid topicId = Uuid.randomUuid();
-        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15);
+        Map<Integer, Set<String>> partitionRacks = mkMapOfPartitionRacks(15);
+        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15, partitionRacks);
+
         assertEquals(topicId, topicMetadata.id());
         assertEquals("foo", topicMetadata.name());
         assertEquals(15, topicMetadata.numPartitions());
+        assertEquals(partitionRacks, topicMetadata.partitionRacks());
     }
 
     @Test
     public void testTopicIdAndNameCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new TopicMetadata(Uuid.randomUuid(), null, 15));
-        assertThrows(NullPointerException.class, () -> new TopicMetadata(null, "foo", 15));
+        assertThrows(NullPointerException.class, () -> new TopicMetadata(Uuid.randomUuid(), null, 15, Collections.emptyMap()));
+        assertThrows(NullPointerException.class, () -> new TopicMetadata(null, "foo", 15, Collections.emptyMap()));
     }
 
     @Test
     public void testEquals() {
         Uuid topicId = Uuid.randomUuid();
-        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15);
-        assertEquals(new TopicMetadata(topicId, "foo", 15), topicMetadata);
-        assertNotEquals(new TopicMetadata(topicId, "foo", 5), topicMetadata);
+        Map<Integer, Set<String>> partitionRacks = mkMapOfPartitionRacks(15);
+        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15, partitionRacks);
+
+        assertEquals(new TopicMetadata(topicId, "foo", 15, partitionRacks), topicMetadata);
+        assertNotEquals(new TopicMetadata(topicId, "foo", 5, mkMapOfPartitionRacks(5)), topicMetadata);
     }
 
     @Test
@@ -56,10 +67,11 @@ public class TopicMetadataTest {
         ConsumerGroupPartitionMetadataValue.TopicMetadata record = new ConsumerGroupPartitionMetadataValue.TopicMetadata()
             .setTopicId(topicId)
             .setTopicName(topicName)
-            .setNumPartitions(15);
+            .setNumPartitions(15)
+            .setPartitionMetadata(mkListOfPartitionRacks(15));
 
         assertEquals(
-            new TopicMetadata(topicId, topicName, 15),
+            new TopicMetadata(topicId, topicName, 15, mkMapOfPartitionRacks(15)),
             TopicMetadata.fromRecord(record)
         );
     }

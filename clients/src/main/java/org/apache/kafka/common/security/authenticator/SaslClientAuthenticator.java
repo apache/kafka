@@ -167,6 +167,7 @@ public class SaslClientAuthenticator implements Authenticator {
     // Version of SaslHandshake request/responses
     private short saslHandshakeVersion;
 
+    @SuppressWarnings("this-escape")
     public SaslClientAuthenticator(Map<String, ?> configs,
                                    AuthenticateCallbackHandler callbackHandler,
                                    String node,
@@ -681,7 +682,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
         public void setAuthenticationEndAndSessionReauthenticationTimes(long nowNanos) {
             authenticationEndNanos = nowNanos;
-            long sessionLifetimeMsToUse = 0;
+            long sessionLifetimeMsToUse;
             if (positiveSessionLifetimeMs != null) {
                 // pick a random percentage between 85% and 95% for session re-authentication
                 double pctWindowFactorToTakeNetworkLatencyAndClockDriftIntoAccount = 0.85;

@@ -15,7 +15,7 @@ package kafka.api
 import java.util
 import java.util.Properties
 
-import kafka.security.authorizer.{AclAuthorizer, AclEntry}
+import kafka.security.authorizer.AclAuthorizer
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
 import org.apache.kafka.clients.admin._
@@ -25,7 +25,9 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.config.ZkConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -67,7 +69,7 @@ object DescribeAuthorizedOperationsTest {
     operation: AclOperation
   ): AccessControlEntry = {
     new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, userName).toString,
-      AclEntry.WildcardHost, operation, ALLOW)
+      AclEntry.WILDCARD_HOST, operation, ALLOW)
   }
 }
 
@@ -75,7 +77,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
   import DescribeAuthorizedOperationsTest._
 
   override val brokerCount = 1
-  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
+  this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
   this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
 
   var client: Admin = _
@@ -87,7 +89,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
   override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
     val authorizer = CoreUtils.createObject[Authorizer](classOf[AclAuthorizer].getName)
     val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
-    val topicResource = new ResourcePattern(ResourceType.TOPIC, AclEntry.WildcardResource, PatternType.LITERAL)
+    val topicResource = new ResourcePattern(ResourceType.TOPIC, AclEntry.WILDCARD_RESOURCE, PatternType.LITERAL)
 
     try {
       authorizer.configure(this.configs.head.originals())
@@ -139,7 +141,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     val describeConsumerGroupsResult = client.describeConsumerGroups(Seq(Group1, Group2, Group3).asJava,
       new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
     assertEquals(3, describeConsumerGroupsResult.describedGroups().size())
-    val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP).asJava
+    val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
 
     val group1Description = describeConsumerGroupsResult.describedGroups().get(Group1).get
     assertEquals(expectedOperations, group1Description.authorizedOperations())
@@ -169,7 +171,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     assertEquals(Set(ClusterAllAcl), results.values.keySet.asScala)
     results.all.get
 
-    val expectedOperations = AclEntry.supportedOperations(ResourceType.CLUSTER).asJava
+    val expectedOperations = AclEntry.supportedOperations(ResourceType.CLUSTER)
 
     clusterDescribeResult = client.describeCluster(new DescribeClusterOptions().
       includeAuthorizedOperations(true))
@@ -197,7 +199,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     assertEquals(Set(Topic1Acl, Topic2All), results.values.keySet.asScala)
     results.all.get
 
-    val expectedOperations = AclEntry.supportedOperations(ResourceType.TOPIC).asJava
+    val expectedOperations = AclEntry.supportedOperations(ResourceType.TOPIC)
 
     describeTopicsResult = client.describeTopics(Set(Topic1, Topic2).asJava,
       new DescribeTopicsOptions().includeAuthorizedOperations(true)).allTopicNames.get()

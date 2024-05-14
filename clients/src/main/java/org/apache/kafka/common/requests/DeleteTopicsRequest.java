@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
 public class DeleteTopicsRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<DeleteTopicsRequest> {
-        private DeleteTopicsRequestData data;
+        private final DeleteTopicsRequestData data;
 
         public Builder(DeleteTopicsRequestData data) {
             super(ApiKeys.DELETE_TOPICS);
@@ -62,7 +62,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
         }
     }
 
-    private DeleteTopicsRequestData data;
+    private final DeleteTopicsRequestData data;
 
     private DeleteTopicsRequest(DeleteTopicsRequestData data, short version) {
         super(ApiKeys.DELETE_TOPICS, version);

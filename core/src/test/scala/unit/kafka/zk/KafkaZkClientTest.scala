@@ -22,11 +22,11 @@ import java.util.{Collections, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.security.authorizer.AclEntry
-import kafka.server.{ConfigType, KafkaConfig, QuorumTestHarness}
+import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.utils.CoreUtils
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
+import org.apache.kafka.common.acl.AccessControlEntry
 import org.apache.kafka.common.acl.AclOperation.READ
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.config.TopicConfig
@@ -43,7 +43,9 @@ import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.{ConfigType, ReplicationConfigs, ZkConfigs}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.{Code, NoAuthException, NoNodeException, NodeExistsException}
 import org.apache.zookeeper.{CreateMode, ZooDefs}
@@ -82,7 +84,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
     zkClient.createControllerEpochRaw(1)
     otherZkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient",
-      zkClientConfig = new ZKClientConfig)
+      zkClientConfig = new ZKClientConfig, enableEntityConfigControllerCheck = false)
     expiredSessionZkClient = ExpiredKafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled),
       zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
   }
@@ -105,7 +107,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
     // TLS connectivity itself is tested in system tests rather than here to avoid having to add TLS support
     // to kafka.zk.EmbeddedZookeeper
     val clientConfig = new ZKClientConfig()
-    val propKey = KafkaConfig.ZkClientCnxnSocketProp
+    val propKey = ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG
     val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
     KafkaConfig.setZooKeeperClientProperty(clientConfig, propKey, propVal)
     val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
@@ -598,7 +600,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
     ZkAclStore.stores.foreach(store => {
       assertFalse(zkClient.pathExists(store.aclPath))
       assertFalse(zkClient.pathExists(store.changeStore.aclChangePath))
-      AclEntry.ResourceTypes.foreach(resource => assertFalse(zkClient.pathExists(store.path(resource))))
+      AclEntry.RESOURCE_TYPES.forEach(resource => assertFalse(zkClient.pathExists(store.path(resource))))
     })
 
     // create acl paths
@@ -607,7 +609,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
     ZkAclStore.stores.foreach(store => {
       assertTrue(zkClient.pathExists(store.aclPath))
       assertTrue(zkClient.pathExists(store.changeStore.aclChangePath))
-      AclEntry.ResourceTypes.foreach(resource => assertTrue(zkClient.pathExists(store.path(resource))))
+      AclEntry.RESOURCE_TYPES.forEach(resource => assertTrue(zkClient.pathExists(store.path(resource))))
 
       val resource1 = new ResourcePattern(TOPIC, Uuid.randomUuid().toString, store.patternType)
       val resource2 = new ResourcePattern(TOPIC, Uuid.randomUuid().toString, store.patternType)
@@ -619,9 +621,9 @@ class KafkaZkClientTest extends QuorumTestHarness {
       assertFalse(zkClient.resourceExists(resource1))
 
 
-      val acl1 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), DENY, "host1" , READ)
-      val acl2 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), ALLOW, "*", READ)
-      val acl3 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), DENY, "host1", READ)
+      val acl1 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice").toString, "host1" , READ, DENY))
+      val acl2 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob").toString, "*", READ, ALLOW))
+      val acl3 = new AclEntry(new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob").toString, "host1", READ, DENY))
 
       // Conditional set should fail if path not created
       assertFalse(zkClient.conditionalSetAclsForResource(resource1, Set(acl1, acl3), 0)._1)
@@ -646,7 +648,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
       assertEquals(1, versionedAcls.zkVersion)
 
       //get resource Types
-      assertEquals(AclEntry.ResourceTypes.map(SecurityUtils.resourceTypeName), zkClient.getResourceTypes(store.patternType).toSet)
+      assertEquals(AclEntry.RESOURCE_TYPES.asScala.map(SecurityUtils.resourceTypeName), zkClient.getResourceTypes(store.patternType).toSet)
 
       //get resource name
       val resourceNames = zkClient.getResourceNames(store.patternType, TOPIC)
@@ -731,20 +733,20 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
   @Test
   def testEntityConfigManagementMethods(): Unit = {
-    assertTrue(zkClient.getEntityConfigs(ConfigType.Topic, topic1).isEmpty)
+    assertTrue(zkClient.getEntityConfigs(ConfigType.TOPIC, topic1).isEmpty)
 
-    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
-    assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.Topic, topic1))
+    zkClient.setOrCreateEntityConfigs(ConfigType.TOPIC, topic1, logProps)
+    assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.TOPIC, topic1))
 
     logProps.remove(TopicConfig.CLEANUP_POLICY_CONFIG)
-    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
-    assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.Topic, topic1))
+    zkClient.setOrCreateEntityConfigs(ConfigType.TOPIC, topic1, logProps)
+    assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.TOPIC, topic1))
 
-    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic2, logProps)
-    assertEquals(Set(topic1, topic2), zkClient.getAllEntitiesWithConfig(ConfigType.Topic).toSet)
+    zkClient.setOrCreateEntityConfigs(ConfigType.TOPIC, topic2, logProps)
+    assertEquals(Set(topic1, topic2), zkClient.getAllEntitiesWithConfig(ConfigType.TOPIC).toSet)
 
     zkClient.deleteTopicConfigs(Seq(topic1, topic2), controllerEpochZkVersion)
-    assertTrue(zkClient.getEntityConfigs(ConfigType.Topic, topic1).isEmpty)
+    assertTrue(zkClient.getEntityConfigs(ConfigType.TOPIC, topic1).isEmpty)
   }
 
   @Test
@@ -752,13 +754,13 @@ class KafkaZkClientTest extends QuorumTestHarness {
     assertFalse(zkClient.pathExists(ConfigEntityChangeNotificationZNode.path))
 
     // The parent path is created if needed
-    zkClient.createConfigChangeNotification(ConfigEntityZNode.path(ConfigType.Topic, topic1))
+    zkClient.createConfigChangeNotification(ConfigEntityZNode.path(ConfigType.TOPIC, topic1))
     assertPathExistenceAndData(
       "/config/changes/config_change_0000000000",
       """{"version":2,"entity_path":"/config/topics/topic1"}""")
 
     // Creation does not fail if the parent path exists
-    zkClient.createConfigChangeNotification(ConfigEntityZNode.path(ConfigType.Topic, topic2))
+    zkClient.createConfigChangeNotification(ConfigEntityZNode.path(ConfigType.TOPIC, topic2))
     assertPathExistenceAndData(
       "/config/changes/config_change_0000000001",
       """{"version":2,"entity_path":"/config/topics/topic2"}""")
@@ -783,12 +785,12 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
     val logProps2 = createLogProps(2048)
 
-    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
+    zkClient.setOrCreateEntityConfigs(ConfigType.TOPIC, topic1, logProps)
     assertEquals((Map(topic1 -> new LogConfig(logProps), topic2 -> emptyConfig), Map.empty),
       zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()),
       "One existing and one non-existent topic")
 
-    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic2, logProps2)
+    zkClient.setOrCreateEntityConfigs(ConfigType.TOPIC, topic2, logProps2)
     assertEquals((Map(topic1 -> new LogConfig(logProps), topic2 -> new LogConfig(logProps2)), Map.empty),
       zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()),
       "Two existing topics")
@@ -812,7 +814,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
         Seq(new EndPoint(host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)),
         rack = rack,
         features = features),
-      MetadataVersion.latest, jmxPort = port + 10)
+      MetadataVersion.latestTesting, jmxPort = port + 10)
 
   @Test
   def testRegisterBrokerInfo(): Unit = {
@@ -1487,8 +1489,28 @@ class KafkaZkClientTest extends QuorumTestHarness {
     }
   }
 
+  @Test
+  def testNoEntityConfigUpdateWithNoController(): Unit = {
+    val props = new Properties()
+    props.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "1") // normal config
+
+    // Create a client that cannot set entity configs without a controller present
+    val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient",
+      zkClientConfig = new ZKClientConfig)
+
+    try {
+      assertThrows(
+        classOf[ControllerMovedException],
+        () => client.setOrCreateEntityConfigs(ConfigType.BROKER, "1", props),
+      )
+    } finally {
+      client.close()
+    }
+  }
+
   class ExpiredKafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time)
-    extends KafkaZkClient(zooKeeperClient, isSecure, time) {
+    extends KafkaZkClient(zooKeeperClient, isSecure, time, false) {
     // Overwriting this method from the parent class to force the client to re-register the Broker.
     override def shouldReCreateEphemeralZNode(ephemeralOwnerId: Long): Boolean = {
       true

@@ -143,7 +143,7 @@ public class ListValueStore
         }
 
         @Override
-        public KeyValue<Bytes, byte[]> makeNext() {
+        protected KeyValue<Bytes, byte[]> makeNext() {
             while (currList.isEmpty() && bytesIterator.hasNext()) {
                 final KeyValue<Bytes, byte[]> next = bytesIterator.next();
                 nextKey = next.key;

@@ -78,29 +78,29 @@ public class WorkerInfo {
     /**
      * Collect general runtime information.
      */
-    protected void addRuntimeInfo() {
+    protected final void addRuntimeInfo() {
         List<String> jvmArgs = RUNTIME.getInputArguments();
-        values.put("jvm.args", Utils.join(jvmArgs, ", "));
+        values.put("jvm.args", String.join(", ", jvmArgs));
         String[] jvmSpec = {
                 RUNTIME.getVmVendor(),
                 RUNTIME.getVmName(),
                 RUNTIME.getSystemProperties().get("java.version"),
                 RUNTIME.getVmVersion()
         };
-        values.put("jvm.spec", Utils.join(jvmSpec, ", "));
+        values.put("jvm.spec", String.join(", ", jvmSpec));
         values.put("jvm.classpath", RUNTIME.getClassPath());
     }
 
     /**
      * Collect system information.
      */
-    protected void addSystemInfo() {
+    protected final void addSystemInfo() {
         String[] osInfo = {
                 OS.getName(),
                 OS.getArch(),
                 OS.getVersion(),
         };
-        values.put("os.spec", Utils.join(osInfo, ", "));
+        values.put("os.spec", String.join(", ", osInfo));
         values.put("os.vcpus", String.valueOf(OS.getAvailableProcessors()));
     }
 

@@ -10,11 +10,11 @@ A new `@ClusterTest` annotation is introduced which allows for a test to declara
 def testSomething(): Unit = { ... }
 ```
 
-This annotation has fields for cluster type and number of brokers, as well as commonly parameterized configurations. 
+This annotation has fields for a set of cluster types and number of brokers, as well as commonly parameterized configurations. 
 Arbitrary server properties can also be provided in the annotation:
 
 ```java
-@ClusterTest(clusterType = Type.Zk, securityProtocol = "PLAINTEXT", properties = {
+@ClusterTest(types = {Type.Zk}, securityProtocol = "PLAINTEXT", properties = {
   @ClusterProperty(key = "inter.broker.protocol.version", value = "2.7-IV2"),
   @ClusterProperty(key = "socket.send.buffer.bytes", value = "10240"),
 })
@@ -102,38 +102,18 @@ For each generated invocation:
 
 # Dependency Injection
 
-A few classes are introduced to provide context to the underlying cluster and to provide reusable functionality that was 
+The class is introduced to provide context to the underlying cluster and to provide reusable functionality that was
 previously garnered from the test hierarchy.
 
-* ClusterConfig: a mutable cluster configuration, includes cluster type, number of brokers, properties, etc
 * ClusterInstance: a shim to the underlying class that actually runs the cluster, provides access to things like SocketServers
-* IntegrationTestHelper: connection related functions taken from IntegrationTestHarness and BaseRequestTest
 
-In order to have one of these objects injected, simply add it as a parameter to your test class, `@BeforeEach` method, or test method.
+In order to inject the object, simply add it as a parameter to your test class, `@BeforeEach` method, or test method.
 
 | Injection | Class | BeforeEach | Test | Notes
 | --- | --- | --- | --- | --- |
-| ClusterConfig | yes | yes | yes* | Once in the test, changing config has no effect |
 | ClusterInstance | yes* | no | yes | Injectable at class level for convenience, can only be accessed inside test |
-| IntegrationTestHelper | yes | yes | yes | - |
-
-```scala
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-class SomeTestClass(helper: IntegrationTestHelper) {
- 
-  @BeforeEach
-  def setup(config: ClusterConfig): Unit = {
-    config.serverProperties().put("foo", "bar")
-  }
-
-  @ClusterTest
-  def testSomething(cluster: ClusterInstance): Unit = {
-    val topics = cluster.createAdminClient().listTopics()
-  }
-}
-```
 
 # Gotchas
 * Test methods annotated with JUnit's `@Test` will still be run, but no cluster will be started and no dependency 
   injection will happen. This is generally not what you want.
-* Even though ClusterConfig is accessible and mutable inside the test method, changing it will have no effect on the cluster.
+* Even though ClusterConfig is accessible, it is immutable inside the test method.

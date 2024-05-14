@@ -28,6 +28,7 @@ import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, De
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
+import org.apache.kafka.server.config.KafkaSecurityConfigs
 import org.junit.jupiter.api.{Test, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -49,13 +50,13 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
       this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[AlterCredentialsTest.TestAuthorizer].getName)
 
     }
-    this.serverConfig.setProperty(KafkaConfig.PrincipalBuilderClassProp, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName)
+    this.serverConfig.setProperty(KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName)
     this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
 
     super.setUp(testInfo)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testDescribeNothing(quorum: String): Unit = {
     val request = new DescribeUserScramCredentialsRequest.Builder(
@@ -67,7 +68,7 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(0, response.data.results.size, "Expected no credentials when describing everything and there are no credentials")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testDescribeWithNull(quorum: String): Unit = {
     val request = new DescribeUserScramCredentialsRequest.Builder(
@@ -89,7 +90,7 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(Errors.NONE.code, error, "Did not expect controller error when routed to non-controller")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testDescribeSameUserTwice(quorum: String): Unit = {
     val user = "user1"
@@ -105,7 +106,7 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(s"Cannot describe SCRAM credentials for the same user twice in a single request: $user", result.errorMessage)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft", "zk"))
   def testUnknownUser(quorum: String): Unit = {
     val unknownUser = "unknownUser"

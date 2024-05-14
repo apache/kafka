@@ -33,8 +33,12 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
     public static final String SEPARATOR_CONFIG = MirrorClientConfig.REPLICATION_POLICY_SEPARATOR;
     public static final String SEPARATOR_DEFAULT = ".";
 
+    public static final String INTERNAL_TOPIC_SEPARATOR_ENABLED_CONFIG = MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED;
+    public static final Boolean INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT = true;
+
     private String separator = SEPARATOR_DEFAULT;
     private Pattern separatorPattern = Pattern.compile(Pattern.quote(SEPARATOR_DEFAULT));
+    private boolean isInternalTopicSeparatorEnabled = true;
 
     @Override
     public void configure(Map<String, ?> props) {
@@ -42,6 +46,13 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
             separator = (String) props.get(SEPARATOR_CONFIG);
             log.info("Using custom remote topic separator: '{}'", separator);
             separatorPattern = Pattern.compile(Pattern.quote(separator));
+
+            if (props.containsKey(INTERNAL_TOPIC_SEPARATOR_ENABLED_CONFIG)) {
+                isInternalTopicSeparatorEnabled = Boolean.parseBoolean(props.get(INTERNAL_TOPIC_SEPARATOR_ENABLED_CONFIG).toString());
+                if (!isInternalTopicSeparatorEnabled) {
+                    log.warn("Disabling custom topic separator for internal topics; will use '.' instead of '{}'", separator);
+                }
+            }
         }
     }
 
@@ -71,17 +82,20 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
         }
     }
 
+    private String internalSeparator() {
+        return isInternalTopicSeparatorEnabled ? separator : ".";
+    }
     private String internalSuffix() {
-        return separator + "internal";
+        return internalSeparator() + "internal";
     }
 
     private String checkpointsTopicSuffix() {
-        return separator + "checkpoints" + internalSuffix();
+        return internalSeparator() + "checkpoints" + internalSuffix();
     }
 
     @Override
     public String offsetSyncsTopic(String clusterAlias) {
-        return "mm2-offset-syncs" + separator + clusterAlias + internalSuffix();
+        return "mm2-offset-syncs" + internalSeparator() + clusterAlias + internalSuffix();
     }
 
     @Override

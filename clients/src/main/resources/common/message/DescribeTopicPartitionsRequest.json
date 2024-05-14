@@ -1,0 +1,40 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 75,
+  "type": "request",
+  "listeners": ["broker"],
+  "name": "DescribeTopicPartitionsRequest",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "Topics", "type": "[]TopicRequest", "versions": "0+",
+      "about": "The topics to fetch details for.",
+      "fields": [
+        { "name": "Name", "type": "string", "versions": "0+",
+          "about": "The topic name", "versions": "0+", "entityType": "topicName"}
+      ]
+    },
+    { "name": "ResponsePartitionLimit", "type": "int32", "versions": "0+", "default": "2000",
+      "about": "The maximum number of partitions included in the response." },
+    { "name": "Cursor", "type": "Cursor", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "The first topic and partition index to fetch details for.", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0+",
+        "about": "The name for the first topic to process", "versions": "0+", "entityType": "topicName"},
+      { "name": "PartitionIndex", "type": "int32", "versions": "0+", "about": "The partition index to start with"}
+    ]}
+  ]
+}

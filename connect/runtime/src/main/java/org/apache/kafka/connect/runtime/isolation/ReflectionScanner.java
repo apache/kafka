@@ -25,15 +25,13 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
-import org.reflections.Configuration;
 import org.reflections.Reflections;
 import org.reflections.ReflectionsException;
-import org.reflections.scanners.SubTypesScanner;
+import org.reflections.scanners.Scanners;
 import org.reflections.util.ConfigurationBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URL;
 import java.util.Collections;
 import java.util.ServiceLoader;
 import java.util.Set;
@@ -45,6 +43,7 @@ import java.util.TreeSet;
  * <p>This implements the legacy discovery strategy, which uses a combination of reflection and service loading in
  * order to discover plugins. Specifically, a plugin appears in the scan result if all the following conditions are true:
  * <ul>
+ *     <li>The class and direct dependencies can be loaded</li>
  *     <li>The class is concrete</li>
  *     <li>The class is public</li>
  *     <li>The class has a no-args constructor</li>
@@ -62,102 +61,85 @@ import java.util.TreeSet;
  *     </li>
  * </ul>
  * <p>Note: This scanner has a runtime proportional to the number of overall classes in the passed-in
- * {@link PluginSource} objects, which may be significant for plugins with large dependencies.
+ * {@link PluginSource} objects, which may be significant for plugins with large dependencies. For a more performant
+ * implementation, consider using {@link ServiceLoaderScanner} and follow migration instructions for
+ * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-898%3A+Modernize+Connect+plugin+discovery">KIP-898</a>.
  */
 public class ReflectionScanner extends PluginScanner {
 
     private static final Logger log = LoggerFactory.getLogger(ReflectionScanner.class);
 
-    public static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
+    private static <T> String versionFor(Class<? extends T> pluginKlass) throws ReflectiveOperationException {
         T pluginImpl = pluginKlass.getDeclaredConstructor().newInstance();
         return versionFor(pluginImpl);
     }
 
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
-        ClassLoader loader = source.loader();
         ConfigurationBuilder builder = new ConfigurationBuilder();
-        builder.setClassLoaders(new ClassLoader[]{loader});
+        builder.setClassLoaders(new ClassLoader[]{source.loader()});
         builder.addUrls(source.urls());
-        builder.setScanners(new SubTypesScanner());
-        builder.useParallelExecutor();
-        Reflections reflections = new InternalReflections(builder);
+        builder.setScanners(Scanners.SubTypes);
+        builder.setParallel(true);
+        Reflections reflections = new Reflections(builder);
 
         return new PluginScanResult(
-                getPluginDesc(reflections, SinkConnector.class, loader),
-                getPluginDesc(reflections, SourceConnector.class, loader),
-                getPluginDesc(reflections, Converter.class, loader),
-                getPluginDesc(reflections, HeaderConverter.class, loader),
-                getTransformationPluginDesc(loader, reflections),
-                getPredicatePluginDesc(loader, reflections),
-                getServiceLoaderPluginDesc(ConfigProvider.class, loader),
-                getServiceLoaderPluginDesc(ConnectRestExtension.class, loader),
-                getServiceLoaderPluginDesc(ConnectorClientConfigOverridePolicy.class, loader)
+                getPluginDesc(reflections, PluginType.SINK, source),
+                getPluginDesc(reflections, PluginType.SOURCE, source),
+                getPluginDesc(reflections, PluginType.CONVERTER, source),
+                getPluginDesc(reflections, PluginType.HEADER_CONVERTER, source),
+                getTransformationPluginDesc(source, reflections),
+                getPredicatePluginDesc(source, reflections),
+                getServiceLoaderPluginDesc(PluginType.CONFIGPROVIDER, source),
+                getServiceLoaderPluginDesc(PluginType.REST_EXTENSION, source),
+                getServiceLoaderPluginDesc(PluginType.CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY, source)
         );
     }
 
     @SuppressWarnings({"unchecked"})
-    private SortedSet<PluginDesc<Predicate<?>>> getPredicatePluginDesc(ClassLoader loader, Reflections reflections) {
-        return (SortedSet<PluginDesc<Predicate<?>>>) (SortedSet<?>) getPluginDesc(reflections, Predicate.class, loader);
+    private SortedSet<PluginDesc<Predicate<?>>> getPredicatePluginDesc(PluginSource source, Reflections reflections) {
+        return (SortedSet<PluginDesc<Predicate<?>>>) (SortedSet<?>) getPluginDesc(reflections, PluginType.PREDICATE, source);
     }
 
     @SuppressWarnings({"unchecked"})
-    private SortedSet<PluginDesc<Transformation<?>>> getTransformationPluginDesc(ClassLoader loader, Reflections reflections) {
-        return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getPluginDesc(reflections, Transformation.class, loader);
+    private SortedSet<PluginDesc<Transformation<?>>> getTransformationPluginDesc(PluginSource source, Reflections reflections) {
+        return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getPluginDesc(reflections, PluginType.TRANSFORMATION, source);
     }
 
+    @SuppressWarnings({"unchecked"})
     private <T> SortedSet<PluginDesc<T>> getPluginDesc(
             Reflections reflections,
-            Class<T> klass,
-            ClassLoader loader
+            PluginType type,
+            PluginSource source
     ) {
         Set<Class<? extends T>> plugins;
         try {
-            plugins = reflections.getSubTypesOf(klass);
+            plugins = reflections.getSubTypesOf((Class<T>) type.superClass());
         } catch (ReflectionsException e) {
-            log.debug("Reflections scanner could not find any classes for URLs: " +
-                    reflections.getConfiguration().getUrls(), e);
+            log.debug("Reflections scanner could not find any {} in {} for URLs: {}",
+                    type, source, source.urls(), e);
             return Collections.emptySortedSet();
         }
 
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
         for (Class<? extends T> pluginKlass : plugins) {
             if (!PluginUtils.isConcrete(pluginKlass)) {
-                log.debug("Skipping {} as it is not concrete implementation", pluginKlass);
+                log.debug("Skipping {} in {} as it is not concrete implementation", pluginKlass, source);
                 continue;
             }
-            if (pluginKlass.getClassLoader() != loader) {
+            if (pluginKlass.getClassLoader() != source.loader()) {
                 log.debug("{} from other classloader {} is visible from {}, excluding to prevent isolated loading",
-                        pluginKlass.getSimpleName(), pluginKlass.getClassLoader(), loader);
+                        pluginKlass, pluginKlass.getClassLoader(), source);
                 continue;
             }
-            try (LoaderSwap loaderSwap = withClassLoader(loader)) {
-                result.add(pluginDesc(pluginKlass, versionFor(pluginKlass), loader));
+            try (LoaderSwap loaderSwap = withClassLoader(source.loader())) {
+                result.add(pluginDesc(pluginKlass, versionFor(pluginKlass), type, source));
             } catch (ReflectiveOperationException | LinkageError e) {
-                log.error("Failed to discover {}: Unable to instantiate {}{}", klass.getSimpleName(), pluginKlass.getSimpleName(), reflectiveErrorDescription(e), e);
+                log.error("Failed to discover {} in {}: Unable to instantiate {}{}",
+                        type.simpleName(), source, pluginKlass.getSimpleName(),
+                        reflectiveErrorDescription(e), e);
             }
         }
         return result;
-    }
-
-    private static class InternalReflections extends Reflections {
-
-        public InternalReflections(Configuration configuration) {
-            super(configuration);
-        }
-
-        // When Reflections is used for parallel scans, it has a bug where it propagates ReflectionsException
-        // as RuntimeException.  Override the scan behavior to emulate the singled-threaded logic.
-        @Override
-        protected void scan(URL url) {
-            try {
-                super.scan(url);
-            } catch (ReflectionsException e) {
-                Logger log = Reflections.log;
-                if (log != null && log.isWarnEnabled()) {
-                    log.warn("could not create Vfs.Dir from url. ignoring the exception and continuing", e);
-                }
-            }
-        }
     }
 }

@@ -16,181 +16,150 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
-import org.apache.log4j.Hierarchy;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
+import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
+import org.slf4j.event.Level;
 
+import javax.ws.rs.core.Response;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.List;
-import java.util.Map;
-import java.util.Vector;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("unchecked")
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class LoggingResourceTest {
 
-    @Test
-    public void getLoggersIgnoresNullLevelsTest() {
-        LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root") {
-        };
-        Logger a = new Logger("a") {
-        };
-        a.setLevel(null);
-        Logger b = new Logger("b") {
-        };
-        b.setLevel(Level.INFO);
-        when(loggingResource.currentLoggers()).thenReturn(loggers(a, b));
-        when(loggingResource.rootLogger()).thenReturn(root);
-        when(loggingResource.listLoggers()).thenCallRealMethod();
-        Map<String, Map<String, String>> loggers = (Map<String, Map<String, String>>) loggingResource.listLoggers().getEntity();
-        assertEquals(1, loggers.size());
-        assertEquals("INFO", loggers.get("b").get("level"));
+    private LoggingResource loggingResource;
+
+    @Mock
+    private Herder herder;
+
+    @Before
+    public void setup() {
+        loggingResource = new LoggingResource(herder);
     }
 
     @Test
-    public void getLoggerFallsbackToEffectiveLogLevelTest() {
-        LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root") {
-        };
-        root.setLevel(Level.ERROR);
-        Hierarchy hierarchy = new Hierarchy(root);
-        Logger a = hierarchy.getLogger("a");
-        a.setLevel(null);
-        Logger b = hierarchy.getLogger("b");
-        b.setLevel(Level.INFO);
-        when(loggingResource.currentLoggers()).thenReturn(loggers(a, b));
-        when(loggingResource.rootLogger()).thenReturn(root);
-        when(loggingResource.getLogger(any())).thenCallRealMethod();
-        Map<String, String> level = (Map<String, String>) loggingResource.getLogger("a").getEntity();
-        assertEquals(1, level.size());
-        assertEquals("ERROR", level.get("level"));
+    public void testGetLevelNotFound() {
+        final String logger = "org.apache.rostropovich";
+        when(herder.loggerLevel(logger)).thenReturn(null);
+        assertThrows(
+                NotFoundException.class,
+                () -> loggingResource.getLogger(logger)
+        );
     }
 
     @Test
-    public void getUnknownLoggerTest() {
-        LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root") {
-        };
-        root.setLevel(Level.ERROR);
-        Hierarchy hierarchy = new Hierarchy(root);
-        Logger a = hierarchy.getLogger("a");
-        a.setLevel(null);
-        Logger b = hierarchy.getLogger("b");
-        b.setLevel(Level.INFO);
-        when(loggingResource.currentLoggers()).thenReturn(loggers(a, b));
-        when(loggingResource.rootLogger()).thenReturn(root);
-        when(loggingResource.getLogger(any())).thenCallRealMethod();
-        assertThrows(NotFoundException.class, () -> loggingResource.getLogger("c"));
-    }
+    public void testGetLevel() {
+        final String logger = "org.apache.kafka.producer";
+        final LoggerLevel expectedLevel = new LoggerLevel(Level.WARN.toString(), 976L);
+        when(herder.loggerLevel(logger)).thenReturn(expectedLevel);
 
-    @Test
-    public void setLevelTest() {
-        LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root") {
-        };
-        root.setLevel(Level.ERROR);
-        Hierarchy hierarchy = new Hierarchy(root);
-        Logger p = hierarchy.getLogger("a.b.c.p");
-        Logger x = hierarchy.getLogger("a.b.c.p.X");
-        Logger y = hierarchy.getLogger("a.b.c.p.Y");
-        Logger z = hierarchy.getLogger("a.b.c.p.Z");
-        Logger w = hierarchy.getLogger("a.b.c.s.W");
-        x.setLevel(Level.INFO);
-        y.setLevel(Level.INFO);
-        z.setLevel(Level.INFO);
-        w.setLevel(Level.INFO);
-        when(loggingResource.currentLoggers()).thenReturn(loggers(x, y, z, w));
-        when(loggingResource.lookupLogger("a.b.c.p")).thenReturn(p);
-        when(loggingResource.rootLogger()).thenReturn(root);
-        when(loggingResource.setLevel(any(), any())).thenCallRealMethod();
-        List<String> modified = (List<String>) loggingResource.setLevel("a.b.c.p", Collections.singletonMap("level", "DEBUG")).getEntity();
-        assertEquals(4, modified.size());
-        assertEquals(Arrays.asList("a.b.c.p", "a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z"), modified);
-        assertEquals(p.getLevel(), Level.DEBUG);
-        assertEquals(x.getLevel(), Level.DEBUG);
-        assertEquals(y.getLevel(), Level.DEBUG);
-        assertEquals(z.getLevel(), Level.DEBUG);
-    }
+        Response response = loggingResource.getLogger(logger);
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        LoggerLevel actualLevel = (LoggerLevel) response.getEntity();
 
-    @Test
-    public void setRootLevelTest() {
-        LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root") {
-        };
-        root.setLevel(Level.ERROR);
-        Hierarchy hierarchy = new Hierarchy(root);
-        Logger p = hierarchy.getLogger("a.b.c.p");
-        Logger x = hierarchy.getLogger("a.b.c.p.X");
-        Logger y = hierarchy.getLogger("a.b.c.p.Y");
-        Logger z = hierarchy.getLogger("a.b.c.p.Z");
-        Logger w = hierarchy.getLogger("a.b.c.s.W");
-        x.setLevel(Level.INFO);
-        y.setLevel(Level.INFO);
-        z.setLevel(Level.INFO);
-        w.setLevel(Level.INFO);
-        when(loggingResource.currentLoggers()).thenReturn(loggers(x, y, z, w));
-        when(loggingResource.lookupLogger("a.b.c.p")).thenReturn(p);
-        when(loggingResource.rootLogger()).thenReturn(root);
-        when(loggingResource.setLevel(any(), any())).thenCallRealMethod();
-        List<String> modified = (List<String>) loggingResource.setLevel("root", Collections.singletonMap("level", "DEBUG")).getEntity();
-        assertEquals(5, modified.size());
-        assertEquals(Arrays.asList("a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z", "a.b.c.s.W", "root"), modified);
-        assertNull(p.getLevel());
-        assertEquals(root.getLevel(), Level.DEBUG);
-        assertEquals(w.getLevel(), Level.DEBUG);
-        assertEquals(x.getLevel(), Level.DEBUG);
-        assertEquals(y.getLevel(), Level.DEBUG);
-        assertEquals(z.getLevel(), Level.DEBUG);
+        assertEquals(
+                expectedLevel,
+                actualLevel
+        );
     }
 
     @Test
     public void setLevelWithEmptyArgTest() {
-        LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root") {
-        };
-        root.setLevel(Level.ERROR);
-        Hierarchy hierarchy = new Hierarchy(root);
-        Logger a = hierarchy.getLogger("a");
-        a.setLevel(null);
-        Logger b = hierarchy.getLogger("b");
-        b.setLevel(Level.INFO);
-        when(loggingResource.currentLoggers()).thenReturn(loggers(a, b));
-        when(loggingResource.rootLogger()).thenReturn(root);
-        when(loggingResource.setLevel(any(), any())).thenCallRealMethod();
-        assertThrows(BadRequestException.class, () -> loggingResource.setLevel("@root", Collections.emptyMap()));
+        for (String scope : Arrays.asList("worker", "cluster", "N/A", null)) {
+            assertThrows(
+                    BadRequestException.class,
+                    () -> loggingResource.setLevel(
+                            "@root",
+                            Collections.emptyMap(),
+                            scope
+                    )
+            );
+        }
     }
 
     @Test
     public void setLevelWithInvalidArgTest() {
-        LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root") {
-        };
-        root.setLevel(Level.ERROR);
-        Hierarchy hierarchy = new Hierarchy(root);
-        Logger a = hierarchy.getLogger("a");
-        a.setLevel(null);
-        Logger b = hierarchy.getLogger("b");
-        b.setLevel(Level.INFO);
-        when(loggingResource.currentLoggers()).thenReturn(loggers(a, b));
-        when(loggingResource.rootLogger()).thenReturn(root);
-        when(loggingResource.setLevel(any(), any())).thenCallRealMethod();
-        assertThrows(NotFoundException.class, () -> loggingResource.setLevel("@root", Collections.singletonMap("level", "HIGH")));
+        for (String scope : Arrays.asList("worker", "cluster", "N/A", null)) {
+            assertThrows(
+                    NotFoundException.class,
+                    () -> loggingResource.setLevel(
+                            "@root",
+                            Collections.singletonMap("level", "HIGH"),
+                            scope
+                    )
+            );
+        }
     }
 
-    private Enumeration<Logger> loggers(Logger... loggers) {
-        return new Vector<>(Arrays.asList(loggers)).elements();
+    @Test
+    public void testSetLevelDefaultScope() {
+        testSetLevelWorkerScope(null, true);
+    }
+
+    @Test
+    public void testSetLevelInvalidScope() {
+        testSetLevelWorkerScope("kip-976", true);
+    }
+
+    @Test
+    public void testSetLevelWorkerScope() {
+        testSetLevelWorkerScope("worker", false);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void testSetLevelWorkerScope(String scope, boolean expectWarning) {
+        final String logger = "org.apache.kafka.connect";
+        final String level = "TRACE";
+        final List<String> expectedLoggers = Arrays.asList(
+                "org.apache.kafka.connect",
+                "org.apache.kafka.connect.runtime.distributed.DistributedHerder"
+        );
+        when(herder.setWorkerLoggerLevel(logger, level)).thenReturn(expectedLoggers);
+
+        List<String> actualLoggers;
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(LoggingResource.class)) {
+            Response response = loggingResource.setLevel(logger, Collections.singletonMap("level", level), scope);
+            assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+            actualLoggers = (List<String>) response.getEntity();
+            long warningMessages = logCaptureAppender.getEvents().stream()
+                    .filter(e -> "WARN".equals(e.getLevel()))
+                    .count();
+            if (expectWarning) {
+                assertEquals(1, warningMessages);
+            } else {
+                assertEquals(0, warningMessages);
+            }
+        }
+
+        assertEquals(expectedLoggers, actualLoggers);
+    }
+
+    @Test
+    public void testSetLevelClusterScope() {
+        final String logger = "org.apache.kafka.connect";
+        final String level = "TRACE";
+
+        Response response = loggingResource.setLevel(logger, Collections.singletonMap("level", level), "cluster");
+
+        assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
+        assertNull(response.getEntity());
+
+        verify(herder).setClusterLoggerLevel(logger, level);
     }
 
 }

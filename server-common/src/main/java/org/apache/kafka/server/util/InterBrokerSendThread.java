@@ -118,6 +118,10 @@ public abstract class InterBrokerSendThread extends ShutdownableThread {
                 // DisconnectException is expected when NetworkClient#initiateClose is called
                 return;
             }
+            if (t instanceof InterruptedException && !isRunning()) {
+                // InterruptedException is expected when shutting down. Throw the error to ShutdownableThread to handle
+                throw t;
+            }
             log.error("unhandled exception caught in InterBrokerSendThread", t);
             // rethrow any unhandled exceptions as FatalExitError so the JVM will be terminated
             // as we will be in an unknown state with potentially some requests dropped and not

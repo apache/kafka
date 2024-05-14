@@ -18,11 +18,15 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP;
 
 public class RemoteLogManagerConfigTest {
 
@@ -32,21 +36,27 @@ public class RemoteLogManagerConfigTest {
         }
     }
 
-    @Test
-    public void testValidConfigs() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testValidConfigs(boolean useDefaultRemoteLogMetadataManagerClass) {
         String rsmPrefix = "__custom.rsm.";
         String rlmmPrefix = "__custom.rlmm.";
         Map<String, Object> rsmProps = Collections.singletonMap("rsm.prop", "val");
         Map<String, Object> rlmmProps = Collections.singletonMap("rlmm.prop", "val");
+        String remoteLogMetadataManagerClass = useDefaultRemoteLogMetadataManagerClass ? DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME : "dummy.remote.log.metadata.class";
         RemoteLogManagerConfig expectedRemoteLogManagerConfig
                 = new RemoteLogManagerConfig(true, "dummy.remote.storage.class", "dummy.remote.storage.class.path",
-                                             "dummy.remote.log.metadata.class", "dummy.remote.log.metadata.class.path",
-                                             "listener.name", 1024 * 1024L, 1, 60000L, 100L, 60000L, 0.3, 10, 100,
+                                             remoteLogMetadataManagerClass, "dummy.remote.log.metadata.class.path",
+                                             "listener.name", 1024 * 1024L, 1, 60000L, 100L, 60000L, 0.3, 10, 100, 100,
                                              rsmPrefix, rsmProps, rlmmPrefix, rlmmProps);
 
         Map<String, Object> props = extractProps(expectedRemoteLogManagerConfig);
         rsmProps.forEach((k, v) -> props.put(rsmPrefix + k, v));
         rlmmProps.forEach((k, v) -> props.put(rlmmPrefix + k, v));
+        // Removing remote.log.metadata.manager.class.name so that the default value gets picked up.
+        if (useDefaultRemoteLogMetadataManagerClass) {
+            props.remove(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP);
+        }
         TestConfig config = new TestConfig(props);
         RemoteLogManagerConfig remoteLogManagerConfig = new RemoteLogManagerConfig(config);
         Assertions.assertEquals(expectedRemoteLogManagerConfig, remoteLogManagerConfig);
@@ -82,6 +92,8 @@ public class RemoteLogManagerConfigTest {
                   remoteLogManagerConfig.remoteLogReaderThreads());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP,
                   remoteLogManagerConfig.remoteLogReaderMaxPendingTasks());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP,
+                  remoteLogManagerConfig.remoteLogMetadataCustomMetadataMaxBytes());
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP,
                   remoteLogManagerConfig.remoteStorageManagerPrefix());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP,

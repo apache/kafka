@@ -26,7 +26,9 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
@@ -62,7 +64,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
  * <p>
  * This implementation currently does nothing with the topic names or header keys.
  */
-public class JsonConverter implements Converter, HeaderConverter {
+public class JsonConverter implements Converter, HeaderConverter, Versioned {
 
     private static final Map<Schema.Type, JsonToConnectTypeConverter> TO_CONNECT_CONVERTERS = new EnumMap<>(Schema.Type.class);
 
@@ -141,7 +143,7 @@ public class JsonConverter implements Converter, HeaderConverter {
     // names specified in the field
     private static final HashMap<String, LogicalTypeConverter> LOGICAL_CONVERTERS = new HashMap<>();
 
-    private static final JsonNodeFactory JSON_NODE_FACTORY = JsonNodeFactory.withExactBigDecimals(true);
+    private static final JsonNodeFactory JSON_NODE_FACTORY = new JsonNodeFactory(true);
 
     static {
         LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
@@ -233,9 +235,21 @@ public class JsonConverter implements Converter, HeaderConverter {
     private final JsonDeserializer deserializer;
 
     public JsonConverter() {
+        this(true);
+    }
+
+    /**
+     * Creates a JsonConvert initializing serializer and deserializer.
+     *
+     * @param enableModules permits to enable/disable the registration of additional Jackson modules.
+     * <p>
+     * NOTE: This is visible only for testing
+     */
+    public JsonConverter(boolean enableModules) {
         serializer = new JsonSerializer(
             mkSet(),
-            JSON_NODE_FACTORY
+            JSON_NODE_FACTORY,
+            enableModules
         );
 
         deserializer = new JsonDeserializer(
@@ -244,7 +258,8 @@ public class JsonConverter implements Converter, HeaderConverter {
                 // floating point numbers that cannot fit into float64
                 DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS
             ),
-            JSON_NODE_FACTORY
+            JSON_NODE_FACTORY,
+            enableModules
         );
     }
 
@@ -256,6 +271,11 @@ public class JsonConverter implements Converter, HeaderConverter {
     // visible for testing
     long sizeOfToConnectSchemaCache() {
         return toConnectSchemaCache.size();
+    }
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
     }
 
     @Override

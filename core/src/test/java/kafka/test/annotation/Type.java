@@ -30,36 +30,22 @@ import java.util.function.Consumer;
 public enum Type {
     KRAFT {
         @Override
-        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf(), false));
+        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, false));
         }
     },
     CO_KRAFT {
         @Override
-        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf(), true));
+        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, true));
         }
     },
     ZK {
         @Override
-        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new ZkClusterInvocationContext(config.copyOf()));
-        }
-    },
-    ALL {
-        @Override
-        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf(), false));
-            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf(), true));
-            invocationConsumer.accept(new ZkClusterInvocationContext(config.copyOf()));
-        }
-    },
-    DEFAULT {
-        @Override
-        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            throw new UnsupportedOperationException("Cannot create invocation contexts for DEFAULT type");
+        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config));
         }
     };
 
-    public abstract void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer);
+    public abstract void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer);
 }

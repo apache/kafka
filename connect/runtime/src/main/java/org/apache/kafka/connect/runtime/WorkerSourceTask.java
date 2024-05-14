@@ -21,6 +21,8 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
@@ -40,6 +42,7 @@ import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
@@ -48,6 +51,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.connect.runtime.SubmittedRecords.CommittableOffsets;
 
@@ -70,7 +74,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             Converter valueConverter,
                             ErrorHandlingMetrics errorMetrics,
                             HeaderConverter headerConverter,
-                            TransformationChain<SourceRecord> transformationChain,
+                            TransformationChain<SourceRecord, SourceRecord> transformationChain,
                             Producer<byte[], byte[]> producer,
                             TopicAdmin admin,
                             Map<String, TopicCreationGroup> topicGroups,
@@ -82,14 +86,15 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             ConnectMetrics connectMetrics,
                             ClassLoader loader,
                             Time time,
-                            RetryWithToleranceOperator retryWithToleranceOperator,
+                            RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                             StatusBackingStore statusBackingStore,
-                            Executor closeExecutor) {
+                            Executor closeExecutor,
+                            Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
 
         super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
                 new WorkerSourceTaskContext(offsetReader, id, configState, null), producer,
                 admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics, loader,
-                time, retryWithToleranceOperator, statusBackingStore, closeExecutor);
+                time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier);
 
         this.committableOffsets = CommittableOffsets.EMPTY;
         this.submittedRecords = new SubmittedRecords();
@@ -151,6 +156,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
 
     @Override
     protected void producerSendFailed(
+            ProcessingContext<SourceRecord> context,
             boolean synchronous,
             ProducerRecord<byte[], byte[]> producerRecord,
             SourceRecord preTransformRecord,
@@ -170,9 +176,9 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
             );
             // executeFailed here allows the use of existing logging infrastructure/configuration
             retryWithToleranceOperator.executeFailed(
+                    context,
                     Stage.KAFKA_PRODUCE,
                     WorkerSourceTask.class,
-                    preTransformRecord,
                     e
             );
             commitTaskRecord(preTransformRecord, null);

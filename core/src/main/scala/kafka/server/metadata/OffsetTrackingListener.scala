@@ -26,7 +26,7 @@ import org.apache.kafka.snapshot.SnapshotReader
  *  brokers with the KRaft controller during a KIP-866 migration.
  */
 class OffsetTrackingListener extends RaftClient.Listener[ApiMessageAndVersion] {
-  @volatile var _highestOffset = 0L
+  @volatile private var _highestOffset = 0L
 
   def highestOffset: Long = _highestOffset
 

@@ -18,9 +18,12 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 
 import java.io.Closeable;
 import java.io.InputStream;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * This interface provides the lifecycle of remote log segments that includes copy, fetch, and delete from remote
@@ -34,6 +37,9 @@ import java.io.InputStream;
  * responsible for storing and fetching metadata about the remote log segments in a strongly consistent manner.
  * This allows {@link RemoteStorageManager} to have eventual consistency on metadata (although the data is stored
  * in strongly consistent semantics).
+ * <p>
+ * All properties prefixed with the config: "remote.log.storage.manager.impl.prefix"
+ * (default value is "rsm.config.") are passed when {@link #configure(Map)} is invoked on this instance.
  */
 @InterfaceStability.Evolving
 public interface RemoteStorageManager extends Configurable, Closeable {
@@ -81,10 +87,11 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
      * @param logSegmentData           data to be copied to tiered storage.
+     * @return custom metadata to be added to the segment metadata after copying.
      * @throws RemoteStorageException if there are any errors in storing the data of the segment.
      */
-    void copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                            LogSegmentData logSegmentData)
+    Optional<CustomMetadata> copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+                                                LogSegmentData logSegmentData)
             throws RemoteStorageException;
 
     /**
@@ -118,15 +125,15 @@ public interface RemoteStorageManager extends Configurable, Closeable {
 
     /**
      * Returns the index for the respective log segment of {@link RemoteLogSegmentMetadata}.
+     * <p>
+     * Note: The transaction index may not exist because of no transactional records.
+     * In this case, it should throw a RemoteResourceNotFoundException, instead of returning {@code null}.
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
      * @param indexType                type of the index to be fetched for the segment.
      * @return input stream of the requested index.
      * @throws RemoteStorageException          if there are any errors while fetching the index.
      * @throws RemoteResourceNotFoundException the requested index is not found in the remote storage
-     * (e.g. Transaction index may not exist because segments created prior to version 2.8.0 will not have transaction index associated with them.).
-     * The caller of this function are encouraged to re-create the indexes from the segment
-     * as the suggested way of handling this error if the index is expected to be existed.
      */
     InputStream fetchIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                            IndexType indexType) throws RemoteStorageException;

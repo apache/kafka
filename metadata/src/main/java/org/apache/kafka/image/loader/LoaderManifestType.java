@@ -19,9 +19,9 @@ package org.apache.kafka.image.loader;
 
 
 /**
- * Contains information about the type of a loader manifest.
+ * Contains information about the type of loader manifest.
  */
 public enum LoaderManifestType {
     LOG_DELTA,
-    SNAPSHOT;
+    SNAPSHOT
 }

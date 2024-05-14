@@ -20,10 +20,11 @@ package kafka.migration
 import kafka.cluster.Broker
 import org.apache.kafka.common.metadata.RegisterBrokerRecord
 import org.apache.kafka.image.ClusterImage
-import org.apache.kafka.metadata.BrokerRegistration
+import org.apache.kafka.metadata.{BrokerRegistration, ControllerRegistration}
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
+import java.util.Collections
 import scala.jdk.CollectionConverters._
 
 class MigrationPropagatorTest {
@@ -39,14 +40,14 @@ class MigrationPropagatorTest {
 
   def brokersToClusterImage(brokers: Seq[BrokerRegistration]): ClusterImage = {
     val brokerMap = brokers.map(broker => Integer.valueOf(broker.id()) -> broker).toMap.asJava
-    new ClusterImage(brokerMap)
+    new ClusterImage(brokerMap, Collections.emptyMap[Integer, ControllerRegistration])
   }
 
   @Test
   def testCalculateBrokerChanges(): Unit = {
     // Start with one fenced, one un-fenced ZK broker
-    var broker0 = brokerBuilder(0, true, true)
-    var broker1 = brokerBuilder(1, true, false)
+    var broker0 = brokerBuilder(0, isZkBroker = true, isFenced = true)
+    var broker1 = brokerBuilder(1, isZkBroker = true, isFenced = false)
     MigrationPropagator.calculateBrokerChanges(ClusterImage.EMPTY, brokersToClusterImage(Seq(broker0, broker1))) match {
       case (addedBrokers, removedBrokers) =>
         assertFalse(addedBrokers.contains(Broker.fromBrokerRegistration(broker0)))
@@ -56,8 +57,8 @@ class MigrationPropagatorTest {
 
     // Un-fence broker 0
     var prevImage = brokersToClusterImage(Seq(broker0, broker1))
-    broker0 = brokerBuilder(0, true, false)
-    broker1 = brokerBuilder(1, true, false)
+    broker0 = brokerBuilder(0, isZkBroker = true, isFenced = false)
+    broker1 = brokerBuilder(1, isZkBroker = true, isFenced = false)
     MigrationPropagator.calculateBrokerChanges(prevImage, brokersToClusterImage(Seq(broker0, broker1))) match {
       case (addedBrokers, removedBrokers) =>
         assertTrue(addedBrokers.contains(Broker.fromBrokerRegistration(broker0)))
@@ -67,8 +68,8 @@ class MigrationPropagatorTest {
 
     // Migrate both to KRaft
     prevImage = brokersToClusterImage(Seq(broker0, broker1))
-    broker0 = brokerBuilder(0, false, false)
-    broker1 = brokerBuilder(1, false, false)
+    broker0 = brokerBuilder(0, isZkBroker = false, isFenced = false)
+    broker1 = brokerBuilder(1, isZkBroker = false, isFenced = false)
     MigrationPropagator.calculateBrokerChanges(prevImage, brokersToClusterImage(Seq(broker0, broker1))) match {
       case (addedBrokers, removedBrokers) =>
         assertTrue(addedBrokers.isEmpty)
@@ -78,8 +79,8 @@ class MigrationPropagatorTest {
 
     // Downgrade one back to ZK
     prevImage = brokersToClusterImage(Seq(broker0, broker1))
-    broker0 = brokerBuilder(0, true, false)
-    broker1 = brokerBuilder(1, false, false)
+    broker0 = brokerBuilder(0, isZkBroker = true, isFenced = false)
+    broker1 = brokerBuilder(1, isZkBroker = false, isFenced = false)
     MigrationPropagator.calculateBrokerChanges(prevImage, brokersToClusterImage(Seq(broker0, broker1))) match {
       case (addedBrokers, removedBrokers) =>
         assertTrue(addedBrokers.contains(Broker.fromBrokerRegistration(broker0)))

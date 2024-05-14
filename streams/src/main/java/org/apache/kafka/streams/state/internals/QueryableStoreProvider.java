@@ -20,7 +20,7 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,7 +36,7 @@ public class QueryableStoreProvider {
     private final GlobalStateStoreProvider globalStoreProvider;
 
     public QueryableStoreProvider(final GlobalStateStoreProvider globalStateStoreProvider) {
-        this.storeProviders = new HashMap<>();
+        this.storeProviders = new ConcurrentHashMap<>();
         this.globalStoreProvider = globalStateStoreProvider;
     }
 

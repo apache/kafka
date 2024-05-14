@@ -18,6 +18,7 @@ package org.apache.kafka.tools;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
@@ -25,9 +26,11 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.io.PrintStream;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
@@ -65,9 +68,13 @@ public class ClusterTool {
         Subparser unregisterParser = subparsers.addParser("unregister")
                 .help("Unregister a broker.");
         for (Subparser subpparser : Arrays.asList(clusterIdParser, unregisterParser)) {
-            subpparser.addArgument("--bootstrap-server", "-b")
+            MutuallyExclusiveGroup connectionOptions = subpparser.addMutuallyExclusiveGroup().required(true);
+            connectionOptions.addArgument("--bootstrap-server", "-b")
                     .action(store())
                     .help("A list of host/port pairs to use for establishing the connection to the Kafka cluster.");
+            connectionOptions.addArgument("--bootstrap-controller", "-C")
+                    .action(store())
+                    .help("A list of host/port pairs to use for establishing the connection to the KRaft controllers.");
             subpparser.addArgument("--config", "-c")
                     .action(store())
                     .help("A property file containing configurations for the Admin client.");
@@ -83,13 +90,9 @@ public class ClusterTool {
         String configPath = namespace.getString("config");
         Properties properties = (configPath == null) ? new Properties() : Utils.loadProps(configPath);
 
-        String bootstrapServer = namespace.getString("bootstrap_server");
-        if (bootstrapServer != null) {
-            properties.setProperty("bootstrap.servers", bootstrapServer);
-        }
-        if (properties.getProperty("bootstrap.servers") == null) {
-            throw new TerseException("Please specify --bootstrap-server.");
-        }
+        CommandLineUtils.initializeBootstrapProperties(properties,
+                Optional.ofNullable(namespace.getString("bootstrap_server")),
+                Optional.ofNullable(namespace.getString("bootstrap_controller")));
 
         switch (command) {
             case "cluster-id": {

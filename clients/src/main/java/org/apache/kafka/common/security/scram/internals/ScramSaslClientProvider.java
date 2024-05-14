@@ -25,7 +25,7 @@ public class ScramSaslClientProvider extends Provider {
 
     private static final long serialVersionUID = 1L;
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("this-escape")
     protected ScramSaslClientProvider() {
         super("SASL/SCRAM Client Provider", 1.0, "SASL/SCRAM Client Provider for Kafka");
         for (ScramMechanism mechanism : ScramMechanism.values())

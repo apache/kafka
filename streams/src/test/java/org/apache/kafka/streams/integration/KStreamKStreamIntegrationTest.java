@@ -27,6 +27,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -96,9 +97,10 @@ public class KStreamKStreamIntegrationTest {
     @BeforeEach
     public void before(final TestInfo testInfo) throws IOException {
         final String stateDirBasePath = TestUtils.tempDirectory().getPath();
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
         streamsConfig = getStreamsConfig(safeTestName);
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath);
+        streamsConfig.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, 0L);
     }
 
     @AfterEach
@@ -117,6 +119,7 @@ public class KStreamKStreamIntegrationTest {
         expected.add(new KeyValue<>("Key-2", "value1=left-2a,value2=null"));
         expected.add(new KeyValue<>("Key-3", "value1=left-3a,value2=null"));
         expected.add(new KeyValue<>("Key-4", "value1=left-4a,value2=null"));
+        expected.add(new KeyValue<>(null, "value1=left-5a,value2=null"));
 
         verifyKStreamKStreamOuterJoin(expected);
     }
@@ -135,7 +138,8 @@ public class KStreamKStreamIntegrationTest {
                 new KeyValue<>("Key-1", "left-1a"),
                 new KeyValue<>("Key-2", "left-2a"),
                 new KeyValue<>("Key-3", "left-3a"),
-                new KeyValue<>("Key-4", "left-4a")
+                new KeyValue<>("Key-4", "left-4a"),
+                new KeyValue<>(null, "left-5a")
         );
 
         final List<KeyValue<String, String>> left2 = asList(

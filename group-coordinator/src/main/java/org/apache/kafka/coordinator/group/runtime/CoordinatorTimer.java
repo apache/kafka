@@ -18,13 +18,12 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.KafkaException;
 
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
  * An interface to schedule and cancel operations.
  */
-public interface CoordinatorTimer<U> {
+public interface CoordinatorTimer<T, U> {
     /**
      * Generates the records needed to implement this timeout write operation. In general,
      * this operation should not modify the hard state of the coordinator. That modifications
@@ -36,8 +35,8 @@ public interface CoordinatorTimer<U> {
      *
      * @param <T> The record type.
      */
-    interface TimeoutOperation<T> {
-        List<T> generateRecords() throws KafkaException;
+    interface TimeoutOperation<T, U> {
+        CoordinatorResult<T, U> generateRecords() throws KafkaException;
     }
 
     /**
@@ -51,7 +50,21 @@ public interface CoordinatorTimer<U> {
      *                    be retried on failure.
      * @param operation   The operation to perform upon expiration.
      */
-    void schedule(String key, long delay, TimeUnit unit, boolean retry, TimeoutOperation<U> operation);
+    void schedule(String key, long delay, TimeUnit unit, boolean retry, TimeoutOperation<T, U> operation);
+
+    /**
+     * Add an operation to the timer. If an operation with the same key
+     * already exists, replace it with the new operation.
+     *
+     * @param key           The key to identify this operation.
+     * @param delay         The delay to wait before expiring.
+     * @param unit          The delay unit.
+     * @param retry         A boolean indicating whether the operation should
+     *                      be retried on failure.
+     * @param retryBackoff  The delay when rescheduled on retry. The same unit is used.
+     * @param operation     The operation to perform upon expiration.
+     */
+    void schedule(String key, long delay, TimeUnit unit, boolean retry, long retryBackoff, TimeoutOperation<T, U> operation);
 
     /**
      * Remove an operation corresponding to a given key.

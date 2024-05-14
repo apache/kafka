@@ -20,7 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentTopicMetadata;
+import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -118,6 +118,11 @@ public class TargetAssignmentBuilder {
     private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
 
     /**
+     * The subscription type of the consumer group.
+     */
+    private SubscriptionType subscriptionType;
+
+    /**
      * The existing target assignment.
      */
     private Map<String, Assignment> targetAssignment = Collections.emptyMap();
@@ -127,6 +132,11 @@ public class TargetAssignmentBuilder {
      * are signaled by a null value.
      */
     private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
+
+    /**
+     * The static members in the group.
+     */
+    private Map<String, String> staticMembers = new HashMap<>();
 
     /**
      * Constructs the object.
@@ -159,6 +169,19 @@ public class TargetAssignmentBuilder {
     }
 
     /**
+     * Adds all the existing static members.
+     *
+     * @param staticMembers   The existing static members in the consumer group.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withStaticMembers(
+        Map<String, String> staticMembers
+    ) {
+        this.staticMembers = staticMembers;
+        return this;
+    }
+
+    /**
      * Adds the subscription metadata to use.
      *
      * @param subscriptionMetadata  The subscription metadata.
@@ -168,6 +191,19 @@ public class TargetAssignmentBuilder {
         Map<String, TopicMetadata> subscriptionMetadata
     ) {
         this.subscriptionMetadata = subscriptionMetadata;
+        return this;
+    }
+
+    /**
+     * Adds the subscription type in use.
+     *
+     * @param subscriptionType  Subscription type of the group.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withSubscriptionType(
+        SubscriptionType subscriptionType
+    ) {
+        this.subscriptionType = subscriptionType;
         return this;
     }
 
@@ -235,25 +271,38 @@ public class TargetAssignmentBuilder {
             if (updatedMemberOrNull == null) {
                 memberSpecs.remove(memberId);
             } else {
+                Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+
+                // A new static member joins and needs to replace an existing departed one.
+                if (updatedMemberOrNull.instanceId() != null) {
+                    String previousMemberId = staticMembers.get(updatedMemberOrNull.instanceId());
+                    if (previousMemberId != null && !previousMemberId.equals(memberId)) {
+                        assignment = targetAssignment.getOrDefault(previousMemberId, Assignment.EMPTY);
+                    }
+                }
+
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                     updatedMemberOrNull,
-                    targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+                    assignment,
                     subscriptionMetadata
                 ));
             }
         });
 
         // Prepare the topic metadata.
-        Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
+        Map<Uuid, TopicMetadata> topicMetadataMap = new HashMap<>();
         subscriptionMetadata.forEach((topicName, topicMetadata) ->
-            topics.put(topicMetadata.id(), new AssignmentTopicMetadata(topicMetadata.numPartitions()))
+            topicMetadataMap.put(
+                topicMetadata.id(),
+                topicMetadata
+            )
         );
 
         // Compute the assignment.
-        GroupAssignment newGroupAssignment = assignor.assign(new AssignmentSpec(
-            Collections.unmodifiableMap(memberSpecs),
-            Collections.unmodifiableMap(topics)
-        ));
+        GroupAssignment newGroupAssignment = assignor.assign(
+            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs), subscriptionType),
+            new SubscribedTopicMetadata(topicMetadataMap)
+        );
 
         // Compute delta from previous to new target assignment and create the
         // relevant records.

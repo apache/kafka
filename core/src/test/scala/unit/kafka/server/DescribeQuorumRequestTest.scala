@@ -33,11 +33,11 @@ import scala.reflect.ClassTag
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(clusterType = Type.KRAFT)
+@ClusterTestDefaults(types = Array(Type.KRAFT))
 @Tag("integration")
 class DescribeQuorumRequestTest(cluster: ClusterInstance) {
 
-  @ClusterTest(clusterType = Type.ZK)
+  @ClusterTest(types = Array(Type.ZK))
   def testDescribeQuorumNotSupportedByZkBrokers(): Unit = {
     val apiRequest = new ApiVersionsRequest.Builder().build()
     val apiResponse =  connectAndReceive[ApiVersionsResponse](apiRequest)
@@ -82,10 +82,10 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
       assertTrue(leaderState.logEndOffset > 0)
 
       val voterData = partitionData.currentVoters.asScala
-      assertEquals(cluster.controllerIds().asScala, voterData.map(_.replicaId).toSet);
+      assertEquals(cluster.controllerIds().asScala, voterData.map(_.replicaId).toSet)
 
       val observerData = partitionData.observers.asScala
-      assertEquals(cluster.brokerIds().asScala, observerData.map(_.replicaId).toSet);
+      assertEquals(cluster.brokerIds().asScala, observerData.map(_.replicaId).toSet)
 
       (voterData ++ observerData).foreach { state =>
         assertTrue(0 < state.logEndOffset)

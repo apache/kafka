@@ -29,12 +29,12 @@ import java.util.concurrent.CompletableFuture;
 public class NoOpRemoteLogMetadataManager implements RemoteLogMetadataManager {
     @Override
     public CompletableFuture<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
-        return null;
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
     public CompletableFuture<Void> updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate remoteLogSegmentMetadataUpdate) {
-        return null;
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
@@ -72,6 +72,11 @@ public class NoOpRemoteLogMetadataManager implements RemoteLogMetadataManager {
 
     @Override
     public void onStopPartitions(Set<TopicIdPartition> partitions) {
+    }
+
+    @Override
+    public long remoteLogSize(TopicIdPartition topicIdPartition, int leaderEpoch) {
+        return 0;
     }
 
     @Override

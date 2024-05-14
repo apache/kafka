@@ -26,7 +26,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class VersionRangeTest {
-    @SuppressWarnings("unchecked")
     private static VersionRange v(int a, int b) {
         assertTrue(a <= Short.MAX_VALUE);
         assertTrue(a >= Short.MIN_VALUE);

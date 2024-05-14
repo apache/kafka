@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -48,6 +49,7 @@ import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TimeZone;
 
@@ -64,7 +66,7 @@ public class JsonConverterTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper()
         .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-        .setNodeFactory(JsonNodeFactory.withExactBigDecimals(true));
+        .setNodeFactory(new JsonNodeFactory(true));
 
     private final JsonConverter converter = new JsonConverter();
 
@@ -868,7 +870,7 @@ public class JsonConverterTest {
 
     @Test
     public void testJsonSchemaCacheSizeFromConfigFile() throws URISyntaxException, IOException {
-        URL url = getClass().getResource("/connect-test.properties");
+        URL url = Objects.requireNonNull(getClass().getResource("/connect-test.properties"));
         File propFile = new File(url.toURI());
         String workerPropsFile = propFile.getAbsolutePath();
         Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
@@ -967,6 +969,11 @@ public class JsonConverterTest {
         Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
         Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
         assertEquals(new Struct(structSchema), sav.value());
+    }
+
+    @Test
+    public void testVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), converter.version());
     }
 
     private JsonNode parse(byte[] json) {

@@ -24,9 +24,24 @@ import org.apache.log4j.spi.LoggingEvent;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseable {
     private final List<LoggingEvent> events = new LinkedList<>();
+    private final List<LogLevelChange> logLevelChanges = new LinkedList<>();
+
+    public static class LogLevelChange {
+
+        public LogLevelChange(final Level originalLevel, final Class<?> clazz) {
+            this.originalLevel = originalLevel;
+            this.clazz = clazz;
+        }
+
+        private final Level originalLevel;
+
+        private final Class<?> clazz;
+
+    }
 
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     public static class Event {
@@ -65,11 +80,13 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
         return logCaptureAppender;
     }
 
-    public static void setClassLoggerToDebug(final Class<?> clazz) {
+    public void setClassLoggerToDebug(final Class<?> clazz) {
+        logLevelChanges.add(new LogLevelChange(Logger.getLogger(clazz).getLevel(), clazz));
         Logger.getLogger(clazz).setLevel(Level.DEBUG);
     }
 
-    public static void setClassLoggerToTrace(final Class<?> clazz) {
+    public void setClassLoggerToTrace(final Class<?> clazz) {
+        logLevelChanges.add(new LogLevelChange(Logger.getLogger(clazz).getLevel(), clazz));
         Logger.getLogger(clazz).setLevel(Level.TRACE);
     }
 
@@ -82,6 +99,13 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
         synchronized (events) {
             events.add(event);
         }
+    }
+
+    public List<String> getMessages(String level) {
+        return getEvents().stream()
+                .filter(e -> level.equals(e.getLevel()))
+                .map(Event::getMessage)
+                .collect(Collectors.toList());
     }
 
     public List<String> getMessages() {
@@ -120,6 +144,10 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
 
     @Override
     public void close() {
+        for (final LogLevelChange logLevelChange : logLevelChanges) {
+            Logger.getLogger(logLevelChange.clazz).setLevel(logLevelChange.originalLevel);
+        }
+        logLevelChanges.clear();
         unregister(this);
     }
 

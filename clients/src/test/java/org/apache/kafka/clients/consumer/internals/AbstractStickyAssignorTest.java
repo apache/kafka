@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
@@ -416,6 +417,59 @@ public abstract class AbstractStickyAssignorTest {
 
     @ParameterizedTest(name = TEST_NAME_WITH_RACK_CONFIG)
     @EnumSource(RackConfig.class)
+    public void testTopicBalanceAfterReassignment(RackConfig rackConfig) {
+        initializeRacks(rackConfig);
+        List<String> allTopics = topics(topic1, topic2);
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, partitionInfos(topic1, 12));
+        partitionsPerTopic.put(topic2, partitionInfos(topic2, 12));
+        subscriptions.put(consumer1, subscription(allTopics, 0));
+        Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assignment.forEach((consumer, tps) -> assertEquals(12, tps.stream().filter(tp -> tp.topic().equals(topic1)).count()));
+        assignment.forEach((consumer, tps) -> assertEquals(12, tps.stream().filter(tp -> tp.topic().equals(topic2)).count()));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
+        assertTrue(isFullyBalanced(assignment));
+
+        // Add another consumer
+        subscriptions.put(consumer1, buildSubscriptionV2Above(allTopics, assignment.get(consumer1), generationId, 0));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(allTopics, Collections.emptyList(), generationId, 1));
+        assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assignment.forEach((consumer, tps) -> assertEquals(6, tps.stream().filter(tp -> tp.topic().equals(topic1)).count()));
+        assignment.forEach((consumer, tps) -> assertEquals(6, tps.stream().filter(tp -> tp.topic().equals(topic2)).count()));
+        assertTrue(isFullyBalanced(assignment));
+
+        // Add two more consumers
+        subscriptions.put(consumer1, buildSubscriptionV2Above(allTopics, assignment.get(consumer1), generationId, 0));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(allTopics, assignment.get(consumer2), generationId, 1));
+        subscriptions.put(consumer3, buildSubscriptionV2Above(allTopics, Collections.emptyList(), generationId, 2));
+        subscriptions.put(consumer4, buildSubscriptionV2Above(allTopics, Collections.emptyList(), generationId, 3));
+        assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assignment.forEach((consumer, tps) -> assertEquals(3, tps.stream().filter(tp -> tp.topic().equals(topic1)).count()));
+        assignment.forEach((consumer, tps) -> assertEquals(3, tps.stream().filter(tp -> tp.topic().equals(topic2)).count()));
+        assertTrue(isFullyBalanced(assignment));
+
+        // remove 2 consumers
+        subscriptions.remove(consumer1);
+        subscriptions.remove(consumer2);
+        subscriptions.put(consumer3, buildSubscriptionV2Above(allTopics, assignment.get(consumer3), generationId, 2));
+        subscriptions.put(consumer4, buildSubscriptionV2Above(allTopics, assignment.get(consumer4), generationId, 3));
+        assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assignment.forEach((consumer, tps) -> assertEquals(6, tps.stream().filter(tp -> tp.topic().equals(topic1)).count()));
+        assignment.forEach((consumer, tps) -> assertEquals(6, tps.stream().filter(tp -> tp.topic().equals(topic2)).count()));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    @ParameterizedTest(name = TEST_NAME_WITH_RACK_CONFIG)
+    @EnumSource(RackConfig.class)
     public void testAddRemoveTwoConsumersTwoTopics(RackConfig rackConfig) {
         initializeRacks(rackConfig);
         List<String> allTopics = topics(topic1, topic2);
@@ -442,15 +496,15 @@ public abstract class AbstractStickyAssignorTest {
         assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
 
         Map<TopicPartition, String> expectedPartitionsTransferringOwnership = new HashMap<>();
-        expectedPartitionsTransferringOwnership.put(tp(topic2, 1), consumer3);
+        expectedPartitionsTransferringOwnership.put(tp(topic1, 2), consumer3);
         expectedPartitionsTransferringOwnership.put(tp(topic2, 3), consumer3);
         expectedPartitionsTransferringOwnership.put(tp(topic2, 2), consumer4);
         assertEquals(expectedPartitionsTransferringOwnership, assignor.partitionsTransferringOwnership);
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
-        assertEquals(partitions(tp(topic1, 0), tp(topic1, 2)), assignment.get(consumer1));
-        assertEquals(partitions(tp(topic1, 1), tp(topic2, 0)), assignment.get(consumer2));
-        assertEquals(partitions(tp(topic2, 1), tp(topic2, 3)), assignment.get(consumer3));
+        assertEquals(partitions(tp(topic1, 0), tp(topic2, 1)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic2, 0), tp(topic1, 1)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic1, 2), tp(topic2, 3)), assignment.get(consumer3));
         assertEquals(partitions(tp(topic2, 2)), assignment.get(consumer4));
         assertTrue(isFullyBalanced(assignment));
 
@@ -460,8 +514,8 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer3, buildSubscriptionV2Above(allTopics, assignment.get(consumer3), generationId, 2));
         subscriptions.put(consumer4, buildSubscriptionV2Above(allTopics, assignment.get(consumer4), generationId, 3));
         assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
-        assertEquals(partitions(tp(topic2, 1), tp(topic2, 3), tp(topic1, 0), tp(topic2, 0)), assignment.get(consumer3));
-        assertEquals(partitions(tp(topic2, 2), tp(topic1, 1), tp(topic1, 2)), assignment.get(consumer4));
+        assertEquals(partitions(tp(topic1, 2), tp(topic2, 3), tp(topic1, 0), tp(topic2, 1)), assignment.get(consumer3));
+        assertEquals(partitions(tp(topic2, 2), tp(topic1, 1), tp(topic2, 0)), assignment.get(consumer4));
 
         assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
@@ -723,6 +777,91 @@ public abstract class AbstractStickyAssignorTest {
         }
 
         assignor.assignPartitions(partitionsPerTopic, subscriptions);
+    }
+
+    @Timeout(90)
+    @ParameterizedTest(name = TEST_NAME_WITH_CONSUMER_RACK)
+    @ValueSource(booleans = {false, true})
+    public void testAssignmentAndGroupWithNonEqualSubscriptionNotTimeout(boolean hasConsumerRack) {
+        initializeRacks(hasConsumerRack ? RackConfig.BROKER_AND_CONSUMER_RACK : RackConfig.NO_CONSUMER_RACK);
+        int topicCount = hasConsumerRack ? 50 : 100;
+        int partitionCount = 2_00;
+        int consumerCount = 5_00;
+
+        List<String> topics = new ArrayList<>();
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        for (int i = 0; i < topicCount; i++) {
+            String topicName = getTopicName(i, topicCount);
+            topics.add(topicName);
+            partitionsPerTopic.put(topicName, partitionInfos(topicName, partitionCount));
+        }
+        for (int i = 0; i < consumerCount; i++) {
+            if (i % 4 == 0) {
+                subscriptions.put(getConsumerName(i, consumerCount),
+                        subscription(topics.subList(0, topicCount / 2), i));
+            } else {
+                subscriptions.put(getConsumerName(i, consumerCount),
+                        subscription(topics.subList(topicCount / 2, topicCount), i));
+            }
+        }
+
+        Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
+
+        for (int i = 1; i < consumerCount; i++) {
+            String consumer = getConsumerName(i, consumerCount);
+            if (i % 4 == 0) {
+                subscriptions.put(
+                        consumer,
+                        buildSubscriptionV2Above(topics.subList(0, topicCount / 2),
+                        assignment.get(consumer), generationId, i)
+                );
+            } else {
+                subscriptions.put(
+                        consumer,
+                        buildSubscriptionV2Above(topics.subList(topicCount / 2, topicCount),
+                        assignment.get(consumer), generationId, i)
+                );
+            }
+        }
+
+        assignor.assignPartitions(partitionsPerTopic, subscriptions);
+    }
+
+    @Test
+    public void testSubscriptionNotEqualAndAssignSamePartitionWith3Generation() {
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, partitionInfos(topic, 6));
+        partitionsPerTopic.put(topic1, partitionInfos(topic1, 1));
+        int[][] sequence = new int[][]{{1, 2, 3}, {1, 3, 2}, {2, 1, 3}, {2, 3, 1}, {3, 1, 2}, {3, 2, 1}};
+        for (int[] ints : sequence) {
+            subscriptions.put(
+                    consumer1,
+                    buildSubscriptionV2Above(topics(topic),
+                    partitions(tp(topic, 0), tp(topic, 2)), ints[0], 0)
+            );
+            subscriptions.put(
+                    consumer2,
+                    buildSubscriptionV2Above(topics(topic),
+                    partitions(tp(topic, 1), tp(topic, 2), tp(topic, 3)), ints[1], 1)
+            );
+            subscriptions.put(
+                    consumer3,
+                    buildSubscriptionV2Above(topics(topic),
+                    partitions(tp(topic, 2), tp(topic, 4), tp(topic, 5)), ints[2], 2)
+            );
+            subscriptions.put(
+                    consumer4,
+                    buildSubscriptionV2Above(topics(topic1),
+                    partitions(tp(topic1, 0)), 2, 3)
+            );
+
+            Map<String, List<TopicPartition>> assign = assignor.assignPartitions(partitionsPerTopic, subscriptions);
+            assertEquals(assign.values().stream().mapToInt(List::size).sum(),
+                    assign.values().stream().flatMap(List::stream).collect(Collectors.toSet()).size());
+            for (List<TopicPartition> list: assign.values()) {
+                assertTrue(list.size() >= 1 && list.size() <= 2);
+            }
+        }
     }
 
     @Timeout(60)

@@ -28,9 +28,10 @@ import java.util.Map;
  * A plugin interface to allow registration of new JAX-RS resources like Filters, REST endpoints, providers, etc. The implementations will
  * be discovered using the standard Java {@link java.util.ServiceLoader} mechanism by  Connect's plugin class loading mechanism.
  *
- * <p>The extension class(es) must be packaged as a plugin, with one JAR containing the implementation classes and a {@code
- * META-INF/services/org.apache.kafka.connect.rest.extension.ConnectRestExtension} file that contains the fully qualified name of the
- * class(es) that implement the ConnectRestExtension interface. The plugin should also include the JARs of all dependencies except those
+ * <p>Kafka Connect discovers implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
+ * To support this, implementations of this interface should also contain a service provider configuration file in
+ * {@code META-INF/services/org.apache.kafka.connect.rest.ConnectRestExtension}.
+ * <p>The extension class(es) must be packaged as a plugin, including the JARs of all dependencies except those
  * already provided by the Connect framework.
  *
  * <p>To install into a Connect installation, add a directory named for the plugin and containing the plugin's JARs into a directory that is

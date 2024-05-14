@@ -293,7 +293,7 @@ public class ByteUtilsBenchmark {
     }
 
 
-    /******************* Implementations **********************/
+    /* Implementations */
 
     /*
      * Implementation in Trunk as of Apr 2023 / v3.4

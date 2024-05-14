@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import org.apache.kafka.common.Uuid;
-
 import java.util.Map;
 import java.util.Objects;
 
@@ -26,37 +24,36 @@ import java.util.Objects;
  */
 public class AssignmentSpec {
     /**
-     * The members keyed by member id.
+     * The member metadata keyed by member Id.
      */
     private final Map<String, AssignmentMemberSpec> members;
 
     /**
-     * The topics' metadata keyed by topic id.
+     * The subscription type followed by the group.
      */
-    private final Map<Uuid, AssignmentTopicMetadata> topics;
+    private final SubscriptionType subscriptionType;
 
     public AssignmentSpec(
         Map<String, AssignmentMemberSpec> members,
-        Map<Uuid, AssignmentTopicMetadata> topics
+        SubscriptionType subscriptionType
     ) {
         Objects.requireNonNull(members);
-        Objects.requireNonNull(topics);
         this.members = members;
-        this.topics = topics;
+        this.subscriptionType = subscriptionType;
     }
 
     /**
-     * @return Member metadata keyed by member Ids.
+     * @return Member metadata keyed by member Id.
      */
     public Map<String, AssignmentMemberSpec> members() {
         return members;
     }
 
     /**
-     * @return Topic metadata keyed by topic Ids.
+     * @return The group's subscription type.
      */
-    public Map<Uuid, AssignmentTopicMetadata> topics() {
-        return topics;
+    public SubscriptionType subscriptionType() {
+        return subscriptionType;
     }
 
     @Override
@@ -64,21 +61,16 @@ public class AssignmentSpec {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         AssignmentSpec that = (AssignmentSpec) o;
-        if (!members.equals(that.members)) return false;
-        return topics.equals(that.topics);
+        return subscriptionType == that.subscriptionType &&
+            members.equals(that.members);
     }
 
     @Override
     public int hashCode() {
-        int result = members.hashCode();
-        result = 31 * result + topics.hashCode();
-        return result;
+        return Objects.hash(members, subscriptionType);
     }
 
-    @Override
     public String toString() {
-        return "AssignmentSpec(members=" + members +
-            ", topics=" + topics +
-            ')';
+        return "AssignmentSpec(members=" + members + ", subscriptionType=" + subscriptionType.toString() + ')';
     }
 }

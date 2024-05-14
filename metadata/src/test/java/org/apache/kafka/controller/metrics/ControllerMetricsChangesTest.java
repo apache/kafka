@@ -20,15 +20,16 @@ package org.apache.kafka.controller.metrics;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.image.TopicDelta;
 import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.NORMAL;
@@ -50,14 +51,24 @@ public class ControllerMetricsChangesTest {
         int brokerId,
         boolean fenced
     ) {
-        return new BrokerRegistration(brokerId,
-                100L,
-                Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ"),
-                Collections.emptyList(),
-                Collections.emptyMap(),
-                Optional.empty(),
-                fenced,
-                false);
+        return new BrokerRegistration.Builder().
+            setId(brokerId).
+            setEpoch(100L).
+            setIncarnationId(Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ")).
+            setFenced(fenced).
+            setInControlledShutdown(false).build();
+    }
+
+    private static BrokerRegistration zkBrokerRegistration(
+        int brokerId
+    ) {
+        return new BrokerRegistration.Builder().
+            setId(brokerId).
+            setEpoch(100L).
+            setIncarnationId(Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ")).
+            setFenced(false).
+            setInControlledShutdown(false).
+            setIsMigratingZkBroker(true).build();
     }
 
     @Test
@@ -104,6 +115,20 @@ public class ControllerMetricsChangesTest {
     }
 
     @Test
+    public void testHandleZkBroker() {
+        ControllerMetricsChanges changes = new ControllerMetricsChanges();
+        changes.handleBrokerChange(null, zkBrokerRegistration(1));
+        assertEquals(1, changes.migratingZkBrokersChange());
+        changes.handleBrokerChange(null, zkBrokerRegistration(2));
+        changes.handleBrokerChange(null, zkBrokerRegistration(3));
+        assertEquals(3, changes.migratingZkBrokersChange());
+
+        changes.handleBrokerChange(zkBrokerRegistration(3), brokerRegistration(3, true));
+        changes.handleBrokerChange(brokerRegistration(3, true), brokerRegistration(3, false));
+        assertEquals(2, changes.migratingZkBrokersChange());
+    }
+
+    @Test
     public void testHandleDeletedTopic() {
         ControllerMetricsChanges changes = new ControllerMetricsChanges();
         Map<Integer, PartitionRegistration> partitions = new HashMap<>();
@@ -130,17 +155,19 @@ public class ControllerMetricsChangesTest {
     static final TopicDelta TOPIC_DELTA2;
 
     static {
+        ImageWriterOptions options = new ImageWriterOptions.Builder().
+                setMetadataVersion(MetadataVersion.IBP_3_7_IV0).build(); // highest MV for PartitionRecord v0
         TOPIC_DELTA1 = new TopicDelta(new TopicImage("foo", FOO_ID, Collections.emptyMap()));
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
-                toRecord(FOO_ID, 0).message());
+                toRecord(FOO_ID, 0, options).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
-                toRecord(FOO_ID, 1).message());
+                toRecord(FOO_ID, 1, options).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
-                toRecord(FOO_ID, 2).message());
+                toRecord(FOO_ID, 2, options).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NON_PREFERRED_LEADER).
-                toRecord(FOO_ID, 3).message());
+                toRecord(FOO_ID, 3, options).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NON_PREFERRED_LEADER).
-                toRecord(FOO_ID, 4).message());
+                toRecord(FOO_ID, 4, options).message());
 
         TOPIC_DELTA2 = new TopicDelta(TOPIC_DELTA1.apply());
         TOPIC_DELTA2.replay(new PartitionChangeRecord().
@@ -148,7 +175,7 @@ public class ControllerMetricsChangesTest {
                 setTopicId(FOO_ID).
                 setLeader(1));
         TOPIC_DELTA2.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
-                toRecord(FOO_ID, 5).message());
+                toRecord(FOO_ID, 5, options).message());
     }
 
     @Test

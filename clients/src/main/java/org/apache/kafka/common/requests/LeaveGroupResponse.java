@@ -61,15 +61,15 @@ public class LeaveGroupResponse extends AbstractResponse {
 
         if (version >= 3) {
             this.data = data;
+        } else if (data.errorCode() != Errors.NONE.code()) {
+            this.data = new LeaveGroupResponseData().setErrorCode(data.errorCode());
         } else {
             if (data.members().size() != 1) {
                 throw new UnsupportedVersionException("LeaveGroup response version " + version +
                     " can only contain one member, got " + data.members().size() + " members.");
             }
 
-            Errors topLevelError = Errors.forCode(data.errorCode());
-            short errorCode = getError(topLevelError, data.members()).code();
-            this.data = new LeaveGroupResponseData().setErrorCode(errorCode);
+            this.data = new LeaveGroupResponseData().setErrorCode(data.members().get(0).errorCode());
         }
     }
 

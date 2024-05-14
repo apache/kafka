@@ -72,7 +72,7 @@ public class TaskExecutorTest {
         final Tasks tasks = mock(Tasks.class);
         final ConsumerGroupMetadata groupMetadata = mock(ConsumerGroupMetadata.class);
         final TaskManager taskManager = mock(TaskManager.class);
-        when(taskManager.activeTaskIterable()).thenReturn(Collections.singletonList(task));
+        when(taskManager.activeRunningTaskIterable()).thenReturn(Collections.singletonList(task));
         when(taskManager.consumerGroupMetadata()).thenReturn(groupMetadata);
 
         final StreamsProducer producer = mock(StreamsProducer.class);

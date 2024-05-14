@@ -32,7 +32,7 @@ public abstract class TimerTask implements Runnable {
         }
     }
 
-    void setTimerTaskEntry(TimerTaskEntry entry) {
+    final void setTimerTaskEntry(TimerTaskEntry entry) {
         synchronized (this) {
             // if this timerTask is already held by an existing timer task entry,
             // we will remove such an entry first.

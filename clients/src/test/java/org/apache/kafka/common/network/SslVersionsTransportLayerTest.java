@@ -117,6 +117,8 @@ public class SslVersionsTransportLayerTest {
             NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
             server.verifyAuthenticationMetrics(0, 1);
         }
+        server.close();
+        selector.close();
     }
 
     /**

@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.KafkaFuture;
@@ -47,6 +46,8 @@ import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
 import java.time.Duration;
 import java.util.stream.Stream;
+
+import static org.apache.kafka.connect.mirror.MirrorUtils.adminCall;
 
 /** Emits checkpoints for upstream consumer groups. */
 public class MirrorCheckpointTask extends SourceTask {
@@ -228,7 +229,10 @@ public class MirrorCheckpointTask extends SourceTask {
             // short circuit if stopping
             return Collections.emptyMap();
         }
-        return sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get();
+        return adminCall(
+                () -> sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get(),
+                () -> String.format("list offsets for consumer group %s on %s cluster", group, sourceClusterAlias)
+        );
     }
 
     Optional<Checkpoint> checkpoint(String group, TopicPartition topicPartition,
@@ -277,9 +281,11 @@ public class MirrorCheckpointTask extends SourceTask {
             System.currentTimeMillis() - record.timestamp());
     }
 
-    private void refreshIdleConsumerGroupOffset() {
-        Map<String, KafkaFuture<ConsumerGroupDescription>> consumerGroupsDesc = targetAdminClient
-            .describeConsumerGroups(consumerGroups).describedGroups();
+    private void refreshIdleConsumerGroupOffset() throws ExecutionException, InterruptedException {
+        Map<String, KafkaFuture<ConsumerGroupDescription>> consumerGroupsDesc = adminCall(
+                () -> targetAdminClient.describeConsumerGroups(consumerGroups).describedGroups(),
+                () -> String.format("describe consumer groups %s on %s cluster", consumerGroups, targetClusterAlias)
+        );
 
         for (String group : consumerGroups) {
             try {
@@ -289,8 +295,13 @@ public class MirrorCheckpointTask extends SourceTask {
                 // (1) idle: because the consumer at target is not actively consuming the mirrored topic
                 // (2) dead: the new consumer that is recently created at source and never existed at target
                 if (consumerGroupState == ConsumerGroupState.EMPTY) {
-                    idleConsumerGroupsOffset.put(group, targetAdminClient.listConsumerGroupOffsets(group)
-                        .partitionsToOffsetAndMetadata().get());
+                    idleConsumerGroupsOffset.put(
+                            group,
+                            adminCall(
+                                    () -> targetAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get(),
+                                    () -> String.format("list offsets for consumer group %s on %s cluster", group, targetClusterAlias)
+                            )
+                    );
                 }
                 // new consumer upstream has state "DEAD" and will be identified during the offset sync-up
             } catch (InterruptedException | ExecutionException e) {
@@ -299,7 +310,7 @@ public class MirrorCheckpointTask extends SourceTask {
         }
     }
 
-    Map<String, Map<TopicPartition, OffsetAndMetadata>> syncGroupOffset() {
+    Map<String, Map<TopicPartition, OffsetAndMetadata>> syncGroupOffset() throws ExecutionException, InterruptedException {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetToSyncAll = new HashMap<>();
 
         // first, sync offsets for the idle consumers at target
@@ -330,11 +341,20 @@ public class MirrorCheckpointTask extends SourceTask {
 
                 // if translated offset from upstream is smaller than the current consumer offset
                 // in the target, skip updating the offset for that partition
-                long latestDownstreamOffset = targetConsumerOffset.get(topicPartition).offset();
-                if (latestDownstreamOffset >= convertedOffset.offset()) {
-                    log.trace("latestDownstreamOffset {} is larger than or equal to convertedUpstreamOffset {} for "
-                        + "TopicPartition {}", latestDownstreamOffset, convertedOffset.offset(), topicPartition);
-                    continue;
+                OffsetAndMetadata targetOffsetAndMetadata = targetConsumerOffset.get(topicPartition);
+                if (targetOffsetAndMetadata != null) {
+                    long latestDownstreamOffset = targetOffsetAndMetadata.offset();
+                    if (latestDownstreamOffset >= convertedOffset.offset()) {
+                        log.trace("latestDownstreamOffset {} is larger than or equal to convertedUpstreamOffset {} for "
+                                + "TopicPartition {}", latestDownstreamOffset, convertedOffset.offset(), topicPartition);
+                        continue;
+                    }
+                } else {
+                    // It is possible that when resetting offsets are performed in the java kafka client, the reset to -1 will be intercepted.
+                    // However, there are some other types of clients such as sarama, which can magically reset the group offset to -1, which will cause
+                    // `targetOffsetAndMetadata` here is null. For this case, just sync the offset to target.
+                    log.warn("Group {} offset for partition {} may has been reset to a negative offset, just sync the offset to target.",
+                            consumerGroupId, topicPartition);
                 }
                 offsetToSync.put(topicPartition, convertedOffset);
             }
@@ -351,20 +371,24 @@ public class MirrorCheckpointTask extends SourceTask {
         return offsetToSyncAll;
     }
 
-    void syncGroupOffset(String consumerGroupId, Map<TopicPartition, OffsetAndMetadata> offsetToSync) {
+    void syncGroupOffset(String consumerGroupId, Map<TopicPartition, OffsetAndMetadata> offsetToSync) throws ExecutionException, InterruptedException {
         if (targetAdminClient != null) {
-            AlterConsumerGroupOffsetsResult result = targetAdminClient.alterConsumerGroupOffsets(consumerGroupId, offsetToSync);
-            result.all().whenComplete((v, throwable) -> {
-                if (throwable != null) {
-                    if (throwable.getCause() instanceof UnknownMemberIdException) {
-                        log.warn("Unable to sync offsets for consumer group {}. This is likely caused by consumers currently using this group in the target cluster.", consumerGroupId);
-                    } else {
-                        log.error("Unable to sync offsets for consumer group {}.", consumerGroupId, throwable);
-                    }
-                } else {
-                    log.trace("Sync-ed {} offsets for consumer group {}.", offsetToSync.size(), consumerGroupId);
-                }
-            });
+            adminCall(
+                    () -> targetAdminClient.alterConsumerGroupOffsets(consumerGroupId, offsetToSync).all()
+                            .whenComplete((v, throwable) -> {
+                                if (throwable != null) {
+                                    if (throwable.getCause() instanceof UnknownMemberIdException) {
+                                        log.warn("Unable to sync offsets for consumer group {}. This is likely caused " +
+                                                "by consumers currently using this group in the target cluster.", consumerGroupId);
+                                    } else {
+                                        log.error("Unable to sync offsets for consumer group {}.", consumerGroupId, throwable);
+                                    }
+                                } else {
+                                    log.trace("Sync-ed {} offsets for consumer group {}.", offsetToSync.size(), consumerGroupId);
+                                }
+                            }),
+                    () -> String.format("alter offsets for consumer group %s on %s cluster", consumerGroupId, targetClusterAlias)
+            );
         }
     }
 

@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.util.concurrent.TimeUnit
-
 import kafka.server.QuotaType.ControllerMutation
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.metrics.MetricConfig
@@ -26,6 +25,7 @@ import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.QuotaViolationException
 import org.apache.kafka.common.metrics.stats.TokenBucket
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -115,10 +115,7 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   private val User = "ANONYMOUS"
   private val ClientId = "test-client"
 
-  private val config = ClientQuotaManagerConfig(
-    numQuotaSamples = 10,
-    quotaWindowSizeSeconds = 1
-  )
+  private val config = new ClientQuotaManagerConfig(10, 1)
 
   private def withQuotaManager(f: ControllerMutationQuotaManager => Unit): Unit = {
     val quotaManager = new ControllerMutationQuotaManager(config, metrics, time,"", None)

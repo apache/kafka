@@ -26,11 +26,10 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 /**
  * This is an implementation of {@code RecordSerde} with {@link ApiMessageAndVersion} but implementors need to implement
  * {@link #apiMessageFor(short)} to return a {@code ApiMessage} instance for the given {@code apiKey}.
- *
+ * <br>
  * This can be used as the underlying serialization mechanism for records defined with {@link ApiMessage}s.
- * <p></p>
+ * <br><br>
  * Serialization format for the given {@code ApiMessageAndVersion} is below:
- * <p></p>
  * <pre>
  *     [data_frame_version header message]
  *     header =&gt; [api_key version]

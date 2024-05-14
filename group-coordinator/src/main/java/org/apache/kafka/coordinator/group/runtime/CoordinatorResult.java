@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * The result of an operation applied to a state machine. The result
@@ -38,6 +39,17 @@ public class CoordinatorResult<T, U> {
     private final T response;
 
     /**
+     * The future to complete once the records are committed.
+     */
+    private final CompletableFuture<Void> appendFuture;
+
+    /**
+     * The boolean indicating whether to replay the records.
+     * The default value is {@code true} unless specified otherwise.
+     */
+    private final boolean replayRecords;
+
+    /**
      * Constructs a Result with records and a response.
      *
      * @param records   A non-null list of records.
@@ -47,8 +59,42 @@ public class CoordinatorResult<T, U> {
         List<U> records,
         T response
     ) {
+        this(records, response, null, true);
+    }
+
+    /**
+     * Constructs a Result with records and an append-future.
+     *
+     * @param records       A non-null list of records.
+     * @param appendFuture  The future to complete once the records are committed.
+     * @param replayRecords The replayRecords.
+     */
+    public CoordinatorResult(
+        List<U> records,
+        CompletableFuture<Void> appendFuture,
+        boolean replayRecords
+    ) {
+        this(records, null, appendFuture, replayRecords);
+    }
+
+    /**
+     * Constructs a Result with records, a response, an append-future, and replayRecords.
+     *
+     * @param records       A non-null list of records.
+     * @param response      A response.
+     * @param appendFuture  The future to complete once the records are committed.
+     * @param replayRecords The replayRecords.
+     */
+    public CoordinatorResult(
+        List<U> records,
+        T response,
+        CompletableFuture<Void> appendFuture,
+        boolean replayRecords
+    ) {
         this.records = Objects.requireNonNull(records);
         this.response = response;
+        this.appendFuture = appendFuture;
+        this.replayRecords = replayRecords;
     }
 
     /**
@@ -59,7 +105,7 @@ public class CoordinatorResult<T, U> {
     public CoordinatorResult(
         List<U> records
     ) {
-        this(records, null);
+        this(records, null, null, true);
     }
 
     /**
@@ -76,28 +122,47 @@ public class CoordinatorResult<T, U> {
         return response;
     }
 
+    /**
+     * @return The append-future.
+     */
+    public CompletableFuture<Void> appendFuture() {
+        return appendFuture;
+    }
+
+    /**
+     * @return Whether to replay the records.
+     */
+    public boolean replayRecords() {
+        return replayRecords;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        CoordinatorResult<?, ?> result = (CoordinatorResult<?, ?>) o;
+        CoordinatorResult<?, ?> that = (CoordinatorResult<?, ?>) o;
 
-        if (!records.equals(result.records)) return false;
-        return response.equals(result.response);
+        if (!Objects.equals(records, that.records)) return false;
+        if (!Objects.equals(response, that.response)) return false;
+        if (!Objects.equals(replayRecords, that.replayRecords)) return false;
+        return Objects.equals(appendFuture, that.appendFuture);
     }
 
     @Override
     public int hashCode() {
-        int result = records.hashCode();
-        result = 31 * result + response.hashCode();
+        int result = records != null ? records.hashCode() : 0;
+        result = 31 * result + (response != null ? response.hashCode() : 0);
+        result = 31 * result + (appendFuture != null ? appendFuture.hashCode() : 0);
+        result = 31 * result + (replayRecords ? 1 : 0);
         return result;
     }
-
     @Override
     public String toString() {
-        return "Result(records=" + records +
+        return "CoordinatorResult(records=" + records +
             ", response=" + response +
+            ", appendFuture=" + appendFuture +
+            ", replayRecords=" + replayRecords +
             ")";
     }
 }

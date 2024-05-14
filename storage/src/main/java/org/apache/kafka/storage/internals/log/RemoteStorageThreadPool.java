@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import com.yammer.metrics.core.Gauge;
 import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.slf4j.Logger;
 
 import java.util.concurrent.LinkedBlockingQueue;
@@ -27,8 +29,13 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
+
 public class RemoteStorageThreadPool extends ThreadPoolExecutor {
     private final Logger logger;
+    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
     public RemoteStorageThreadPool(String threadNamePrefix,
                                    int numThreads,
@@ -41,6 +48,19 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
                 return "[" + Thread.currentThread().getName() + "]";
             }
         }.logger(RemoteStorageThreadPool.class);
+
+        metricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(), new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return RemoteStorageThreadPool.this.getQueue().size();
+            }
+        });
+        metricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(), new Gauge<Double>() {
+            @Override
+            public Double value() {
+                return 1 - (double) RemoteStorageThreadPool.this.getActiveCount() / (double) RemoteStorageThreadPool.this.getCorePoolSize();
+            }
+        });
     }
 
     @Override
@@ -69,5 +89,9 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
             return new Thread(r, namePrefix + threadNumber.getAndIncrement());
         }
 
+    }
+
+    public void removeMetrics() {
+        REMOTE_STORAGE_THREAD_POOL_METRICS.forEach(metricsGroup::removeMetric);
     }
 }

@@ -29,7 +29,7 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def doTest(env, target = "unitTest integrationTest") {
+def doTest(env, target = "test") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
@@ -156,10 +156,10 @@ pipeline {
           }
         }
 
-        stage('JDK 20 and Scala 2.13') {
+        stage('JDK 21 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
-            jdk 'jdk_20_latest'
+            jdk 'jdk_21_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS')
@@ -171,7 +171,7 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
-            echo 'Skipping Kafka Streams archetype test for Java 20'
+            echo 'Skipping Kafka Streams archetype test for Java 21'
           }
         }
       }

@@ -42,8 +42,8 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.server.util.ThroughputThrottler;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.util.ToolsUtils;
 
 public class ProducerPerformance {
 
@@ -336,10 +336,10 @@ public class ProducerPerformance {
 
     // Visible for testing
     static class Stats {
-        private long start;
-        private long windowStart;
-        private int[] latencies;
-        private long sampling;
+        private final long start;
+        private final int[] latencies;
+        private final long sampling;
+        private final long reportingInterval;
         private long iteration;
         private int index;
         private long count;
@@ -350,7 +350,7 @@ public class ProducerPerformance {
         private int windowMaxLatency;
         private long windowTotalLatency;
         private long windowBytes;
-        private long reportingInterval;
+        private long windowStart;
 
         public Stats(long numRecords, int reportingInterval) {
             this.start = System.currentTimeMillis();

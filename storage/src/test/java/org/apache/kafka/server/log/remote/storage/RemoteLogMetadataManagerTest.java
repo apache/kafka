@@ -24,20 +24,16 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerWrapperWithHarness;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
 /**
- * This class covers basic tests for {@link RemoteLogMetadataManager} implementations like {@link InmemoryRemoteLogMetadataManager},
- * and {@link org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager}.
+ * This class covers basic tests for {@link RemoteLogMetadataManager} implementations like
+ * {@link TopicBasedRemoteLogMetadataManagerWrapperWithHarness}
  */
 public class RemoteLogMetadataManagerTest {
 
@@ -49,9 +45,10 @@ public class RemoteLogMetadataManagerTest {
 
     private final Time time = new MockTime(1);
 
-    @ParameterizedTest(name = "remoteLogMetadataManager = {0}")
-    @MethodSource("remoteLogMetadataManagers")
-    public void testFetchSegments(RemoteLogMetadataManager remoteLogMetadataManager) throws Exception {
+    private RemoteLogMetadataManager remoteLogMetadataManager = new TopicBasedRemoteLogMetadataManagerWrapperWithHarness();
+
+    @Test
+    public void testFetchSegments() throws Exception {
         try {
             remoteLogMetadataManager.configure(Collections.emptyMap());
             remoteLogMetadataManager.onPartitionLeadershipChanges(Collections.singleton(TP0), Collections.emptySet());
@@ -69,7 +66,8 @@ public class RemoteLogMetadataManagerTest {
 
             // 2.Move that segment to COPY_SEGMENT_FINISHED state and this segment should be available.
             RemoteLogSegmentMetadataUpdate segmentMetadataUpdate = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
-                                                                                                      RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
+                    Optional.empty(),
+                    RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
                                                                                                       BROKER_ID_1);
             // Wait until the segment is updated successfully.
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(segmentMetadataUpdate).get();
@@ -83,9 +81,8 @@ public class RemoteLogMetadataManagerTest {
         }
     }
 
-    @ParameterizedTest(name = "remoteLogMetadataManager = {0}")
-    @MethodSource("remoteLogMetadataManagers")
-    public void testRemotePartitionDeletion(RemoteLogMetadataManager remoteLogMetadataManager) throws Exception {
+    @Test
+    public void testRemotePartitionDeletion() throws Exception {
         try {
             remoteLogMetadataManager.configure(Collections.emptyMap());
             remoteLogMetadataManager.onPartitionLeadershipChanges(Collections.singleton(TP0), Collections.emptySet());
@@ -108,7 +105,7 @@ public class RemoteLogMetadataManagerTest {
             remoteLogMetadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get();
 
             RemoteLogSegmentMetadataUpdate segmentMetadataUpdate = new RemoteLogSegmentMetadataUpdate(
-                    segmentId, time.milliseconds(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, BROKER_ID_1);
+                    segmentId, time.milliseconds(), Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, BROKER_ID_1);
             // Wait until the segment is updated successfully.
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(segmentMetadataUpdate).get();
 
@@ -149,9 +146,5 @@ public class RemoteLogMetadataManagerTest {
 
     private RemotePartitionDeleteMetadata createRemotePartitionDeleteMetadata(RemotePartitionDeleteState state) {
         return new RemotePartitionDeleteMetadata(TP0, state, time.milliseconds(), BROKER_ID_0);
-    }
-
-    private static Collection<Arguments> remoteLogMetadataManagers() {
-        return Arrays.asList(Arguments.of(new InmemoryRemoteLogMetadataManager()), Arguments.of(new TopicBasedRemoteLogMetadataManagerWrapperWithHarness()));
     }
 }

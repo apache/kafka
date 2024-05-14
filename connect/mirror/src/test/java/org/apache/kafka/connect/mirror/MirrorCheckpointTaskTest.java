@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -116,7 +117,7 @@ public class MirrorCheckpointTaskTest {
     }
 
     @Test
-    public void testSyncOffset() {
+    public void testSyncOffset() throws ExecutionException, InterruptedException {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
         Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
 
@@ -167,6 +168,33 @@ public class MirrorCheckpointTaskTest {
                 "Consumer 1 " + topic1 + " failed");
         assertEquals(51, output.get(consumer2).get(t2p0).offset(),
                 "Consumer 2 " + topic2 + " failed");
+    }
+
+    @Test
+    public void testSyncOffsetForTargetGroupWithNullOffsetAndMetadata() throws ExecutionException, InterruptedException {
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
+        Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+
+        String consumer = "consumer";
+        String topic = "topic";
+        Map<TopicPartition, OffsetAndMetadata> ct = new HashMap<>();
+        TopicPartition tp = new TopicPartition(topic, 0);
+        // Simulate other clients such as Sarama, which may reset group offsets to -1. This can cause
+        // the obtained `OffsetAndMetadata` of the target cluster to be null.
+        ct.put(tp, null);
+        idleConsumerGroupsOffset.put(consumer, ct);
+
+        Checkpoint cp = new Checkpoint(consumer, new TopicPartition(topic, 0), 200, 101, "metadata");
+        Map<TopicPartition, Checkpoint> checkpointMap = new HashMap<>();
+        checkpointMap.put(cp.topicPartition(), cp);
+        checkpointsPerConsumerGroup.put(consumer, checkpointMap);
+
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source", "target",
+                new DefaultReplicationPolicy(), null, idleConsumerGroupsOffset, checkpointsPerConsumerGroup);
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
+
+        assertEquals(101, output.get(consumer).get(tp).offset(), "Consumer " + topic + " failed");
     }
 
     @Test

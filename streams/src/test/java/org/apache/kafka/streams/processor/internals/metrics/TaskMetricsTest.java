@@ -178,30 +178,6 @@ public class TaskMetricsTest {
     }
 
     @Test
-    public void shouldGetCommitSensor() {
-        final String operation = "commit";
-        final String totalDescription = "The total number of calls to commit";
-        final String rateDescription = "The average number of calls to commit per second";
-        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG)).thenReturn(expectedSensor);
-        when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
-
-        try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
-            final Sensor sensor = TaskMetrics.commitSensor(THREAD_ID, TASK_ID, streamsMetrics);
-            streamsMetricsStaticMock.verify(
-                () -> StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-                    expectedSensor,
-                    TASK_LEVEL_GROUP,
-                    tagMap,
-                    operation,
-                    rateDescription,
-                    totalDescription
-                )
-            );
-            assertThat(sensor, is(expectedSensor));
-        }
-    }
-
-    @Test
     public void shouldGetEnforcedProcessingSensor() {
         final String operation = "enforced-processing";
         final String totalDescription = "The total number of occurrences of enforced-processing operations";

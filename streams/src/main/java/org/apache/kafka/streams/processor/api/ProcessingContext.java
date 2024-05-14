@@ -151,7 +151,9 @@ public interface ProcessingContext {
                          final Punctuator callback);
 
     /**
-     * Request a commit.
+     * Request a commit. Note that calling {@code commit()} is only a request for a commit, but it does not execute one.
+     * Hence, when {@code commit()} returns, no commit was executed yet. However, Kafka Streams will commit as soon
+     * as possible, instead of waiting for next {@code commit.interval.ms} to pass.
      */
     void commit();
 

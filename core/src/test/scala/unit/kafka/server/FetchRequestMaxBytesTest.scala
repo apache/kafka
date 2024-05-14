@@ -24,7 +24,9 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.{Optional, Properties}
 import scala.jdk.CollectionConverters._
@@ -101,8 +103,9 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
    * Note that when a single batch is larger than FetchMaxBytes, it will be
    * returned in full even if this is larger than FetchMaxBytes.  See KIP-74.
    */
-  @Test
-  def testConsumeMultipleRecords(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testConsumeMultipleRecords(quorum: String): Unit = {
     createTopics()
 
     expectNextRecords(IndexedSeq(messages(0), messages(1)), 0)
@@ -126,7 +129,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
         val array = new Array[Byte](buffer.remaining())
         buffer.get(array)
         assertArrayEquals(expected(i),
-          array, s"expectNextRecords unexpected element ${i}")
+          array, s"expectNextRecords unexpected element $i")
       }
     }
   }

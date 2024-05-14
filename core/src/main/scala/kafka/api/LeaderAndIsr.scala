@@ -66,7 +66,7 @@ case class LeaderAndIsr(
     LeaderAndIsr(leader, leaderEpoch + 1, isr, leaderRecoveryState, partitionEpoch)
   }
 
-  def newLeaderAndIsrWithBrokerEpoch(leader: Int, isrWithBrokerEpoch: List[BrokerState]): LeaderAndIsr = {
+  private def newLeaderAndIsrWithBrokerEpoch(leader: Int, isrWithBrokerEpoch: List[BrokerState]): LeaderAndIsr = {
     LeaderAndIsr(leader, leaderEpoch + 1, leaderRecoveryState, isrWithBrokerEpoch, partitionEpoch)
   }
 

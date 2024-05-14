@@ -23,18 +23,28 @@ import java.util.Objects;
 
 public class PluginSource {
 
+    public enum Type {
+        CLASSPATH, MULTI_JAR, SINGLE_JAR, CLASS_HIERARCHY
+    }
+
     private final Path location;
+    private final Type type;
     private final ClassLoader loader;
     private final URL[] urls;
 
-    public PluginSource(Path location, ClassLoader loader, URL[] urls) {
+    public PluginSource(Path location, Type type, ClassLoader loader, URL[] urls) {
         this.location = location;
+        this.type = type;
         this.loader = loader;
         this.urls = urls;
     }
 
     public Path location() {
         return location;
+    }
+
+    public Type type() {
+        return type;
     }
 
     public ClassLoader loader() {
@@ -46,7 +56,7 @@ public class PluginSource {
     }
 
     public boolean isolated() {
-        return loader instanceof PluginClassLoader;
+        return location != null;
     }
 
     @Override
@@ -62,5 +72,9 @@ public class PluginSource {
         int result = Objects.hash(location, loader);
         result = 31 * result + Arrays.hashCode(urls);
         return result;
+    }
+
+    public String toString() {
+        return location == null ? "classpath" : location.toString();
     }
 }

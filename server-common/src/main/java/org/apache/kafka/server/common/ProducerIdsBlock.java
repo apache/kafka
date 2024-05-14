@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Holds a range of Producer IDs used for Transactional and EOS producers.
- *
+ * <br>
  * The start and end of the ID block are inclusive.
  */
 public class ProducerIdsBlock {
