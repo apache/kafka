@@ -2364,7 +2364,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     ensureInterBrokerVersion(IBP_0_11_0_IV0)
     // We are checking for AlterCluster permissions first. If it is not present, we are authorizing cluster operation
     // The latter will throw an exception if it is denied.
-    if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
+    if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME, logIfDenied = false)) {
       authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     }
     val writeTxnMarkersRequest = request.body[WriteTxnMarkersRequest]
