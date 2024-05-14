@@ -9562,7 +9562,11 @@ public class GroupMetadataManagerTest {
             .setClientHost("client-host")
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
-            .setSupportedClassicProtocols(protocols)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+            )
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0),
                 mkTopicAssignment(barTopicId, 0)))
@@ -9780,7 +9784,11 @@ public class GroupMetadataManagerTest {
             .setClientHost("client-host")
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
-            .setSupportedClassicProtocols(protocols1)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols1))
+            )
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1)))
             .build();
@@ -9792,7 +9800,11 @@ public class GroupMetadataManagerTest {
             .setClientHost("client-host")
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
-            .setSupportedClassicProtocols(protocols2)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols2))
+            )
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(barTopicId, 0)))
             .build();
@@ -10037,7 +10049,11 @@ public class GroupMetadataManagerTest {
             .setClientHost("client-host")
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
-            .setSupportedClassicProtocols(protocols1)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols1))
+            )
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1)))
             .build();
@@ -10049,7 +10065,11 @@ public class GroupMetadataManagerTest {
             .setClientHost("client-host")
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
-            .setSupportedClassicProtocols(protocols2)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols2))
+            )
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(barTopicId, 0)))
             .build();
@@ -10265,8 +10285,11 @@ public class GroupMetadataManagerTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
-            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                .setSupportedProtocols(protocols))
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(protocols)
+            )
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2),
                 mkTopicAssignment(barTopicId, 0, 1)))
@@ -10360,7 +10383,7 @@ public class GroupMetadataManagerTest {
                 member1.clientId(),
                 member1.clientHost(),
                 member1.rebalanceTimeoutMs(),
-                45000,
+                member1.classicProtocolSessionTimeout().get(),
                 ConsumerProtocol.PROTOCOL_TYPE,
                 member1.supportedJoinGroupRequestProtocols(),
                 assignment
@@ -10387,7 +10410,7 @@ public class GroupMetadataManagerTest {
         assertUnorderedListEquals(expectedRecords.subList(2, 4), result.records().subList(2, 4));
         assertRecordEquals(expectedRecords.get(4), result.records().get(4));
         assertUnorderedListEquals(expectedRecords.subList(5, 7), result.records().subList(5, 7));
-        assertRecordsEquals(expectedRecords.subList(7, 9), result.records().subList(7, 9));
+        assertRecordsEquals(expectedRecords.subList(7, 10), result.records().subList(7, 10));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
@@ -10454,8 +10477,11 @@ public class GroupMetadataManagerTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
-            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                .setSupportedProtocols(protocols))
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(protocols)
+            )
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2),
                 mkTopicAssignment(barTopicId, 0, 1)))
@@ -10554,7 +10580,7 @@ public class GroupMetadataManagerTest {
                 member1.clientId(),
                 member1.clientHost(),
                 member1.rebalanceTimeoutMs(),
-                45000,
+                member1.classicProtocolSessionTimeout().get(),
                 ConsumerProtocol.PROTOCOL_TYPE,
                 member1.supportedJoinGroupRequestProtocols(),
                 assignment
@@ -10580,7 +10606,7 @@ public class GroupMetadataManagerTest {
         assertUnorderedListEquals(expectedRecords.subList(2, 4), timeout.result.records().subList(2, 4));
         assertRecordEquals(expectedRecords.get(4), timeout.result.records().get(4));
         assertUnorderedListEquals(expectedRecords.subList(5, 7), timeout.result.records().subList(5, 7));
-        assertRecordsEquals(expectedRecords.subList(7, 9), timeout.result.records().subList(7, 9));
+        assertRecordsEquals(expectedRecords.subList(7, 10), timeout.result.records().subList(7, 10));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
@@ -10641,8 +10667,11 @@ public class GroupMetadataManagerTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(30000)
-            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                .setSupportedProtocols(protocols))
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(protocols)
+            )
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2),
                 mkTopicAssignment(barTopicId, 0, 1)))
@@ -10767,7 +10796,7 @@ public class GroupMetadataManagerTest {
                 member1.clientId(),
                 member1.clientHost(),
                 member1.rebalanceTimeoutMs(),
-                45000,
+                member1.classicProtocolSessionTimeout().get(),
                 ConsumerProtocol.PROTOCOL_TYPE,
                 member1.supportedJoinGroupRequestProtocols(),
                 assignment
@@ -10794,7 +10823,7 @@ public class GroupMetadataManagerTest {
         assertUnorderedListEquals(expectedRecords.subList(2, 4), timeout.result.records().subList(2, 4));
         assertRecordEquals(expectedRecords.get(4), timeout.result.records().get(4));
         assertUnorderedListEquals(expectedRecords.subList(5, 7), timeout.result.records().subList(5, 7));
-        assertRecordsEquals(expectedRecords.subList(7, 9), timeout.result.records().subList(7, 9));
+        assertRecordsEquals(expectedRecords.subList(7, 10), timeout.result.records().subList(7, 10));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.RECONCILING, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
@@ -10849,7 +10878,13 @@ public class GroupMetadataManagerTest {
                     .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(10)
-                    .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toProtocols("roundrobin"))
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                            .setSessionTimeoutMs(5000)
+                            .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                                GroupMetadataManagerTestContext.toProtocols("roundrobin")
+                            ))
+                    )
                     .build()))
             .build();
 
@@ -10966,7 +11001,11 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
                 .setRebalanceTimeoutMs(500)
                 .setAssignedPartitions(assignor.targetPartitions(newMemberId))
-                .setSupportedClassicProtocols(request.protocols())
+                .setClassicMemberMetadata(
+                    new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                        .setSessionTimeoutMs(request.sessionTimeoutMs())
+                        .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(request.protocols()))
+                )
                 .build();
 
             List<Record> expectedRecords = Arrays.asList(
@@ -11132,7 +11171,11 @@ public class GroupMetadataManagerTest {
             .setClientHost("localhost/127.0.0.1")
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(500)
-            .setSupportedClassicProtocols(request.protocols())
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(request.sessionTimeoutMs())
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(request.protocols()))
+            )
             .build();
 
         List<Record> expectedRecords = Arrays.asList(
@@ -11232,7 +11275,11 @@ public class GroupMetadataManagerTest {
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1)))
             .setRebalanceTimeoutMs(500)
-            .setSupportedClassicProtocols(request.protocols())
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(request.sessionTimeoutMs())
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(request.protocols()))
+            )
             .build();
 
         List<Record> expectedRecords = Arrays.asList(
@@ -11304,9 +11351,16 @@ public class GroupMetadataManagerTest {
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0),
                         mkTopicAssignment(barTopicId, 0)))
-                    .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
-                        Arrays.asList(fooTopicName, barTopicName),
-                        Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(fooTopicName, 1))))
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                            .setSessionTimeoutMs(5000)
+                            .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                                GroupMetadataManagerTestContext.toConsumerProtocol(
+                                    Arrays.asList(fooTopicName, barTopicName),
+                                    Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(fooTopicName, 1))
+                                )
+                            ))
+                    )
                     .build())
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
                     .setState(MemberState.STABLE)
@@ -11366,9 +11420,16 @@ public class GroupMetadataManagerTest {
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0),
                 mkTopicAssignment(zarTopicId, 0)))
-            .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
-                Arrays.asList(fooTopicName, barTopicName, zarTopicName),
-                Collections.emptyList()))
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(request.sessionTimeoutMs())
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                        GroupMetadataManagerTestContext.toConsumerProtocol(
+                            Arrays.asList(fooTopicName, barTopicName, zarTopicName),
+                            Collections.emptyList()
+                        )
+                    ))
+            )
             .build();
 
         List<Record> expectedRecords = Arrays.asList(
@@ -11418,7 +11479,11 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
-                    .setSupportedClassicProtocols(protocols)
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                            .setSessionTimeoutMs(5000)
+                            .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+                    )
                     .build())
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
                     .build()))
@@ -11453,7 +11518,11 @@ public class GroupMetadataManagerTest {
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setInstanceId(instanceId)
-                    .setSupportedClassicProtocols(protocols)
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                            .setSessionTimeoutMs(5000)
+                            .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols))
+                    )
                     .build())
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
                     .build()))
@@ -11510,9 +11579,16 @@ public class GroupMetadataManagerTest {
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0),
                         mkTopicAssignment(barTopicId, 0)))
-                    .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
-                        Arrays.asList(fooTopicName, barTopicName),
-                        Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(barTopicName, 0))))
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                            .setSessionTimeoutMs(5000)
+                            .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                                GroupMetadataManagerTestContext.toConsumerProtocol(
+                                    Arrays.asList(fooTopicName, barTopicName),
+                                    Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(barTopicName, 0))
+                                )
+                            ))
+                    )
                     .build())
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
                     .setState(MemberState.STABLE)
@@ -11573,9 +11649,16 @@ public class GroupMetadataManagerTest {
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0),
                 mkTopicAssignment(zarTopicId, 0)))
-            .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
-                Arrays.asList(fooTopicName, barTopicName, zarTopicName),
-                Collections.emptyList()))
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(request.sessionTimeoutMs())
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                        GroupMetadataManagerTestContext.toConsumerProtocol(
+                            Arrays.asList(fooTopicName, barTopicName, zarTopicName),
+                            Collections.emptyList()
+                        )
+                    ))
+            )
             .build();
 
         List<Record> expectedRecords1 = Arrays.asList(
@@ -11695,9 +11778,16 @@ public class GroupMetadataManagerTest {
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0),
                         mkTopicAssignment(barTopicId, 0)))
-                    .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
-                        Arrays.asList(fooTopicName, barTopicName),
-                        Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(barTopicName, 0))))
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                            .setSessionTimeoutMs(5000)
+                            .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                                GroupMetadataManagerTestContext.toConsumerProtocol(
+                                    Arrays.asList(fooTopicName, barTopicName),
+                                    Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(barTopicName, 0))
+                                )
+                            ))
+                    )
                     .build())
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
                     .setState(MemberState.STABLE)
@@ -11758,9 +11848,16 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(fooTopicId, 0)))
             .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(barTopicId, 0)))
-            .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
-                Arrays.asList(fooTopicName, barTopicName, zarTopicName),
-                Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(barTopicName, 0))))
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(request1.sessionTimeoutMs())
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                        GroupMetadataManagerTestContext.toConsumerProtocol(
+                            Arrays.asList(fooTopicName, barTopicName, zarTopicName),
+                            Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(barTopicName, 0))
+                        )
+                    ))
+            )
             .build();
 
         List<Record> expectedRecords1 = Arrays.asList(
@@ -11819,9 +11916,16 @@ public class GroupMetadataManagerTest {
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0),
                 mkTopicAssignment(zarTopicId, 0)))
-            .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
-                Arrays.asList(fooTopicName, barTopicName, zarTopicName),
-                Collections.singletonList(new TopicPartition(fooTopicName, 0))))
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(request2.sessionTimeoutMs())
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                        GroupMetadataManagerTestContext.toConsumerProtocol(
+                            Arrays.asList(fooTopicName, barTopicName, zarTopicName),
+                            Collections.singletonList(new TopicPartition(fooTopicName, 0))
+                        )
+                    ))
+            )
             .build();
 
         assertRecordsEquals(
@@ -11870,9 +11974,16 @@ public class GroupMetadataManagerTest {
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1),
                 mkTopicAssignment(zarTopicId, 0)))
-            .setSupportedClassicProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
-                Arrays.asList(fooTopicName, barTopicName, zarTopicName),
-                Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(zarTopicName, 0))))
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(request3.sessionTimeoutMs())
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                        GroupMetadataManagerTestContext.toConsumerProtocol(
+                            Arrays.asList(fooTopicName, barTopicName, zarTopicName),
+                            Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(zarTopicName, 0))
+                        )
+                    ))
+            )
             .build();
 
         assertRecordsEquals(

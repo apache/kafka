@@ -79,7 +79,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("ClassDataAbstractionCoupling")
 public class ConsumerNetworkThreadTest {
 
     private ConsumerTestBuilder.ConsumerNetworkThreadTestBuilder testBuilder;
@@ -91,12 +90,9 @@ public class ConsumerNetworkThreadTest {
     private OffsetsRequestManager offsetsRequestManager;
     private CommitRequestManager commitRequestManager;
     private CoordinatorRequestManager coordinatorRequestManager;
-    private HeartbeatRequestManager heartbeatRequestManager;
-    private MembershipManager memberhipsManager;
     private ConsumerNetworkThread consumerNetworkThread;
     private CompletableEventReaper applicationEventReaper;
     private MockClient client;
-    private SubscriptionState subscriptions;
 
     @BeforeEach
     public void setup() {
@@ -110,11 +106,8 @@ public class ConsumerNetworkThreadTest {
         commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
         offsetsRequestManager = testBuilder.offsetsRequestManager;
         coordinatorRequestManager = testBuilder.coordinatorRequestManager.orElseThrow(IllegalStateException::new);
-        heartbeatRequestManager = testBuilder.heartbeatRequestManager.orElseThrow(IllegalStateException::new);
-        memberhipsManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
         consumerNetworkThread = testBuilder.consumerNetworkThread;
         applicationEventReaper = testBuilder.applicationEventReaper;
-        subscriptions = testBuilder.subscriptions;
         consumerNetworkThread.initializeResources();
     }
 
