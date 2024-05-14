@@ -36,7 +36,7 @@
           "about": "The topics the topology reads from." },
         { "name": "SinkTopics", "type": "[]string", "versions": "0+",
           "about": "The topics the topology writes to." },
-        { "name": "StateChangelogTopics", "type": "[]TopicInfo", "versions": "0+",
+        { "name": "ChangelogTopics", "type": "[]TopicInfo", "versions": "0+",
           "about": "The set of state changelog topics associated with this subtopology. Created automatically." },
         { "name": "RepartitionSourceTopics", "type": "[]TopicInfo", "versions": "0+",
           "about": "The set of source topics that are internally created repartition topics. Created automatically." }
