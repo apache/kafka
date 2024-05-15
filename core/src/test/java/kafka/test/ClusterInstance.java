@@ -20,6 +20,7 @@ package kafka.test;
 import kafka.network.SocketServer;
 import kafka.server.BrokerFeatures;
 import kafka.test.annotation.ClusterTest;
+import kafka.test.annotation.Type;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.network.ListenerName;
@@ -39,18 +40,10 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROU
 
 public interface ClusterInstance {
 
-    enum ClusterType {
-        ZK,
-        RAFT
-    }
-
-    /**
-     * Cluster type. For now, only ZK is supported.
-     */
-    ClusterType clusterType();
+    Type type();
 
     default boolean isKRaftTest() {
-        return clusterType() == ClusterType.RAFT;
+        return type() == Type.KRAFT || type() == Type.CO_KRAFT;
     }
 
     /**

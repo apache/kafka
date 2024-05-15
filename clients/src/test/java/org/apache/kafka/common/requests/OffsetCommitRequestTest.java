@@ -55,11 +55,10 @@ public class OffsetCommitRequestTest {
     protected static int throttleTimeMs = 10;
 
     private static OffsetCommitRequestData data;
-    private static List<OffsetCommitRequestTopic> topics;
 
     @BeforeEach
     public void setUp() {
-        topics = Arrays.asList(
+        List<OffsetCommitRequestTopic> topics = Arrays.asList(
             new OffsetCommitRequestTopic()
                 .setName(topicOne)
                 .setPartitions(Collections.singletonList(

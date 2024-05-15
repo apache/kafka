@@ -106,6 +106,7 @@ public class TargetAssignmentBuilderBenchmark {
         targetAssignmentBuilder = new TargetAssignmentBuilder(GROUP_ID, GROUP_EPOCH, partitionAssignor)
             .withMembers(members)
             .withSubscriptionMetadata(subscriptionMetadata)
+            .withSubscriptionType(HOMOGENEOUS)
             .withTargetAssignment(existingTargetAssignment)
             .withPartitionAssignments(partitionAssignments)
             .addOrUpdateMember(newMember.memberId(), newMember);

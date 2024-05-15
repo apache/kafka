@@ -39,8 +39,8 @@ import org.slf4j.Logger;
  * This type keeps track of changes to the finalized kraft.version and the sets of voters between
  * the latest snasphot and the log end offset.
  *
- * The are two actors/threads for this type. One is the KRaft driver which indirectly call a lot of
- * the public methods. The other are the callers of {@code RaftClient::createSnapshot} which
+ * There are two type of actors/threads accessing this type. One is the KRaft driver which indirectly call a lot of
+ * the public methods. The other actors/threads are the callers of {@code RaftClient.createSnapshot} which
  * indirectly call {@code voterSetAtOffset} and {@code kraftVersionAtOffset} when freezing a snapshot.
  */
 final public class KRaftControlRecordStateMachine {
@@ -115,7 +115,7 @@ final public class KRaftControlRecordStateMachine {
     /**
      * Remove the tail of the log until the given offset.
      *
-     * @param @startOffset the start offset (inclusive)
+     * @param startOffset the start offset (inclusive)
      */
     public void truncateOldEntries(long startOffset) {
         synchronized (voterSetHistory) {

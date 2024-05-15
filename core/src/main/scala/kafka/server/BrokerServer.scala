@@ -35,9 +35,8 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.group
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
-import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, RecordSerde}
+import org.apache.kafka.coordinator.group.{CoordinatorRecord, GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, CoordinatorRecordSerde}
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
 import org.apache.kafka.raft.QuorumConfig
@@ -389,9 +388,17 @@ class BrokerServer(
       authorizer = config.createNewAuthorizer()
       authorizer.foreach(_.configure(config.originals))
 
-      val fetchManager = new FetchManager(Time.SYSTEM,
-        new FetchSessionCache(config.maxIncrementalFetchSessionCacheSlots,
-          KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS))
+      // The FetchSessionCache is divided into config.numIoThreads shards, each responsible
+      // for Math.max(1, shardNum * sessionIdRange) <= sessionId < (shardNum + 1) * sessionIdRange
+      val sessionIdRange = Int.MaxValue / NumFetchSessionCacheShards
+      val fetchSessionCacheShards = (0 until NumFetchSessionCacheShards)
+        .map(shardNum => new FetchSessionCacheShard(
+          config.maxIncrementalFetchSessionCacheSlots / NumFetchSessionCacheShards,
+          KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS,
+          sessionIdRange,
+          shardNum
+        ))
+      val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
 
       // Create the request processor objects.
       val raftSupport = RaftSupport(forwardingManager, metadataCache)
@@ -555,7 +562,7 @@ class BrokerServer(
     // to fix the underlying issue.
     if (config.isNewGroupCoordinatorEnabled) {
       val time = Time.SYSTEM
-      val serde = new RecordSerde
+      val serde = new CoordinatorRecordSerde
       val groupCoordinatorConfig = new GroupCoordinatorConfig(
         config.groupCoordinatorNumThreads,
         config.consumerGroupSessionTimeoutMs,
@@ -578,13 +585,13 @@ class BrokerServer(
         "group-coordinator-reaper",
         new SystemTimer("group-coordinator")
       )
-      val loader = new CoordinatorLoaderImpl[group.Record](
+      val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
         time,
         replicaManager,
         serde,
         config.offsetsLoadBufferSize
       )
-      val writer = new CoordinatorPartitionWriter[group.Record](
+      val writer = new CoordinatorPartitionWriter[CoordinatorRecord](
         replicaManager,
         serde,
         config.offsetsTopicCompressionType,

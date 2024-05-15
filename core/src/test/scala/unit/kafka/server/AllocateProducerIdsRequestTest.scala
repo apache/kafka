@@ -32,7 +32,7 @@ import org.junit.jupiter.api.{Tag, Timeout}
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(clusterType = Type.KRAFT)
+@ClusterTestDefaults(types = Array(Type.KRAFT))
 @Tag("integration")
 class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
 

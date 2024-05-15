@@ -39,8 +39,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConsumerGroupMemberTest {
 
@@ -354,10 +354,7 @@ public class ConsumerGroupMemberTest {
     }
 
     @Test
-    public void testSetSupportedClassicProtocolsWithJoinGroupRequestProtocolCollections() {
-        Uuid topicId1 = Uuid.randomUuid();
-        Uuid topicId2 = Uuid.randomUuid();
-
+    public void testClassicProtocolListFromJoinRequestProtocolCollection() {
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
         protocols.addAll(Arrays.asList(
             new JoinGroupRequestData.JoinGroupRequestProtocol()
@@ -365,26 +362,10 @@ public class ConsumerGroupMemberTest {
                 .setMetadata(new byte[]{1, 2, 3})
         ));
 
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
-            .setMemberEpoch(10)
-            .setPreviousMemberEpoch(9)
-            .setInstanceId("instance-id")
-            .setRackId("rack-id")
-            .setRebalanceTimeoutMs(5000)
-            .setClientId("client-id")
-            .setClientHost("hostname")
-            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-            .setSubscribedTopicRegex("regex")
-            .setServerAssignorName("range")
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(topicId2, 4, 5, 6)))
-            .setSupportedClassicProtocols(protocols)
-            .build();
-
-        assertEquals(toClassicProtocolCollection("range"), member.supportedClassicProtocols().get());
-        assertTrue(member.useClassicProtocol());
+        assertEquals(
+            toClassicProtocolCollection("range"),
+            classicProtocolListFromJoinRequestProtocolCollection(protocols)
+        );
     }
 
     private List<ConsumerGroupMemberMetadataValue.ClassicProtocol> toClassicProtocolCollection(String name) {
