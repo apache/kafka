@@ -282,6 +282,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
                     TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, partition);
                     if (rackInfo.useRackStrategy && rackInfo.racksMismatch(memberId, topicIdPartition)) {
                         currentPartitionOwners.put(topicIdPartition, memberId);
+                        unassignedPartitions.add(topicIdPartition);
                     } else {
                         validCurrentAssignmentList.add(topicIdPartition);
                     }
